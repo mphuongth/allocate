@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 
-const FUND_TYPES = ['equity', 'debt', 'hybrid', 'gold', 'other'] as const
+const FUND_TYPES = ['balanced', 'equity', 'debt', 'gold'] as const
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params

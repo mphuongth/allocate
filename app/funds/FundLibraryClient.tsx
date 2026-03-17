@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 
-type FundType = 'equity' | 'debt' | 'hybrid' | 'gold' | 'other'
+type FundType = 'balanced' | 'equity' | 'debt' | 'gold'
 
 type Fund = {
   id: string
@@ -19,19 +19,17 @@ type Toast = { id: number; message: string; type: 'success' | 'error' }
 type SortKey = 'name' | 'code' | 'fund_type'
 
 const FUND_TYPE_LABELS: Record<FundType, string> = {
+  balanced: 'Balanced',
   equity: 'Equity',
   debt: 'Debt',
-  hybrid: 'Hybrid',
   gold: 'Gold',
-  other: 'Other',
 }
 
 const FUND_TYPE_COLORS: Record<FundType, string> = {
+  balanced: 'bg-purple-100 text-purple-700',
   equity: 'bg-green-100 text-green-700',
   debt: 'bg-blue-100 text-blue-700',
-  hybrid: 'bg-purple-100 text-purple-700',
   gold: 'bg-amber-100 text-amber-700',
-  other: 'bg-gray-100 text-gray-600',
 }
 
 let toastId = 0
