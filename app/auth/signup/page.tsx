@@ -20,18 +20,15 @@ export default async function SignupPage({
     }
 
     const supabase = await createSupabaseServerClient()
-    const { error } = await supabase.auth.signUp({ email, password })
+    const { data, error } = await supabase.auth.signUp({ email, password })
 
     if (error) {
       redirect('/auth/signup?error=true')
     }
 
-    // Sign in immediately after signup (no email confirmation required by default)
-    const { error: loginError } = await supabase.auth.signInWithPassword({ email, password })
-
-    if (loginError) {
-      // Account created but couldn't auto-login — redirect to login
-      redirect('/auth/login')
+    // If session is null, Supabase requires email confirmation
+    if (!data.session) {
+      redirect('/auth/signup?error=confirm')
     }
 
     redirect('/')
@@ -40,9 +37,32 @@ export default async function SignupPage({
   const errorMessage =
     error === 'mismatch'
       ? 'Passwords do not match.'
-      : error
-        ? 'Could not create account. Please try again.'
-        : null
+      : error === 'confirm'
+        ? null // handled by the confirmation notice below
+        : error
+          ? 'Could not create account. Please try again.'
+          : null
+
+  if (error === 'confirm') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="w-full max-w-md bg-white rounded-lg shadow p-8 text-center">
+          <div className="text-4xl mb-4">📧</div>
+          <h1 className="text-2xl font-bold mb-3">Check your email</h1>
+          <p className="text-gray-600 text-sm mb-6">
+            We sent a confirmation link to your email address. Click it to activate your account,
+            then come back to sign in.
+          </p>
+          <Link
+            href="/auth/login"
+            className="inline-block py-2 px-6 bg-indigo-600 text-white rounded-md font-medium hover:bg-indigo-700 transition-colors"
+          >
+            Go to sign in
+          </Link>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -80,7 +100,10 @@ export default async function SignupPage({
             />
           </div>
           <div>
-            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+            <label
+              htmlFor="confirmPassword"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
               Confirm Password
             </label>
             <input
