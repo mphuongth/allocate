@@ -32,6 +32,18 @@ export default async function HomePage() {
           Welcome to Allocate
         </h1>
 
+        {user && (
+          <div className="bg-white rounded-lg shadow p-4">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Navigation</h2>
+            <a
+              href="/funds"
+              className="flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-800 transition-colors"
+            >
+              📚 Fund Library
+            </a>
+          </div>
+        )}
+
         <div className="bg-white rounded-lg shadow p-6 space-y-4">
           <h2 className="text-lg font-semibold text-gray-700">System Status</h2>
 
