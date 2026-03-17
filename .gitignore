@@ -31,11 +31,15 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # env files (can opt-in for committing if needed)
-.env*
+.env.local
+.env.*.local
+
+# braingrid temp (local-only files)
+.braingrid/temp/*.local
+.braingrid/temp/*.local.md
 
 # vercel
 .vercel
 
 # typescript
 *.tsbuildinfo
-next-env.d.ts
