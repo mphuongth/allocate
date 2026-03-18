@@ -45,7 +45,8 @@ export default function AllocationSummary({ plan, investments, savings, fixedExp
   }
 
   const totalFixed = fixedExpenses.reduce((sum, e) => {
-    const monthly = e.override != null ? e.override : Math.round(e.amount_vnd / 12)
+    // amount_vnd in fixed_expenses is already a monthly amount (entered directly by the user)
+    const monthly = e.override != null ? e.override : e.amount_vnd
     return sum + monthly
   }, 0)
 
