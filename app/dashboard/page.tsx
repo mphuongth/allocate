@@ -1,12 +1,16 @@
+import { redirect } from 'next/navigation'
+import { createSupabaseServerClient } from '@/lib/supabase-server'
+import DashboardClient from '@/app/assets/DashboardClient'
 import AuthenticatedLayout from '@/app/components/layouts/AuthenticatedLayout'
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const supabase = await createSupabaseServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/auth/login')
+
   return (
     <AuthenticatedLayout>
-      <div className="space-y-6">
-        <h1 className="text-2xl font-bold text-gray-900">Assets Dashboard</h1>
-        <p className="text-gray-500">Your financial overview will appear here.</p>
-      </div>
+      <DashboardClient />
     </AuthenticatedLayout>
   )
 }
