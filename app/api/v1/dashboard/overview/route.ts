@@ -52,7 +52,7 @@ export async function GET() {
       .eq('user_id', user.id),
     supabase
       .from('investment_transactions')
-      .select('goal_id, amount_vnd, interest_rate, investment_date')
+      .select('goal_id, amount_vnd, interest_rate, investment_date, asset_type, units, unit_price, fund_id, funds(id, name, nav, updated_at)')
       .eq('user_id', user.id)
       .not('goal_id', 'is', null),
   ])
@@ -107,8 +107,22 @@ export async function GET() {
 
   for (const tx of savingsTxs) {
     if (!tx.goal_id || !goalMap.has(tx.goal_id)) continue
-    const interest = calcProjectedInterest(tx.amount_vnd, tx.interest_rate, tx.investment_date)
-    const currentValue = tx.amount_vnd + interest
+
+    let currentValue: number
+    if (tx.asset_type === 'fund' && tx.units) {
+      // Fund transactions: use current NAV × units for real P&L
+      const fund = Array.isArray(tx.funds)
+        ? tx.funds[0] as { id: string; nav: number; updated_at: string } | undefined
+        : tx.funds as { id: string; nav: number; updated_at: string } | null
+      const currentNAV = fund?.nav ?? tx.unit_price ?? 0
+      currentValue = tx.units * currentNAV
+      if (fund?.updated_at && isNavStale(fund.updated_at)) navStale = true
+    } else {
+      // Bank/stock/gold: amount + projected compound interest
+      const interest = calcProjectedInterest(tx.amount_vnd, tx.interest_rate, tx.investment_date)
+      currentValue = tx.amount_vnd + interest
+    }
+
     const goalEntry = goalMap.get(tx.goal_id)!
     goalEntry.totalInvested += tx.amount_vnd
     goalEntry.currentValue += currentValue
