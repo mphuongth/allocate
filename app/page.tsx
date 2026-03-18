@@ -22,7 +22,7 @@ const BENEFITS = [
     icon: '📈',
     title: 'Plan Investments',
     description:
-      'Organize and track your investment funds. Know exactly how much you're allocating to each fund every month.',
+      "Organize and track your investment funds. Know exactly how much you're allocating to each fund every month.",
   },
   {
     icon: '🛡️',
