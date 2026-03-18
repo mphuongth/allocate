@@ -1,12 +1,13 @@
 'use client'
 
-import type { MonthlyPlan, FundInvestment, DirectSaving, FixedExpense } from '../PlanningClient'
+import type { MonthlyPlan, FundInvestment, DirectSaving, FixedExpense, InsuranceMember } from '../PlanningClient'
 
 interface Props {
   plan: MonthlyPlan | null
   investments: FundInvestment[]
   savings: DirectSaving[]
   fixedExpenses: FixedExpense[]
+  insuranceMembers: InsuranceMember[]
 }
 
 const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
@@ -16,7 +17,7 @@ interface GoalRow {
   total: number
 }
 
-export default function AllocationSummary({ plan, investments, savings, fixedExpenses }: Props) {
+export default function AllocationSummary({ plan, investments, savings, fixedExpenses, insuranceMembers }: Props) {
   if (!plan) {
     return (
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
@@ -50,9 +51,11 @@ export default function AllocationSummary({ plan, investments, savings, fixedExp
     return sum + monthly
   }, 0)
 
+  const totalInsurance = insuranceMembers.reduce((sum, m) => sum + Math.round(m.annual_payment_vnd / 12), 0)
+
   const totalInvested = investments.reduce((s, i) => s + i.amount_vnd, 0)
   const totalSaved = savings.reduce((s, d) => s + d.amount_vnd, 0)
-  const totalAllocated = totalInvested + totalSaved + totalFixed
+  const totalAllocated = totalInvested + totalSaved + totalFixed + totalInsurance
   const remaining = salary - totalAllocated
 
   // Build rows sorted: named goals alphabetically, then Unassigned
@@ -109,6 +112,17 @@ export default function AllocationSummary({ plan, investments, savings, fixedExp
               <div className="text-right">
                 <span className="text-gray-700 font-medium">{fmt(totalFixed)}</span>
                 <span className="ml-2 text-gray-400 text-xs">{pct(totalFixed)}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Insurance row */}
+          {insuranceMembers.length > 0 && (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-600">Insurance</span>
+              <div className="text-right">
+                <span className="text-gray-700 font-medium">{fmt(totalInsurance)}</span>
+                <span className="ml-2 text-gray-400 text-xs">{pct(totalInsurance)}</span>
               </div>
             </div>
           )}

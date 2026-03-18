@@ -5,6 +5,7 @@ import SalaryInput from './components/SalaryInput'
 import FundInvestmentsSection from './components/FundInvestmentsSection'
 import DirectSavingsSection from './components/DirectSavingsSection'
 import FixedExpensesSection from './components/FixedExpensesSection'
+import InsuranceSection from './components/InsuranceSection'
 import AllocationSummary from './components/AllocationSummary'
 
 export interface MonthlyPlan {
@@ -43,6 +44,14 @@ export interface FixedExpense {
   override?: number // overridden monthly amount if set
 }
 
+export interface InsuranceMember {
+  member_id: string
+  member_name: string
+  relationship: string
+  annual_payment_vnd: number
+  payment_date: string | null
+}
+
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
 function prevMonth(m: number, y: number) { return m === 1 ? { m: 12, y: y - 1 } : { m: m - 1, y } }
@@ -56,6 +65,7 @@ export default function PlanningClient() {
   const [investments, setInvestments] = useState<FundInvestment[]>([])
   const [savings, setSavings] = useState<DirectSaving[]>([])
   const [fixedExpenses, setFixedExpenses] = useState<FixedExpense[]>([])
+  const [insuranceMembers, setInsuranceMembers] = useState<InsuranceMember[]>([])
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState('')
 
@@ -70,15 +80,16 @@ export default function PlanningClient() {
     if (res.ok) {
       const p = await res.json()
       setPlan(p)
-      const [invRes, savRes, overridesRes] = await Promise.all([
+      const [invRes, savRes, overridesRes, expRes, insRes] = await Promise.all([
         fetch(`/api/v1/monthly-plans/${p.id}/fund-investments`),
         fetch(`/api/v1/monthly-plans/${p.id}/direct-savings`),
         fetch(`/api/v1/monthly-plans/${p.id}/fixed-expense-overrides`),
+        fetch('/api/v1/fixed-expenses'),
+        fetch('/api/v1/insurance-members'),
       ])
       setInvestments(invRes.ok ? await invRes.json() : [])
       setSavings(savRes.ok ? await savRes.json() : [])
 
-      const expRes = await fetch('/api/v1/fixed-expenses')
       const { expenses } = expRes.ok ? await expRes.json() : { expenses: [] }
       const overrides: Array<{ fixed_expense_id: string; monthly_amount_override_vnd: number }> =
         overridesRes.ok ? await overridesRes.json() : []
@@ -87,14 +98,22 @@ export default function PlanningClient() {
         ...e,
         override: overrideMap.get(e.expense_id),
       })))
+
+      const { members } = insRes.ok ? await insRes.json() : { members: [] }
+      setInsuranceMembers(members ?? [])
     } else {
       setPlan(null)
       setInvestments([])
       setSavings([])
-      // Still load fixed expenses even without a plan
-      const expRes = await fetch('/api/v1/fixed-expenses')
+      // Still load fixed expenses and insurance even without a plan
+      const [expRes, insRes] = await Promise.all([
+        fetch('/api/v1/fixed-expenses'),
+        fetch('/api/v1/insurance-members'),
+      ])
       const { expenses } = expRes.ok ? await expRes.json() : { expenses: [] }
       setFixedExpenses((expenses ?? []).map((e: { expense_id: string; expense_name: string; amount_vnd: number }) => ({ ...e })))
+      const { members } = insRes.ok ? await insRes.json() : { members: [] }
+      setInsuranceMembers(members ?? [])
     }
     setLoading(false)
   }, [month, year])
@@ -164,6 +183,10 @@ export default function PlanningClient() {
                     onRefresh={refetch}
                     onToast={showToast}
                   />
+                  <InsuranceSection
+                    plan={plan}
+                    insuranceMembers={insuranceMembers}
+                  />
                 </>
               ) : (
                 <div className="text-center py-8 text-gray-400 text-sm">
@@ -179,6 +202,7 @@ export default function PlanningClient() {
                 investments={investments}
                 savings={savings}
                 fixedExpenses={fixedExpenses}
+                insuranceMembers={insuranceMembers}
               />
             </div>
           </div>
