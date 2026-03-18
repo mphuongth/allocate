@@ -23,6 +23,7 @@ export interface FundInvestment {
   amount_vnd: number
   units_purchased: number
   nav_at_purchase: number
+  investment_date: string | null
   funds: { name: string; nav: number } | null
   savings_goals: { goal_name: string } | null
 }

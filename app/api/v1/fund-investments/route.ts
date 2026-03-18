@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from('fund_investments')
-    .select('id, fund_id, goal_id, amount_vnd, units_purchased, nav_at_purchase, created_at, funds(id, name, nav)')
+    .select('id, fund_id, goal_id, amount_vnd, units_purchased, nav_at_purchase, investment_date, created_at, funds(id, name, nav)')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
 
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { plan_id, fund_id, goal_id, amount_vnd, units_purchased, nav_at_purchase } = body
+  const { plan_id, fund_id, goal_id, amount_vnd, units_purchased, nav_at_purchase, investment_date } = body
 
   if (!fund_id) return NextResponse.json({ error: 'Fund is required' }, { status: 400 })
 
@@ -64,6 +64,7 @@ export async function POST(request: NextRequest) {
       amount_vnd: amountNum,
       units_purchased: unitsNum,
       nav_at_purchase: navNum,
+      investment_date: investment_date || null,
     })
     .select('*, funds(id, name, nav), savings_goals(goal_name)')
     .single()

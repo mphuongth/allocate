@@ -8,7 +8,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { fund_id, goal_id, amount_vnd, units_purchased, nav_at_purchase } = body
+  const { fund_id, goal_id, amount_vnd, units_purchased, nav_at_purchase, investment_date } = body
 
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
 
@@ -30,6 +30,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (isNaN(n) || n <= 0) return NextResponse.json({ error: 'NAV at purchase must be positive' }, { status: 400 })
     updates.nav_at_purchase = n
   }
+  if (investment_date !== undefined) updates.investment_date = investment_date || null
 
   const { data, error } = await supabase
     .from('fund_investments')

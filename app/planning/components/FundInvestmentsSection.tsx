@@ -15,7 +15,7 @@ interface Props {
 
 const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
 
-const emptyForm = { fund_id: '', goal_id: '', amount_vnd: '', units_purchased: '', nav_at_purchase: '' }
+const emptyForm = { fund_id: '', goal_id: '', amount_vnd: '', units_purchased: '', nav_at_purchase: '', investment_date: '' }
 
 export default function FundInvestmentsSection({ plan, investments, onRefresh, onToast }: Props) {
   const [funds, setFunds] = useState<Fund[]>([])
@@ -40,9 +40,12 @@ export default function FundInvestmentsSection({ plan, investments, onRefresh, o
 
   useEffect(() => { fetchRefs() }, [fetchRefs])
 
+  const minDate = new Date(plan.year, plan.month - 1, 1).toISOString().split('T')[0]
+  const maxDate = new Date(plan.year, plan.month, 0).toISOString().split('T')[0]
+
   function openAdd() {
     setEditItem(null)
-    setForm(emptyForm)
+    setForm({ ...emptyForm, investment_date: minDate })
     setFormError('')
     setShowForm(true)
   }
@@ -55,6 +58,7 @@ export default function FundInvestmentsSection({ plan, investments, onRefresh, o
       amount_vnd: String(inv.amount_vnd),
       units_purchased: String(inv.units_purchased),
       nav_at_purchase: String(inv.nav_at_purchase),
+      investment_date: inv.investment_date ?? minDate,
     })
     setFormError('')
     setShowForm(true)
@@ -72,6 +76,7 @@ export default function FundInvestmentsSection({ plan, investments, onRefresh, o
   async function handleSave() {
     setFormError('')
     if (!form.fund_id) { setFormError('Fund is required'); return }
+    if (!form.investment_date) { setFormError('Investment date is required'); return }
     if (!form.amount_vnd || Number(form.amount_vnd) <= 0) { setFormError('Amount and units are required and must be positive'); return }
     if (!form.units_purchased || Number(form.units_purchased) <= 0) { setFormError('Amount and units are required and must be positive'); return }
     if (!form.nav_at_purchase || Number(form.nav_at_purchase) <= 0) { setFormError('NAV at purchase must be positive'); return }
@@ -84,6 +89,7 @@ export default function FundInvestmentsSection({ plan, investments, onRefresh, o
       amount_vnd: Number(form.amount_vnd),
       units_purchased: Number(form.units_purchased),
       nav_at_purchase: Number(form.nav_at_purchase),
+      investment_date: form.investment_date,
     }
 
     const url = editItem ? `/api/v1/fund-investments/${editItem.id}` : '/api/v1/fund-investments'
@@ -132,7 +138,7 @@ export default function FundInvestmentsSection({ plan, investments, onRefresh, o
         <table className="w-full text-sm">
           <thead className="bg-gray-50">
             <tr>
-              {['Fund', 'Amount', 'Units', 'Goal', 'Actions'].map((h) => (
+              {['Fund', 'Date', 'Amount', 'Units', 'Goal', 'Actions'].map((h) => (
                 <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">{h}</th>
               ))}
             </tr>
@@ -141,6 +147,7 @@ export default function FundInvestmentsSection({ plan, investments, onRefresh, o
             {investments.map((inv) => (
               <tr key={inv.id} className="hover:bg-gray-50">
                 <td className="px-4 py-3 font-medium text-gray-900">{inv.funds?.name ?? '—'}</td>
+                <td className="px-4 py-3 text-gray-500">{inv.investment_date ?? '—'}</td>
                 <td className="px-4 py-3">{fmt(inv.amount_vnd)}</td>
                 <td className="px-4 py-3 text-gray-500">{inv.units_purchased}</td>
                 <td className="px-4 py-3 text-gray-500">{inv.savings_goals?.goal_name ?? 'Unassigned'}</td>
@@ -175,6 +182,17 @@ export default function FundInvestmentsSection({ plan, investments, onRefresh, o
                     <option key={f.id} value={f.id}>{f.name} (NAV: {f.nav})</option>
                   ))}
                 </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Investment Date *</label>
+                <input
+                  type="date"
+                  value={form.investment_date}
+                  min={minDate}
+                  max={maxDate}
+                  onChange={(e) => setForm((prev) => ({ ...prev, investment_date: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Goal (optional)</label>
