@@ -8,6 +8,12 @@ interface Goal {
   description: string | null
 }
 
+interface Fund {
+  id: string
+  name: string
+  code: string
+}
+
 interface Transaction {
   transaction_id: string
   asset_type: string
@@ -17,6 +23,8 @@ interface Transaction {
   units: number | null
   interest_rate: number | null
   notes: string | null
+  fund_id: string | null
+  fund_display?: string
 }
 
 const ASSET_TYPES = ['fund', 'bank', 'stock', 'gold'] as const
@@ -39,10 +47,11 @@ function calcProjectedInterest(amount: number, rate: number | null, investmentDa
 
 const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
 
-const emptyForm = { asset_type: 'bank', investment_date: '', amount_vnd: '', unit_price: '', units: '', interest_rate: '', notes: '' }
+const emptyForm = { asset_type: 'bank', investment_date: '', amount_vnd: '', unit_price: '', units: '', interest_rate: '', notes: '', fund_id: '' }
 
 export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: () => void }) {
   const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [funds, setFunds] = useState<Fund[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editTx, setEditTx] = useState<Transaction | null>(null)
@@ -54,8 +63,21 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
   const fetchTransactions = useCallback(async () => {
     setLoading(true)
     const res = await fetch(`/api/v1/investment-transactions?goal_id=${goal.goal_id}&limit=1000`)
-    const { transactions } = await res.json()
-    setTransactions(transactions ?? [])
+    const { transactions: txs } = await res.json()
+
+    // Attach fund display strings
+    const fundsRes = await fetch('/api/funds')
+    const { funds: allFunds } = await fundsRes.json()
+    const fundMap: Record<string, Fund> = {}
+    for (const f of (allFunds ?? [])) fundMap[f.id] = f
+
+    const enriched = (txs ?? []).map((tx: Transaction) => ({
+      ...tx,
+      fund_display: tx.fund_id && fundMap[tx.fund_id] ? `${fundMap[tx.fund_id].code} - ${fundMap[tx.fund_id].name}` : undefined,
+    }))
+
+    setFunds(allFunds ?? [])
+    setTransactions(enriched)
     setLoading(false)
   }, [goal.goal_id])
 
@@ -78,13 +100,22 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
       units: tx.units != null ? String(tx.units) : '',
       interest_rate: tx.interest_rate != null ? String(tx.interest_rate) : '',
       notes: tx.notes ?? '',
+      fund_id: tx.fund_id ?? '',
     })
     setFormError('')
     setShowForm(true)
   }
 
+  function handleAssetTypeChange(value: string) {
+    setForm({ ...form, asset_type: value, fund_id: '' })
+  }
+
   async function handleSave() {
     setFormError('')
+    if (form.asset_type === 'fund' && !form.fund_id) {
+      setFormError('Please select a fund.')
+      return
+    }
     const payload = {
       goal_id: goal.goal_id,
       asset_type: form.asset_type,
@@ -94,6 +125,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
       units: form.units ? Number(form.units) : null,
       interest_rate: form.interest_rate ? Number(form.interest_rate) : null,
       notes: form.notes || null,
+      fund_id: form.asset_type === 'fund' ? form.fund_id : null,
     }
     setSaving(true)
     const url = editTx ? `/api/v1/investment-transactions/${editTx.transaction_id}` : '/api/v1/investment-transactions'
@@ -174,7 +206,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
             <table className="w-full text-sm">
               <thead className="bg-gray-50">
                 <tr>
-                  {['Date', 'Asset Type', 'Amount', 'Units', 'Interest Rate', 'Projected Interest', 'Notes', 'Actions'].map((h) => (
+                  {['Date', 'Asset Type', 'Fund', 'Amount', 'Units', 'Interest Rate', 'Projected Interest', 'Notes', 'Actions'].map((h) => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">{h}</th>
                   ))}
                 </tr>
@@ -190,6 +222,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                           {tx.asset_type}
                         </span>
                       </td>
+                      <td className="px-4 py-3 text-gray-500 text-xs">{tx.fund_display ?? '—'}</td>
                       <td className="px-4 py-3 font-medium text-gray-900">{fmt(tx.amount_vnd)}</td>
                       <td className="px-4 py-3 text-gray-500">{tx.units != null ? tx.units : '—'}</td>
                       <td className="px-4 py-3 text-gray-500">{tx.interest_rate != null ? `${tx.interest_rate}%` : '—'}</td>
@@ -222,7 +255,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                   <label className="block text-sm font-medium text-gray-700 mb-1">Asset Type *</label>
                   <select
                     value={form.asset_type}
-                    onChange={(e) => setForm({ ...form, asset_type: e.target.value })}
+                    onChange={(e) => handleAssetTypeChange(e.target.value)}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   >
                     {ASSET_TYPES.map((t) => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
@@ -239,6 +272,21 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                   />
                 </div>
               </div>
+              {form.asset_type === 'fund' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Fund *</label>
+                  <select
+                    value={form.fund_id}
+                    onChange={(e) => setForm({ ...form, fund_id: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="">Select a fund...</option>
+                    {funds.map((f) => (
+                      <option key={f.id} value={f.id}>{f.code} - {f.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Amount (VND) *</label>
                 <input
