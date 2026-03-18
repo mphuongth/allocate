@@ -1,0 +1,77 @@
+'use client'
+
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+import { Home, BarChart3, Calendar, BookOpen, Settings } from 'lucide-react'
+import { useNavigation } from './NavigationContext'
+
+const NAV_ITEMS = [
+  { label: 'Home', href: '/', icon: Home },
+  { label: 'Assets Dashboard', href: '/dashboard', icon: BarChart3 },
+  { label: 'Monthly Planning', href: '/planning', icon: Calendar },
+  { label: 'Fund Library', href: '/funds', icon: BookOpen },
+  { label: 'Settings', href: '/settings', icon: Settings },
+]
+
+interface SidebarProps {
+  email: string
+  initials: string
+  onNavClick?: () => void
+}
+
+export default function Sidebar({ email, initials, onNavClick }: SidebarProps) {
+  const pathname = usePathname()
+  const { sidebarCollapsed } = useNavigation()
+
+  return (
+    <nav
+      className={`flex flex-col h-full bg-white border-r border-gray-200 transition-all duration-200 ${
+        sidebarCollapsed ? 'w-16' : 'w-60'
+      }`}
+    >
+      {/* Logo */}
+      <div className={`flex items-center h-16 px-4 border-b border-gray-100 ${sidebarCollapsed ? 'justify-center' : ''}`}>
+        {sidebarCollapsed ? (
+          <span className="text-brand font-bold text-lg">A</span>
+        ) : (
+          <span className="text-brand font-bold text-xl tracking-tight">Allocate</span>
+        )}
+      </div>
+
+      {/* Nav items */}
+      <ul className="flex-1 py-3 space-y-0.5">
+        {NAV_ITEMS.map(({ label, href, icon: Icon }) => {
+          const active = pathname === href
+          return (
+            <li key={href}>
+              <Link
+                href={href}
+                onClick={onNavClick}
+                aria-current={active ? 'page' : undefined}
+                title={sidebarCollapsed ? label : undefined}
+                className={`flex items-center gap-3 h-11 px-3 mx-2 rounded-md border-l-4 transition-colors text-sm font-medium ${
+                  active
+                    ? 'border-brand bg-brand-light text-gray-900 font-semibold'
+                    : 'border-transparent text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                } ${sidebarCollapsed ? 'justify-center px-0 mx-2' : ''}`}
+              >
+                <Icon size={18} className="shrink-0" />
+                {!sidebarCollapsed && <span>{label}</span>}
+              </Link>
+            </li>
+          )
+        })}
+      </ul>
+
+      {/* Profile */}
+      {!sidebarCollapsed && (
+        <div className="flex items-center gap-3 px-4 py-3 border-t border-gray-100">
+          <div className="w-8 h-8 rounded-full bg-brand flex items-center justify-center text-white text-xs font-semibold shrink-0">
+            {initials}
+          </div>
+          <p className="text-xs text-gray-600 truncate">{email}</p>
+        </div>
+      )}
+    </nav>
+  )
+}
