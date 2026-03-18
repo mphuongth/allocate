@@ -1,27 +1,43 @@
+'use client'
+
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { useState } from 'react'
+import { createBrowserClient } from '@supabase/ssr'
 
-export default async function LoginPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ error?: string }>
-}) {
-  const { error } = await searchParams
+export default function LoginPage() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const expired = searchParams.get('expired') === 'true'
 
-  async function login(formData: FormData) {
-    'use server'
-    const email = formData.get('email') as string
-    const password = formData.get('password') as string
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState<string | null>(expired ? 'Your session has expired. Please log in again.' : null)
+  const [loading, setLoading] = useState(false)
 
-    const supabase = await createSupabaseServerClient()
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault()
+    setError(null)
+    setLoading(true)
 
-    if (error) {
-      redirect('/auth/login?error=true')
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      if (error) {
+        setError('Email or password is incorrect.')
+      } else {
+        router.push('/dashboard')
+        router.refresh()
+      }
+    } catch {
+      setError('Unable to connect. Please check your internet and try again.')
+    } finally {
+      setLoading(false)
     }
-
-    redirect('/')
   }
 
   return (
@@ -29,11 +45,9 @@ export default async function LoginPage({
       <div className="w-full max-w-md bg-white rounded-lg shadow p-8">
         <h1 className="text-2xl font-bold text-center mb-6">Sign in to Allocate</h1>
         {error && (
-          <div className="mb-4 p-3 bg-red-50 text-red-700 text-sm rounded-md">
-            Invalid email or password. Please try again.
-          </div>
+          <div className="mb-4 p-3 bg-red-50 text-red-700 text-sm rounded-md">{error}</div>
         )}
-        <form action={login} className="space-y-4">
+        <form onSubmit={handleLogin} className="space-y-4">
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
               Email
@@ -43,6 +57,8 @@ export default async function LoginPage({
               id="email"
               name="email"
               required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
               placeholder="you@example.com"
             />
@@ -56,15 +72,21 @@ export default async function LoginPage({
               id="password"
               name="password"
               required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
               placeholder="••••••••"
             />
           </div>
+          <div className="text-right">
+            <span className="text-sm text-gray-400 cursor-not-allowed">Forgot password?</span>
+          </div>
           <button
             type="submit"
-            className="w-full py-2 px-4 bg-indigo-600 text-white rounded-md font-medium hover:bg-indigo-700 transition-colors"
+            disabled={loading}
+            className="w-full py-2 px-4 bg-indigo-600 text-white rounded-md font-medium hover:bg-indigo-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            Sign in
+            {loading ? 'Signing in...' : 'Log in'}
           </button>
         </form>
         <p className="mt-4 text-center text-sm text-gray-600">
