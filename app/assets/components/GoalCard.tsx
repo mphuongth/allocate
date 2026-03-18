@@ -1,4 +1,6 @@
-import type { FundBreakdownItem } from '../DashboardClient'
+'use client'
+
+import { useRouter } from 'next/navigation'
 
 const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
 const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`
@@ -12,29 +14,25 @@ interface Props {
   profitLoss: number
   profitLossPercentage: number
   progressPercentage: number | null
-  funds: FundBreakdownItem[]
-  isExpanded: boolean
-  onToggleExpand: (goalId: string) => void
-  onFundClick: (fundId: string) => void
 }
 
 export default function GoalCard({
   goalId, goalName, targetAmount, currentValue, totalInvested,
-  profitLoss, profitLossPercentage, progressPercentage, funds,
-  isExpanded, onToggleExpand, onFundClick,
+  profitLoss, profitLossPercentage, progressPercentage,
 }: Props) {
+  const router = useRouter()
   const plPositive = profitLoss >= 0
   const exceededTarget = progressPercentage !== null && progressPercentage >= 100
 
   return (
     <div
-      className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden cursor-pointer hover:border-gray-200 transition-colors"
-      onClick={() => onToggleExpand(goalId)}
+      className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden cursor-pointer hover:border-indigo-200 hover:shadow-md transition-all"
+      onClick={() => router.push(`/savings-goals/${goalId}`)}
     >
       <div className="p-5">
         <div className="flex items-start justify-between mb-2">
           <h3 className="font-semibold text-gray-900 text-sm">{goalName}</h3>
-          <span className="text-gray-400 text-sm ml-2">{isExpanded ? '▲' : '▼'}</span>
+          <span className="text-gray-300 text-sm ml-2">→</span>
         </div>
 
         <p className="text-2xl font-bold text-gray-900 mb-1">{fmt(currentValue)}</p>
@@ -65,36 +63,9 @@ export default function GoalCard({
         )}
 
         {targetAmount == null && currentValue === 0 && (
-          <p className="text-xs text-gray-400">₫0</p>
+          <p className="text-xs text-gray-400">No transactions yet</p>
         )}
       </div>
-
-      {/* Expanded fund breakdown */}
-      {isExpanded && funds.length > 0 && (
-        <div className="border-t border-gray-100 bg-gray-50">
-          {funds.map((fund) => (
-            <button
-              key={fund.fundId}
-              onClick={(e) => { e.stopPropagation(); onFundClick(fund.fundId) }}
-              className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-100 text-left border-b border-gray-100 last:border-0"
-            >
-              <span className="text-sm font-medium text-gray-700">{fund.fundName}</span>
-              <div className="text-right">
-                <p className="text-sm text-gray-900">{fmt(fund.currentValue)}</p>
-                <p className={`text-xs ${fund.profitLoss >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {fmtPct(fund.profitLossPercentage)}
-                </p>
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {isExpanded && funds.length === 0 && (
-        <div className="border-t border-gray-100 px-5 py-3 text-xs text-gray-400 bg-gray-50">
-          No fund investments in this goal
-        </div>
-      )}
     </div>
   )
 }

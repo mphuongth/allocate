@@ -86,7 +86,6 @@ export default function DashboardClient() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [sortOrder, setSortOrder] = useState<SortOrder>('manual')
-  const [expandedGoalId, setExpandedGoalId] = useState<string | null>(null)
   const [fundDetailId, setFundDetailId] = useState<string | null>(null)
   const [goalPickerFundId, setGoalPickerFundId] = useState<string | null>(null)
   const [assignLoading, setAssignLoading] = useState(false)
@@ -121,10 +120,6 @@ export default function DashboardClient() {
   function handleSortChange(order: SortOrder) {
     setSortOrder(order)
     localStorage.setItem(SORT_KEY, order)
-  }
-
-  function handleToggleExpand(goalId: string) {
-    setExpandedGoalId((prev) => (prev === goalId ? null : goalId))
   }
 
   async function handleFundClick(fundId: string) {
@@ -327,9 +322,6 @@ export default function DashboardClient() {
                     <GoalCard
                       key={goal.goalId}
                       {...goal}
-                      isExpanded={expandedGoalId === goal.goalId}
-                      onToggleExpand={handleToggleExpand}
-                      onFundClick={handleFundClick}
                     />
                   ))}
                 </div>
