@@ -41,7 +41,6 @@ export default function UserMenu({ email, initials }: UserMenuProps) {
     } else {
       toast.success('Logged out successfully')
       router.push('/auth/login')
-      router.refresh()
     }
   }
 
