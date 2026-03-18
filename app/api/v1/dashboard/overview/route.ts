@@ -37,7 +37,7 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   // Fetch all data in parallel
-  const [goalsRes, investmentsRes, insuranceRes, txRes] = await Promise.all([
+  const [goalsRes, investmentsRes, insuranceRes, txRes, plansRes] = await Promise.all([
     supabase
       .from('savings_goals')
       .select('goal_id, goal_name, target_amount')
@@ -55,6 +55,10 @@ export async function GET() {
       .select('goal_id, amount_vnd, interest_rate, investment_date, asset_type, units, unit_price, fund_id, funds(id, name, nav, updated_at)')
       .eq('user_id', user.id)
       .not('goal_id', 'is', null),
+    supabase
+      .from('monthly_plans')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id),
   ])
 
   if (goalsRes.error || investmentsRes.error || insuranceRes.error) {
@@ -65,6 +69,7 @@ export async function GET() {
   const investments = investmentsRes.data ?? []
   const insuranceMembers = insuranceRes.data ?? []
   const savingsTxs = txRes.data ?? []
+  const monthlyPlanCount = plansRes.count ?? 0
 
   // Detect stale NAV
   let navStale = false
@@ -232,7 +237,9 @@ export async function GET() {
   const insuranceOutput = insuranceMembers.map((m) => {
     const annualPremium = m.annual_payment_vnd
     const savings = Array.isArray(m.insurance_savings) ? m.insurance_savings : []
-    const amountSaved = savings.reduce((sum: number, s: { amount_saved_vnd: number }) => sum + (s.amount_saved_vnd ?? 0), 0)
+    const lumpSumSaved = savings.reduce((sum: number, s: { amount_saved_vnd: number }) => sum + (s.amount_saved_vnd ?? 0), 0)
+    const monthlySavedFromPlanning = monthlyPlanCount * Math.round(annualPremium / 12)
+    const amountSaved = lumpSumSaved + monthlySavedFromPlanning
     const savingsProgressPercentage = annualPremium > 0 ? (amountSaved / annualPremium) * 100 : 0
     const status = insuranceStatus(m.payment_date)
 
