@@ -87,19 +87,23 @@ export default function FundInvestmentsSection({ plan, investments, onRefresh, o
     }
 
     const url = editItem ? `/api/v1/fund-investments/${editItem.id}` : '/api/v1/fund-investments'
-    const res = await fetch(url, {
-      method: editItem ? 'PUT' : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
+    try {
+      const res = await fetch(url, {
+        method: editItem ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
 
-    if (!res.ok) {
-      const { error } = await res.json()
-      setFormError(error ?? 'Something went wrong. Please try again later.')
-    } else {
-      setShowForm(false)
-      onToast(editItem ? 'Fund investment updated' : 'Fund investment added')
-      onRefresh()
+      if (!res.ok) {
+        const { error } = await res.json()
+        setFormError(error ?? 'Something went wrong. Please try again later.')
+      } else {
+        setShowForm(false)
+        onToast(editItem ? 'Fund investment updated' : 'Fund investment added')
+        onRefresh()
+      }
+    } catch {
+      setFormError('Unable to save. Please check your connection and try again.')
     }
     setSaving(false)
   }

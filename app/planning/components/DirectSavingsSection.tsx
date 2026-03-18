@@ -69,19 +69,23 @@ export default function DirectSavingsSection({ plan, savings, onRefresh, onToast
     }
 
     const url = editItem ? `/api/v1/direct-savings/${editItem.id}` : '/api/v1/direct-savings'
-    const res = await fetch(url, {
-      method: editItem ? 'PUT' : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
+    try {
+      const res = await fetch(url, {
+        method: editItem ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
 
-    if (!res.ok) {
-      const { error } = await res.json()
-      setFormError(error ?? 'Something went wrong. Please try again later.')
-    } else {
-      setShowForm(false)
-      onToast(editItem ? 'Direct saving updated' : 'Direct saving added')
-      onRefresh()
+      if (!res.ok) {
+        const { error } = await res.json()
+        setFormError(error ?? 'Something went wrong. Please try again later.')
+      } else {
+        setShowForm(false)
+        onToast(editItem ? 'Direct saving updated' : 'Direct saving added')
+        onRefresh()
+      }
+    } catch {
+      setFormError('Unable to save. Please check your connection and try again.')
     }
     setSaving(false)
   }

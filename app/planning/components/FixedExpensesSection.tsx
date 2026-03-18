@@ -36,19 +36,23 @@ export default function FixedExpensesSection({ plan, fixedExpenses, onRefresh, o
     }
 
     setSaving(true)
-    const res = await fetch(`/api/v1/monthly-plans/${plan.id}/fixed-expense-overrides`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fixed_expense_id: editItem.expense_id, monthly_amount_override_vnd: num }),
-    })
+    try {
+      const res = await fetch(`/api/v1/monthly-plans/${plan.id}/fixed-expense-overrides`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fixed_expense_id: editItem.expense_id, monthly_amount_override_vnd: num }),
+      })
 
-    if (!res.ok) {
-      const { error } = await res.json()
-      setFormError(error ?? 'Something went wrong. Please try again later.')
-    } else {
-      setEditItem(null)
-      onToast('Fixed expense override saved')
-      onRefresh()
+      if (!res.ok) {
+        const { error } = await res.json()
+        setFormError(error ?? 'Something went wrong. Please try again later.')
+      } else {
+        setEditItem(null)
+        onToast('Fixed expense override saved')
+        onRefresh()
+      }
+    } catch {
+      setFormError('Unable to save. Please check your connection and try again.')
     }
     setSaving(false)
   }

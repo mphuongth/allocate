@@ -31,31 +31,35 @@ export default function SalaryInput({ plan, month, year, onPlanCreated }: Props)
     setError('')
     setSaving(true)
 
-    if (plan) {
-      // Update existing plan
-      const res = await fetch(`/api/v1/monthly-plans/${plan.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ salary_vnd: num }),
-      })
-      if (!res.ok) {
-        const { error: e } = await res.json()
-        setError(e ?? 'Something went wrong. Please try again later.')
-      }
-    } else {
-      // Create new plan on blur
-      const res = await fetch('/api/v1/monthly-plans', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ month, year, salary_vnd: num }),
-      })
-      if (res.ok) {
-        const newPlan = await res.json()
-        onPlanCreated(newPlan)
+    try {
+      if (plan) {
+        // Update existing plan
+        const res = await fetch(`/api/v1/monthly-plans/${plan.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ salary_vnd: num }),
+        })
+        if (!res.ok) {
+          const { error: e } = await res.json()
+          setError(e ?? 'Something went wrong. Please try again later.')
+        }
       } else {
-        const { error: e } = await res.json()
-        setError(e ?? 'Something went wrong. Please try again later.')
+        // Create new plan on blur
+        const res = await fetch('/api/v1/monthly-plans', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ month, year, salary_vnd: num }),
+        })
+        if (res.ok) {
+          const newPlan = await res.json()
+          onPlanCreated(newPlan)
+        } else {
+          const { error: e } = await res.json()
+          setError(e ?? 'Something went wrong. Please try again later.')
+        }
       }
+    } catch {
+      setError('Unable to save. Please check your connection and try again.')
     }
     setSaving(false)
   }
