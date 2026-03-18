@@ -48,7 +48,7 @@ export async function GET() {
       .eq('user_id', user.id),
     supabase
       .from('insurance_members')
-      .select('member_id, member_name, coverage_type, annual_payment_vnd, amount_saved_vnd, payment_date')
+      .select('member_id, member_name, coverage_type, annual_payment_vnd, payment_date, insurance_savings(amount_saved_vnd)')
       .eq('user_id', user.id),
     supabase
       .from('investment_transactions')
@@ -231,7 +231,8 @@ export async function GET() {
   // Insurance
   const insuranceOutput = insuranceMembers.map((m) => {
     const annualPremium = m.annual_payment_vnd
-    const amountSaved = m.amount_saved_vnd ?? 0
+    const savings = Array.isArray(m.insurance_savings) ? m.insurance_savings : []
+    const amountSaved = savings.reduce((sum: number, s: { amount_saved_vnd: number }) => sum + (s.amount_saved_vnd ?? 0), 0)
     const savingsProgressPercentage = annualPremium > 0 ? (amountSaved / annualPremium) * 100 : 0
     const status = insuranceStatus(m.payment_date)
 

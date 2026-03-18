@@ -2,6 +2,13 @@
 
 import { useState, useEffect, useCallback } from 'react'
 
+interface InsuranceSaving {
+  id: string
+  amount_saved_vnd: number
+  saved_date: string
+  created_at: string
+}
+
 interface InsuranceMember {
   member_id: string
   member_name: string
@@ -10,6 +17,8 @@ interface InsuranceMember {
   monthly_premium_vnd: number
   payment_date: string | null
   created_at: string
+  insurance_savings: InsuranceSaving[]
+  total_saved_vnd: number
 }
 
 const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
@@ -25,6 +34,13 @@ export default function InsuranceMembersTab() {
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
+
+  // Savings modal state
+  const [savingsMember, setSavingsMember] = useState<InsuranceMember | null>(null)
+  const [savingsAmount, setSavingsAmount] = useState('')
+  const [savingsDate, setSavingsDate] = useState('')
+  const [savingsError, setSavingsError] = useState('')
+  const [savingsSubmitting, setSavingsSubmitting] = useState(false)
 
   const fetchMembers = useCallback(async () => {
     setLoading(true)
@@ -53,6 +69,13 @@ export default function InsuranceMembersTab() {
     })
     setFormError('')
     setShowForm(true)
+  }
+
+  function openSavings(member: InsuranceMember) {
+    setSavingsMember(member)
+    setSavingsAmount('')
+    setSavingsDate(new Date().toISOString().split('T')[0])
+    setSavingsError('')
   }
 
   async function handleSave() {
@@ -93,6 +116,33 @@ export default function InsuranceMembersTab() {
     }
   }
 
+  async function handleRecordSavings() {
+    setSavingsError('')
+    const amount = Number(savingsAmount)
+    if (!savingsAmount || isNaN(amount) || amount <= 0) { setSavingsError('Amount must be greater than 0.'); return }
+
+    setSavingsSubmitting(true)
+    const res = await fetch('/api/v1/insurance-savings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        insurance_member_id: savingsMember!.member_id,
+        amount_saved_vnd: amount,
+        saved_date: savingsDate,
+      }),
+    })
+    if (!res.ok) {
+      const { error } = await res.json()
+      setSavingsError(error ?? 'Failed to record savings.')
+    } else {
+      setSavingsMember(null)
+      setSuccessMsg('Savings recorded.')
+      setTimeout(() => setSuccessMsg(''), 4000)
+      await fetchMembers()
+    }
+    setSavingsSubmitting(false)
+  }
+
   const totalAnnual = members.reduce((s, m) => s + m.annual_payment_vnd, 0)
   const totalMonthly = members.reduce((s, m) => s + m.monthly_premium_vnd, 0)
 
@@ -125,31 +175,46 @@ export default function InsuranceMembersTab() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50">
               <tr>
-                {['Member', 'Relationship', 'Annual Payment', 'Monthly Premium', 'Payment Date', 'Actions'].map((h) => (
+                {['Member', 'Relationship', 'Annual Payment', 'Monthly Premium', 'Amount Saved', 'Payment Date', 'Actions'].map((h) => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {members.map((member) => (
-                <tr key={member.member_id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium text-gray-900">{member.member_name}</td>
-                  <td className="px-4 py-3">
-                    <span className="inline-block px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs font-medium">{member.relationship}</span>
-                  </td>
-                  <td className="px-4 py-3 text-gray-700">{fmt(member.annual_payment_vnd)}</td>
-                  <td className="px-4 py-3 font-medium text-indigo-600">{fmt(member.monthly_premium_vnd)}</td>
-                  <td className="px-4 py-3 text-gray-500">
-                    {member.payment_date ? new Date(member.payment_date).toLocaleDateString('vi-VN') : '—'}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-3">
-                      <button onClick={() => openEdit(member)} className="text-xs text-indigo-600 hover:underline">Edit</button>
-                      <button onClick={() => handleDelete(member)} className="text-xs text-red-500 hover:underline">Delete</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {members.map((member) => {
+                const progress = member.annual_payment_vnd > 0
+                  ? Math.min((member.total_saved_vnd / member.annual_payment_vnd) * 100, 100)
+                  : 0
+                return (
+                  <tr key={member.member_id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 font-medium text-gray-900">{member.member_name}</td>
+                    <td className="px-4 py-3">
+                      <span className="inline-block px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs font-medium">{member.relationship}</span>
+                    </td>
+                    <td className="px-4 py-3 text-gray-700">{fmt(member.annual_payment_vnd)}</td>
+                    <td className="px-4 py-3 font-medium text-indigo-600">{fmt(member.monthly_premium_vnd)}</td>
+                    <td className="px-4 py-3">
+                      <div>
+                        <span className="font-medium text-gray-800">{fmt(member.total_saved_vnd)}</span>
+                        <div className="mt-1 h-1.5 w-24 bg-gray-100 rounded-full overflow-hidden">
+                          <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${progress}%` }} />
+                        </div>
+                        <span className="text-xs text-gray-400">{Math.round(progress)}%</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-gray-500">
+                      {member.payment_date ? new Date(member.payment_date).toLocaleDateString('vi-VN') : '—'}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-3">
+                        <button onClick={() => openSavings(member)} className="text-xs text-green-600 hover:underline">+ Savings</button>
+                        <button onClick={() => openEdit(member)} className="text-xs text-indigo-600 hover:underline">Edit</button>
+                        <button onClick={() => handleDelete(member)} className="text-xs text-red-500 hover:underline">Delete</button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         )}
@@ -190,6 +255,45 @@ export default function InsuranceMembersTab() {
               <button onClick={() => setShowForm(false)} className="flex-1 py-2 text-sm font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
               <button onClick={handleSave} disabled={saving} className="flex-1 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50">
                 {saving ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Record Savings Modal */}
+      {savingsMember && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-1">Record Savings</h3>
+            <p className="text-sm text-gray-500 mb-4">{savingsMember.member_name} · Total saved: {fmt(savingsMember.total_saved_vnd)}</p>
+            {savingsError && <p className="text-red-600 text-sm mb-3">{savingsError}</p>}
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Amount Saved (VND) *</label>
+                <input
+                  type="number"
+                  value={savingsAmount}
+                  onChange={(e) => setSavingsAmount(e.target.value)}
+                  placeholder="e.g. 1000000"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                <input
+                  type="date"
+                  value={savingsDate}
+                  onChange={(e) => setSavingsDate(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 mt-5">
+              <button onClick={() => setSavingsMember(null)} className="flex-1 py-2 text-sm font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+              <button onClick={handleRecordSavings} disabled={savingsSubmitting} className="flex-1 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50">
+                {savingsSubmitting ? 'Saving...' : 'Record Savings'}
               </button>
             </div>
           </div>

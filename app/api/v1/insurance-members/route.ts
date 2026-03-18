@@ -8,12 +8,19 @@ export async function GET() {
 
   const { data: members, error } = await supabase
     .from('insurance_members')
-    .select('*')
+    .select('*, insurance_savings(id, amount_saved_vnd, saved_date, created_at)')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
 
   if (error) return NextResponse.json({ error: 'Failed to fetch members' }, { status: 500 })
-  return NextResponse.json({ members })
+
+  const membersWithTotals = (members ?? []).map((m) => {
+    const savings = Array.isArray(m.insurance_savings) ? m.insurance_savings : []
+    const total_saved_vnd = savings.reduce((sum: number, s: { amount_saved_vnd: number }) => sum + (s.amount_saved_vnd ?? 0), 0)
+    return { ...m, total_saved_vnd }
+  })
+
+  return NextResponse.json({ members: membersWithTotals })
 }
 
 export async function POST(request: NextRequest) {
