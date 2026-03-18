@@ -1,6 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 
+export async function GET(request: NextRequest) {
+  const supabase = await createSupabaseServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { searchParams } = new URL(request.url)
+  const fundId = searchParams.get('fund_id')
+
+  let query = supabase
+    .from('fund_investments')
+    .select('id, fund_id, goal_id, amount_vnd, units_purchased, nav_at_purchase, created_at')
+    .eq('user_id', user.id)
+
+  if (fundId) query = query.eq('fund_id', fundId)
+
+  const { data, error } = await query
+  if (error) return NextResponse.json({ error: 'Failed to fetch investments' }, { status: 500 })
+  return NextResponse.json(data ?? [])
+}
+
 export async function POST(request: NextRequest) {
   const supabase = await createSupabaseServerClient()
   const { data: { user } } = await supabase.auth.getUser()
