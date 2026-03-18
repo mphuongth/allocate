@@ -24,6 +24,15 @@ interface Transaction {
   investment_date: string
 }
 
+interface FundInvestment {
+  id: string
+  goal_id: string | null
+  amount_vnd: number
+  units_purchased: number
+  nav_at_purchase: number
+  funds: { nav: number } | null
+}
+
 function calcProjectedInterest(amount: number, rate: number | null, investmentDate: string): number {
   if (!rate) return 0
   const months = Math.max(0, Math.floor(
@@ -46,23 +55,40 @@ export default function SavingsGoalsTab() {
 
   const fetchGoals = useCallback(async () => {
     setLoading(true)
-    const [goalsRes, txRes] = await Promise.all([
+    const [goalsRes, txRes, fiRes] = await Promise.all([
       fetch('/api/v1/savings-goals'),
       fetch('/api/v1/investment-transactions?limit=1000'),
+      fetch('/api/v1/fund-investments'),
     ])
     const { goals: rawGoals } = await goalsRes.json()
     const { transactions } = await txRes.json()
+    const fundInvestments: FundInvestment[] = fiRes.ok ? await fiRes.json() : []
 
     const statsMap = new Map<string, { count: number; invested: number; interest: number }>()
+
+    // investment_transactions: bank/stock/gold + legacy fund entries
     ;(transactions as Transaction[]).forEach((tx) => {
       if (!tx.goal_id) return
-      const gid = tx.goal_id
       const interest = calcProjectedInterest(tx.amount_vnd, tx.interest_rate, tx.investment_date)
-      const existing = statsMap.get(gid) ?? { count: 0, invested: 0, interest: 0 }
-      statsMap.set(gid, {
+      const existing = statsMap.get(tx.goal_id) ?? { count: 0, invested: 0, interest: 0 }
+      statsMap.set(tx.goal_id, {
         count: existing.count + 1,
         invested: existing.invested + tx.amount_vnd,
         interest: existing.interest + interest,
+      })
+    })
+
+    // fund_investments: NAV-based P&L
+    fundInvestments.forEach((fi) => {
+      if (!fi.goal_id) return
+      const currentNav = fi.funds?.nav ?? fi.nav_at_purchase
+      const currentValue = fi.units_purchased * currentNav
+      const gain = currentValue - fi.amount_vnd
+      const existing = statsMap.get(fi.goal_id) ?? { count: 0, invested: 0, interest: 0 }
+      statsMap.set(fi.goal_id, {
+        count: existing.count + 1,
+        invested: existing.invested + fi.amount_vnd,
+        interest: existing.interest + gain,
       })
     })
 
