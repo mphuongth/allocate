@@ -87,7 +87,7 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_OUT' || (!session && event !== 'INITIAL_SESSION')) {
+      if (!session && event !== 'INITIAL_SESSION' && event !== 'SIGNED_OUT') {
         toast.error('Session expired. Please log in again.', { duration: 5000 })
         router.push('/auth/login')
       }
