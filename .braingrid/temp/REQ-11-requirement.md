@@ -1,0 +1,68 @@
+# 📝 Settings Configuration - Investment Tracking & Savings Goals
+
+**Short ID:** REQ-11
+**ID:** 85abbaf4-3397-4018-b262-316a7cc645db
+**URL:** https://app.braingrid.ai/requirements/overview?id=85abbaf4-3397-4018-b262-316a7cc645db
+**Status:** PLANNED
+
+## Overview
+
+Replace the percentage-based fund allocation system with a transaction-level investment tracking system. Users will create savings goals, record individual investments with asset type and details, track unassigned investments separately, and view projected interest calculations for bank savings. The Settings page will organize functionality across five tabs: Savings Goals, Investment Transactions, Unassigned Investments, Fixed Expenses, and Insurance Members.
+
+## Data Models
+
+### savings_goals
+- goal_id (UUID PK), user_id (FK), goal_name (unique per user), description, created_at, updated_at
+
+### investment_transactions
+- transaction_id (UUID PK), goal_id (nullable FK), user_id (FK), asset_type (fund/bank/stock/gold), investment_date, amount_vnd, unit_price, units, interest_rate, notes, created_at, updated_at
+
+### fixed_expenses
+- expense_id (UUID PK), user_id (FK), expense_name, amount_vnd, category, created_at, updated_at
+
+### insurance_members
+- member_id (UUID PK), user_id (FK), member_name, relationship, annual_payment_vnd, monthly_premium_vnd (calculated = annual/12), payment_date, created_at, updated_at
+
+## Business Logic
+- projected_value = amount_vnd * (1 + interest_rate/100/12)^months_since_investment
+- monthly_premium_vnd = annual_payment_vnd / 12
+- Deleting a goal sets goal_id to null on all linked transactions
+
+## API Base: /api/v1
+
+## Acceptance Criteria
+
+- [] Given a user is on the Settings page, When the page loads, Then five tabs are displayed: Savings Goals, Investment Transactions, Unassigned Investments, Fixed Expenses, Insurance Members.
+- [] Given a user is on the Savings Goals tab, When they click "Create Goal", Then a form appears with fields for goal_name (required) and description (optional), and clicking "Save" creates the goal and displays it in the list.
+- [] Given a user has created a savings goal, When they click on the goal card, Then a detail view opens showing all linked investment transactions, total current value (invested + projected interest), and an "Add Transaction" button.
+- [] Given a user is viewing a goal detail, When they click "Add Transaction", Then a form appears with fields for investment_date, amount_vnd, asset_type (dropdown), unit_price, units, interest_rate, and notes, and clicking "Save" creates the transaction and displays it in the list.
+- [] Given a user has added a bank savings transaction with interest_rate = 5.5%, When the transaction is displayed, Then projected_interest is calculated as amount_vnd * (1 + 5.5/100/12)^months - amount_vnd and displayed alongside the transaction.
+- [] Given a user has multiple transactions linked to a goal, When viewing the goal detail, Then total_current_value = sum of (amount_vnd + projected_interest) for all linked transactions and is displayed prominently.
+- [] Given a user is on the Investment Transactions tab, When they filter by asset_type = "bank", Then only bank savings transactions are displayed.
+- [] Given a user is on the Investment Transactions tab, When they filter by date range (from_date = "2024-01-01", to_date = "2024-01-31"), Then only transactions with investment_date within that range are displayed.
+- [] Given a user is on the Unassigned Investments tab, When they select one or more transactions and click "Assign to Goal", Then a goal selector appears, and clicking "Assign" links the transactions to the selected goal and removes them from the Unassigned tab.
+- [] Given a user is on the Unassigned Investments tab, When they click "Delete" on a transaction, Then the transaction is permanently deleted and removed from the list.
+- [] Given a user is on the Fixed Expenses tab, When they click "Create Expense", Then a form appears with fields for expense_name, amount_vnd, and category, and clicking "Save" creates the expense and displays it in the list.
+- [] Given a user is on the Insurance Members tab, When they click "Add Member", Then a form appears with fields for member_name, relationship, annual_payment_vnd, and payment_date, and clicking "Save" calculates monthly_premium_vnd = annual_payment_vnd / 12 and creates the member.
+- [] Given a user is viewing an insurance member, When the member is displayed, Then monthly_premium_vnd is shown as annual_payment_vnd / 12 (rounded to nearest integer).
+- [] Given a user deletes a savings goal, When the deletion is confirmed, Then the goal is removed from the list, all linked transactions have goal_id set to null, and a success message displays: "Goal deleted. X transactions moved to Unassigned Investments."
+- [] Given a user attempts to create a transaction with investment_date in the future, When they click "Save", Then a validation error appears: "Investment date cannot be in the future."
+- [] Given a user attempts to create a transaction with asset_type not in ["fund", "bank", "stock", "gold"], When they click "Save", Then a validation error appears: "Invalid asset type."
+- [] Given a user attempts to create a transaction with amount_vnd <= 0, When they click "Save", Then a validation error appears: "Amount must be greater than 0."
+- [] Given a user attempts to link a transaction to a goal owned by another user, When the API request is made, Then a 403 Forbidden response is returned with message: "You don't have permission to access this goal."
+- [] Given a user attempts to access the API without a valid Bearer token, When the request is made, Then a 401 Unauthorized response is returned.
+- [] Given a user is on the Savings Goals tab, When they sort by "created_at" in descending order, Then goals are displayed with newest first.
+- [] Given a user is on the Investment Transactions tab, When they sort by "investment_date" in descending order, Then transactions are displayed with most recent first.
+- [] Given a user is on the Investment Transactions tab with pagination enabled, When they navigate to page 2, Then the next 20 transactions are displayed (or fewer if fewer than 20 remain).
+- [] Given a user edits a savings goal, When they change the goal_name and click "Save", Then the goal is updated, updated_at is refreshed, and the change is reflected in the list.
+- [] Given a user edits an investment transaction, When they change the interest_rate and click "Save", Then the transaction is updated, projected_interest is recalculated, and the goal's total_current_value is updated.
+- [] Given a user is on the Unassigned Investments tab, When they view the list, Then only transactions with goal_id = null are displayed.
+- [] Given a user reassigns a transaction from one goal to another, When the reassignment is confirmed, Then the transaction's goal_id is updated, the old goal's total_current_value is recalculated, and the new goal's total_current_value is recalculated.
+- [] Given a user is viewing a goal detail with multiple transactions, When they scroll through the transaction list, Then all transactions are displayed with consistent formatting and no data loss.
+- [] Given a user creates a transaction without providing optional fields (unit_price, units, interest_rate, notes), When the transaction is saved, Then it is created successfully with those fields set to null or empty.
+- [] Given a user is on the Settings page, When they switch between tabs, Then the previous tab's state is preserved (scroll position, filters, selections) when they return to it.
+- [] Given a user deletes a transaction, When the deletion is confirmed, Then the transaction is permanently removed, the goal's total_current_value is recalculated (if the transaction was linked to a goal), and a success message is displayed.
+- [] Given a user is on the Insurance Members tab, When they edit a member's annual_payment_vnd, When they click "Save", Then monthly_premium_vnd is recalculated and updated.
+- [] Given a user is on the Fixed Expenses tab, When they filter by category = "Housing", Then only expenses with that category are displayed.
+- [] Given a user attempts to create a goal with goal_name that is empty or only whitespace, When they click "Save", Then a validation error appears: "Goal name is required."
+- [] Given a user is viewing the Savings Goals list, When they see a goal with total_current_value = 15,500,000, When they click on the goal, Then the detail view shows invested_amount = 15,000,000 and projected_interest = 500,000 (sum of all linked transactions).
