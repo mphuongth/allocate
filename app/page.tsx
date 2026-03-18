@@ -42,6 +42,12 @@ export default async function HomePage() {
               📚 Fund Library
             </a>
             <a
+              href="/planning"
+              className="flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-800 transition-colors mt-2"
+            >
+              📅 Monthly Planning
+            </a>
+            <a
               href="/settings"
               className="flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-800 transition-colors mt-2"
             >
