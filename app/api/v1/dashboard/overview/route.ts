@@ -10,6 +10,14 @@ function isNavStale(updatedAt: string): boolean {
   return diffDays > 1
 }
 
+function calcProjectedInterest(amount: number, rate: number | null, investmentDate: string): number {
+  if (!rate) return 0
+  const months = Math.max(0, Math.floor(
+    (Date.now() - new Date(investmentDate).getTime()) / (1000 * 60 * 60 * 24 * 30.44)
+  ))
+  return amount * Math.pow(1 + rate / 100 / 12, months) - amount
+}
+
 function insuranceStatus(paymentDate: string | null): 'on_track' | 'upcoming' | 'overdue' | 'completed' {
   if (!paymentDate) return 'on_track'
   const payment = new Date(paymentDate)
@@ -29,7 +37,7 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   // Fetch all data in parallel
-  const [goalsRes, investmentsRes, insuranceRes] = await Promise.all([
+  const [goalsRes, investmentsRes, insuranceRes, txRes] = await Promise.all([
     supabase
       .from('savings_goals')
       .select('goal_id, goal_name, target_amount')
@@ -42,6 +50,11 @@ export async function GET() {
       .from('insurance_members')
       .select('member_id, member_name, coverage_type, annual_payment_vnd, amount_saved_vnd, payment_date')
       .eq('user_id', user.id),
+    supabase
+      .from('investment_transactions')
+      .select('goal_id, amount_vnd, interest_rate, investment_date')
+      .eq('user_id', user.id)
+      .not('goal_id', 'is', null),
   ])
 
   if (goalsRes.error || investmentsRes.error || insuranceRes.error) {
@@ -51,6 +64,7 @@ export async function GET() {
   const goals = goalsRes.data ?? []
   const investments = investmentsRes.data ?? []
   const insuranceMembers = insuranceRes.data ?? []
+  const savingsTxs = txRes.data ?? []
 
   // Detect stale NAV
   let navStale = false
@@ -85,6 +99,21 @@ export async function GET() {
       totalInvested: 0,
       funds: [],
     })
+  }
+
+  // Aggregate investment_transactions (bank/stock/gold/fund) into goals
+  let savingsTotalInvested = 0
+  let savingsTotalCurrentValue = 0
+
+  for (const tx of savingsTxs) {
+    if (!tx.goal_id || !goalMap.has(tx.goal_id)) continue
+    const interest = calcProjectedInterest(tx.amount_vnd, tx.interest_rate, tx.investment_date)
+    const currentValue = tx.amount_vnd + interest
+    const goalEntry = goalMap.get(tx.goal_id)!
+    goalEntry.totalInvested += tx.amount_vnd
+    goalEntry.currentValue += currentValue
+    savingsTotalInvested += tx.amount_vnd
+    savingsTotalCurrentValue += currentValue
   }
 
   // Process investments — group by fund within each goal (aggregate multiple purchases of same fund)
@@ -203,6 +232,10 @@ export async function GET() {
       nextPaymentDate: m.payment_date ?? null,
     }
   })
+
+  // Include savings transactions in global totals
+  totalAssets += savingsTotalCurrentValue
+  totalInvestedGlobal += savingsTotalInvested
 
   // Net worth (no liabilities tracked yet — set to 0)
   const totalLiabilities = 0
