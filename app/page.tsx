@@ -1,9 +1,6 @@
-'use client'
-
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
+import { redirect } from 'next/navigation'
+import { createSupabaseServerClient } from '@/lib/supabase-server'
 
 const BENEFITS = [
   {
@@ -32,67 +29,10 @@ const BENEFITS = [
   },
 ]
 
-export default function HomePage() {
-  const router = useRouter()
-  const [loading, setLoading] = useState(true)
-  const [authError, setAuthError] = useState(false)
-
-  useEffect(() => {
-    const supabase = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
-
-    supabase.auth
-      .getSession()
-      .then(({ data: { session }, error }) => {
-        if (error) {
-          setAuthError(true)
-          setLoading(false)
-          return
-        }
-        if (session) {
-          router.replace('/assets')
-        } else {
-          setLoading(false)
-        }
-      })
-      .catch(() => {
-        setAuthError(true)
-        setLoading(false)
-      })
-  }, [router])
-
-  if (loading && !authError) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm text-gray-500">Loading...</span>
-        </div>
-      </div>
-    )
-  }
-
-  if (authError) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <div className="text-center space-y-4">
-          <p className="text-red-600 text-sm">Something went wrong. Please try again.</p>
-          <button
-            onClick={() => {
-              setAuthError(false)
-              setLoading(true)
-              window.location.reload()
-            }}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    )
-  }
+export default async function HomePage() {
+  const supabase = await createSupabaseServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (user) redirect('/assets')
 
   return (
     <div className="min-h-screen flex flex-col bg-white text-gray-900">
