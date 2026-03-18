@@ -1,0 +1,37 @@
+## Acceptance Criteria
+- [] Given user is logged in, When dashboard loads, Then all aggregated data (goals, funds, insurance, net worth) displays within 2 seconds.
+- [] Given dashboard is loaded, When user views net worth card, Then total assets, total liabilities, and net worth are calculated and displayed correctly.
+- [] Given goals exist with targets, When user views goals section, Then each goal shows target amount, current value, profit/loss, and progress bar (current value / target).
+- [] Given funds exist with holdings, When user views funds section, Then each fund shows units held, current NAV, current value, and profit/loss (absolute and percentage).
+- [] Given funds are assigned to goals, When user views funds section, Then funds are grouped by goal; unassigned funds appear in separate section.
+- [] Given insurance members exist, When user views insurance section, Then each member shows coverage type, annual premium, amount saved, progress bar (amount_saved / annual_premium × 100), and payment status (on-track/upcoming/overdue).
+- [] Given insurance member has on_track status, When user views insurance card, Then status badge displays in green and shows "On Track".
+- [] Given insurance member has upcoming status (payment due within 7 days), When user views insurance card, Then status badge displays in yellow and shows "Upcoming".
+- [] Given insurance member has overdue status (payment past due), When user views insurance card, Then status badge displays in red and shows "Overdue".
+- [] Given insurance member has completed status, When user views insurance card, Then status badge displays in gray and shows "Completed" (disabled state).
+- [] Given funds have no goal assignment, When user views dashboard, Then unallocated investments section displays with total value and list of funds.
+- [] Given NAV data is missing or stale, When dashboard loads, Then missing NAV shows last known value with "stale" indicator or "—"; error is logged.
+- [] Given user has no data (no goals, funds, or insurance), When dashboard loads, Then empty state message displays with link to Settings.
+- [] Given dashboard is open, When user manually refreshes, Then all data is re-fetched and calculations are updated.
+- [] Given user is on mobile (<768px), When dashboard loads, Then layout is single-column, cards are full-width, and sections are collapsible.
+- [] Given user is on tablet (768-1023px), When dashboard loads, Then layout is 2-column grid with sections stacking vertically.
+- [] Given user is on desktop (1024px+), When dashboard loads, Then layout is multi-column grid with all sections visible.
+- [] Given dashboard is loading, When data fetch is in progress, Then skeleton cards (NetWorth, Goal, Insurance skeletons) are displayed matching the dashboard layout.
+- [] Given user clicks sort dropdown, When user selects a sort option (Manual Order, Progress High-to-Low, Progress Low-to-High, Alphabetical), Then goals are re-sorted immediately and sort preference is saved to localStorage.
+- [] Given user is on mobile (<768px), When fund detail modal opens, Then modal is full-screen or near-full-screen with scrollable content, touch targets are 44px+, and close button is easily accessible.
+- [] Given user is on mobile (<768px), When goal picker modal opens, Then modal is full-screen or near-full-screen with scrollable goal list, touch targets are 44px+, and close button is easily accessible.
+- [] Given profit/loss is positive, When user views fund or goal card, Then P&L displays in green.
+- [] Given profit/loss is negative, When user views fund or goal card, Then P&L displays in red.
+- [] Given API returns error, When dashboard loads, Then user sees error message and can retry; partial data displays if available.
+- [] Given goal has target set, When user views goal card, Then progress bar displays with percentage (current value / target, capped at 100%).
+- [] Given goal has no target set, When user views goal card, Then progress bar is hidden; only current value displays.
+- [] Given goal current value exceeds target, When user views progress bar, Then progress shows 100% or "Target exceeded" label.
+- [] Given goal has zero current value and no target, When user views goal card, Then displays "₫0" with no progress bar.
+- [] Given user clicks on a fund card, When fund detail modal opens, Then modal displays fund name, current NAV, quantity, current value, profit/loss summary, and purchase history table.
+- [] Given fund detail modal is open, When user views purchase history, Then each row displays purchase date, units, and NAV at purchase (sorted by date descending).
+- [] Given fund detail modal is open, When user clicks X button or clicks outside modal, Then modal closes and dashboard is visible.
+- [] Given fund detail modal is open, When user views P&L breakdown, Then entry price (avg) is calculated as weighted average NAV across all holdings, and total gain/loss is displayed.
+- [] Given user clicks "Assign to Goal" button, When goal picker modal opens, Then modal displays list of all goals with name, target amount, and current progress percentage.
+- [] Given goal picker modal is open, When user selects a goal, Then fund is reassigned to that goal (optimistic update) and modal closes.
+- [] Given goal picker modal is open, When user clicks X or clicks outside modal, Then modal closes without reassigning fund.
+- [] Given user clicks "Refresh" or navigates to dashboard, When data is fetched, Then net worth, P&L, and progress figures are all recalculated from latest NAV data.
