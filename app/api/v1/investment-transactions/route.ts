@@ -45,10 +45,13 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { goal_id, asset_type, investment_date, amount_vnd, unit_price, units, interest_rate, notes } = body
+  const { goal_id, asset_type, investment_date, amount_vnd, unit_price, units, interest_rate, notes, fund_id } = body
 
   if (!asset_type || !ASSET_TYPES.includes(asset_type)) {
     return NextResponse.json({ error: 'Invalid asset type.' }, { status: 400 })
+  }
+  if (asset_type === 'fund' && !fund_id) {
+    return NextResponse.json({ error: 'Fund selection is required for fund transactions.' }, { status: 400 })
   }
   if (!investment_date) {
     return NextResponse.json({ error: 'Investment date is required.' }, { status: 400 })
@@ -84,6 +87,7 @@ export async function POST(request: NextRequest) {
       units: units ? Number(units) : null,
       interest_rate: interest_rate ? Number(interest_rate) : null,
       notes: notes?.trim() || null,
+      fund_id: asset_type === 'fund' ? (fund_id || null) : null,
     })
     .select()
     .single()
