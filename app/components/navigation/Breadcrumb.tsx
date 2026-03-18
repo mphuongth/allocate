@@ -4,12 +4,11 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { ChevronRight } from 'lucide-react'
 
-const BREADCRUMB_MAP: Record<string, { label: string; parent?: string }> = {
-  '/': { label: 'Home' },
-  '/dashboard': { label: 'Assets Dashboard', parent: '/' },
-  '/planning': { label: 'Monthly Planning', parent: '/' },
-  '/funds': { label: 'Fund Library', parent: '/' },
-  '/settings': { label: 'Settings', parent: '/' },
+const BREADCRUMB_MAP: Record<string, { label: string }> = {
+  '/dashboard': { label: 'Assets Dashboard' },
+  '/planning': { label: 'Monthly Planning' },
+  '/funds': { label: 'Fund Library' },
+  '/settings': { label: 'Settings' },
 }
 
 interface Crumb {
@@ -20,15 +19,8 @@ interface Crumb {
 
 function buildCrumbs(pathname: string): Crumb[] {
   const entry = BREADCRUMB_MAP[pathname]
-  if (!entry) return [{ label: 'Home', href: '/', current: false }, { label: pathname.slice(1), href: pathname, current: true }]
-
-  const crumbs: Crumb[] = []
-  if (entry.parent) {
-    const parent = BREADCRUMB_MAP[entry.parent]
-    if (parent) crumbs.push({ label: parent.label, href: entry.parent, current: false })
-  }
-  crumbs.push({ label: entry.label, href: pathname, current: true })
-  return crumbs
+  if (!entry) return [{ label: pathname.slice(1), href: pathname, current: true }]
+  return [{ label: entry.label, href: pathname, current: true }]
 }
 
 export default function Breadcrumb() {
