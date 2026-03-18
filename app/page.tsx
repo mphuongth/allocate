@@ -32,7 +32,7 @@ const BENEFITS = [
 export default async function HomePage() {
   const supabase = await createSupabaseServerClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (user) redirect('/assets')
+  if (user) redirect('/dashboard')
 
   return (
     <div className="min-h-screen flex flex-col bg-white text-gray-900">
