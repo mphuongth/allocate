@@ -21,7 +21,7 @@ export default function FixedExpensesSection({ plan, fixedExpenses, onRefresh, o
 
   function openEdit(expense: FixedExpense) {
     setEditItem(expense)
-    const monthly = expense.override != null ? expense.override : Math.round(expense.amount_vnd / 12)
+    const monthly = expense.override != null ? expense.override : expense.amount_vnd
     setOverrideValue(String(monthly))
     setFormError('')
   }
@@ -92,7 +92,7 @@ export default function FixedExpensesSection({ plan, fixedExpenses, onRefresh, o
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="px-5 py-4 border-b border-gray-100">
         <h2 className="font-semibold text-gray-900">Fixed Expenses</h2>
-        <p className="text-xs text-gray-400 mt-0.5">Monthly amounts (annual ÷ 12). Override for this month only.</p>
+        <p className="text-xs text-gray-400 mt-0.5">Monthly amounts as entered in Settings. Override for this month only.</p>
       </div>
 
       <table className="w-full text-sm">
@@ -105,7 +105,7 @@ export default function FixedExpensesSection({ plan, fixedExpenses, onRefresh, o
         </thead>
         <tbody className="divide-y divide-gray-50">
           {fixedExpenses.map((expense) => {
-            const defaultMonthly = Math.round(expense.amount_vnd / 12)
+            const defaultMonthly = expense.amount_vnd
             const thisMonth = expense.override ?? defaultMonthly
             const hasOverride = expense.override != null
             return (
@@ -147,7 +147,7 @@ export default function FixedExpensesSection({ plan, fixedExpenses, onRefresh, o
                 onChange={(e) => setOverrideValue(e.target.value)}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
-              <p className="text-xs text-gray-400 mt-1">Default: {fmt(Math.round(editItem.amount_vnd / 12))}/month</p>
+              <p className="text-xs text-gray-400 mt-1">Default: {fmt(editItem.amount_vnd)}/month</p>
             </div>
             <div className="flex gap-3 mt-5">
               <button onClick={() => setEditItem(null)} className="flex-1 py-2 text-sm font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
