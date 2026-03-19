@@ -60,17 +60,17 @@ export default function MobileDrawer({ open, onClose, email, initials }: MobileD
       {/* Drawer */}
       <div
         ref={drawerRef}
-        className="absolute left-0 top-0 h-full w-[280px] max-w-[90vw] bg-white shadow-xl flex flex-col"
+        className="absolute left-0 top-0 h-full w-[280px] max-w-[90vw] bg-white dark:bg-gray-900 shadow-xl flex flex-col"
         role="dialog"
         aria-modal="true"
         aria-label="Navigation menu"
       >
-        <div className="flex items-center justify-between px-4 h-14 border-b border-gray-100">
+        <div className="flex items-center justify-between px-4 h-14 border-b border-gray-100 dark:border-gray-700">
           <span className="text-brand font-bold text-xl tracking-tight">Allocate</span>
           <button
             onClick={onClose}
             aria-label="Close navigation menu"
-            className="p-1 rounded hover:bg-gray-100 transition-colors"
+            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-400"
           >
             <X size={20} />
           </button>

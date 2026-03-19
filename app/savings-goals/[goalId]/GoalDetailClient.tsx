@@ -77,28 +77,28 @@ export default function GoalDetailClient({ goalId }: { goalId: string }) {
   const exceededTarget = goal?.progressPercentage !== null && (goal?.progressPercentage ?? 0) >= 100
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* Back */}
         <button
           onClick={() => router.push('/dashboard')}
-          className="flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-800 font-medium mb-6"
+          className="flex items-center gap-1.5 text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium mb-6"
         >
           ← Back to Dashboard
         </button>
 
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 flex items-center justify-between">
+          <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-sm text-red-700 dark:text-red-400 flex items-center justify-between">
             {error}
-            <button onClick={fetchData} className="text-red-600 font-medium hover:underline ml-4">Retry</button>
+            <button onClick={fetchData} className="text-red-600 dark:text-red-400 font-medium hover:underline ml-4">Retry</button>
           </div>
         )}
 
         {loading && (
           <div className="space-y-4">
-            <div className="h-8 w-48 bg-gray-200 rounded-lg animate-pulse" />
-            <div className="h-32 bg-gray-200 rounded-xl animate-pulse" />
-            <div className="h-64 bg-gray-200 rounded-xl animate-pulse" />
+            <div className="h-8 w-48 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse" />
+            <div className="h-32 bg-gray-200 dark:bg-gray-700 rounded-xl animate-pulse" />
+            <div className="h-64 bg-gray-200 dark:bg-gray-700 rounded-xl animate-pulse" />
           </div>
         )}
 
@@ -106,27 +106,27 @@ export default function GoalDetailClient({ goalId }: { goalId: string }) {
           <>
             {/* Goal header */}
             <div className="mb-6">
-              <h1 className="text-2xl font-bold text-gray-900 mb-1">
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">
                 {goal?.goalName ?? 'Goal'}
               </h1>
               {!goal && (
-                <p className="text-sm text-gray-400">Goal not found or has no data yet.</p>
+                <p className="text-sm text-gray-400 dark:text-gray-500">Goal not found or has no data yet.</p>
               )}
             </div>
 
             {/* Summary cards */}
             {goal && (
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-                  <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-1">Current Value</p>
-                  <p className="text-lg font-bold text-gray-900">{fmt(goal.currentValue)}</p>
+                <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm p-4">
+                  <p className="text-xs text-gray-400 dark:text-gray-500 font-medium uppercase tracking-wide mb-1">Current Value</p>
+                  <p className="text-lg font-bold text-gray-900 dark:text-gray-100">{fmt(goal.currentValue)}</p>
                 </div>
-                <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-                  <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-1">Invested</p>
-                  <p className="text-lg font-bold text-gray-900">{fmt(goal.totalInvested)}</p>
+                <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm p-4">
+                  <p className="text-xs text-gray-400 dark:text-gray-500 font-medium uppercase tracking-wide mb-1">Invested</p>
+                  <p className="text-lg font-bold text-gray-900 dark:text-gray-100">{fmt(goal.totalInvested)}</p>
                 </div>
-                <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-                  <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-1">P&amp;L</p>
+                <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm p-4">
+                  <p className="text-xs text-gray-400 dark:text-gray-500 font-medium uppercase tracking-wide mb-1">P&amp;L</p>
                   <p className={`text-lg font-bold ${plPositive ? 'text-green-600' : 'text-red-600'}`}>
                     {fmt(goal.profitLoss)}
                   </p>
@@ -135,12 +135,12 @@ export default function GoalDetailClient({ goalId }: { goalId: string }) {
                   </p>
                 </div>
                 {goal.targetAmount != null && (
-                  <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-                    <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-1">Progress</p>
-                    <p className={`text-lg font-bold ${exceededTarget ? 'text-green-600' : 'text-gray-900'}`}>
+                  <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm p-4">
+                    <p className="text-xs text-gray-400 dark:text-gray-500 font-medium uppercase tracking-wide mb-1">Progress</p>
+                    <p className={`text-lg font-bold ${exceededTarget ? 'text-green-600' : 'text-gray-900 dark:text-gray-100'}`}>
                       {exceededTarget ? '🎉 Done' : `${Math.round(goal.progressPercentage ?? 0)}%`}
                     </p>
-                    <p className="text-xs text-gray-400">of {fmt(goal.targetAmount)}</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500">of {fmt(goal.targetAmount)}</p>
                   </div>
                 )}
               </div>
@@ -148,14 +148,14 @@ export default function GoalDetailClient({ goalId }: { goalId: string }) {
 
             {/* Progress bar */}
             {goal?.targetAmount != null && (
-              <div className="mb-8 bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-                <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
+              <div className="mb-8 bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm p-5">
+                <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
                   <span>Target: {fmt(goal.targetAmount)}</span>
                   <span className={exceededTarget ? 'text-green-600 font-medium' : ''}>
                     {exceededTarget ? 'Target exceeded!' : `${Math.round(goal.progressPercentage ?? 0)}% complete`}
                   </span>
                 </div>
-                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div className="h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
                   <div
                     className={`h-full rounded-full transition-all ${exceededTarget ? 'bg-green-500' : 'bg-indigo-500'}`}
                     style={{ width: `${Math.min(goal.progressPercentage ?? 0, 100)}%` }}
@@ -165,29 +165,29 @@ export default function GoalDetailClient({ goalId }: { goalId: string }) {
             )}
 
             {/* Transactions table */}
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-100">
-                <h2 className="font-semibold text-gray-900">Transactions</h2>
+            <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+                <h2 className="font-semibold text-gray-900 dark:text-gray-100">Transactions</h2>
               </div>
 
               {transactions.length === 0 ? (
-                <div className="text-center py-12 text-gray-400 text-sm">No transactions yet.</div>
+                <div className="text-center py-12 text-gray-400 dark:text-gray-500 text-sm">No transactions yet.</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead className="bg-gray-50">
+                    <thead className="bg-gray-50 dark:bg-gray-800">
                       <tr>
                         {['Date', 'Type', 'Fund', 'Amount', 'Units', 'Unit Price', 'Interest Rate', 'Notes'].map((h) => (
-                          <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                          <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                             {h}
                           </th>
                         ))}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-50">
+                    <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
                       {transactions.map((tx) => (
-                        <tr key={tx.transaction_id} className="hover:bg-gray-50">
-                          <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
+                        <tr key={tx.transaction_id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                          <td className="px-4 py-3 text-gray-700 dark:text-gray-300 whitespace-nowrap">
                             {new Date(tx.investment_date).toLocaleDateString('vi-VN')}
                           </td>
                           <td className="px-4 py-3">
@@ -195,16 +195,16 @@ export default function GoalDetailClient({ goalId }: { goalId: string }) {
                               {tx.asset_type}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-gray-500 text-xs">{tx.fund_name ?? '—'}</td>
-                          <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">{fmt(tx.amount_vnd)}</td>
-                          <td className="px-4 py-3 text-gray-500">{tx.units ?? '—'}</td>
-                          <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
+                          <td className="px-4 py-3 text-gray-500 dark:text-gray-400 text-xs">{tx.fund_name ?? '—'}</td>
+                          <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap">{fmt(tx.amount_vnd)}</td>
+                          <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{tx.units ?? '—'}</td>
+                          <td className="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">
                             {tx.unit_price != null ? fmt(tx.unit_price) : '—'}
                           </td>
-                          <td className="px-4 py-3 text-gray-500">
+                          <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
                             {tx.interest_rate != null ? `${tx.interest_rate}%` : '—'}
                           </td>
-                          <td className="px-4 py-3 text-gray-400 max-w-32 truncate">{tx.notes ?? '—'}</td>
+                          <td className="px-4 py-3 text-gray-400 dark:text-gray-500 max-w-32 truncate">{tx.notes ?? '—'}</td>
                         </tr>
                       ))}
                     </tbody>

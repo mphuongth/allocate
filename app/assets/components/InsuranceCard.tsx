@@ -15,7 +15,6 @@ const fmtDate = (dateStr: string): string => {
   }
 }
 
-// Compute display status from raw payment date using user's local timezone
 type DisplayStatus = 'overdue' | 'due' | 'not_due_yet'
 
 function computeDisplayStatus(nextPaymentDate: string | null): DisplayStatus {
@@ -24,7 +23,6 @@ function computeDisplayStatus(nextPaymentDate: string | null): DisplayStatus {
     const payment = new Date(nextPaymentDate)
     if (isNaN(payment.getTime())) return 'not_due_yet'
     const now = new Date()
-    // Normalise both to local midnight so hour-of-day doesn't affect the result
     const todayMs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
     const paymentMs = new Date(payment.getFullYear(), payment.getMonth(), payment.getDate()).getTime()
     if (paymentMs < todayMs) return 'overdue'
@@ -55,10 +53,10 @@ interface Props {
 }
 
 const statusConfig: Record<DisplayStatus | 'completed', { label: string; className: string; icon?: boolean }> = {
-  not_due_yet: { label: 'Not Due Yet', className: 'bg-green-100 text-green-700' },
-  due: { label: 'Due', className: 'bg-yellow-100 text-yellow-700' },
-  overdue: { label: 'Overdue', className: 'bg-red-100 text-red-700', icon: true },
-  completed: { label: 'Completed', className: 'bg-gray-100 text-gray-500' },
+  not_due_yet: { label: 'Not Due Yet', className: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' },
+  due: { label: 'Due', className: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400' },
+  overdue: { label: 'Overdue', className: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400', icon: true },
+  completed: { label: 'Completed', className: 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400' },
 }
 
 export default function InsuranceCard({
@@ -69,7 +67,6 @@ export default function InsuranceCard({
   const displayStatus: DisplayStatus | 'completed' = isCompleted ? 'completed' : computeDisplayStatus(nextPaymentDate)
   const cfg = statusConfig[displayStatus]
   const progress = Math.min(savingsProgressPercentage, 100)
-  // Use server-side status for button — preserves the 30-day upcoming window from PR #17
   const showMarkAsPaid = status === 'upcoming' || status === 'overdue'
 
   const [inputAmount, setInputAmount] = useState('')
@@ -94,7 +91,6 @@ export default function InsuranceCard({
 
   useEffect(() => { fetchSavings() }, [fetchSavings])
 
-  // Close confirm dialog on Escape
   useEffect(() => {
     if (!showConfirm) return
     function onKey(e: KeyboardEvent) {
@@ -164,10 +160,10 @@ export default function InsuranceCard({
   }
 
   return (
-    <div className={`bg-white rounded-xl shadow-sm border border-gray-100 p-5 ${isCompleted ? 'opacity-60' : ''}`}>
+    <div className={`bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 ${isCompleted ? 'opacity-60' : ''}`}>
       {/* Header */}
       <div className="flex items-start justify-between mb-1">
-        <h3 className="font-semibold text-gray-900 text-sm">{insuranceName}</h3>
+        <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">{insuranceName}</h3>
         <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${cfg.className}`}>
           {cfg.icon && <TriangleAlert size={11} />}
           {cfg.label}
@@ -175,54 +171,54 @@ export default function InsuranceCard({
       </div>
 
       {coverageType && (
-        <p className="text-xs text-gray-400 mb-3">{coverageType}</p>
+        <p className="text-xs text-gray-400 dark:text-gray-500 mb-3">{coverageType}</p>
       )}
 
       <div className="grid grid-cols-2 gap-3 mb-3 text-xs">
         <div>
-          <p className="text-gray-400 mb-0.5">Annual Premium</p>
-          <p className="font-medium text-gray-800">{fmt(annualPremium)}</p>
+          <p className="text-gray-400 dark:text-gray-500 mb-0.5">Annual Premium</p>
+          <p className="font-medium text-gray-800 dark:text-gray-200">{fmt(annualPremium)}</p>
         </div>
         <div>
-          <p className="text-gray-400 mb-0.5">Amount Saved</p>
-          <p className="font-medium text-gray-800">{fmt(amountSaved)}</p>
+          <p className="text-gray-400 dark:text-gray-500 mb-0.5">Amount Saved</p>
+          <p className="font-medium text-gray-800 dark:text-gray-200">{fmt(amountSaved)}</p>
         </div>
       </div>
 
       <div>
-        <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
+        <div className="flex items-center justify-between text-xs text-gray-400 dark:text-gray-500 mb-1">
           <span>Savings Progress</span>
           <span>{Math.round(progress)}%</span>
         </div>
-        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+        <div className="h-1.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
           <div
-            className={`h-full rounded-full ${isCompleted ? 'bg-gray-400' : 'bg-indigo-500'}`}
+            className={`h-full rounded-full ${isCompleted ? 'bg-gray-400 dark:bg-gray-500' : 'bg-indigo-500'}`}
             style={{ width: `${progress}%` }}
           />
         </div>
       </div>
 
       {nextPaymentDate && !isCompleted && (
-        <p className="text-xs text-gray-400 mt-2">
+        <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
           Next Due: {fmtDate(nextPaymentDate)}
         </p>
       )}
       {lastPaymentDate && (
-        <p className="text-xs text-gray-400 mt-0.5">
+        <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
           Last Paid: {fmtDate(lastPaymentDate)}
         </p>
       )}
 
       {/* Toast */}
       {toast && (
-        <p className={`text-xs mt-2 ${toast.type === 'error' ? 'text-red-600' : 'text-green-600'}`}>
+        <p className={`text-xs mt-2 ${toast.type === 'error' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
           {toast.msg}
         </p>
       )}
 
       {/* Add Savings */}
-      <div className="border-t border-gray-100 mt-3 pt-3">
-        <p className="text-xs font-medium text-gray-600 mb-2">Add Savings</p>
+      <div className="border-t border-gray-100 dark:border-gray-700 mt-3 pt-3">
+        <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">Add Savings</p>
         <div className="flex gap-2">
           <input
             type="number"
@@ -230,7 +226,7 @@ export default function InsuranceCard({
             onChange={(e) => setInputAmount(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
             placeholder="Enter amount (VND)"
-            className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="flex-1 min-w-0 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
           <button
             onClick={handleAdd}
@@ -244,16 +240,16 @@ export default function InsuranceCard({
 
       {/* Savings Records */}
       {savingsList.length > 0 && (
-        <div className="border-t border-gray-100 mt-3 pt-3">
-          <p className="text-xs font-medium text-gray-600 mb-2">Savings Records</p>
+        <div className="border-t border-gray-100 dark:border-gray-700 mt-3 pt-3">
+          <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">Savings Records</p>
           <ul className="space-y-1.5">
             {savingsList.map((s) => (
               <li key={s.id} className="flex items-center justify-between">
-                <span className="text-xs text-gray-700">{fmt(s.amount_saved_vnd)}</span>
+                <span className="text-xs text-gray-700 dark:text-gray-300">{fmt(s.amount_saved_vnd)}</span>
                 <button
                   onClick={() => handleDelete(s.id)}
                   disabled={isLoading}
-                  className="text-gray-300 hover:text-red-500 disabled:opacity-40 transition-colors"
+                  className="text-gray-300 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-400 disabled:opacity-40 transition-colors"
                   aria-label="Delete"
                 >
                   <Trash2 size={13} />
@@ -266,7 +262,7 @@ export default function InsuranceCard({
 
       {/* Mark as Paid */}
       {showMarkAsPaid && (
-        <div className="border-t border-gray-100 mt-3 pt-3">
+        <div className="border-t border-gray-100 dark:border-gray-700 mt-3 pt-3">
           <button
             onClick={() => setShowConfirm(true)}
             className="w-full py-2 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 transition-colors"
@@ -282,21 +278,21 @@ export default function InsuranceCard({
           className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
           onClick={(e) => { if (e.target === e.currentTarget) setShowConfirm(false) }}
         >
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
-            <h3 className="text-base font-semibold text-gray-900 mb-1">Confirm Payment</h3>
-            <p className="text-sm text-gray-600 mb-4">
+          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-sm p-6 border border-gray-100 dark:border-gray-700">
+            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">Confirm Payment</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
               Mark payment as completed for <strong>{insuranceName}</strong>?
             </p>
-            <div className="bg-gray-50 rounded-lg p-3 mb-4 border-l-4 border-indigo-500">
-              <p className="text-xs text-gray-700 font-medium">{insuranceName}</p>
-              <p className="text-xs text-gray-500 mt-0.5">Annual Payment: {fmt(annualPremium)}</p>
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 mb-4 border-l-4 border-indigo-500">
+              <p className="text-xs text-gray-700 dark:text-gray-300 font-medium">{insuranceName}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Annual Payment: {fmt(annualPremium)}</p>
             </div>
-            <p className="text-xs text-gray-400 mb-5">Your savings balance will be reset to ₫0.</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mb-5">Your savings balance will be reset to ₫0.</p>
             <div className="flex gap-3">
               <button
                 onClick={() => setShowConfirm(false)}
                 disabled={markPaidLoading}
-                className="flex-1 py-2 text-sm font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
               >
                 Cancel
               </button>

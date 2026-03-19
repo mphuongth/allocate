@@ -21,15 +21,15 @@ export default function SettingsClient() {
   const [activeTab, setActiveTab] = useState<TabId>('goals')
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <div className="max-w-6xl mx-auto px-4 py-8">
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-          <p className="text-sm text-gray-500 mt-1">Manage your savings goals, investments, expenses, and insurance.</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Settings</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage your savings goals, investments, expenses, and insurance.</p>
         </div>
 
         {/* Tabs */}
-        <div className="border-b border-gray-200 mb-6">
+        <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
           <nav className="-mb-px flex gap-1 overflow-x-auto">
             {TABS.map((tab) => (
               <button
@@ -37,8 +37,8 @@ export default function SettingsClient() {
                 onClick={() => setActiveTab(tab.id)}
                 className={`whitespace-nowrap py-3 px-4 text-sm font-medium border-b-2 transition-colors ${
                   activeTab === tab.id
-                    ? 'border-indigo-600 text-indigo-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-400'
+                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-500'
                 }`}
               >
                 {tab.label}

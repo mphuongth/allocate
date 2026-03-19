@@ -253,15 +253,15 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
   return (
     <div>
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={onBack} className="text-sm text-indigo-600 hover:text-indigo-800 font-medium">← Back</button>
+        <button onClick={onBack} className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium">← Back</button>
         <div>
-          <h2 className="text-xl font-bold text-gray-900">{goal.goal_name}</h2>
-          {goal.description && <p className="text-sm text-gray-500">{goal.description}</p>}
+          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">{goal.goal_name}</h2>
+          {goal.description && <p className="text-sm text-gray-500 dark:text-gray-400">{goal.description}</p>}
         </div>
       </div>
 
       {successMsg && (
-        <div className="mb-4 p-3 bg-green-50 border border-green-200 text-green-800 rounded-lg text-sm">{successMsg}</div>
+        <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-300 rounded-lg text-sm">{successMsg}</div>
       )}
 
       {/* Summary */}
@@ -271,9 +271,9 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
           { label: 'Total Invested', value: fmt(totalInvested) },
           { label: 'Total Gain / Loss', value: fmt(totalGain) },
         ].map((item) => (
-          <div key={item.label} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center">
-            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">{item.label}</p>
-            <p className={`text-xl font-bold ${item.label === 'Total Gain / Loss' ? (totalGain >= 0 ? 'text-green-600' : 'text-red-600') : 'text-indigo-700'}`}>
+          <div key={item.label} className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 text-center">
+            <p className="text-xs text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wide mb-1">{item.label}</p>
+            <p className={`text-xl font-bold ${item.label === 'Total Gain / Loss' ? (totalGain >= 0 ? 'text-green-600' : 'text-red-600') : 'text-indigo-700 dark:text-indigo-300'}`}>
               {item.value}
             </p>
           </div>
@@ -281,11 +281,11 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
       </div>
 
       {/* Fund Investments (synced with Monthly Planning) */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-4">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden mb-4">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
           <div>
-            <h3 className="font-semibold text-gray-900">Fund Investments</h3>
-            <p className="text-xs text-gray-400 mt-0.5">Synced with Monthly Planning</p>
+            <h3 className="font-semibold text-gray-900 dark:text-gray-100">Fund Investments</h3>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Synced with Monthly Planning</p>
           </div>
           <button onClick={openFiAdd} className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700">
             Add Fund Investment
@@ -293,36 +293,36 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
         </div>
 
         {loading ? (
-          <div className="text-center py-8 text-gray-400 text-sm">Loading...</div>
+          <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">Loading...</div>
         ) : rows.filter(r => r._source === 'fi').length === 0 ? (
-          <div className="text-center py-8 text-gray-400 text-sm">No fund investments yet.</div>
+          <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">No fund investments yet.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50">
+              <thead className="bg-gray-50 dark:bg-gray-800">
                 <tr>
                   {['Date', 'Fund', 'Amount', 'Units', 'NAV at Purchase', 'Current NAV', 'Current Value', 'P&L', 'Actions'].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">{h}</th>
+                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">{h}</th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
                 {rows.filter((r): r is FiRow => r._source === 'fi').map((row) => {
                   const pl = row.current_value - row.amount_vnd
                   return (
-                    <tr key={row._id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-gray-700">{new Date(row.created_at).toLocaleDateString('vi-VN')}</td>
-                      <td className="px-4 py-3 font-medium text-gray-900">{row.fund_name}</td>
-                      <td className="px-4 py-3 text-gray-700">{fmt(row.amount_vnd)}</td>
-                      <td className="px-4 py-3 text-gray-500">{row.units_purchased}</td>
-                      <td className="px-4 py-3 text-gray-500">{fmt(row.nav_at_purchase)}</td>
-                      <td className="px-4 py-3 text-gray-500">{fmt(row.current_nav)}</td>
-                      <td className="px-4 py-3 font-medium text-gray-900">{fmt(row.current_value)}</td>
+                    <tr key={row._id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                      <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{new Date(row.created_at).toLocaleDateString('vi-VN')}</td>
+                      <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{row.fund_name}</td>
+                      <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{fmt(row.amount_vnd)}</td>
+                      <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{row.units_purchased}</td>
+                      <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{fmt(row.nav_at_purchase)}</td>
+                      <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{fmt(row.current_nav)}</td>
+                      <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{fmt(row.current_value)}</td>
                       <td className={`px-4 py-3 font-medium ${pl >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt(pl)}</td>
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
-                          <button onClick={() => openFiEdit(row)} className="text-xs text-indigo-600 hover:underline">Edit</button>
-                          <button onClick={() => handleFiDelete(row)} className="text-xs text-red-500 hover:underline">Delete</button>
+                          <button onClick={() => openFiEdit(row)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">Edit</button>
+                          <button onClick={() => handleFiDelete(row)} className="text-xs text-red-500 dark:text-red-400 hover:underline">Delete</button>
                         </div>
                       </td>
                     </tr>
@@ -335,11 +335,11 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
       </div>
 
       {/* Other Transactions (bank/stock/gold) */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
           <div>
-            <h3 className="font-semibold text-gray-900">Other Transactions</h3>
-            <p className="text-xs text-gray-400 mt-0.5">Bank deposits, stocks, gold</p>
+            <h3 className="font-semibold text-gray-900 dark:text-gray-100">Other Transactions</h3>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Bank deposits, stocks, gold</p>
           </div>
           <button onClick={openTxAdd} className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700">
             Add Transaction
@@ -347,40 +347,40 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
         </div>
 
         {loading ? (
-          <div className="text-center py-8 text-gray-400 text-sm">Loading...</div>
+          <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">Loading...</div>
         ) : rows.filter(r => r._source === 'tx').length === 0 ? (
-          <div className="text-center py-8 text-gray-400 text-sm">No transactions yet.</div>
+          <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">No transactions yet.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50">
+              <thead className="bg-gray-50 dark:bg-gray-800">
                 <tr>
                   {['Date', 'Type', 'Fund', 'Amount', 'Units', 'Interest Rate', 'Gain/Loss', 'Notes', 'Actions'].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">{h}</th>
+                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">{h}</th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
                 {rows.filter((r): r is TxRow => r._source === 'tx').map((row) => {
                   const gain = row.current_value - row.amount_vnd
                   return (
-                    <tr key={row._id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-gray-700">{new Date(row.investment_date).toLocaleDateString('vi-VN')}</td>
+                    <tr key={row._id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                      <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{new Date(row.investment_date).toLocaleDateString('vi-VN')}</td>
                       <td className="px-4 py-3">
                         <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${ASSET_COLORS[row.asset_type] ?? 'bg-gray-100 text-gray-700'}`}>
                           {row.asset_type}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-gray-500 text-xs">{row.fund_display ?? '—'}</td>
-                      <td className="px-4 py-3 font-medium text-gray-900">{fmt(row.amount_vnd)}</td>
-                      <td className="px-4 py-3 text-gray-500">{row.units ?? '—'}</td>
-                      <td className="px-4 py-3 text-gray-500">{row.interest_rate != null ? `${row.interest_rate}%` : '—'}</td>
+                      <td className="px-4 py-3 text-gray-500 dark:text-gray-400 text-xs">{row.fund_display ?? '—'}</td>
+                      <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{fmt(row.amount_vnd)}</td>
+                      <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{row.units ?? '—'}</td>
+                      <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{row.interest_rate != null ? `${row.interest_rate}%` : '—'}</td>
                       <td className={`px-4 py-3 font-medium ${gain >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt(gain)}</td>
-                      <td className="px-4 py-3 text-gray-400 max-w-32 truncate">{row.notes ?? '—'}</td>
+                      <td className="px-4 py-3 text-gray-400 dark:text-gray-500 max-w-32 truncate">{row.notes ?? '—'}</td>
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
-                          <button onClick={() => openTxEdit(row)} className="text-xs text-indigo-600 hover:underline">Edit</button>
-                          <button onClick={() => handleTxDelete(row)} className="text-xs text-red-500 hover:underline">Delete</button>
+                          <button onClick={() => openTxEdit(row)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">Edit</button>
+                          <button onClick={() => handleTxDelete(row)} className="text-xs text-red-500 dark:text-red-400 hover:underline">Delete</button>
                         </div>
                       </td>
                     </tr>
@@ -395,41 +395,41 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
       {/* Fund Investment Add/Edit Modal */}
       {(formMode === 'fi-add' || formMode === 'fi-edit') && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">{formMode === 'fi-edit' ? 'Edit Fund Investment' : 'Add Fund Investment'}</h3>
-            {formError && <p className="text-red-600 text-sm mb-3">{formError}</p>}
+          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-md p-6 border border-gray-100 dark:border-gray-700">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{formMode === 'fi-edit' ? 'Edit Fund Investment' : 'Add Fund Investment'}</h3>
+            {formError && <p className="text-red-600 dark:text-red-400 text-sm mb-3">{formError}</p>}
             <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Fund *</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fund *</label>
                 <select
                   value={fiForm.fund_id}
                   onChange={(e) => setFiForm({ ...fiForm, fund_id: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   <option value="">Select a fund...</option>
                   {funds.map((f) => <option key={f.id} value={f.id}>{f.code} - {f.name}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Amount (VND) *</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Amount (VND) *</label>
                 <input type="number" value={fiForm.amount_vnd} onChange={(e) => setFiForm({ ...fiForm, amount_vnd: e.target.value })}
-                  placeholder="e.g. 10000000" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  placeholder="e.g. 10000000" className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Units *</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Units *</label>
                   <input type="number" value={fiForm.units_purchased} onChange={(e) => setFiForm({ ...fiForm, units_purchased: e.target.value })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">NAV at Purchase *</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">NAV at Purchase *</label>
                   <input type="number" value={fiForm.nav_at_purchase} onChange={(e) => setFiForm({ ...fiForm, nav_at_purchase: e.target.value })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
               </div>
             </div>
             <div className="flex gap-3 mt-5">
-              <button onClick={() => setFormMode(null)} className="flex-1 py-2 text-sm font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+              <button onClick={() => setFormMode(null)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Cancel</button>
               <button onClick={handleFiSave} disabled={saving} className="flex-1 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50">
                 {saving ? 'Saving...' : 'Save'}
               </button>
@@ -441,55 +441,55 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
       {/* Other Transaction Add/Edit Modal */}
       {(formMode === 'tx-add' || formMode === 'tx-edit') && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">{formMode === 'tx-edit' ? 'Edit Transaction' : 'Add Transaction'}</h3>
-            {formError && <p className="text-red-600 text-sm mb-3">{formError}</p>}
+          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto border border-gray-100 dark:border-gray-700">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{formMode === 'tx-edit' ? 'Edit Transaction' : 'Add Transaction'}</h3>
+            {formError && <p className="text-red-600 dark:text-red-400 text-sm mb-3">{formError}</p>}
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Asset Type *</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Asset Type *</label>
                   <select value={txForm.asset_type} onChange={(e) => setTxForm({ ...txForm, asset_type: e.target.value, fund_id: '' })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
                     {['bank', 'stock', 'gold'].map((t) => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Investment Date *</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Investment Date *</label>
                   <input type="date" value={txForm.investment_date} max={new Date().toISOString().slice(0, 10)}
                     onChange={(e) => setTxForm({ ...txForm, investment_date: e.target.value })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Amount (VND) *</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Amount (VND) *</label>
                 <input type="number" value={txForm.amount_vnd} onChange={(e) => setTxForm({ ...txForm, amount_vnd: e.target.value })}
-                  placeholder="e.g. 10000000" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  placeholder="e.g. 10000000" className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Unit Price</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Unit Price</label>
                   <input type="number" value={txForm.unit_price} onChange={(e) => setTxForm({ ...txForm, unit_price: e.target.value })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Units</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Units</label>
                   <input type="number" value={txForm.units} onChange={(e) => setTxForm({ ...txForm, units: e.target.value })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Interest Rate (%/year)</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Interest Rate (%/year)</label>
                 <input type="number" step="0.1" value={txForm.interest_rate} onChange={(e) => setTxForm({ ...txForm, interest_rate: e.target.value })}
-                  placeholder="e.g. 5.5" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  placeholder="e.g. 5.5" className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Notes</label>
                 <textarea value={txForm.notes} onChange={(e) => setTxForm({ ...txForm, notes: e.target.value })} rows={2}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
               </div>
             </div>
             <div className="flex gap-3 mt-5">
-              <button onClick={() => setFormMode(null)} className="flex-1 py-2 text-sm font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+              <button onClick={() => setFormMode(null)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Cancel</button>
               <button onClick={handleTxSave} disabled={saving} className="flex-1 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50">
                 {saving ? 'Saving...' : 'Save'}
               </button>

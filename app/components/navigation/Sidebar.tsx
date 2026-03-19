@@ -24,12 +24,12 @@ export default function Sidebar({ email, initials, onNavClick }: SidebarProps) {
 
   return (
     <nav
-      className={`flex flex-col h-full bg-white border-r border-gray-200 transition-all duration-200 ${
+      className={`flex flex-col h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 transition-all duration-200 ${
         sidebarCollapsed ? 'w-16' : 'w-60'
       }`}
     >
       {/* Logo */}
-      <div className={`flex items-center h-16 px-4 border-b border-gray-100 ${sidebarCollapsed ? 'justify-center' : ''}`}>
+      <div className={`flex items-center h-16 px-4 border-b border-gray-100 dark:border-gray-700 ${sidebarCollapsed ? 'justify-center' : ''}`}>
         {sidebarCollapsed ? (
           <span className="text-brand font-bold text-lg">A</span>
         ) : (
@@ -50,8 +50,8 @@ export default function Sidebar({ email, initials, onNavClick }: SidebarProps) {
                 title={sidebarCollapsed ? label : undefined}
                 className={`flex items-center gap-3 h-11 px-3 mx-2 rounded-md border-l-4 transition-colors text-sm font-medium ${
                   active
-                    ? 'border-brand bg-brand-light text-gray-900 font-semibold'
-                    : 'border-transparent text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                    ? 'border-brand bg-brand-light dark:bg-brand/20 text-gray-900 dark:text-gray-100 font-semibold'
+                    : 'border-transparent text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100'
                 } ${sidebarCollapsed ? 'justify-center px-0 mx-2' : ''}`}
               >
                 <Icon size={18} className="shrink-0" />
@@ -64,11 +64,11 @@ export default function Sidebar({ email, initials, onNavClick }: SidebarProps) {
 
       {/* Profile */}
       {!sidebarCollapsed && (
-        <div className="flex items-center gap-3 px-4 py-3 border-t border-gray-100">
+        <div className="flex items-center gap-3 px-4 py-3 border-t border-gray-100 dark:border-gray-700">
           <div className="w-8 h-8 rounded-full bg-brand flex items-center justify-center text-white text-xs font-semibold shrink-0">
             {initials}
           </div>
-          <p className="text-xs text-gray-600 truncate">{email}</p>
+          <p className="text-xs text-gray-600 dark:text-gray-400 truncate">{email}</p>
         </div>
       )}
     </nav>

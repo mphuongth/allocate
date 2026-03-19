@@ -163,61 +163,61 @@ export default function SavingsGoalsTab() {
   return (
     <div>
       {successMsg && (
-        <div className="mb-4 p-3 bg-green-50 border border-green-200 text-green-800 rounded-lg text-sm">{successMsg}</div>
+        <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-300 rounded-lg text-sm">{successMsg}</div>
       )}
 
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-lg font-semibold text-gray-900">Savings Goals</h2>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Savings Goals</h2>
         <button onClick={openCreate} className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors">
           Create Goal
         </button>
       </div>
 
       {loading ? (
-        <div className="text-center py-12 text-gray-400 text-sm">Loading...</div>
+        <div className="text-center py-12 text-gray-400 dark:text-gray-500 text-sm">Loading...</div>
       ) : goals.length === 0 ? (
-        <div className="text-center py-12 text-gray-400">
+        <div className="text-center py-12 text-gray-400 dark:text-gray-500">
           <p className="text-lg mb-2">No savings goals yet</p>
           <p className="text-sm">Create a goal to start tracking your investments.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {goals.map((goal) => (
-            <div key={goal.goal_id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow">
+            <div key={goal.goal_id} className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 hover:shadow-md transition-shadow">
               <div className="mb-3">
-                <h3 className="font-semibold text-gray-900 text-base">{goal.goal_name}</h3>
-                {goal.description && <p className="text-sm text-gray-500 mt-1">{goal.description}</p>}
+                <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-base">{goal.goal_name}</h3>
+                {goal.description && <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{goal.description}</p>}
               </div>
 
-              <div className="bg-indigo-50 rounded-lg p-3 mb-3">
-                <p className="text-xs text-indigo-600 font-medium mb-1">Current Total Value</p>
-                <p className="text-xl font-bold text-indigo-700">{fmt(goal.totalInvested + goal.projectedInterest)}</p>
-                <div className="flex gap-4 mt-2 text-xs text-gray-500">
+              <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-3 mb-3">
+                <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium mb-1">Current Total Value</p>
+                <p className="text-xl font-bold text-indigo-700 dark:text-indigo-300">{fmt(goal.totalInvested + goal.projectedInterest)}</p>
+                <div className="flex gap-4 mt-2 text-xs text-gray-500 dark:text-gray-400">
                   <span>Invested: {fmt(goal.totalInvested)}</span>
                   <span>Interest: {fmt(goal.projectedInterest)}</span>
                 </div>
               </div>
 
-              <p className="text-xs text-gray-400 mb-4">
+              <p className="text-xs text-gray-400 dark:text-gray-500 mb-4">
                 {new Date(goal.created_at).toLocaleDateString('vi-VN')} · {goal.transactionCount} transaction{goal.transactionCount !== 1 ? 's' : ''}
               </p>
 
               <div className="flex gap-2">
                 <button
                   onClick={() => setSelectedGoal(goal)}
-                  className="flex-1 py-2 text-sm font-medium text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors"
+                  className="flex-1 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-700 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
                 >
                   View Details
                 </button>
                 <button
                   onClick={() => openEdit(goal)}
-                  className="px-3 py-2 text-sm font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                  className="px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                 >
                   Edit
                 </button>
                 <button
                   onClick={() => handleDelete(goal)}
-                  className="px-3 py-2 text-sm font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+                  className="px-3 py-2 text-sm font-medium text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                 >
                   Delete
                 </button>
@@ -230,33 +230,33 @@ export default function SavingsGoalsTab() {
       {/* Create/Edit Modal */}
       {showForm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">{editGoal ? 'Edit Goal' : 'Create Goal'}</h3>
-            {formError && <p className="text-red-600 text-sm mb-3">{formError}</p>}
+          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-md p-6 border border-gray-100 dark:border-gray-700">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{editGoal ? 'Edit Goal' : 'Create Goal'}</h3>
+            {formError && <p className="text-red-600 dark:text-red-400 text-sm mb-3">{formError}</p>}
             <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Goal Name *</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Goal Name *</label>
                 <input
                   type="text"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                   placeholder="e.g. Retirement"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
                 <textarea
                   value={formDesc}
                   onChange={(e) => setFormDesc(e.target.value)}
                   rows={3}
                   placeholder="Optional description"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
                 />
               </div>
             </div>
             <div className="flex gap-3 mt-5">
-              <button onClick={() => setShowForm(false)} className="flex-1 py-2 text-sm font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+              <button onClick={() => setShowForm(false)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Cancel</button>
               <button onClick={handleSave} disabled={saving} className="flex-1 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50">
                 {saving ? 'Saving...' : 'Save'}
               </button>

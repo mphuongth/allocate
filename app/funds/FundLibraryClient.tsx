@@ -171,14 +171,14 @@ export default function FundLibraryClient() {
   const SortButton = ({ col, label }: { col: SortKey; label: string }) => (
     <button
       onClick={() => setSortBy(col)}
-      className={`text-left font-semibold text-sm ${sortBy === col ? 'text-indigo-600' : 'text-gray-600'}`}
+      className={`text-left font-semibold text-sm ${sortBy === col ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-600 dark:text-gray-400'}`}
     >
       {label} {sortBy === col && '↑'}
     </button>
   )
 
   return (
-    <main className="min-h-screen bg-gray-50 px-4 py-8 sm:px-8">
+    <main className="min-h-screen bg-gray-50 dark:bg-gray-950 px-4 py-8 sm:px-8">
       {/* Toasts */}
       <div className="fixed top-4 right-4 z-50 flex flex-col gap-2">
         {toasts.map((t) => (
@@ -195,8 +195,8 @@ export default function FundLibraryClient() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Fund Library</h1>
-            <p className="text-sm text-gray-500 mt-1">Manage your investment funds</p>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Fund Library</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage your investment funds</p>
           </div>
           <button
             onClick={openAddModal}
@@ -208,19 +208,19 @@ export default function FundLibraryClient() {
 
         {/* Content */}
         {loading ? (
-          <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="bg-white dark:bg-gray-900 rounded-lg shadow overflow-hidden">
             {[...Array(3)].map((_, i) => (
-              <div key={i} className="flex gap-4 p-4 border-b border-gray-100 animate-pulse">
-                <div className="h-4 bg-gray-200 rounded flex-1" />
-                <div className="h-4 bg-gray-200 rounded w-20" />
-                <div className="h-4 bg-gray-200 rounded w-16" />
-                <div className="h-4 bg-gray-200 rounded w-16" />
+              <div key={i} className="flex gap-4 p-4 border-b border-gray-100 dark:border-gray-700 animate-pulse">
+                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded flex-1" />
+                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-20" />
+                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-16" />
+                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-16" />
               </div>
             ))}
           </div>
         ) : error ? (
-          <div className="bg-white rounded-lg shadow p-8 text-center">
-            <p className="text-red-600 mb-4">{error}</p>
+          <div className="bg-white dark:bg-gray-900 rounded-lg shadow p-8 text-center border border-gray-100 dark:border-gray-700">
+            <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
             <button
               onClick={loadFunds}
               className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded hover:bg-indigo-700 transition-colors"
@@ -229,10 +229,10 @@ export default function FundLibraryClient() {
             </button>
           </div>
         ) : funds.length === 0 ? (
-          <div className="bg-white rounded-lg shadow p-16 text-center">
+          <div className="bg-white dark:bg-gray-900 rounded-lg shadow p-16 text-center border border-gray-100 dark:border-gray-700">
             <div className="text-5xl mb-4">📚</div>
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">No funds yet</h2>
-            <p className="text-gray-500 text-sm mb-6">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">No funds yet</h2>
+            <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">
               Add your first fund to get started. You&apos;ll be able to select these funds when setting up your allocation.
             </p>
             <button
@@ -245,39 +245,39 @@ export default function FundLibraryClient() {
         ) : (
           <>
             {/* Desktop table */}
-            <div className="hidden md:block bg-white rounded-lg shadow overflow-x-auto">
+            <div className="hidden md:block bg-white dark:bg-gray-900 rounded-lg shadow overflow-x-auto border border-gray-100 dark:border-gray-700">
               <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200">
+                <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
                   <tr>
                     <th className="px-4 py-3 text-left"><SortButton col="name" label="Name" /></th>
                     <th className="px-4 py-3 text-left"><SortButton col="code" label="Code" /></th>
                     <th className="px-4 py-3 text-left"><SortButton col="fund_type" label="Type" /></th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-600">NAV</th>
-                    <th className="px-4 py-3 text-right text-sm font-semibold text-gray-600">Actions</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-600 dark:text-gray-400">NAV</th>
+                    <th className="px-4 py-3 text-right text-sm font-semibold text-gray-600 dark:text-gray-400">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {sortedFunds.map((fund) => (
-                    <tr key={fund.id} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="px-4 py-3 text-sm font-medium text-gray-900">{fund.name}</td>
-                      <td className="px-4 py-3 text-sm font-mono text-gray-500">{fund.code}</td>
+                    <tr key={fund.id} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
+                      <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">{fund.name}</td>
+                      <td className="px-4 py-3 text-sm font-mono text-gray-500 dark:text-gray-400">{fund.code}</td>
                       <td className="px-4 py-3">
                         <span className={`text-xs px-2 py-1 rounded font-medium ${FUND_TYPE_COLORS[fund.fund_type]}`}>
                           {FUND_TYPE_LABELS[fund.fund_type]}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm font-medium text-gray-900">{fund.nav.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">{fund.nav.toLocaleString()}</td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex gap-2 justify-end">
                           <button
                             onClick={() => openEditModal(fund)}
-                            className="text-xs px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 text-gray-700 transition-colors"
+                            className="text-xs px-3 py-1 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors"
                           >
                             Edit
                           </button>
                           <button
                             onClick={() => setDeleteTarget(fund)}
-                            className="text-xs px-3 py-1 border border-red-200 rounded hover:bg-red-50 text-red-600 transition-colors"
+                            className="text-xs px-3 py-1 border border-red-200 dark:border-red-800 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 transition-colors"
                           >
                             Delete
                           </button>
@@ -292,27 +292,27 @@ export default function FundLibraryClient() {
             {/* Mobile card list */}
             <div className="md:hidden flex flex-col gap-3">
               {sortedFunds.map((fund) => (
-                <div key={fund.id} className="bg-white rounded-lg shadow p-4">
+                <div key={fund.id} className="bg-white dark:bg-gray-900 rounded-lg shadow p-4 border border-gray-100 dark:border-gray-700">
                   <div className="flex items-start justify-between mb-2">
                     <div>
-                      <p className="font-semibold text-gray-900 text-sm">{fund.name}</p>
-                      <p className="text-xs font-mono text-gray-500">{fund.code}</p>
+                      <p className="font-semibold text-gray-900 dark:text-gray-100 text-sm">{fund.name}</p>
+                      <p className="text-xs font-mono text-gray-500 dark:text-gray-400">{fund.code}</p>
                     </div>
                     <span className={`text-xs px-2 py-1 rounded font-medium ${FUND_TYPE_COLORS[fund.fund_type]}`}>
                       {FUND_TYPE_LABELS[fund.fund_type]}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-700 mb-3">NAV: <span className="font-medium">{fund.nav.toLocaleString()}</span></p>
+                  <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">NAV: <span className="font-medium">{fund.nav.toLocaleString()}</span></p>
                   <div className="flex gap-2">
                     <button
                       onClick={() => openEditModal(fund)}
-                      className="flex-1 text-xs px-3 py-2 border border-gray-300 rounded hover:bg-gray-100 text-gray-700 transition-colors"
+                      className="flex-1 text-xs px-3 py-2 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors"
                     >
                       Edit
                     </button>
                     <button
                       onClick={() => setDeleteTarget(fund)}
-                      className="flex-1 text-xs px-3 py-2 border border-red-200 rounded hover:bg-red-50 text-red-600 transition-colors"
+                      className="flex-1 text-xs px-3 py-2 border border-red-200 dark:border-red-800 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 transition-colors"
                     >
                       Delete
                     </button>
@@ -327,43 +327,43 @@ export default function FundLibraryClient() {
       {/* Add/Edit Modal */}
       {modalMode && (
         <div className="fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-            <h2 className="text-lg font-bold text-gray-900 mb-4">
+          <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-md p-6 border border-gray-100 dark:border-gray-700">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">
               {modalMode === 'add' ? 'Add Fund' : 'Edit Fund'}
             </h2>
             {formError && (
-              <div className="mb-4 p-3 bg-red-50 text-red-700 text-sm rounded">{formError}</div>
+              <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-sm rounded border border-red-200 dark:border-red-800">{formError}</div>
             )}
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Fund Name *</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fund Name *</label>
                 <input
                   type="text"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                   maxLength={255}
                   placeholder="e.g., Vanguard S&P 500 ETF"
-                  className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Code *</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Code *</label>
                   <input
                     type="text"
                     value={formCode}
                     onChange={(e) => setFormCode(e.target.value.toUpperCase())}
                     maxLength={50}
                     placeholder="e.g., VOO"
-                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-mono"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-mono"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Type *</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Type *</label>
                   <select
                     value={formType}
                     onChange={(e) => setFormType(e.target.value as FundType)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                   >
                     <option value="">Select type</option>
                     {(Object.keys(FUND_TYPE_LABELS) as FundType[]).map((t) => (
@@ -373,7 +373,7 @@ export default function FundLibraryClient() {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">NAV *</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">NAV *</label>
                 <input
                   type="number"
                   value={formNav}
@@ -381,7 +381,7 @@ export default function FundLibraryClient() {
                   min="0.01"
                   step="0.01"
                   placeholder="e.g., 450.25"
-                  className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                 />
               </div>
             </div>
@@ -389,7 +389,7 @@ export default function FundLibraryClient() {
               <button
                 onClick={closeModal}
                 disabled={saving}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+                className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -408,14 +408,14 @@ export default function FundLibraryClient() {
       {/* Delete Confirmation Modal */}
       {deleteTarget && (
         <div className="fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-sm p-6">
-            <h2 className="text-lg font-bold text-gray-900 mb-2">Delete {deleteTarget.name}?</h2>
-            <p className="text-sm text-gray-500 mb-6">This action cannot be undone.</p>
+          <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-sm p-6 border border-gray-100 dark:border-gray-700">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-2">Delete {deleteTarget.name}?</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">This action cannot be undone.</p>
             <div className="flex gap-3">
               <button
                 onClick={() => setDeleteTarget(null)}
                 disabled={deleting}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+                className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>

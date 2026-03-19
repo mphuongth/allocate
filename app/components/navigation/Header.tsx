@@ -15,12 +15,12 @@ export default function Header({ email, initials, onMobileMenuToggle }: HeaderPr
   const { sidebarCollapsed, setSidebarCollapsed } = useNavigation()
 
   return (
-    <header className="h-16 border-b border-gray-200 bg-white flex items-center px-4 gap-4 shrink-0">
+    <header className="h-16 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 flex items-center px-4 gap-4 shrink-0">
       {/* Mobile hamburger */}
       <button
         onClick={onMobileMenuToggle}
         aria-label="Toggle navigation menu"
-        className="lg:hidden p-1.5 rounded hover:bg-gray-100 transition-colors"
+        className="lg:hidden p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-400"
       >
         <Menu size={20} />
       </button>
@@ -29,7 +29,7 @@ export default function Header({ email, initials, onMobileMenuToggle }: HeaderPr
       <button
         onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
         aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        className="hidden md:flex lg:hidden p-1.5 rounded hover:bg-gray-100 transition-colors"
+        className="hidden md:flex lg:hidden p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-400"
       >
         {sidebarCollapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
       </button>
