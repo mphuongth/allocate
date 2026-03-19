@@ -69,7 +69,8 @@ export default function InsuranceCard({
   const displayStatus: DisplayStatus | 'completed' = isCompleted ? 'completed' : computeDisplayStatus(nextPaymentDate)
   const cfg = statusConfig[displayStatus]
   const progress = Math.min(savingsProgressPercentage, 100)
-  const showMarkAsPaid = displayStatus === 'due' || displayStatus === 'overdue'
+  // Use server-side status for button — preserves the 30-day upcoming window from PR #17
+  const showMarkAsPaid = status === 'upcoming' || status === 'overdue'
 
   const [inputAmount, setInputAmount] = useState('')
   const [savingsList, setSavingsList] = useState<SavingsRecord[]>([])
