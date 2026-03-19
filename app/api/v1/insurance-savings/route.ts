@@ -7,7 +7,7 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { insurance_member_id, amount_saved_vnd, saved_date } = body
+  const { insurance_member_id, amount_saved_vnd } = body
 
   if (!insurance_member_id) return NextResponse.json({ error: 'insurance_member_id is required' }, { status: 400 })
   const amount = Number(amount_saved_vnd)
@@ -15,24 +15,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Amount must be greater than 0' }, { status: 400 })
   }
 
-  // Verify member belongs to user
-  const { data: member } = await supabase
-    .from('insurance_members')
-    .select('member_id')
-    .eq('member_id', insurance_member_id)
-    .eq('user_id', user.id)
-    .single()
-  if (!member) return NextResponse.json({ error: 'Member not found' }, { status: 404 })
-
   const { data, error } = await supabase
     .from('insurance_savings')
-    .insert({
-      user_id: user.id,
-      insurance_member_id,
-      amount_saved_vnd: amount,
-      saved_date: saved_date || new Date().toISOString().split('T')[0],
-    })
-    .select()
+    .insert({ user_id: user.id, insurance_member_id, amount_saved_vnd: amount })
+    .select('id, amount_saved_vnd, created_at')
     .single()
 
   if (error) return NextResponse.json({ error: 'Failed to record savings' }, { status: 500 })
