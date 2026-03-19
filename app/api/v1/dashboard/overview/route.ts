@@ -37,7 +37,7 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   // Fetch all data in parallel
-  const [goalsRes, investmentsRes, insuranceRes, txRes, plansRes] = await Promise.all([
+  const [goalsRes, investmentsRes, insuranceRes, txRes, plansRes, insuranceSavingsRes] = await Promise.all([
     supabase
       .from('savings_goals')
       .select('goal_id, goal_name, target_amount')
@@ -48,7 +48,7 @@ export async function GET() {
       .eq('user_id', user.id),
     supabase
       .from('insurance_members')
-      .select('member_id, member_name, coverage_type, annual_payment_vnd, payment_date, insurance_savings(amount_saved_vnd)')
+      .select('member_id, member_name, coverage_type, annual_payment_vnd, payment_date')
       .eq('user_id', user.id),
     supabase
       .from('investment_transactions')
@@ -58,6 +58,10 @@ export async function GET() {
     supabase
       .from('monthly_plans')
       .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id),
+    supabase
+      .from('insurance_savings')
+      .select('insurance_member_id, amount_saved_vnd')
       .eq('user_id', user.id),
   ])
 
@@ -70,6 +74,13 @@ export async function GET() {
   const insuranceMembers = insuranceRes.data ?? []
   const savingsTxs = txRes.data ?? []
   const monthlyPlanCount = plansRes.count ?? 0
+
+  // Aggregate insurance lump sums by member
+  const insuranceLumpSumMap = new Map<string, number>()
+  for (const s of (insuranceSavingsRes.data ?? [])) {
+    const prev = insuranceLumpSumMap.get(s.insurance_member_id) ?? 0
+    insuranceLumpSumMap.set(s.insurance_member_id, prev + (s.amount_saved_vnd ?? 0))
+  }
 
   // Detect stale NAV
   let navStale = false
@@ -236,8 +247,7 @@ export async function GET() {
   // Insurance
   const insuranceOutput = insuranceMembers.map((m) => {
     const annualPremium = m.annual_payment_vnd
-    const savings = Array.isArray(m.insurance_savings) ? m.insurance_savings : []
-    const lumpSumSaved = savings.reduce((sum: number, s: { amount_saved_vnd: number }) => sum + (s.amount_saved_vnd ?? 0), 0)
+    const lumpSumSaved = insuranceLumpSumMap.get(m.member_id) ?? 0
     const monthlySavedFromPlanning = monthlyPlanCount * Math.round(annualPremium / 12)
     const amountSaved = lumpSumSaved + monthlySavedFromPlanning
     const savingsProgressPercentage = annualPremium > 0 ? (amountSaved / annualPremium) * 100 : 0
