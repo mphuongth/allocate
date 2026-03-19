@@ -20,6 +20,7 @@ interface Props {
   savingsProgressPercentage: number
   status: 'on_track' | 'upcoming' | 'overdue' | 'completed'
   nextPaymentDate: string | null
+  lastPaymentDate: string | null
   onSavingsChange?: () => void
 }
 
@@ -32,7 +33,7 @@ const statusConfig = {
 
 export default function InsuranceCard({
   insuranceId, insuranceName, coverageType, annualPremium, amountSaved,
-  savingsProgressPercentage, status, nextPaymentDate, onSavingsChange,
+  savingsProgressPercentage, status, nextPaymentDate, lastPaymentDate, onSavingsChange,
 }: Props) {
   const cfg = statusConfig[status]
   const isCompleted = status === 'completed'
@@ -169,6 +170,11 @@ export default function InsuranceCard({
       {nextPaymentDate && !isCompleted && (
         <p className="text-xs text-gray-400 mt-2">
           Next payment: {new Date(nextPaymentDate).toLocaleDateString('vi-VN')}
+        </p>
+      )}
+      {lastPaymentDate && (
+        <p className="text-xs text-gray-400 mt-0.5">
+          Last paid: {new Date(lastPaymentDate).toLocaleDateString('vi-VN')}
         </p>
       )}
 
