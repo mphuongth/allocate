@@ -18,6 +18,49 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   return NextResponse.json(plan)
 }
 
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const supabase = await createSupabaseServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  // Verify plan exists and belongs to user
+  const { data: plan, error: fetchError } = await supabase
+    .from('monthly_plans')
+    .select('id, month, year, user_id')
+    .eq('id', id)
+    .single()
+
+  if (fetchError || !plan) return NextResponse.json({ error: 'Salary record not found' }, { status: 404 })
+  if (plan.user_id !== user.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  // Delete child records, then the plan
+  const [invDel, savDel, overrideDel] = await Promise.all([
+    supabase.from('fund_investments').delete().eq('plan_id', id).eq('user_id', user.id),
+    supabase.from('direct_savings').delete().eq('plan_id', id).eq('user_id', user.id),
+    supabase.from('fixed_expense_overrides').delete().eq('plan_id', id),
+  ])
+
+  if (invDel.error || savDel.error || overrideDel.error) {
+    return NextResponse.json({ error: 'Failed to delete salary record. Please try again.' }, { status: 500 })
+  }
+
+  const { error: planError } = await supabase
+    .from('monthly_plans')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', user.id)
+
+  if (planError) {
+    return NextResponse.json({ error: 'Failed to delete salary record. Please try again.' }, { status: 500 })
+  }
+
+  return NextResponse.json({
+    data: { id, status: 'deleted', month: plan.month, year: plan.year },
+    message: 'Salary record deleted successfully',
+  })
+}
+
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createSupabaseServerClient()
