@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 
+const inputCls = 'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500'
+
 export default function SignupPage() {
   const router = useRouter()
 
@@ -81,11 +83,11 @@ export default function SignupPage() {
 
   if (confirmSent) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="w-full max-w-md bg-white rounded-lg shadow p-8 text-center">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
+        <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-lg shadow p-8 text-center border border-transparent dark:border-gray-700">
           <div className="text-4xl mb-4">📧</div>
-          <h1 className="text-2xl font-bold mb-3">Check your email</h1>
-          <p className="text-gray-600 text-sm mb-6">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-3">Check your email</h1>
+          <p className="text-gray-600 dark:text-gray-400 text-sm mb-6">
             We sent a confirmation link to your email address. Click it to activate your account,
             then come back to sign in.
           </p>
@@ -101,15 +103,15 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="w-full max-w-md bg-white rounded-lg shadow p-8">
-        <h1 className="text-2xl font-bold text-center mb-6">Create your account</h1>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
+      <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-lg shadow p-8 border border-transparent dark:border-gray-700">
+        <h1 className="text-2xl font-bold text-center text-gray-900 dark:text-gray-100 mb-6">Create your account</h1>
         {formError && (
-          <div className="mb-4 p-3 bg-red-50 text-red-700 text-sm rounded-md">{formError}</div>
+          <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-sm rounded-md">{formError}</div>
         )}
         <form onSubmit={handleSignup} className="space-y-4">
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Email
             </label>
             <input
@@ -119,12 +121,12 @@ export default function SignupPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className={inputCls}
               placeholder="you@example.com"
             />
           </div>
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Password
             </label>
             <input
@@ -136,18 +138,15 @@ export default function SignupPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               onBlur={handlePasswordBlur}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className={inputCls}
               placeholder="••••••••"
             />
             {passwordError && (
-              <p className="mt-1 text-xs text-red-600">{passwordError}</p>
+              <p className="mt-1 text-xs text-red-600 dark:text-red-400">{passwordError}</p>
             )}
           </div>
           <div>
-            <label
-              htmlFor="confirmPassword"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
+            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Confirm Password
             </label>
             <input
@@ -159,11 +158,11 @@ export default function SignupPage() {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               onBlur={handleConfirmBlur}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className={inputCls}
               placeholder="••••••••"
             />
             {confirmError && (
-              <p className="mt-1 text-xs text-red-600">{confirmError}</p>
+              <p className="mt-1 text-xs text-red-600 dark:text-red-400">{confirmError}</p>
             )}
           </div>
           <button
@@ -174,9 +173,9 @@ export default function SignupPage() {
             {loading ? 'Creating account...' : 'Sign up'}
           </button>
         </form>
-        <p className="mt-4 text-center text-sm text-gray-600">
+        <p className="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">
           Already have an account?{' '}
-          <Link href="/auth/login" className="text-indigo-600 hover:underline font-medium">
+          <Link href="/auth/login" className="text-indigo-600 dark:text-indigo-400 hover:underline font-medium">
             Sign in
           </Link>
         </p>

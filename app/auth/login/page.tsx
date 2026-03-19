@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useState, Suspense } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 
+const inputCls = 'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500'
+
 function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -41,14 +43,14 @@ function LoginForm() {
   }
 
   return (
-    <div className="w-full max-w-md bg-white rounded-lg shadow p-8">
-      <h1 className="text-2xl font-bold text-center mb-6">Sign in to Allocate</h1>
+    <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-lg shadow p-8 border border-transparent dark:border-gray-700">
+      <h1 className="text-2xl font-bold text-center text-gray-900 dark:text-gray-100 mb-6">Sign in to Allocate</h1>
       {error && (
-        <div className="mb-4 p-3 bg-red-50 text-red-700 text-sm rounded-md">{error}</div>
+        <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-sm rounded-md">{error}</div>
       )}
       <form onSubmit={handleLogin} className="space-y-4">
         <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Email
           </label>
           <input
@@ -58,12 +60,12 @@ function LoginForm() {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className={inputCls}
             placeholder="you@example.com"
           />
         </div>
         <div>
-          <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Password
           </label>
           <input
@@ -73,12 +75,12 @@ function LoginForm() {
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className={inputCls}
             placeholder="••••••••"
           />
         </div>
         <div className="text-right">
-          <span className="text-sm text-gray-400 cursor-not-allowed">Forgot password?</span>
+          <span className="text-sm text-gray-400 dark:text-gray-500 cursor-not-allowed">Forgot password?</span>
         </div>
         <button
           type="submit"
@@ -88,9 +90,9 @@ function LoginForm() {
           {loading ? 'Signing in...' : 'Log in'}
         </button>
       </form>
-      <p className="mt-4 text-center text-sm text-gray-600">
+      <p className="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">
         Don&apos;t have an account?{' '}
-        <Link href="/auth/signup" className="text-indigo-600 hover:underline font-medium">
+        <Link href="/auth/signup" className="text-indigo-600 dark:text-indigo-400 hover:underline font-medium">
           Sign up
         </Link>
       </p>
@@ -100,8 +102,8 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <Suspense fallback={<div className="w-full max-w-md bg-white rounded-lg shadow p-8 animate-pulse h-80" />}>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
+      <Suspense fallback={<div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-lg shadow p-8 animate-pulse h-80" />}>
         <LoginForm />
       </Suspense>
     </div>
