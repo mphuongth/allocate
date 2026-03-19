@@ -1,9 +1,36 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Trash2 } from 'lucide-react'
+import { Trash2, TriangleAlert } from 'lucide-react'
 
 const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
+
+const fmtDate = (dateStr: string): string => {
+  try {
+    return new Date(dateStr).toLocaleDateString(undefined, {
+      month: 'long', day: 'numeric', year: 'numeric',
+    })
+  } catch {
+    return ''
+  }
+}
+
+// Compute display status from raw payment date using user's local timezone
+type DisplayStatus = 'overdue' | 'due' | 'not_due_yet'
+
+function computeDisplayStatus(nextPaymentDate: string | null): DisplayStatus {
+  if (!nextPaymentDate) return 'not_due_yet'
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: tz }) // YYYY-MM-DD
+    const payment = new Date(nextPaymentDate).toLocaleDateString('en-CA', { timeZone: tz }) // YYYY-MM-DD
+    if (payment < today) return 'overdue'
+    if (payment === today) return 'due'
+    return 'not_due_yet'
+  } catch {
+    return 'not_due_yet'
+  }
+}
 
 interface SavingsRecord {
   id: string
@@ -24,10 +51,10 @@ interface Props {
   onSavingsChange?: () => void
 }
 
-const statusConfig = {
-  on_track: { label: 'On Track', className: 'bg-green-100 text-green-700' },
-  upcoming: { label: 'Upcoming', className: 'bg-yellow-100 text-yellow-700' },
-  overdue: { label: 'Overdue', className: 'bg-red-100 text-red-700' },
+const statusConfig: Record<DisplayStatus | 'completed', { label: string; className: string; icon?: boolean }> = {
+  not_due_yet: { label: 'Not Due Yet', className: 'bg-green-100 text-green-700' },
+  due: { label: 'Due', className: 'bg-yellow-100 text-yellow-700' },
+  overdue: { label: 'Overdue', className: 'bg-red-100 text-red-700', icon: true },
   completed: { label: 'Completed', className: 'bg-gray-100 text-gray-500' },
 }
 
@@ -35,10 +62,11 @@ export default function InsuranceCard({
   insuranceId, insuranceName, coverageType, annualPremium, amountSaved,
   savingsProgressPercentage, status, nextPaymentDate, lastPaymentDate, onSavingsChange,
 }: Props) {
-  const cfg = statusConfig[status]
   const isCompleted = status === 'completed'
+  const displayStatus: DisplayStatus | 'completed' = isCompleted ? 'completed' : computeDisplayStatus(nextPaymentDate)
+  const cfg = statusConfig[displayStatus]
   const progress = Math.min(savingsProgressPercentage, 100)
-  const showMarkAsPaid = status === 'upcoming' || status === 'overdue'
+  const showMarkAsPaid = displayStatus === 'due' || displayStatus === 'overdue'
 
   const [inputAmount, setInputAmount] = useState('')
   const [savingsList, setSavingsList] = useState<SavingsRecord[]>([])
@@ -136,7 +164,10 @@ export default function InsuranceCard({
       {/* Header */}
       <div className="flex items-start justify-between mb-1">
         <h3 className="font-semibold text-gray-900 text-sm">{insuranceName}</h3>
-        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${cfg.className}`}>{cfg.label}</span>
+        <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${cfg.className}`}>
+          {cfg.icon && <TriangleAlert size={11} />}
+          {cfg.label}
+        </span>
       </div>
 
       {coverageType && (
@@ -169,12 +200,12 @@ export default function InsuranceCard({
 
       {nextPaymentDate && !isCompleted && (
         <p className="text-xs text-gray-400 mt-2">
-          Next payment: {new Date(nextPaymentDate).toLocaleDateString('vi-VN')}
+          Next Due: {fmtDate(nextPaymentDate)}
         </p>
       )}
       {lastPaymentDate && (
         <p className="text-xs text-gray-400 mt-0.5">
-          Last paid: {new Date(lastPaymentDate).toLocaleDateString('vi-VN')}
+          Last Paid: {fmtDate(lastPaymentDate)}
         </p>
       )}
 
