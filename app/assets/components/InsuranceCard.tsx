@@ -37,11 +37,14 @@ export default function InsuranceCard({
   const cfg = statusConfig[status]
   const isCompleted = status === 'completed'
   const progress = Math.min(savingsProgressPercentage, 100)
+  const showMarkAsPaid = status === 'upcoming' || status === 'overdue'
 
   const [inputAmount, setInputAmount] = useState('')
   const [savingsList, setSavingsList] = useState<SavingsRecord[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
+  const [showConfirm, setShowConfirm] = useState(false)
+  const [markPaidLoading, setMarkPaidLoading] = useState(false)
 
   const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
     setToast({ msg, type })
@@ -57,6 +60,16 @@ export default function InsuranceCard({
   }, [insuranceId])
 
   useEffect(() => { fetchSavings() }, [fetchSavings])
+
+  // Close confirm dialog on Escape
+  useEffect(() => {
+    if (!showConfirm) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setShowConfirm(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [showConfirm])
 
   async function handleAdd() {
     const amount = Number(inputAmount)
@@ -92,6 +105,29 @@ export default function InsuranceCard({
       showToast('Failed to delete', 'error')
     }
     setIsLoading(false)
+  }
+
+  async function handleMarkAsPaid() {
+    setMarkPaidLoading(true)
+    try {
+      const res = await fetch(`/api/v1/insurance-members/${insuranceId}/mark-paid`, { method: 'POST' })
+      if (res.ok) {
+        setShowConfirm(false)
+        showToast('Payment marked! Savings reset to ₫0.')
+        onSavingsChange?.()
+      } else {
+        const body = await res.json().catch(() => ({}))
+        const msg = res.status === 401 ? "You don't have permission to mark this payment. Contact support."
+          : res.status === 422 ? body.error ?? 'Payment is not yet due.'
+          : body.error ?? 'Something went wrong. Please try again.'
+        showToast(msg, 'error')
+        setShowConfirm(false)
+      }
+    } catch {
+      showToast('Connection lost. Please check your internet and try again.', 'error')
+      setShowConfirm(false)
+    }
+    setMarkPaidLoading(false)
   }
 
   return (
@@ -184,6 +220,62 @@ export default function InsuranceCard({
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {/* Mark as Paid */}
+      {showMarkAsPaid && (
+        <div className="border-t border-gray-100 mt-3 pt-3">
+          <button
+            onClick={() => setShowConfirm(true)}
+            className="w-full py-2 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 transition-colors"
+          >
+            Mark as Paid
+          </button>
+        </div>
+      )}
+
+      {/* Confirmation Dialog */}
+      {showConfirm && (
+        <div
+          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowConfirm(false) }}
+        >
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
+            <h3 className="text-base font-semibold text-gray-900 mb-1">Confirm Payment</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Mark payment as completed for <strong>{insuranceName}</strong>?
+            </p>
+            <div className="bg-gray-50 rounded-lg p-3 mb-4 border-l-4 border-indigo-500">
+              <p className="text-xs text-gray-700 font-medium">{insuranceName}</p>
+              <p className="text-xs text-gray-500 mt-0.5">Annual Payment: {fmt(annualPremium)}</p>
+            </div>
+            <p className="text-xs text-gray-400 mb-5">Your savings balance will be reset to ₫0.</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowConfirm(false)}
+                disabled={markPaidLoading}
+                className="flex-1 py-2 text-sm font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleMarkAsPaid}
+                disabled={markPaidLoading}
+                className="flex-1 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {markPaidLoading ? (
+                  <>
+                    <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                    </svg>
+                    Processing...
+                  </>
+                ) : 'Confirm'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
