@@ -2,6 +2,8 @@
 
 A personal finance allocation manager built with Next.js 16, Supabase, and Tailwind CSS.
 
+Production URL: https://allocate-kohl.vercel.app/
+
 ## Getting Started
 
 First, copy the environment template and fill in your Supabase credentials:
