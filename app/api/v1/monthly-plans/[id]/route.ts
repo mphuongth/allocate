@@ -38,7 +38,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const [invDel, savDel, overrideDel] = await Promise.all([
     supabase.from('fund_investments').delete().eq('plan_id', id).eq('user_id', user.id),
     supabase.from('direct_savings').delete().eq('plan_id', id).eq('user_id', user.id),
-    supabase.from('fixed_expense_overrides').delete().eq('plan_id', id).eq('user_id', user.id),
+    supabase.from('fixed_expense_overrides').delete().eq('plan_id', id),
   ])
 
   if (invDel.error || savDel.error || overrideDel.error) {
