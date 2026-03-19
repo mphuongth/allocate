@@ -32,25 +32,15 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   const now = new Date()
   const todayISO = now.toISOString().split('T')[0]
 
-  // Update last_payment_date (column added in REQ-33 migration; gracefully skip if absent)
-  let updatedAt = now.toISOString()
-  try {
-    const { data: updated, error: updateError } = await supabase
-      .from('insurance_members')
-      .update({ last_payment_date: todayISO, updated_at: now.toISOString() })
-      .eq('member_id', id)
-      .eq('user_id', user.id)
-      .select('updated_at')
-      .single()
+  // Count savings records before deletion for audit log
+  const { count: savingsCount } = await supabase
+    .from('insurance_savings')
+    .select('*', { count: 'exact', head: true })
+    .eq('insurance_member_id', id)
+    .eq('user_id', user.id)
 
-    if (!updateError && updated) {
-      updatedAt = updated.updated_at ?? now.toISOString()
-    }
-  } catch {
-    // Column may not exist yet (REQ-33 pending) — continue without it
-  }
-
-  // Delete all savings records (reset balance to 0)
+  // Delete all savings records first (reset balance to 0)
+  // Delete before update so that if delete fails, member state is unchanged
   const { error: deleteError } = await supabase
     .from('insurance_savings')
     .delete()
@@ -62,8 +52,25 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     return err(500, 'INTERNAL_ERROR', 'An error occurred while processing your request')
   }
 
+  // Update last_payment_date after savings are cleared
+  const { data: updated, error: updateError } = await supabase
+    .from('insurance_members')
+    .update({ last_payment_date: todayISO, updated_at: now.toISOString() })
+    .eq('member_id', id)
+    .eq('user_id', user.id)
+    .select('updated_at')
+    .single()
+
+  if (updateError) {
+    console.error('[mark-paid] Failed to update last_payment_date', { user_id: user.id, member_id: id, error: updateError.message })
+    return err(500, 'INTERNAL_ERROR', 'An error occurred while processing your request')
+  }
+
+  const updatedAt = updated?.updated_at ?? now.toISOString()
+  const deletedCount = savingsCount ?? 0
+
   // Audit log
-  console.log('[mark-paid] Payment marked', { user_id: user.id, member_id: id, timestamp: now.toISOString() })
+  console.log(`[AUDIT] User ${user.id} marked member ${id} as paid. Deleted ${deletedCount} savings records at ${now.toISOString()}`)
 
   return NextResponse.json({
     data: {
