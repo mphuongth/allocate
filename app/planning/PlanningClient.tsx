@@ -162,6 +162,15 @@ export default function PlanningClient() {
                 month={month}
                 year={year}
                 onPlanCreated={(p) => { setPlan(p); refetch() }}
+                onPlanDeleted={() => {
+                  const deletedMonth = MONTHS[month - 1]
+                  const deletedYear = year
+                  setPlan(null)
+                  setInvestments([])
+                  setSavings([])
+                  setFixedExpenses([])
+                  showToast(`Salary record for ${deletedMonth} ${deletedYear} deleted successfully`)
+                }}
               />
 
               {plan ? (

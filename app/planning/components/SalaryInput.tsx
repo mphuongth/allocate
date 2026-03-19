@@ -8,11 +8,13 @@ interface Props {
   month: number
   year: number
   onPlanCreated: (plan: MonthlyPlan) => void
+  onPlanDeleted: () => void
 }
 
-export default function SalaryInput({ plan, month, year, onPlanCreated }: Props) {
+export default function SalaryInput({ plan, month, year, onPlanCreated, onPlanDeleted }: Props) {
   const [value, setValue] = useState(plan ? String(plan.salary_vnd) : '')
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState('')
   const prevPlanId = useRef(plan?.id)
 
@@ -64,6 +66,23 @@ export default function SalaryInput({ plan, month, year, onPlanCreated }: Props)
     setSaving(false)
   }
 
+  async function deletePlan() {
+    if (!plan) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/v1/monthly-plans/${plan.id}`, { method: 'DELETE' })
+      if (res.ok) {
+        onPlanDeleted()
+      } else {
+        const { error: e } = await res.json()
+        setError(e ?? 'Failed to delete. Please try again.')
+      }
+    } catch {
+      setError('Unable to delete. Please check your connection and try again.')
+    }
+    setDeleting(false)
+  }
+
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'Enter') saveSalary()
   }
@@ -88,6 +107,19 @@ export default function SalaryInput({ plan, month, year, onPlanCreated }: Props)
         </div>
         {saving && (
           <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+        )}
+        {plan && (
+          <button
+            onClick={deletePlan}
+            disabled={deleting || saving}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {deleting ? (
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              'Delete'
+            )}
+          </button>
         )}
       </div>
     </div>
