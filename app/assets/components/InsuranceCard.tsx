@@ -21,11 +21,14 @@ type DisplayStatus = 'overdue' | 'due' | 'not_due_yet'
 function computeDisplayStatus(nextPaymentDate: string | null): DisplayStatus {
   if (!nextPaymentDate) return 'not_due_yet'
   try {
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
-    const today = new Date().toLocaleDateString('en-CA', { timeZone: tz }) // YYYY-MM-DD
-    const payment = new Date(nextPaymentDate).toLocaleDateString('en-CA', { timeZone: tz }) // YYYY-MM-DD
-    if (payment < today) return 'overdue'
-    if (payment === today) return 'due'
+    const payment = new Date(nextPaymentDate)
+    if (isNaN(payment.getTime())) return 'not_due_yet'
+    const now = new Date()
+    // Normalise both to local midnight so hour-of-day doesn't affect the result
+    const todayMs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+    const paymentMs = new Date(payment.getFullYear(), payment.getMonth(), payment.getDate()).getTime()
+    if (paymentMs < todayMs) return 'overdue'
+    if (paymentMs === todayMs) return 'due'
     return 'not_due_yet'
   } catch {
     return 'not_due_yet'
@@ -66,7 +69,8 @@ export default function InsuranceCard({
   const displayStatus: DisplayStatus | 'completed' = isCompleted ? 'completed' : computeDisplayStatus(nextPaymentDate)
   const cfg = statusConfig[displayStatus]
   const progress = Math.min(savingsProgressPercentage, 100)
-  const showMarkAsPaid = displayStatus === 'due' || displayStatus === 'overdue'
+  // Use server-side status for button — preserves the 30-day upcoming window from PR #17
+  const showMarkAsPaid = status === 'upcoming' || status === 'overdue'
 
   const [inputAmount, setInputAmount] = useState('')
   const [savingsList, setSavingsList] = useState<SavingsRecord[]>([])

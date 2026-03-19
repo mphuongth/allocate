@@ -32,6 +32,15 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   const now = new Date()
   const todayISO = now.toISOString().split('T')[0]
 
+  // Advance payment_date by exactly 1 year (keep month/day, increment year)
+  const nextPaymentDate = member.payment_date
+    ? (() => {
+        const d = new Date(member.payment_date)
+        d.setFullYear(d.getFullYear() + 1)
+        return d.toISOString().split('T')[0]
+      })()
+    : null
+
   // Count savings records before deletion for audit log
   const { count: savingsCount } = await supabase
     .from('insurance_savings')
@@ -52,10 +61,14 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     return err(500, 'INTERNAL_ERROR', 'An error occurred while processing your request')
   }
 
-  // Update last_payment_date after savings are cleared
+  // Advance payment_date by 1 year and record last_payment_date
   const { data: updated, error: updateError } = await supabase
     .from('insurance_members')
-    .update({ last_payment_date: todayISO, updated_at: now.toISOString() })
+    .update({
+      payment_date: nextPaymentDate,
+      last_payment_date: todayISO,
+      updated_at: now.toISOString(),
+    })
     .eq('member_id', id)
     .eq('user_id', user.id)
     .select('updated_at')
@@ -77,7 +90,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       member_id: id,
       name: member.member_name,
       amount_saved: 0,
-      payment_date: member.payment_date,
+      payment_date: nextPaymentDate,
       last_payment_date: todayISO,
       monthly_allocation: member.monthly_premium_vnd ?? Math.round((member.annual_payment_vnd ?? 0) / 12),
       updated_at: updatedAt,
