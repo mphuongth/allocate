@@ -31,13 +31,13 @@ export default function Breadcrumb() {
     <nav aria-label="Breadcrumb" className="hidden md:flex items-center gap-1">
       {crumbs.map((crumb, i) => (
         <span key={crumb.href} className="flex items-center gap-1">
-          {i > 0 && <ChevronRight size={12} className="text-gray-400" />}
+          {i > 0 && <ChevronRight size={12} className="text-gray-400 dark:text-gray-500" />}
           {crumb.current ? (
-            <span aria-current="page" className="text-xs text-gray-400 font-medium">
+            <span aria-current="page" className="text-xs text-gray-400 dark:text-gray-500 font-medium">
               {crumb.label}
             </span>
           ) : (
-            <Link href={crumb.href} className="text-xs text-gray-600 hover:text-gray-900 transition-colors">
+            <Link href={crumb.href} className="text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors">
               {crumb.label}
             </Link>
           )}
@@ -53,7 +53,7 @@ export function PageTitle() {
   const title = entry?.label ?? pathname.slice(1)
 
   return (
-    <p className="text-sm font-medium text-gray-700 md:hidden px-4 py-2 border-b border-gray-100">
+    <p className="text-sm font-medium text-gray-700 dark:text-gray-300 md:hidden px-4 py-2 border-b border-gray-100 dark:border-gray-700">
       {title}
     </p>
   )

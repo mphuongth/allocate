@@ -20,9 +20,9 @@ interface GoalRow {
 export default function AllocationSummary({ plan, investments, savings, fixedExpenses, insuranceMembers }: Props) {
   if (!plan) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-        <h2 className="font-semibold text-gray-900 mb-3">Allocation Summary</h2>
-        <p className="text-sm text-gray-400 text-center py-6">Enter your salary to see the summary.</p>
+      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-5">
+        <h2 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">Allocation Summary</h2>
+        <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-6">Enter your salary to see the summary.</p>
       </div>
     )
   }
@@ -46,7 +46,6 @@ export default function AllocationSummary({ plan, investments, savings, fixedExp
   }
 
   const totalFixed = fixedExpenses.reduce((sum, e) => {
-    // amount_vnd in fixed_expenses is already a monthly amount (entered directly by the user)
     const monthly = e.override != null ? e.override : e.amount_vnd
     return sum + monthly
   }, 0)
@@ -70,10 +69,10 @@ export default function AllocationSummary({ plan, investments, savings, fixedExp
   const pct = (n: number) => salary > 0 ? `${Math.round((n / salary) * 100)}%` : '—'
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden sticky top-6">
-      <div className="px-5 py-4 border-b border-gray-100">
-        <h2 className="font-semibold text-gray-900">Allocation Summary</h2>
-        <p className="text-xs text-gray-400 mt-0.5">Salary: {fmt(salary)}</p>
+    <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden sticky top-6">
+      <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+        <h2 className="font-semibold text-gray-900 dark:text-gray-100">Allocation Summary</h2>
+        <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Salary: {fmt(salary)}</p>
       </div>
 
       <div className="p-5 space-y-4">
@@ -83,16 +82,16 @@ export default function AllocationSummary({ plan, investments, savings, fixedExp
             <thead>
               <tr>
                 {['Goal', 'Allocated', '% Salary'].map((h) => (
-                  <th key={h} className="pb-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
+                  <th key={h} className="pb-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
               {goalRows.map((row) => (
                 <tr key={row.label}>
-                  <td className="py-2 text-gray-700 font-medium pr-2">{row.label}</td>
-                  <td className="py-2 text-gray-600 pr-2">{fmt(row.total)}</td>
-                  <td className="py-2 text-gray-400">{pct(row.total)}</td>
+                  <td className="py-2 text-gray-700 dark:text-gray-300 font-medium pr-2">{row.label}</td>
+                  <td className="py-2 text-gray-600 dark:text-gray-400 pr-2">{fmt(row.total)}</td>
+                  <td className="py-2 text-gray-400 dark:text-gray-500">{pct(row.total)}</td>
                 </tr>
               ))}
             </tbody>
@@ -100,18 +99,18 @@ export default function AllocationSummary({ plan, investments, savings, fixedExp
         )}
 
         {goalRows.length === 0 && (
-          <p className="text-sm text-gray-400 text-center py-2">No allocations yet</p>
+          <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-2">No allocations yet</p>
         )}
 
         {/* Divider */}
-        <div className="border-t border-gray-100 pt-4 space-y-2">
+        <div className="border-t border-gray-100 dark:border-gray-700 pt-4 space-y-2">
           {/* Fixed expenses row */}
           {fixedExpenses.length > 0 && (
             <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-600">Fixed Expenses</span>
+              <span className="text-gray-600 dark:text-gray-400">Fixed Expenses</span>
               <div className="text-right">
-                <span className="text-gray-700 font-medium">{fmt(totalFixed)}</span>
-                <span className="ml-2 text-gray-400 text-xs">{pct(totalFixed)}</span>
+                <span className="text-gray-700 dark:text-gray-300 font-medium">{fmt(totalFixed)}</span>
+                <span className="ml-2 text-gray-400 dark:text-gray-500 text-xs">{pct(totalFixed)}</span>
               </div>
             </div>
           )}
@@ -119,40 +118,40 @@ export default function AllocationSummary({ plan, investments, savings, fixedExp
           {/* Insurance row */}
           {insuranceMembers.length > 0 && (
             <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-600">Insurance</span>
+              <span className="text-gray-600 dark:text-gray-400">Insurance</span>
               <div className="text-right">
-                <span className="text-gray-700 font-medium">{fmt(totalInsurance)}</span>
-                <span className="ml-2 text-gray-400 text-xs">{pct(totalInsurance)}</span>
+                <span className="text-gray-700 dark:text-gray-300 font-medium">{fmt(totalInsurance)}</span>
+                <span className="ml-2 text-gray-400 dark:text-gray-500 text-xs">{pct(totalInsurance)}</span>
               </div>
             </div>
           )}
 
           {/* Total row */}
-          <div className="flex items-center justify-between text-sm border-t border-gray-100 pt-2 mt-2">
-            <span className="font-semibold text-gray-700">Total Allocated</span>
+          <div className="flex items-center justify-between text-sm border-t border-gray-100 dark:border-gray-700 pt-2 mt-2">
+            <span className="font-semibold text-gray-700 dark:text-gray-300">Total Allocated</span>
             <div className="text-right">
-              <span className="font-semibold text-gray-900">{fmt(totalAllocated)}</span>
-              <span className="ml-2 text-gray-400 text-xs">{pct(totalAllocated)}</span>
+              <span className="font-semibold text-gray-900 dark:text-gray-100">{fmt(totalAllocated)}</span>
+              <span className="ml-2 text-gray-400 dark:text-gray-500 text-xs">{pct(totalAllocated)}</span>
             </div>
           </div>
 
           {/* Remaining row */}
-          <div className={`flex items-center justify-between text-sm rounded-lg px-3 py-2 ${remaining >= 0 ? 'bg-green-50' : 'bg-red-50'}`}>
-            <span className={`font-semibold ${remaining >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+          <div className={`flex items-center justify-between text-sm rounded-lg px-3 py-2 ${remaining >= 0 ? 'bg-green-50 dark:bg-green-900/20' : 'bg-red-50 dark:bg-red-900/20'}`}>
+            <span className={`font-semibold ${remaining >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
               Remaining Salary
             </span>
             <div className="text-right">
-              <span className={`font-semibold ${remaining >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+              <span className={`font-semibold ${remaining >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
                 {fmt(remaining)}
               </span>
-              <span className={`ml-2 text-xs ${remaining >= 0 ? 'text-green-500' : 'text-red-400'}`}>
+              <span className={`ml-2 text-xs ${remaining >= 0 ? 'text-green-500 dark:text-green-400' : 'text-red-400 dark:text-red-300'}`}>
                 {pct(Math.abs(remaining))}
               </span>
             </div>
           </div>
 
           {remaining < 0 && (
-            <p className="text-xs text-red-500 text-center">Over-allocated by {fmt(Math.abs(remaining))}</p>
+            <p className="text-xs text-red-500 dark:text-red-400 text-center">Over-allocated by {fmt(Math.abs(remaining))}</p>
           )}
         </div>
       </div>

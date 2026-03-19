@@ -67,71 +67,71 @@ export default function InvestmentTransactionsTab() {
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-gray-900">Investment Transactions</h2>
-        <span className="text-sm text-gray-500">{total} total</span>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Investment Transactions</h2>
+        <span className="text-sm text-gray-500 dark:text-gray-400">{total} total</span>
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-4 flex flex-wrap gap-3 items-end">
+      <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm p-4 mb-4 flex flex-wrap gap-3 items-end">
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Asset Type</label>
+          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Asset Type</label>
           <select
             value={filterAsset}
             onChange={(e) => setFilterAsset(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
             <option value="">All</option>
             {ASSET_TYPES.map((t) => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
           </select>
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">From Date</label>
+          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">From Date</label>
           <input type="date" value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">To Date</label>
+          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">To Date</label>
           <input type="date" value={filterTo} onChange={(e) => setFilterTo(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
         </div>
         <div className="flex gap-2">
           <button onClick={applyFilters} className="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Apply</button>
-          <button onClick={resetFilters} className="px-3 py-1.5 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Reset</button>
+          <button onClick={resetFilters} className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Reset</button>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
         {loading ? (
-          <div className="text-center py-10 text-gray-400 text-sm">Loading...</div>
+          <div className="text-center py-10 text-gray-400 dark:text-gray-500 text-sm">Loading...</div>
         ) : transactions.length === 0 ? (
-          <div className="text-center py-10 text-gray-400 text-sm">No transactions found.</div>
+          <div className="text-center py-10 text-gray-400 dark:text-gray-500 text-sm">No transactions found.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50">
+              <thead className="bg-gray-50 dark:bg-gray-800">
                 <tr>
                   {['Date', 'Asset', 'Amount', 'Units', 'Rate', 'Projected Interest', 'Goal', 'Notes'].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">{h}</th>
+                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">{h}</th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
                 {transactions.map((tx) => {
                   const interest = calcProjectedInterest(tx.amount_vnd, tx.interest_rate, tx.investment_date)
                   return (
-                    <tr key={tx.transaction_id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-gray-700">{new Date(tx.investment_date).toLocaleDateString('vi-VN')}</td>
+                    <tr key={tx.transaction_id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                      <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{new Date(tx.investment_date).toLocaleDateString('vi-VN')}</td>
                       <td className="px-4 py-3">
                         <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${ASSET_COLORS[tx.asset_type as AssetType] ?? 'bg-gray-100 text-gray-700'}`}>
                           {tx.asset_type}
                         </span>
                       </td>
-                      <td className="px-4 py-3 font-medium">{fmt(tx.amount_vnd)}</td>
-                      <td className="px-4 py-3 text-gray-500">{tx.units ?? '—'}</td>
-                      <td className="px-4 py-3 text-gray-500">{tx.interest_rate != null ? `${tx.interest_rate}%` : '—'}</td>
-                      <td className="px-4 py-3 text-indigo-600 font-medium">{fmt(interest)}</td>
-                      <td className="px-4 py-3 text-gray-500">{tx.savings_goals?.goal_name ?? <span className="text-gray-300">Unassigned</span>}</td>
-                      <td className="px-4 py-3 text-gray-400 max-w-32 truncate">{tx.notes ?? '—'}</td>
+                      <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{fmt(tx.amount_vnd)}</td>
+                      <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{tx.units ?? '—'}</td>
+                      <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{tx.interest_rate != null ? `${tx.interest_rate}%` : '—'}</td>
+                      <td className="px-4 py-3 text-indigo-600 dark:text-indigo-400 font-medium">{fmt(interest)}</td>
+                      <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{tx.savings_goals?.goal_name ?? <span className="text-gray-300 dark:text-gray-600">Unassigned</span>}</td>
+                      <td className="px-4 py-3 text-gray-400 dark:text-gray-500 max-w-32 truncate">{tx.notes ?? '—'}</td>
                     </tr>
                   )
                 })}
@@ -142,19 +142,19 @@ export default function InvestmentTransactionsTab() {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100">
+          <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 dark:border-gray-700">
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-40 hover:bg-gray-50"
+              className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300"
             >
               Previous
             </button>
-            <span className="text-sm text-gray-500">Page {page} of {totalPages}</span>
+            <span className="text-sm text-gray-500 dark:text-gray-400">Page {page} of {totalPages}</span>
             <button
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
-              className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-40 hover:bg-gray-50"
+              className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300"
             >
               Next
             </button>

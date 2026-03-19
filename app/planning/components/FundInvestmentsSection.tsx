@@ -17,6 +17,8 @@ const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
 
 const emptyForm = { fund_id: '', goal_id: '', amount_vnd: '', units_purchased: '', nav_at_purchase: '', investment_date: '' }
 
+const inputCls = 'w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500'
+
 export default function FundInvestmentsSection({ plan, investments, onRefresh, onToast }: Props) {
   const [funds, setFunds] = useState<Fund[]>([])
   const [goals, setGoals] = useState<Goal[]>([])
@@ -124,37 +126,37 @@ export default function FundInvestmentsSection({ plan, investments, onRefresh, o
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-        <h2 className="font-semibold text-gray-900">Fund Investments</h2>
+    <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+        <h2 className="font-semibold text-gray-900 dark:text-gray-100">Fund Investments</h2>
         <button onClick={openAdd} className="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
           Add Fund Investment
         </button>
       </div>
 
       {investments.length === 0 ? (
-        <div className="text-center py-10 text-gray-400 text-sm">Add your first fund investment to get started</div>
+        <div className="text-center py-10 text-gray-400 dark:text-gray-500 text-sm">Add your first fund investment to get started</div>
       ) : (
         <table className="w-full text-sm">
-          <thead className="bg-gray-50">
+          <thead className="bg-gray-50 dark:bg-gray-800">
             <tr>
               {['Fund', 'Date', 'Amount', 'Units', 'Goal', 'Actions'].map((h) => (
-                <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">{h}</th>
+                <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">{h}</th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-50">
+          <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
             {investments.map((inv) => (
-              <tr key={inv.id} className="hover:bg-gray-50">
-                <td className="px-4 py-3 font-medium text-gray-900">{inv.funds?.name ?? '—'}</td>
-                <td className="px-4 py-3 text-gray-500">{inv.investment_date ?? '—'}</td>
-                <td className="px-4 py-3">{fmt(inv.amount_vnd)}</td>
-                <td className="px-4 py-3 text-gray-500">{inv.units_purchased}</td>
-                <td className="px-4 py-3 text-gray-500">{inv.savings_goals?.goal_name ?? 'Unassigned'}</td>
+              <tr key={inv.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{inv.funds?.name ?? '—'}</td>
+                <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{inv.investment_date ?? '—'}</td>
+                <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{fmt(inv.amount_vnd)}</td>
+                <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{inv.units_purchased}</td>
+                <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{inv.savings_goals?.goal_name ?? 'Unassigned'}</td>
                 <td className="px-4 py-3">
                   <div className="flex gap-3">
-                    <button onClick={() => openEdit(inv)} className="text-xs text-indigo-600 hover:underline">Edit</button>
-                    <button onClick={() => setConfirmDelete(inv)} className="text-xs text-red-500 hover:underline">Delete</button>
+                    <button onClick={() => openEdit(inv)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">Edit</button>
+                    <button onClick={() => setConfirmDelete(inv)} className="text-xs text-red-500 dark:text-red-400 hover:underline">Delete</button>
                   </div>
                 </td>
               </tr>
@@ -166,17 +168,13 @@ export default function FundInvestmentsSection({ plan, investments, onRefresh, o
       {/* Add/Edit Modal */}
       {showForm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">{editItem ? 'Edit Fund Investment' : 'Add Fund Investment'}</h3>
-            {formError && <p className="text-red-600 text-sm mb-3">{formError}</p>}
+          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto border border-gray-100 dark:border-gray-700">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{editItem ? 'Edit Fund Investment' : 'Add Fund Investment'}</h3>
+            {formError && <p className="text-red-600 dark:text-red-400 text-sm mb-3">{formError}</p>}
             <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Fund *</label>
-                <select
-                  value={form.fund_id}
-                  onChange={(e) => handleFundSelect(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fund *</label>
+                <select value={form.fund_id} onChange={(e) => handleFundSelect(e.target.value)} className={inputCls}>
                   <option value="">Select fund...</option>
                   {funds.map((f) => (
                     <option key={f.id} value={f.id}>{f.name} (NAV: {f.nav})</option>
@@ -184,48 +182,36 @@ export default function FundInvestmentsSection({ plan, investments, onRefresh, o
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Investment Date *</label>
-                <input
-                  type="date"
-                  value={form.investment_date}
-                  min={minDate}
-                  max={maxDate}
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Investment Date *</label>
+                <input type="date" value={form.investment_date} min={minDate} max={maxDate}
                   onChange={(e) => setForm((prev) => ({ ...prev, investment_date: e.target.value }))}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
+                  className={inputCls} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Goal (optional)</label>
-                <select
-                  value={form.goal_id}
-                  onChange={(e) => setForm({ ...form, goal_id: e.target.value })}
-                  disabled={goals.length === 0}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
-                >
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Goal (optional)</label>
+                <select value={form.goal_id} onChange={(e) => setForm({ ...form, goal_id: e.target.value })}
+                  disabled={goals.length === 0} className={`${inputCls} disabled:opacity-50`}>
                   <option value="">{goals.length === 0 ? 'No goals available' : 'Unassigned'}</option>
                   {goals.map((g) => <option key={g.goal_id} value={g.goal_id}>{g.goal_name}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Amount (VND) *</label>
-                <input type="number" value={form.amount_vnd} onChange={(e) => setForm({ ...form, amount_vnd: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Amount (VND) *</label>
+                <input type="number" value={form.amount_vnd} onChange={(e) => setForm({ ...form, amount_vnd: e.target.value })} className={inputCls} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Units Purchased *</label>
-                  <input type="number" step="0.0001" value={form.units_purchased} onChange={(e) => setForm({ ...form, units_purchased: e.target.value })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Units Purchased *</label>
+                  <input type="number" step="0.0001" value={form.units_purchased} onChange={(e) => setForm({ ...form, units_purchased: e.target.value })} className={inputCls} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">NAV at Purchase *</label>
-                  <input type="number" step="0.0001" value={form.nav_at_purchase} onChange={(e) => setForm({ ...form, nav_at_purchase: e.target.value })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">NAV at Purchase *</label>
+                  <input type="number" step="0.0001" value={form.nav_at_purchase} onChange={(e) => setForm({ ...form, nav_at_purchase: e.target.value })} className={inputCls} />
                 </div>
               </div>
             </div>
             <div className="flex gap-3 mt-5">
-              <button onClick={() => setShowForm(false)} className="flex-1 py-2 text-sm font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+              <button onClick={() => setShowForm(false)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Cancel</button>
               <button onClick={handleSave} disabled={saving} className="flex-1 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2">
                 {saving && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
                 {saving ? 'Saving...' : 'Save'}
@@ -238,11 +224,11 @@ export default function FundInvestmentsSection({ plan, investments, onRefresh, o
       {/* Delete Confirmation */}
       {confirmDelete && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
-            <h3 className="text-base font-semibold text-gray-900 mb-2">Delete Investment</h3>
-            <p className="text-sm text-gray-600 mb-5">Are you sure you want to delete this investment?</p>
+          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-sm p-6 border border-gray-100 dark:border-gray-700">
+            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">Delete Investment</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-5">Are you sure you want to delete this investment?</p>
             <div className="flex gap-3">
-              <button onClick={() => setConfirmDelete(null)} className="flex-1 py-2 text-sm font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+              <button onClick={() => setConfirmDelete(null)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Cancel</button>
               <button onClick={() => handleDelete(confirmDelete)} className="flex-1 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700">Confirm</button>
             </div>
           </div>

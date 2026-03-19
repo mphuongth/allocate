@@ -130,17 +130,17 @@ export default function PlanningClient() {
   const refetch = useCallback(() => fetchPlan(), [fetchPlan])
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">Monthly Planning</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Monthly Planning</h1>
           <div className="flex items-center gap-3">
-            <button onClick={() => navigate('prev')} className="p-2 rounded-lg border border-gray-200 hover:bg-gray-100 text-gray-600">‹</button>
-            <span className="text-lg font-semibold text-gray-800 min-w-[120px] text-center">
+            <button onClick={() => navigate('prev')} className="p-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400">‹</button>
+            <span className="text-lg font-semibold text-gray-800 dark:text-gray-200 min-w-[120px] text-center">
               {MONTHS[month - 1]} {year}
             </span>
-            <button onClick={() => navigate('next')} className="p-2 rounded-lg border border-gray-200 hover:bg-gray-100 text-gray-600">›</button>
+            <button onClick={() => navigate('next')} className="p-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400">›</button>
           </div>
         </div>
 
@@ -152,7 +152,7 @@ export default function PlanningClient() {
         )}
 
         {loading ? (
-          <div className="text-center py-20 text-gray-400">Loading...</div>
+          <div className="text-center py-20 text-gray-400 dark:text-gray-500">Loading...</div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Left col: salary + sections */}
@@ -199,7 +199,7 @@ export default function PlanningClient() {
                   />
                 </>
               ) : (
-                <div className="text-center py-8 text-gray-400 text-sm">
+                <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">
                   Enter your monthly salary to begin planning.
                 </div>
               )}

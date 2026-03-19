@@ -203,18 +203,18 @@ export default function DashboardClient() {
   const detailFund = fundDetailId ? allFunds.find((f) => f.fundId === fundDetailId) : null
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-8 flex-wrap gap-3">
-          <h1 className="text-2xl font-bold text-gray-900">Assets Dashboard</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Assets Dashboard</h1>
           <div className="flex items-center gap-3 flex-wrap">
             {/* Sort dropdown */}
             {!loading && data && (
               <select
                 value={sortOrder}
                 onChange={(e) => handleSortChange(e.target.value as SortOrder)}
-                className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-1.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
                 <option value="manual">Manual Order</option>
                 <option value="progress-desc">Progress: High to Low</option>
@@ -234,9 +234,9 @@ export default function DashboardClient() {
 
         {/* Error state */}
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center justify-between">
-            <p className="text-sm text-red-700">{error}</p>
-            <button onClick={fetchData} className="text-sm text-red-600 font-medium hover:underline ml-4">Retry</button>
+          <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl flex items-center justify-between">
+            <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
+            <button onClick={fetchData} className="text-sm text-red-600 dark:text-red-400 font-medium hover:underline ml-4">Retry</button>
           </div>
         )}
 
@@ -259,13 +259,13 @@ export default function DashboardClient() {
         {!loading && !error && isEmpty && (
           <div className="flex flex-col items-center py-16 px-4">
             {/* Icon */}
-            <div className="w-20 h-20 rounded-2xl bg-indigo-50 flex items-center justify-center mb-6">
+            <div className="w-20 h-20 rounded-2xl bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center mb-6">
               <span className="text-4xl">📊</span>
             </div>
 
             {/* Title & description */}
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">No Assets Yet</h2>
-            <p className="text-gray-500 text-center max-w-sm mb-10">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">No Assets Yet</h2>
+            <p className="text-gray-500 dark:text-gray-400 text-center max-w-sm mb-10">
               Start by adding financial goals, investment funds, or insurance to track your wealth.
             </p>
 
@@ -279,25 +279,25 @@ export default function DashboardClient() {
                 <a
                   key={title}
                   href="/settings"
-                  className="flex items-center gap-4 bg-white border border-gray-100 rounded-xl px-5 py-4 shadow-sm hover:shadow-md hover:border-indigo-100 transition-all group"
+                  className="flex items-center gap-4 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-xl px-5 py-4 shadow-sm hover:shadow-md hover:border-indigo-100 dark:hover:border-indigo-700 transition-all group"
                 >
-                  <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center flex-shrink-0 text-xl">
+                  <div className="w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center flex-shrink-0 text-xl">
                     {icon}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-900 text-sm">{title}</p>
-                    <p className="text-xs text-gray-500 mt-0.5">{desc}</p>
+                    <p className="font-semibold text-gray-900 dark:text-gray-100 text-sm">{title}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{desc}</p>
                   </div>
-                  <span className="text-gray-300 group-hover:text-indigo-500 transition-colors text-lg">→</span>
+                  <span className="text-gray-300 dark:text-gray-600 group-hover:text-indigo-500 transition-colors text-lg">→</span>
                 </a>
               ))}
             </div>
 
             {/* Divider + Settings button */}
             <div className="flex items-center gap-3 w-full max-w-md mb-5">
-              <div className="flex-1 h-px bg-gray-200" />
-              <span className="text-xs text-gray-400 whitespace-nowrap">Or manage everything in</span>
-              <div className="flex-1 h-px bg-gray-200" />
+              <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+              <span className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">Or manage everything in</span>
+              <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
             </div>
             <a
               href="/settings"
@@ -317,7 +317,7 @@ export default function DashboardClient() {
             {/* Goals */}
             {sortedGoals.length > 0 && (
               <section>
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Goals</h2>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Goals</h2>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   {sortedGoals.map((goal) => (
                     <GoalCard
@@ -342,7 +342,7 @@ export default function DashboardClient() {
             {/* Insurance */}
             {data.insurance.length > 0 && (
               <section>
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Insurance</h2>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Insurance</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {data.insurance.map((ins) => (
                     <InsuranceCard key={ins.insuranceId} {...ins} onSavingsChange={fetchData} />
