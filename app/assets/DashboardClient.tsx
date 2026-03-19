@@ -42,6 +42,7 @@ export interface InsuranceData {
   savingsProgressPercentage: number
   status: 'on_track' | 'upcoming' | 'overdue' | 'completed'
   nextPaymentDate: string | null
+  lastPaymentDate: string | null
 }
 
 export interface DashboardData {

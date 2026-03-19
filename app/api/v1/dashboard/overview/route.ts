@@ -48,7 +48,7 @@ export async function GET() {
       .eq('user_id', user.id),
     supabase
       .from('insurance_members')
-      .select('member_id, member_name, coverage_type, annual_payment_vnd, payment_date')
+      .select('member_id, member_name, coverage_type, annual_payment_vnd, payment_date, last_payment_date')
       .eq('user_id', user.id),
     supabase
       .from('investment_transactions')
@@ -262,6 +262,7 @@ export async function GET() {
       savingsProgressPercentage,
       status,
       nextPaymentDate: m.payment_date ?? null,
+      lastPaymentDate: m.last_payment_date ?? null,
     }
   })
 
