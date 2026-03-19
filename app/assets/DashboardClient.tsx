@@ -344,7 +344,7 @@ export default function DashboardClient() {
                 <h2 className="text-lg font-semibold text-gray-900 mb-4">Insurance</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {data.insurance.map((ins) => (
-                    <InsuranceCard key={ins.insuranceId} {...ins} />
+                    <InsuranceCard key={ins.insuranceId} {...ins} onSavingsChange={fetchData} />
                   ))}
                 </div>
               </section>
