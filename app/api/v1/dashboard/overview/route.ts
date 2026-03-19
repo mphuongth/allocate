@@ -23,11 +23,11 @@ function insuranceStatus(paymentDate: string | null): 'on_track' | 'upcoming' | 
   const payment = new Date(paymentDate)
   const today = new Date()
   today.setHours(0, 0, 0, 0)
-  const sevenDaysLater = new Date(today)
-  sevenDaysLater.setDate(today.getDate() + 7)
+  const thirtyDaysLater = new Date(today)
+  thirtyDaysLater.setDate(today.getDate() + 30)
 
   if (payment < today) return 'overdue'
-  if (payment <= sevenDaysLater) return 'upcoming'
+  if (payment <= thirtyDaysLater) return 'upcoming'
   return 'on_track'
 }
 
