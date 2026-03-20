@@ -36,8 +36,12 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // Fetch all data in parallel
-  const [goalsRes, investmentsRes, insuranceRes, txRes, plansRes, insuranceSavingsRes] = await Promise.all([
+  // Step 1: fetch plans to get IDs needed for insurance exclusion/override queries
+  const plansRes = await supabase.from('monthly_plans').select('id').eq('user_id', user.id)
+  const planIds = (plansRes.data ?? []).map((p) => p.id)
+
+  // Step 2: fetch everything else in parallel
+  const [goalsRes, investmentsRes, insuranceRes, txRes, insuranceSavingsRes, insExclusionsRes, insOverridesRes] = await Promise.all([
     supabase
       .from('savings_goals')
       .select('goal_id, goal_name, target_amount')
@@ -56,13 +60,15 @@ export async function GET() {
       .eq('user_id', user.id)
       .not('goal_id', 'is', null),
     supabase
-      .from('monthly_plans')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', user.id),
-    supabase
       .from('insurance_savings')
       .select('insurance_member_id, amount_saved_vnd')
       .eq('user_id', user.id),
+    planIds.length > 0
+      ? supabase.from('plan_excluded_insurance_members').select('plan_id, member_id').in('plan_id', planIds)
+      : Promise.resolve({ data: [], error: null }),
+    planIds.length > 0
+      ? supabase.from('plan_insurance_member_overrides').select('plan_id, member_id, monthly_amount_override_vnd').in('plan_id', planIds)
+      : Promise.resolve({ data: [], error: null }),
   ])
 
   if (goalsRes.error || investmentsRes.error || insuranceRes.error) {
@@ -73,13 +79,25 @@ export async function GET() {
   const investments = investmentsRes.data ?? []
   const insuranceMembers = insuranceRes.data ?? []
   const savingsTxs = txRes.data ?? []
-  const monthlyPlanCount = plansRes.count ?? 0
+  const monthlyPlanCount = planIds.length
 
   // Aggregate insurance lump sums by member
   const insuranceLumpSumMap = new Map<string, number>()
   for (const s of (insuranceSavingsRes.data ?? [])) {
     const prev = insuranceLumpSumMap.get(s.insurance_member_id) ?? 0
     insuranceLumpSumMap.set(s.insurance_member_id, prev + (s.amount_saved_vnd ?? 0))
+  }
+
+  // Build sets for per-plan exclusions and overrides
+  // excludedSet: "planId::memberId" -> true
+  const excludedSet = new Set<string>()
+  for (const e of (insExclusionsRes.data ?? [])) {
+    excludedSet.add(`${e.plan_id}::${e.member_id}`)
+  }
+  // overrideMap: "planId::memberId" -> monthly_amount_override_vnd
+  const overrideMap = new Map<string, number>()
+  for (const o of (insOverridesRes.data ?? [])) {
+    overrideMap.set(`${o.plan_id}::${o.member_id}`, o.monthly_amount_override_vnd)
   }
 
   // Detect stale NAV
@@ -248,7 +266,11 @@ export async function GET() {
   const insuranceOutput = insuranceMembers.map((m) => {
     const annualPremium = m.annual_payment_vnd
     const lumpSumSaved = insuranceLumpSumMap.get(m.member_id) ?? 0
-    const monthlySavedFromPlanning = monthlyPlanCount * Math.round(annualPremium / 12)
+    const defaultMonthly = Math.round(annualPremium / 12)
+    const monthlySavedFromPlanning = planIds.reduce((sum, planId) => {
+      if (excludedSet.has(`${planId}::${m.member_id}`)) return sum
+      return sum + (overrideMap.get(`${planId}::${m.member_id}`) ?? defaultMonthly)
+    }, 0)
     const amountSaved = lumpSumSaved + monthlySavedFromPlanning
     const savingsProgressPercentage = annualPremium > 0 ? (amountSaved / annualPremium) * 100 : 0
     const status = insuranceStatus(m.payment_date)
