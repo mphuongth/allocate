@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from('fund_investments')
-    .select('id, fund_id, goal_id, amount_vnd, units_purchased, nav_at_purchase, investment_date, created_at, funds(id, name, nav)')
+    .select('id, fund_id, goal_id, amount_vnd, units_purchased, nav_at_purchase, investment_date, created_at, funds(id, name, nav), savings_goals(goal_name)')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
 

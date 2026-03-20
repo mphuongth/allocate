@@ -1,6 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 
+export async function GET() {
+  const supabase = await createSupabaseServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { data, error } = await supabase
+    .from('direct_savings')
+    .select('id, plan_id, goal_id, amount_vnd, profit_percent, expiry_date, created_at, savings_goals(goal_name)')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+
+  if (error) return NextResponse.json({ error: 'Failed to fetch savings' }, { status: 500 })
+  return NextResponse.json(data ?? [])
+}
+
 export async function POST(request: NextRequest) {
   const supabase = await createSupabaseServerClient()
   const { data: { user } } = await supabase.auth.getUser()
