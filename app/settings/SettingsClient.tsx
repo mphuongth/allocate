@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import SavingsGoalsTab from './tabs/SavingsGoalsTab'
 import InvestmentTransactionsTab from './tabs/InvestmentTransactionsTab'
 import UnassignedInvestmentsTab from './tabs/UnassignedInvestmentsTab'
@@ -17,8 +18,31 @@ const TABS = [
 
 type TabId = typeof TABS[number]['id']
 
-export default function SettingsClient() {
-  const [activeTab, setActiveTab] = useState<TabId>('goals')
+const VALID_TABS = TABS.map((t) => t.id) as string[]
+
+interface Props {
+  initialTab?: string
+  initialGoalId?: string
+}
+
+export default function SettingsClient({ initialTab, initialGoalId }: Props) {
+  const router = useRouter()
+  const [activeTab, setActiveTab] = useState<TabId>(
+    VALID_TABS.includes(initialTab ?? '') ? (initialTab as TabId) : 'goals'
+  )
+
+  function handleTabChange(tab: TabId) {
+    setActiveTab(tab)
+    router.replace(`/settings?tab=${tab}`)
+  }
+
+  const handleGoalChange = useCallback((goalId: string | null) => {
+    if (goalId) {
+      router.replace(`/settings?tab=goals&goal=${goalId}`)
+    } else {
+      router.replace('/settings?tab=goals')
+    }
+  }, [router])
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
@@ -34,7 +58,7 @@ export default function SettingsClient() {
             {TABS.map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => handleTabChange(tab.id)}
                 className={`whitespace-nowrap py-3 px-4 text-sm font-medium border-b-2 transition-colors ${
                   activeTab === tab.id
                     ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-400'
@@ -48,7 +72,12 @@ export default function SettingsClient() {
         </div>
 
         {/* Tab content */}
-        {activeTab === 'goals' && <SavingsGoalsTab />}
+        {activeTab === 'goals' && (
+          <SavingsGoalsTab
+            initialGoalId={initialGoalId}
+            onGoalChange={handleGoalChange}
+          />
+        )}
         {activeTab === 'transactions' && <InvestmentTransactionsTab />}
         {activeTab === 'unassigned' && <UnassignedInvestmentsTab />}
         {activeTab === 'expenses' && <FixedExpensesTab />}

@@ -27,7 +27,7 @@ export default function GoalCard({
   return (
     <div
       className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden cursor-pointer hover:border-indigo-200 dark:hover:border-indigo-700 hover:shadow-md transition-all"
-      onClick={() => router.push(`/savings-goals/${goalId}`)}
+      onClick={() => router.push(`/settings?tab=goals&goal=${goalId}`)}
     >
       <div className="p-5">
         <div className="flex items-start justify-between mb-2">
