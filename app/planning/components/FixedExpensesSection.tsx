@@ -20,6 +20,7 @@ export default function FixedExpensesSection({ plan, fixedExpenses, onRefresh, o
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
   const [confirmRemove, setConfirmRemove] = useState<FixedExpense | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<FixedExpense | null>(null)
 
   function openEdit(expense: FixedExpense) {
     setEditItem(expense)
@@ -78,6 +79,15 @@ export default function FixedExpensesSection({ plan, fixedExpenses, onRefresh, o
     }
   }
 
+  async function handleDelete(expense: FixedExpense) {
+    const res = await fetch(`/api/v1/fixed-expenses/${expense.expense_id}`, { method: 'DELETE' })
+    if (res.ok) {
+      setConfirmDelete(null)
+      onToast('Fixed expense deleted')
+      onRefresh()
+    }
+  }
+
   if (fixedExpenses.length === 0) {
     return (
       <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
@@ -123,8 +133,9 @@ export default function FixedExpensesSection({ plan, fixedExpenses, onRefresh, o
                   <div className="flex gap-3">
                     <button onClick={() => openEdit(expense)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">Edit</button>
                     {hasOverride && (
-                      <button onClick={() => setConfirmRemove(expense)} className="text-xs text-red-500 dark:text-red-400 hover:underline">Reset</button>
+                      <button onClick={() => setConfirmRemove(expense)} className="text-xs text-gray-500 dark:text-gray-400 hover:underline">Reset</button>
                     )}
+                    <button onClick={() => setConfirmDelete(expense)} className="text-xs text-red-500 dark:text-red-400 hover:underline">Delete</button>
                   </div>
                 </td>
               </tr>
@@ -151,6 +162,20 @@ export default function FixedExpensesSection({ plan, fixedExpenses, onRefresh, o
                 {saving && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
                 {saving ? 'Saving...' : 'Save'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation */}
+      {confirmDelete && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-sm p-6 border border-gray-100 dark:border-gray-700">
+            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">Delete Expense</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-5">Are you sure you want to delete <strong>{confirmDelete.expense_name}</strong>? This will remove it from all plans.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmDelete(null)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Cancel</button>
+              <button onClick={() => handleDelete(confirmDelete)} className="flex-1 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700">Delete</button>
             </div>
           </div>
         </div>
