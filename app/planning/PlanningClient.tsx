@@ -196,6 +196,8 @@ export default function PlanningClient() {
                   <InsuranceSection
                     plan={plan}
                     insuranceMembers={insuranceMembers}
+                    onRefresh={refetch}
+                    onToast={showToast}
                   />
                 </>
               ) : (
