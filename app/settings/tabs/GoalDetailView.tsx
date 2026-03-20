@@ -6,6 +6,7 @@ interface Goal {
   goal_id: string
   goal_name: string
   description: string | null
+  target_amount: number | null
 }
 
 interface Fund {
@@ -262,6 +263,39 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
 
       {successMsg && (
         <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-300 rounded-lg text-sm">{successMsg}</div>
+      )}
+
+      {/* Goal Progress */}
+      {goal.target_amount != null && (
+        <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 mb-6">
+          <div className="flex items-center justify-between text-sm mb-2">
+            <span className="font-medium text-gray-700 dark:text-gray-300">Goal Progress</span>
+            <span className="text-gray-500 dark:text-gray-400">
+              {fmt(totalCurrentValue)} / {fmt(goal.target_amount)}
+            </span>
+          </div>
+          {(() => {
+            const pct = Math.min((totalCurrentValue / goal.target_amount!) * 100, 100)
+            const exceeded = totalCurrentValue >= goal.target_amount!
+            return (
+              <>
+                <div className="h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${exceeded ? 'bg-green-500' : 'bg-indigo-500'}`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+                <div className="flex items-center justify-between mt-1.5 text-xs text-gray-400 dark:text-gray-500">
+                  <span>{Math.round(pct)}%</span>
+                  {exceeded
+                    ? <span className="text-green-600 dark:text-green-400 font-medium">Target reached!</span>
+                    : <span>{fmt(goal.target_amount! - totalCurrentValue)} remaining</span>
+                  }
+                </div>
+              </>
+            )
+          })()}
+        </div>
       )}
 
       {/* Summary */}
