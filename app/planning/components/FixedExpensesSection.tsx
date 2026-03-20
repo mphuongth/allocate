@@ -115,7 +115,7 @@ export default function FixedExpensesSection({ plan, fixedExpenses, onRefresh, o
         <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
           {fixedExpenses.map((expense) => {
             const isSkipped = expense.override === 0
-            const hasOverride = expense.override != null && expense.override > 0
+            const hasOverride = expense.override != null && expense.override > 0 && expense.override !== expense.amount_vnd
             const thisMonth = expense.override ?? expense.amount_vnd
             return (
               <tr key={expense.expense_id} className={`hover:bg-gray-50 dark:hover:bg-gray-800 ${isSkipped ? 'opacity-60' : ''}`}>

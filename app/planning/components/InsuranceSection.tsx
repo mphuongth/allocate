@@ -109,7 +109,7 @@ export default function InsuranceSection({ plan, insuranceMembers, onRefresh, on
         <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
           {insuranceMembers.map((m) => {
             const defaultMonthly = Math.round(m.annual_payment_vnd / 12)
-            const hasOverride = m.monthlyOverride != null
+            const hasOverride = m.monthlyOverride != null && m.monthlyOverride !== defaultMonthly
             return (
               <tr key={m.member_id} className={`hover:bg-gray-50 dark:hover:bg-gray-800 ${m.excluded ? 'opacity-60' : ''}`}>
                 <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{m.member_name}</td>
