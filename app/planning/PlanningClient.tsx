@@ -52,6 +52,7 @@ export interface InsuranceMember {
   annual_payment_vnd: number
   payment_date: string | null
   excluded?: boolean
+  monthlyOverride?: number
 }
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
@@ -82,13 +83,14 @@ export default function PlanningClient() {
     if (res.ok) {
       const p = await res.json()
       setPlan(p)
-      const [invRes, savRes, overridesRes, expRes, insRes, exclRes] = await Promise.all([
+      const [invRes, savRes, overridesRes, expRes, insRes, exclRes, insOverridesRes] = await Promise.all([
         fetch(`/api/v1/monthly-plans/${p.id}/fund-investments`),
         fetch(`/api/v1/monthly-plans/${p.id}/direct-savings`),
         fetch(`/api/v1/monthly-plans/${p.id}/fixed-expense-overrides`),
         fetch('/api/v1/fixed-expenses'),
         fetch('/api/v1/insurance-members'),
         fetch(`/api/v1/monthly-plans/${p.id}/excluded-insurance`),
+        fetch(`/api/v1/monthly-plans/${p.id}/insurance-overrides`),
       ])
       setInvestments(invRes.ok ? await invRes.json() : [])
       setSavings(savRes.ok ? await savRes.json() : [])
@@ -105,7 +107,14 @@ export default function PlanningClient() {
       const { members } = insRes.ok ? await insRes.json() : { members: [] }
       const exclusions: Array<{ member_id: string }> = exclRes.ok ? await exclRes.json() : []
       const excludedSet = new Set(exclusions.map((e) => e.member_id))
-      setInsuranceMembers((members ?? []).map((m: InsuranceMember) => ({ ...m, excluded: excludedSet.has(m.member_id) })))
+      const insOverrides: Array<{ member_id: string; monthly_amount_override_vnd: number }> =
+        insOverridesRes.ok ? await insOverridesRes.json() : []
+      const insOverrideMap = new Map(insOverrides.map((o) => [o.member_id, o.monthly_amount_override_vnd]))
+      setInsuranceMembers((members ?? []).map((m: InsuranceMember) => ({
+        ...m,
+        excluded: excludedSet.has(m.member_id),
+        monthlyOverride: insOverrideMap.get(m.member_id),
+      })))
     } else {
       setPlan(null)
       setInvestments([])

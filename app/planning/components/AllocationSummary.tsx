@@ -51,7 +51,10 @@ export default function AllocationSummary({ plan, investments, savings, fixedExp
     return sum + monthly
   }, 0)
 
-  const totalInsurance = insuranceMembers.reduce((sum, m) => sum + Math.round(m.annual_payment_vnd / 12), 0)
+  const totalInsurance = insuranceMembers.reduce((sum, m) => {
+    if (m.excluded) return sum
+    return sum + (m.monthlyOverride ?? Math.round(m.annual_payment_vnd / 12))
+  }, 0)
 
   const totalInvested = investments.reduce((s, i) => s + i.amount_vnd, 0)
   const totalSaved = savings.reduce((s, d) => s + d.amount_vnd, 0)
