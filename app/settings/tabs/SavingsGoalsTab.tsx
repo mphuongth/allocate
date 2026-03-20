@@ -7,6 +7,7 @@ interface SavingsGoal {
   goal_id: string
   goal_name: string
   description: string | null
+  target_amount: number | null
   created_at: string
 }
 
@@ -49,6 +50,7 @@ export default function SavingsGoalsTab() {
   const [editGoal, setEditGoal] = useState<SavingsGoal | null>(null)
   const [formName, setFormName] = useState('')
   const [formDesc, setFormDesc] = useState('')
+  const [formTargetAmount, setFormTargetAmount] = useState('')
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
@@ -105,6 +107,7 @@ export default function SavingsGoalsTab() {
     setEditGoal(null)
     setFormName('')
     setFormDesc('')
+    setFormTargetAmount('')
     setFormError('')
     setShowForm(true)
   }
@@ -113,6 +116,7 @@ export default function SavingsGoalsTab() {
     setEditGoal(goal)
     setFormName(goal.goal_name)
     setFormDesc(goal.description ?? '')
+    setFormTargetAmount(goal.target_amount != null ? String(goal.target_amount) : '')
     setFormError('')
     setShowForm(true)
   }
@@ -126,7 +130,7 @@ export default function SavingsGoalsTab() {
     const res = await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ goal_name: formName, description: formDesc }),
+      body: JSON.stringify({ goal_name: formName, description: formDesc, target_amount: formTargetAmount || null }),
     })
     if (!res.ok) {
       const { error } = await res.json()
@@ -186,6 +190,9 @@ export default function SavingsGoalsTab() {
             <div key={goal.goal_id} className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 hover:shadow-md transition-shadow">
               <div className="mb-3">
                 <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-base">{goal.goal_name}</h3>
+                {goal.target_amount != null && (
+                  <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-0.5">Target: {fmt(goal.target_amount)}</p>
+                )}
                 {goal.description && <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{goal.description}</p>}
               </div>
 
@@ -241,6 +248,16 @@ export default function SavingsGoalsTab() {
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                   placeholder="e.g. Retirement"
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Goal Amount (VND)</label>
+                <input
+                  type="number"
+                  value={formTargetAmount}
+                  onChange={(e) => setFormTargetAmount(e.target.value)}
+                  placeholder="Optional — e.g. 50000000"
                   className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>

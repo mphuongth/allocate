@@ -25,15 +25,20 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { goal_name, description } = body
+  const { goal_name, description, target_amount } = body
 
   if (!goal_name || typeof goal_name !== 'string' || goal_name.trim().length === 0) {
     return NextResponse.json({ error: 'Goal name is required.' }, { status: 400 })
   }
 
+  const targetAmountVal = target_amount != null && target_amount !== '' ? Number(target_amount) : null
+  if (targetAmountVal !== null && (isNaN(targetAmountVal) || targetAmountVal <= 0)) {
+    return NextResponse.json({ error: 'Goal amount must be a positive number.' }, { status: 400 })
+  }
+
   const { data: goal, error } = await supabase
     .from('savings_goals')
-    .update({ goal_name: goal_name.trim(), description: description?.trim() || null, updated_at: new Date().toISOString() })
+    .update({ goal_name: goal_name.trim(), description: description?.trim() || null, target_amount: targetAmountVal, updated_at: new Date().toISOString() })
     .eq('goal_id', id)
     .eq('user_id', user.id)
     .select()
