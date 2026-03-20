@@ -34,8 +34,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const amountNum = Number(monthly_amount_override_vnd)
   if (!fixed_expense_id) return NextResponse.json({ error: 'fixed_expense_id is required' }, { status: 400 })
-  if (!monthly_amount_override_vnd || isNaN(amountNum) || amountNum <= 0) {
-    return NextResponse.json({ error: 'Monthly amount must be positive' }, { status: 400 })
+  if (monthly_amount_override_vnd === undefined || monthly_amount_override_vnd === null || isNaN(amountNum) || amountNum < 0) {
+    return NextResponse.json({ error: 'Monthly amount must be 0 or positive' }, { status: 400 })
   }
 
   // Upsert — one override per expense per plan

@@ -46,6 +46,7 @@ export default function AllocationSummary({ plan, investments, savings, fixedExp
   }
 
   const totalFixed = fixedExpenses.reduce((sum, e) => {
+    if (e.override === 0) return sum // skipped this month
     const monthly = e.override != null ? e.override : e.amount_vnd
     return sum + monthly
   }, 0)
