@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import GoalDetailView from './GoalDetailView'
 
 interface SavingsGoal {
@@ -42,7 +42,12 @@ function calcProjectedInterest(amount: number, rate: number | null, investmentDa
   return amount * Math.pow(1 + rate / 100 / 12, months) - amount
 }
 
-export default function SavingsGoalsTab() {
+interface Props {
+  initialGoalId?: string
+  onGoalChange?: (id: string | null) => void
+}
+
+export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) {
   const [goals, setGoals] = useState<GoalWithStats[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedGoal, setSelectedGoal] = useState<SavingsGoal | null>(null)
@@ -54,6 +59,7 @@ export default function SavingsGoalsTab() {
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
+  const hasAutoSelected = useRef(false)
 
   const fetchGoals = useCallback(async () => {
     setLoading(true)
@@ -94,14 +100,36 @@ export default function SavingsGoalsTab() {
       })
     })
 
-    setGoals((rawGoals ?? []).map((g: SavingsGoal) => {
+    const fetched: GoalWithStats[] = (rawGoals ?? []).map((g: SavingsGoal) => {
       const stats = statsMap.get(g.goal_id) ?? { count: 0, invested: 0, interest: 0 }
       return { ...g, transactionCount: stats.count, totalInvested: stats.invested, projectedInterest: stats.interest }
-    }))
+    })
+    setGoals(fetched)
+
+    // Auto-select goal from URL param once on initial load only
+    if (initialGoalId && !hasAutoSelected.current) {
+      const match = fetched.find((g) => g.goal_id === initialGoalId)
+      if (match) {
+        setSelectedGoal(match)
+        hasAutoSelected.current = true
+      }
+    }
+
     setLoading(false)
-  }, [])
+  }, [initialGoalId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { fetchGoals() }, [fetchGoals])
+
+  function selectGoal(goal: SavingsGoal) {
+    setSelectedGoal(goal)
+    onGoalChange?.(goal.goal_id)
+  }
+
+  function clearGoal() {
+    setSelectedGoal(null)
+    onGoalChange?.(null)
+    fetchGoals()
+  }
 
   function openCreate() {
     setEditGoal(null)
@@ -159,7 +187,7 @@ export default function SavingsGoalsTab() {
     return (
       <GoalDetailView
         goal={selectedGoal}
-        onBack={() => { setSelectedGoal(null); fetchGoals() }}
+        onBack={clearGoal}
       />
     )
   }
@@ -211,7 +239,7 @@ export default function SavingsGoalsTab() {
 
               <div className="flex gap-2">
                 <button
-                  onClick={() => setSelectedGoal(goal)}
+                  onClick={() => selectGoal(goal)}
                   className="flex-1 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-700 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
                 >
                   View Details
