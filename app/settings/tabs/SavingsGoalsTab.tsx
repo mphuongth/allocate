@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import GoalDetailView from './GoalDetailView'
 
 interface SavingsGoal {
@@ -59,6 +59,7 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
+  const hasAutoSelected = useRef(false)
 
   const fetchGoals = useCallback(async () => {
     setLoading(true)
@@ -105,10 +106,13 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
     })
     setGoals(fetched)
 
-    // Auto-select goal from URL param (only on initial load)
-    if (initialGoalId && !selectedGoal) {
+    // Auto-select goal from URL param once on initial load only
+    if (initialGoalId && !hasAutoSelected.current) {
       const match = fetched.find((g) => g.goal_id === initialGoalId)
-      if (match) setSelectedGoal(match)
+      if (match) {
+        setSelectedGoal(match)
+        hasAutoSelected.current = true
+      }
     }
 
     setLoading(false)
