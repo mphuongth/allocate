@@ -162,7 +162,16 @@ export default function FixedExpensesSection({ plan, fixedExpenses, onRefresh, o
             {formError && <p className="text-red-600 dark:text-red-400 text-sm mb-3">{formError}</p>}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">This Month Amount (VND) *</label>
-              <input type="number" value={overrideValue} onChange={(e) => setOverrideValue(e.target.value)} className={inputCls} />
+              <div className="flex gap-2">
+                <input type="number" value={overrideValue} onChange={(e) => setOverrideValue(e.target.value)} className={inputCls} />
+                <button
+                  type="button"
+                  onClick={() => setOverrideValue(String(editItem.amount_vnd))}
+                  className="shrink-0 px-3 py-2 text-xs font-medium text-indigo-600 dark:text-indigo-400 border border-indigo-300 dark:border-indigo-700 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 whitespace-nowrap"
+                >
+                  Default
+                </button>
+              </div>
               <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Default: {fmt(editItem.amount_vnd)}/month</p>
             </div>
             <div className="flex gap-3 mt-5">
