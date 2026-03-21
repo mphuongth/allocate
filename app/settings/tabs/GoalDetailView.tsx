@@ -25,6 +25,7 @@ interface TxRow {
   unit_price: number | null
   units: number | null
   interest_rate: number | null
+  expiry_date: string | null
   notes: string | null
   fund_id: string | null
   fund_display?: string
@@ -48,7 +49,7 @@ function calcProjectedInterest(amount: number, rate: number | null, investmentDa
 
 const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
 
-const emptyTxForm = { asset_type: 'bank', investment_date: '', amount_vnd: '', unit_price: '', units: '', interest_rate: '', notes: '', fund_id: '' }
+const emptyTxForm = { asset_type: 'bank', investment_date: '', amount_vnd: '', unit_price: '', units: '', interest_rate: '', expiry_date: '', notes: '', fund_id: '' }
 const emptyFiForm = { fund_id: '', amount_vnd: '', units: '', unit_price: '' }
 
 export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: () => void }) {
@@ -81,7 +82,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
 
     const txRows: TxRow[] = (txs ?? []).map((tx: {
       transaction_id: string; asset_type: string; investment_date: string; amount_vnd: number
-      unit_price: number | null; units: number | null; interest_rate: number | null; notes: string | null
+      unit_price: number | null; units: number | null; interest_rate: number | null; expiry_date: string | null; notes: string | null
       fund_id: string | null; funds?: { id: string; name: string; nav: number } | null
     }) => {
       let currentValue: number
@@ -102,6 +103,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
         unit_price: tx.unit_price,
         units: tx.units,
         interest_rate: tx.interest_rate,
+        expiry_date: tx.expiry_date,
         notes: tx.notes,
         fund_id: tx.fund_id,
         fund_display: tx.fund_id && fundMap[tx.fund_id] ? `${fundMap[tx.fund_id].code} - ${fundMap[tx.fund_id].name}` : undefined,
@@ -131,6 +133,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
       unit_price: row.unit_price != null ? String(row.unit_price) : '',
       units: row.units != null ? String(row.units) : '',
       interest_rate: row.interest_rate != null ? String(row.interest_rate) : '',
+      expiry_date: row.expiry_date ?? '',
       notes: row.notes ?? '',
       fund_id: row.fund_id ?? '',
     })
@@ -151,6 +154,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
       unit_price: txForm.unit_price ? Number(txForm.unit_price) : null,
       units: txForm.units ? Number(txForm.units) : null,
       interest_rate: txForm.interest_rate ? Number(txForm.interest_rate) : null,
+      expiry_date: txForm.asset_type === 'bank' ? (txForm.expiry_date || null) : null,
       notes: txForm.notes || null,
       fund_id: txForm.asset_type === 'fund' ? (txForm.fund_id || null) : null,
     }
@@ -495,6 +499,13 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                 <input type="number" step="0.1" value={txForm.interest_rate} onChange={(e) => setTxForm({ ...txForm, interest_rate: e.target.value })}
                   placeholder="e.g. 5.5" className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
+              {txForm.asset_type === 'bank' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Expiry Date</label>
+                  <input type="date" value={txForm.expiry_date} onChange={(e) => setTxForm({ ...txForm, expiry_date: e.target.value })}
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Notes</label>
                 <textarea value={txForm.notes} onChange={(e) => setTxForm({ ...txForm, notes: e.target.value })} rows={2}
