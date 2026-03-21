@@ -56,6 +56,9 @@ export interface InsuranceMember {
   monthlyOverride?: number
 }
 
+export interface Fund { id: string; name: string; nav: number }
+export interface Goal { goal_id: string; goal_name: string }
+
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
 function prevMonth(m: number, y: number) { return m === 1 ? { m: 12, y: y - 1 } : { m: m - 1, y } }
@@ -70,6 +73,8 @@ export default function PlanningClient() {
   const [savings, setSavings] = useState<DirectSaving[]>([])
   const [fixedExpenses, setFixedExpenses] = useState<FixedExpense[]>([])
   const [insuranceMembers, setInsuranceMembers] = useState<InsuranceMember[]>([])
+  const [funds, setFunds] = useState<Fund[]>([])
+  const [goals, setGoals] = useState<Goal[]>([])
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState('')
 
@@ -80,46 +85,46 @@ export default function PlanningClient() {
 
   const fetchPlan = useCallback(async () => {
     setLoading(true)
-    const res = await fetch(`/api/v1/monthly-plans?month=${month}&year=${year}`)
+    const res = await fetch(`/api/v1/monthly-plans?month=${month}&year=${year}&full=true`)
     if (res.ok) {
       const p = await res.json()
-      setPlan(p)
-      const [invRes, savRes, overridesRes, expRes, insRes, exclRes, insOverridesRes] = await Promise.all([
-        fetch(`/api/v1/monthly-plans/${p.id}/fund-investments`),
-        fetch(`/api/v1/monthly-plans/${p.id}/direct-savings`),
-        fetch(`/api/v1/monthly-plans/${p.id}/fixed-expense-overrides`),
-        fetch('/api/v1/fixed-expenses'),
-        fetch('/api/v1/insurance-members'),
-        fetch(`/api/v1/monthly-plans/${p.id}/excluded-insurance`),
-        fetch(`/api/v1/monthly-plans/${p.id}/insurance-overrides`),
-      ])
-      setInvestments(invRes.ok ? await invRes.json() : [])
-      setSavings(savRes.ok ? await savRes.json() : [])
+      setPlan({ id: p.id, month: p.month, year: p.year, salary_vnd: p.salary_vnd })
+      setInvestments(p.fund_investments ?? [])
+      setSavings(p.direct_savings ?? [])
 
-      const { expenses } = expRes.ok ? await expRes.json() : { expenses: [] }
-      const overrides: Array<{ fixed_expense_id: string; monthly_amount_override_vnd: number }> =
-        overridesRes.ok ? await overridesRes.json() : []
-      const overrideMap = new Map(overrides.map((o) => [o.fixed_expense_id, o.monthly_amount_override_vnd]))
-      setFixedExpenses((expenses ?? []).map((e: { expense_id: string; expense_name: string; amount_vnd: number }) => ({
-        ...e,
-        override: overrideMap.get(e.expense_id),
-      })))
+      const overrideMap = new Map(
+        (p.fixed_expense_overrides as Array<{ fixed_expense_id: string; monthly_amount_override_vnd: number }>)
+          .map((o) => [o.fixed_expense_id, o.monthly_amount_override_vnd])
+      )
+      setFixedExpenses(
+        (p.fixed_expenses as Array<{ expense_id: string; expense_name: string; amount_vnd: number }>).map((e) => ({
+          ...e,
+          override: overrideMap.get(e.expense_id),
+        }))
+      )
 
-      const { members } = insRes.ok ? await insRes.json() : { members: [] }
-      const exclusions: Array<{ member_id: string }> = exclRes.ok ? await exclRes.json() : []
-      const excludedSet = new Set(exclusions.map((e) => e.member_id))
-      const insOverrides: Array<{ member_id: string; monthly_amount_override_vnd: number }> =
-        insOverridesRes.ok ? await insOverridesRes.json() : []
-      const insOverrideMap = new Map(insOverrides.map((o) => [o.member_id, o.monthly_amount_override_vnd]))
-      setInsuranceMembers((members ?? []).map((m: InsuranceMember) => ({
-        ...m,
-        excluded: excludedSet.has(m.member_id),
-        monthlyOverride: insOverrideMap.get(m.member_id),
-      })))
+      const excludedSet = new Set(
+        (p.excluded_insurance as Array<{ member_id: string }>).map((e) => e.member_id)
+      )
+      const insOverrideMap = new Map(
+        (p.insurance_overrides as Array<{ member_id: string; monthly_amount_override_vnd: number }>)
+          .map((o) => [o.member_id, o.monthly_amount_override_vnd])
+      )
+      setInsuranceMembers(
+        (p.insurance_members as InsuranceMember[]).map((m) => ({
+          ...m,
+          excluded: excludedSet.has(m.member_id),
+          monthlyOverride: insOverrideMap.get(m.member_id),
+        }))
+      )
+      setGoals(p.goals ?? [])
+      setFunds(p.funds ?? [])
     } else {
       setPlan(null)
       setInvestments([])
       setSavings([])
+      setGoals([])
+      setFunds([])
       // Still load fixed expenses and insurance even without a plan
       const [expRes, insRes] = await Promise.all([
         fetch('/api/v1/fixed-expenses'),
@@ -192,12 +197,15 @@ export default function PlanningClient() {
                   <FundInvestmentsSection
                     plan={plan}
                     investments={investments}
+                    funds={funds}
+                    goals={goals}
                     onRefresh={refetch}
                     onToast={showToast}
                   />
                   <DirectSavingsSection
                     plan={plan}
                     savings={savings}
+                    goals={goals}
                     onRefresh={refetch}
                     onToast={showToast}
                   />

@@ -1,14 +1,13 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import type { MonthlyPlan, FundInvestment } from '../PlanningClient'
-
-interface Fund { id: string; name: string; nav: number }
-interface Goal { goal_id: string; goal_name: string }
+import { useState } from 'react'
+import type { MonthlyPlan, FundInvestment, Fund, Goal } from '../PlanningClient'
 
 interface Props {
   plan: MonthlyPlan
   investments: FundInvestment[]
+  funds: Fund[]
+  goals: Goal[]
   onRefresh: () => void
   onToast: (msg: string) => void
 }
@@ -19,28 +18,13 @@ const emptyForm = { fund_id: '', goal_id: '', amount_vnd: '', units: '', unit_pr
 
 const inputCls = 'w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500'
 
-export default function FundInvestmentsSection({ plan, investments, onRefresh, onToast }: Props) {
-  const [funds, setFunds] = useState<Fund[]>([])
-  const [goals, setGoals] = useState<Goal[]>([])
+export default function FundInvestmentsSection({ plan, investments, funds, goals, onRefresh, onToast }: Props) {
   const [showForm, setShowForm] = useState(false)
   const [editItem, setEditItem] = useState<FundInvestment | null>(null)
   const [form, setForm] = useState(emptyForm)
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<FundInvestment | null>(null)
-
-  const fetchRefs = useCallback(async () => {
-    const [fundsRes, goalsRes] = await Promise.all([
-      fetch('/api/funds'),
-      fetch('/api/v1/savings-goals'),
-    ])
-    const { funds } = fundsRes.ok ? await fundsRes.json() : { funds: [] }
-    const { goals } = goalsRes.ok ? await goalsRes.json() : { goals: [] }
-    setFunds(funds ?? [])
-    setGoals(goals ?? [])
-  }, [])
-
-  useEffect(() => { fetchRefs() }, [fetchRefs])
 
   const minDate = new Date(plan.year, plan.month - 1, 1).toISOString().split('T')[0]
   const maxDate = new Date(plan.year, plan.month, 0).toISOString().split('T')[0]

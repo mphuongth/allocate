@@ -1,13 +1,12 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import type { MonthlyPlan, DirectSaving } from '../PlanningClient'
-
-interface Goal { goal_id: string; goal_name: string }
+import { useState } from 'react'
+import type { MonthlyPlan, DirectSaving, Goal } from '../PlanningClient'
 
 interface Props {
   plan: MonthlyPlan
   savings: DirectSaving[]
+  goals: Goal[]
   onRefresh: () => void
   onToast: (msg: string) => void
 }
@@ -17,8 +16,7 @@ const emptyForm = { goal_id: '', amount_vnd: '', interest_rate: '', expiry_date:
 
 const inputCls = 'w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500'
 
-export default function DirectSavingsSection({ plan, savings, onRefresh, onToast }: Props) {
-  const [goals, setGoals] = useState<Goal[]>([])
+export default function DirectSavingsSection({ plan, savings, goals, onRefresh, onToast }: Props) {
   const [showForm, setShowForm] = useState(false)
   const [editItem, setEditItem] = useState<DirectSaving | null>(null)
   const [form, setForm] = useState(emptyForm)
@@ -28,14 +26,6 @@ export default function DirectSavingsSection({ plan, savings, onRefresh, onToast
 
   const minDate = new Date(plan.year, plan.month - 1, 1).toISOString().split('T')[0]
   const maxDate = new Date(plan.year, plan.month, 0).toISOString().split('T')[0]
-
-  const fetchGoals = useCallback(async () => {
-    const res = await fetch('/api/v1/savings-goals')
-    const { goals } = res.ok ? await res.json() : { goals: [] }
-    setGoals(goals ?? [])
-  }, [])
-
-  useEffect(() => { fetchGoals() }, [fetchGoals])
 
   function openAdd() {
     setEditItem(null)

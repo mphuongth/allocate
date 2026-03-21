@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 
 interface Transaction {
   transaction_id: string
@@ -46,16 +46,20 @@ function calcCurrentValue(tx: Transaction): number {
 
 const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
 
+interface AppliedFilters { asset_type: string; goal_id: string; from_date: string; to_date: string }
+const EMPTY_FILTERS: AppliedFilters = { asset_type: '', goal_id: '', from_date: '', to_date: '' }
+
 export default function InvestmentTransactionsTab() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [goals, setGoals] = useState<Goal[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
-  const [filterAsset, setFilterAsset] = useState('')
-  const [filterGoal, setFilterGoal] = useState('')
-  const [filterFrom, setFilterFrom] = useState('')
-  const [filterTo, setFilterTo] = useState('')
+
+  const [filters, setFilters] = useState<AppliedFilters>(EMPTY_FILTERS)
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const fetchGoals = useCallback(async () => {
     const res = await fetch('/api/v1/savings-goals')
@@ -66,24 +70,44 @@ export default function InvestmentTransactionsTab() {
   const fetchTransactions = useCallback(async () => {
     setLoading(true)
     const params = new URLSearchParams({ page: String(page) })
-    if (filterAsset) params.set('asset_type', filterAsset)
-    if (filterFrom) params.set('from_date', filterFrom)
-    if (filterTo) params.set('to_date', filterTo)
-    if (filterGoal === 'unassigned') params.set('unassigned', 'true')
-    else if (filterGoal) params.set('goal_id', filterGoal)
+    if (filters.asset_type) params.set('asset_type', filters.asset_type)
+    if (filters.from_date) params.set('from_date', filters.from_date)
+    if (filters.to_date) params.set('to_date', filters.to_date)
+    if (filters.goal_id === 'unassigned') params.set('unassigned', 'true')
+    else if (filters.goal_id) params.set('goal_id', filters.goal_id)
 
     const res = await fetch(`/api/v1/investment-transactions?${params}`)
     const data = res.ok ? await res.json() : { transactions: [], total: 0 }
     setTransactions(data.transactions ?? [])
     setTotal(data.total ?? 0)
     setLoading(false)
-  }, [page, filterAsset, filterGoal, filterFrom, filterTo])
+  }, [page, filters])
 
   useEffect(() => { fetchGoals() }, [fetchGoals])
   useEffect(() => { fetchTransactions() }, [fetchTransactions])
 
-  function applyFilters() { setPage(1); fetchTransactions() }
-  function resetFilters() { setFilterAsset(''); setFilterGoal(''); setFilterFrom(''); setFilterTo(''); setPage(1) }
+  // Dropdowns apply instantly; date inputs debounce 400ms
+  function setSelectFilter(key: 'asset_type' | 'goal_id', value: string) {
+    setFilters((prev) => ({ ...prev, [key]: value }))
+    setPage(1)
+  }
+
+  function setDateFilter(key: 'from_date' | 'to_date', value: string, setter: (v: string) => void) {
+    setter(value)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      setFilters((prev) => ({ ...prev, [key]: value }))
+      setPage(1)
+    }, 400)
+  }
+
+  function resetFilters() {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    setDateFrom('')
+    setDateTo('')
+    setFilters(EMPTY_FILTERS)
+    setPage(1)
+  }
 
   const totalPages = Math.max(1, Math.ceil(total / 20))
 
@@ -99,8 +123,8 @@ export default function InvestmentTransactionsTab() {
         <div>
           <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Asset Type</label>
           <select
-            value={filterAsset}
-            onChange={(e) => setFilterAsset(e.target.value)}
+            value={filters.asset_type}
+            onChange={(e) => setSelectFilter('asset_type', e.target.value)}
             className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
             <option value="">All</option>
@@ -110,8 +134,8 @@ export default function InvestmentTransactionsTab() {
         <div>
           <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Goal</label>
           <select
-            value={filterGoal}
-            onChange={(e) => setFilterGoal(e.target.value)}
+            value={filters.goal_id}
+            onChange={(e) => setSelectFilter('goal_id', e.target.value)}
             className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
             <option value="">All Goals</option>
@@ -121,16 +145,15 @@ export default function InvestmentTransactionsTab() {
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">From Date</label>
-          <input type="date" value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)}
+          <input type="date" value={dateFrom} onChange={(e) => setDateFilter('from_date', e.target.value, setDateFrom)}
             className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">To Date</label>
-          <input type="date" value={filterTo} onChange={(e) => setFilterTo(e.target.value)}
+          <input type="date" value={dateTo} onChange={(e) => setDateFilter('to_date', e.target.value, setDateTo)}
             className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
         </div>
-        <div className="flex gap-2">
-          <button onClick={applyFilters} className="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Apply</button>
+        <div>
           <button onClick={resetFilters} className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Reset</button>
         </div>
       </div>
