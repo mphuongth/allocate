@@ -13,7 +13,7 @@ interface Props {
 }
 
 const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
-const emptyForm = { goal_id: '', amount_vnd: '', profit_percent: '', expiry_date: '' }
+const emptyForm = { goal_id: '', amount_vnd: '', interest_rate: '', expiry_date: '', investment_date: '' }
 
 const inputCls = 'w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500'
 
@@ -26,6 +26,9 @@ export default function DirectSavingsSection({ plan, savings, onRefresh, onToast
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<DirectSaving | null>(null)
 
+  const minDate = new Date(plan.year, plan.month - 1, 1).toISOString().split('T')[0]
+  const maxDate = new Date(plan.year, plan.month, 0).toISOString().split('T')[0]
+
   const fetchGoals = useCallback(async () => {
     const res = await fetch('/api/v1/savings-goals')
     const { goals } = res.ok ? await res.json() : { goals: [] }
@@ -36,7 +39,7 @@ export default function DirectSavingsSection({ plan, savings, onRefresh, onToast
 
   function openAdd() {
     setEditItem(null)
-    setForm(emptyForm)
+    setForm({ ...emptyForm, investment_date: minDate })
     setFormError('')
     setShowForm(true)
   }
@@ -46,8 +49,9 @@ export default function DirectSavingsSection({ plan, savings, onRefresh, onToast
     setForm({
       goal_id: item.goal_id ?? '',
       amount_vnd: String(item.amount_vnd),
-      profit_percent: item.profit_percent != null ? String(item.profit_percent) : '',
+      interest_rate: item.interest_rate != null ? String(item.interest_rate) : '',
       expiry_date: item.expiry_date ?? '',
+      investment_date: item.investment_date ?? minDate,
     })
     setFormError('')
     setShowForm(true)
@@ -60,17 +64,25 @@ export default function DirectSavingsSection({ plan, savings, onRefresh, onToast
       setFormError('Amount is required and must be positive')
       return
     }
+    if (!form.investment_date) {
+      setFormError('Investment date is required')
+      return
+    }
 
     setSaving(true)
     const payload = {
+      asset_type: 'bank',
       plan_id: plan.id,
       goal_id: form.goal_id || null,
       amount_vnd: amountNum,
-      profit_percent: form.profit_percent !== '' ? Number(form.profit_percent) : null,
+      interest_rate: form.interest_rate !== '' ? Number(form.interest_rate) : null,
       expiry_date: form.expiry_date || null,
+      investment_date: form.investment_date,
     }
 
-    const url = editItem ? `/api/v1/direct-savings/${editItem.id}` : '/api/v1/direct-savings'
+    const url = editItem
+      ? `/api/v1/investment-transactions/${editItem.transaction_id}`
+      : '/api/v1/investment-transactions'
     try {
       const res = await fetch(url, {
         method: editItem ? 'PUT' : 'POST',
@@ -93,7 +105,7 @@ export default function DirectSavingsSection({ plan, savings, onRefresh, onToast
   }
 
   async function handleDelete(item: DirectSaving) {
-    const res = await fetch(`/api/v1/direct-savings/${item.id}`, { method: 'DELETE' })
+    const res = await fetch(`/api/v1/investment-transactions/${item.transaction_id}`, { method: 'DELETE' })
     if (res.ok) {
       setConfirmDelete(null)
       onToast('Direct saving deleted')
@@ -116,16 +128,17 @@ export default function DirectSavingsSection({ plan, savings, onRefresh, onToast
         <table className="w-full text-sm">
           <thead className="bg-gray-50 dark:bg-gray-800">
             <tr>
-              {['Amount', 'Profit %', 'Expiry Date', 'Goal', 'Actions'].map((h) => (
+              {['Date', 'Amount', 'Interest %', 'Expiry Date', 'Goal', 'Actions'].map((h) => (
                 <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
             {savings.map((item) => (
-              <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+              <tr key={item.transaction_id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{item.investment_date ? new Date(item.investment_date).toLocaleDateString('vi-VN') : '—'}</td>
                 <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{fmt(item.amount_vnd)}</td>
-                <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{item.profit_percent != null ? `${item.profit_percent}%` : '—'}</td>
+                <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{item.interest_rate != null ? `${item.interest_rate}%` : '—'}</td>
                 <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{item.expiry_date ? new Date(item.expiry_date).toLocaleDateString('vi-VN') : '—'}</td>
                 <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{item.savings_goals?.goal_name ?? 'Unassigned'}</td>
                 <td className="px-4 py-3">
@@ -148,6 +161,11 @@ export default function DirectSavingsSection({ plan, savings, onRefresh, onToast
             {formError && <p className="text-red-600 dark:text-red-400 text-sm mb-3">{formError}</p>}
             <div className="space-y-3">
               <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Investment Date *</label>
+                <input type="date" value={form.investment_date} min={minDate} max={maxDate}
+                  onChange={(e) => setForm({ ...form, investment_date: e.target.value })} className={inputCls} />
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Goal (optional)</label>
                 <select value={form.goal_id} onChange={(e) => setForm({ ...form, goal_id: e.target.value })}
                   disabled={goals.length === 0} className={`${inputCls} disabled:opacity-50`}>
@@ -160,8 +178,8 @@ export default function DirectSavingsSection({ plan, savings, onRefresh, onToast
                 <input type="number" value={form.amount_vnd} onChange={(e) => setForm({ ...form, amount_vnd: e.target.value })} className={inputCls} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Profit % (optional)</label>
-                <input type="number" step="0.01" value={form.profit_percent} onChange={(e) => setForm({ ...form, profit_percent: e.target.value })}
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Interest % (optional)</label>
+                <input type="number" step="0.01" value={form.interest_rate} onChange={(e) => setForm({ ...form, interest_rate: e.target.value })}
                   placeholder="e.g. 5.5" className={inputCls} />
               </div>
               <div>

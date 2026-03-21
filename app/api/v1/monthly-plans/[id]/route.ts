@@ -35,13 +35,10 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   if (plan.user_id !== user.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   // Delete child records, then the plan
-  const [invDel, savDel, overrideDel] = await Promise.all([
-    supabase.from('fund_investments').delete().eq('plan_id', id).eq('user_id', user.id),
-    supabase.from('direct_savings').delete().eq('plan_id', id).eq('user_id', user.id),
-    supabase.from('fixed_expense_overrides').delete().eq('plan_id', id),
-  ])
+  // investment_transactions.plan_id has ON DELETE SET NULL — no explicit delete needed
+  const overrideDel = await supabase.from('fixed_expense_overrides').delete().eq('plan_id', id)
 
-  if (invDel.error || savDel.error || overrideDel.error) {
+  if (overrideDel.error) {
     return NextResponse.json({ error: 'Failed to delete salary record. Please try again.' }, { status: 500 })
   }
 

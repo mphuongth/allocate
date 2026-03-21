@@ -13,14 +13,16 @@ export async function GET(request: NextRequest) {
   const from_date = searchParams.get('from_date')
   const to_date = searchParams.get('to_date')
   const goal_id = searchParams.get('goal_id')
+  const plan_id = searchParams.get('plan_id')
   const unassigned = searchParams.get('unassigned')
   const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10))
-  const limit = 20
+  const limitParam = parseInt(searchParams.get('limit') ?? '20', 10)
+  const limit = Math.min(Math.max(1, isNaN(limitParam) ? 20 : limitParam), 1000)
   const offset = (page - 1) * limit
 
   let query = supabase
     .from('investment_transactions')
-    .select('*, savings_goals(goal_name)', { count: 'exact' })
+    .select('*, savings_goals(goal_name), funds(id, name, nav)', { count: 'exact' })
     .eq('user_id', user.id)
     .order('investment_date', { ascending: false })
     .range(offset, offset + limit - 1)
@@ -31,6 +33,7 @@ export async function GET(request: NextRequest) {
   if (from_date) query = query.gte('investment_date', from_date)
   if (to_date) query = query.lte('investment_date', to_date)
   if (goal_id) query = query.eq('goal_id', goal_id)
+  if (plan_id) query = query.eq('plan_id', plan_id)
   if (unassigned === 'true') query = query.is('goal_id', null)
 
   const { data: transactions, error, count } = await query
@@ -45,7 +48,7 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { goal_id, asset_type, investment_date, amount_vnd, unit_price, units, interest_rate, notes, fund_id } = body
+  const { goal_id, asset_type, investment_date, amount_vnd, unit_price, units, interest_rate, notes, fund_id, plan_id, expiry_date } = body
 
   if (!asset_type || !ASSET_TYPES.includes(asset_type)) {
     return NextResponse.json({ error: 'Invalid asset type.' }, { status: 400 })
@@ -56,7 +59,8 @@ export async function POST(request: NextRequest) {
   if (!investment_date) {
     return NextResponse.json({ error: 'Investment date is required.' }, { status: 400 })
   }
-  if (new Date(investment_date) > new Date()) {
+  // Allow future dates within the plan month (plan_id provided); otherwise reject future dates
+  if (!plan_id && new Date(investment_date) > new Date()) {
     return NextResponse.json({ error: 'Investment date cannot be in the future.' }, { status: 400 })
   }
   const amountNum = Number(amount_vnd)
@@ -75,6 +79,12 @@ export async function POST(request: NextRequest) {
     if (!goal) return NextResponse.json({ error: "You don't have permission to access this goal." }, { status: 403 })
   }
 
+  // Verify plan ownership if provided
+  if (plan_id) {
+    const { data: plan } = await supabase.from('monthly_plans').select('id').eq('id', plan_id).eq('user_id', user.id).single()
+    if (!plan) return NextResponse.json({ error: 'Plan not found' }, { status: 404 })
+  }
+
   const { data: transaction, error } = await supabase
     .from('investment_transactions')
     .insert({
@@ -88,6 +98,8 @@ export async function POST(request: NextRequest) {
       interest_rate: interest_rate ? Number(interest_rate) : null,
       notes: notes?.trim() || null,
       fund_id: asset_type === 'fund' ? (fund_id || null) : null,
+      plan_id: plan_id || null,
+      expiry_date: expiry_date || null,
     })
     .select()
     .single()

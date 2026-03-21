@@ -79,7 +79,7 @@ function sortGoals(goals: GoalData[], order: SortOrder): GoalData[] {
   }
 }
 
-// Fetch fund detail (purchase history) from fund_investments
+// Fetch fund detail (purchase history) from investment_transactions
 interface PurchaseHistory { purchase_date: string; units: number; nav_at_purchase: number }
 
 export default function DashboardClient() {

@@ -11,9 +11,10 @@ export async function GET(request: NextRequest) {
   const goalId = searchParams.get('goal_id')
 
   let query = supabase
-    .from('fund_investments')
-    .select('id, fund_id, goal_id, amount_vnd, units_purchased, nav_at_purchase, investment_date, created_at, funds(id, name, nav), savings_goals(goal_name)')
+    .from('investment_transactions')
+    .select('transaction_id, fund_id, goal_id, amount_vnd, units, unit_price, investment_date, created_at, funds(id, name, nav), savings_goals(goal_name)')
     .eq('user_id', user.id)
+    .eq('asset_type', 'fund')
     .order('created_at', { ascending: false })
 
   if (fundId) query = query.eq('fund_id', fundId)
@@ -21,7 +22,22 @@ export async function GET(request: NextRequest) {
 
   const { data, error } = await query
   if (error) return NextResponse.json({ error: 'Failed to fetch investments' }, { status: 500 })
-  return NextResponse.json(data ?? [])
+
+  // Map to legacy shape for backward compatibility
+  const mapped = (data ?? []).map((row) => ({
+    id: row.transaction_id,
+    fund_id: row.fund_id,
+    goal_id: row.goal_id,
+    amount_vnd: row.amount_vnd,
+    units_purchased: row.units,
+    nav_at_purchase: row.unit_price,
+    investment_date: row.investment_date,
+    created_at: row.created_at,
+    funds: row.funds,
+    savings_goals: row.savings_goals,
+  }))
+
+  return NextResponse.json(mapped)
 }
 
 export async function POST(request: NextRequest) {
@@ -48,27 +64,41 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'NAV at purchase must be positive' }, { status: 400 })
   }
 
-  // Verify plan ownership only if plan_id provided
   if (plan_id) {
     const { data: plan } = await supabase.from('monthly_plans').select('id').eq('id', plan_id).eq('user_id', user.id).single()
     if (!plan) return NextResponse.json({ error: 'Plan not found' }, { status: 404 })
   }
 
   const { data, error } = await supabase
-    .from('fund_investments')
+    .from('investment_transactions')
     .insert({
       user_id: user.id,
       plan_id: plan_id || null,
       fund_id,
       goal_id: goal_id || null,
+      asset_type: 'fund',
       amount_vnd: amountNum,
-      units_purchased: unitsNum,
-      nav_at_purchase: navNum,
-      investment_date: investment_date || null,
+      units: unitsNum,
+      unit_price: navNum,
+      investment_date: investment_date || new Date().toISOString().slice(0, 10),
     })
-    .select('*, funds(id, name, nav), savings_goals(goal_name)')
+    .select('transaction_id, fund_id, goal_id, amount_vnd, units, unit_price, investment_date, created_at, funds(id, name, nav), savings_goals(goal_name)')
     .single()
 
   if (error) return NextResponse.json({ error: 'Failed to create investment' }, { status: 500 })
-  return NextResponse.json(data, { status: 201 })
+
+  const mapped = {
+    id: data.transaction_id,
+    fund_id: data.fund_id,
+    goal_id: data.goal_id,
+    amount_vnd: data.amount_vnd,
+    units_purchased: data.units,
+    nav_at_purchase: data.unit_price,
+    investment_date: data.investment_date,
+    created_at: data.created_at,
+    funds: data.funds,
+    savings_goals: data.savings_goals,
+  }
+
+  return NextResponse.json(mapped, { status: 201 })
 }

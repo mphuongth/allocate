@@ -15,7 +15,7 @@ interface Props {
 
 const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
 
-const emptyForm = { fund_id: '', goal_id: '', amount_vnd: '', units_purchased: '', nav_at_purchase: '', investment_date: '' }
+const emptyForm = { fund_id: '', goal_id: '', amount_vnd: '', units: '', unit_price: '', investment_date: '' }
 
 const inputCls = 'w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500'
 
@@ -58,8 +58,8 @@ export default function FundInvestmentsSection({ plan, investments, onRefresh, o
       fund_id: inv.fund_id,
       goal_id: inv.goal_id ?? '',
       amount_vnd: String(inv.amount_vnd),
-      units_purchased: String(inv.units_purchased),
-      nav_at_purchase: String(inv.nav_at_purchase),
+      units: String(inv.units),
+      unit_price: String(inv.unit_price),
       investment_date: inv.investment_date ?? minDate,
     })
     setFormError('')
@@ -71,7 +71,7 @@ export default function FundInvestmentsSection({ plan, investments, onRefresh, o
     setForm((prev) => ({
       ...prev,
       fund_id: fundId,
-      nav_at_purchase: fund ? String(fund.nav) : prev.nav_at_purchase,
+      unit_price: fund ? String(fund.nav) : prev.unit_price,
     }))
   }
 
@@ -80,21 +80,24 @@ export default function FundInvestmentsSection({ plan, investments, onRefresh, o
     if (!form.fund_id) { setFormError('Fund is required'); return }
     if (!form.investment_date) { setFormError('Investment date is required'); return }
     if (!form.amount_vnd || Number(form.amount_vnd) <= 0) { setFormError('Amount and units are required and must be positive'); return }
-    if (!form.units_purchased || Number(form.units_purchased) <= 0) { setFormError('Amount and units are required and must be positive'); return }
-    if (!form.nav_at_purchase || Number(form.nav_at_purchase) <= 0) { setFormError('NAV at purchase must be positive'); return }
+    if (!form.units || Number(form.units) <= 0) { setFormError('Amount and units are required and must be positive'); return }
+    if (!form.unit_price || Number(form.unit_price) <= 0) { setFormError('NAV at purchase must be positive'); return }
 
     setSaving(true)
     const payload = {
+      asset_type: 'fund',
       plan_id: plan.id,
       fund_id: form.fund_id,
       goal_id: form.goal_id || null,
       amount_vnd: Number(form.amount_vnd),
-      units_purchased: Number(form.units_purchased),
-      nav_at_purchase: Number(form.nav_at_purchase),
+      units: Number(form.units),
+      unit_price: Number(form.unit_price),
       investment_date: form.investment_date,
     }
 
-    const url = editItem ? `/api/v1/fund-investments/${editItem.id}` : '/api/v1/fund-investments'
+    const url = editItem
+      ? `/api/v1/investment-transactions/${editItem.transaction_id}`
+      : '/api/v1/investment-transactions'
     try {
       const res = await fetch(url, {
         method: editItem ? 'PUT' : 'POST',
@@ -117,7 +120,7 @@ export default function FundInvestmentsSection({ plan, investments, onRefresh, o
   }
 
   async function handleDelete(inv: FundInvestment) {
-    const res = await fetch(`/api/v1/fund-investments/${inv.id}`, { method: 'DELETE' })
+    const res = await fetch(`/api/v1/investment-transactions/${inv.transaction_id}`, { method: 'DELETE' })
     if (res.ok) {
       setConfirmDelete(null)
       onToast('Fund investment deleted')
@@ -147,11 +150,11 @@ export default function FundInvestmentsSection({ plan, investments, onRefresh, o
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
             {investments.map((inv) => (
-              <tr key={inv.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+              <tr key={inv.transaction_id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
                 <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{inv.funds?.name ?? '—'}</td>
                 <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{inv.investment_date ?? '—'}</td>
                 <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{fmt(inv.amount_vnd)}</td>
-                <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{inv.units_purchased}</td>
+                <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{inv.units}</td>
                 <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{inv.savings_goals?.goal_name ?? 'Unassigned'}</td>
                 <td className="px-4 py-3">
                   <div className="flex gap-3">
@@ -202,11 +205,11 @@ export default function FundInvestmentsSection({ plan, investments, onRefresh, o
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Units Purchased *</label>
-                  <input type="number" step="0.0001" value={form.units_purchased} onChange={(e) => setForm({ ...form, units_purchased: e.target.value })} className={inputCls} />
+                  <input type="number" step="0.0001" value={form.units} onChange={(e) => setForm({ ...form, units: e.target.value })} className={inputCls} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">NAV at Purchase *</label>
-                  <input type="number" step="0.0001" value={form.nav_at_purchase} onChange={(e) => setForm({ ...form, nav_at_purchase: e.target.value })} className={inputCls} />
+                  <input type="number" step="0.0001" value={form.unit_price} onChange={(e) => setForm({ ...form, unit_price: e.target.value })} className={inputCls} />
                 </div>
               </div>
             </div>

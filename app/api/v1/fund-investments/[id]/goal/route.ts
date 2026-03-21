@@ -13,25 +13,14 @@ export async function PATCH(
   const body = await request.json()
   const { goal_id } = body
 
-  // Verify ownership
-  const { data: inv, error: fetchErr } = await supabase
-    .from('fund_investments')
-    .select('id')
-    .eq('id', id)
-    .eq('user_id', user.id)
-    .maybeSingle()
-
-  if (fetchErr) return NextResponse.json({ error: 'Failed to fetch investment' }, { status: 500 })
-  if (!inv) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-
   const { data, error } = await supabase
-    .from('fund_investments')
+    .from('investment_transactions')
     .update({ goal_id: goal_id ?? null })
-    .eq('id', id)
+    .eq('transaction_id', id)
     .eq('user_id', user.id)
     .select()
     .single()
 
-  if (error) return NextResponse.json({ error: 'Failed to update goal' }, { status: 500 })
+  if (error || !data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   return NextResponse.json(data)
 }
