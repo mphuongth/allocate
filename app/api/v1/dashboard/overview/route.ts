@@ -35,10 +35,8 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const plansRes = await supabase.from('monthly_plans').select('id').eq('user_id', user.id)
-  const planIds = (plansRes.data ?? []).map((p) => p.id)
-
-  const [goalsRes, txRes, insuranceRes, insuranceSavingsRes, insExclusionsRes, insOverridesRes] = await Promise.all([
+  const [plansRes, goalsRes, txRes, insuranceRes, insuranceSavingsRes] = await Promise.all([
+    supabase.from('monthly_plans').select('id').eq('user_id', user.id),
     supabase
       .from('savings_goals')
       .select('goal_id, goal_name, target_amount')
@@ -55,6 +53,11 @@ export async function GET() {
       .from('insurance_savings')
       .select('insurance_member_id, amount_saved_vnd')
       .eq('user_id', user.id),
+  ])
+
+  const planIds = (plansRes.data ?? []).map((p) => p.id)
+
+  const [insExclusionsRes, insOverridesRes] = await Promise.all([
     planIds.length > 0
       ? supabase.from('plan_excluded_insurance_members').select('plan_id, member_id').in('plan_id', planIds)
       : Promise.resolve({ data: [], error: null }),
@@ -133,6 +136,8 @@ export async function GET() {
   // Track unallocated non-fund totals
   let unallocatedNonFundValue = 0
   let unallocatedNonFundInvested = 0
+  let totalAssets = 0
+  let totalInvestedGlobal = 0
 
   for (const tx of allTxs) {
     if (tx.asset_type === 'fund' && tx.units) {
@@ -164,6 +169,9 @@ export async function GET() {
       const interest = calcProjectedInterest(tx.amount_vnd, tx.interest_rate, tx.investment_date)
       const currentValue = tx.amount_vnd + interest
 
+      totalAssets += currentValue
+      totalInvestedGlobal += tx.amount_vnd
+
       if (tx.goal_id && goalMap.has(tx.goal_id)) {
         const goalEntry = goalMap.get(tx.goal_id)!
         goalEntry.totalInvested += tx.amount_vnd
@@ -181,8 +189,6 @@ export async function GET() {
     currentValue: number; purchasePrice: number; profitLoss: number; profitLossPercentage: number; goalId: null
   }> = []
   let unallocatedFundValue = 0
-  let totalAssets = 0
-  let totalInvestedGlobal = 0
 
   for (const [, acc] of fundAccumMap) {
     const currentValue = acc.currentNAV * acc.totalUnits
@@ -213,19 +219,6 @@ export async function GET() {
     } else {
       unallocatedFunds.push({ ...fundItem, goalId: null })
       unallocatedFundValue += currentValue
-    }
-  }
-
-  // Add non-fund totals to global (unallocated)
-  totalAssets += unallocatedNonFundValue
-  totalInvestedGlobal += unallocatedNonFundInvested
-
-  // Add non-fund totals that belong to goals
-  for (const tx of allTxs) {
-    if (tx.asset_type !== 'fund' && tx.goal_id && goalMap.has(tx.goal_id)) {
-      const interest = calcProjectedInterest(tx.amount_vnd, tx.interest_rate, tx.investment_date)
-      totalAssets += tx.amount_vnd + interest
-      totalInvestedGlobal += tx.amount_vnd
     }
   }
 

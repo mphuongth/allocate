@@ -24,6 +24,46 @@ export async function GET(request: NextRequest) {
 
   if (error) return NextResponse.json({ error: 'Failed to fetch plan' }, { status: 500 })
   if (!plan) return NextResponse.json({ error: 'Plan not found for this month' }, { status: 404 })
+
+  if (searchParams.get('full') === 'true') {
+    const [invRes, savRes, overridesRes, expRes, insRes, exclRes, insOverridesRes] = await Promise.all([
+      supabase
+        .from('investment_transactions')
+        .select('transaction_id, plan_id, fund_id, goal_id, amount_vnd, units, unit_price, investment_date, funds(name, nav), savings_goals(goal_name)')
+        .eq('plan_id', plan.id).eq('asset_type', 'fund'),
+      supabase
+        .from('investment_transactions')
+        .select('transaction_id, plan_id, goal_id, amount_vnd, interest_rate, expiry_date, investment_date, savings_goals(goal_name)')
+        .eq('plan_id', plan.id).eq('asset_type', 'bank'),
+      supabase
+        .from('fixed_expense_overrides')
+        .select('fixed_expense_id, monthly_amount_override_vnd').eq('plan_id', plan.id),
+      supabase
+        .from('fixed_expenses')
+        .select('expense_id, expense_name, amount_vnd, category').eq('user_id', user.id),
+      supabase
+        .from('insurance_members')
+        .select('member_id, member_name, relationship, coverage_type, annual_payment_vnd, payment_date, last_payment_date')
+        .eq('user_id', user.id),
+      supabase
+        .from('plan_excluded_insurance_members')
+        .select('member_id').eq('plan_id', plan.id),
+      supabase
+        .from('plan_insurance_member_overrides')
+        .select('member_id, monthly_amount_override_vnd').eq('plan_id', plan.id),
+    ])
+    return NextResponse.json({
+      ...plan,
+      fund_investments:        invRes.data ?? [],
+      direct_savings:          savRes.data ?? [],
+      fixed_expense_overrides: overridesRes.data ?? [],
+      fixed_expenses:          expRes.data ?? [],
+      insurance_members:       insRes.data ?? [],
+      excluded_insurance:      exclRes.data ?? [],
+      insurance_overrides:     insOverridesRes.data ?? [],
+    })
+  }
+
   return NextResponse.json(plan)
 }
 
