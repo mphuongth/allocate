@@ -66,8 +66,10 @@ export default function InsuranceCard({
   const isCompleted = status === 'completed'
   const displayStatus: DisplayStatus | 'completed' = isCompleted ? 'completed' : computeDisplayStatus(nextPaymentDate)
   const cfg = statusConfig[displayStatus]
-  const progress = Math.min(savingsProgressPercentage, 100)
   const showMarkAsPaid = status === 'upcoming' || status === 'overdue'
+
+  const [localAmountSaved, setLocalAmountSaved] = useState(amountSaved)
+  const localProgress = Math.min(annualPremium > 0 ? (localAmountSaved / annualPremium) * 100 : 0, 100)
 
   const [inputAmount, setInputAmount] = useState('')
   const [savingsList, setSavingsList] = useState<SavingsRecord[]>([])
@@ -114,8 +116,8 @@ export default function InsuranceCard({
     })
     if (res.ok) {
       setInputAmount('')
+      setLocalAmountSaved((prev) => prev + amount)
       await fetchSavings()
-      onSavingsChange?.()
       showToast('Savings added')
     } else {
       showToast('Failed to add savings', 'error')
@@ -123,12 +125,12 @@ export default function InsuranceCard({
     setIsLoading(false)
   }
 
-  async function handleDelete(id: string) {
+  async function handleDelete(id: string, amount: number) {
     setIsLoading(true)
     const res = await fetch(`/api/v1/insurance-savings/${id}`, { method: 'DELETE' })
     if (res.ok) {
+      setLocalAmountSaved((prev) => prev - amount)
       await fetchSavings()
-      onSavingsChange?.()
       showToast('Record deleted')
     } else {
       showToast('Failed to delete', 'error')
@@ -141,6 +143,7 @@ export default function InsuranceCard({
     try {
       const res = await fetch(`/api/v1/insurance-members/${insuranceId}/mark-paid`, { method: 'POST' })
       if (res.ok) {
+        setLocalAmountSaved(0)
         setShowConfirm(false)
         showToast('Payment marked! Savings reset to ₫0.')
         onSavingsChange?.()
@@ -181,19 +184,19 @@ export default function InsuranceCard({
         </div>
         <div>
           <p className="text-gray-400 dark:text-gray-500 mb-0.5">Amount Saved</p>
-          <p className="font-medium text-gray-800 dark:text-gray-200">{fmt(amountSaved)}</p>
+          <p className="font-medium text-gray-800 dark:text-gray-200">{fmt(localAmountSaved)}</p>
         </div>
       </div>
 
       <div>
         <div className="flex items-center justify-between text-xs text-gray-400 dark:text-gray-500 mb-1">
           <span>Savings Progress</span>
-          <span>{Math.round(progress)}%</span>
+          <span>{Math.round(localProgress)}%</span>
         </div>
         <div className="h-1.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
           <div
             className={`h-full rounded-full ${isCompleted ? 'bg-gray-400 dark:bg-gray-500' : 'bg-indigo-500'}`}
-            style={{ width: `${progress}%` }}
+            style={{ width: `${localProgress}%` }}
           />
         </div>
       </div>
@@ -247,7 +250,7 @@ export default function InsuranceCard({
               <li key={s.id} className="flex items-center justify-between">
                 <span className="text-xs text-gray-700 dark:text-gray-300">{fmt(s.amount_saved_vnd)}</span>
                 <button
-                  onClick={() => handleDelete(s.id)}
+                  onClick={() => handleDelete(s.id, s.amount_saved_vnd)}
                   disabled={isLoading}
                   className="text-gray-300 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-400 disabled:opacity-40 transition-colors"
                   aria-label="Delete"
