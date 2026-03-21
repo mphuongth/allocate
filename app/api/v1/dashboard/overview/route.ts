@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 
-// 1 business day = 1 day for simplicity (excludes weekends would need more logic)
 function isNavStale(updatedAt: string): boolean {
   const updated = new Date(updatedAt)
   const now = new Date()
@@ -36,29 +35,22 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // Step 1: fetch plans to get IDs needed for insurance exclusion/override queries
   const plansRes = await supabase.from('monthly_plans').select('id').eq('user_id', user.id)
   const planIds = (plansRes.data ?? []).map((p) => p.id)
 
-  // Step 2: fetch everything else in parallel
-  const [goalsRes, investmentsRes, insuranceRes, txRes, insuranceSavingsRes, insExclusionsRes, insOverridesRes] = await Promise.all([
+  const [goalsRes, txRes, insuranceRes, insuranceSavingsRes, insExclusionsRes, insOverridesRes] = await Promise.all([
     supabase
       .from('savings_goals')
       .select('goal_id, goal_name, target_amount')
       .eq('user_id', user.id),
     supabase
-      .from('fund_investments')
-      .select('id, goal_id, amount_vnd, units_purchased, nav_at_purchase, funds(id, name, nav, updated_at)')
+      .from('investment_transactions')
+      .select('goal_id, amount_vnd, interest_rate, investment_date, asset_type, units, unit_price, fund_id, funds(id, name, nav, updated_at)')
       .eq('user_id', user.id),
     supabase
       .from('insurance_members')
       .select('member_id, member_name, coverage_type, annual_payment_vnd, payment_date, last_payment_date')
       .eq('user_id', user.id),
-    supabase
-      .from('investment_transactions')
-      .select('goal_id, amount_vnd, interest_rate, investment_date, asset_type, units, unit_price, fund_id, funds(id, name, nav, updated_at)')
-      .eq('user_id', user.id)
-      .not('goal_id', 'is', null),
     supabase
       .from('insurance_savings')
       .select('insurance_member_id, amount_saved_vnd')
@@ -71,39 +63,31 @@ export async function GET() {
       : Promise.resolve({ data: [], error: null }),
   ])
 
-  if (goalsRes.error || investmentsRes.error || insuranceRes.error) {
+  if (goalsRes.error || txRes.error || insuranceRes.error) {
     return NextResponse.json({ error: 'Failed to fetch dashboard data' }, { status: 500 })
   }
 
   const goals = goalsRes.data ?? []
-  const investments = investmentsRes.data ?? []
+  const allTxs = txRes.data ?? []
   const insuranceMembers = insuranceRes.data ?? []
-  const savingsTxs = txRes.data ?? []
-  const monthlyPlanCount = planIds.length
 
-  // Aggregate insurance lump sums by member
   const insuranceLumpSumMap = new Map<string, number>()
   for (const s of (insuranceSavingsRes.data ?? [])) {
     const prev = insuranceLumpSumMap.get(s.insurance_member_id) ?? 0
     insuranceLumpSumMap.set(s.insurance_member_id, prev + (s.amount_saved_vnd ?? 0))
   }
 
-  // Build sets for per-plan exclusions and overrides
-  // excludedSet: "planId::memberId" -> true
   const excludedSet = new Set<string>()
   for (const e of (insExclusionsRes.data ?? [])) {
     excludedSet.add(`${e.plan_id}::${e.member_id}`)
   }
-  // overrideMap: "planId::memberId" -> monthly_amount_override_vnd
   const overrideMap = new Map<string, number>()
   for (const o of (insOverridesRes.data ?? [])) {
     overrideMap.set(`${o.plan_id}::${o.member_id}`, o.monthly_amount_override_vnd)
   }
 
-  // Detect stale NAV
   let navStale = false
 
-  // Build per-goal aggregations
   const goalMap = new Map<string, {
     goalId: string
     goalName: string
@@ -123,7 +107,6 @@ export async function GET() {
     }>
   }>()
 
-  // Initialize goal map from goals table (includes goals with zero investments)
   for (const goal of goals) {
     goalMap.set(goal.goal_id, {
       goalId: goal.goal_id,
@@ -135,36 +118,7 @@ export async function GET() {
     })
   }
 
-  // Aggregate investment_transactions (bank/stock/gold/fund) into goals
-  let savingsTotalInvested = 0
-  let savingsTotalCurrentValue = 0
-
-  for (const tx of savingsTxs) {
-    if (!tx.goal_id || !goalMap.has(tx.goal_id)) continue
-
-    let currentValue: number
-    if (tx.asset_type === 'fund' && tx.units) {
-      // Fund transactions: use current NAV × units for real P&L
-      const fund = Array.isArray(tx.funds)
-        ? tx.funds[0] as { id: string; nav: number; updated_at: string } | undefined
-        : tx.funds as { id: string; nav: number; updated_at: string } | null
-      const currentNAV = fund?.nav ?? tx.unit_price ?? 0
-      currentValue = tx.units * currentNAV
-      if (fund?.updated_at && isNavStale(fund.updated_at)) navStale = true
-    } else {
-      // Bank/stock/gold: amount + projected compound interest
-      const interest = calcProjectedInterest(tx.amount_vnd, tx.interest_rate, tx.investment_date)
-      currentValue = tx.amount_vnd + interest
-    }
-
-    const goalEntry = goalMap.get(tx.goal_id)!
-    goalEntry.totalInvested += tx.amount_vnd
-    goalEntry.currentValue += currentValue
-    savingsTotalInvested += tx.amount_vnd
-    savingsTotalCurrentValue += currentValue
-  }
-
-  // Process investments — group by fund within each goal (aggregate multiple purchases of same fund)
+  // Aggregate fund transactions by goal+fund for P&L grouping
   type FundAccum = {
     fundId: string
     fundName: string
@@ -176,36 +130,57 @@ export async function GET() {
   }
   const fundAccumMap = new Map<string, FundAccum>()
 
-  for (const inv of investments) {
-    const fund = Array.isArray(inv.funds) ? inv.funds[0] as { id: string; name: string; nav: number; updated_at: string } : inv.funds as { id: string; name: string; nav: number; updated_at: string } | null
-    if (!fund) continue
+  // Track unallocated non-fund totals
+  let unallocatedNonFundValue = 0
+  let unallocatedNonFundInvested = 0
 
-    const key = `${inv.goal_id ?? 'unallocated'}::${fund.id}`
-    const existing = fundAccumMap.get(key)
-    if (existing) {
-      existing.totalUnits += inv.units_purchased
-      existing.totalInvested += inv.amount_vnd
+  for (const tx of allTxs) {
+    if (tx.asset_type === 'fund' && tx.units) {
+      const fund = Array.isArray(tx.funds)
+        ? tx.funds[0] as { id: string; name: string; nav: number; updated_at: string } | undefined
+        : tx.funds as { id: string; name: string; nav: number; updated_at: string } | null
+      if (!fund) continue
+
+      if (isNavStale(fund.updated_at)) navStale = true
+
+      const key = `${tx.goal_id ?? 'unallocated'}::${fund.id}`
+      const existing = fundAccumMap.get(key)
+      if (existing) {
+        existing.totalUnits += tx.units
+        existing.totalInvested += tx.amount_vnd
+      } else {
+        fundAccumMap.set(key, {
+          fundId: fund.id,
+          fundName: fund.name,
+          totalUnits: tx.units,
+          totalInvested: tx.amount_vnd,
+          currentNAV: fund.nav,
+          navUpdatedAt: fund.updated_at,
+          goalId: tx.goal_id ?? null,
+        })
+      }
     } else {
-      fundAccumMap.set(key, {
-        fundId: fund.id,
-        fundName: fund.name,
-        totalUnits: inv.units_purchased,
-        totalInvested: inv.amount_vnd,
-        currentNAV: fund.nav,
-        navUpdatedAt: fund.updated_at,
-        goalId: inv.goal_id ?? null,
-      })
-    }
+      // bank / stock / gold
+      const interest = calcProjectedInterest(tx.amount_vnd, tx.interest_rate, tx.investment_date)
+      const currentValue = tx.amount_vnd + interest
 
-    if (isNavStale(fund.updated_at)) navStale = true
+      if (tx.goal_id && goalMap.has(tx.goal_id)) {
+        const goalEntry = goalMap.get(tx.goal_id)!
+        goalEntry.totalInvested += tx.amount_vnd
+        goalEntry.currentValue += currentValue
+      } else {
+        unallocatedNonFundValue += currentValue
+        unallocatedNonFundInvested += tx.amount_vnd
+      }
+    }
   }
 
-  // Convert accumulated funds to breakdown items and assign to goals or unallocated
+  // Convert fund accumulators to breakdown items
   const unallocatedFunds: Array<{
     fundId: string; fundName: string; quantity: number; currentNAV: number
     currentValue: number; purchasePrice: number; profitLoss: number; profitLossPercentage: number; goalId: null
   }> = []
-  let unallocatedTotal = 0
+  let unallocatedFundValue = 0
   let totalAssets = 0
   let totalInvestedGlobal = 0
 
@@ -237,11 +212,23 @@ export async function GET() {
       goalEntry.funds.push({ ...fundItem, goalId: acc.goalId })
     } else {
       unallocatedFunds.push({ ...fundItem, goalId: null })
-      unallocatedTotal += currentValue
+      unallocatedFundValue += currentValue
     }
   }
 
-  // Build goals array with P&L and progress
+  // Add non-fund totals to global (unallocated)
+  totalAssets += unallocatedNonFundValue
+  totalInvestedGlobal += unallocatedNonFundInvested
+
+  // Add non-fund totals that belong to goals
+  for (const tx of allTxs) {
+    if (tx.asset_type !== 'fund' && tx.goal_id && goalMap.has(tx.goal_id)) {
+      const interest = calcProjectedInterest(tx.amount_vnd, tx.interest_rate, tx.investment_date)
+      totalAssets += tx.amount_vnd + interest
+      totalInvestedGlobal += tx.amount_vnd
+    }
+  }
+
   const goalsOutput = Array.from(goalMap.values()).map((g) => {
     const profitLoss = g.currentValue - g.totalInvested
     const profitLossPercentage = g.totalInvested > 0 ? (profitLoss / g.totalInvested) * 100 : 0
@@ -262,7 +249,6 @@ export async function GET() {
     }
   })
 
-  // Insurance
   const insuranceOutput = insuranceMembers.map((m) => {
     const annualPremium = m.annual_payment_vnd
     const lumpSumSaved = insuranceLumpSumMap.get(m.member_id) ?? 0
@@ -288,11 +274,6 @@ export async function GET() {
     }
   })
 
-  // Include savings transactions in global totals
-  totalAssets += savingsTotalCurrentValue
-  totalInvestedGlobal += savingsTotalInvested
-
-  // Net worth (no liabilities tracked yet — set to 0)
   const totalLiabilities = 0
   const netWorth = totalAssets - totalLiabilities
   const overallProfitLoss = totalAssets - totalInvestedGlobal
@@ -313,7 +294,7 @@ export async function GET() {
     },
     goals: goalsOutput,
     unallocated: {
-      totalValue: unallocatedTotal,
+      totalValue: unallocatedFundValue + unallocatedNonFundValue,
       funds: unallocatedFunds,
     },
     insurance: insuranceOutput,

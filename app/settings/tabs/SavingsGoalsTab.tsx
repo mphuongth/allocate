@@ -20,18 +20,13 @@ interface GoalWithStats extends SavingsGoal {
 interface Transaction {
   transaction_id: string
   goal_id: string | null
+  asset_type: string
   amount_vnd: number
+  units: number | null
+  unit_price: number | null
   interest_rate: number | null
   investment_date: string
-}
-
-interface FundInvestment {
-  id: string
-  goal_id: string | null
-  amount_vnd: number
-  units_purchased: number
-  nav_at_purchase: number
-  funds: { nav: number } | null
+  funds?: { id: string; name: string; nav: number } | null
 }
 
 function calcProjectedInterest(amount: number, rate: number | null, investmentDate: string): number {
@@ -63,39 +58,31 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
 
   const fetchGoals = useCallback(async () => {
     setLoading(true)
-    const [goalsRes, txRes, fiRes] = await Promise.all([
+    const [goalsRes, txRes] = await Promise.all([
       fetch('/api/v1/savings-goals'),
       fetch('/api/v1/investment-transactions?limit=1000'),
-      fetch('/api/v1/fund-investments'),
     ])
     const { goals: rawGoals } = await goalsRes.json()
     const { transactions } = await txRes.json()
-    const fundInvestments: FundInvestment[] = fiRes.ok ? await fiRes.json() : []
 
     const statsMap = new Map<string, { count: number; invested: number; interest: number }>()
 
-    // investment_transactions: bank/stock/gold + legacy fund entries
     ;(transactions as Transaction[]).forEach((tx) => {
       if (!tx.goal_id) return
-      const interest = calcProjectedInterest(tx.amount_vnd, tx.interest_rate, tx.investment_date)
+
+      let gain: number
+      if (tx.asset_type === 'fund' && tx.units) {
+        const fund = Array.isArray(tx.funds) ? tx.funds[0] : tx.funds
+        const currentNav = fund?.nav ?? tx.unit_price ?? 0
+        gain = tx.units * currentNav - tx.amount_vnd
+      } else {
+        gain = calcProjectedInterest(tx.amount_vnd, tx.interest_rate, tx.investment_date)
+      }
+
       const existing = statsMap.get(tx.goal_id) ?? { count: 0, invested: 0, interest: 0 }
       statsMap.set(tx.goal_id, {
         count: existing.count + 1,
         invested: existing.invested + tx.amount_vnd,
-        interest: existing.interest + interest,
-      })
-    })
-
-    // fund_investments: NAV-based P&L
-    fundInvestments.forEach((fi) => {
-      if (!fi.goal_id) return
-      const currentNav = fi.funds?.nav ?? fi.nav_at_purchase
-      const currentValue = fi.units_purchased * currentNav
-      const gain = currentValue - fi.amount_vnd
-      const existing = statsMap.get(fi.goal_id) ?? { count: 0, invested: 0, interest: 0 }
-      statsMap.set(fi.goal_id, {
-        count: existing.count + 1,
-        invested: existing.invested + fi.amount_vnd,
         interest: existing.interest + gain,
       })
     })
@@ -106,7 +93,6 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
     })
     setGoals(fetched)
 
-    // Auto-select goal from URL param once on initial load only
     if (initialGoalId && !hasAutoSelected.current) {
       const match = fetched.find((g) => g.goal_id === initialGoalId)
       if (match) {
@@ -229,7 +215,7 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
                 <p className="text-xl font-bold text-indigo-700 dark:text-indigo-300">{fmt(goal.totalInvested + goal.projectedInterest)}</p>
                 <div className="flex gap-4 mt-2 text-xs text-gray-500 dark:text-gray-400">
                   <span>Invested: {fmt(goal.totalInvested)}</span>
-                  <span>Interest: {fmt(goal.projectedInterest)}</span>
+                  <span>Gain: {fmt(goal.projectedInterest)}</span>
                 </div>
               </div>
 

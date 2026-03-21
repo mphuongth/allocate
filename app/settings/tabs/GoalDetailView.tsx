@@ -16,10 +16,9 @@ interface Fund {
   nav: number
 }
 
-// Rows from investment_transactions (bank/stock/gold + legacy fund entries)
 interface TxRow {
-  _source: 'tx'
-  _id: string
+  _source: 'fund' | 'other'
+  transaction_id: string
   asset_type: string
   investment_date: string
   amount_vnd: number
@@ -31,22 +30,6 @@ interface TxRow {
   fund_display?: string
   current_value: number
 }
-
-// Rows from fund_investments (synced with Monthly Planning)
-interface FiRow {
-  _source: 'fi'
-  _id: string
-  fund_id: string
-  fund_name: string
-  current_nav: number
-  amount_vnd: number
-  units_purchased: number
-  nav_at_purchase: number
-  created_at: string
-  current_value: number
-}
-
-type Row = TxRow | FiRow
 
 const ASSET_COLORS: Record<string, string> = {
   fund: 'bg-purple-100 text-purple-700',
@@ -66,10 +49,10 @@ function calcProjectedInterest(amount: number, rate: number | null, investmentDa
 const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
 
 const emptyTxForm = { asset_type: 'bank', investment_date: '', amount_vnd: '', unit_price: '', units: '', interest_rate: '', notes: '', fund_id: '' }
-const emptyFiForm = { fund_id: '', amount_vnd: '', units_purchased: '', nav_at_purchase: '' }
+const emptyFiForm = { fund_id: '', amount_vnd: '', units: '', unit_price: '' }
 
 export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: () => void }) {
-  const [rows, setRows] = useState<Row[]>([])
+  const [rows, setRows] = useState<TxRow[]>([])
   const [funds, setFunds] = useState<Fund[]>([])
   const [loading, setLoading] = useState(true)
   const [successMsg, setSuccessMsg] = useState('')
@@ -79,32 +62,40 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
   // Form mode: null = closed, 'tx-add', 'tx-edit', 'fi-add', 'fi-edit'
   const [formMode, setFormMode] = useState<'tx-add' | 'tx-edit' | 'fi-add' | 'fi-edit' | null>(null)
   const [editTx, setEditTx] = useState<TxRow | null>(null)
-  const [editFi, setEditFi] = useState<FiRow | null>(null)
   const [txForm, setTxForm] = useState(emptyTxForm)
   const [fiForm, setFiForm] = useState(emptyFiForm)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
-    const [txRes, fiRes, fundsRes] = await Promise.all([
+    const [txRes, fundsRes] = await Promise.all([
       fetch(`/api/v1/investment-transactions?goal_id=${goal.goal_id}&limit=1000`),
-      fetch(`/api/v1/fund-investments?goal_id=${goal.goal_id}`),
       fetch('/api/funds'),
     ])
 
     const { transactions: txs } = txRes.ok ? await txRes.json() : { transactions: [] }
-    const fiData: Array<{ id: string; fund_id: string; amount_vnd: number; units_purchased: number; nav_at_purchase: number; created_at: string; funds: { id: string; name: string; nav: number } | null }> =
-      fiRes.ok ? await fiRes.json() : []
     const { funds: allFunds } = fundsRes.ok ? await fundsRes.json() : { funds: [] }
 
     const fundMap: Record<string, Fund> = {}
     for (const f of (allFunds ?? [])) fundMap[f.id] = f
     setFunds(allFunds ?? [])
 
-    const txRows: TxRow[] = (txs ?? []).map((tx: { transaction_id: string; asset_type: string; investment_date: string; amount_vnd: number; unit_price: number | null; units: number | null; interest_rate: number | null; notes: string | null; fund_id: string | null }) => {
-      const interest = calcProjectedInterest(tx.amount_vnd, tx.interest_rate, tx.investment_date)
+    const txRows: TxRow[] = (txs ?? []).map((tx: {
+      transaction_id: string; asset_type: string; investment_date: string; amount_vnd: number
+      unit_price: number | null; units: number | null; interest_rate: number | null; notes: string | null
+      fund_id: string | null; funds?: { id: string; name: string; nav: number } | null
+    }) => {
+      let currentValue: number
+      if (tx.asset_type === 'fund' && tx.units) {
+        const fund = Array.isArray(tx.funds) ? tx.funds[0] : tx.funds
+        const currentNav = fund?.nav ?? tx.unit_price ?? 0
+        currentValue = tx.units * currentNav
+      } else {
+        const interest = calcProjectedInterest(tx.amount_vnd, tx.interest_rate, tx.investment_date)
+        currentValue = tx.amount_vnd + interest
+      }
       return {
-        _source: 'tx' as const,
-        _id: tx.transaction_id,
+        _source: tx.asset_type === 'fund' ? 'fund' : 'other',
+        transaction_id: tx.transaction_id,
         asset_type: tx.asset_type,
         investment_date: tx.investment_date,
         amount_vnd: tx.amount_vnd,
@@ -114,34 +105,17 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
         notes: tx.notes,
         fund_id: tx.fund_id,
         fund_display: tx.fund_id && fundMap[tx.fund_id] ? `${fundMap[tx.fund_id].code} - ${fundMap[tx.fund_id].name}` : undefined,
-        current_value: tx.amount_vnd + interest,
+        current_value: currentValue,
       }
     })
 
-    const fiRows: FiRow[] = fiData.map((fi) => {
-      const currentNav = fi.funds?.nav ?? fi.nav_at_purchase
-      return {
-        _source: 'fi' as const,
-        _id: fi.id,
-        fund_id: fi.fund_id,
-        fund_name: fi.funds?.name ?? fundMap[fi.fund_id]?.name ?? fi.fund_id,
-        current_nav: currentNav,
-        amount_vnd: fi.amount_vnd,
-        units_purchased: fi.units_purchased,
-        nav_at_purchase: fi.nav_at_purchase,
-        created_at: fi.created_at,
-        current_value: fi.units_purchased * currentNav,
-      }
-    })
-
-    // Merge: fi rows first (most recent Monthly Planning investments), then tx rows
-    setRows([...fiRows, ...txRows])
+    setRows(txRows)
     setLoading(false)
   }, [goal.goal_id])
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  // --- TX handlers ---
+  // --- Other tx handlers ---
   function openTxAdd() {
     setTxForm({ ...emptyTxForm, investment_date: new Date().toISOString().slice(0, 10) })
     setEditTx(null)
@@ -181,7 +155,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
       fund_id: txForm.asset_type === 'fund' ? (txForm.fund_id || null) : null,
     }
     setSaving(true)
-    const url = editTx ? `/api/v1/investment-transactions/${editTx._id}` : '/api/v1/investment-transactions'
+    const url = editTx ? `/api/v1/investment-transactions/${editTx.transaction_id}` : '/api/v1/investment-transactions'
     const res = await fetch(url, { method: editTx ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
     if (!res.ok) { const { error } = await res.json(); setFormError(error ?? 'Something went wrong.') }
     else { setFormMode(null); await fetchData() }
@@ -190,26 +164,26 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
 
   async function handleTxDelete(row: TxRow) {
     if (!confirm('Delete this transaction?')) return
-    const res = await fetch(`/api/v1/investment-transactions/${row._id}`, { method: 'DELETE' })
+    const res = await fetch(`/api/v1/investment-transactions/${row.transaction_id}`, { method: 'DELETE' })
     if (res.ok) { setSuccessMsg('Transaction deleted.'); setTimeout(() => setSuccessMsg(''), 4000); await fetchData() }
   }
 
-  // --- FI handlers ---
+  // --- Fund investment handlers ---
   function openFiAdd() {
     setFiForm(emptyFiForm)
-    setEditFi(null)
+    setEditTx(null)
     setFormError('')
     setFormMode('fi-add')
   }
 
-  function openFiEdit(row: FiRow) {
+  function openFiEdit(row: TxRow) {
     setFiForm({
-      fund_id: row.fund_id,
+      fund_id: row.fund_id ?? '',
       amount_vnd: String(row.amount_vnd),
-      units_purchased: String(row.units_purchased),
-      nav_at_purchase: String(row.nav_at_purchase),
+      units: row.units != null ? String(row.units) : '',
+      unit_price: row.unit_price != null ? String(row.unit_price) : '',
     })
-    setEditFi(row)
+    setEditTx(row)
     setFormError('')
     setFormMode('fi-edit')
   }
@@ -218,35 +192,39 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
     setFormError('')
     if (!fiForm.fund_id) { setFormError('Please select a fund.'); return }
     if (!fiForm.amount_vnd || Number(fiForm.amount_vnd) <= 0) { setFormError('Amount must be greater than 0.'); return }
-    if (!fiForm.units_purchased || Number(fiForm.units_purchased) <= 0) { setFormError('Units must be greater than 0.'); return }
-    if (!fiForm.nav_at_purchase || Number(fiForm.nav_at_purchase) <= 0) { setFormError('NAV at purchase must be positive.'); return }
+    if (!fiForm.units || Number(fiForm.units) <= 0) { setFormError('Units must be greater than 0.'); return }
+    if (!fiForm.unit_price || Number(fiForm.unit_price) <= 0) { setFormError('NAV at purchase must be positive.'); return }
 
     const payload = {
+      asset_type: 'fund',
       fund_id: fiForm.fund_id,
       goal_id: goal.goal_id,
       amount_vnd: Number(fiForm.amount_vnd),
-      units_purchased: Number(fiForm.units_purchased),
-      nav_at_purchase: Number(fiForm.nav_at_purchase),
+      units: Number(fiForm.units),
+      unit_price: Number(fiForm.unit_price),
+      investment_date: editTx?.investment_date ?? new Date().toISOString().slice(0, 10),
     }
     setSaving(true)
-    const url = editFi ? `/api/v1/fund-investments/${editFi._id}` : '/api/v1/fund-investments'
-    const res = await fetch(url, { method: editFi ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    const url = editTx ? `/api/v1/investment-transactions/${editTx.transaction_id}` : '/api/v1/investment-transactions'
+    const res = await fetch(url, { method: editTx ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
     if (!res.ok) { const { error } = await res.json(); setFormError(error ?? 'Something went wrong.') }
     else { setFormMode(null); await fetchData() }
     setSaving(false)
   }
 
-  async function handleFiDelete(row: FiRow) {
+  async function handleFiDelete(row: TxRow) {
     if (!confirm('Delete this fund investment?')) return
-    const res = await fetch(`/api/v1/fund-investments/${row._id}`, { method: 'DELETE' })
-    if (res.status === 204 || res.ok) {
+    const res = await fetch(`/api/v1/investment-transactions/${row.transaction_id}`, { method: 'DELETE' })
+    if (res.ok) {
       setSuccessMsg('Investment deleted.')
       setTimeout(() => setSuccessMsg(''), 4000)
       await fetchData()
     }
   }
 
-  // Summary totals
+  const fundRows = rows.filter((r) => r._source === 'fund')
+  const otherRows = rows.filter((r) => r._source === 'other')
+
   const totalInvested = rows.reduce((s, r) => s + r.amount_vnd, 0)
   const totalCurrentValue = rows.reduce((s, r) => s + r.current_value, 0)
   const totalGain = totalCurrentValue - totalInvested
@@ -314,12 +292,12 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
         ))}
       </div>
 
-      {/* Fund Investments (synced with Monthly Planning) */}
+      {/* Fund Investments */}
       <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden mb-4">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
           <div>
             <h3 className="font-semibold text-gray-900 dark:text-gray-100">Fund Investments</h3>
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Synced with Monthly Planning</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">From Settings and Monthly Planning</p>
           </div>
           <button onClick={openFiAdd} className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700">
             Add Fund Investment
@@ -328,7 +306,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
 
         {loading ? (
           <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">Loading...</div>
-        ) : rows.filter(r => r._source === 'fi').length === 0 ? (
+        ) : fundRows.length === 0 ? (
           <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">No fund investments yet.</div>
         ) : (
           <div className="overflow-x-auto">
@@ -341,16 +319,18 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
-                {rows.filter((r): r is FiRow => r._source === 'fi').map((row) => {
+                {fundRows.map((row) => {
                   const pl = row.current_value - row.amount_vnd
+                  const fund = funds.find((f) => f.id === row.fund_id)
+                  const currentNav = fund?.nav ?? row.unit_price ?? 0
                   return (
-                    <tr key={row._id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                      <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{new Date(row.created_at).toLocaleDateString('vi-VN')}</td>
-                      <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{row.fund_name}</td>
+                    <tr key={row.transaction_id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                      <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{new Date(row.investment_date).toLocaleDateString('vi-VN')}</td>
+                      <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{row.fund_display ?? row.fund_id ?? '—'}</td>
                       <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{fmt(row.amount_vnd)}</td>
-                      <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{row.units_purchased}</td>
-                      <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{fmt(row.nav_at_purchase)}</td>
-                      <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{fmt(row.current_nav)}</td>
+                      <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{row.units ?? '—'}</td>
+                      <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{row.unit_price != null ? fmt(row.unit_price) : '—'}</td>
+                      <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{fmt(currentNav)}</td>
                       <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{fmt(row.current_value)}</td>
                       <td className={`px-4 py-3 font-medium ${pl >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt(pl)}</td>
                       <td className="px-4 py-3">
@@ -382,30 +362,29 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
 
         {loading ? (
           <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">Loading...</div>
-        ) : rows.filter(r => r._source === 'tx').length === 0 ? (
+        ) : otherRows.length === 0 ? (
           <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">No transactions yet.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 dark:bg-gray-800">
                 <tr>
-                  {['Date', 'Type', 'Fund', 'Amount', 'Units', 'Interest Rate', 'Gain/Loss', 'Notes', 'Actions'].map((h) => (
+                  {['Date', 'Type', 'Amount', 'Units', 'Interest Rate', 'Gain/Loss', 'Notes', 'Actions'].map((h) => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
-                {rows.filter((r): r is TxRow => r._source === 'tx').map((row) => {
+                {otherRows.map((row) => {
                   const gain = row.current_value - row.amount_vnd
                   return (
-                    <tr key={row._id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                    <tr key={row.transaction_id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
                       <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{new Date(row.investment_date).toLocaleDateString('vi-VN')}</td>
                       <td className="px-4 py-3">
                         <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${ASSET_COLORS[row.asset_type] ?? 'bg-gray-100 text-gray-700'}`}>
                           {row.asset_type}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-gray-500 dark:text-gray-400 text-xs">{row.fund_display ?? '—'}</td>
                       <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{fmt(row.amount_vnd)}</td>
                       <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{row.units ?? '—'}</td>
                       <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{row.interest_rate != null ? `${row.interest_rate}%` : '—'}</td>
@@ -452,12 +431,12 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Units *</label>
-                  <input type="number" value={fiForm.units_purchased} onChange={(e) => setFiForm({ ...fiForm, units_purchased: e.target.value })}
+                  <input type="number" value={fiForm.units} onChange={(e) => setFiForm({ ...fiForm, units: e.target.value })}
                     className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">NAV at Purchase *</label>
-                  <input type="number" value={fiForm.nav_at_purchase} onChange={(e) => setFiForm({ ...fiForm, nav_at_purchase: e.target.value })}
+                  <input type="number" value={fiForm.unit_price} onChange={(e) => setFiForm({ ...fiForm, unit_price: e.target.value })}
                     className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
               </div>

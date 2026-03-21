@@ -4,14 +4,12 @@ import { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import SavingsGoalsTab from './tabs/SavingsGoalsTab'
 import InvestmentTransactionsTab from './tabs/InvestmentTransactionsTab'
-import UnassignedInvestmentsTab from './tabs/UnassignedInvestmentsTab'
 import FixedExpensesTab from './tabs/FixedExpensesTab'
 import InsuranceMembersTab from './tabs/InsuranceMembersTab'
 
 const TABS = [
   { id: 'goals', label: 'Savings Goals' },
   { id: 'transactions', label: 'Investment Transactions' },
-  { id: 'unassigned', label: 'Unassigned Investments' },
   { id: 'expenses', label: 'Fixed Expenses' },
   { id: 'insurance', label: 'Insurance Members' },
 ] as const
@@ -79,7 +77,6 @@ export default function SettingsClient({ initialTab, initialGoalId }: Props) {
           />
         )}
         {activeTab === 'transactions' && <InvestmentTransactionsTab />}
-        {activeTab === 'unassigned' && <UnassignedInvestmentsTab />}
         {activeTab === 'expenses' && <FixedExpensesTab />}
         {activeTab === 'insurance' && <InsuranceMembersTab />}
       </div>

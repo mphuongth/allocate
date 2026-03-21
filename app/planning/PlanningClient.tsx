@@ -16,25 +16,26 @@ export interface MonthlyPlan {
 }
 
 export interface FundInvestment {
-  id: string
+  transaction_id: string
   plan_id: string
   fund_id: string
   goal_id: string | null
   amount_vnd: number
-  units_purchased: number
-  nav_at_purchase: number
+  units: number
+  unit_price: number
   investment_date: string | null
   funds: { name: string; nav: number } | null
   savings_goals: { goal_name: string } | null
 }
 
 export interface DirectSaving {
-  id: string
+  transaction_id: string
   plan_id: string
   goal_id: string | null
   amount_vnd: number
-  profit_percent: number | null
+  interest_rate: number | null
   expiry_date: string | null
+  investment_date: string
   savings_goals: { goal_name: string } | null
 }
 

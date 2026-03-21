@@ -11,11 +11,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   if (!plan) return NextResponse.json({ error: 'Plan not found' }, { status: 404 })
 
   const { data, error } = await supabase
-    .from('direct_savings')
-    .select('*, savings_goals(goal_name)')
+    .from('investment_transactions')
+    .select('transaction_id, plan_id, goal_id, amount_vnd, interest_rate, expiry_date, investment_date, savings_goals(goal_name)')
     .eq('plan_id', id)
+    .eq('asset_type', 'bank')
     .eq('user_id', user.id)
-    .order('created_at', { ascending: true })
+    .order('investment_date', { ascending: true })
 
   if (error) return NextResponse.json({ error: 'Failed to fetch savings' }, { status: 500 })
   return NextResponse.json(data)
