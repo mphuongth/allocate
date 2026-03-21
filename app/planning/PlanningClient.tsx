@@ -56,6 +56,9 @@ export interface InsuranceMember {
   monthlyOverride?: number
 }
 
+export interface Fund { id: string; name: string; nav: number }
+export interface Goal { goal_id: string; goal_name: string }
+
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
 function prevMonth(m: number, y: number) { return m === 1 ? { m: 12, y: y - 1 } : { m: m - 1, y } }
@@ -70,6 +73,8 @@ export default function PlanningClient() {
   const [savings, setSavings] = useState<DirectSaving[]>([])
   const [fixedExpenses, setFixedExpenses] = useState<FixedExpense[]>([])
   const [insuranceMembers, setInsuranceMembers] = useState<InsuranceMember[]>([])
+  const [funds, setFunds] = useState<Fund[]>([])
+  const [goals, setGoals] = useState<Goal[]>([])
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState('')
 
@@ -112,10 +117,14 @@ export default function PlanningClient() {
           monthlyOverride: insOverrideMap.get(m.member_id),
         }))
       )
+      setGoals(p.goals ?? [])
+      setFunds(p.funds ?? [])
     } else {
       setPlan(null)
       setInvestments([])
       setSavings([])
+      setGoals([])
+      setFunds([])
       // Still load fixed expenses and insurance even without a plan
       const [expRes, insRes] = await Promise.all([
         fetch('/api/v1/fixed-expenses'),
@@ -188,12 +197,15 @@ export default function PlanningClient() {
                   <FundInvestmentsSection
                     plan={plan}
                     investments={investments}
+                    funds={funds}
+                    goals={goals}
                     onRefresh={refetch}
                     onToast={showToast}
                   />
                   <DirectSavingsSection
                     plan={plan}
                     savings={savings}
+                    goals={goals}
                     onRefresh={refetch}
                     onToast={showToast}
                   />

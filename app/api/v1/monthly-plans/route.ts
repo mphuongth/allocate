@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
   if (!plan) return NextResponse.json({ error: 'Plan not found for this month' }, { status: 404 })
 
   if (searchParams.get('full') === 'true') {
-    const [invRes, savRes, overridesRes, expRes, insRes, exclRes, insOverridesRes] = await Promise.all([
+    const [invRes, savRes, overridesRes, expRes, insRes, exclRes, insOverridesRes, goalsRes, fundsRes] = await Promise.all([
       supabase
         .from('investment_transactions')
         .select('transaction_id, plan_id, fund_id, goal_id, amount_vnd, units, unit_price, investment_date, funds(name, nav), savings_goals(goal_name)')
@@ -51,6 +51,12 @@ export async function GET(request: NextRequest) {
       supabase
         .from('plan_insurance_member_overrides')
         .select('member_id, monthly_amount_override_vnd').eq('plan_id', plan.id),
+      supabase
+        .from('savings_goals')
+        .select('goal_id, goal_name').eq('user_id', user.id).order('created_at', { ascending: false }),
+      supabase
+        .from('funds')
+        .select('id, name, nav').eq('user_id', user.id).order('name', { ascending: true }),
     ])
     return NextResponse.json({
       ...plan,
@@ -61,6 +67,8 @@ export async function GET(request: NextRequest) {
       insurance_members:       insRes.data ?? [],
       excluded_insurance:      exclRes.data ?? [],
       insurance_overrides:     insOverridesRes.data ?? [],
+      goals:                   goalsRes.data ?? [],
+      funds:                   fundsRes.data ?? [],
     })
   }
 
