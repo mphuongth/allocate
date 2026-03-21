@@ -46,16 +46,24 @@ function calcCurrentValue(tx: Transaction): number {
 
 const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
 
+interface AppliedFilters { asset_type: string; goal_id: string; from_date: string; to_date: string }
+const EMPTY_FILTERS: AppliedFilters = { asset_type: '', goal_id: '', from_date: '', to_date: '' }
+
 export default function InvestmentTransactionsTab() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [goals, setGoals] = useState<Goal[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
+
+  // Live form state — updated on every input change but does NOT trigger fetches
   const [filterAsset, setFilterAsset] = useState('')
   const [filterGoal, setFilterGoal] = useState('')
   const [filterFrom, setFilterFrom] = useState('')
   const [filterTo, setFilterTo] = useState('')
+
+  // Applied state — only updated on Apply/Reset; this is what triggers fetches
+  const [appliedFilters, setAppliedFilters] = useState<AppliedFilters>(EMPTY_FILTERS)
 
   const fetchGoals = useCallback(async () => {
     const res = await fetch('/api/v1/savings-goals')
@@ -66,24 +74,35 @@ export default function InvestmentTransactionsTab() {
   const fetchTransactions = useCallback(async () => {
     setLoading(true)
     const params = new URLSearchParams({ page: String(page) })
-    if (filterAsset) params.set('asset_type', filterAsset)
-    if (filterFrom) params.set('from_date', filterFrom)
-    if (filterTo) params.set('to_date', filterTo)
-    if (filterGoal === 'unassigned') params.set('unassigned', 'true')
-    else if (filterGoal) params.set('goal_id', filterGoal)
+    if (appliedFilters.asset_type) params.set('asset_type', appliedFilters.asset_type)
+    if (appliedFilters.from_date) params.set('from_date', appliedFilters.from_date)
+    if (appliedFilters.to_date) params.set('to_date', appliedFilters.to_date)
+    if (appliedFilters.goal_id === 'unassigned') params.set('unassigned', 'true')
+    else if (appliedFilters.goal_id) params.set('goal_id', appliedFilters.goal_id)
 
     const res = await fetch(`/api/v1/investment-transactions?${params}`)
     const data = res.ok ? await res.json() : { transactions: [], total: 0 }
     setTransactions(data.transactions ?? [])
     setTotal(data.total ?? 0)
     setLoading(false)
-  }, [page, filterAsset, filterGoal, filterFrom, filterTo])
+  }, [page, appliedFilters])
 
   useEffect(() => { fetchGoals() }, [fetchGoals])
   useEffect(() => { fetchTransactions() }, [fetchTransactions])
 
-  function applyFilters() { setPage(1); fetchTransactions() }
-  function resetFilters() { setFilterAsset(''); setFilterGoal(''); setFilterFrom(''); setFilterTo(''); setPage(1) }
+  function applyFilters() {
+    setAppliedFilters({ asset_type: filterAsset, goal_id: filterGoal, from_date: filterFrom, to_date: filterTo })
+    setPage(1)
+  }
+
+  function resetFilters() {
+    setFilterAsset('')
+    setFilterGoal('')
+    setFilterFrom('')
+    setFilterTo('')
+    setAppliedFilters(EMPTY_FILTERS)
+    setPage(1)
+  }
 
   const totalPages = Math.max(1, Math.ceil(total / 20))
 
