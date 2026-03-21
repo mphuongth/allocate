@@ -16,6 +16,7 @@ function LoginForm() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(expired ? 'Your session has expired. Please log in again.' : null)
   const [loading, setLoading] = useState(false)
+  const [redirecting, setRedirecting] = useState(false)
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -31,13 +32,15 @@ function LoginForm() {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) {
         setError('Email or password is incorrect.')
+        setLoading(false)
       } else {
+        setRedirecting(true)
         router.push('/dashboard')
         router.refresh()
+        // keep loading=true — page will unmount on redirect
       }
     } catch {
       setError('Unable to connect. Please check your internet and try again.')
-    } finally {
       setLoading(false)
     }
   }
@@ -87,7 +90,7 @@ function LoginForm() {
           disabled={loading}
           className="w-full py-2 px-4 bg-indigo-600 text-white rounded-md font-medium hover:bg-indigo-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
         >
-          {loading ? 'Signing in...' : 'Log in'}
+          {redirecting ? 'Redirecting…' : loading ? 'Signing in…' : 'Log in'}
         </button>
       </form>
       <p className="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">
