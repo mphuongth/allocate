@@ -14,11 +14,18 @@ function parseVietnameseNumber(raw: string): number {
   return parseFloat(cleaned.replace(/,/g, ''))
 }
 
-// Fetch HTML with Node.js https module (supports rejectUnauthorized: false)
-function fetchWithNodeHttps(url: string, options: { rejectUnauthorized?: boolean } = {}): Promise<string> {
+// Fetch with Node.js https module (supports rejectUnauthorized: false and custom headers)
+function fetchWithNodeHttps(url: string, options: { rejectUnauthorized?: boolean; headers?: Record<string, string> } = {}): Promise<string> {
   return new Promise((resolve, reject) => {
     const agent = new https.Agent({ rejectUnauthorized: options.rejectUnauthorized ?? true })
-    https.get(url, { agent }, (res) => {
+    const parsedUrl = new URL(url)
+    const reqOptions = {
+      hostname: parsedUrl.hostname,
+      path: parsedUrl.pathname + parsedUrl.search,
+      headers: options.headers,
+      agent,
+    }
+    https.get(reqOptions, (res) => {
       let data = ''
       res.on('data', (chunk) => { data += chunk })
       res.on('end', () => resolve(data))
@@ -64,11 +71,68 @@ async function scrapeSSIAM(url: string): Promise<number> {
   return parseVietnameseNumber(navMatch[1])
 }
 
-async function scrapeDragonCapital(_url: string): Promise<number> {
-  // Dragon Capital's website is a Salesforce LWC SPA. All pages return the SPA HTML shell
-  // and their api-gateway.dragoncapital.com.vn returns 502 from non-Vietnam IPs.
-  // There is no publicly accessible static or API endpoint to fetch NAV from server-side.
-  throw new Error('Dragon Capital: NAV cannot be auto-fetched (Salesforce SPA, no public API). Please update NAV manually.')
+// Dragon Capital uses a Salesforce LWC SPA.
+// The URL slug (e.g. "dcde") is the fundReportCode__c, but the Apex API requires fundCode__c (e.g. "VF4").
+// We discover the mapping by querying VF1–VF15 in parallel and matching fundReportCode__c.
+async function scrapeDragonCapital(url: string): Promise<number> {
+  const pathSegments = new URL(url).pathname.split('/').filter(Boolean)
+  const urlReportCode = pathSegments[pathSegments.length - 1].toUpperCase()
+  if (!urlReportCode) throw new Error('Dragon Capital: could not extract fund report code from URL')
+
+  const today = new Date().toISOString().split('T')[0]
+  const siteId = '0DMJ2000000oLukOAE'
+  const classname = '@udd/01pJ2000000CgSu'
+
+  async function queryFundCode(fundCode: string): Promise<{ navPerShare: number; reportCode: string } | null> {
+    const params = JSON.stringify({
+      endDateIsoString: `${today}T23:59:59.000Z`,
+      fundCode,
+      orderBy: 'navDate__c',
+      orderDirection: 'desc',
+      pageNumber: 1,
+      pageSize: 1,
+      siteId,
+      startDateIsoString: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    })
+    const qs = new URLSearchParams({
+      cacheable: 'true',
+      classname,
+      isContinuation: 'false',
+      method: 'getFundRelatedDataByDateRange',
+      namespace: '',
+      params,
+      language: 'vi',
+      asGuest: 'true',
+      htmlEncode: 'false',
+    })
+    const apiUrl = `https://www.dragoncapital.com.vn/individual/vi/webruntime/api/apex/execute?${qs}`
+    try {
+      const text = await fetchWithNodeHttps(apiUrl, {
+        rejectUnauthorized: false,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'application/json, text/plain, */*',
+          'Referer': 'https://www.dragoncapital.com.vn/individual/vi/tra-cuu-gia-nav/',
+        },
+      })
+      const data = JSON.parse(text)
+      const records: Record<string, unknown>[] = data?.returnValue ?? []
+      if (records.length > 0) {
+        return {
+          navPerShare: records[0].navPerShare__c as number,
+          reportCode: (records[0].fundReportCode__c as string).toUpperCase(),
+        }
+      }
+    } catch { /* skip failed requests */ }
+    return null
+  }
+
+  // Query VF1–VF15 in parallel — find the one whose fundReportCode__c matches the URL slug
+  const results = await Promise.all(Array.from({ length: 15 }, (_, i) => queryFundCode(`VF${i + 1}`)))
+  const match = results.find(r => r && r.reportCode === urlReportCode)
+  if (!match) throw new Error(`Dragon Capital: no fund with reportCode "${urlReportCode}" found`)
+
+  return match.navPerShare
 }
 
 async function scrapeVinaCapital(url: string): Promise<number> {
