@@ -10,6 +10,7 @@ type Fund = {
   code: string
   fund_type: FundType
   nav: number
+  nav_source_url: string | null
   created_at: string
   updated_at: string
 }
@@ -50,9 +51,11 @@ export default function FundLibraryClient() {
   const [formCode, setFormCode] = useState('')
   const [formType, setFormType] = useState<FundType | ''>('')
   const [formNav, setFormNav] = useState('')
+  const [formNavUrl, setFormNavUrl] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
 
   // Toasts
   const [toasts, setToasts] = useState<Toast[]>([])
@@ -91,6 +94,7 @@ export default function FundLibraryClient() {
     setFormCode('')
     setFormType('')
     setFormNav('')
+    setFormNavUrl('')
     setFormError(null)
     setSelectedFund(null)
     setModalMode('add')
@@ -101,6 +105,7 @@ export default function FundLibraryClient() {
     setFormCode(fund.code)
     setFormType(fund.fund_type)
     setFormNav(String(fund.nav))
+    setFormNavUrl(fund.nav_source_url ?? '')
     setFormError(null)
     setSelectedFund(fund)
     setModalMode('edit')
@@ -130,7 +135,7 @@ export default function FundLibraryClient() {
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: formName.trim(), code: formCode.trim(), fund_type: formType, nav: navNum }),
+        body: JSON.stringify({ name: formName.trim(), code: formCode.trim(), fund_type: formType, nav: navNum, nav_source_url: formNavUrl.trim() || null }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -168,6 +173,38 @@ export default function FundLibraryClient() {
     }
   }
 
+  async function handleRefreshNav() {
+    setRefreshing(true)
+    try {
+      const res = await fetch('/api/v1/funds/refresh-nav', { method: 'POST' })
+      const { results } = await res.json()
+      const updated = results.filter((r: { nav?: number }) => r.nav !== undefined).length
+      const failed = results.filter((r: { error?: string }) => r.error).length
+      await loadFunds()
+      addToast(
+        `${updated} updated${failed ? `, ${failed} failed` : ''}`,
+        failed > 0 && updated === 0 ? 'error' : 'success'
+      )
+    } catch {
+      addToast('Failed to refresh NAV. Please try again.', 'error')
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  function formatRelativeDate(dateStr: string): string {
+    const date = new Date(dateStr)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    if (diffMins < 1) return 'just now'
+    if (diffMins < 60) return `${diffMins}m ago`
+    const diffHours = Math.floor(diffMins / 60)
+    if (diffHours < 24) return `${diffHours}h ago`
+    const diffDays = Math.floor(diffHours / 24)
+    return `${diffDays}d ago`
+  }
+
   const SortButton = ({ col, label }: { col: SortKey; label: string }) => (
     <button
       onClick={() => setSortBy(col)}
@@ -198,12 +235,21 @@ export default function FundLibraryClient() {
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Fund Library</h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage your investment funds</p>
           </div>
-          <button
-            onClick={openAddModal}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded transition-colors"
-          >
-            Add Fund
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={handleRefreshNav}
+              disabled={refreshing || !funds.some(f => f.nav_source_url)}
+              className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm font-medium rounded hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {refreshing ? 'Refreshing…' : '↻ Refresh NAV'}
+            </button>
+            <button
+              onClick={openAddModal}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded transition-colors"
+            >
+              Add Fund
+            </button>
+          </div>
         </div>
 
         {/* Content */}
@@ -266,7 +312,12 @@ export default function FundLibraryClient() {
                           {FUND_TYPE_LABELS[fund.fund_type]}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">{fund.nav.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">
+                        <span>{fund.nav.toLocaleString()}</span>
+                        {fund.nav_source_url && fund.updated_at && (
+                          <span className="text-xs text-gray-400 ml-1">{formatRelativeDate(fund.updated_at)}</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex gap-2 justify-end">
                           <button
@@ -302,7 +353,12 @@ export default function FundLibraryClient() {
                       {FUND_TYPE_LABELS[fund.fund_type]}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">NAV: <span className="font-medium">{fund.nav.toLocaleString()}</span></p>
+                  <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">
+                    NAV: <span className="font-medium">{fund.nav.toLocaleString()}</span>
+                    {fund.nav_source_url && fund.updated_at && (
+                      <span className="text-xs text-gray-400 ml-1">{formatRelativeDate(fund.updated_at)}</span>
+                    )}
+                  </p>
                   <div className="flex gap-2">
                     <button
                       onClick={() => openEditModal(fund)}
@@ -381,6 +437,16 @@ export default function FundLibraryClient() {
                   min="0.01"
                   step="0.01"
                   placeholder="e.g., 450.25"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">NAV Source URL <span className="text-gray-400 font-normal">(optional)</span></label>
+                <input
+                  type="url"
+                  value={formNavUrl}
+                  onChange={(e) => setFormNavUrl(e.target.value)}
+                  placeholder="e.g., https://www.vcbf.com/quy-trai-phieu"
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                 />
               </div>

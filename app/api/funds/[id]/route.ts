@@ -40,7 +40,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   }
 
   const body = await request.json()
-  const { name, code, fund_type, nav } = body
+  const { name, code, fund_type, nav, nav_source_url } = body
 
   if (!name || typeof name !== 'string' || name.trim().length === 0) {
     return NextResponse.json({ error: 'Name is required' }, { status: 400 })
@@ -69,6 +69,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       code: code.trim().toUpperCase(),
       fund_type,
       nav: navNum,
+      nav_source_url: typeof nav_source_url === 'string' && nav_source_url.trim() ? nav_source_url.trim() : null,
     })
     .eq('id', id)
     .eq('user_id', user.id)
