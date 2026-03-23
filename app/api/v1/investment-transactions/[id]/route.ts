@@ -27,7 +27,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { goal_id, asset_type, investment_date, amount_vnd, unit_price, units, interest_rate, notes, fund_id } = body
+  const { goal_id, asset_type, investment_date, amount_vnd, unit_price, units, interest_rate, expiry_date, notes, fund_id } = body
 
   if (asset_type && !ASSET_TYPES.includes(asset_type)) {
     return NextResponse.json({ error: 'Invalid asset type.' }, { status: 400 })
@@ -60,6 +60,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   if (unit_price !== undefined) updates.unit_price = unit_price ? Number(unit_price) : null
   if (units !== undefined) updates.units = units ? Number(units) : null
   if (interest_rate !== undefined) updates.interest_rate = interest_rate ? Number(interest_rate) : null
+  if (expiry_date !== undefined) updates.expiry_date = expiry_date || null
   if (notes !== undefined) updates.notes = notes?.trim() || null
   if (fund_id !== undefined) updates.fund_id = asset_type === 'fund' ? (fund_id || null) : null
 
