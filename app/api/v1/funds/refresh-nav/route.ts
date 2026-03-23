@@ -135,11 +135,38 @@ async function scrapeDragonCapital(url: string): Promise<number> {
   return match.navPerShare
 }
 
-async function scrapeVinaCapital(_url: string): Promise<number> {
-  // vinacapital.com is behind Cloudflare's JavaScript challenge (cf-mitigated: challenge).
-  // This requires browser-side JS execution to solve — no static HTTP request can bypass it.
-  // No alternative public API or data endpoint was found for VinaCapital.
-  throw new Error('VinaCapital: website is protected by Cloudflare JS challenge. Please update NAV manually.')
+async function scrapeVinaCapital(url: string): Promise<number> {
+  // vinacapital.com uses WordPress. The wp-admin/admin-ajax.php endpoint with
+  // action=getchartfundnav is a backend AJAX route that may not be behind the Cloudflare
+  // JS challenge protecting the frontend. Fund name is extracted from the URL slug.
+  const pathSegments = new URL(url).pathname.split('/').filter(Boolean)
+  const fundName = pathSegments[pathSegments.length - 1].toUpperCase()
+  if (!fundName) throw new Error('VinaCapital: could not extract fund name from URL')
+
+  const body = new URLSearchParams()
+  body.append('action', 'getchartfundnav')
+  body.append('fundname', fundName)
+
+  const res = await fetch('https://vinacapital.com/wp-admin/admin-ajax.php', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      'Referer': url,
+      'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.6,en;q=0.5',
+    },
+    body: body.toString(),
+  })
+
+  const html = await res.text()
+  if (!html || !html.includes('rpfundnavcontent')) {
+    throw new Error(`VinaCapital: AJAX endpoint returned no fund data for "${fundName}". Site may be protected by Cloudflare JS challenge — update NAV manually.`)
+  }
+
+  const navMatch = html.match(/rpfundnavcontent f4">([\s\S]*?)<\/div>/)
+  if (!navMatch) throw new Error('VinaCapital: could not parse NAV from AJAX response')
+
+  return parseVietnameseNumber(navMatch[1].trim())
 }
 
 async function scrapeNav(url: string): Promise<{ nav: number } | { error: string }> {
