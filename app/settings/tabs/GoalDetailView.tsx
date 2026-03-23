@@ -41,10 +41,9 @@ const ASSET_COLORS: Record<string, string> = {
 
 function calcProjectedInterest(amount: number, rate: number | null, investmentDate: string): number {
   if (!rate) return 0
-  const months = Math.max(0, Math.floor(
-    (Date.now() - new Date(investmentDate).getTime()) / (1000 * 60 * 60 * 24 * 30.44)
-  ))
-  return amount * Math.pow(1 + rate / 100 / 12, months) - amount
+  const days = Math.max(0, (Date.now() - new Date(investmentDate).getTime()) / (1000 * 60 * 60 * 24))
+  const years = days / 365
+  return amount * Math.pow(1 + rate / 100, years) - amount
 }
 
 const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
