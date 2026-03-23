@@ -57,18 +57,28 @@ async function scrapeVCBF(url: string): Promise<number> {
 }
 
 async function scrapeSSIAM(url: string): Promise<number> {
-  const html = await fetch(url).then(r => r.text())
-  // Look for NAV/unit in table rows — grab first numeric value in a row that looks like a date row
-  // The table has columns: Date | NAV/unit | ...
-  // Match pattern: a row with date then the NAV value
-  const rowMatch = html.match(/<tr[^>]*>[\s\S]*?<td[^>]*>[\s\S]*?\d{1,2}\/\d{1,2}\/\d{4}[\s\S]*?<\/td>[\s\S]*?<td[^>]*>([\d,. ]+)<\/td>/i)
-  if (rowMatch) {
-    return parseVietnameseNumber(rowMatch[1])
+  const html = await fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
+    },
+  }).then(r => r.text())
+
+  // Primary: find NAV/CCQ label in the page, then extract the next number near it.
+  // The card section contains "NAV/CCQ" followed by the value like "44.378,54 VND"
+  const navLabelMatch = html.match(/NAV\/CCQ[\s\S]{0,300}?([\d]{1,3}[.,][\d]{3}[.,][\d]{2})/)
+  if (navLabelMatch) {
+    return parseVietnameseNumber(navLabelMatch[1])
   }
-  // Fallback: find any NAV-like value (5-6 digit number with decimals)
-  const navMatch = html.match(/(\d{2,3}[,.]?\d{3}[,.]?\d{2,3}(?:[,.]\d{2})?)/)
-  if (!navMatch) throw new Error('SSIAM: NAV not found')
-  return parseVietnameseNumber(navMatch[1])
+
+  // Fallback: table columns are [fund-name, NAV, date, ...] — NAV comes BEFORE the date
+  // Match: <td>NAV-value</td> immediately before a <td>with a date</td>
+  const tableMatch = html.match(/<td[^>]*>([\d.,]+)<\/td>\s*<td[^>]*>\d{1,2}\/\d{1,2}\/\d{4}<\/td>/i)
+  if (tableMatch) {
+    return parseVietnameseNumber(tableMatch[1])
+  }
+
+  throw new Error('SSIAM: NAV not found')
 }
 
 // Dragon Capital uses a Salesforce LWC SPA.
