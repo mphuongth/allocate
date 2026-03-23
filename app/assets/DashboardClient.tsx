@@ -45,6 +45,15 @@ export interface InsuranceData {
   lastPaymentDate: string | null
 }
 
+export interface NonFundUnallocatedItem {
+  type: string
+  amount: number
+  currentValue: number
+  interestRate: number | null
+  expiryDate: string | null
+  investmentDate: string
+}
+
 export interface DashboardData {
   netWorth: {
     totalAssets: number
@@ -57,7 +66,7 @@ export interface DashboardData {
     navStale: boolean
   }
   goals: GoalData[]
-  unallocated: { totalValue: number; funds: FundBreakdownItem[] }
+  unallocated: { totalValue: number; funds: FundBreakdownItem[]; nonFunds: NonFundUnallocatedItem[] }
   insurance: InsuranceData[]
 }
 
@@ -194,7 +203,7 @@ export default function DashboardClient() {
     setAssignLoading(false)
   }
 
-  const isEmpty = data && data.goals.length === 0 && data.unallocated.funds.length === 0 && data.insurance.length === 0
+  const isEmpty = data && data.goals.length === 0 && data.unallocated.funds.length === 0 && data.unallocated.nonFunds.length === 0 && data.insurance.length === 0
 
   const sortedGoals = data ? sortGoals(data.goals, sortOrder) : []
 
@@ -330,10 +339,11 @@ export default function DashboardClient() {
             )}
 
             {/* Unallocated */}
-            {data.unallocated.funds.length > 0 && (
+            {(data.unallocated.funds.length > 0 || data.unallocated.nonFunds.length > 0) && (
               <UnallocatedSection
                 unallocatedAmount={data.unallocated.totalValue}
                 funds={data.unallocated.funds}
+                nonFunds={data.unallocated.nonFunds}
                 onFundClick={handleFundClick}
                 onAssignToGoal={(fundId) => setGoalPickerFundId(fundId)}
               />

@@ -11,14 +11,23 @@ interface Transaction {
   unit_price: number | null
   units: number | null
   interest_rate: number | null
+  expiry_date: string | null
+  fund_id: string | null
   notes: string | null
   savings_goals?: { goal_name: string } | null
-  funds?: { id: string; name: string; nav: number } | null
+  funds?: { id: string; name: string; nav: number } | { id: string; name: string; nav: number }[] | null
 }
 
 interface Goal {
   goal_id: string
   goal_name: string
+}
+
+interface Fund {
+  id: string
+  name: string
+  code: string
+  nav: number
 }
 
 const ASSET_TYPES = ['fund', 'bank', 'stock', 'gold'] as const
@@ -34,14 +43,14 @@ const ASSET_COLORS: Record<AssetType, string> = {
 function calcCurrentValue(tx: Transaction): number {
   if (tx.asset_type === 'fund' && tx.units) {
     const fund = Array.isArray(tx.funds) ? tx.funds[0] : tx.funds
-    const currentNav = fund?.nav ?? tx.unit_price ?? 0
-    return tx.units * currentNav
+    return tx.units * (fund?.nav ?? tx.unit_price ?? 0)
   }
   if (!tx.interest_rate) return tx.amount_vnd
-  const months = Math.max(0, Math.floor(
-    (Date.now() - new Date(tx.investment_date).getTime()) / (1000 * 60 * 60 * 24 * 30.44)
-  ))
-  return tx.amount_vnd * Math.pow(1 + tx.interest_rate / 100 / 12, months)
+  const endMs = tx.expiry_date
+    ? Math.min(Date.now(), new Date(tx.expiry_date).getTime())
+    : Date.now()
+  const days = Math.max(0, (endMs - new Date(tx.investment_date).getTime()) / 86400000)
+  return tx.amount_vnd * Math.pow(1 + tx.interest_rate / 100, days / 365)
 }
 
 const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
@@ -49,9 +58,23 @@ const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
 interface AppliedFilters { asset_type: string; goal_id: string; from_date: string; to_date: string }
 const EMPTY_FILTERS: AppliedFilters = { asset_type: '', goal_id: '', from_date: '', to_date: '' }
 
+const emptyTxForm = {
+  asset_type: 'bank',
+  investment_date: '',
+  amount_vnd: '',
+  unit_price: '',
+  units: '',
+  interest_rate: '',
+  expiry_date: '',
+  notes: '',
+  fund_id: '',
+  goal_id: '',
+}
+
 export default function InvestmentTransactionsTab() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [goals, setGoals] = useState<Goal[]>([])
+  const [funds, setFunds] = useState<Fund[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
@@ -61,10 +84,22 @@ export default function InvestmentTransactionsTab() {
   const [dateTo, setDateTo] = useState('')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  const [txForm, setTxForm] = useState(emptyTxForm)
+  const [editTx, setEditTx] = useState<Transaction | null>(null)
+  const [formMode, setFormMode] = useState<'add' | 'edit' | null>(null)
+  const [formError, setFormError] = useState('')
+  const [saving, setSaving] = useState(false)
+
   const fetchGoals = useCallback(async () => {
     const res = await fetch('/api/v1/savings-goals')
-    const { goals } = res.ok ? await res.json() : { goals: [] }
-    setGoals(goals ?? [])
+    const { goals: g } = res.ok ? await res.json() : { goals: [] }
+    setGoals(g ?? [])
+  }, [])
+
+  const fetchFunds = useCallback(async () => {
+    const res = await fetch('/api/funds')
+    const data = res.ok ? await res.json() : {}
+    setFunds(data.funds ?? [])
   }, [])
 
   const fetchTransactions = useCallback(async () => {
@@ -84,9 +119,9 @@ export default function InvestmentTransactionsTab() {
   }, [page, filters])
 
   useEffect(() => { fetchGoals() }, [fetchGoals])
+  useEffect(() => { fetchFunds() }, [fetchFunds])
   useEffect(() => { fetchTransactions() }, [fetchTransactions])
 
-  // Dropdowns apply instantly; date inputs debounce 400ms
   function setSelectFilter(key: 'asset_type' | 'goal_id', value: string) {
     setFilters((prev) => ({ ...prev, [key]: value }))
     setPage(1)
@@ -109,13 +144,89 @@ export default function InvestmentTransactionsTab() {
     setPage(1)
   }
 
+  function openAdd() {
+    setTxForm({ ...emptyTxForm, investment_date: new Date().toISOString().slice(0, 10) })
+    setEditTx(null)
+    setFormError('')
+    setFormMode('add')
+  }
+
+  function openEdit(tx: Transaction) {
+    setTxForm({
+      asset_type: tx.asset_type,
+      investment_date: tx.investment_date,
+      amount_vnd: String(tx.amount_vnd),
+      unit_price: tx.unit_price != null ? String(tx.unit_price) : '',
+      units: tx.units != null ? String(tx.units) : '',
+      interest_rate: tx.interest_rate != null ? String(tx.interest_rate) : '',
+      expiry_date: tx.expiry_date ?? '',
+      notes: tx.notes ?? '',
+      fund_id: tx.fund_id ?? '',
+      goal_id: tx.goal_id ?? '',
+    })
+    setEditTx(tx)
+    setFormError('')
+    setFormMode('edit')
+  }
+
+  async function handleSave() {
+    setFormError('')
+    if (!txForm.amount_vnd || Number(txForm.amount_vnd) <= 0) { setFormError('Amount must be greater than 0.'); return }
+    if (!txForm.investment_date) { setFormError('Investment date is required.'); return }
+
+    const payload = {
+      asset_type: txForm.asset_type,
+      investment_date: txForm.investment_date,
+      amount_vnd: Number(txForm.amount_vnd),
+      unit_price: txForm.unit_price ? Number(txForm.unit_price) : null,
+      units: txForm.units ? Number(txForm.units) : null,
+      interest_rate: txForm.interest_rate ? Number(txForm.interest_rate) : null,
+      expiry_date: txForm.asset_type === 'bank' ? (txForm.expiry_date || null) : null,
+      notes: txForm.notes || null,
+      fund_id: txForm.asset_type === 'fund' ? (txForm.fund_id || null) : null,
+      goal_id: txForm.goal_id || null,
+    }
+
+    setSaving(true)
+    const url = editTx
+      ? `/api/v1/investment-transactions/${editTx.transaction_id}`
+      : '/api/v1/investment-transactions'
+    const res = await fetch(url, {
+      method: editTx ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) {
+      const { error } = await res.json()
+      setFormError(error ?? 'Something went wrong.')
+    } else {
+      setFormMode(null)
+      await fetchTransactions()
+    }
+    setSaving(false)
+  }
+
+  async function handleDelete(tx: Transaction) {
+    if (!confirm('Delete this transaction?')) return
+    const res = await fetch(`/api/v1/investment-transactions/${tx.transaction_id}`, { method: 'DELETE' })
+    if (res.ok) await fetchTransactions()
+  }
+
   const totalPages = Math.max(1, Math.ceil(total / 20))
 
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Investment Transactions</h2>
-        <span className="text-sm text-gray-500 dark:text-gray-400">{total} total</span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-gray-500 dark:text-gray-400">{total} total</span>
+          <button
+            onClick={openAdd}
+            className="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+          >
+            + Add Transaction
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -168,7 +279,7 @@ export default function InvestmentTransactionsTab() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 dark:bg-gray-800">
                 <tr>
-                  {['Date', 'Asset', 'Amount', 'Units', 'Rate / NAV', 'Current Value', 'Goal', 'Notes'].map((h) => (
+                  {['Date', 'Asset', 'Amount', 'Units', 'Rate / NAV', 'Current Value', 'Goal', 'Notes', 'Actions'].map((h) => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">{h}</th>
                   ))}
                 </tr>
@@ -195,6 +306,20 @@ export default function InvestmentTransactionsTab() {
                         {tx.savings_goals?.goal_name ?? <span className="text-gray-300 dark:text-gray-600">Unassigned</span>}
                       </td>
                       <td className="px-4 py-3 text-gray-400 dark:text-gray-500 max-w-32 truncate">{tx.notes ?? '—'}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <button
+                          onClick={() => openEdit(tx)}
+                          className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline mr-3"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDelete(tx)}
+                          className="text-xs text-red-500 dark:text-red-400 hover:underline"
+                        >
+                          Delete
+                        </button>
+                      </td>
                     </tr>
                   )
                 })}
@@ -223,6 +348,179 @@ export default function InvestmentTransactionsTab() {
           </div>
         )}
       </div>
+
+      {/* Add/Edit Modal */}
+      {formMode && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+              <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                {formMode === 'add' ? 'Add Transaction' : 'Edit Transaction'}
+              </h3>
+              <button
+                onClick={() => setFormMode(null)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="px-6 py-5 space-y-4">
+              {/* Asset Type */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Asset Type</label>
+                <select
+                  value={txForm.asset_type}
+                  onChange={(e) => setTxForm((f) => ({ ...f, asset_type: e.target.value, fund_id: '', unit_price: '', units: '', interest_rate: '', expiry_date: '' }))}
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  {ASSET_TYPES.map((t) => (
+                    <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Goal */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Goal</label>
+                <select
+                  value={txForm.goal_id}
+                  onChange={(e) => setTxForm((f) => ({ ...f, goal_id: e.target.value }))}
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">No Goal (Unassigned)</option>
+                  {goals.map((g) => (
+                    <option key={g.goal_id} value={g.goal_id}>{g.goal_name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Fund picker — only for fund type */}
+              {txForm.asset_type === 'fund' && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Fund</label>
+                  <select
+                    value={txForm.fund_id}
+                    onChange={(e) => setTxForm((f) => ({ ...f, fund_id: e.target.value }))}
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="">Select fund…</option>
+                    {funds.map((f) => (
+                      <option key={f.id} value={f.id}>{f.code} - {f.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Date */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Investment Date</label>
+                <input
+                  type="date"
+                  value={txForm.investment_date}
+                  onChange={(e) => setTxForm((f) => ({ ...f, investment_date: e.target.value }))}
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              {/* Amount */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Amount (VND)</label>
+                <input
+                  type="number"
+                  value={txForm.amount_vnd}
+                  onChange={(e) => setTxForm((f) => ({ ...f, amount_vnd: e.target.value }))}
+                  placeholder="e.g. 10000000"
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              {/* Unit Price + Units — non-bank */}
+              {txForm.asset_type !== 'bank' && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                      {txForm.asset_type === 'fund' ? 'NAV at Purchase' : 'Unit Price'}
+                    </label>
+                    <input
+                      type="number"
+                      value={txForm.unit_price}
+                      onChange={(e) => setTxForm((f) => ({ ...f, unit_price: e.target.value }))}
+                      className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Units</label>
+                    <input
+                      type="number"
+                      value={txForm.units}
+                      onChange={(e) => setTxForm((f) => ({ ...f, units: e.target.value }))}
+                      className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Interest Rate + Expiry — bank only */}
+              {txForm.asset_type === 'bank' && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Interest Rate (%/yr)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={txForm.interest_rate}
+                      onChange={(e) => setTxForm((f) => ({ ...f, interest_rate: e.target.value }))}
+                      placeholder="e.g. 6.5"
+                      className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Expiry Date</label>
+                    <input
+                      type="date"
+                      value={txForm.expiry_date}
+                      onChange={(e) => setTxForm((f) => ({ ...f, expiry_date: e.target.value }))}
+                      className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Notes */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Notes</label>
+                <input
+                  type="text"
+                  value={txForm.notes}
+                  onChange={(e) => setTxForm((f) => ({ ...f, notes: e.target.value }))}
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              {formError && (
+                <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>
+              )}
+            </div>
+
+            <div className="flex gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700">
+              <button
+                onClick={() => setFormMode(null)}
+                className="flex-1 px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="flex-1 px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
