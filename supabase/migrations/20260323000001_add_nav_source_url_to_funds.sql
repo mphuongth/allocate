@@ -1,0 +1,1 @@
+ALTER TABLE funds ADD COLUMN IF NOT EXISTS nav_source_url TEXT;

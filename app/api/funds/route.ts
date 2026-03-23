@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json()
-  const { name, code, fund_type, nav } = body
+  const { name, code, fund_type, nav, nav_source_url } = body
 
   // Validate required fields
   if (!name || typeof name !== 'string' || name.trim().length === 0) {
@@ -68,6 +68,7 @@ export async function POST(request: NextRequest) {
       code: code.trim().toUpperCase(),
       fund_type,
       nav: navNum,
+      nav_source_url: typeof nav_source_url === 'string' && nav_source_url.trim() ? nav_source_url.trim() : null,
     })
     .select()
     .single()
