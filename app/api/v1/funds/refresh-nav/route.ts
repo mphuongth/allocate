@@ -135,27 +135,11 @@ async function scrapeDragonCapital(url: string): Promise<number> {
   return match.navPerShare
 }
 
-async function scrapeVinaCapital(url: string): Promise<number> {
-  const html = await fetch(url, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-      'Referer': 'https://vinacapital.com/',
-    },
-  }).then(r => {
-    if (!r.ok) throw new Error(`VinaCapital: HTTP ${r.status}`)
-    return r.text()
-  })
-
-  // Look for NAV value — VinaCapital typically shows it as "XX,XXX" or "XX.XXX,XX"
-  const match = html.match(/NAV[^<]{0,100}?([\d]{2,3}[,.]\d{3}(?:[,.]\d{2,4})?)/i)
-  if (!match) {
-    const fallback = html.match(/([\d]{2,3}[,.]\d{3}(?:[,.]\d{2,4})?)/g)
-    if (!fallback) throw new Error('VinaCapital: NAV not found')
-    return parseVietnameseNumber(fallback[0])
-  }
-  return parseVietnameseNumber(match[1])
+async function scrapeVinaCapital(_url: string): Promise<number> {
+  // vinacapital.com is behind Cloudflare's JavaScript challenge (cf-mitigated: challenge).
+  // This requires browser-side JS execution to solve — no static HTTP request can bypass it.
+  // No alternative public API or data endpoint was found for VinaCapital.
+  throw new Error('VinaCapital: website is protected by Cloudflare JS challenge. Please update NAV manually.')
 }
 
 async function scrapeNav(url: string): Promise<{ nav: number } | { error: string }> {
