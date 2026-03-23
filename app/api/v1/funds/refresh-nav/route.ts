@@ -64,19 +64,45 @@ async function scrapeSSIAM(url: string): Promise<number> {
   return parseVietnameseNumber(navMatch[1])
 }
 
-async function scrapeDragonCapital(url: string): Promise<number> {
-  // Dragon Capital has SSL cert issues — fetch with rejectUnauthorized: false
-  const html = await fetchWithNodeHttps(url, { rejectUnauthorized: false })
-  // Look for NAV value in HTML — typically shown as "XX,XXX.XX" or "XX.XXX,XX"
-  const match = html.match(/NAV[^<]*?(?:VND)?[^<]*?([\d]{2,3}[,.][\d]{3}(?:[,.][\d]{2,3})?)/i)
-  if (!match) {
-    // Broader fallback: find large numbers that look like fund NAV (10,000+)
-    const fallback = html.match(/(\d{2,3}[,.]\d{3}(?:[,.]\d{2,4})?)/g)
-    if (!fallback) throw new Error('Dragon Capital: NAV not found')
-    // Take the first plausible value
-    return parseVietnameseNumber(fallback[0])
+// Recursively search a JSON object for a field whose name contains a NAV-related keyword
+// and whose value is a plausible NAV (number > 1000)
+function findNavInJson(obj: unknown, depth = 0): number | null {
+  if (depth > 6 || obj === null || typeof obj !== 'object') return null
+  for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+    const k = key.toLowerCase()
+    if ((k.includes('nav') || k.includes('price') || k.includes('unit')) && typeof value === 'number' && value > 1000) {
+      return value
+    }
+    if (typeof value === 'string' && (k.includes('nav') || k.includes('price') || k.includes('unit'))) {
+      const n = parseVietnameseNumber(value)
+      if (!isNaN(n) && n > 1000) return n
+    }
+    const nested = findNavInJson(value, depth + 1)
+    if (nested !== null) return nested
   }
-  return parseVietnameseNumber(match[1])
+  return null
+}
+
+async function scrapeDragonCapital(url: string): Promise<number> {
+  // Dragon Capital uses a Salesforce LWC SPA — NAV is not in static HTML.
+  // Extract the Salesforce record ID from the URL and call the LWR community record API.
+  const recordIdMatch = url.match(/\/product\/([a-zA-Z0-9]{15,18})/)
+  if (!recordIdMatch) throw new Error('Dragon Capital: could not extract record ID from URL')
+
+  const recordId = recordIdMatch[1]
+  const apiUrl = `https://www.dragoncapital.com.vn/individual/vi/webruntime/api/records/${recordId}`
+  const responseText = await fetchWithNodeHttps(apiUrl, { rejectUnauthorized: false })
+
+  let data: unknown
+  try {
+    data = JSON.parse(responseText)
+  } catch {
+    throw new Error('Dragon Capital: record API did not return valid JSON')
+  }
+
+  const nav = findNavInJson(data)
+  if (nav === null) throw new Error('Dragon Capital: NAV field not found in record API response')
+  return nav
 }
 
 async function scrapeVinaCapital(url: string): Promise<number> {
