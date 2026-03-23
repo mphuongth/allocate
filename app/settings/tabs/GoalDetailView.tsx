@@ -39,9 +39,10 @@ const ASSET_COLORS: Record<string, string> = {
   gold: 'bg-amber-100 text-amber-700',
 }
 
-function calcProjectedInterest(amount: number, rate: number | null, investmentDate: string): number {
+function calcProjectedInterest(amount: number, rate: number | null, investmentDate: string, expiryDate?: string | null): number {
   if (!rate) return 0
-  const days = Math.max(0, (Date.now() - new Date(investmentDate).getTime()) / (1000 * 60 * 60 * 24))
+  const endMs = expiryDate ? Math.min(Date.now(), new Date(expiryDate).getTime()) : Date.now()
+  const days = Math.max(0, (endMs - new Date(investmentDate).getTime()) / (1000 * 60 * 60 * 24))
   const years = days / 365
   return amount * Math.pow(1 + rate / 100, years) - amount
 }
@@ -90,7 +91,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
         const currentNav = fund?.nav ?? tx.unit_price ?? 0
         currentValue = tx.units * currentNav
       } else {
-        const interest = calcProjectedInterest(tx.amount_vnd, tx.interest_rate, tx.investment_date)
+        const interest = calcProjectedInterest(tx.amount_vnd, tx.interest_rate, tx.investment_date, tx.expiry_date)
         currentValue = tx.amount_vnd + interest
       }
       return {
