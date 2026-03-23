@@ -79,85 +79,77 @@ export default function AllocationSummary({ plan, investments, savings, fixedExp
         <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Salary: {fmt(salary)}</p>
       </div>
 
-      <div className="p-5 space-y-4">
-        {/* Goal breakdown table */}
-        {goalRows.length > 0 && (
-          <table className="w-full text-sm">
-            <thead>
+      <div className="p-5">
+        <table className="w-full text-sm">
+          <thead>
+            <tr>
+              <th className="pb-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Goal</th>
+              <th className="pb-2 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide px-3">Allocated</th>
+              <th className="pb-2 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">% Salary</th>
+            </tr>
+          </thead>
+          <tbody>
+            {/* Goal rows */}
+            {goalRows.length === 0 ? (
               <tr>
-                {['Goal', 'Allocated', '% Salary'].map((h) => (
-                  <th key={h} className="pb-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">{h}</th>
-                ))}
+                <td colSpan={3} className="py-2 text-sm text-gray-400 dark:text-gray-500 text-center">No allocations yet</td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-              {goalRows.map((row) => (
-                <tr key={row.label}>
-                  <td className="py-2 text-gray-700 dark:text-gray-300 font-medium pr-2">{row.label}</td>
-                  <td className="py-2 text-gray-600 dark:text-gray-400 pr-2">{fmt(row.total)}</td>
-                  <td className="py-2 text-gray-400 dark:text-gray-500">{pct(row.total)}</td>
+            ) : (
+              goalRows.map((row) => (
+                <tr key={row.label} className="border-t border-gray-100 dark:border-gray-700">
+                  <td className="py-2 text-gray-700 dark:text-gray-300 font-medium">{row.label}</td>
+                  <td className="py-2 text-right text-gray-600 dark:text-gray-400 px-3">{fmt(row.total)}</td>
+                  <td className="py-2 text-right text-gray-400 dark:text-gray-500">{pct(row.total)}</td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+              ))
+            )}
 
-        {goalRows.length === 0 && (
-          <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-2">No allocations yet</p>
-        )}
+            {/* Fixed Expenses */}
+            {fixedExpenses.length > 0 && (
+              <tr className="border-t border-gray-200 dark:border-gray-600">
+                <td className="pt-3 pb-1 text-gray-600 dark:text-gray-400">Fixed Expenses</td>
+                <td className="pt-3 pb-1 text-right text-gray-700 dark:text-gray-300 font-medium px-3">{fmt(totalFixed)}</td>
+                <td className="pt-3 pb-1 text-right text-gray-400 dark:text-gray-500">{pct(totalFixed)}</td>
+              </tr>
+            )}
 
-        {/* Divider */}
-        <div className="border-t border-gray-100 dark:border-gray-700 pt-4 space-y-2">
-          {/* Fixed expenses row */}
-          {fixedExpenses.length > 0 && (
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-600 dark:text-gray-400">Fixed Expenses</span>
-              <div className="text-right">
-                <span className="text-gray-700 dark:text-gray-300 font-medium">{fmt(totalFixed)}</span>
-                <span className="ml-2 text-gray-400 dark:text-gray-500 text-xs">{pct(totalFixed)}</span>
-              </div>
-            </div>
-          )}
+            {/* Insurance */}
+            {insuranceMembers.length > 0 && (
+              <tr className={fixedExpenses.length > 0 ? '' : 'border-t border-gray-200 dark:border-gray-600'}>
+                <td className="py-1 text-gray-600 dark:text-gray-400">Insurance</td>
+                <td className="py-1 text-right text-gray-700 dark:text-gray-300 font-medium px-3">{fmt(totalInsurance)}</td>
+                <td className="py-1 text-right text-gray-400 dark:text-gray-500">{pct(totalInsurance)}</td>
+              </tr>
+            )}
 
-          {/* Insurance row */}
-          {insuranceMembers.length > 0 && (
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-600 dark:text-gray-400">Insurance</span>
-              <div className="text-right">
-                <span className="text-gray-700 dark:text-gray-300 font-medium">{fmt(totalInsurance)}</span>
-                <span className="ml-2 text-gray-400 dark:text-gray-500 text-xs">{pct(totalInsurance)}</span>
-              </div>
-            </div>
-          )}
+            {/* Total Allocated */}
+            <tr className="border-t border-gray-200 dark:border-gray-600">
+              <td className="pt-2 pb-1 font-semibold text-gray-700 dark:text-gray-300">Total Allocated</td>
+              <td className="pt-2 pb-1 text-right font-semibold text-gray-900 dark:text-gray-100 px-3">{fmt(totalAllocated)}</td>
+              <td className="pt-2 pb-1 text-right font-semibold text-gray-400 dark:text-gray-500">{pct(totalAllocated)}</td>
+            </tr>
 
-          {/* Total row */}
-          <div className="flex items-center justify-between text-sm border-t border-gray-100 dark:border-gray-700 pt-2 mt-2">
-            <span className="font-semibold text-gray-700 dark:text-gray-300">Total Allocated</span>
-            <div className="text-right">
-              <span className="font-semibold text-gray-900 dark:text-gray-100">{fmt(totalAllocated)}</span>
-              <span className="ml-2 text-gray-400 dark:text-gray-500 text-xs">{pct(totalAllocated)}</span>
-            </div>
-          </div>
+            {/* Spacer */}
+            <tr><td colSpan={3} className="pt-2" /></tr>
 
-          {/* Remaining row */}
-          <div className={`flex items-center justify-between text-sm rounded-lg px-3 py-2 ${remaining >= 0 ? 'bg-green-50 dark:bg-green-900/20' : 'bg-red-50 dark:bg-red-900/20'}`}>
-            <span className={`font-semibold ${remaining >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
-              Remaining Salary
-            </span>
-            <div className="text-right">
-              <span className={`font-semibold ${remaining >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
+            {/* Remaining Salary — inside the table so columns stay aligned */}
+            <tr>
+              <td className={`py-2 pl-3 rounded-l-lg font-semibold ${remaining >= 0 ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400' : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400'}`}>
+                Remaining Salary
+              </td>
+              <td className={`py-2 text-right font-semibold px-3 ${remaining >= 0 ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400' : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400'}`}>
                 {fmt(remaining)}
-              </span>
-              <span className={`ml-2 text-xs ${remaining >= 0 ? 'text-green-500 dark:text-green-400' : 'text-red-400 dark:text-red-300'}`}>
+              </td>
+              <td className={`py-2 pr-3 text-right text-xs font-semibold rounded-r-lg whitespace-nowrap ${remaining >= 0 ? 'bg-green-50 dark:bg-green-900/20 text-green-500 dark:text-green-400' : 'bg-red-50 dark:bg-red-900/20 text-red-400 dark:text-red-300'}`}>
                 {pct(Math.abs(remaining))}
-              </span>
-            </div>
-          </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
 
-          {remaining < 0 && (
-            <p className="text-xs text-red-500 dark:text-red-400 text-center">Over-allocated by {fmt(Math.abs(remaining))}</p>
-          )}
-        </div>
+        {remaining < 0 && (
+          <p className="text-xs text-red-500 dark:text-red-400 text-center mt-2">Over-allocated by {fmt(Math.abs(remaining))}</p>
+        )}
       </div>
     </div>
   )
