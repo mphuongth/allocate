@@ -9,12 +9,11 @@ function isNavStale(updatedAt: string): boolean {
   return diffDays > 1
 }
 
-function calcProjectedInterest(amount: number, rate: number | null, investmentDate: string): number {
+function calcProjectedInterest(amount: number, rate: number | null, investmentDate: string, expiryDate?: string | null): number {
   if (!rate) return 0
-  const months = Math.max(0, Math.floor(
-    (Date.now() - new Date(investmentDate).getTime()) / (1000 * 60 * 60 * 24 * 30.44)
-  ))
-  return amount * Math.pow(1 + rate / 100 / 12, months) - amount
+  const endMs = expiryDate ? Math.min(Date.now(), new Date(expiryDate).getTime()) : Date.now()
+  const days = Math.max(0, (endMs - new Date(investmentDate).getTime()) / 86400000)
+  return amount * Math.pow(1 + rate / 100, days / 365) - amount
 }
 
 function insuranceStatus(paymentDate: string | null): 'on_track' | 'upcoming' | 'overdue' | 'completed' {
@@ -43,7 +42,7 @@ export async function GET() {
       .eq('user_id', user.id),
     supabase
       .from('investment_transactions')
-      .select('goal_id, amount_vnd, interest_rate, investment_date, asset_type, units, unit_price, fund_id, funds(id, name, nav, updated_at)')
+      .select('goal_id, amount_vnd, interest_rate, investment_date, asset_type, units, unit_price, fund_id, expiry_date, funds(id, name, nav, updated_at)')
       .eq('user_id', user.id),
     supabase
       .from('insurance_members')
@@ -135,9 +134,12 @@ export async function GET() {
 
   // Track unallocated non-fund totals
   let unallocatedNonFundValue = 0
-  let unallocatedNonFundInvested = 0
   let totalAssets = 0
   let totalInvestedGlobal = 0
+
+  const unallocatedNonFunds: {
+    type: string; amount: number; currentValue: number; interestRate: number | null; expiryDate: string | null; investmentDate: string
+  }[] = []
 
   for (const tx of allTxs) {
     if (tx.asset_type === 'fund' && tx.units) {
@@ -166,7 +168,7 @@ export async function GET() {
       }
     } else {
       // bank / stock / gold
-      const interest = calcProjectedInterest(tx.amount_vnd, tx.interest_rate, tx.investment_date)
+      const interest = calcProjectedInterest(tx.amount_vnd, tx.interest_rate, tx.investment_date, (tx as { expiry_date?: string | null }).expiry_date)
       const currentValue = tx.amount_vnd + interest
 
       totalAssets += currentValue
@@ -178,7 +180,15 @@ export async function GET() {
         goalEntry.currentValue += currentValue
       } else {
         unallocatedNonFundValue += currentValue
-        unallocatedNonFundInvested += tx.amount_vnd
+        const expiryDate = (tx as { expiry_date?: string | null }).expiry_date ?? null
+        unallocatedNonFunds.push({
+          type: tx.asset_type,
+          amount: tx.amount_vnd,
+          currentValue,
+          interestRate: tx.interest_rate ?? null,
+          expiryDate,
+          investmentDate: tx.investment_date,
+        })
       }
     }
   }
@@ -289,6 +299,7 @@ export async function GET() {
     unallocated: {
       totalValue: unallocatedFundValue + unallocatedNonFundValue,
       funds: unallocatedFunds,
+      nonFunds: unallocatedNonFunds,
     },
     insurance: insuranceOutput,
   })

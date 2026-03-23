@@ -1,16 +1,23 @@
-import type { FundBreakdownItem } from '../DashboardClient'
+import type { FundBreakdownItem, NonFundUnallocatedItem } from '../DashboardClient'
 
 const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
 const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`
 
+const TYPE_COLORS: Record<string, string> = {
+  bank: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+  stock: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+  gold: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+}
+
 interface Props {
   unallocatedAmount: number
   funds: FundBreakdownItem[]
+  nonFunds: NonFundUnallocatedItem[]
   onFundClick: (fundId: string) => void
   onAssignToGoal: (fundId: string) => void
 }
 
-export default function UnallocatedSection({ unallocatedAmount, funds, onFundClick, onAssignToGoal }: Props) {
+export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds, onFundClick, onAssignToGoal }: Props) {
   return (
     <section>
       <div className="flex items-center justify-between mb-4">
@@ -18,6 +25,7 @@ export default function UnallocatedSection({ unallocatedAmount, funds, onFundCli
         <span className="text-sm text-gray-500 dark:text-gray-400">Total: {fmt(unallocatedAmount)}</span>
       </div>
       <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+        {/* Fund items */}
         {funds.map((fund) => (
           <div
             key={fund.fundId}
@@ -48,6 +56,76 @@ export default function UnallocatedSection({ unallocatedAmount, funds, onFundCli
             </div>
           </div>
         ))}
+
+        {/* Non-fund items grouped by type */}
+        {nonFunds.length > 0 && (
+          <div className={funds.length > 0 ? 'border-t border-gray-100 dark:border-gray-700' : ''}>
+            {(['bank', 'stock', 'gold'] as const).map((type) => {
+              const items = nonFunds.filter((i) => i.type === type)
+              if (!items.length) return null
+
+              const groupTotal = items.reduce((s, i) => s + i.currentValue, 0)
+              const groupInvested = items.reduce((s, i) => s + i.amount, 0)
+              const groupPL = groupTotal - groupInvested
+              const groupPLPct = groupInvested > 0 ? (groupPL / groupInvested) * 100 : 0
+
+              return (
+                <div key={type}>
+                  {/* Group header */}
+                  <div className="flex items-center justify-between px-5 py-3 bg-gray-50 dark:bg-gray-800/50">
+                    <div className="flex items-center gap-2">
+                      <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${TYPE_COLORS[type] ?? 'bg-gray-100 text-gray-700'}`}>
+                        {type.charAt(0).toUpperCase() + type.slice(1)}
+                      </span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">{items.length} {items.length === 1 ? 'item' : 'items'}</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{fmt(groupTotal)}</span>
+                      <span className={`ml-2 text-xs ${groupPL >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {fmtPct(groupPLPct)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Individual items */}
+                  {items.map((item, idx) => {
+                    const pl = item.currentValue - item.amount
+                    const plPct = item.amount > 0 ? (pl / item.amount) * 100 : 0
+                    return (
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between px-5 py-3 border-t border-gray-50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-800"
+                      >
+                        <div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            {new Date(item.investmentDate).toLocaleDateString('vi-VN')}
+                            {item.interestRate != null && (
+                              <span className="ml-2 text-blue-600 dark:text-blue-400">{item.interestRate}%/yr</span>
+                            )}
+                            {item.expiryDate && (
+                              <span className="ml-2 text-gray-400 dark:text-gray-500">
+                                exp {new Date(item.expiryDate).toLocaleDateString('vi-VN')}
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+                            Invested: {fmt(item.amount)}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{fmt(item.currentValue)}</p>
+                          <p className={`text-xs ${pl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {pl >= 0 ? '+' : ''}{fmt(pl)} ({fmtPct(plPct)})
+                          </p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
     </section>
   )
