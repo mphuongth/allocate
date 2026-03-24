@@ -313,7 +313,7 @@ export default function FundLibraryClient() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">
-                        <span>{fund.nav.toLocaleString()}</span>
+                        <span>{fund.nav.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         {fund.nav_source_url && fund.updated_at && (
                           <span className="text-xs text-gray-400 ml-1">{formatRelativeDate(fund.updated_at)}</span>
                         )}
@@ -354,7 +354,7 @@ export default function FundLibraryClient() {
                     </span>
                   </div>
                   <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">
-                    NAV: <span className="font-medium">{fund.nav.toLocaleString()}</span>
+                    NAV: <span className="font-medium">{fund.nav.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     {fund.nav_source_url && fund.updated_at && (
                       <span className="text-xs text-gray-400 ml-1">{formatRelativeDate(fund.updated_at)}</span>
                     )}
