@@ -75,7 +75,7 @@ export default function FundDetailModal({
             </div>
             <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
               <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">Avg Entry Price</p>
-              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{fmtNav(purchasePrice)}</p>
+              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{fmt(purchasePrice)}</p>
             </div>
           </div>
 
