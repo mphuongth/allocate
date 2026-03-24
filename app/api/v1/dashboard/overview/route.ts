@@ -126,6 +126,7 @@ export async function GET() {
     fundName: string
     totalUnits: number
     totalInvested: number
+    totalNavCost: number   // Σ(units × unit_price) — excludes fees, used for Avg Entry Price
     currentNAV: number
     navUpdatedAt: string
     goalId: string | null
@@ -155,12 +156,14 @@ export async function GET() {
       if (existing) {
         existing.totalUnits += tx.units
         existing.totalInvested += tx.amount_vnd
+        existing.totalNavCost += tx.units * (tx.unit_price ?? 0)
       } else {
         fundAccumMap.set(key, {
           fundId: fund.id,
           fundName: fund.name,
           totalUnits: tx.units,
           totalInvested: tx.amount_vnd,
+          totalNavCost: tx.units * (tx.unit_price ?? 0),
           currentNAV: fund.nav,
           navUpdatedAt: fund.updated_at,
           goalId: tx.goal_id ?? null,
@@ -204,7 +207,7 @@ export async function GET() {
     const currentValue = acc.currentNAV * acc.totalUnits
     const profitLoss = currentValue - acc.totalInvested
     const profitLossPercentage = acc.totalInvested > 0 ? (profitLoss / acc.totalInvested) * 100 : 0
-    const purchasePrice = acc.totalUnits > 0 ? acc.totalInvested / acc.totalUnits : 0
+    const purchasePrice = acc.totalUnits > 0 ? acc.totalNavCost / acc.totalUnits : 0
 
     totalAssets += currentValue
     totalInvestedGlobal += acc.totalInvested
