@@ -1,6 +1,7 @@
 import type { FundBreakdownItem, NonFundUnallocatedItem } from '../DashboardClient'
 
 const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
+const fmtNav = (n: number) => '₫ ' + n.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`
 
 const TYPE_COLORS: Record<string, string> = {
@@ -37,7 +38,7 @@ export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds,
             >
               <p className="font-medium text-gray-900 dark:text-gray-100 text-sm">{fund.fundName}</p>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                {fund.quantity} units · NAV {fmt(fund.currentNAV)}
+                {fund.quantity} units · NAV {fmtNav(fund.currentNAV)}
               </p>
             </button>
             <div className="flex items-center gap-4 ml-4">
