@@ -140,8 +140,8 @@ export default function DashboardClient() {
       if (res.ok) {
         const items = await res.json()
         setPurchaseHistory(
-          (items as Array<{ nav_at_purchase: number; units_purchased: number; created_at: string }>)
-            .map((i) => ({ purchase_date: i.created_at, units: i.units_purchased, nav_at_purchase: i.nav_at_purchase }))
+          (items as Array<{ nav_at_purchase: number; units_purchased: number; investment_date: string | null; created_at: string }>)
+            .map((i) => ({ purchase_date: i.investment_date ?? i.created_at, units: i.units_purchased, nav_at_purchase: i.nav_at_purchase }))
             .sort((a, b) => new Date(b.purchase_date).getTime() - new Date(a.purchase_date).getTime())
         )
       }
