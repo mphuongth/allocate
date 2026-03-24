@@ -38,7 +38,7 @@ export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds,
             >
               <p className="font-medium text-gray-900 dark:text-gray-100 text-sm">{fund.fundName}</p>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                {fund.quantity} units · NAV {fmtNav(fund.currentNAV)}
+                {fund.quantity.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} units · NAV {fmtNav(fund.currentNAV)}
               </p>
             </button>
             <div className="flex items-center gap-4 ml-4">

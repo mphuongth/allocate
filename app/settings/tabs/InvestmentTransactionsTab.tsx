@@ -56,6 +56,33 @@ function calcCurrentValue(tx: Transaction): number {
 const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
 const fmtNav = (n: number) => '₫ ' + n.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
+interface ParsedRow {
+  investment_date: string
+  amount_vnd: number
+  unit_price: number
+  units: number
+  error?: string
+}
+
+function parseExcelPaste(raw: string): ParsedRow[] {
+  return raw.trim().split('\n')
+    .map(line => line.split('\t'))
+    .filter(cols => cols.length >= 5)
+    .map(cols => {
+      const parts = cols[0].trim().split('/')
+      const m = parts[0], y = parts[1]
+      const investment_date = y && m ? `${y}-${m.padStart(2, '0')}-01` : ''
+      const parseNum = (s: string) => parseFloat(s.replace(/,/g, '').trim())
+      const amount_vnd = parseNum(cols[1])
+      // cols[2] = Tiền mua — skip
+      const unit_price = parseNum(cols[3])
+      const units = parseNum(cols[4])
+      const error = (!investment_date || isNaN(amount_vnd) || isNaN(unit_price) || isNaN(units))
+        ? 'Cannot parse row' : undefined
+      return { investment_date, amount_vnd, unit_price, units, error }
+    })
+}
+
 interface AppliedFilters { asset_type: string; goal_id: string; from_date: string; to_date: string }
 const EMPTY_FILTERS: AppliedFilters = { asset_type: '', goal_id: '', from_date: '', to_date: '' }
 
@@ -90,6 +117,13 @@ export default function InvestmentTransactionsTab() {
   const [formMode, setFormMode] = useState<'add' | 'edit' | null>(null)
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
+
+  const [showImport, setShowImport] = useState(false)
+  const [importFundId, setImportFundId] = useState('')
+  const [importRaw, setImportRaw] = useState('')
+  const [importRows, setImportRows] = useState<ParsedRow[]>([])
+  const [importing, setImporting] = useState(false)
+  const [importToast, setImportToast] = useState('')
 
   const fetchGoals = useCallback(async () => {
     const res = await fetch('/api/v1/savings-goals')
@@ -207,6 +241,41 @@ export default function InvestmentTransactionsTab() {
     setSaving(false)
   }
 
+  function handleImportPaste(raw: string) {
+    setImportRaw(raw)
+    setImportRows(raw.trim() ? parseExcelPaste(raw) : [])
+  }
+
+  async function handleImport() {
+    const validRows = importRows.filter((r) => !r.error)
+    if (!importFundId || validRows.length === 0) return
+    setImporting(true)
+    const res = await fetch('/api/v1/investment-transactions/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        transactions: validRows.map((r) => ({
+          fund_id: importFundId,
+          investment_date: r.investment_date,
+          amount_vnd: r.amount_vnd,
+          unit_price: r.unit_price,
+          units: r.units,
+        })),
+      }),
+    })
+    setImporting(false)
+    if (res.ok) {
+      const { inserted } = await res.json()
+      setShowImport(false)
+      setImportRaw('')
+      setImportRows([])
+      setImportFundId('')
+      setImportToast(`Imported ${inserted} transactions`)
+      setTimeout(() => setImportToast(''), 4000)
+      await fetchTransactions()
+    }
+  }
+
   async function handleDelete(tx: Transaction) {
     if (!confirm('Delete this transaction?')) return
     const res = await fetch(`/api/v1/investment-transactions/${tx.transaction_id}`, { method: 'DELETE' })
@@ -221,6 +290,12 @@ export default function InvestmentTransactionsTab() {
         <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Investment Transactions</h2>
         <div className="flex items-center gap-3">
           <span className="text-sm text-gray-500 dark:text-gray-400">{total} total</span>
+          <button
+            onClick={() => { setShowImport(true); setImportRaw(''); setImportRows([]); setImportFundId('') }}
+            className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
+          >
+            ↑ Import from Excel
+          </button>
           <button
             onClick={openAdd}
             className="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
@@ -349,6 +424,113 @@ export default function InvestmentTransactionsTab() {
           </div>
         )}
       </div>
+
+      {/* Toast */}
+      {importToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2.5 rounded-lg shadow-lg z-50">
+          {importToast}
+        </div>
+      )}
+
+      {/* Import from Excel Modal */}
+      {showImport && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+              <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Import from Excel</h3>
+              <button
+                onClick={() => setShowImport(false)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="px-6 py-5 space-y-4 overflow-y-auto flex-1">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Fund</label>
+                <select
+                  value={importFundId}
+                  onChange={(e) => setImportFundId(e.target.value)}
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">Select fund…</option>
+                  {funds.map((f) => (
+                    <option key={f.id} value={f.id}>{f.code} - {f.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                  Paste rows from Excel
+                </label>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">
+                  Column order: Tháng | Tiền chuyển | Tiền mua (skip) | NAV mua | CCQ mua
+                </p>
+                <textarea
+                  value={importRaw}
+                  onChange={(e) => handleImportPaste(e.target.value)}
+                  rows={6}
+                  placeholder={"7/2023\t10,000,000\t9,876,543\t23,375.28\t42.78\n8/2023\t10,000,000\t9,876,543\t24,100.00\t40.98"}
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm font-mono bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                />
+              </div>
+
+              {importRows.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                    Preview — {importRows.filter((r) => !r.error).length} valid / {importRows.length} rows
+                  </p>
+                  <div className="overflow-x-auto rounded-lg border border-gray-100 dark:border-gray-700">
+                    <table className="w-full text-xs">
+                      <thead className="bg-gray-50 dark:bg-gray-800">
+                        <tr>
+                          {['Date', 'Amount (₫)', 'NAV', 'Units', 'Status'].map((h) => (
+                            <th key={h} className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
+                        {importRows.map((row, i) => (
+                          <tr key={i} className={row.error ? 'bg-red-50 dark:bg-red-900/10' : ''}>
+                            <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{row.investment_date || '—'}</td>
+                            <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{isNaN(row.amount_vnd) ? '—' : Math.round(row.amount_vnd).toLocaleString('vi-VN')}</td>
+                            <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{isNaN(row.unit_price) ? '—' : row.unit_price.toLocaleString('vi-VN')}</td>
+                            <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{isNaN(row.units) ? '—' : row.units}</td>
+                            <td className="px-3 py-2">
+                              {row.error
+                                ? <span className="text-red-500 dark:text-red-400">{row.error}</span>
+                                : <span className="text-green-600 dark:text-green-400">✓</span>
+                              }
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700">
+              <button
+                onClick={() => setShowImport(false)}
+                className="flex-1 px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleImport}
+                disabled={importing || !importFundId || importRows.filter((r) => !r.error).length === 0}
+                className="flex-1 px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {importing ? 'Importing…' : `Import ${importRows.filter((r) => !r.error).length} transactions`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add/Edit Modal */}
       {formMode && (
