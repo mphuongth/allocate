@@ -54,7 +54,6 @@ function calcCurrentValue(tx: Transaction): number {
 }
 
 const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
-const fmtNav = (n: number) => '₫ ' + n.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 interface AppliedFilters { asset_type: string; goal_id: string; from_date: string; to_date: string }
 const EMPTY_FILTERS: AppliedFilters = { asset_type: '', goal_id: '', from_date: '', to_date: '' }
@@ -289,7 +288,7 @@ export default function InvestmentTransactionsTab() {
                 {transactions.map((tx) => {
                   const currentValue = calcCurrentValue(tx)
                   const rateOrNav = tx.asset_type === 'fund'
-                    ? (tx.unit_price != null ? fmtNav(tx.unit_price) : '—')
+                    ? (tx.unit_price != null ? fmt(tx.unit_price) : '—')
                     : (tx.interest_rate != null ? `${tx.interest_rate}%` : '—')
                   return (
                     <tr key={tx.transaction_id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
