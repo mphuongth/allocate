@@ -75,13 +75,16 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
 
   const fetchData = useCallback(async () => {
     setLoading(true)
-    const [txRes, fundsRes] = await Promise.all([
+    const [txRes, fundsRes, goldPriceRes] = await Promise.all([
       fetch(`/api/v1/investment-transactions?goal_id=${goal.goal_id}&limit=1000`),
       fetch('/api/funds'),
+      fetch('/api/v1/gold-price'),
     ])
 
     const { transactions: txs } = txRes.ok ? await txRes.json() : { transactions: [] }
     const { funds: allFunds } = fundsRes.ok ? await fundsRes.json() : { funds: [] }
+    const goldPriceData = goldPriceRes.ok ? await goldPriceRes.json() : null
+    const goldPricePerChi: number | null = goldPriceData?.price_per_chi ?? null
 
     const fundMap: Record<string, Fund> = {}
     for (const f of (allFunds ?? [])) fundMap[f.id] = f
@@ -97,6 +100,8 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
         const fund = Array.isArray(tx.funds) ? tx.funds[0] : tx.funds
         const currentNav = fund?.nav ?? tx.unit_price ?? 0
         currentValue = tx.units * currentNav
+      } else if (tx.asset_type === 'gold' && goldPricePerChi && tx.units) {
+        currentValue = tx.units * goldPricePerChi
       } else {
         const interest = calcProjectedInterest(tx.amount_vnd, tx.interest_rate, tx.investment_date, tx.expiry_date)
         currentValue = tx.amount_vnd + interest
