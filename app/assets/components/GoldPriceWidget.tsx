@@ -60,7 +60,7 @@ export default function GoldPriceWidget({ onRefresh }: Props) {
   return (
     <div className="flex items-center justify-between px-5 py-3 bg-amber-50 dark:bg-amber-900/10 border-b border-amber-100 dark:border-amber-800/30">
       <div className="flex items-center gap-2 min-w-0">
-        <span className="text-amber-600 dark:text-amber-400 text-sm">Giá vàng SJC (Doji)</span>
+        <span className="text-amber-600 dark:text-amber-400 text-sm">Giá vàng Doji</span>
         {priceData ? (
           <span className="font-semibold text-amber-800 dark:text-amber-200 text-sm">
             {fmt(priceData.price_per_chi)} / chỉ

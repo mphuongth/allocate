@@ -18,10 +18,11 @@ async function scrapeDoji(): Promise<number> {
     },
   }).then((r) => r.text())
 
-  // Page table: <td>SJC - Bán Lẻ</td><td>BUY</td><td>SELL</td>
+  // Page table: <td>NHẪN TRÒN 9999</td><td>BUY</td><td>SELL</td>
+  // Doji's own ring gold (NHẪN TRÒN 9999) — different from SJC pricing
   // Price unit on page: nghìn VND/chỉ — multiply by 1000 to get VND/chỉ
-  const match = html.match(/SJC[\s\S]{0,300}?<td[^>]*>([\d.,]+)<\/td>/)
-  if (!match) throw new Error('Doji: SJC price row not found')
+  const match = html.match(/NHẪN TRÒN[\s\S]{0,300}?<td[^>]*>([\d.,]+)<\/td>/)
+  if (!match) throw new Error('Doji: NHẪN TRÒN price row not found')
 
   const raw = parseVietnameseNumber(match[1])
   if (isNaN(raw) || raw <= 0) throw new Error('Doji: invalid price value')
