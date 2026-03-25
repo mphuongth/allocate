@@ -8,10 +8,10 @@ import FixedExpensesTab from './tabs/FixedExpensesTab'
 import InsuranceMembersTab from './tabs/InsuranceMembersTab'
 
 const TABS = [
-  { id: 'goals', label: 'Savings Goals' },
-  { id: 'transactions', label: 'Investment Transactions' },
-  { id: 'expenses', label: 'Fixed Expenses' },
-  { id: 'insurance', label: 'Insurance Members' },
+  { id: 'goals', label: 'Mục tiêu Tiết kiệm' },
+  { id: 'transactions', label: 'Giao dịch Đầu tư' },
+  { id: 'expenses', label: 'Chi phí Cố định' },
+  { id: 'insurance', label: 'Thành viên Bảo hiểm' },
 ] as const
 
 type TabId = typeof TABS[number]['id']
@@ -46,8 +46,8 @@ export default function SettingsClient({ initialTab, initialGoalId }: Props) {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <div className="max-w-6xl mx-auto px-4 py-8">
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Settings</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage your savings goals, investments, expenses, and insurance.</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Cài đặt</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Quản lý mục tiêu tiết kiệm, đầu tư, chi phí và bảo hiểm.</p>
         </div>
 
         {/* Tabs */}

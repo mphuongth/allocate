@@ -88,7 +88,7 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (!session && event !== 'INITIAL_SESSION' && event !== 'SIGNED_OUT') {
-        toast.error('Session expired. Please log in again.', { duration: 5000 })
+        toast.error('Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.', { duration: 5000 })
         router.push('/auth/login')
       }
     })
@@ -101,7 +101,7 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-4 border-brand border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm text-gray-500 dark:text-gray-400">Loading...</span>
+          <span className="text-sm text-gray-500 dark:text-gray-400">Đang tải...</span>
         </div>
       </div>
     )

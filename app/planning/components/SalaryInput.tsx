@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react'
 import type { MonthlyPlan } from '../PlanningClient'
 
-const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
+const MONTHS = ['Tháng 1','Tháng 2','Tháng 3','Tháng 4','Tháng 5','Tháng 6','Tháng 7','Tháng 8','Tháng 9','Tháng 10','Tháng 11','Tháng 12']
 
 interface Props {
   plan: MonthlyPlan | null
@@ -30,7 +30,7 @@ export default function SalaryInput({ plan, month, year, onPlanCreated, onPlanDe
   async function saveSalary() {
     const num = Number(value)
     if (!value || isNaN(num) || num <= 0) {
-      setError('Salary must be positive')
+      setError('Lương phải lớn hơn 0')
       return
     }
     setError('')
@@ -45,7 +45,7 @@ export default function SalaryInput({ plan, month, year, onPlanCreated, onPlanDe
         })
         if (!res.ok) {
           const { error: e } = await res.json()
-          setError(e ?? 'Something went wrong. Please try again later.')
+          setError(e ?? 'Đã xảy ra lỗi. Vui lòng thử lại sau.')
         }
       } else {
         const res = await fetch('/api/v1/monthly-plans', {
@@ -58,11 +58,11 @@ export default function SalaryInput({ plan, month, year, onPlanCreated, onPlanDe
           onPlanCreated(newPlan)
         } else {
           const { error: e } = await res.json()
-          setError(e ?? 'Something went wrong. Please try again later.')
+          setError(e ?? 'Đã xảy ra lỗi. Vui lòng thử lại sau.')
         }
       }
     } catch {
-      setError('Unable to save. Please check your connection and try again.')
+      setError('Không thể lưu. Vui lòng kiểm tra kết nối và thử lại.')
     }
     setSaving(false)
   }
@@ -77,10 +77,10 @@ export default function SalaryInput({ plan, month, year, onPlanCreated, onPlanDe
         onPlanDeleted()
       } else {
         const { error: e } = await res.json()
-        setError(e ?? 'Failed to delete. Please try again.')
+        setError(e ?? 'Xóa thất bại. Vui lòng thử lại.')
       }
     } catch {
-      setError('Unable to delete. Please check your connection and try again.')
+      setError('Không thể xóa. Vui lòng kiểm tra kết nối và thử lại.')
     }
     setDeleting(false)
   }
@@ -92,7 +92,7 @@ export default function SalaryInput({ plan, month, year, onPlanCreated, onPlanDe
   return (
     <>
       <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-5">
-        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Monthly Salary (VND)</label>
+        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Lương Tháng (VND)</label>
         {error && <p className="text-red-600 dark:text-red-400 text-sm mb-2">{error}</p>}
         <div className="flex items-center gap-3">
           <div className="relative flex-1">
@@ -104,7 +104,7 @@ export default function SalaryInput({ plan, month, year, onPlanCreated, onPlanDe
               onBlur={saveSalary}
               onKeyDown={handleKeyDown}
               disabled={saving}
-              placeholder="Enter your monthly salary to begin planning"
+              placeholder="Nhập lương tháng để bắt đầu lập kế hoạch"
               className="w-full pl-7 pr-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60"
             />
           </div>
@@ -120,7 +120,7 @@ export default function SalaryInput({ plan, month, year, onPlanCreated, onPlanDe
               {deleting ? (
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
               ) : (
-                'Delete'
+                'Xóa'
               )}
             </button>
           )}
@@ -132,24 +132,24 @@ export default function SalaryInput({ plan, month, year, onPlanCreated, onPlanDe
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/40" onClick={() => setShowConfirm(false)} />
           <div className="relative bg-white dark:bg-gray-900 rounded-xl shadow-xl p-6 w-full max-w-sm mx-4 border border-gray-100 dark:border-gray-700">
-            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">Delete salary record?</h2>
+            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">Xóa bản ghi lương?</h2>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">
-              This will permanently delete the salary record for{' '}
+              Thao tác này sẽ xóa vĩnh viễn bản ghi lương của{' '}
               <span className="font-medium text-gray-700 dark:text-gray-300">{MONTHS[month - 1]} {year}</span>{' '}
-              and all associated allocations. This action cannot be undone.
+              và tất cả các phân bổ liên quan. Hành động này không thể hoàn tác.
             </p>
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setShowConfirm(false)}
                 className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700"
               >
-                Cancel
+                Hủy
               </button>
               <button
                 onClick={confirmDelete}
                 className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
               >
-                Delete
+                Xóa
               </button>
             </div>
           </div>

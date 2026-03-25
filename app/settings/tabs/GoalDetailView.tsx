@@ -39,6 +39,13 @@ const ASSET_COLORS: Record<string, string> = {
   gold: 'bg-amber-100 text-amber-700',
 }
 
+const ASSET_LABELS: Record<string, string> = {
+  fund: 'Quỹ',
+  bank: 'Ngân hàng',
+  stock: 'Cổ phiếu',
+  gold: 'Vàng',
+}
+
 function calcProjectedInterest(amount: number, rate: number | null, investmentDate: string, expiryDate?: string | null): number {
   if (!rate) return 0
   const endMs = expiryDate ? Math.min(Date.now(), new Date(expiryDate).getTime()) : Date.now()
@@ -144,8 +151,8 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
 
   async function handleTxSave() {
     setFormError('')
-    if (!txForm.amount_vnd || Number(txForm.amount_vnd) <= 0) { setFormError('Amount must be greater than 0.'); return }
-    if (!txForm.investment_date) { setFormError('Investment date is required.'); return }
+    if (!txForm.amount_vnd || Number(txForm.amount_vnd) <= 0) { setFormError('Số tiền phải lớn hơn 0.'); return }
+    if (!txForm.investment_date) { setFormError('Ngày đầu tư là bắt buộc.'); return }
     const payload = {
       goal_id: goal.goal_id,
       asset_type: txForm.asset_type,
@@ -161,15 +168,15 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
     setSaving(true)
     const url = editTx ? `/api/v1/investment-transactions/${editTx.transaction_id}` : '/api/v1/investment-transactions'
     const res = await fetch(url, { method: editTx ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-    if (!res.ok) { const { error } = await res.json(); setFormError(error ?? 'Something went wrong.') }
+    if (!res.ok) { const { error } = await res.json(); setFormError(error ?? 'Đã xảy ra lỗi.') }
     else { setFormMode(null); await fetchData() }
     setSaving(false)
   }
 
   async function handleTxDelete(row: TxRow) {
-    if (!confirm('Delete this transaction?')) return
+    if (!confirm('Xóa giao dịch này?')) return
     const res = await fetch(`/api/v1/investment-transactions/${row.transaction_id}`, { method: 'DELETE' })
-    if (res.ok) { setSuccessMsg('Transaction deleted.'); setTimeout(() => setSuccessMsg(''), 4000); await fetchData() }
+    if (res.ok) { setSuccessMsg('Đã xóa giao dịch.'); setTimeout(() => setSuccessMsg(''), 4000); await fetchData() }
   }
 
   // --- Fund investment handlers ---
@@ -195,10 +202,10 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
 
   async function handleFiSave() {
     setFormError('')
-    if (!fiForm.fund_id) { setFormError('Please select a fund.'); return }
-    if (!fiForm.amount_vnd || Number(fiForm.amount_vnd) <= 0) { setFormError('Amount must be greater than 0.'); return }
-    if (!fiForm.units || Number(fiForm.units) <= 0) { setFormError('Units must be greater than 0.'); return }
-    if (!fiForm.unit_price || Number(fiForm.unit_price) <= 0) { setFormError('NAV at purchase must be positive.'); return }
+    if (!fiForm.fund_id) { setFormError('Vui lòng chọn quỹ.'); return }
+    if (!fiForm.amount_vnd || Number(fiForm.amount_vnd) <= 0) { setFormError('Số tiền phải lớn hơn 0.'); return }
+    if (!fiForm.units || Number(fiForm.units) <= 0) { setFormError('Số CCQ phải lớn hơn 0.'); return }
+    if (!fiForm.unit_price || Number(fiForm.unit_price) <= 0) { setFormError('NAV khi mua phải dương.'); return }
 
     const payload = {
       asset_type: 'fund',
@@ -212,16 +219,16 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
     setSaving(true)
     const url = editTx ? `/api/v1/investment-transactions/${editTx.transaction_id}` : '/api/v1/investment-transactions'
     const res = await fetch(url, { method: editTx ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-    if (!res.ok) { const { error } = await res.json(); setFormError(error ?? 'Something went wrong.') }
+    if (!res.ok) { const { error } = await res.json(); setFormError(error ?? 'Đã xảy ra lỗi.') }
     else { setFormMode(null); await fetchData() }
     setSaving(false)
   }
 
   async function handleFiDelete(row: TxRow) {
-    if (!confirm('Delete this fund investment?')) return
+    if (!confirm('Xóa khoản đầu tư quỹ này?')) return
     const res = await fetch(`/api/v1/investment-transactions/${row.transaction_id}`, { method: 'DELETE' })
     if (res.ok) {
-      setSuccessMsg('Investment deleted.')
+      setSuccessMsg('Đã xóa khoản đầu tư.')
       setTimeout(() => setSuccessMsg(''), 4000)
       await fetchData()
     }
@@ -237,7 +244,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
   return (
     <div>
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={onBack} className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium">← Back</button>
+        <button onClick={onBack} className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium">← Quay lại</button>
         <div>
           <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">{goal.goal_name}</h2>
           {goal.description && <p className="text-sm text-gray-500 dark:text-gray-400">{goal.description}</p>}
@@ -252,7 +259,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
       {goal.target_amount != null && (
         <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 mb-6">
           <div className="flex items-center justify-between text-sm mb-2">
-            <span className="font-medium text-gray-700 dark:text-gray-300">Goal Progress</span>
+            <span className="font-medium text-gray-700 dark:text-gray-300">Tiến độ Mục tiêu</span>
             <span className="text-gray-500 dark:text-gray-400">
               {fmt(totalCurrentValue)} / {fmt(goal.target_amount)}
             </span>
@@ -271,8 +278,8 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                 <div className="flex items-center justify-between mt-1.5 text-xs text-gray-400 dark:text-gray-500">
                   <span>{Math.round(pct)}%</span>
                   {exceeded
-                    ? <span className="text-green-600 dark:text-green-400 font-medium">Target reached!</span>
-                    : <span>{fmt(goal.target_amount! - totalCurrentValue)} remaining</span>
+                    ? <span className="text-green-600 dark:text-green-400 font-medium">Đã đạt mục tiêu!</span>
+                    : <span>{fmt(goal.target_amount! - totalCurrentValue)} còn lại</span>
                   }
                 </div>
               </>
@@ -284,13 +291,13 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
       {/* Summary */}
       <div className="grid grid-cols-3 gap-4 mb-6">
         {[
-          { label: 'Total Current Value', value: fmt(totalCurrentValue) },
-          { label: 'Total Invested', value: fmt(totalInvested) },
-          { label: 'Total Gain / Loss', value: fmt(totalGain) },
+          { label: 'Giá trị Hiện tại', value: fmt(totalCurrentValue) },
+          { label: 'Tổng Đầu tư', value: fmt(totalInvested) },
+          { label: 'Lãi / Lỗ', value: fmt(totalGain) },
         ].map((item) => (
           <div key={item.label} className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 text-center">
             <p className="text-xs text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wide mb-1">{item.label}</p>
-            <p className={`text-xl font-bold ${item.label === 'Total Gain / Loss' ? (totalGain >= 0 ? 'text-green-600' : 'text-red-600') : 'text-indigo-700 dark:text-indigo-300'}`}>
+            <p className={`text-xl font-bold ${item.label === 'Lãi / Lỗ' ? (totalGain >= 0 ? 'text-green-600' : 'text-red-600') : 'text-indigo-700 dark:text-indigo-300'}`}>
               {item.value}
             </p>
           </div>
@@ -301,24 +308,24 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
       <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden mb-4">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
           <div>
-            <h3 className="font-semibold text-gray-900 dark:text-gray-100">Fund Investments</h3>
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">From Settings and Monthly Planning</p>
+            <h3 className="font-semibold text-gray-900 dark:text-gray-100">Đầu tư Quỹ</h3>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Từ Cài đặt và Kế hoạch Tháng</p>
           </div>
           <button onClick={openFiAdd} className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700">
-            Add Fund Investment
+            Thêm Đầu tư Quỹ
           </button>
         </div>
 
         {loading ? (
-          <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">Loading...</div>
+          <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">Đang tải...</div>
         ) : fundRows.length === 0 ? (
-          <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">No fund investments yet.</div>
+          <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">Chưa có đầu tư quỹ nào.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 dark:bg-gray-800">
                 <tr>
-                  {['Date', 'Fund', 'Amount', 'Units', 'NAV at Purchase', 'Current NAV', 'Current Value', 'P&L', 'Actions'].map((h) => (
+                  {['Ngày', 'Quỹ', 'Số tiền', 'CCQ', 'NAV khi Mua', 'NAV Hiện tại', 'Giá trị Hiện tại', 'Lãi/Lỗ', 'Thao tác'].map((h) => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">{h}</th>
                   ))}
                 </tr>
@@ -340,8 +347,8 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                       <td className={`px-4 py-3 font-medium ${pl >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt(pl)}</td>
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
-                          <button onClick={() => openFiEdit(row)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">Edit</button>
-                          <button onClick={() => handleFiDelete(row)} className="text-xs text-red-500 dark:text-red-400 hover:underline">Delete</button>
+                          <button onClick={() => openFiEdit(row)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">Sửa</button>
+                          <button onClick={() => handleFiDelete(row)} className="text-xs text-red-500 dark:text-red-400 hover:underline">Xóa</button>
                         </div>
                       </td>
                     </tr>
@@ -357,24 +364,24 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
       <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
           <div>
-            <h3 className="font-semibold text-gray-900 dark:text-gray-100">Other Transactions</h3>
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Bank deposits, stocks, gold</p>
+            <h3 className="font-semibold text-gray-900 dark:text-gray-100">Giao dịch Khác</h3>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Tiết kiệm ngân hàng, cổ phiếu, vàng</p>
           </div>
           <button onClick={openTxAdd} className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700">
-            Add Transaction
+            Thêm Giao dịch
           </button>
         </div>
 
         {loading ? (
-          <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">Loading...</div>
+          <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">Đang tải...</div>
         ) : otherRows.length === 0 ? (
-          <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">No transactions yet.</div>
+          <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">Chưa có giao dịch nào.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 dark:bg-gray-800">
                 <tr>
-                  {['Date', 'Type', 'Amount', 'Units', 'Interest Rate', 'Gain/Loss', 'Notes', 'Actions'].map((h) => (
+                  {['Ngày', 'Loại', 'Số tiền', 'CCQ', 'Lãi suất', 'Lãi/Lỗ', 'Ghi chú', 'Thao tác'].map((h) => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">{h}</th>
                   ))}
                 </tr>
@@ -387,7 +394,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                       <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{new Date(row.investment_date).toLocaleDateString('vi-VN')}</td>
                       <td className="px-4 py-3">
                         <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${ASSET_COLORS[row.asset_type] ?? 'bg-gray-100 text-gray-700'}`}>
-                          {row.asset_type}
+                          {ASSET_LABELS[row.asset_type] ?? row.asset_type}
                         </span>
                       </td>
                       <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{fmt(row.amount_vnd)}</td>
@@ -397,8 +404,8 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                       <td className="px-4 py-3 text-gray-400 dark:text-gray-500 max-w-32 truncate">{row.notes ?? '—'}</td>
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
-                          <button onClick={() => openTxEdit(row)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">Edit</button>
-                          <button onClick={() => handleTxDelete(row)} className="text-xs text-red-500 dark:text-red-400 hover:underline">Delete</button>
+                          <button onClick={() => openTxEdit(row)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">Sửa</button>
+                          <button onClick={() => handleTxDelete(row)} className="text-xs text-red-500 dark:text-red-400 hover:underline">Xóa</button>
                         </div>
                       </td>
                     </tr>
@@ -414,48 +421,48 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
       {(formMode === 'fi-add' || formMode === 'fi-edit') && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-md p-6 border border-gray-100 dark:border-gray-700">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{formMode === 'fi-edit' ? 'Edit Fund Investment' : 'Add Fund Investment'}</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{formMode === 'fi-edit' ? 'Sửa Đầu tư Quỹ' : 'Thêm Đầu tư Quỹ'}</h3>
             {formError && <p className="text-red-600 dark:text-red-400 text-sm mb-3">{formError}</p>}
             <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fund *</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Quỹ *</label>
                 <select
                   value={fiForm.fund_id}
                   onChange={(e) => setFiForm({ ...fiForm, fund_id: e.target.value })}
                   className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
-                  <option value="">Select a fund...</option>
+                  <option value="">Chọn quỹ...</option>
                   {funds.map((f) => <option key={f.id} value={f.id}>{f.code} - {f.name}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Investment Date *</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Ngày Đầu tư *</label>
                 <input type="date" value={fiForm.investment_date} max={new Date().toISOString().slice(0, 10)}
                   onChange={(e) => setFiForm({ ...fiForm, investment_date: e.target.value })}
                   className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Amount (VND) *</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Số tiền (VND) *</label>
                 <input type="number" value={fiForm.amount_vnd} onChange={(e) => setFiForm({ ...fiForm, amount_vnd: e.target.value })}
-                  placeholder="e.g. 10000000" className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  placeholder="VD: 10000000" className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Units *</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Số CCQ *</label>
                   <input type="number" value={fiForm.units} onChange={(e) => setFiForm({ ...fiForm, units: e.target.value })}
                     className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">NAV at Purchase *</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">NAV khi Mua *</label>
                   <input type="number" value={fiForm.unit_price} onChange={(e) => setFiForm({ ...fiForm, unit_price: e.target.value })}
                     className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
               </div>
             </div>
             <div className="flex gap-3 mt-5">
-              <button onClick={() => setFormMode(null)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Cancel</button>
+              <button onClick={() => setFormMode(null)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Hủy</button>
               <button onClick={handleFiSave} disabled={saving} className="flex-1 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50">
-                {saving ? 'Saving...' : 'Save'}
+                {saving ? 'Đang lưu...' : 'Lưu'}
               </button>
             </div>
           </div>
@@ -466,63 +473,63 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
       {(formMode === 'tx-add' || formMode === 'tx-edit') && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto border border-gray-100 dark:border-gray-700">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{formMode === 'tx-edit' ? 'Edit Transaction' : 'Add Transaction'}</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{formMode === 'tx-edit' ? 'Sửa Giao dịch' : 'Thêm Giao dịch'}</h3>
             {formError && <p className="text-red-600 dark:text-red-400 text-sm mb-3">{formError}</p>}
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Asset Type *</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Loại Tài sản *</label>
                   <select value={txForm.asset_type} onChange={(e) => setTxForm({ ...txForm, asset_type: e.target.value, fund_id: '' })}
                     className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                    {['bank', 'stock', 'gold'].map((t) => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
+                    {[{ v: 'bank', l: 'Ngân hàng' }, { v: 'stock', l: 'Cổ phiếu' }, { v: 'gold', l: 'Vàng' }].map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Investment Date *</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Ngày Đầu tư *</label>
                   <input type="date" value={txForm.investment_date} max={new Date().toISOString().slice(0, 10)}
                     onChange={(e) => setTxForm({ ...txForm, investment_date: e.target.value })}
                     className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Amount (VND) *</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Số tiền (VND) *</label>
                 <input type="number" value={txForm.amount_vnd} onChange={(e) => setTxForm({ ...txForm, amount_vnd: e.target.value })}
-                  placeholder="e.g. 10000000" className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  placeholder="VD: 10000000" className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Unit Price</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Giá Đơn vị</label>
                   <input type="number" value={txForm.unit_price} onChange={(e) => setTxForm({ ...txForm, unit_price: e.target.value })}
                     className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Units</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">CCQ</label>
                   <input type="number" value={txForm.units} onChange={(e) => setTxForm({ ...txForm, units: e.target.value })}
                     className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Interest Rate (%/year)</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Lãi suất (%/năm)</label>
                 <input type="number" step="0.1" value={txForm.interest_rate} onChange={(e) => setTxForm({ ...txForm, interest_rate: e.target.value })}
-                  placeholder="e.g. 5.5" className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  placeholder="VD: 5.5" className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
               {txForm.asset_type === 'bank' && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Expiry Date</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Ngày Đáo hạn</label>
                   <input type="date" value={txForm.expiry_date} onChange={(e) => setTxForm({ ...txForm, expiry_date: e.target.value })}
                     className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
               )}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Notes</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Ghi chú</label>
                 <textarea value={txForm.notes} onChange={(e) => setTxForm({ ...txForm, notes: e.target.value })} rows={2}
                   className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
               </div>
             </div>
             <div className="flex gap-3 mt-5">
-              <button onClick={() => setFormMode(null)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Cancel</button>
+              <button onClick={() => setFormMode(null)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Hủy</button>
               <button onClick={handleTxSave} disabled={saving} className="flex-1 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50">
-                {saving ? 'Saving...' : 'Save'}
+                {saving ? 'Đang lưu...' : 'Lưu'}
               </button>
             </div>
           </div>

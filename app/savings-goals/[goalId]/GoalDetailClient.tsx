@@ -27,6 +27,13 @@ const ASSET_COLORS: Record<string, string> = {
   gold: 'bg-amber-100 text-amber-700',
 }
 
+const ASSET_LABELS: Record<string, string> = {
+  fund: 'Quỹ',
+  bank: 'Ngân hàng',
+  stock: 'Cổ phiếu',
+  gold: 'Vàng',
+}
+
 export default function GoalDetailClient({ goalId }: { goalId: string }) {
   const router = useRouter()
   const [goal, setGoal] = useState<GoalData | null>(null)
@@ -192,7 +199,7 @@ export default function GoalDetailClient({ goalId }: { goalId: string }) {
                           </td>
                           <td className="px-4 py-3">
                             <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${ASSET_COLORS[tx.asset_type] ?? 'bg-gray-100 text-gray-700'}`}>
-                              {tx.asset_type}
+                              {ASSET_LABELS[tx.asset_type] ?? tx.asset_type}
                             </span>
                           </td>
                           <td className="px-4 py-3 text-gray-500 dark:text-gray-400 text-xs">{tx.fund_name ?? '—'}</td>

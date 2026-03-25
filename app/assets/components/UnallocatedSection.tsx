@@ -10,6 +10,12 @@ const TYPE_COLORS: Record<string, string> = {
   gold: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
 }
 
+const TYPE_LABELS: Record<string, string> = {
+  bank: 'Ngân hàng',
+  stock: 'Cổ phiếu',
+  gold: 'Vàng',
+}
+
 interface Props {
   unallocatedAmount: number
   funds: FundBreakdownItem[]
@@ -22,8 +28,8 @@ export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds,
   return (
     <section>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Unallocated Investments</h2>
-        <span className="text-sm text-gray-500 dark:text-gray-400">Total: {fmt(unallocatedAmount)}</span>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Đầu tư Chưa phân bổ</h2>
+        <span className="text-sm text-gray-500 dark:text-gray-400">Tổng: {fmt(unallocatedAmount)}</span>
       </div>
       <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
         {/* Fund items */}
@@ -38,7 +44,7 @@ export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds,
             >
               <p className="font-medium text-gray-900 dark:text-gray-100 text-sm">{fund.fundName}</p>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                {fund.quantity.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} units · NAV {fmtNav(fund.currentNAV)}
+                {fund.quantity.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} CCQ · NAV {fmtNav(fund.currentNAV)}
               </p>
             </button>
             <div className="flex items-center gap-4 ml-4">
@@ -52,7 +58,7 @@ export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds,
                 onClick={() => onAssignToGoal(fund.fundId)}
                 className="text-xs px-2 py-1 border border-indigo-300 dark:border-indigo-700 text-indigo-600 dark:text-indigo-400 rounded-md hover:bg-indigo-50 dark:hover:bg-indigo-900/20 whitespace-nowrap"
               >
-                Assign to Goal
+                Gán vào Mục tiêu
               </button>
             </div>
           </div>
@@ -76,9 +82,9 @@ export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds,
                   <div className="flex items-center justify-between px-5 py-3 bg-gray-50 dark:bg-gray-800/50">
                     <div className="flex items-center gap-2">
                       <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${TYPE_COLORS[type] ?? 'bg-gray-100 text-gray-700'}`}>
-                        {type.charAt(0).toUpperCase() + type.slice(1)}
+                        {TYPE_LABELS[type] ?? type}
                       </span>
-                      <span className="text-xs text-gray-500 dark:text-gray-400">{items.length} {items.length === 1 ? 'item' : 'items'}</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">{items.length} mục</span>
                     </div>
                     <div className="text-right">
                       <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{fmt(groupTotal)}</span>
@@ -110,7 +116,7 @@ export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds,
                             )}
                           </p>
                           <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-                            Invested: {fmt(item.amount)}
+                            Đã đầu tư: {fmt(item.amount)}
                           </p>
                         </div>
                         <div className="text-right">

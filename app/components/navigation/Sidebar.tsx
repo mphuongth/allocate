@@ -6,10 +6,10 @@ import { BarChart3, Calendar, BookOpen, Settings } from 'lucide-react'
 import { useNavigation } from './NavigationContext'
 
 const NAV_ITEMS = [
-  { label: 'Assets Dashboard', href: '/dashboard', icon: BarChart3 },
-  { label: 'Monthly Planning', href: '/planning', icon: Calendar },
-  { label: 'Fund Library', href: '/funds', icon: BookOpen },
-  { label: 'Settings', href: '/settings', icon: Settings },
+  { label: 'Tổng Quan Tài Sản', href: '/dashboard', icon: BarChart3 },
+  { label: 'Kế Hoạch Tháng', href: '/planning', icon: Calendar },
+  { label: 'Thư Viện Quỹ', href: '/funds', icon: BookOpen },
+  { label: 'Cài Đặt', href: '/settings', icon: Settings },
 ]
 
 interface SidebarProps {
