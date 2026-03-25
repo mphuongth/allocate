@@ -8,6 +8,7 @@ import UnallocatedSection from './components/UnallocatedSection'
 import InsuranceCard from './components/InsuranceCard'
 import FundDetailModal from './components/FundDetailModal'
 import GoalPickerModal from './components/GoalPickerModal'
+import GoldPriceWidget from './components/GoldPriceWidget'
 
 export interface FundBreakdownItem {
   fundId: string
@@ -46,6 +47,7 @@ export interface InsuranceData {
 }
 
 export interface NonFundUnallocatedItem {
+  transactionId: string
   type: string
   amount: number
   currentValue: number
@@ -64,6 +66,7 @@ export interface DashboardData {
     overallProfitLoss: number
     overallProfitLossPercentage: number
     navStale: boolean
+    hasGold: boolean
   }
   goals: GoalData[]
   unallocated: { totalValue: number; funds: FundBreakdownItem[]; nonFunds: NonFundUnallocatedItem[] }
@@ -101,6 +104,9 @@ export default function DashboardClient() {
   const [assignLoading, setAssignLoading] = useState(false)
   const [assignError, setAssignError] = useState('')
   const [purchaseHistory, setPurchaseHistory] = useState<PurchaseHistory[]>([])
+  const [nonFundPickerTxId, setNonFundPickerTxId] = useState<string | null>(null)
+  const [nonFundAssignLoading, setNonFundAssignLoading] = useState(false)
+  const [nonFundAssignError, setNonFundAssignError] = useState('')
 
   // Load sort preference from localStorage
   useEffect(() => {
@@ -201,6 +207,28 @@ export default function DashboardClient() {
       setAssignError('Unable to save. Please check your connection and try again.')
     }
     setAssignLoading(false)
+  }
+
+  async function handleAssignNonFundToGoal(txId: string, goalId: string) {
+    setNonFundAssignLoading(true)
+    setNonFundAssignError('')
+    try {
+      const res = await fetch(`/api/v1/investment-transactions/${txId}/assign`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ goal_id: goalId }),
+      })
+      if (!res.ok) {
+        const { error } = await res.json()
+        setNonFundAssignError(error ?? 'Failed to assign. Please try again.')
+      } else {
+        setNonFundPickerTxId(null)
+        await fetchData()
+      }
+    } catch {
+      setNonFundAssignError('Unable to save. Please check your connection.')
+    }
+    setNonFundAssignLoading(false)
   }
 
   const isEmpty = data && data.goals.length === 0 && data.unallocated.funds.length === 0 && data.unallocated.nonFunds.length === 0 && data.insurance.length === 0
@@ -317,6 +345,13 @@ export default function DashboardClient() {
           </div>
         )}
 
+        {/* Gold price widget — shown whenever user has any gold investment */}
+        {!loading && data?.netWorth.hasGold && (
+          <div className="mb-6 rounded-xl overflow-hidden border border-amber-100 dark:border-amber-800/30">
+            <GoldPriceWidget onRefresh={fetchData} />
+          </div>
+        )}
+
         {/* Dashboard content */}
         {!loading && data && !isEmpty && (
           <div className="space-y-8">
@@ -346,6 +381,8 @@ export default function DashboardClient() {
                 nonFunds={data.unallocated.nonFunds}
                 onFundClick={handleFundClick}
                 onAssignToGoal={(fundId) => setGoalPickerFundId(fundId)}
+                onAssignNonFundToGoal={(txId) => setNonFundPickerTxId(txId)}
+                onRefresh={fetchData}
               />
             )}
 
@@ -380,7 +417,7 @@ export default function DashboardClient() {
         />
       )}
 
-      {/* Goal Picker Modal */}
+      {/* Goal Picker Modal — funds */}
       {goalPickerFundId && data && (
         <GoalPickerModal
           fundId={goalPickerFundId}
@@ -398,6 +435,29 @@ export default function DashboardClient() {
           error={assignError}
         />
       )}
+
+      {/* Goal Picker Modal — non-funds (gold, bank, stock) */}
+      {nonFundPickerTxId && data && (() => {
+        const item = data.unallocated.nonFunds.find((i) => i.transactionId === nonFundPickerTxId)
+        const label = item ? `${item.type === 'gold' ? 'Vàng' : item.type === 'bank' ? 'Ngân hàng' : 'Cổ phiếu'} · ${new Date(item.investmentDate).toLocaleDateString('vi-VN')}` : ''
+        return (
+          <GoalPickerModal
+            fundId={nonFundPickerTxId}
+            fundName={label}
+            goals={data.goals.map((g) => ({
+              id: g.goalId,
+              name: g.goalName,
+              targetAmount: g.targetAmount,
+              currentValue: g.currentValue,
+              progressPercent: g.progressPercentage,
+            }))}
+            onConfirm={(goalId) => handleAssignNonFundToGoal(nonFundPickerTxId, goalId)}
+            onCancel={() => { setNonFundPickerTxId(null); setNonFundAssignError('') }}
+            isLoading={nonFundAssignLoading}
+            error={nonFundAssignError}
+          />
+        )
+      })()}
     </div>
   )
 }
