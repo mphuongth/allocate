@@ -69,9 +69,23 @@ function parseExcelPaste(raw: string): ParsedRow[] {
     .map(line => line.split('\t'))
     .filter(cols => cols.length >= 5)
     .map(cols => {
-      const parts = cols[0].trim().split('/')
-      const m = parts[0], y = parts[1]
-      const investment_date = y && m ? `${y}-${m.padStart(2, '0')}-01` : ''
+      const raw0 = cols[0].trim()
+      let investment_date = ''
+      if (/^\d{4}-\d{2}-\d{2}$/.test(raw0)) {
+        // ISO date: 2023-07-15 → keep as-is
+        investment_date = raw0
+      } else {
+        const parts = raw0.split('/')
+        if (parts.length === 3) {
+          // D/M/YYYY full date: 15/7/2023 → 2023-07-15
+          const [d, m, y] = parts
+          investment_date = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
+        } else if (parts.length === 2) {
+          // M/YYYY month only: 7/2023 → 2023-07-01
+          const [m, y] = parts
+          investment_date = `${y}-${m.padStart(2, '0')}-01`
+        }
+      }
       const parseNum = (s: string) => parseFloat(s.replace(/,/g, '').trim())
       const amount_vnd = parseNum(cols[1])
       // cols[2] = Tiền mua — skip
