@@ -34,7 +34,7 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const [plansRes, goalsRes, txRes, insuranceRes, insuranceSavingsRes] = await Promise.all([
+  const [plansRes, goalsRes, txRes, insuranceRes, insuranceSavingsRes, goldPriceRes] = await Promise.all([
     supabase.from('monthly_plans').select('id').eq('user_id', user.id),
     supabase
       .from('savings_goals')
@@ -52,6 +52,11 @@ export async function GET() {
       .from('insurance_savings')
       .select('insurance_member_id, amount_saved_vnd')
       .eq('user_id', user.id),
+    supabase
+      .from('gold_price_settings')
+      .select('price_per_chi')
+      .eq('user_id', user.id)
+      .single(),
   ])
 
   const planIds = (plansRes.data ?? []).map((p) => p.id)
@@ -72,6 +77,7 @@ export async function GET() {
   const goals = goalsRes.data ?? []
   const allTxs = txRes.data ?? []
   const insuranceMembers = insuranceRes.data ?? []
+  const goldPricePerChi: number | null = goldPriceRes.data?.price_per_chi ?? null
 
   const insuranceLumpSumMap = new Map<string, number>()
   for (const s of (insuranceSavingsRes.data ?? [])) {
@@ -171,8 +177,13 @@ export async function GET() {
       }
     } else {
       // bank / stock / gold
-      const interest = calcProjectedInterest(tx.amount_vnd, tx.interest_rate, tx.investment_date, (tx as { expiry_date?: string | null }).expiry_date)
-      const currentValue = tx.amount_vnd + interest
+      let currentValue: number
+      if (tx.asset_type === 'gold' && goldPricePerChi && tx.units) {
+        currentValue = tx.units * goldPricePerChi
+      } else {
+        const interest = calcProjectedInterest(tx.amount_vnd, tx.interest_rate, tx.investment_date, (tx as { expiry_date?: string | null }).expiry_date)
+        currentValue = tx.amount_vnd + interest
+      }
 
       totalAssets += currentValue
       totalInvestedGlobal += tx.amount_vnd

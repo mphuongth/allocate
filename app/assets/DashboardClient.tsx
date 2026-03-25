@@ -346,6 +346,7 @@ export default function DashboardClient() {
                 nonFunds={data.unallocated.nonFunds}
                 onFundClick={handleFundClick}
                 onAssignToGoal={(fundId) => setGoalPickerFundId(fundId)}
+                onRefresh={fetchData}
               />
             )}
 
