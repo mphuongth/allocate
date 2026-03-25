@@ -39,6 +39,13 @@ const ASSET_COLORS: Record<string, string> = {
   gold: 'bg-amber-100 text-amber-700',
 }
 
+const ASSET_LABELS: Record<string, string> = {
+  fund: 'Quỹ',
+  bank: 'Ngân hàng',
+  stock: 'Cổ phiếu',
+  gold: 'Vàng',
+}
+
 function calcProjectedInterest(amount: number, rate: number | null, investmentDate: string, expiryDate?: string | null): number {
   if (!rate) return 0
   const endMs = expiryDate ? Math.min(Date.now(), new Date(expiryDate).getTime()) : Date.now()
@@ -387,7 +394,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                       <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{new Date(row.investment_date).toLocaleDateString('vi-VN')}</td>
                       <td className="px-4 py-3">
                         <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${ASSET_COLORS[row.asset_type] ?? 'bg-gray-100 text-gray-700'}`}>
-                          {row.asset_type}
+                          {ASSET_LABELS[row.asset_type] ?? row.asset_type}
                         </span>
                       </td>
                       <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{fmt(row.amount_vnd)}</td>

@@ -392,7 +392,7 @@ export default function InvestmentTransactionsTab() {
                       <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{new Date(tx.investment_date).toLocaleDateString('vi-VN')}</td>
                       <td className="px-4 py-3">
                         <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${ASSET_COLORS[tx.asset_type as AssetType] ?? 'bg-gray-100 text-gray-700'}`}>
-                          {tx.asset_type}
+                          {TYPE_LABELS[tx.asset_type as AssetType] ?? tx.asset_type}
                         </span>
                       </td>
                       <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{fmt(tx.amount_vnd)}</td>
