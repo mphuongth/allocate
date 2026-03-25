@@ -8,6 +8,7 @@ import UnallocatedSection from './components/UnallocatedSection'
 import InsuranceCard from './components/InsuranceCard'
 import FundDetailModal from './components/FundDetailModal'
 import GoalPickerModal from './components/GoalPickerModal'
+import GoldPriceWidget from './components/GoldPriceWidget'
 
 export interface FundBreakdownItem {
   fundId: string
@@ -64,6 +65,7 @@ export interface DashboardData {
     overallProfitLoss: number
     overallProfitLossPercentage: number
     navStale: boolean
+    hasGold: boolean
   }
   goals: GoalData[]
   unallocated: { totalValue: number; funds: FundBreakdownItem[]; nonFunds: NonFundUnallocatedItem[] }
@@ -314,6 +316,13 @@ export default function DashboardClient() {
             >
               Settings
             </a>
+          </div>
+        )}
+
+        {/* Gold price widget — shown whenever user has any gold investment */}
+        {!loading && data?.netWorth.hasGold && (
+          <div className="mb-6 rounded-xl overflow-hidden border border-amber-100 dark:border-amber-800/30">
+            <GoldPriceWidget onRefresh={fetchData} />
           </div>
         )}
 

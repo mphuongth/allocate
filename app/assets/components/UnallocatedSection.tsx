@@ -1,5 +1,4 @@
 import type { FundBreakdownItem, NonFundUnallocatedItem } from '../DashboardClient'
-import GoldPriceWidget from './GoldPriceWidget'
 
 const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
 const fmtNav = (n: number) => '₫ ' + n.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -27,7 +26,6 @@ interface Props {
 }
 
 export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds, onFundClick, onAssignToGoal, onRefresh }: Props) {
-  const hasGold = nonFunds.some((i) => i.type === 'gold')
   return (
     <section>
       <div className="flex items-center justify-between mb-4">
@@ -66,9 +64,6 @@ export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds,
             </div>
           </div>
         ))}
-
-        {/* Gold price widget */}
-        {hasGold && <GoldPriceWidget onRefresh={onRefresh} />}
 
         {/* Non-fund items grouped by type */}
         {nonFunds.length > 0 && (

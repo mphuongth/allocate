@@ -298,6 +298,8 @@ export async function GET() {
     ? (overallProfitLoss / totalInvestedGlobal) * 100
     : 0
 
+  const hasGold = allTxs.some((tx) => tx.asset_type === 'gold')
+
   return NextResponse.json({
     netWorth: {
       totalAssets,
@@ -308,6 +310,7 @@ export async function GET() {
       overallProfitLoss,
       overallProfitLossPercentage,
       navStale,
+      hasGold,
     },
     goals: goalsOutput,
     unallocated: {
