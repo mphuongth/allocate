@@ -28,7 +28,7 @@ export default function Header({ email, initials, onMobileMenuToggle }: HeaderPr
       {/* Tablet sidebar toggle */}
       <button
         onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-        aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        aria-label={sidebarCollapsed ? 'Mở rộng menu' : 'Thu gọn menu'}
         className="hidden md:flex lg:hidden p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-400"
       >
         {sidebarCollapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}

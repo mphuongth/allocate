@@ -136,7 +136,7 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
   }
 
   async function handleSave() {
-    if (!formName.trim()) { setFormError('Goal name is required.'); return }
+    if (!formName.trim()) { setFormError('Tên mục tiêu là bắt buộc.'); return }
     setSaving(true)
     setFormError('')
     const url = editGoal ? `/api/v1/savings-goals/${editGoal.goal_id}` : '/api/v1/savings-goals'
@@ -148,7 +148,7 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
     })
     if (!res.ok) {
       const { error } = await res.json()
-      setFormError(error ?? 'Something went wrong.')
+      setFormError(error ?? 'Đã xảy ra lỗi.')
     } else {
       setShowForm(false)
       await fetchGoals()
@@ -157,7 +157,7 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
   }
 
   async function handleDelete(goal: GoalWithStats) {
-    if (!confirm(`Delete "${goal.goal_name}"? ${goal.transactionCount} transaction(s) will be unassigned.`)) return
+    if (!confirm(`Xóa "${goal.goal_name}"? ${goal.transactionCount} giao dịch sẽ bị bỏ gán.`)) return
     const res = await fetch(`/api/v1/savings-goals/${goal.goal_id}`, { method: 'DELETE' })
     if (res.ok) {
       const { message } = await res.json()
@@ -185,18 +185,18 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
       )}
 
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Savings Goals</h2>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Mục tiêu Tiết kiệm</h2>
         <button onClick={openCreate} className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors">
-          Create Goal
+          Tạo Mục tiêu
         </button>
       </div>
 
       {loading ? (
-        <div className="text-center py-12 text-gray-400 dark:text-gray-500 text-sm">Loading...</div>
+        <div className="text-center py-12 text-gray-400 dark:text-gray-500 text-sm">Đang tải...</div>
       ) : goals.length === 0 ? (
         <div className="text-center py-12 text-gray-400 dark:text-gray-500">
-          <p className="text-lg mb-2">No savings goals yet</p>
-          <p className="text-sm">Create a goal to start tracking your investments.</p>
+          <p className="text-lg mb-2">Chưa có mục tiêu tiết kiệm</p>
+          <p className="text-sm">Tạo mục tiêu để bắt đầu theo dõi đầu tư.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -205,22 +205,22 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
               <div className="mb-3">
                 <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-base">{goal.goal_name}</h3>
                 {goal.target_amount != null && (
-                  <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-0.5">Target: {fmt(goal.target_amount)}</p>
+                  <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-0.5">Mục tiêu: {fmt(goal.target_amount)}</p>
                 )}
                 {goal.description && <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{goal.description}</p>}
               </div>
 
               <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-3 mb-3">
-                <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium mb-1">Current Total Value</p>
+                <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium mb-1">Giá trị Hiện tại</p>
                 <p className="text-xl font-bold text-indigo-700 dark:text-indigo-300">{fmt(goal.totalInvested + goal.projectedInterest)}</p>
                 <div className="flex gap-4 mt-2 text-xs text-gray-500 dark:text-gray-400">
-                  <span>Invested: {fmt(goal.totalInvested)}</span>
-                  <span>Gain: {fmt(goal.projectedInterest)}</span>
+                  <span>Đã đầu tư: {fmt(goal.totalInvested)}</span>
+                  <span>Lãi: {fmt(goal.projectedInterest)}</span>
                 </div>
               </div>
 
               <p className="text-xs text-gray-400 dark:text-gray-500 mb-4">
-                {new Date(goal.created_at).toLocaleDateString('vi-VN')} · {goal.transactionCount} transaction{goal.transactionCount !== 1 ? 's' : ''}
+                {new Date(goal.created_at).toLocaleDateString('vi-VN')} · {goal.transactionCount} giao dịch
               </p>
 
               <div className="flex gap-2">
@@ -228,19 +228,19 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
                   onClick={() => selectGoal(goal)}
                   className="flex-1 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-700 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
                 >
-                  View Details
+                  Xem Chi tiết
                 </button>
                 <button
                   onClick={() => openEdit(goal)}
                   className="px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                 >
-                  Edit
+                  Sửa
                 </button>
                 <button
                   onClick={() => handleDelete(goal)}
                   className="px-3 py-2 text-sm font-medium text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                 >
-                  Delete
+                  Xóa
                 </button>
               </div>
             </div>
@@ -252,44 +252,44 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
       {showForm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-md p-6 border border-gray-100 dark:border-gray-700">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{editGoal ? 'Edit Goal' : 'Create Goal'}</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{editGoal ? 'Sửa Mục tiêu' : 'Tạo Mục tiêu'}</h3>
             {formError && <p className="text-red-600 dark:text-red-400 text-sm mb-3">{formError}</p>}
             <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Goal Name *</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tên Mục tiêu *</label>
                 <input
                   type="text"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
-                  placeholder="e.g. Retirement"
+                  placeholder="VD: Hưu trí"
                   className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Goal Amount (VND)</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Số tiền Mục tiêu (VND)</label>
                 <input
                   type="number"
                   value={formTargetAmount}
                   onChange={(e) => setFormTargetAmount(e.target.value)}
-                  placeholder="Optional — e.g. 50000000"
+                  placeholder="Tùy chọn — VD: 50000000"
                   className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mô tả</label>
                 <textarea
                   value={formDesc}
                   onChange={(e) => setFormDesc(e.target.value)}
                   rows={3}
-                  placeholder="Optional description"
+                  placeholder="Mô tả tùy chọn"
                   className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
                 />
               </div>
             </div>
             <div className="flex gap-3 mt-5">
-              <button onClick={() => setShowForm(false)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Cancel</button>
+              <button onClick={() => setShowForm(false)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Hủy</button>
               <button onClick={handleSave} disabled={saving} className="flex-1 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50">
-                {saving ? 'Saving...' : 'Save'}
+                {saving ? 'Đang lưu...' : 'Lưu'}
               </button>
             </div>
           </div>

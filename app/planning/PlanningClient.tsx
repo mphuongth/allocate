@@ -59,7 +59,7 @@ export interface InsuranceMember {
 export interface Fund { id: string; name: string; nav: number }
 export interface Goal { goal_id: string; goal_name: string }
 
-const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+const MONTHS = ['Tháng 1','Tháng 2','Tháng 3','Tháng 4','Tháng 5','Tháng 6','Tháng 7','Tháng 8','Tháng 9','Tháng 10','Tháng 11','Tháng 12']
 
 function prevMonth(m: number, y: number) { return m === 1 ? { m: 12, y: y - 1 } : { m: m - 1, y } }
 function nextMonth(m: number, y: number) { return m === 12 ? { m: 1, y: y + 1 } : { m: m + 1, y } }
@@ -153,7 +153,7 @@ export default function PlanningClient() {
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Monthly Planning</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Kế hoạch Tháng</h1>
           <div className="flex items-center gap-3">
             <button onClick={() => navigate('prev')} className="p-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400">‹</button>
             <span className="text-lg font-semibold text-gray-800 dark:text-gray-200 min-w-[120px] text-center">
@@ -171,7 +171,7 @@ export default function PlanningClient() {
         )}
 
         {loading ? (
-          <div className="text-center py-20 text-gray-400 dark:text-gray-500">Loading...</div>
+          <div className="text-center py-20 text-gray-400 dark:text-gray-500">Đang tải...</div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Left col: salary + sections */}
@@ -188,7 +188,7 @@ export default function PlanningClient() {
                   setInvestments([])
                   setSavings([])
                   setFixedExpenses([])
-                  showToast(`Salary record for ${deletedMonth} ${deletedYear} deleted successfully`)
+                  showToast(`Đã xóa bản ghi lương ${deletedMonth} ${deletedYear}`)
                 }}
               />
 
@@ -224,7 +224,7 @@ export default function PlanningClient() {
                 </>
               ) : (
                 <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">
-                  Enter your monthly salary to begin planning.
+                  Nhập lương tháng để bắt đầu lập kế hoạch.
                 </div>
               )}
             </div>

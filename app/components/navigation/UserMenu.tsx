@@ -35,11 +35,11 @@ export default function UserMenu({ email, initials }: UserMenuProps) {
     )
     const { error } = await supabase.auth.signOut()
     if (error) {
-      toast.error('Failed to logout. Please try again.', {
-        action: { label: 'Retry', onClick: handleLogout },
+      toast.error('Đăng xuất thất bại. Vui lòng thử lại.', {
+        action: { label: 'Thử lại', onClick: handleLogout },
       })
     } else {
-      toast.success('Logged out successfully')
+      toast.success('Đã đăng xuất thành công')
       router.push('/auth/login')
     }
   }
@@ -66,20 +66,20 @@ export default function UserMenu({ email, initials }: UserMenuProps) {
             onClick={() => setOpen(false)}
             className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
           >
-            <User size={14} /> Profile
+            <User size={14} /> Hồ sơ
           </Link>
           <Link
             href="/settings"
             onClick={() => setOpen(false)}
             className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
           >
-            <Settings size={14} /> Settings
+            <Settings size={14} /> Cài đặt
           </Link>
           <button
             onClick={handleLogout}
             className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
           >
-            <LogOut size={14} /> Logout
+            <LogOut size={14} /> Đăng xuất
           </button>
         </div>
       )}

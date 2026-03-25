@@ -33,7 +33,7 @@ export default function InsuranceSection({ plan, insuranceMembers, onRefresh, on
     setFormError('')
     const num = Number(overrideValue)
     if (!overrideValue || isNaN(num) || num <= 0) {
-      setFormError('Override amount must be positive')
+      setFormError('Số tiền ghi đè phải dương')
       return
     }
 
@@ -46,14 +46,14 @@ export default function InsuranceSection({ plan, insuranceMembers, onRefresh, on
       })
       if (!res.ok) {
         const { error } = await res.json()
-        setFormError(error ?? 'Something went wrong. Please try again later.')
+        setFormError(error ?? 'Đã xảy ra lỗi. Vui lòng thử lại sau.')
       } else {
         setEditItem(null)
-        onToast('Insurance override saved')
+        onToast('Đã lưu ghi đè bảo hiểm')
         onRefresh()
       }
     } catch {
-      setFormError('Unable to save. Please check your connection and try again.')
+      setFormError('Không thể lưu. Vui lòng kiểm tra kết nối và thử lại.')
     }
     setSaving(false)
   }
@@ -65,13 +65,13 @@ export default function InsuranceSection({ plan, insuranceMembers, onRefresh, on
       body: JSON.stringify({ member_id: member.member_id }),
     })
     setConfirmSkip(null)
-    onToast(`${member.member_name} skipped for this month`)
+    onToast(`Đã bỏ qua ${member.member_name} tháng này`)
     onRefresh()
   }
 
   async function handleRestore(member: InsuranceMember) {
     await fetch(`/api/v1/monthly-plans/${plan.id}/excluded-insurance/${member.member_id}`, { method: 'DELETE' })
-    onToast(`${member.member_name} restored`)
+    onToast(`Đã khôi phục ${member.member_name}`)
     onRefresh()
   }
 
@@ -79,9 +79,9 @@ export default function InsuranceSection({ plan, insuranceMembers, onRefresh, on
     return (
       <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700">
-          <h2 className="font-semibold text-gray-900 dark:text-gray-100">Insurance</h2>
+          <h2 className="font-semibold text-gray-900 dark:text-gray-100">Bảo hiểm</h2>
         </div>
-        <div className="text-center py-10 text-gray-400 dark:text-gray-500 text-sm">No insurance members configured</div>
+        <div className="text-center py-10 text-gray-400 dark:text-gray-500 text-sm">Chưa có thành viên bảo hiểm nào</div>
       </div>
     )
   }
@@ -94,14 +94,14 @@ export default function InsuranceSection({ plan, insuranceMembers, onRefresh, on
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
       <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700">
-        <h2 className="font-semibold text-gray-900 dark:text-gray-100">Insurance</h2>
-        <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Monthly premiums (annual ÷ 12). Override or skip for this month only.</p>
+        <h2 className="font-semibold text-gray-900 dark:text-gray-100">Bảo hiểm</h2>
+        <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Phí hàng tháng (năm ÷ 12). Ghi đè hoặc bỏ qua cho tháng này.</p>
       </div>
 
       <table className="w-full text-sm">
         <thead className="bg-gray-50 dark:bg-gray-800">
           <tr>
-            {['Member', 'Relationship', 'Default Monthly', 'This Month', 'Actions'].map((h) => (
+            {['Thành viên', 'Quan hệ', 'Mặc định / Tháng', 'Tháng này', 'Thao tác'].map((h) => (
               <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">{h}</th>
             ))}
           </tr>
@@ -118,25 +118,25 @@ export default function InsuranceSection({ plan, insuranceMembers, onRefresh, on
                 <td className="px-4 py-3">
                   {m.excluded ? (
                     <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
-                      Skipped
+                      Bỏ qua
                     </span>
                   ) : (
                     <>
                       <span className={hasOverride ? 'text-indigo-600 dark:text-indigo-400 font-medium' : 'text-gray-700 dark:text-gray-300'}>
                         {fmt(m.monthlyOverride ?? defaultMonthly)}
                       </span>
-                      {hasOverride && <span className="ml-1.5 text-xs text-indigo-400 dark:text-indigo-500">(overridden)</span>}
+                      {hasOverride && <span className="ml-1.5 text-xs text-indigo-400 dark:text-indigo-500">(đã ghi đè)</span>}
                     </>
                   )}
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex gap-3">
                     {m.excluded ? (
-                      <button onClick={() => handleRestore(m)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">Restore</button>
+                      <button onClick={() => handleRestore(m)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">Khôi phục</button>
                     ) : (
                       <>
-                        <button onClick={() => openEdit(m)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">Edit</button>
-                        <button onClick={() => setConfirmSkip(m)} className="text-xs text-red-500 dark:text-red-400 hover:underline">Delete</button>
+                        <button onClick={() => openEdit(m)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">Sửa</button>
+                        <button onClick={() => setConfirmSkip(m)} className="text-xs text-red-500 dark:text-red-400 hover:underline">Xóa</button>
                       </>
                     )}
                   </div>
@@ -147,7 +147,7 @@ export default function InsuranceSection({ plan, insuranceMembers, onRefresh, on
         </tbody>
         <tfoot>
           <tr className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-            <td colSpan={3} className="px-4 py-3 text-sm font-semibold text-gray-700 dark:text-gray-300">Total Monthly</td>
+            <td colSpan={3} className="px-4 py-3 text-sm font-semibold text-gray-700 dark:text-gray-300">Tổng Tháng</td>
             <td colSpan={2} className="px-4 py-3 text-sm font-semibold text-gray-900 dark:text-gray-100">{fmt(totalMonthly)}</td>
           </tr>
         </tfoot>
@@ -157,11 +157,11 @@ export default function InsuranceSection({ plan, insuranceMembers, onRefresh, on
       {editItem && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-sm p-6 border border-gray-100 dark:border-gray-700">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">Override Monthly Amount</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">Ghi đè Số tiền Tháng</h3>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{editItem.member_name}</p>
             {formError && <p className="text-red-600 dark:text-red-400 text-sm mb-3">{formError}</p>}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">This Month Amount (VND) *</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Số tiền Tháng này (VND) *</label>
               <div className="flex gap-2">
                 <input type="number" value={overrideValue} onChange={(e) => setOverrideValue(e.target.value)} className={inputCls} />
                 <button
@@ -169,16 +169,16 @@ export default function InsuranceSection({ plan, insuranceMembers, onRefresh, on
                   onClick={() => setOverrideValue(String(Math.round(editItem.annual_payment_vnd / 12)))}
                   className="shrink-0 px-3 py-2 text-xs font-medium text-indigo-600 dark:text-indigo-400 border border-indigo-300 dark:border-indigo-700 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 whitespace-nowrap"
                 >
-                  Default
+                  Mặc định
                 </button>
               </div>
-              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Default: {fmt(Math.round(editItem.annual_payment_vnd / 12))}/month (annual ÷ 12)</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Mặc định: {fmt(Math.round(editItem.annual_payment_vnd / 12))}/tháng (năm ÷ 12)</p>
             </div>
             <div className="flex gap-3 mt-5">
-              <button onClick={() => setEditItem(null)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Cancel</button>
+              <button onClick={() => setEditItem(null)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Hủy</button>
               <button onClick={handleSaveOverride} disabled={saving} className="flex-1 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2">
                 {saving && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-                {saving ? 'Saving...' : 'Save'}
+                {saving ? 'Đang lưu...' : 'Lưu'}
               </button>
             </div>
           </div>
@@ -189,13 +189,13 @@ export default function InsuranceSection({ plan, insuranceMembers, onRefresh, on
       {confirmSkip && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-sm p-6 border border-gray-100 dark:border-gray-700">
-            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">Skip this month?</h3>
+            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">Bỏ qua tháng này?</h3>
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-5">
-              <strong>{confirmSkip.member_name}</strong> will be excluded from this month's plan only. Settings and other months are not affected.
+              <strong>{confirmSkip.member_name}</strong> sẽ bị loại khỏi kế hoạch tháng này. Cài đặt và các tháng khác không bị ảnh hưởng.
             </p>
             <div className="flex gap-3">
-              <button onClick={() => setConfirmSkip(null)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Cancel</button>
-              <button onClick={() => handleSkip(confirmSkip)} className="flex-1 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700">Skip</button>
+              <button onClick={() => setConfirmSkip(null)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Hủy</button>
+              <button onClick={() => handleSkip(confirmSkip)} className="flex-1 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700">Bỏ qua</button>
             </div>
           </div>
         </div>

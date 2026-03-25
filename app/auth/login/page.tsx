@@ -14,7 +14,7 @@ function LoginForm() {
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState<string | null>(expired ? 'Your session has expired. Please log in again.' : null)
+  const [error, setError] = useState<string | null>(expired ? 'Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.' : null)
   const [loading, setLoading] = useState(false)
   const [redirecting, setRedirecting] = useState(false)
 
@@ -31,7 +31,7 @@ function LoginForm() {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) {
-        setError('Email or password is incorrect.')
+        setError('Email hoặc mật khẩu không đúng.')
         setLoading(false)
       } else {
         setRedirecting(true)
@@ -40,14 +40,14 @@ function LoginForm() {
         // keep loading=true — page will unmount on redirect
       }
     } catch {
-      setError('Unable to connect. Please check your internet and try again.')
+      setError('Không thể kết nối. Vui lòng kiểm tra internet và thử lại.')
       setLoading(false)
     }
   }
 
   return (
     <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-lg shadow p-8 border border-transparent dark:border-gray-700">
-      <h1 className="text-2xl font-bold text-center text-gray-900 dark:text-gray-100 mb-6">Sign in to Allocate</h1>
+      <h1 className="text-2xl font-bold text-center text-gray-900 dark:text-gray-100 mb-6">Đăng nhập vào Allocate</h1>
       {error && (
         <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-sm rounded-md">{error}</div>
       )}
@@ -69,7 +69,7 @@ function LoginForm() {
         </div>
         <div>
           <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Password
+            Mật khẩu
           </label>
           <input
             type="password"
@@ -83,20 +83,20 @@ function LoginForm() {
           />
         </div>
         <div className="text-right">
-          <span className="text-sm text-gray-400 dark:text-gray-500 cursor-not-allowed">Forgot password?</span>
+          <span className="text-sm text-gray-400 dark:text-gray-500 cursor-not-allowed">Quên mật khẩu?</span>
         </div>
         <button
           type="submit"
           disabled={loading}
           className="w-full py-2 px-4 bg-indigo-600 text-white rounded-md font-medium hover:bg-indigo-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
         >
-          {redirecting ? 'Redirecting…' : loading ? 'Signing in…' : 'Log in'}
+          {redirecting ? 'Đang chuyển trang…' : loading ? 'Đang đăng nhập…' : 'Đăng nhập'}
         </button>
       </form>
       <p className="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">
-        Don&apos;t have an account?{' '}
+        Chưa có tài khoản?{' '}
         <Link href="/auth/signup" className="text-indigo-600 dark:text-indigo-400 hover:underline font-medium">
-          Sign up
+          Đăng ký
         </Link>
       </p>
     </div>

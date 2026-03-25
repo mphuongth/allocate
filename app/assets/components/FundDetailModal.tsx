@@ -62,26 +62,26 @@ export default function FundDetailModal({
           {/* Summary stats */}
           <div className="grid grid-cols-2 gap-4">
             <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
-              <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">Current NAV</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">NAV hiện tại</p>
               <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{fmtNav(currentNAV)}</p>
             </div>
             <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
-              <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">Units Held</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">Số CCQ nắm giữ</p>
               <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{quantity.toLocaleString('vi-VN')}</p>
             </div>
             <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
-              <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">Current Value</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">Giá trị hiện tại</p>
               <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{fmt(currentValue)}</p>
             </div>
             <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
-              <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">Avg Entry Price</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">Giá mua trung bình</p>
               <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{fmtNav(purchasePrice)}</p>
             </div>
           </div>
 
           {/* P&L */}
           <div className={`rounded-lg p-4 ${plPositive ? 'bg-green-50 dark:bg-green-900/20' : 'bg-red-50 dark:bg-red-900/20'}`}>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Total Gain / Loss</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Tổng Lãi / Lỗ</p>
             <p className={`text-xl font-bold ${plPositive ? 'text-green-700' : 'text-red-700'}`}>
               {fmt(profitLoss)}
             </p>
@@ -93,11 +93,11 @@ export default function FundDetailModal({
           {/* Purchase history */}
           {purchaseHistory.length > 0 && (
             <div>
-              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Purchase History</h3>
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Lịch sử mua</h3>
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 dark:bg-gray-800">
                   <tr>
-                    {['Date', 'Units', 'NAV at Purchase'].map((h) => (
+                    {['Ngày', 'CCQ', 'NAV khi mua'].map((h) => (
                       <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">{h}</th>
                     ))}
                   </tr>

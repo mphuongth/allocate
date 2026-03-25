@@ -21,8 +21,8 @@ export default function AllocationSummary({ plan, investments, savings, fixedExp
   if (!plan) {
     return (
       <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-5">
-        <h2 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">Allocation Summary</h2>
-        <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-6">Enter your salary to see the summary.</p>
+        <h2 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">Tóm tắt Phân bổ</h2>
+        <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-6">Nhập lương để xem tóm tắt.</p>
       </div>
     )
   }
@@ -37,11 +37,11 @@ export default function AllocationSummary({ plan, investments, savings, fixedExp
   }
 
   for (const inv of investments) {
-    const label = inv.savings_goals?.goal_name ?? 'Unassigned'
+    const label = inv.savings_goals?.goal_name ?? 'Chưa gán'
     addToGoal(label, inv.amount_vnd)
   }
   for (const sav of savings) {
-    const label = sav.savings_goals?.goal_name ?? 'Unassigned'
+    const label = sav.savings_goals?.goal_name ?? 'Chưa gán'
     addToGoal(label, sav.amount_vnd)
   }
 
@@ -63,36 +63,36 @@ export default function AllocationSummary({ plan, investments, savings, fixedExp
 
   // Build rows sorted: named goals alphabetically, then Unassigned
   const goalRows: GoalRow[] = []
-  const unassigned = goalMap.get('Unassigned')
+  const unassigned = goalMap.get('Chưa gán')
   for (const [label, total] of goalMap.entries()) {
-    if (label !== 'Unassigned') goalRows.push({ label, total })
+    if (label !== 'Chưa gán') goalRows.push({ label, total })
   }
   goalRows.sort((a, b) => a.label.localeCompare(b.label))
-  if (unassigned != null) goalRows.push({ label: 'Unassigned', total: unassigned })
+  if (unassigned != null) goalRows.push({ label: 'Chưa gán', total: unassigned })
 
   const pct = (n: number) => salary > 0 ? `${Math.round((n / salary) * 100)}%` : '—'
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden sticky top-6">
       <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700">
-        <h2 className="font-semibold text-gray-900 dark:text-gray-100">Allocation Summary</h2>
-        <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Salary: {fmt(salary)}</p>
+        <h2 className="font-semibold text-gray-900 dark:text-gray-100">Tóm tắt Phân bổ</h2>
+        <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Lương: {fmt(salary)}</p>
       </div>
 
       <div className="p-5">
         <table className="w-full text-sm">
           <thead>
             <tr>
-              <th className="pb-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Goal</th>
-              <th className="pb-2 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide px-3">Allocated</th>
-              <th className="pb-2 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">% Salary</th>
+              <th className="pb-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Mục tiêu</th>
+              <th className="pb-2 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide px-3">Phân bổ</th>
+              <th className="pb-2 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">% Lương</th>
             </tr>
           </thead>
           <tbody>
             {/* Goal rows */}
             {goalRows.length === 0 ? (
               <tr>
-                <td colSpan={3} className="py-2 text-sm text-gray-400 dark:text-gray-500 text-center">No allocations yet</td>
+                <td colSpan={3} className="py-2 text-sm text-gray-400 dark:text-gray-500 text-center">Chưa có phân bổ nào</td>
               </tr>
             ) : (
               goalRows.map((row) => (
@@ -107,7 +107,7 @@ export default function AllocationSummary({ plan, investments, savings, fixedExp
             {/* Fixed Expenses */}
             {fixedExpenses.length > 0 && (
               <tr className="border-t border-gray-200 dark:border-gray-600">
-                <td className="pt-3 pb-1 text-gray-600 dark:text-gray-400">Fixed Expenses</td>
+                <td className="pt-3 pb-1 text-gray-600 dark:text-gray-400">Chi phí Cố định</td>
                 <td className="pt-3 pb-1 text-right text-gray-700 dark:text-gray-300 font-medium px-3">{fmt(totalFixed)}</td>
                 <td className="pt-3 pb-1 text-right text-gray-400 dark:text-gray-500">{pct(totalFixed)}</td>
               </tr>
@@ -116,7 +116,7 @@ export default function AllocationSummary({ plan, investments, savings, fixedExp
             {/* Insurance */}
             {insuranceMembers.length > 0 && (
               <tr className={fixedExpenses.length > 0 ? '' : 'border-t border-gray-200 dark:border-gray-600'}>
-                <td className="py-1 text-gray-600 dark:text-gray-400">Insurance</td>
+                <td className="py-1 text-gray-600 dark:text-gray-400">Bảo hiểm</td>
                 <td className="py-1 text-right text-gray-700 dark:text-gray-300 font-medium px-3">{fmt(totalInsurance)}</td>
                 <td className="py-1 text-right text-gray-400 dark:text-gray-500">{pct(totalInsurance)}</td>
               </tr>
@@ -124,7 +124,7 @@ export default function AllocationSummary({ plan, investments, savings, fixedExp
 
             {/* Total Allocated */}
             <tr className="border-t border-gray-200 dark:border-gray-600">
-              <td className="pt-2 pb-1 font-semibold text-gray-700 dark:text-gray-300">Total Allocated</td>
+              <td className="pt-2 pb-1 font-semibold text-gray-700 dark:text-gray-300">Tổng Phân bổ</td>
               <td className="pt-2 pb-1 text-right font-semibold text-gray-900 dark:text-gray-100 px-3">{fmt(totalAllocated)}</td>
               <td className="pt-2 pb-1 text-right font-semibold text-gray-400 dark:text-gray-500">{pct(totalAllocated)}</td>
             </tr>
@@ -135,7 +135,7 @@ export default function AllocationSummary({ plan, investments, savings, fixedExp
             {/* Remaining Salary — inside the table so columns stay aligned */}
             <tr>
               <td className={`py-2 pl-3 rounded-l-lg font-semibold ${remaining >= 0 ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400' : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400'}`}>
-                Remaining Salary
+                Lương Còn lại
               </td>
               <td className={`py-2 text-right font-semibold px-3 ${remaining >= 0 ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400' : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400'}`}>
                 {fmt(remaining)}
@@ -148,7 +148,7 @@ export default function AllocationSummary({ plan, investments, savings, fixedExp
         </table>
 
         {remaining < 0 && (
-          <p className="text-xs text-red-500 dark:text-red-400 text-center mt-2">Over-allocated by {fmt(Math.abs(remaining))}</p>
+          <p className="text-xs text-red-500 dark:text-red-400 text-center mt-2">Phân bổ vượt {fmt(Math.abs(remaining))}</p>
         )}
       </div>
     </div>

@@ -53,10 +53,10 @@ interface Props {
 }
 
 const statusConfig: Record<DisplayStatus | 'completed', { label: string; className: string; icon?: boolean }> = {
-  not_due_yet: { label: 'Not Due Yet', className: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' },
-  due: { label: 'Due', className: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400' },
-  overdue: { label: 'Overdue', className: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400', icon: true },
-  completed: { label: 'Completed', className: 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400' },
+  not_due_yet: { label: 'Chưa đến hạn', className: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' },
+  due: { label: 'Đến hạn', className: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400' },
+  overdue: { label: 'Quá hạn', className: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400', icon: true },
+  completed: { label: 'Đã hoàn thành', className: 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400' },
 }
 
 export default function InsuranceCard({
@@ -105,7 +105,7 @@ export default function InsuranceCard({
   async function handleAdd() {
     const amount = Number(inputAmount)
     if (!inputAmount || isNaN(amount) || amount <= 0) {
-      showToast('Amount must be greater than 0', 'error')
+      showToast('Số tiền phải lớn hơn 0', 'error')
       return
     }
     setIsLoading(true)
@@ -118,9 +118,9 @@ export default function InsuranceCard({
       setInputAmount('')
       setLocalAmountSaved((prev) => prev + amount)
       await fetchSavings()
-      showToast('Savings added')
+      showToast('Đã thêm tiết kiệm')
     } else {
-      showToast('Failed to add savings', 'error')
+      showToast('Không thể thêm tiết kiệm', 'error')
     }
     setIsLoading(false)
   }
@@ -131,9 +131,9 @@ export default function InsuranceCard({
     if (res.ok) {
       setLocalAmountSaved((prev) => prev - amount)
       await fetchSavings()
-      showToast('Record deleted')
+      showToast('Đã xóa bản ghi')
     } else {
-      showToast('Failed to delete', 'error')
+      showToast('Không thể xóa', 'error')
     }
     setIsLoading(false)
   }
@@ -145,18 +145,18 @@ export default function InsuranceCard({
       if (res.ok) {
         setLocalAmountSaved(0)
         setShowConfirm(false)
-        showToast('Payment marked! Savings reset to ₫0.')
+        showToast('Đã đánh dấu thanh toán! Số dư tiết kiệm đặt lại về ₫0.')
         onSavingsChange?.()
       } else {
         const body = await res.json().catch(() => ({}))
-        const msg = res.status === 401 ? "You don't have permission to mark this payment. Contact support."
-          : res.status === 422 ? body.error ?? 'Payment is not yet due.'
-          : body.error ?? 'Something went wrong. Please try again.'
+        const msg = res.status === 401 ? 'Bạn không có quyền đánh dấu thanh toán này. Vui lòng liên hệ hỗ trợ.'
+          : res.status === 422 ? body.error ?? 'Thanh toán chưa đến hạn.'
+          : body.error ?? 'Đã xảy ra lỗi. Vui lòng thử lại.'
         showToast(msg, 'error')
         setShowConfirm(false)
       }
     } catch {
-      showToast('Connection lost. Please check your internet and try again.', 'error')
+      showToast('Mất kết nối. Vui lòng kiểm tra internet và thử lại.', 'error')
       setShowConfirm(false)
     }
     setMarkPaidLoading(false)
@@ -179,18 +179,18 @@ export default function InsuranceCard({
 
       <div className="grid grid-cols-2 gap-3 mb-3 text-xs">
         <div>
-          <p className="text-gray-400 dark:text-gray-500 mb-0.5">Annual Premium</p>
+          <p className="text-gray-400 dark:text-gray-500 mb-0.5">Phí hàng năm</p>
           <p className="font-medium text-gray-800 dark:text-gray-200">{fmt(annualPremium)}</p>
         </div>
         <div>
-          <p className="text-gray-400 dark:text-gray-500 mb-0.5">Amount Saved</p>
+          <p className="text-gray-400 dark:text-gray-500 mb-0.5">Đã tiết kiệm</p>
           <p className="font-medium text-gray-800 dark:text-gray-200">{fmt(localAmountSaved)}</p>
         </div>
       </div>
 
       <div>
         <div className="flex items-center justify-between text-xs text-gray-400 dark:text-gray-500 mb-1">
-          <span>Savings Progress</span>
+          <span>Tiến độ tiết kiệm</span>
           <span>{Math.round(localProgress)}%</span>
         </div>
         <div className="h-1.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
@@ -203,12 +203,12 @@ export default function InsuranceCard({
 
       {nextPaymentDate && !isCompleted && (
         <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
-          Next Due: {fmtDate(nextPaymentDate)}
+          Hạn tiếp theo: {fmtDate(nextPaymentDate)}
         </p>
       )}
       {lastPaymentDate && (
         <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-          Last Paid: {fmtDate(lastPaymentDate)}
+          Lần thanh toán gần nhất: {fmtDate(lastPaymentDate)}
         </p>
       )}
 
@@ -221,14 +221,14 @@ export default function InsuranceCard({
 
       {/* Add Savings */}
       <div className="border-t border-gray-100 dark:border-gray-700 mt-3 pt-3">
-        <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">Add Savings</p>
+        <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">Thêm tiết kiệm</p>
         <div className="flex gap-2">
           <input
             type="number"
             value={inputAmount}
             onChange={(e) => setInputAmount(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-            placeholder="Enter amount (VND)"
+            placeholder="Nhập số tiền (VND)"
             className="flex-1 min-w-0 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
           <button
@@ -236,7 +236,7 @@ export default function InsuranceCard({
             disabled={isLoading}
             className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 whitespace-nowrap"
           >
-            Add
+            Thêm
           </button>
         </div>
       </div>
@@ -244,7 +244,7 @@ export default function InsuranceCard({
       {/* Savings Records */}
       {savingsList.length > 0 && (
         <div className="border-t border-gray-100 dark:border-gray-700 mt-3 pt-3">
-          <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">Savings Records</p>
+          <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">Lịch sử tiết kiệm</p>
           <ul className="space-y-1.5">
             {savingsList.map((s) => (
               <li key={s.id} className="flex items-center justify-between">
@@ -270,7 +270,7 @@ export default function InsuranceCard({
             onClick={() => setShowConfirm(true)}
             className="w-full py-2 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 transition-colors"
           >
-            Mark as Paid
+            Đánh dấu đã thanh toán
           </button>
         </div>
       )}
@@ -282,22 +282,22 @@ export default function InsuranceCard({
           onClick={(e) => { if (e.target === e.currentTarget) setShowConfirm(false) }}
         >
           <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-sm p-6 border border-gray-100 dark:border-gray-700">
-            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">Confirm Payment</h3>
+            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">Xác nhận thanh toán</h3>
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-              Mark payment as completed for <strong>{insuranceName}</strong>?
+              Đánh dấu thanh toán hoàn tất cho <strong>{insuranceName}</strong>?
             </p>
             <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 mb-4 border-l-4 border-indigo-500">
               <p className="text-xs text-gray-700 dark:text-gray-300 font-medium">{insuranceName}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Annual Payment: {fmt(annualPremium)}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Thanh toán hàng năm: {fmt(annualPremium)}</p>
             </div>
-            <p className="text-xs text-gray-400 dark:text-gray-500 mb-5">Your savings balance will be reset to ₫0.</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mb-5">Số dư tiết kiệm sẽ được đặt lại về ₫0.</p>
             <div className="flex gap-3">
               <button
                 onClick={() => setShowConfirm(false)}
                 disabled={markPaidLoading}
                 className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
               >
-                Cancel
+                Hủy
               </button>
               <button
                 onClick={handleMarkAsPaid}
@@ -310,9 +310,9 @@ export default function InsuranceCard({
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                     </svg>
-                    Processing...
+                    Đang xử lý...
                   </>
-                ) : 'Confirm'}
+                ) : 'Xác nhận'}
               </button>
             </div>
           </div>

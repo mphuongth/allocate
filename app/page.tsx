@@ -5,27 +5,27 @@ import { createSupabaseServerClient } from '@/lib/supabase-server'
 const BENEFITS = [
   {
     icon: '📊',
-    title: 'Auto-Calculate Allocations',
+    title: 'Tự động Tính Phân bổ',
     description:
-      'Intelligently distribute your monthly salary across invoices, insurance, and investments with smart recommendations.',
+      'Tự động phân bổ lương tháng vào hóa đơn, bảo hiểm và đầu tư một cách thông minh.',
   },
   {
     icon: '💰',
-    title: 'Track Net Worth',
+    title: 'Theo dõi Tài sản Ròng',
     description:
-      'Monitor your total assets, liabilities, and net worth in real-time. See your financial health at a glance.',
+      'Theo dõi tổng tài sản, nợ và tài sản ròng theo thời gian thực. Nắm bắt sức khỏe tài chính ngay lập tức.',
   },
   {
     icon: '📈',
-    title: 'Plan Investments',
+    title: 'Lên Kế hoạch Đầu tư',
     description:
-      "Organize and track your investment funds. Know exactly how much you're allocating to each fund every month.",
+      'Quản lý và theo dõi các quỹ đầu tư. Biết chính xác bạn phân bổ bao nhiêu cho từng quỹ mỗi tháng.',
   },
   {
     icon: '🛡️',
-    title: 'Manage Insurance',
+    title: 'Quản lý Bảo hiểm',
     description:
-      'Keep all your insurance policies in one place. Track coverage amounts and monthly premiums effortlessly.',
+      'Tập trung tất cả hợp đồng bảo hiểm vào một nơi. Theo dõi mức bảo hiểm và phí hàng tháng dễ dàng.',
   },
 ]
 
@@ -45,13 +45,13 @@ export default async function HomePage() {
               href="/auth/login"
               className="text-sm font-medium text-gray-600 hover:text-indigo-700 transition-colors"
             >
-              Log In
+              Đăng nhập
             </Link>
             <Link
               href="/auth/signup"
               className="text-sm font-medium px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
             >
-              Sign Up
+              Đăng ký
             </Link>
           </nav>
         </div>
@@ -62,24 +62,23 @@ export default async function HomePage() {
         <section className="py-24 px-6 text-center">
           <div className="max-w-3xl mx-auto">
             <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight leading-tight mb-6">
-              Automate Your Monthly Allocation
+              Tự động hóa Phân bổ Hàng tháng
             </h1>
             <p className="text-lg text-gray-600 mb-10 max-w-xl mx-auto leading-relaxed">
-              Take control of your finances with intelligent allocation planning. Track investments,
-              manage insurance, and optimize your monthly budget in minutes.
+              Kiểm soát tài chính với kế hoạch phân bổ thông minh. Theo dõi đầu tư, quản lý bảo hiểm và tối ưu ngân sách hàng tháng.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link
                 href="/auth/signup"
                 className="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
               >
-                Sign Up
+                Đăng ký
               </Link>
               <Link
                 href="/auth/login"
                 className="px-6 py-3 border-2 border-indigo-600 text-indigo-700 font-semibold rounded-lg hover:bg-indigo-50 transition-colors"
               >
-                Log In
+                Đăng nhập
               </Link>
             </div>
           </div>
@@ -88,7 +87,7 @@ export default async function HomePage() {
         {/* Benefits */}
         <section className="py-20 px-6 bg-gray-50">
           <div className="max-w-6xl mx-auto">
-            <h2 className="text-3xl font-bold text-center mb-14">Why Choose Allocate?</h2>
+            <h2 className="text-3xl font-bold text-center mb-14">Tại sao chọn Allocate?</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {BENEFITS.map((b) => (
                 <div

@@ -34,7 +34,7 @@ export default function FixedExpensesSection({ plan, fixedExpenses, onRefresh, o
     setFormError('')
     const num = Number(overrideValue)
     if (!overrideValue || isNaN(num) || num <= 0) {
-      setFormError('Override amount must be positive')
+      setFormError('Số tiền ghi đè phải dương')
       return
     }
 
@@ -47,14 +47,14 @@ export default function FixedExpensesSection({ plan, fixedExpenses, onRefresh, o
       })
       if (!res.ok) {
         const { error } = await res.json()
-        setFormError(error ?? 'Something went wrong. Please try again later.')
+        setFormError(error ?? 'Đã xảy ra lỗi. Vui lòng thử lại sau.')
       } else {
         setEditItem(null)
-        onToast('Fixed expense override saved')
+        onToast('Đã lưu ghi đè chi phí cố định')
         onRefresh()
       }
     } catch {
-      setFormError('Unable to save. Please check your connection and try again.')
+      setFormError('Không thể lưu. Vui lòng kiểm tra kết nối và thử lại.')
     }
     setSaving(false)
   }
@@ -67,7 +67,7 @@ export default function FixedExpensesSection({ plan, fixedExpenses, onRefresh, o
       body: JSON.stringify({ fixed_expense_id: expense.expense_id, monthly_amount_override_vnd: 0 }),
     })
     setConfirmSkip(null)
-    onToast(`${expense.expense_name} skipped for this month`)
+    onToast(`Đã bỏ qua ${expense.expense_name} tháng này`)
     onRefresh()
   }
 
@@ -81,7 +81,7 @@ export default function FixedExpensesSection({ plan, fixedExpenses, onRefresh, o
 
     const delRes = await fetch(`/api/v1/monthly-plans/${plan.id}/fixed-expense-overrides/${match.id}`, { method: 'DELETE' })
     if (delRes.ok) {
-      onToast(`${expense.expense_name} restored`)
+      onToast(`Đã khôi phục ${expense.expense_name}`)
       onRefresh()
     }
   }
@@ -90,9 +90,9 @@ export default function FixedExpensesSection({ plan, fixedExpenses, onRefresh, o
     return (
       <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700">
-          <h2 className="font-semibold text-gray-900 dark:text-gray-100">Fixed Expenses</h2>
+          <h2 className="font-semibold text-gray-900 dark:text-gray-100">Chi phí Cố định</h2>
         </div>
-        <div className="text-center py-10 text-gray-400 dark:text-gray-500 text-sm">No fixed expenses configured</div>
+        <div className="text-center py-10 text-gray-400 dark:text-gray-500 text-sm">Chưa có chi phí cố định nào</div>
       </div>
     )
   }
@@ -100,14 +100,14 @@ export default function FixedExpensesSection({ plan, fixedExpenses, onRefresh, o
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
       <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700">
-        <h2 className="font-semibold text-gray-900 dark:text-gray-100">Fixed Expenses</h2>
-        <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Monthly amounts as entered in Settings. Override or skip for this month only.</p>
+        <h2 className="font-semibold text-gray-900 dark:text-gray-100">Chi phí Cố định</h2>
+        <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Số tiền hàng tháng theo Cài đặt. Ghi đè hoặc bỏ qua cho tháng này.</p>
       </div>
 
       <table className="w-full text-sm">
         <thead className="bg-gray-50 dark:bg-gray-800">
           <tr>
-            {['Expense', 'Default Monthly', 'This Month', 'Actions'].map((h) => (
+            {['Chi phí', 'Mặc định / Tháng', 'Tháng này', 'Thao tác'].map((h) => (
               <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">{h}</th>
             ))}
           </tr>
@@ -124,25 +124,25 @@ export default function FixedExpensesSection({ plan, fixedExpenses, onRefresh, o
                 <td className="px-4 py-3">
                   {isSkipped ? (
                     <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
-                      Skipped
+                      Bỏ qua
                     </span>
                   ) : (
                     <>
                       <span className={hasOverride ? 'text-indigo-600 dark:text-indigo-400 font-medium' : 'text-gray-500 dark:text-gray-400'}>
                         {fmt(thisMonth)}
                       </span>
-                      {hasOverride && <span className="ml-1.5 text-xs text-indigo-400 dark:text-indigo-500">(overridden)</span>}
+                      {hasOverride && <span className="ml-1.5 text-xs text-indigo-400 dark:text-indigo-500">(đã ghi đè)</span>}
                     </>
                   )}
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex gap-3">
                     {isSkipped ? (
-                      <button onClick={() => handleRestore(expense)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">Restore</button>
+                      <button onClick={() => handleRestore(expense)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">Khôi phục</button>
                     ) : (
                       <>
-                        <button onClick={() => openEdit(expense)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">Edit</button>
-                        <button onClick={() => setConfirmSkip(expense)} className="text-xs text-red-500 dark:text-red-400 hover:underline">Delete</button>
+                        <button onClick={() => openEdit(expense)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">Sửa</button>
+                        <button onClick={() => setConfirmSkip(expense)} className="text-xs text-red-500 dark:text-red-400 hover:underline">Xóa</button>
                       </>
                     )}
                   </div>
@@ -157,11 +157,11 @@ export default function FixedExpensesSection({ plan, fixedExpenses, onRefresh, o
       {editItem && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-sm p-6 border border-gray-100 dark:border-gray-700">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">Override Monthly Amount</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">Ghi đè Số tiền Tháng</h3>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{editItem.expense_name}</p>
             {formError && <p className="text-red-600 dark:text-red-400 text-sm mb-3">{formError}</p>}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">This Month Amount (VND) *</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Số tiền Tháng này (VND) *</label>
               <div className="flex gap-2">
                 <input type="number" value={overrideValue} onChange={(e) => setOverrideValue(e.target.value)} className={inputCls} />
                 <button
@@ -169,16 +169,16 @@ export default function FixedExpensesSection({ plan, fixedExpenses, onRefresh, o
                   onClick={() => setOverrideValue(String(editItem.amount_vnd))}
                   className="shrink-0 px-3 py-2 text-xs font-medium text-indigo-600 dark:text-indigo-400 border border-indigo-300 dark:border-indigo-700 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 whitespace-nowrap"
                 >
-                  Default
+                  Mặc định
                 </button>
               </div>
-              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Default: {fmt(editItem.amount_vnd)}/month</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Mặc định: {fmt(editItem.amount_vnd)}/tháng</p>
             </div>
             <div className="flex gap-3 mt-5">
-              <button onClick={() => setEditItem(null)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Cancel</button>
+              <button onClick={() => setEditItem(null)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Hủy</button>
               <button onClick={handleSaveOverride} disabled={saving} className="flex-1 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2">
                 {saving && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-                {saving ? 'Saving...' : 'Save'}
+                {saving ? 'Đang lưu...' : 'Lưu'}
               </button>
             </div>
           </div>
@@ -189,13 +189,13 @@ export default function FixedExpensesSection({ plan, fixedExpenses, onRefresh, o
       {confirmSkip && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-sm p-6 border border-gray-100 dark:border-gray-700">
-            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">Skip this month?</h3>
+            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">Bỏ qua tháng này?</h3>
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-5">
-              <strong>{confirmSkip.expense_name}</strong> will be excluded from this month's plan only. Settings and other months are not affected.
+              <strong>{confirmSkip.expense_name}</strong> sẽ bị loại khỏi kế hoạch tháng này. Cài đặt và các tháng khác không bị ảnh hưởng.
             </p>
             <div className="flex gap-3">
-              <button onClick={() => setConfirmSkip(null)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Cancel</button>
-              <button onClick={() => handleSkip(confirmSkip)} className="flex-1 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700">Skip</button>
+              <button onClick={() => setConfirmSkip(null)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Hủy</button>
+              <button onClick={() => handleSkip(confirmSkip)} className="flex-1 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700">Bỏ qua</button>
             </div>
           </div>
         </div>

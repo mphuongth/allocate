@@ -21,7 +21,7 @@ export default function SignupPage() {
 
   function handlePasswordBlur() {
     if (password && password.length < 8) {
-      setPasswordError('Password must be at least 8 characters.')
+      setPasswordError('Mật khẩu phải có ít nhất 8 ký tự.')
     } else {
       setPasswordError(null)
     }
@@ -29,7 +29,7 @@ export default function SignupPage() {
 
   function handleConfirmBlur() {
     if (confirmPassword && password !== confirmPassword) {
-      setConfirmError('Passwords do not match.')
+      setConfirmError('Mật khẩu không khớp.')
     } else {
       setConfirmError(null)
     }
@@ -40,11 +40,11 @@ export default function SignupPage() {
     setFormError(null)
 
     if (password.length < 8) {
-      setPasswordError('Password must be at least 8 characters.')
+      setPasswordError('Mật khẩu phải có ít nhất 8 ký tự.')
       return
     }
     if (password !== confirmPassword) {
-      setConfirmError('Passwords do not match.')
+      setConfirmError('Mật khẩu không khớp.')
       return
     }
 
@@ -60,9 +60,9 @@ export default function SignupPage() {
 
       if (error) {
         if (error.message.toLowerCase().includes('already') || error.status === 422) {
-          setFormError('Email already in use.')
+          setFormError('Email đã được sử dụng.')
         } else {
-          setFormError('Could not create account. Please try again.')
+          setFormError('Không thể tạo tài khoản. Vui lòng thử lại.')
         }
         return
       }
@@ -75,7 +75,7 @@ export default function SignupPage() {
       router.push('/dashboard')
       router.refresh()
     } catch {
-      setFormError('Unable to connect. Please check your internet and try again.')
+      setFormError('Không thể kết nối. Vui lòng kiểm tra internet và thử lại.')
     } finally {
       setLoading(false)
     }
@@ -86,16 +86,15 @@ export default function SignupPage() {
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
         <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-lg shadow p-8 text-center border border-transparent dark:border-gray-700">
           <div className="text-4xl mb-4">📧</div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-3">Check your email</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-3">Kiểm tra email</h1>
           <p className="text-gray-600 dark:text-gray-400 text-sm mb-6">
-            We sent a confirmation link to your email address. Click it to activate your account,
-            then come back to sign in.
+            Chúng tôi đã gửi liên kết xác nhận đến email của bạn. Nhấp vào đó để kích hoạt tài khoản, sau đó quay lại đăng nhập.
           </p>
           <Link
             href="/auth/login"
             className="inline-block py-2 px-6 bg-indigo-600 text-white rounded-md font-medium hover:bg-indigo-700 transition-colors"
           >
-            Go to sign in
+            Đi đến đăng nhập
           </Link>
         </div>
       </div>
@@ -105,7 +104,7 @@ export default function SignupPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
       <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-lg shadow p-8 border border-transparent dark:border-gray-700">
-        <h1 className="text-2xl font-bold text-center text-gray-900 dark:text-gray-100 mb-6">Create your account</h1>
+        <h1 className="text-2xl font-bold text-center text-gray-900 dark:text-gray-100 mb-6">Tạo tài khoản</h1>
         {formError && (
           <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-sm rounded-md">{formError}</div>
         )}
@@ -127,7 +126,7 @@ export default function SignupPage() {
           </div>
           <div>
             <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Password
+              Mật khẩu
             </label>
             <input
               type="password"
@@ -147,7 +146,7 @@ export default function SignupPage() {
           </div>
           <div>
             <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Confirm Password
+              Xác nhận mật khẩu
             </label>
             <input
               type="password"
@@ -170,13 +169,13 @@ export default function SignupPage() {
             disabled={loading}
             className="w-full py-2 px-4 bg-indigo-600 text-white rounded-md font-medium hover:bg-indigo-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {loading ? 'Creating account...' : 'Sign up'}
+            {loading ? 'Đang tạo tài khoản...' : 'Đăng ký'}
           </button>
         </form>
         <p className="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">
-          Already have an account?{' '}
+          Đã có tài khoản?{' '}
           <Link href="/auth/login" className="text-indigo-600 dark:text-indigo-400 hover:underline font-medium">
-            Sign in
+            Đăng nhập
           </Link>
         </p>
       </div>

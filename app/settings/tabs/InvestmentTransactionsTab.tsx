@@ -33,6 +33,13 @@ interface Fund {
 const ASSET_TYPES = ['fund', 'bank', 'stock', 'gold'] as const
 type AssetType = typeof ASSET_TYPES[number]
 
+const TYPE_LABELS: Record<AssetType, string> = {
+  fund: 'Quỹ',
+  bank: 'Ngân hàng',
+  stock: 'Cổ phiếu',
+  gold: 'Vàng',
+}
+
 const ASSET_COLORS: Record<AssetType, string> = {
   fund: 'bg-purple-100 text-purple-700',
   bank: 'bg-blue-100 text-blue-700',
@@ -220,8 +227,8 @@ export default function InvestmentTransactionsTab() {
 
   async function handleSave() {
     setFormError('')
-    if (!txForm.amount_vnd || Number(txForm.amount_vnd) <= 0) { setFormError('Amount must be greater than 0.'); return }
-    if (!txForm.investment_date) { setFormError('Investment date is required.'); return }
+    if (!txForm.amount_vnd || Number(txForm.amount_vnd) <= 0) { setFormError('Số tiền phải lớn hơn 0.'); return }
+    if (!txForm.investment_date) { setFormError('Ngày đầu tư là bắt buộc.'); return }
 
     const payload = {
       asset_type: txForm.asset_type,
@@ -247,7 +254,7 @@ export default function InvestmentTransactionsTab() {
     })
     if (!res.ok) {
       const { error } = await res.json()
-      setFormError(error ?? 'Something went wrong.')
+      setFormError(error ?? 'Đã xảy ra lỗi.')
     } else {
       setFormMode(null)
       await fetchTransactions()
@@ -284,14 +291,14 @@ export default function InvestmentTransactionsTab() {
       setImportRaw('')
       setImportRows([])
       setImportFundId('')
-      setImportToast(`Imported ${inserted} transactions`)
+      setImportToast(`Đã nhập ${inserted} giao dịch`)
       setTimeout(() => setImportToast(''), 4000)
       await fetchTransactions()
     }
   }
 
   async function handleDelete(tx: Transaction) {
-    if (!confirm('Delete this transaction?')) return
+    if (!confirm('Xóa giao dịch này?')) return
     const res = await fetch(`/api/v1/investment-transactions/${tx.transaction_id}`, { method: 'DELETE' })
     if (res.ok) await fetchTransactions()
   }
@@ -301,20 +308,20 @@ export default function InvestmentTransactionsTab() {
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Investment Transactions</h2>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Giao dịch Đầu tư</h2>
         <div className="flex items-center gap-3">
-          <span className="text-sm text-gray-500 dark:text-gray-400">{total} total</span>
+          <span className="text-sm text-gray-500 dark:text-gray-400">{total} giao dịch</span>
           <button
             onClick={() => { setShowImport(true); setImportRaw(''); setImportRows([]); setImportFundId('') }}
             className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
           >
-            ↑ Import from Excel
+            ↑ Nhập từ Excel
           </button>
           <button
             onClick={openAdd}
             className="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
           >
-            + Add Transaction
+            + Thêm Giao dịch
           </button>
         </div>
       </div>
@@ -322,54 +329,54 @@ export default function InvestmentTransactionsTab() {
       {/* Filters */}
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm p-4 mb-4 flex flex-wrap gap-3 items-end">
         <div>
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Asset Type</label>
+          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Loại Tài sản</label>
           <select
             value={filters.asset_type}
             onChange={(e) => setSelectFilter('asset_type', e.target.value)}
             className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
-            <option value="">All</option>
-            {ASSET_TYPES.map((t) => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
+            <option value="">Tất cả</option>
+            {ASSET_TYPES.map((t) => <option key={t} value={t}>{TYPE_LABELS[t] ?? t}</option>)}
           </select>
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Goal</label>
+          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Mục tiêu</label>
           <select
             value={filters.goal_id}
             onChange={(e) => setSelectFilter('goal_id', e.target.value)}
             className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
-            <option value="">All Goals</option>
-            <option value="unassigned">Unassigned</option>
+            <option value="">Tất cả Mục tiêu</option>
+            <option value="unassigned">Chưa gán</option>
             {goals.map((g) => <option key={g.goal_id} value={g.goal_id}>{g.goal_name}</option>)}
           </select>
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">From Date</label>
+          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Từ Ngày</label>
           <input type="date" value={dateFrom} onChange={(e) => setDateFilter('from_date', e.target.value, setDateFrom)}
             className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">To Date</label>
+          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Đến Ngày</label>
           <input type="date" value={dateTo} onChange={(e) => setDateFilter('to_date', e.target.value, setDateTo)}
             className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
         </div>
         <div>
-          <button onClick={resetFilters} className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Reset</button>
+          <button onClick={resetFilters} className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Đặt lại</button>
         </div>
       </div>
 
       <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
         {loading ? (
-          <div className="text-center py-10 text-gray-400 dark:text-gray-500 text-sm">Loading...</div>
+          <div className="text-center py-10 text-gray-400 dark:text-gray-500 text-sm">Đang tải...</div>
         ) : transactions.length === 0 ? (
-          <div className="text-center py-10 text-gray-400 dark:text-gray-500 text-sm">No transactions found.</div>
+          <div className="text-center py-10 text-gray-400 dark:text-gray-500 text-sm">Không tìm thấy giao dịch.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 dark:bg-gray-800">
                 <tr>
-                  {['Date', 'Asset', 'Amount', 'Units', 'Rate / NAV', 'Current Value', 'Goal', 'Notes', 'Actions'].map((h) => (
+                  {['Ngày', 'Tài sản', 'Số tiền', 'CCQ', 'Lãi suất / NAV', 'Giá trị Hiện tại', 'Mục tiêu', 'Ghi chú', 'Thao tác'].map((h) => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">{h}</th>
                   ))}
                 </tr>
@@ -393,7 +400,7 @@ export default function InvestmentTransactionsTab() {
                       <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{rateOrNav}</td>
                       <td className="px-4 py-3 text-indigo-600 dark:text-indigo-400 font-medium">{fmt(currentValue)}</td>
                       <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
-                        {tx.savings_goals?.goal_name ?? <span className="text-gray-300 dark:text-gray-600">Unassigned</span>}
+                        {tx.savings_goals?.goal_name ?? <span className="text-gray-300 dark:text-gray-600">Chưa gán</span>}
                       </td>
                       <td className="px-4 py-3 text-gray-400 dark:text-gray-500 max-w-32 truncate">{tx.notes ?? '—'}</td>
                       <td className="px-4 py-3 whitespace-nowrap">
@@ -401,13 +408,13 @@ export default function InvestmentTransactionsTab() {
                           onClick={() => openEdit(tx)}
                           className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline mr-3"
                         >
-                          Edit
+                          Sửa
                         </button>
                         <button
                           onClick={() => handleDelete(tx)}
                           className="text-xs text-red-500 dark:text-red-400 hover:underline"
                         >
-                          Delete
+                          Xóa
                         </button>
                       </td>
                     </tr>
@@ -425,15 +432,15 @@ export default function InvestmentTransactionsTab() {
               disabled={page === 1}
               className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300"
             >
-              Previous
+              Trước
             </button>
-            <span className="text-sm text-gray-500 dark:text-gray-400">Page {page} of {totalPages}</span>
+            <span className="text-sm text-gray-500 dark:text-gray-400">Trang {page} / {totalPages}</span>
             <button
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
               className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300"
             >
-              Next
+              Tiếp
             </button>
           </div>
         )}
@@ -451,7 +458,7 @@ export default function InvestmentTransactionsTab() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
-              <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Import from Excel</h3>
+              <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Nhập từ Excel</h3>
               <button
                 onClick={() => setShowImport(false)}
                 className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl leading-none"
@@ -462,13 +469,13 @@ export default function InvestmentTransactionsTab() {
 
             <div className="px-6 py-5 space-y-4 overflow-y-auto flex-1">
               <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Fund</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Quỹ</label>
                 <select
                   value={importFundId}
                   onChange={(e) => setImportFundId(e.target.value)}
                   className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
-                  <option value="">Select fund…</option>
+                  <option value="">Chọn quỹ…</option>
                   {funds.map((f) => (
                     <option key={f.id} value={f.id}>{f.code} - {f.name}</option>
                   ))}
@@ -477,7 +484,7 @@ export default function InvestmentTransactionsTab() {
 
               <div>
                 <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-                  Paste rows from Excel
+                  Dán dữ liệu từ Excel
                 </label>
                 <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">
                   Column order: Tháng | Tiền chuyển | Tiền mua (skip) | NAV mua | CCQ mua
@@ -494,13 +501,13 @@ export default function InvestmentTransactionsTab() {
               {importRows.length > 0 && (
                 <div>
                   <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
-                    Preview — {importRows.filter((r) => !r.error).length} valid / {importRows.length} rows
+                    Xem trước — {importRows.filter((r) => !r.error).length} hợp lệ / {importRows.length} dòng
                   </p>
                   <div className="overflow-x-auto rounded-lg border border-gray-100 dark:border-gray-700">
                     <table className="w-full text-xs">
                       <thead className="bg-gray-50 dark:bg-gray-800">
                         <tr>
-                          {['Date', 'Amount (₫)', 'NAV', 'Units', 'Status'].map((h) => (
+                          {['Ngày', 'Số tiền (₫)', 'NAV', 'CCQ', 'Trạng thái'].map((h) => (
                             <th key={h} className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">{h}</th>
                           ))}
                         </tr>
@@ -532,14 +539,14 @@ export default function InvestmentTransactionsTab() {
                 onClick={() => setShowImport(false)}
                 className="flex-1 px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
               >
-                Cancel
+                Hủy
               </button>
               <button
                 onClick={handleImport}
                 disabled={importing || !importFundId || importRows.filter((r) => !r.error).length === 0}
                 className="flex-1 px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
               >
-                {importing ? 'Importing…' : `Import ${importRows.filter((r) => !r.error).length} transactions`}
+                {importing ? 'Đang nhập…' : `Nhập ${importRows.filter((r) => !r.error).length} giao dịch`}
               </button>
             </div>
           </div>
@@ -552,7 +559,7 @@ export default function InvestmentTransactionsTab() {
           <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
               <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
-                {formMode === 'add' ? 'Add Transaction' : 'Edit Transaction'}
+                {formMode === 'add' ? 'Thêm Giao dịch' : 'Sửa Giao dịch'}
               </h3>
               <button
                 onClick={() => setFormMode(null)}
@@ -565,27 +572,27 @@ export default function InvestmentTransactionsTab() {
             <div className="px-6 py-5 space-y-4">
               {/* Asset Type */}
               <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Asset Type</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Loại Tài sản</label>
                 <select
                   value={txForm.asset_type}
                   onChange={(e) => setTxForm((f) => ({ ...f, asset_type: e.target.value, fund_id: '', unit_price: '', units: '', interest_rate: '', expiry_date: '' }))}
                   className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   {ASSET_TYPES.map((t) => (
-                    <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+                    <option key={t} value={t}>{TYPE_LABELS[t] ?? t}</option>
                   ))}
                 </select>
               </div>
 
               {/* Goal */}
               <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Goal</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Mục tiêu</label>
                 <select
                   value={txForm.goal_id}
                   onChange={(e) => setTxForm((f) => ({ ...f, goal_id: e.target.value }))}
                   className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
-                  <option value="">No Goal (Unassigned)</option>
+                  <option value="">Không có Mục tiêu (Chưa gán)</option>
                   {goals.map((g) => (
                     <option key={g.goal_id} value={g.goal_id}>{g.goal_name}</option>
                   ))}
@@ -595,13 +602,13 @@ export default function InvestmentTransactionsTab() {
               {/* Fund picker — only for fund type */}
               {txForm.asset_type === 'fund' && (
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Fund</label>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Quỹ</label>
                   <select
                     value={txForm.fund_id}
                     onChange={(e) => setTxForm((f) => ({ ...f, fund_id: e.target.value }))}
                     className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   >
-                    <option value="">Select fund…</option>
+                    <option value="">Chọn quỹ…</option>
                     {funds.map((f) => (
                       <option key={f.id} value={f.id}>{f.code} - {f.name}</option>
                     ))}
@@ -611,7 +618,7 @@ export default function InvestmentTransactionsTab() {
 
               {/* Date */}
               <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Investment Date</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Ngày Đầu tư</label>
                 <input
                   type="date"
                   value={txForm.investment_date}
@@ -622,12 +629,12 @@ export default function InvestmentTransactionsTab() {
 
               {/* Amount */}
               <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Amount (VND)</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Số tiền (VND)</label>
                 <input
                   type="number"
                   value={txForm.amount_vnd}
                   onChange={(e) => setTxForm((f) => ({ ...f, amount_vnd: e.target.value }))}
-                  placeholder="e.g. 10000000"
+                  placeholder="VD: 10000000"
                   className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
@@ -637,7 +644,7 @@ export default function InvestmentTransactionsTab() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-                      {txForm.asset_type === 'fund' ? 'NAV at Purchase' : 'Unit Price'}
+                      {txForm.asset_type === 'fund' ? 'NAV khi Mua' : 'Giá Đơn vị'}
                     </label>
                     <input
                       type="number"
@@ -647,7 +654,7 @@ export default function InvestmentTransactionsTab() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Units</label>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">CCQ</label>
                     <input
                       type="number"
                       value={txForm.units}
@@ -662,18 +669,18 @@ export default function InvestmentTransactionsTab() {
               {txForm.asset_type === 'bank' && (
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Interest Rate (%/yr)</label>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Lãi suất (%/năm)</label>
                     <input
                       type="number"
                       step="0.01"
                       value={txForm.interest_rate}
                       onChange={(e) => setTxForm((f) => ({ ...f, interest_rate: e.target.value }))}
-                      placeholder="e.g. 6.5"
+                      placeholder="VD: 6.5"
                       className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Expiry Date</label>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Ngày Đáo hạn</label>
                     <input
                       type="date"
                       value={txForm.expiry_date}
@@ -686,7 +693,7 @@ export default function InvestmentTransactionsTab() {
 
               {/* Notes */}
               <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Notes</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Ghi chú</label>
                 <input
                   type="text"
                   value={txForm.notes}
@@ -705,14 +712,14 @@ export default function InvestmentTransactionsTab() {
                 onClick={() => setFormMode(null)}
                 className="flex-1 px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
               >
-                Cancel
+                Hủy
               </button>
               <button
                 onClick={handleSave}
                 disabled={saving}
                 className="flex-1 px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
               >
-                {saving ? 'Saving…' : 'Save'}
+                {saving ? 'Đang lưu…' : 'Lưu'}
               </button>
             </div>
           </div>

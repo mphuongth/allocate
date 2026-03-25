@@ -58,9 +58,9 @@ export default function FixedExpensesTab() {
 
   async function handleSave() {
     setFormError('')
-    if (!form.expense_name.trim()) { setFormError('Expense name is required.'); return }
-    if (!form.category.trim()) { setFormError('Category is required.'); return }
-    if (!form.amount_vnd || Number(form.amount_vnd) <= 0) { setFormError('Amount must be greater than 0.'); return }
+    if (!form.expense_name.trim()) { setFormError('Tên chi phí là bắt buộc.'); return }
+    if (!form.category.trim()) { setFormError('Danh mục là bắt buộc.'); return }
+    if (!form.amount_vnd || Number(form.amount_vnd) <= 0) { setFormError('Số tiền phải lớn hơn 0.'); return }
 
     setSaving(true)
     const url = editExpense ? `/api/v1/fixed-expenses/${editExpense.expense_id}` : '/api/v1/fixed-expenses'
@@ -71,7 +71,7 @@ export default function FixedExpensesTab() {
     })
     if (!res.ok) {
       const { error } = await res.json()
-      setFormError(error ?? 'Something went wrong.')
+      setFormError(error ?? 'Đã xảy ra lỗi.')
     } else {
       setShowForm(false)
       await fetchExpenses()
@@ -80,10 +80,10 @@ export default function FixedExpensesTab() {
   }
 
   async function handleDelete(expense: Expense) {
-    if (!confirm(`Delete "${expense.expense_name}"?`)) return
+    if (!confirm(`Xóa "${expense.expense_name}"?`)) return
     const res = await fetch(`/api/v1/fixed-expenses/${expense.expense_id}`, { method: 'DELETE' })
     if (res.ok) {
-      setSuccessMsg('Expense deleted.')
+      setSuccessMsg('Đã xóa chi phí.')
       setTimeout(() => setSuccessMsg(''), 4000)
       await fetchExpenses()
     }
@@ -95,11 +95,11 @@ export default function FixedExpensesTab() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Fixed Expenses</h2>
-          {expenses.length > 0 && <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Total: {fmt(totalMonthly)} / month</p>}
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Chi phí Cố định</h2>
+          {expenses.length > 0 && <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Tổng: {fmt(totalMonthly)} / tháng</p>}
         </div>
         <button onClick={openCreate} className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700">
-          Create Expense
+          Tạo Chi phí
         </button>
       </div>
 
@@ -110,13 +110,13 @@ export default function FixedExpensesTab() {
       {/* Filter */}
       {categories.length > 0 && (
         <div className="mb-4 flex items-center gap-3">
-          <label className="text-sm text-gray-600 dark:text-gray-400 font-medium">Category:</label>
+          <label className="text-sm text-gray-600 dark:text-gray-400 font-medium">Danh mục:</label>
           <select
             value={filterCategory}
             onChange={(e) => setFilterCategory(e.target.value)}
             className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
-            <option value="">All</option>
+            <option value="">Tất cả</option>
             {categories.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
@@ -124,14 +124,14 @@ export default function FixedExpensesTab() {
 
       <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
         {loading ? (
-          <div className="text-center py-10 text-gray-400 dark:text-gray-500 text-sm">Loading...</div>
+          <div className="text-center py-10 text-gray-400 dark:text-gray-500 text-sm">Đang tải...</div>
         ) : expenses.length === 0 ? (
-          <div className="text-center py-10 text-gray-400 dark:text-gray-500 text-sm">No expenses yet.</div>
+          <div className="text-center py-10 text-gray-400 dark:text-gray-500 text-sm">Chưa có chi phí nào.</div>
         ) : (
           <table className="w-full text-sm">
             <thead className="bg-gray-50 dark:bg-gray-800">
               <tr>
-                {['Name', 'Category', 'Amount / Month', 'Created', 'Actions'].map((h) => (
+                {['Tên', 'Danh mục', 'Số tiền / Tháng', 'Ngày tạo', 'Thao tác'].map((h) => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
@@ -147,8 +147,8 @@ export default function FixedExpensesTab() {
                   <td className="px-4 py-3 text-gray-400 dark:text-gray-500 text-xs">{new Date(expense.created_at).toLocaleDateString('vi-VN')}</td>
                   <td className="px-4 py-3">
                     <div className="flex gap-3">
-                      <button onClick={() => openEdit(expense)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">Edit</button>
-                      <button onClick={() => handleDelete(expense)} className="text-xs text-red-500 dark:text-red-400 hover:underline">Delete</button>
+                      <button onClick={() => openEdit(expense)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">Sửa</button>
+                      <button onClick={() => handleDelete(expense)} className="text-xs text-red-500 dark:text-red-400 hover:underline">Xóa</button>
                     </div>
                   </td>
                 </tr>
@@ -162,29 +162,29 @@ export default function FixedExpensesTab() {
       {showForm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-sm p-6 border border-gray-100 dark:border-gray-700">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{editExpense ? 'Edit Expense' : 'Create Expense'}</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{editExpense ? 'Sửa Chi phí' : 'Tạo Chi phí'}</h3>
             {formError && <p className="text-red-600 dark:text-red-400 text-sm mb-3">{formError}</p>}
             <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Expense Name *</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tên Chi phí *</label>
                 <input type="text" value={form.expense_name} onChange={(e) => setForm({ ...form, expense_name: e.target.value })}
-                  placeholder="e.g. Rent" className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  placeholder="VD: Tiền thuê nhà" className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Category *</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Danh mục *</label>
                 <input type="text" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}
-                  placeholder="e.g. Housing" className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  placeholder="VD: Nhà ở" className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Amount (VND) *</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Số tiền (VND) *</label>
                 <input type="number" value={form.amount_vnd} onChange={(e) => setForm({ ...form, amount_vnd: e.target.value })}
-                  placeholder="e.g. 5000000" className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  placeholder="VD: 5000000" className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
             </div>
             <div className="flex gap-3 mt-5">
-              <button onClick={() => setShowForm(false)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Cancel</button>
+              <button onClick={() => setShowForm(false)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Hủy</button>
               <button onClick={handleSave} disabled={saving} className="flex-1 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50">
-                {saving ? 'Saving...' : 'Save'}
+                {saving ? 'Đang lưu...' : 'Lưu'}
               </button>
             </div>
           </div>

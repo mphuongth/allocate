@@ -115,12 +115,12 @@ export default function DashboardClient() {
       const res = await fetch('/api/v1/dashboard/overview')
       if (!res.ok) {
         const { error: e } = await res.json()
-        setError(e ?? 'Failed to load dashboard data.')
+        setError(e ?? 'Không thể tải dữ liệu.')
       } else {
         setData(await res.json())
       }
     } catch {
-      setError('Unable to load data. Please check your connection and try again.')
+      setError('Không thể tải dữ liệu. Vui lòng kiểm tra kết nối và thử lại.')
     }
     setLoading(false)
   }, [])
@@ -216,7 +216,7 @@ export default function DashboardClient() {
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-8 flex-wrap gap-3">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Assets Dashboard</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Tổng Quan Tài Sản</h1>
           <div className="flex items-center gap-3 flex-wrap">
             {/* Sort dropdown */}
             {!loading && data && (
@@ -225,10 +225,10 @@ export default function DashboardClient() {
                 onChange={(e) => handleSortChange(e.target.value as SortOrder)}
                 className="text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-1.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
-                <option value="manual">Manual Order</option>
-                <option value="progress-desc">Progress: High to Low</option>
-                <option value="progress-asc">Progress: Low to High</option>
-                <option value="alpha">Alphabetical (A-Z)</option>
+                <option value="manual">Sắp xếp thủ công</option>
+                <option value="progress-desc">Tiến độ: Cao → Thấp</option>
+                <option value="progress-asc">Tiến độ: Thấp → Cao</option>
+                <option value="alpha">Theo bảng chữ cái (A-Z)</option>
               </select>
             )}
             <button
@@ -236,7 +236,7 @@ export default function DashboardClient() {
               disabled={loading}
               className="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
             >
-              {loading ? 'Loading...' : 'Refresh'}
+              {loading ? 'Đang tải...' : 'Làm mới'}
             </button>
           </div>
         </div>
@@ -245,7 +245,7 @@ export default function DashboardClient() {
         {error && (
           <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl flex items-center justify-between">
             <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
-            <button onClick={fetchData} className="text-sm text-red-600 dark:text-red-400 font-medium hover:underline ml-4">Retry</button>
+            <button onClick={fetchData} className="text-sm text-red-600 dark:text-red-400 font-medium hover:underline ml-4">Thử lại</button>
           </div>
         )}
 
@@ -273,17 +273,17 @@ export default function DashboardClient() {
             </div>
 
             {/* Title & description */}
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">No Assets Yet</h2>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Chưa có tài sản nào</h2>
             <p className="text-gray-500 dark:text-gray-400 text-center max-w-sm mb-10">
-              Start by adding financial goals, investment funds, or insurance to track your wealth.
+              Bắt đầu bằng cách thêm mục tiêu tài chính, quỹ đầu tư hoặc bảo hiểm để theo dõi tài sản.
             </p>
 
             {/* Action cards */}
             <div className="w-full max-w-md space-y-3 mb-8">
               {[
-                { icon: '🎯', title: 'Add Financial Goal', desc: 'Create a savings or investment target' },
-                { icon: '💰', title: 'Add Investment Fund', desc: 'Record your funds and certificates' },
-                { icon: '🛡️', title: 'Add Insurance', desc: 'Manage your insurance policies' },
+                { icon: '🎯', title: 'Thêm Mục tiêu Tài chính', desc: 'Tạo mục tiêu tiết kiệm hoặc đầu tư' },
+                { icon: '💰', title: 'Thêm Quỹ Đầu tư', desc: 'Ghi lại các quỹ và chứng chỉ của bạn' },
+                { icon: '🛡️', title: 'Thêm Bảo hiểm', desc: 'Quản lý các hợp đồng bảo hiểm' },
               ].map(({ icon, title, desc }) => (
                 <a
                   key={title}
@@ -305,7 +305,7 @@ export default function DashboardClient() {
             {/* Divider + Settings button */}
             <div className="flex items-center gap-3 w-full max-w-md mb-5">
               <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
-              <span className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">Or manage everything in</span>
+              <span className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">Hoặc quản lý mọi thứ trong</span>
               <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
             </div>
             <a
@@ -326,7 +326,7 @@ export default function DashboardClient() {
             {/* Goals */}
             {sortedGoals.length > 0 && (
               <section>
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Goals</h2>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Mục tiêu</h2>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   {sortedGoals.map((goal) => (
                     <GoalCard
@@ -352,7 +352,7 @@ export default function DashboardClient() {
             {/* Insurance */}
             {data.insurance.length > 0 && (
               <section>
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Insurance</h2>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Bảo hiểm</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {data.insurance.map((ins) => (
                     <InsuranceCard key={ins.insuranceId} {...ins} onSavingsChange={fetchData} />
