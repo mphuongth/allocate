@@ -376,7 +376,7 @@ export default function InvestmentTransactionsTab() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 dark:bg-gray-800">
                 <tr>
-                  {['Ngày', 'Tài sản', 'Số tiền', 'CCQ', 'Lãi suất / NAV', 'Giá trị Hiện tại', 'Mục tiêu', 'Ghi chú', 'Thao tác'].map((h) => (
+                  {['Ngày', 'Tài sản', 'Số tiền', 'Đơn vị', 'Lãi suất / NAV', 'Giá trị Hiện tại', 'Mục tiêu', 'Ghi chú', 'Thao tác'].map((h) => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">{h}</th>
                   ))}
                 </tr>
@@ -654,7 +654,7 @@ export default function InvestmentTransactionsTab() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">CCQ</label>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{txForm.asset_type === 'fund' ? 'CCQ' : txForm.asset_type === 'stock' ? 'CP' : txForm.asset_type === 'gold' ? 'Chỉ' : 'Đơn vị'}</label>
                     <input
                       type="number"
                       value={txForm.units}

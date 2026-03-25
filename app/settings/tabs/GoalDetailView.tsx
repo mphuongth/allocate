@@ -381,7 +381,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
             <table className="w-full text-sm">
               <thead className="bg-gray-50 dark:bg-gray-800">
                 <tr>
-                  {['Ngày', 'Loại', 'Số tiền', 'CCQ', 'Lãi suất', 'Lãi/Lỗ', 'Ghi chú', 'Thao tác'].map((h) => (
+                  {['Ngày', 'Loại', 'Số tiền', 'Đơn vị', 'Lãi suất', 'Lãi/Lỗ', 'Ghi chú', 'Thao tác'].map((h) => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">{h}</th>
                   ))}
                 </tr>
@@ -503,7 +503,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                     className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">CCQ</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{txForm.asset_type === 'stock' ? 'CP' : txForm.asset_type === 'gold' ? 'Chỉ' : 'Đơn vị'}</label>
                   <input type="number" value={txForm.units} onChange={(e) => setTxForm({ ...txForm, units: e.target.value })}
                     className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
