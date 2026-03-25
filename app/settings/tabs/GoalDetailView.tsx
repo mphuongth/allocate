@@ -50,7 +50,7 @@ function calcProjectedInterest(amount: number, rate: number | null, investmentDa
 const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
 
 const emptyTxForm = { asset_type: 'bank', investment_date: '', amount_vnd: '', unit_price: '', units: '', interest_rate: '', expiry_date: '', notes: '', fund_id: '' }
-const emptyFiForm = { fund_id: '', amount_vnd: '', units: '', unit_price: '' }
+const emptyFiForm = { fund_id: '', investment_date: '', amount_vnd: '', units: '', unit_price: '' }
 
 export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: () => void }) {
   const [rows, setRows] = useState<TxRow[]>([])
@@ -174,7 +174,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
 
   // --- Fund investment handlers ---
   function openFiAdd() {
-    setFiForm(emptyFiForm)
+    setFiForm({ ...emptyFiForm, investment_date: new Date().toISOString().slice(0, 10) })
     setEditTx(null)
     setFormError('')
     setFormMode('fi-add')
@@ -183,6 +183,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
   function openFiEdit(row: TxRow) {
     setFiForm({
       fund_id: row.fund_id ?? '',
+      investment_date: row.investment_date,
       amount_vnd: String(row.amount_vnd),
       units: row.units != null ? String(row.units) : '',
       unit_price: row.unit_price != null ? String(row.unit_price) : '',
@@ -206,7 +207,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
       amount_vnd: Number(fiForm.amount_vnd),
       units: Number(fiForm.units),
       unit_price: Number(fiForm.unit_price),
-      investment_date: editTx?.investment_date ?? new Date().toISOString().slice(0, 10),
+      investment_date: fiForm.investment_date || new Date().toISOString().slice(0, 10),
     }
     setSaving(true)
     const url = editTx ? `/api/v1/investment-transactions/${editTx.transaction_id}` : '/api/v1/investment-transactions'
@@ -426,6 +427,12 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                   <option value="">Select a fund...</option>
                   {funds.map((f) => <option key={f.id} value={f.id}>{f.code} - {f.name}</option>)}
                 </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Investment Date *</label>
+                <input type="date" value={fiForm.investment_date} max={new Date().toISOString().slice(0, 10)}
+                  onChange={(e) => setFiForm({ ...fiForm, investment_date: e.target.value })}
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Amount (VND) *</label>
