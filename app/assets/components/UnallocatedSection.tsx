@@ -22,10 +22,11 @@ interface Props {
   nonFunds: NonFundUnallocatedItem[]
   onFundClick: (fundId: string) => void
   onAssignToGoal: (fundId: string) => void
+  onAssignNonFundToGoal: (transactionId: string) => void
   onRefresh: () => void
 }
 
-export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds, onFundClick, onAssignToGoal, onRefresh }: Props) {
+export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds, onFundClick, onAssignToGoal, onAssignNonFundToGoal, onRefresh }: Props) {
   return (
     <section>
       <div className="flex items-center justify-between mb-4">
@@ -104,7 +105,7 @@ export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds,
                         key={idx}
                         className="flex items-center justify-between px-5 py-3 border-t border-gray-50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-800"
                       >
-                        <div>
+                        <div className="flex-1 min-w-0">
                           <p className="text-xs text-gray-500 dark:text-gray-400">
                             {new Date(item.investmentDate).toLocaleDateString('vi-VN')}
                             {item.interestRate != null && (
@@ -120,11 +121,19 @@ export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds,
                             Đã đầu tư: {fmt(item.amount)}
                           </p>
                         </div>
-                        <div className="text-right">
-                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{fmt(item.currentValue)}</p>
-                          <p className={`text-xs ${pl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            {pl >= 0 ? '+' : ''}{fmt(pl)} ({fmtPct(plPct)})
-                          </p>
+                        <div className="flex items-center gap-3 ml-3 flex-shrink-0">
+                          <div className="text-right">
+                            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{fmt(item.currentValue)}</p>
+                            <p className={`text-xs ${pl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {pl >= 0 ? '+' : ''}{fmt(pl)} ({fmtPct(plPct)})
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => onAssignNonFundToGoal(item.transactionId)}
+                            className="text-xs px-2 py-1 border border-indigo-300 dark:border-indigo-700 text-indigo-600 dark:text-indigo-400 rounded-md hover:bg-indigo-50 dark:hover:bg-indigo-900/20 whitespace-nowrap"
+                          >
+                            Gán vào Mục tiêu
+                          </button>
                         </div>
                       </div>
                     )
