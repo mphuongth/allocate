@@ -7,12 +7,10 @@ import { useNavigation } from './NavigationContext'
 import ThemeToggleButton from '../ThemeToggleButton'
 
 interface HeaderProps {
-  email: string
-  initials: string
   onMobileMenuToggle: () => void
 }
 
-export default function Header({ email, initials, onMobileMenuToggle }: HeaderProps) {
+export default function Header({ onMobileMenuToggle }: HeaderProps) {
   const { sidebarCollapsed, setSidebarCollapsed } = useNavigation()
 
   return (
@@ -48,10 +46,8 @@ export default function Header({ email, initials, onMobileMenuToggle }: HeaderPr
       {/* Theme toggle */}
       <ThemeToggleButton />
 
-      {/* User menu */}
-      <div className="ml-auto">
-        <UserMenu email={email} initials={initials} />
-      </div>
+      {/* Logout */}
+      <UserMenu />
     </header>
   )
 }
