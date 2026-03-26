@@ -16,12 +16,6 @@ All screenshots captured from [allocate-kohl.vercel.app](https://allocate-kohl.v
 | ![](screenshots/86-savings-goal-detail-in-settings-light.png) | ![](screenshots/87-savings-goal-detail-in-settings-dark.png) | Savings Goal Detail |
 | ![](screenshots/20-settings-light.png) | ![](screenshots/21-settings-dark.png) | Settings |
 
-## Navigation
-
-| Light | Dark | Component |
-|---|---|---|
-| ![](screenshots/90-user-menu-light.png) | ![](screenshots/91-user-menu-dark.png) | User menu (avatar dropdown) |
-
 ## Settings Tabs
 
 | Light | Dark | Tab |
