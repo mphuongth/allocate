@@ -13,7 +13,6 @@ All screenshots captured from [allocate-kohl.vercel.app](https://allocate-kohl.v
 | ![](screenshots/09-assets-light.png) | ![](screenshots/10-assets-dark.png) | Assets |
 | ![](screenshots/80-fund-library-light.png) | ![](screenshots/81-fund-library-dark.png) | Fund Library |
 | ![](screenshots/14-planning-light.png) | ![](screenshots/15-planning-dark.png) | Planning |
-| ![](screenshots/16-savings-goals-light.png) | ![](screenshots/17-savings-goals-dark.png) | Savings Goals |
 | ![](screenshots/86-savings-goal-detail-in-settings-light.png) | ![](screenshots/87-savings-goal-detail-in-settings-dark.png) | Savings Goal Detail |
 | ![](screenshots/20-settings-light.png) | ![](screenshots/21-settings-dark.png) | Settings |
 
