@@ -1,14 +1,16 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import dynamic from 'next/dynamic'
 import { NetWorthSkeleton, GoalSkeleton, InsuranceSkeleton } from './components/Skeletons'
 import NetWorthCard from './components/NetWorthCard'
 import GoalCard from './components/GoalCard'
 import UnallocatedSection from './components/UnallocatedSection'
 import InsuranceCard from './components/InsuranceCard'
-import FundDetailModal from './components/FundDetailModal'
-import GoalPickerModal from './components/GoalPickerModal'
-import GoldPriceWidget from './components/GoldPriceWidget'
+
+const FundDetailModal = dynamic(() => import('./components/FundDetailModal'))
+const GoalPickerModal = dynamic(() => import('./components/GoalPickerModal'))
+const GoldPriceWidget = dynamic(() => import('./components/GoldPriceWidget'))
 
 export interface FundBreakdownItem {
   fundId: string
@@ -76,6 +78,22 @@ export interface DashboardData {
 type SortOrder = 'manual' | 'progress-desc' | 'progress-asc' | 'alpha'
 
 const SORT_KEY = 'assetsSortOrder'
+const OVERVIEW_CACHE_KEY = 'dashboardOverviewCache'
+const OVERVIEW_CACHE_TTL = 2 * 60 * 1000 // 2 minutes
+
+function getCachedOverview(): DashboardData | null {
+  try {
+    const raw = localStorage.getItem(OVERVIEW_CACHE_KEY)
+    if (!raw) return null
+    const { data, ts } = JSON.parse(raw)
+    if (Date.now() - ts > OVERVIEW_CACHE_TTL) return null
+    return data
+  } catch { return null }
+}
+
+function setCachedOverview(data: DashboardData) {
+  try { localStorage.setItem(OVERVIEW_CACHE_KEY, JSON.stringify({ data, ts: Date.now() })) } catch { /* ignore */ }
+}
 
 function sortGoals(goals: GoalData[], order: SortOrder): GoalData[] {
   const copy = [...goals]
@@ -114,7 +132,13 @@ export default function DashboardClient() {
     if (saved) setSortOrder(saved as SortOrder)
   }, [])
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (opts?: { force?: boolean }) => {
+    const cached = !opts?.force && getCachedOverview()
+    if (cached) {
+      setData(cached)
+      setLoading(false)
+      return
+    }
     setLoading(true)
     setError('')
     try {
@@ -123,7 +147,9 @@ export default function DashboardClient() {
         const { error: e } = await res.json()
         setError(e ?? 'Không thể tải dữ liệu.')
       } else {
-        setData(await res.json())
+        const json = await res.json()
+        setData(json)
+        setCachedOverview(json)
       }
     } catch {
       setError('Không thể tải dữ liệu. Vui lòng kiểm tra kết nối và thử lại.')
@@ -198,6 +224,7 @@ export default function DashboardClient() {
           )
         )
         setGoalPickerFundId(null)
+        await fetchData({ force: true })
       } else {
         setData(prevData)
         setAssignError('Failed to reassign fund. Please try again.')
@@ -223,7 +250,7 @@ export default function DashboardClient() {
         setNonFundAssignError(error ?? 'Failed to assign. Please try again.')
       } else {
         setNonFundPickerTxId(null)
-        await fetchData()
+        await fetchData({ force: true })
       }
     } catch {
       setNonFundAssignError('Unable to save. Please check your connection.')
@@ -260,7 +287,7 @@ export default function DashboardClient() {
               </select>
             )}
             <button
-              onClick={fetchData}
+              onClick={() => fetchData({ force: true })}
               disabled={loading}
               className="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
             >
@@ -273,7 +300,7 @@ export default function DashboardClient() {
         {error && (
           <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl flex items-center justify-between">
             <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
-            <button onClick={fetchData} className="text-sm text-red-600 dark:text-red-400 font-medium hover:underline ml-4">Thử lại</button>
+            <button onClick={() => fetchData({ force: true })} className="text-sm text-red-600 dark:text-red-400 font-medium hover:underline ml-4">Thử lại</button>
           </div>
         )}
 
@@ -348,7 +375,7 @@ export default function DashboardClient() {
         {/* Gold price widget — shown whenever user has any gold investment */}
         {!loading && data?.netWorth.hasGold && (
           <div className="mb-6 rounded-xl overflow-hidden border border-amber-100 dark:border-amber-800/30">
-            <GoldPriceWidget onRefresh={fetchData} />
+            <GoldPriceWidget onRefresh={() => fetchData({ force: true })} />
           </div>
         )}
 
@@ -382,7 +409,7 @@ export default function DashboardClient() {
                 onFundClick={handleFundClick}
                 onAssignToGoal={(fundId) => setGoalPickerFundId(fundId)}
                 onAssignNonFundToGoal={(txId) => setNonFundPickerTxId(txId)}
-                onRefresh={fetchData}
+                onRefresh={() => fetchData({ force: true })}
               />
             )}
 
@@ -392,7 +419,7 @@ export default function DashboardClient() {
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Bảo hiểm</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {data.insurance.map((ins) => (
-                    <InsuranceCard key={ins.insuranceId} {...ins} onSavingsChange={fetchData} />
+                    <InsuranceCard key={ins.insuranceId} {...ins} onSavingsChange={() => fetchData({ force: true })} />
                   ))}
                 </div>
               </section>
