@@ -383,7 +383,7 @@ export default function FundLibraryClient() {
       {/* Add/Edit Modal */}
       {modalMode && (
         <div className="fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-md p-6 border border-gray-100 dark:border-gray-700">
+          <form onSubmit={(e) => { e.preventDefault(); handleSave() }} className="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-md p-6 border border-gray-100 dark:border-gray-700">
             <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">
               {modalMode === 'add' ? 'Thêm Quỹ' : 'Sửa Quỹ'}
             </h2>
@@ -453,6 +453,7 @@ export default function FundLibraryClient() {
             </div>
             <div className="flex gap-3 mt-6">
               <button
+                type="button"
                 onClick={closeModal}
                 disabled={saving}
                 className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
@@ -460,14 +461,14 @@ export default function FundLibraryClient() {
                 Hủy
               </button>
               <button
-                onClick={handleSave}
+                type="submit"
                 disabled={saving}
                 className="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded transition-colors disabled:opacity-50"
               >
                 {saving ? 'Đang lưu…' : 'Lưu quỹ'}
               </button>
             </div>
-          </div>
+          </form>
         </div>
       )}
 
