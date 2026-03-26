@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import ConfirmModal from '@/app/components/ConfirmModal'
 
 interface Goal {
   goal_id: string
@@ -67,6 +68,8 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [pendingConfirm, setPendingConfirm] = useState<{ title: string; message: string; onConfirm: () => Promise<void> } | null>(null)
+  const [confirming, setConfirming] = useState(false)
 
   // Form mode: null = closed, 'tx-add', 'tx-edit', 'fi-add', 'fi-edit'
   const [formMode, setFormMode] = useState<'tx-add' | 'tx-edit' | 'fi-add' | 'fi-edit' | null>(null)
@@ -180,11 +183,16 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
   }
 
   async function handleTxDelete(row: TxRow) {
-    if (!confirm('Xóa giao dịch này?')) return
-    setDeletingId(row.transaction_id)
-    const res = await fetch(`/api/v1/investment-transactions/${row.transaction_id}`, { method: 'DELETE' })
-    if (res.ok) { setSuccessMsg('Đã xóa giao dịch.'); setTimeout(() => setSuccessMsg(''), 4000); await fetchData() }
-    setDeletingId(null)
+    setPendingConfirm({
+      title: 'Xóa Giao dịch',
+      message: 'Bạn có chắc muốn xóa giao dịch đầu tư này?',
+      onConfirm: async () => {
+        setDeletingId(row.transaction_id)
+        const res = await fetch(`/api/v1/investment-transactions/${row.transaction_id}`, { method: 'DELETE' })
+        if (res.ok) { setSuccessMsg('Đã xóa giao dịch.'); setTimeout(() => setSuccessMsg(''), 4000); await fetchData() }
+        setDeletingId(null)
+      },
+    })
   }
 
   // --- Fund investment handlers ---
@@ -233,29 +241,39 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
   }
 
   async function handleFiDelete(row: TxRow) {
-    if (!confirm('Xóa khoản đầu tư quỹ này?')) return
-    setDeletingId(row.transaction_id)
-    const res = await fetch(`/api/v1/investment-transactions/${row.transaction_id}`, { method: 'DELETE' })
-    if (res.ok) {
-      setSuccessMsg('Đã xóa khoản đầu tư.')
-      setTimeout(() => setSuccessMsg(''), 4000)
-      await fetchData()
-    }
-    setDeletingId(null)
+    setPendingConfirm({
+      title: 'Xóa Khoản Đầu tư Quỹ',
+      message: 'Bạn có chắc muốn xóa khoản đầu tư quỹ này?',
+      onConfirm: async () => {
+        setDeletingId(row.transaction_id)
+        const res = await fetch(`/api/v1/investment-transactions/${row.transaction_id}`, { method: 'DELETE' })
+        if (res.ok) {
+          setSuccessMsg('Đã xóa khoản đầu tư.')
+          setTimeout(() => setSuccessMsg(''), 4000)
+          await fetchData()
+        }
+        setDeletingId(null)
+      },
+    })
   }
 
   async function handleUnassign(row: TxRow) {
-    if (!confirm('Bỏ gán giao dịch này khỏi mục tiêu?')) return
-    const res = await fetch(`/api/v1/investment-transactions/${row.transaction_id}/assign`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ goal_id: null }),
+    setPendingConfirm({
+      title: 'Bỏ gán Giao dịch',
+      message: 'Bạn có chắc muốn bỏ gán giao dịch này khỏi mục tiêu?',
+      onConfirm: async () => {
+        const res = await fetch(`/api/v1/investment-transactions/${row.transaction_id}/assign`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ goal_id: null }),
+        })
+        if (res.ok) {
+          setSuccessMsg('Đã bỏ gán khỏi mục tiêu.')
+          setTimeout(() => setSuccessMsg(''), 4000)
+          await fetchData()
+        }
+      },
     })
-    if (res.ok) {
-      setSuccessMsg('Đã bỏ gán khỏi mục tiêu.')
-      setTimeout(() => setSuccessMsg(''), 4000)
-      await fetchData()
-    }
   }
 
   const fundRows = rows.filter((r) => r._source === 'fund')
@@ -564,6 +582,21 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
             </div>
           </div>
         </div>
+      )}
+
+      {pendingConfirm && (
+        <ConfirmModal
+          title={pendingConfirm.title}
+          message={pendingConfirm.message}
+          confirming={confirming}
+          onConfirm={async () => {
+            setConfirming(true)
+            await pendingConfirm.onConfirm()
+            setConfirming(false)
+            setPendingConfirm(null)
+          }}
+          onCancel={() => setPendingConfirm(null)}
+        />
       )}
     </div>
   )

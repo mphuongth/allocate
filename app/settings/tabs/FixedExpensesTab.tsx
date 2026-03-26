@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import ConfirmModal from '@/app/components/ConfirmModal'
 
 interface Expense {
   expense_id: string
@@ -25,6 +26,7 @@ export default function FixedExpensesTab() {
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [confirmExpense, setConfirmExpense] = useState<Expense | null>(null)
   const [successMsg, setSuccessMsg] = useState('')
 
   const fetchExpenses = useCallback(async () => {
@@ -81,10 +83,10 @@ export default function FixedExpensesTab() {
   }
 
   async function handleDelete(expense: Expense) {
-    if (!confirm(`Xóa "${expense.expense_name}"?`)) return
     setDeletingId(expense.expense_id)
     const res = await fetch(`/api/v1/fixed-expenses/${expense.expense_id}`, { method: 'DELETE' })
     if (res.ok) {
+      setConfirmExpense(null)
       setSuccessMsg('Đã xóa chi phí.')
       setTimeout(() => setSuccessMsg(''), 4000)
       await fetchExpenses()
@@ -151,8 +153,8 @@ export default function FixedExpensesTab() {
                   <td className="px-4 py-3">
                     <div className="flex gap-3">
                       <button onClick={() => openEdit(expense)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">Sửa</button>
-                      <button onClick={() => handleDelete(expense)} disabled={deletingId === expense.expense_id} className="text-xs text-red-500 dark:text-red-400 hover:underline disabled:opacity-50">
-                        {deletingId === expense.expense_id ? 'Đang xóa...' : 'Xóa'}
+                      <button onClick={() => setConfirmExpense(expense)} className="text-xs text-red-500 dark:text-red-400 hover:underline">
+                        Xóa
                       </button>
                     </div>
                   </td>
@@ -194,6 +196,17 @@ export default function FixedExpensesTab() {
             </div>
           </form>
         </div>
+      )}
+
+      {confirmExpense && (
+        <ConfirmModal
+          title="Xóa Chi phí"
+          message="Bạn có chắc muốn xóa chi phí này?"
+          detail={`${confirmExpense.expense_name} — ${fmt(confirmExpense.amount_vnd)}`}
+          confirming={deletingId === confirmExpense.expense_id}
+          onConfirm={() => handleDelete(confirmExpense)}
+          onCancel={() => setConfirmExpense(null)}
+        />
       )}
     </div>
   )

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import ConfirmModal from '@/app/components/ConfirmModal'
 
 interface Transaction {
   transaction_id: string
@@ -139,6 +140,7 @@ export default function InvestmentTransactionsTab() {
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [confirmTx, setConfirmTx] = useState<Transaction | null>(null)
 
   const [showImport, setShowImport] = useState(false)
   const [importFundId, setImportFundId] = useState('')
@@ -299,10 +301,12 @@ export default function InvestmentTransactionsTab() {
   }
 
   async function handleDelete(tx: Transaction) {
-    if (!confirm('Xóa giao dịch này?')) return
     setDeletingId(tx.transaction_id)
     const res = await fetch(`/api/v1/investment-transactions/${tx.transaction_id}`, { method: 'DELETE' })
-    if (res.ok) await fetchTransactions()
+    if (res.ok) {
+      setConfirmTx(null)
+      await fetchTransactions()
+    }
     setDeletingId(null)
   }
 
@@ -414,11 +418,10 @@ export default function InvestmentTransactionsTab() {
                           Sửa
                         </button>
                         <button
-                          onClick={() => handleDelete(tx)}
-                          disabled={deletingId === tx.transaction_id}
-                          className="text-xs text-red-500 dark:text-red-400 hover:underline disabled:opacity-50"
+                          onClick={() => setConfirmTx(tx)}
+                          className="text-xs text-red-500 dark:text-red-400 hover:underline"
                         >
-                          {deletingId === tx.transaction_id ? 'Đang xóa...' : 'Xóa'}
+                          Xóa
                         </button>
                       </td>
                     </tr>
@@ -730,6 +733,16 @@ export default function InvestmentTransactionsTab() {
             </div>
           </form>
         </div>
+      )}
+
+      {confirmTx && (
+        <ConfirmModal
+          title="Xóa Giao dịch"
+          message="Bạn có chắc muốn xóa giao dịch đầu tư này?"
+          confirming={deletingId === confirmTx.transaction_id}
+          onConfirm={() => handleDelete(confirmTx)}
+          onCancel={() => setConfirmTx(null)}
+        />
       )}
     </div>
   )
