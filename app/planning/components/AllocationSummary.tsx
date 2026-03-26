@@ -1,6 +1,6 @@
 'use client'
 
-import type { MonthlyPlan, FundInvestment, DirectSaving, FixedExpense, InsuranceMember } from '../PlanningClient'
+import type { MonthlyPlan, FundInvestment, DirectSaving, FixedExpense, InsuranceMember, OtherExpense } from '../PlanningClient'
 
 interface Props {
   plan: MonthlyPlan | null
@@ -8,6 +8,7 @@ interface Props {
   savings: DirectSaving[]
   fixedExpenses: FixedExpense[]
   insuranceMembers: InsuranceMember[]
+  otherExpenses: OtherExpense[]
 }
 
 const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
@@ -17,7 +18,7 @@ interface GoalRow {
   total: number
 }
 
-export default function AllocationSummary({ plan, investments, savings, fixedExpenses, insuranceMembers }: Props) {
+export default function AllocationSummary({ plan, investments, savings, fixedExpenses, insuranceMembers, otherExpenses }: Props) {
   if (!plan) {
     return (
       <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-5">
@@ -58,7 +59,8 @@ export default function AllocationSummary({ plan, investments, savings, fixedExp
 
   const totalInvested = investments.reduce((s, i) => s + i.amount_vnd, 0)
   const totalSaved = savings.reduce((s, d) => s + d.amount_vnd, 0)
-  const totalAllocated = totalInvested + totalSaved + totalFixed + totalInsurance
+  const totalOther = otherExpenses.reduce((s, e) => s + e.amount_vnd, 0)
+  const totalAllocated = totalInvested + totalSaved + totalFixed + totalInsurance + totalOther
   const remaining = salary - totalAllocated
 
   // Build rows sorted: named goals alphabetically, then Unassigned
@@ -119,6 +121,15 @@ export default function AllocationSummary({ plan, investments, savings, fixedExp
                 <td className="py-1 text-gray-600 dark:text-gray-400">Bảo hiểm</td>
                 <td className="py-1 text-right text-gray-700 dark:text-gray-300 font-medium px-3">{fmt(totalInsurance)}</td>
                 <td className="py-1 text-right text-gray-400 dark:text-gray-500">{pct(totalInsurance)}</td>
+              </tr>
+            )}
+
+            {/* Other Expenses */}
+            {otherExpenses.length > 0 && (
+              <tr className={(fixedExpenses.length > 0 || insuranceMembers.length > 0) ? '' : 'border-t border-gray-200 dark:border-gray-600'}>
+                <td className="py-1 text-gray-600 dark:text-gray-400">Chi phí Khác</td>
+                <td className="py-1 text-right text-gray-700 dark:text-gray-300 font-medium px-3">{fmt(totalOther)}</td>
+                <td className="py-1 text-right text-gray-400 dark:text-gray-500">{pct(totalOther)}</td>
               </tr>
             )}
 

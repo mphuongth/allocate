@@ -6,6 +6,7 @@ import FundInvestmentsSection from './components/FundInvestmentsSection'
 import DirectSavingsSection from './components/DirectSavingsSection'
 import FixedExpensesSection from './components/FixedExpensesSection'
 import InsuranceSection from './components/InsuranceSection'
+import OtherExpensesSection from './components/OtherExpensesSection'
 import AllocationSummary from './components/AllocationSummary'
 
 export interface MonthlyPlan {
@@ -56,6 +57,14 @@ export interface InsuranceMember {
   monthlyOverride?: number
 }
 
+export interface OtherExpense {
+  id: string
+  plan_id: string
+  description: string
+  amount_vnd: number
+  created_at: string
+}
+
 export interface Fund { id: string; name: string; nav: number }
 export interface Goal { goal_id: string; goal_name: string }
 
@@ -73,6 +82,7 @@ export default function PlanningClient() {
   const [savings, setSavings] = useState<DirectSaving[]>([])
   const [fixedExpenses, setFixedExpenses] = useState<FixedExpense[]>([])
   const [insuranceMembers, setInsuranceMembers] = useState<InsuranceMember[]>([])
+  const [otherExpenses, setOtherExpenses] = useState<OtherExpense[]>([])
   const [funds, setFunds] = useState<Fund[]>([])
   const [goals, setGoals] = useState<Goal[]>([])
   const [loading, setLoading] = useState(true)
@@ -117,12 +127,14 @@ export default function PlanningClient() {
           monthlyOverride: insOverrideMap.get(m.member_id),
         }))
       )
+      setOtherExpenses(p.other_expenses ?? [])
       setGoals(p.goals ?? [])
       setFunds(p.funds ?? [])
     } else {
       setPlan(null)
       setInvestments([])
       setSavings([])
+      setOtherExpenses([])
       setGoals([])
       setFunds([])
       // Still load fixed expenses and insurance even without a plan
@@ -221,6 +233,12 @@ export default function PlanningClient() {
                     onRefresh={refetch}
                     onToast={showToast}
                   />
+                  <OtherExpensesSection
+                    plan={plan}
+                    otherExpenses={otherExpenses}
+                    onRefresh={refetch}
+                    onToast={showToast}
+                  />
                 </>
               ) : (
                 <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">
@@ -237,6 +255,7 @@ export default function PlanningClient() {
                 savings={savings}
                 fixedExpenses={fixedExpenses}
                 insuranceMembers={insuranceMembers}
+                otherExpenses={otherExpenses}
               />
             </div>
           </div>
