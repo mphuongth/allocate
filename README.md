@@ -11,8 +11,10 @@ All screenshots captured from [allocate-kohl.vercel.app](https://allocate-kohl.v
 | ![](screenshots/05-signup-light.png) | ![](screenshots/06-signup-dark.png) | Sign Up |
 | ![](screenshots/07-dashboard-light.png) | ![](screenshots/08-dashboard-dark.png) | Dashboard |
 | ![](screenshots/09-assets-light.png) | ![](screenshots/10-assets-dark.png) | Assets |
+| ![](screenshots/80-fund-library-light.png) | ![](screenshots/81-fund-library-dark.png) | Fund Library |
 | ![](screenshots/14-planning-light.png) | ![](screenshots/15-planning-dark.png) | Planning |
 | ![](screenshots/16-savings-goals-light.png) | ![](screenshots/17-savings-goals-dark.png) | Savings Goals |
+| ![](screenshots/86-savings-goal-detail-in-settings-light.png) | ![](screenshots/87-savings-goal-detail-in-settings-dark.png) | Savings Goal Detail |
 | ![](screenshots/20-settings-light.png) | ![](screenshots/21-settings-dark.png) | Settings |
 
 ## Settings Tabs
@@ -28,7 +30,7 @@ All screenshots captured from [allocate-kohl.vercel.app](https://allocate-kohl.v
 
 | Light | Dark | Modal |
 |---|---|---|
-| ![](screenshots/11-assets-fund-detail-modal.png) | — | Assets: Fund detail |
+| ![](screenshots/84-assets-fund-detail-modal-light.png) | ![](screenshots/85-assets-fund-detail-modal-dark.png) | Assets: Fund detail |
 | ![](screenshots/64-assets-goal-picker-light.png) | ![](screenshots/65-assets-goal-picker-dark.png) | Assets: Goal picker |
 | ![](screenshots/52-modal-edit-fund-light.png) | ![](screenshots/53-modal-edit-fund-dark.png) | Edit Fund |
 | ![](screenshots/40-settings-add-modal-m-c-ti-u-ti-t-ki-m-light.png) | ![](screenshots/41-settings-add-modal-m-c-ti-u-ti-t-ki-m-dark.png) | Add Goal |
@@ -44,5 +46,6 @@ All screenshots captured from [allocate-kohl.vercel.app](https://allocate-kohl.v
 | Light | Dark | Page |
 |---|---|---|
 | ![](screenshots/40-mobile-assets-light.png) | ![](screenshots/41-mobile-assets-dark.png) | Assets |
+| ![](screenshots/83-mobile-fund-library-light.png) | ![](screenshots/82-mobile-fund-library-dark.png) | Fund Library |
 | ![](screenshots/43-mobile-planning-light.png) | ![](screenshots/42-mobile-planning-dark.png) | Planning |
 | ![](screenshots/44-mobile-settings-light.png) | ![](screenshots/45-mobile-settings-dark.png) | Settings |
