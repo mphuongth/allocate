@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
+import ThemeToggleButton from '@/app/components/ThemeToggleButton'
 
 const inputCls = 'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500'
 
@@ -102,7 +103,10 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 relative">
+      <div className="absolute top-4 right-4">
+        <ThemeToggleButton />
+      </div>
       <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-lg shadow p-8 border border-transparent dark:border-gray-700">
         <h1 className="text-2xl font-bold text-center text-gray-900 dark:text-gray-100 mb-6">Tạo tài khoản</h1>
         {formError && (

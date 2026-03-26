@@ -4,6 +4,7 @@ import { Menu, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import Breadcrumb from './Breadcrumb'
 import UserMenu from './UserMenu'
 import { useNavigation } from './NavigationContext'
+import ThemeToggleButton from '../ThemeToggleButton'
 
 interface HeaderProps {
   email: string
@@ -43,6 +44,9 @@ export default function Header({ email, initials, onMobileMenuToggle }: HeaderPr
       <div className="hidden md:block flex-1">
         <Breadcrumb />
       </div>
+
+      {/* Theme toggle */}
+      <ThemeToggleButton />
 
       {/* User menu */}
       <div className="ml-auto">
