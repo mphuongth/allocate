@@ -15,13 +15,22 @@ const inputCls = 'w-full border border-gray-300 dark:border-gray-600 rounded-lg 
 
 export default function OtherExpensesSection({ plan, otherExpenses, onRefresh, onToast }: Props) {
   const [showForm, setShowForm] = useState(false)
+  const [editItem, setEditItem] = useState<OtherExpense | null>(null)
   const [form, setForm] = useState({ description: '', amount_vnd: '' })
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<OtherExpense | null>(null)
 
   function openAdd() {
+    setEditItem(null)
     setForm({ description: '', amount_vnd: '' })
+    setFormError('')
+    setShowForm(true)
+  }
+
+  function openEdit(item: OtherExpense) {
+    setEditItem(item)
+    setForm({ description: item.description, amount_vnd: String(item.amount_vnd) })
     setFormError('')
     setShowForm(true)
   }
@@ -39,9 +48,12 @@ export default function OtherExpensesSection({ plan, otherExpenses, onRefresh, o
     }
 
     setSaving(true)
+    const url = editItem
+      ? `/api/v1/monthly-plans/${plan.id}/other-expenses/${editItem.id}`
+      : `/api/v1/monthly-plans/${plan.id}/other-expenses`
     try {
-      const res = await fetch(`/api/v1/monthly-plans/${plan.id}/other-expenses`, {
-        method: 'POST',
+      const res = await fetch(url, {
+        method: editItem ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ description: form.description.trim(), amount_vnd: amountNum }),
       })
@@ -50,7 +62,7 @@ export default function OtherExpensesSection({ plan, otherExpenses, onRefresh, o
         setFormError(error ?? 'Đã xảy ra lỗi. Vui lòng thử lại sau.')
       } else {
         setShowForm(false)
-        onToast('Đã thêm chi phí khác')
+        onToast(editItem ? 'Đã cập nhật chi phí khác' : 'Đã thêm chi phí khác')
         onRefresh()
       }
     } catch {
@@ -94,7 +106,10 @@ export default function OtherExpensesSection({ plan, otherExpenses, onRefresh, o
                 <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{item.description}</td>
                 <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{fmt(item.amount_vnd)}</td>
                 <td className="px-4 py-3">
-                  <button onClick={() => setConfirmDelete(item)} className="text-xs text-red-500 dark:text-red-400 hover:underline">Xóa</button>
+                  <div className="flex gap-3">
+                    <button onClick={() => openEdit(item)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">Sửa</button>
+                    <button onClick={() => setConfirmDelete(item)} className="text-xs text-red-500 dark:text-red-400 hover:underline">Xóa</button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -106,7 +121,7 @@ export default function OtherExpensesSection({ plan, otherExpenses, onRefresh, o
       {showForm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-sm p-6 border border-gray-100 dark:border-gray-700">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Thêm Chi phí Khác</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{editItem ? 'Sửa Chi phí Khác' : 'Thêm Chi phí Khác'}</h3>
             {formError && <p className="text-red-600 dark:text-red-400 text-sm mb-3">{formError}</p>}
             <div className="space-y-3">
               <div>
