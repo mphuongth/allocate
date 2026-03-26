@@ -17,26 +17,6 @@ interface GoalWithStats extends SavingsGoal {
   projectedInterest: number
 }
 
-interface Transaction {
-  transaction_id: string
-  goal_id: string | null
-  asset_type: string
-  amount_vnd: number
-  units: number | null
-  unit_price: number | null
-  interest_rate: number | null
-  investment_date: string
-  funds?: { id: string; name: string; nav: number } | null
-}
-
-function calcProjectedInterest(amount: number, rate: number | null, investmentDate: string): number {
-  if (!rate) return 0
-  const months = Math.max(0, Math.floor(
-    (Date.now() - new Date(investmentDate).getTime()) / (1000 * 60 * 60 * 24 * 30.44)
-  ))
-  return amount * Math.pow(1 + rate / 100 / 12, months) - amount
-}
-
 interface Props {
   initialGoalId?: string
   onGoalChange?: (id: string | null) => void
@@ -58,43 +38,12 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
 
   const fetchGoals = useCallback(async () => {
     setLoading(true)
-    const [goalsRes, txRes] = await Promise.all([
-      fetch('/api/v1/savings-goals'),
-      fetch('/api/v1/investment-transactions?limit=1000'),
-    ])
-    const { goals: rawGoals } = await goalsRes.json()
-    const { transactions } = await txRes.json()
-
-    const statsMap = new Map<string, { count: number; invested: number; interest: number }>()
-
-    ;(transactions as Transaction[]).forEach((tx) => {
-      if (!tx.goal_id) return
-
-      let gain: number
-      if (tx.asset_type === 'fund' && tx.units) {
-        const fund = Array.isArray(tx.funds) ? tx.funds[0] : tx.funds
-        const currentNav = fund?.nav ?? tx.unit_price ?? 0
-        gain = tx.units * currentNav - tx.amount_vnd
-      } else {
-        gain = calcProjectedInterest(tx.amount_vnd, tx.interest_rate, tx.investment_date)
-      }
-
-      const existing = statsMap.get(tx.goal_id) ?? { count: 0, invested: 0, interest: 0 }
-      statsMap.set(tx.goal_id, {
-        count: existing.count + 1,
-        invested: existing.invested + tx.amount_vnd,
-        interest: existing.interest + gain,
-      })
-    })
-
-    const fetched: GoalWithStats[] = (rawGoals ?? []).map((g: SavingsGoal) => {
-      const stats = statsMap.get(g.goal_id) ?? { count: 0, invested: 0, interest: 0 }
-      return { ...g, transactionCount: stats.count, totalInvested: stats.invested, projectedInterest: stats.interest }
-    })
-    setGoals(fetched)
+    const res = await fetch('/api/v1/savings-goals?stats=true')
+    const { goals: fetched } = await res.json()
+    setGoals(fetched ?? [])
 
     if (initialGoalId && !hasAutoSelected.current) {
-      const match = fetched.find((g) => g.goal_id === initialGoalId)
+      const match = fetched.find((g: GoalWithStats) => g.goal_id === initialGoalId)
       if (match) {
         setSelectedGoal(match)
         hasAutoSelected.current = true
