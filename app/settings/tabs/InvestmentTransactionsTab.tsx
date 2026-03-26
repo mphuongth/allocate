@@ -138,6 +138,7 @@ export default function InvestmentTransactionsTab() {
   const [formMode, setFormMode] = useState<'add' | 'edit' | null>(null)
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const [showImport, setShowImport] = useState(false)
   const [importFundId, setImportFundId] = useState('')
@@ -299,8 +300,10 @@ export default function InvestmentTransactionsTab() {
 
   async function handleDelete(tx: Transaction) {
     if (!confirm('Xóa giao dịch này?')) return
+    setDeletingId(tx.transaction_id)
     const res = await fetch(`/api/v1/investment-transactions/${tx.transaction_id}`, { method: 'DELETE' })
     if (res.ok) await fetchTransactions()
+    setDeletingId(null)
   }
 
   const totalPages = Math.max(1, Math.ceil(total / 20))
@@ -412,9 +415,10 @@ export default function InvestmentTransactionsTab() {
                         </button>
                         <button
                           onClick={() => handleDelete(tx)}
-                          className="text-xs text-red-500 dark:text-red-400 hover:underline"
+                          disabled={deletingId === tx.transaction_id}
+                          className="text-xs text-red-500 dark:text-red-400 hover:underline disabled:opacity-50"
                         >
-                          Xóa
+                          {deletingId === tx.transaction_id ? 'Đang xóa...' : 'Xóa'}
                         </button>
                       </td>
                     </tr>

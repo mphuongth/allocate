@@ -66,6 +66,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
   const [successMsg, setSuccessMsg] = useState('')
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   // Form mode: null = closed, 'tx-add', 'tx-edit', 'fi-add', 'fi-edit'
   const [formMode, setFormMode] = useState<'tx-add' | 'tx-edit' | 'fi-add' | 'fi-edit' | null>(null)
@@ -180,8 +181,10 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
 
   async function handleTxDelete(row: TxRow) {
     if (!confirm('Xóa giao dịch này?')) return
+    setDeletingId(row.transaction_id)
     const res = await fetch(`/api/v1/investment-transactions/${row.transaction_id}`, { method: 'DELETE' })
     if (res.ok) { setSuccessMsg('Đã xóa giao dịch.'); setTimeout(() => setSuccessMsg(''), 4000); await fetchData() }
+    setDeletingId(null)
   }
 
   // --- Fund investment handlers ---
@@ -231,12 +234,14 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
 
   async function handleFiDelete(row: TxRow) {
     if (!confirm('Xóa khoản đầu tư quỹ này?')) return
+    setDeletingId(row.transaction_id)
     const res = await fetch(`/api/v1/investment-transactions/${row.transaction_id}`, { method: 'DELETE' })
     if (res.ok) {
       setSuccessMsg('Đã xóa khoản đầu tư.')
       setTimeout(() => setSuccessMsg(''), 4000)
       await fetchData()
     }
+    setDeletingId(null)
   }
 
   async function handleUnassign(row: TxRow) {
@@ -368,7 +373,9 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                         <div className="flex gap-2">
                           <button onClick={() => openFiEdit(row)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">Sửa</button>
                           <button onClick={() => handleUnassign(row)} className="text-xs text-amber-600 dark:text-amber-400 hover:underline">Bỏ gán</button>
-                          <button onClick={() => handleFiDelete(row)} className="text-xs text-red-500 dark:text-red-400 hover:underline">Xóa</button>
+                          <button onClick={() => handleFiDelete(row)} disabled={deletingId === row.transaction_id} className="text-xs text-red-500 dark:text-red-400 hover:underline disabled:opacity-50">
+                            {deletingId === row.transaction_id ? 'Đang xóa...' : 'Xóa'}
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -426,7 +433,9 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                         <div className="flex gap-2">
                           <button onClick={() => openTxEdit(row)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">Sửa</button>
                           <button onClick={() => handleUnassign(row)} className="text-xs text-amber-600 dark:text-amber-400 hover:underline">Bỏ gán</button>
-                          <button onClick={() => handleTxDelete(row)} className="text-xs text-red-500 dark:text-red-400 hover:underline">Xóa</button>
+                          <button onClick={() => handleTxDelete(row)} disabled={deletingId === row.transaction_id} className="text-xs text-red-500 dark:text-red-400 hover:underline disabled:opacity-50">
+                            {deletingId === row.transaction_id ? 'Đang xóa...' : 'Xóa'}
+                          </button>
                         </div>
                       </td>
                     </tr>

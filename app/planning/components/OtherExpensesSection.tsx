@@ -20,6 +20,7 @@ export default function OtherExpensesSection({ plan, otherExpenses, onRefresh, o
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<OtherExpense | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   function openAdd() {
     setEditItem(null)
@@ -72,12 +73,14 @@ export default function OtherExpensesSection({ plan, otherExpenses, onRefresh, o
   }
 
   async function handleDelete(item: OtherExpense) {
+    setDeleting(true)
     const res = await fetch(`/api/v1/monthly-plans/${plan.id}/other-expenses/${item.id}`, { method: 'DELETE' })
     if (res.ok) {
       setConfirmDelete(null)
       onToast('Đã xóa chi phí khác')
       onRefresh()
     }
+    setDeleting(false)
   }
 
   return (
@@ -163,8 +166,10 @@ export default function OtherExpensesSection({ plan, otherExpenses, onRefresh, o
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Bạn có chắc muốn xóa khoản chi phí này?</p>
             <p className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-5">{confirmDelete.description} — {fmt(confirmDelete.amount_vnd)}</p>
             <div className="flex gap-3">
-              <button onClick={() => setConfirmDelete(null)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Hủy</button>
-              <button onClick={() => handleDelete(confirmDelete)} className="flex-1 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700">Xác nhận</button>
+              <button onClick={() => setConfirmDelete(null)} disabled={deleting} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50">Hủy</button>
+              <button onClick={() => handleDelete(confirmDelete)} disabled={deleting} className="flex-1 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50">
+                {deleting ? 'Đang xóa...' : 'Xác nhận'}
+              </button>
             </div>
           </div>
         </div>

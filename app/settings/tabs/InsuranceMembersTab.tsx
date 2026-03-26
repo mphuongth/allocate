@@ -24,6 +24,7 @@ export default function InsuranceMembersTab() {
   const [form, setForm] = useState(emptyForm)
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState('')
 
   const fetchMembers = useCallback(async () => {
@@ -85,12 +86,14 @@ export default function InsuranceMembersTab() {
 
   async function handleDelete(member: InsuranceMember) {
     if (!confirm(`Xóa "${member.member_name}"?`)) return
+    setDeletingId(member.member_id)
     const res = await fetch(`/api/v1/insurance-members/${member.member_id}`, { method: 'DELETE' })
     if (res.ok) {
       setSuccessMsg('Đã xóa thành viên.')
       setTimeout(() => setSuccessMsg(''), 4000)
       await fetchMembers()
     }
+    setDeletingId(null)
   }
 
   const totalAnnual = members.reduce((s, m) => s + m.annual_payment_vnd, 0)
@@ -145,7 +148,9 @@ export default function InsuranceMembersTab() {
                   <td className="px-4 py-3">
                     <div className="flex gap-3">
                       <button onClick={() => openEdit(member)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">Sửa</button>
-                      <button onClick={() => handleDelete(member)} className="text-xs text-red-500 dark:text-red-400 hover:underline">Xóa</button>
+                      <button onClick={() => handleDelete(member)} disabled={deletingId === member.member_id} className="text-xs text-red-500 dark:text-red-400 hover:underline disabled:opacity-50">
+                        {deletingId === member.member_id ? 'Đang xóa...' : 'Xóa'}
+                      </button>
                     </div>
                   </td>
                 </tr>
