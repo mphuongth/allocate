@@ -9,7 +9,6 @@ All screenshots captured from [allocate-kohl.vercel.app](https://allocate-kohl.v
 | ![](screenshots/01-landing-light.png) | ![](screenshots/02-landing-dark.png) | Landing |
 | ![](screenshots/03-login-light.png) | ![](screenshots/04-login-dark.png) | Login |
 | ![](screenshots/05-signup-light.png) | ![](screenshots/06-signup-dark.png) | Sign Up |
-| ![](screenshots/07-dashboard-light.png) | ![](screenshots/08-dashboard-dark.png) | Dashboard |
 | ![](screenshots/09-assets-light.png) | ![](screenshots/10-assets-dark.png) | Assets |
 | ![](screenshots/80-fund-library-light.png) | ![](screenshots/81-fund-library-dark.png) | Fund Library |
 | ![](screenshots/14-planning-light.png) | ![](screenshots/15-planning-dark.png) | Planning |
