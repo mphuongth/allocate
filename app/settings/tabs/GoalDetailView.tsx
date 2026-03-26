@@ -239,6 +239,20 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
     }
   }
 
+  async function handleUnassign(row: TxRow) {
+    if (!confirm('Bỏ gán giao dịch này khỏi mục tiêu?')) return
+    const res = await fetch(`/api/v1/investment-transactions/${row.transaction_id}/assign`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ goal_id: null }),
+    })
+    if (res.ok) {
+      setSuccessMsg('Đã bỏ gán khỏi mục tiêu.')
+      setTimeout(() => setSuccessMsg(''), 4000)
+      await fetchData()
+    }
+  }
+
   const fundRows = rows.filter((r) => r._source === 'fund')
   const otherRows = rows.filter((r) => r._source === 'other')
 
@@ -353,6 +367,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
                           <button onClick={() => openFiEdit(row)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">Sửa</button>
+                          <button onClick={() => handleUnassign(row)} className="text-xs text-amber-600 dark:text-amber-400 hover:underline">Bỏ gán</button>
                           <button onClick={() => handleFiDelete(row)} className="text-xs text-red-500 dark:text-red-400 hover:underline">Xóa</button>
                         </div>
                       </td>
@@ -410,6 +425,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
                           <button onClick={() => openTxEdit(row)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">Sửa</button>
+                          <button onClick={() => handleUnassign(row)} className="text-xs text-amber-600 dark:text-amber-400 hover:underline">Bỏ gán</button>
                           <button onClick={() => handleTxDelete(row)} className="text-xs text-red-500 dark:text-red-400 hover:underline">Xóa</button>
                         </div>
                       </td>
