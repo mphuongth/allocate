@@ -39,6 +39,7 @@ export default function UserMenu({ email, initials }: UserMenuProps) {
         action: { label: 'Thử lại', onClick: handleLogout },
       })
     } else {
+      localStorage.removeItem('dashboardOverviewCache')
       toast.success('Đã đăng xuất thành công')
       router.push('/auth/login')
     }
