@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import GoalDetailView from './GoalDetailView'
+import ConfirmModal from '@/app/components/ConfirmModal'
 
 interface SavingsGoal {
   goal_id: string
@@ -34,6 +35,8 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
+  const [confirmGoal, setConfirmGoal] = useState<GoalWithStats | null>(null)
+  const [deletingGoal, setDeletingGoal] = useState(false)
   const hasAutoSelected = useRef(false)
 
   const fetchGoals = useCallback(async () => {
@@ -106,14 +109,16 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
   }
 
   async function handleDelete(goal: GoalWithStats) {
-    if (!confirm(`Xóa "${goal.goal_name}"? ${goal.transactionCount} giao dịch sẽ bị bỏ gán.`)) return
+    setDeletingGoal(true)
     const res = await fetch(`/api/v1/savings-goals/${goal.goal_id}`, { method: 'DELETE' })
     if (res.ok) {
+      setConfirmGoal(null)
       const { message } = await res.json()
       setSuccessMsg(message)
       setTimeout(() => setSuccessMsg(''), 5000)
       await fetchGoals()
     }
+    setDeletingGoal(false)
   }
 
   const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
@@ -186,7 +191,7 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
                   Sửa
                 </button>
                 <button
-                  onClick={() => handleDelete(goal)}
+                  onClick={() => setConfirmGoal(goal)}
                   className="px-3 py-2 text-sm font-medium text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                 >
                   Xóa
@@ -243,6 +248,17 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
             </div>
           </form>
         </div>
+      )}
+
+      {confirmGoal && (
+        <ConfirmModal
+          title="Xóa Mục tiêu"
+          message={`${confirmGoal.transactionCount} giao dịch trong mục tiêu này sẽ bị bỏ gán.`}
+          detail={`"${confirmGoal.goal_name}"`}
+          confirming={deletingGoal}
+          onConfirm={() => handleDelete(confirmGoal)}
+          onCancel={() => setConfirmGoal(null)}
+        />
       )}
     </div>
   )
