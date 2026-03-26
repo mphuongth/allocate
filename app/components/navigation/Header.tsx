@@ -1,10 +1,10 @@
 'use client'
 
-import { Menu, Moon, PanelLeftClose, PanelLeftOpen, Sun } from 'lucide-react'
+import { Menu, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import Breadcrumb from './Breadcrumb'
 import UserMenu from './UserMenu'
 import { useNavigation } from './NavigationContext'
-import { useTheme } from '../ThemeProvider'
+import ThemeToggleButton from '../ThemeToggleButton'
 
 interface HeaderProps {
   email: string
@@ -14,7 +14,6 @@ interface HeaderProps {
 
 export default function Header({ email, initials, onMobileMenuToggle }: HeaderProps) {
   const { sidebarCollapsed, setSidebarCollapsed } = useNavigation()
-  const { theme, toggleTheme } = useTheme()
 
   return (
     <header className="h-16 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 flex items-center px-4 gap-4 shrink-0">
@@ -47,13 +46,7 @@ export default function Header({ email, initials, onMobileMenuToggle }: HeaderPr
       </div>
 
       {/* Theme toggle */}
-      <button
-        onClick={toggleTheme}
-        aria-label={theme === 'dark' ? 'Chuyển sang sáng' : 'Chuyển sang tối'}
-        className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-400"
-      >
-        {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-      </button>
+      <ThemeToggleButton />
 
       {/* User menu */}
       <div className="ml-auto">
