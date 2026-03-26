@@ -156,7 +156,7 @@ export default function FixedExpensesSection({ plan, fixedExpenses, onRefresh, o
       {/* Edit Override Modal */}
       {editItem && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-sm p-6 border border-gray-100 dark:border-gray-700">
+          <form onSubmit={(e) => { e.preventDefault(); handleSaveOverride() }} className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-sm p-6 border border-gray-100 dark:border-gray-700">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">Ghi đè Số tiền Tháng</h3>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{editItem.expense_name}</p>
             {formError && <p className="text-red-600 dark:text-red-400 text-sm mb-3">{formError}</p>}
@@ -175,13 +175,13 @@ export default function FixedExpensesSection({ plan, fixedExpenses, onRefresh, o
               <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Mặc định: {fmt(editItem.amount_vnd)}/tháng</p>
             </div>
             <div className="flex gap-3 mt-5">
-              <button onClick={() => setEditItem(null)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Hủy</button>
-              <button onClick={handleSaveOverride} disabled={saving} className="flex-1 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2">
+              <button type="button" onClick={() => setEditItem(null)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Hủy</button>
+              <button type="submit" disabled={saving} className="flex-1 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2">
                 {saving && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
                 {saving ? 'Đang lưu...' : 'Lưu'}
               </button>
             </div>
-          </div>
+          </form>
         </div>
       )}
 
