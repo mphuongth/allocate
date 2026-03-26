@@ -51,11 +51,7 @@ function AuthenticatedLayoutInner({ children, email, initials }: AuthenticatedLa
 
       {/* Main area */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        <Header
-          email={email}
-          initials={initials}
-          onMobileMenuToggle={() => setDrawerOpen(true)}
-        />
+        <Header onMobileMenuToggle={() => setDrawerOpen(true)} />
         {/* Mobile page title */}
         <PageTitle />
         <main className="flex-1 overflow-y-auto p-6">
