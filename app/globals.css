@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-@variant dark (@media (prefers-color-scheme: dark));
+@variant dark (&:where(.dark, .dark *));
 
 :root {
   --background: #ffffff;
@@ -20,14 +20,12 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-    --brand: #a78bfa;
-    --brand-light: #3730a3;
-    --brand-dark: #c4b5fd;
-  }
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  --brand: #a78bfa;
+  --brand-light: #3730a3;
+  --brand-dark: #c4b5fd;
 }
 
 body {
