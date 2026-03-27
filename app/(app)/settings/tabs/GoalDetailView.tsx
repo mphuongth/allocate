@@ -61,6 +61,7 @@ const emptyTxForm = { asset_type: 'bank', investment_date: '', amount_vnd: '', u
 const emptyFiForm = { fund_id: '', investment_date: '', amount_vnd: '', units: '', unit_price: '' }
 
 export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: () => void }) {
+  const [currentGoal, setCurrentGoal] = useState(goal)
   const [rows, setRows] = useState<TxRow[]>([])
   const [funds, setFunds] = useState<Fund[]>([])
   const [loading, setLoading] = useState(true)
@@ -71,6 +72,14 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
   const [pendingConfirm, setPendingConfirm] = useState<{ title: string; message: string; onConfirm: () => Promise<void> } | null>(null)
   const [confirming, setConfirming] = useState(false)
 
+  // Goal edit form
+  const [showEditGoal, setShowEditGoal] = useState(false)
+  const [editGoalName, setEditGoalName] = useState('')
+  const [editGoalDesc, setEditGoalDesc] = useState('')
+  const [editGoalTarget, setEditGoalTarget] = useState('')
+  const [editGoalError, setEditGoalError] = useState('')
+  const [editGoalSaving, setEditGoalSaving] = useState(false)
+
   // Form mode: null = closed, 'tx-add', 'tx-edit', 'fi-add', 'fi-edit'
   const [formMode, setFormMode] = useState<'tx-add' | 'tx-edit' | 'fi-add' | 'fi-edit' | null>(null)
   const [editTx, setEditTx] = useState<TxRow | null>(null)
@@ -80,7 +89,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
   const fetchData = useCallback(async () => {
     setLoading(true)
     const [txRes, fundsRes, goldPriceRes] = await Promise.all([
-      fetch(`/api/v1/investment-transactions?goal_id=${goal.goal_id}&limit=1000`),
+      fetch(`/api/v1/investment-transactions?goal_id=${currentGoal.goal_id}&limit=1000`),
       fetch('/api/funds'),
       fetch('/api/v1/gold-price'),
     ])
@@ -129,7 +138,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
 
     setRows(txRows)
     setLoading(false)
-  }, [goal.goal_id])
+  }, [currentGoal.goal_id])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -163,7 +172,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
     if (!txForm.amount_vnd || Number(txForm.amount_vnd) <= 0) { setFormError('Số tiền phải lớn hơn 0.'); return }
     if (!txForm.investment_date) { setFormError('Ngày đầu tư là bắt buộc.'); return }
     const payload = {
-      goal_id: goal.goal_id,
+      goal_id: currentGoal.goal_id,
       asset_type: txForm.asset_type,
       investment_date: txForm.investment_date,
       amount_vnd: Number(txForm.amount_vnd),
@@ -226,7 +235,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
     const payload = {
       asset_type: 'fund',
       fund_id: fiForm.fund_id,
-      goal_id: goal.goal_id,
+      goal_id: currentGoal.goal_id,
       amount_vnd: Number(fiForm.amount_vnd),
       units: Number(fiForm.units),
       unit_price: Number(fiForm.unit_price),
@@ -276,6 +285,45 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
     })
   }
 
+  function openEditGoal() {
+    setEditGoalName(currentGoal.goal_name)
+    setEditGoalDesc(currentGoal.description ?? '')
+    setEditGoalTarget(currentGoal.target_amount != null ? String(currentGoal.target_amount) : '')
+    setEditGoalError('')
+    setShowEditGoal(true)
+  }
+
+  async function handleEditGoalSave() {
+    if (!editGoalName.trim()) { setEditGoalError('Tên mục tiêu là bắt buộc.'); return }
+    setEditGoalSaving(true)
+    setEditGoalError('')
+    const res = await fetch(`/api/v1/savings-goals/${currentGoal.goal_id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ goal_name: editGoalName, description: editGoalDesc, target_amount: editGoalTarget || null }),
+    })
+    if (!res.ok) {
+      const { error } = await res.json()
+      setEditGoalError(error ?? 'Đã xảy ra lỗi.')
+    } else {
+      const updated = await res.json()
+      setCurrentGoal({ ...currentGoal, goal_name: updated.goal_name, description: updated.description, target_amount: updated.target_amount })
+      setShowEditGoal(false)
+    }
+    setEditGoalSaving(false)
+  }
+
+  function handleDeleteGoal() {
+    setPendingConfirm({
+      title: 'Xóa Mục tiêu',
+      message: `${rows.length} giao dịch trong mục tiêu này sẽ bị bỏ gán.`,
+      onConfirm: async () => {
+        const res = await fetch(`/api/v1/savings-goals/${currentGoal.goal_id}`, { method: 'DELETE' })
+        if (res.ok) onBack()
+      },
+    })
+  }
+
   const fundRows = rows.filter((r) => r._source === 'fund')
   const otherRows = rows.filter((r) => r._source === 'other')
 
@@ -285,11 +333,17 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={onBack} className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium">← Quay lại</button>
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">{goal.goal_name}</h2>
-          {goal.description && <p className="text-sm text-gray-500 dark:text-gray-400">{goal.description}</p>}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <button onClick={onBack} className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium">← Quay lại</button>
+          <div>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">{currentGoal.goal_name}</h2>
+            {currentGoal.description && <p className="text-sm text-gray-500 dark:text-gray-400">{currentGoal.description}</p>}
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={openEditGoal} className="px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Sửa</button>
+          <button onClick={handleDeleteGoal} className="px-3 py-1.5 text-sm font-medium text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20">Xóa</button>
         </div>
       </div>
 
@@ -298,17 +352,17 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
       )}
 
       {/* Goal Progress */}
-      {goal.target_amount != null && (
+      {currentGoal.target_amount != null && (
         <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 mb-6">
           <div className="flex items-center justify-between text-sm mb-2">
             <span className="font-medium text-gray-700 dark:text-gray-300">Tiến độ Mục tiêu</span>
             <span className="text-gray-500 dark:text-gray-400">
-              {fmt(totalCurrentValue)} / {fmt(goal.target_amount)}
+              {fmt(totalCurrentValue)} / {fmt(currentGoal.target_amount)}
             </span>
           </div>
           {(() => {
-            const pct = Math.min((totalCurrentValue / goal.target_amount!) * 100, 100)
-            const exceeded = totalCurrentValue >= goal.target_amount!
+            const pct = Math.min((totalCurrentValue / currentGoal.target_amount!) * 100, 100)
+            const exceeded = totalCurrentValue >= currentGoal.target_amount!
             return (
               <>
                 <div className="h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
@@ -321,7 +375,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                   <span>{Math.round(pct)}%</span>
                   {exceeded
                     ? <span className="text-green-600 dark:text-green-400 font-medium">Đã đạt mục tiêu!</span>
-                    : <span>{fmt(goal.target_amount! - totalCurrentValue)} còn lại</span>
+                    : <span>{fmt(currentGoal.target_amount! - totalCurrentValue)} còn lại</span>
                   }
                 </div>
               </>
@@ -464,6 +518,40 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
           </div>
         )}
       </div>
+
+      {/* Edit Goal Modal */}
+      {showEditGoal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <form onSubmit={(e) => { e.preventDefault(); handleEditGoalSave() }} className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-md p-6 border border-gray-100 dark:border-gray-700">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Sửa Mục tiêu</h3>
+            {editGoalError && <p className="text-red-600 dark:text-red-400 text-sm mb-3">{editGoalError}</p>}
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tên Mục tiêu *</label>
+                <input type="text" value={editGoalName} onChange={(e) => setEditGoalName(e.target.value)}
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Số tiền Mục tiêu (VND)</label>
+                <input type="number" value={editGoalTarget} onChange={(e) => setEditGoalTarget(e.target.value)}
+                  placeholder="Tùy chọn"
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mô tả</label>
+                <textarea value={editGoalDesc} onChange={(e) => setEditGoalDesc(e.target.value)} rows={3}
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
+              </div>
+            </div>
+            <div className="flex gap-3 mt-5">
+              <button type="button" onClick={() => setShowEditGoal(false)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Hủy</button>
+              <button type="submit" disabled={editGoalSaving} className="flex-1 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+                {editGoalSaving ? 'Đang lưu...' : 'Lưu'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* Fund Investment Add/Edit Modal */}
       {(formMode === 'fi-add' || formMode === 'fi-edit') && (
