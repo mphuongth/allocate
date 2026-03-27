@@ -54,8 +54,8 @@ function bustFundsCache() {
 }
 
 export default function FundLibraryClient() {
-  const [funds, setFunds] = useState<Fund[]>([])
-  const [loading, setLoading] = useState(true)
+  const [funds, setFunds] = useState<Fund[]>(() => getFundsCache() ?? [])
+  const [loading, setLoading] = useState(() => !getFundsCache())
   const [error, setError] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<SortKey>('name')
 
@@ -85,13 +85,7 @@ export default function FundLibraryClient() {
   }, [])
 
   const loadFunds = useCallback(async (opts?: { force?: boolean }) => {
-    const cached = !opts?.force && getFundsCache()
-    if (cached) {
-      setFunds(cached)
-      setLoading(false)
-    } else {
-      setLoading(true)
-    }
+    if (opts?.force) bustFundsCache()
     setError(null)
     try {
       const res = await fetch('/api/funds')

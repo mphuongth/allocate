@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import { toast } from 'sonner'
-import { NavigationProvider, useNavigation } from '../navigation/NavigationContext'
+import { NavigationProvider } from '../navigation/NavigationContext'
 import Sidebar from '../navigation/Sidebar'
 import Header from '../navigation/Header'
 import MobileDrawer from '../navigation/MobileDrawer'
@@ -19,14 +19,7 @@ function getInitials(email: string): string {
     .slice(0, 2) || email[0]?.toUpperCase() || 'U'
 }
 
-interface AuthenticatedLayoutInnerProps {
-  children: React.ReactNode
-  email: string
-  initials: string
-}
-
-function AuthenticatedLayoutInner({ children, email, initials }: AuthenticatedLayoutInnerProps) {
-  const { sidebarCollapsed } = useNavigation()
+function AuthenticatedLayoutInner({ children, email, initials }: { children: React.ReactNode; email: string; initials: string }) {
   const [drawerOpen, setDrawerOpen] = useState(false)
 
   return (
@@ -62,25 +55,15 @@ function AuthenticatedLayoutInner({ children, email, initials }: AuthenticatedLa
   )
 }
 
-export default function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
+export default function AuthenticatedLayout({ children, email }: { children: React.ReactNode; email: string }) {
   const router = useRouter()
-  const [email, setEmail] = useState('')
-  const [ready, setReady] = useState(false)
 
+  // Watch for session expiry (e.g. token revoked or expired)
   useEffect(() => {
     const supabase = createBrowserClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     )
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
-        router.push('/auth/login')
-        return
-      }
-      setEmail(session.user.email ?? 'User')
-      setReady(true)
-    })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (!session && event !== 'INITIAL_SESSION' && event !== 'SIGNED_OUT') {
@@ -91,17 +74,6 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
 
     return () => subscription.unsubscribe()
   }, [router])
-
-  if (!ready) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-4 border-brand border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm text-gray-500 dark:text-gray-400">Đang tải...</span>
-        </div>
-      </div>
-    )
-  }
 
   const initials = getInitials(email)
 

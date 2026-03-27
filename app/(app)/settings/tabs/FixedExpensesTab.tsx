@@ -36,10 +36,13 @@ function bustFixedCache() {
 }
 
 export default function FixedExpensesTab() {
-  const [expenses, setExpenses] = useState<Expense[]>([])
-  const [loading, setLoading] = useState(true)
+  const [expenses, setExpenses] = useState<Expense[]>(() => getFixedCache('') ?? [])
+  const [loading, setLoading] = useState(() => !getFixedCache(''))
   const [filterCategory, setFilterCategory] = useState('')
-  const [categories, setCategories] = useState<string[]>([])
+  const [categories, setCategories] = useState<string[]>(() => {
+    const cached = getFixedCache('')
+    return cached ? [...new Set<string>(cached.map(e => e.category))] : []
+  })
   const [showForm, setShowForm] = useState(false)
   const [editExpense, setEditExpense] = useState<Expense | null>(null)
   const [form, setForm] = useState(emptyForm)
@@ -50,17 +53,7 @@ export default function FixedExpensesTab() {
   const [successMsg, setSuccessMsg] = useState('')
 
   const fetchExpenses = useCallback(async (opts?: { force?: boolean }) => {
-    const cached = !opts?.force && getFixedCache(filterCategory)
-    if (cached) {
-      setExpenses(cached)
-      setLoading(false)
-      if (!filterCategory && cached.length) {
-        setCategories([...new Set<string>(cached.map((e: Expense) => e.category))])
-      }
-    } else {
-      setLoading(true)
-    }
-
+    if (opts?.force) bustFixedCache()
     const params = new URLSearchParams()
     if (filterCategory) params.set('category', filterCategory)
     const res = await fetch(`/api/v1/fixed-expenses?${params}`)
@@ -108,7 +101,6 @@ export default function FixedExpensesTab() {
       setFormError(error ?? 'Đã xảy ra lỗi.')
     } else {
       setShowForm(false)
-      bustFixedCache()
       await fetchExpenses({ force: true })
     }
     setSaving(false)
@@ -121,7 +113,6 @@ export default function FixedExpensesTab() {
       setConfirmExpense(null)
       setSuccessMsg('Đã xóa chi phí.')
       setTimeout(() => setSuccessMsg(''), 4000)
-      bustFixedCache()
       await fetchExpenses({ force: true })
     }
     setDeletingId(null)
