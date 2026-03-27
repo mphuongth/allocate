@@ -10,3 +10,7 @@ ALTER TABLE investment_transactions
 ALTER TABLE investment_transactions
   ADD CONSTRAINT require_asset_type_for_investments
   CHECK (transaction_type = 'withdrawal' OR asset_type IS NOT NULL);
+
+-- Link withdrawals back to the specific investment transaction they came from
+ALTER TABLE investment_transactions
+  ADD COLUMN parent_transaction_id UUID REFERENCES investment_transactions(transaction_id) ON DELETE SET NULL;

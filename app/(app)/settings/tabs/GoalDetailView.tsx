@@ -21,6 +21,7 @@ interface TxRow {
   _source: 'fund' | 'other' | 'withdrawal'
   transaction_type: 'investment' | 'withdrawal'
   transaction_id: string
+  parent_transaction_id: string | null
   asset_type: string | null
   investment_date: string
   amount_vnd: number
@@ -31,6 +32,7 @@ interface TxRow {
   notes: string | null
   fund_id: string | null
   fund_display?: string
+  _parent_display?: string
   current_value: number
 }
 
@@ -58,6 +60,25 @@ function calcProjectedInterest(amount: number, rate: number | null, investmentDa
 
 const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
 
+function buildParentLabel(row: TxRow): string {
+  const date = new Date(row.investment_date).toLocaleDateString('vi-VN')
+  if (row._source === 'fund') return `${row.fund_display ?? 'Quỹ'} · ${date}`
+  const typeLabel = ASSET_LABELS[row.asset_type ?? ''] ?? row.asset_type ?? ''
+  return `${typeLabel} · ${fmt(row.amount_vnd)} · ${date}`
+}
+
+function withdrawBtnLabel(assetType: string | null): string {
+  return assetType === 'bank' ? 'Rút' : 'Bán'
+}
+
+function withdrawModalTitle(assetType: string | null): string {
+  if (assetType === 'fund') return 'Ghi nhận Bán Quỹ'
+  if (assetType === 'bank') return 'Ghi nhận Rút Tiết kiệm'
+  if (assetType === 'gold') return 'Ghi nhận Bán Vàng'
+  if (assetType === 'stock') return 'Ghi nhận Bán Cổ phiếu'
+  return 'Ghi nhận Rút / Bán'
+}
+
 const emptyTxForm = { asset_type: 'bank', investment_date: '', amount_vnd: '', unit_price: '', units: '', interest_rate: '', expiry_date: '', notes: '', fund_id: '' }
 const emptyFiForm = { fund_id: '', investment_date: '', amount_vnd: '', units: '', unit_price: '' }
 
@@ -73,8 +94,8 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
   const [pendingConfirm, setPendingConfirm] = useState<{ title: string; message: string; onConfirm: () => Promise<void> } | null>(null)
   const [confirming, setConfirming] = useState(false)
 
-  // Withdrawal form
-  const [showWithdrawForm, setShowWithdrawForm] = useState(false)
+  // Withdrawal form — withdrawSource is the investment transaction being sold/withdrawn from
+  const [withdrawSource, setWithdrawSource] = useState<TxRow | null>(null)
   const [withdrawForm, setWithdrawForm] = useState({ amount_vnd: '', investment_date: new Date().toISOString().slice(0, 10), notes: '' })
   const [withdrawError, setWithdrawError] = useState('')
   const [withdrawSaving, setWithdrawSaving] = useState(false)
@@ -113,7 +134,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
     const txRows: TxRow[] = (txs ?? []).map((tx: {
       transaction_id: string; asset_type: string | null; transaction_type: string; investment_date: string; amount_vnd: number
       unit_price: number | null; units: number | null; interest_rate: number | null; expiry_date: string | null; notes: string | null
-      fund_id: string | null; funds?: { id: string; name: string; nav: number } | null
+      fund_id: string | null; parent_transaction_id: string | null; funds?: { id: string; name: string; nav: number } | null
     }) => {
       const txType = tx.transaction_type === 'withdrawal' ? 'withdrawal' : 'investment'
       if (txType === 'withdrawal') {
@@ -121,6 +142,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
           _source: 'withdrawal' as const,
           transaction_type: 'withdrawal' as const,
           transaction_id: tx.transaction_id,
+          parent_transaction_id: tx.parent_transaction_id,
           asset_type: null,
           investment_date: tx.investment_date,
           amount_vnd: tx.amount_vnd,
@@ -144,6 +166,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
         _source: tx.asset_type === 'fund' ? 'fund' : 'other',
         transaction_type: 'investment' as const,
         transaction_id: tx.transaction_id,
+        parent_transaction_id: tx.parent_transaction_id,
         asset_type: tx.asset_type,
         investment_date: tx.investment_date,
         amount_vnd: tx.amount_vnd,
@@ -157,6 +180,18 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
         current_value: currentValue,
       }
     })
+
+    // Build lookup map and resolve _parent_display for withdrawal rows
+    const txMap: Record<string, TxRow> = {}
+    for (const row of txRows) {
+      if (row.transaction_type === 'investment') txMap[row.transaction_id] = row
+    }
+    for (const row of txRows) {
+      if (row._source === 'withdrawal' && row.parent_transaction_id) {
+        const parent = txMap[row.parent_transaction_id]
+        if (parent) row._parent_display = buildParentLabel(parent)
+      }
+    }
 
     setRows(txRows)
     setLoading(false)
@@ -346,10 +381,21 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
     })
   }
 
+  function openWithdraw(row: TxRow) {
+    setWithdrawSource(row)
+    setWithdrawForm({
+      amount_vnd: String(Math.round(row.current_value > 0 ? row.current_value : row.amount_vnd)),
+      investment_date: new Date().toISOString().slice(0, 10),
+      notes: '',
+    })
+    setWithdrawError('')
+  }
+
   async function handleWithdrawSave() {
+    if (!withdrawSource) return
     setWithdrawError('')
     if (!withdrawForm.amount_vnd || Number(withdrawForm.amount_vnd) <= 0) { setWithdrawError('Số tiền phải lớn hơn 0.'); return }
-    if (!withdrawForm.investment_date) { setWithdrawError('Ngày rút là bắt buộc.'); return }
+    if (!withdrawForm.investment_date) { setWithdrawError('Ngày là bắt buộc.'); return }
     setWithdrawSaving(true)
     const res = await fetch('/api/v1/investment-transactions', {
       method: 'POST',
@@ -357,6 +403,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
       body: JSON.stringify({
         transaction_type: 'withdrawal',
         goal_id: currentGoal.goal_id,
+        parent_transaction_id: withdrawSource.transaction_id,
         investment_date: withdrawForm.investment_date,
         amount_vnd: Number(withdrawForm.amount_vnd),
         notes: withdrawForm.notes || null,
@@ -366,9 +413,9 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
       const { error } = await res.json()
       setWithdrawError(error ?? 'Đã xảy ra lỗi.')
     } else {
-      setShowWithdrawForm(false)
+      setWithdrawSource(null)
       setWithdrawForm({ amount_vnd: '', investment_date: new Date().toISOString().slice(0, 10), notes: '' })
-      setSuccessMsg('Đã ghi nhận rút tiền.')
+      setSuccessMsg('Đã ghi nhận.')
       setTimeout(() => setSuccessMsg(''), 4000)
       await fetchData()
     }
@@ -395,7 +442,6 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
           </div>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => setShowWithdrawForm(true)} className="px-3 py-1.5 text-sm font-medium text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-900/20">Ghi nhận Rút tiền</button>
           <button onClick={openEditGoal} className="px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Sửa</button>
           <button onClick={handleDeleteGoal} className="px-3 py-1.5 text-sm font-medium text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20">Xóa</button>
         </div>
@@ -497,7 +543,8 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
                           <button onClick={() => openFiEdit(row)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">Sửa</button>
-                          <button onClick={() => handleUnassign(row)} className="text-xs text-amber-600 dark:text-amber-400 hover:underline">Bỏ gán</button>
+                          <button onClick={() => openWithdraw(row)} className="text-xs text-amber-600 dark:text-amber-400 hover:underline">Bán</button>
+                          <button onClick={() => handleUnassign(row)} className="text-xs text-gray-500 dark:text-gray-400 hover:underline">Bỏ gán</button>
                           <button onClick={() => handleFiDelete(row)} disabled={deletingId === row.transaction_id} className="text-xs text-red-500 dark:text-red-400 hover:underline disabled:opacity-50">
                             {deletingId === row.transaction_id ? 'Đang xóa...' : 'Xóa'}
                           </button>
@@ -557,7 +604,8 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
                           <button onClick={() => openTxEdit(row)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">Sửa</button>
-                          <button onClick={() => handleUnassign(row)} className="text-xs text-amber-600 dark:text-amber-400 hover:underline">Bỏ gán</button>
+                          <button onClick={() => openWithdraw(row)} className="text-xs text-amber-600 dark:text-amber-400 hover:underline">{withdrawBtnLabel(row.asset_type)}</button>
+                          <button onClick={() => handleUnassign(row)} className="text-xs text-gray-500 dark:text-gray-400 hover:underline">Bỏ gán</button>
                           <button onClick={() => handleTxDelete(row)} disabled={deletingId === row.transaction_id} className="text-xs text-red-500 dark:text-red-400 hover:underline disabled:opacity-50">
                             {deletingId === row.transaction_id ? 'Đang xóa...' : 'Xóa'}
                           </button>
@@ -581,7 +629,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
           <table className="w-full text-sm">
             <thead className="bg-gray-50 dark:bg-gray-800">
               <tr>
-                {['Ngày', 'Số tiền rút', 'Ghi chú', 'Thao tác'].map((h) => (
+                {['Ngày', 'Nguồn', 'Số tiền', 'Ghi chú', 'Thao tác'].map((h) => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
@@ -590,6 +638,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
               {withdrawalRows.map((row) => (
                 <tr key={row.transaction_id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
                   <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{new Date(row.investment_date).toLocaleDateString('vi-VN')}</td>
+                  <td className="px-4 py-3 text-gray-500 dark:text-gray-400 text-xs">{row._parent_display ?? '—'}</td>
                   <td className="px-4 py-3 font-medium text-red-600 dark:text-red-400">− {fmt(row.amount_vnd)}</td>
                   <td className="px-4 py-3 text-gray-400 dark:text-gray-500">{row.notes ?? '—'}</td>
                   <td className="px-4 py-3">
@@ -615,20 +664,23 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
       )}
 
       {/* Withdrawal Modal */}
-      {showWithdrawForm && (
+      {withdrawSource && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <form onSubmit={(e) => { e.preventDefault(); handleWithdrawSave() }} className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-sm p-6 border border-gray-100 dark:border-gray-700">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Ghi nhận Rút tiền</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">{withdrawModalTitle(withdrawSource.asset_type)}</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+              {buildParentLabel(withdrawSource)}
+            </p>
             {withdrawError && <p className="text-red-600 dark:text-red-400 text-sm mb-3">{withdrawError}</p>}
             <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Ngày Rút *</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Ngày *</label>
                 <input type="date" value={withdrawForm.investment_date} max={new Date().toISOString().slice(0, 10)}
                   onChange={(e) => setWithdrawForm({ ...withdrawForm, investment_date: e.target.value })}
                   className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Số tiền Rút (VND) *</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Số tiền thực nhận (VND) *</label>
                 <input type="number" value={withdrawForm.amount_vnd}
                   onChange={(e) => setWithdrawForm({ ...withdrawForm, amount_vnd: e.target.value })}
                   placeholder="VD: 5000000"
@@ -638,12 +690,12 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Ghi chú</label>
                 <input type="text" value={withdrawForm.notes}
                   onChange={(e) => setWithdrawForm({ ...withdrawForm, notes: e.target.value })}
-                  placeholder="VD: Rút để mua vàng"
+                  placeholder="VD: Đáo hạn, bán một phần..."
                   className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
             </div>
             <div className="flex gap-3 mt-5">
-              <button type="button" onClick={() => setShowWithdrawForm(false)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Hủy</button>
+              <button type="button" onClick={() => setWithdrawSource(null)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Hủy</button>
               <button type="submit" disabled={withdrawSaving} className="flex-1 py-2 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50">
                 {withdrawSaving ? 'Đang lưu...' : 'Ghi nhận'}
               </button>
