@@ -42,8 +42,8 @@ function bustGoalsCache() {
 }
 
 export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) {
-  const [goals, setGoals] = useState<GoalWithStats[]>([])
-  const [loading, setLoading] = useState(true)
+  const [goals, setGoals] = useState<GoalWithStats[]>(() => getGoalsCache() ?? [])
+  const [loading, setLoading] = useState(() => !getGoalsCache())
   const [selectedGoal, setSelectedGoal] = useState<SavingsGoal | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [editGoal, setEditGoal] = useState<SavingsGoal | null>(null)
@@ -58,29 +58,16 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
   const hasAutoSelected = useRef(false)
 
   const fetchGoals = useCallback(async (opts?: { force?: boolean }) => {
-    const cached = !opts?.force && getGoalsCache()
-    if (cached) {
-      setGoals(cached)
-      setLoading(false)
-      if (initialGoalId && !hasAutoSelected.current) {
-        const match = cached.find((g: GoalWithStats) => g.goal_id === initialGoalId)
-        if (match) { setSelectedGoal(match); hasAutoSelected.current = true }
-      }
-    } else {
-      setLoading(true)
-    }
-
+    if (opts?.force) bustGoalsCache()
     const res = await fetch('/api/v1/savings-goals?stats=true')
     const { goals: fetched } = await res.json()
     const list: GoalWithStats[] = fetched ?? []
     setGoalsCache(list)
     setGoals(list)
-
     if (initialGoalId && !hasAutoSelected.current) {
       const match = list.find((g: GoalWithStats) => g.goal_id === initialGoalId)
       if (match) { setSelectedGoal(match); hasAutoSelected.current = true }
     }
-
     setLoading(false)
   }, [initialGoalId]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -131,7 +118,6 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
       setFormError(error ?? 'Đã xảy ra lỗi.')
     } else {
       setShowForm(false)
-      bustGoalsCache()
       await fetchGoals({ force: true })
     }
     setSaving(false)
@@ -145,7 +131,6 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
       const { message } = await res.json()
       setSuccessMsg(message)
       setTimeout(() => setSuccessMsg(''), 5000)
-      bustGoalsCache()
       await fetchGoals({ force: true })
     }
     setDeletingGoal(false)

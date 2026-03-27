@@ -36,8 +36,8 @@ function bustInsCache() {
 }
 
 export default function InsuranceMembersTab() {
-  const [members, setMembers] = useState<InsuranceMember[]>([])
-  const [loading, setLoading] = useState(true)
+  const [members, setMembers] = useState<InsuranceMember[]>(() => getInsCache() ?? [])
+  const [loading, setLoading] = useState(() => !getInsCache())
   const [showForm, setShowForm] = useState(false)
   const [editMember, setEditMember] = useState<InsuranceMember | null>(null)
   const [form, setForm] = useState(emptyForm)
@@ -48,13 +48,7 @@ export default function InsuranceMembersTab() {
   const [successMsg, setSuccessMsg] = useState('')
 
   const fetchMembers = useCallback(async (opts?: { force?: boolean }) => {
-    const cached = !opts?.force && getInsCache()
-    if (cached) {
-      setMembers(cached)
-      setLoading(false)
-    } else {
-      setLoading(true)
-    }
+    if (opts?.force) bustInsCache()
     const res = await fetch('/api/v1/insurance-members')
     const { members } = await res.json()
     const list: InsuranceMember[] = members ?? []
@@ -107,7 +101,6 @@ export default function InsuranceMembersTab() {
       setFormError(error ?? 'Đã xảy ra lỗi.')
     } else {
       setShowForm(false)
-      bustInsCache()
       await fetchMembers({ force: true })
     }
     setSaving(false)
@@ -120,7 +113,6 @@ export default function InsuranceMembersTab() {
       setConfirmMember(null)
       setSuccessMsg('Đã xóa thành viên.')
       setTimeout(() => setSuccessMsg(''), 4000)
-      bustInsCache()
       await fetchMembers({ force: true })
     }
     setDeletingId(null)

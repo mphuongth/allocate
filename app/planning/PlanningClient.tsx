@@ -92,17 +92,21 @@ function nextMonth(m: number, y: number) { return m === 12 ? { m: 1, y: y + 1 } 
 
 export default function PlanningClient() {
   const now = new Date()
-  const [month, setMonth] = useState(now.getMonth() + 1)
-  const [year, setYear] = useState(now.getFullYear())
-  const [plan, setPlan] = useState<MonthlyPlan | null>(null)
-  const [investments, setInvestments] = useState<FundInvestment[]>([])
-  const [savings, setSavings] = useState<DirectSaving[]>([])
-  const [fixedExpenses, setFixedExpenses] = useState<FixedExpense[]>([])
-  const [insuranceMembers, setInsuranceMembers] = useState<InsuranceMember[]>([])
-  const [otherExpenses, setOtherExpenses] = useState<OtherExpense[]>([])
-  const [funds, setFunds] = useState<Fund[]>([])
-  const [goals, setGoals] = useState<Goal[]>([])
-  const [loading, setLoading] = useState(true)
+  const initialMonth = now.getMonth() + 1
+  const initialYear = now.getFullYear()
+  const [initialCache] = useState(() => getPlanCache(initialMonth, initialYear))
+
+  const [month, setMonth] = useState(initialMonth)
+  const [year, setYear] = useState(initialYear)
+  const [plan, setPlan] = useState<MonthlyPlan | null>(initialCache?.plan ?? null)
+  const [investments, setInvestments] = useState<FundInvestment[]>(initialCache?.investments ?? [])
+  const [savings, setSavings] = useState<DirectSaving[]>(initialCache?.savings ?? [])
+  const [fixedExpenses, setFixedExpenses] = useState<FixedExpense[]>(initialCache?.fixedExpenses ?? [])
+  const [insuranceMembers, setInsuranceMembers] = useState<InsuranceMember[]>(initialCache?.insuranceMembers ?? [])
+  const [otherExpenses, setOtherExpenses] = useState<OtherExpense[]>(initialCache?.otherExpenses ?? [])
+  const [funds, setFunds] = useState<Fund[]>(initialCache?.funds ?? [])
+  const [goals, setGoals] = useState<Goal[]>(initialCache?.goals ?? [])
+  const [loading, setLoading] = useState(!initialCache)
   const [toast, setToast] = useState('')
 
   const showToast = useCallback((msg: string) => {
@@ -110,26 +114,8 @@ export default function PlanningClient() {
     setTimeout(() => setToast(''), 3000)
   }, [])
 
-  function applyPlanData(p: ReturnType<typeof getPlanCache>) {
-    if (!p) return
-    setPlan(p.plan)
-    setInvestments(p.investments)
-    setSavings(p.savings)
-    setFixedExpenses(p.fixedExpenses)
-    setInsuranceMembers(p.insuranceMembers)
-    setOtherExpenses(p.otherExpenses)
-    setGoals(p.goals)
-    setFunds(p.funds)
-  }
-
   const fetchPlan = useCallback(async (opts?: { force?: boolean }) => {
-    const cached = !opts?.force && getPlanCache(month, year)
-    if (cached) {
-      applyPlanData(cached)
-      setLoading(false)
-    } else {
-      setLoading(true)
-    }
+    if (opts?.force) bustPlanCache(month, year)
 
     const res = await fetch(`/api/v1/monthly-plans?month=${month}&year=${year}&full=true`)
     if (res.ok) {
@@ -169,7 +155,14 @@ export default function PlanningClient() {
         funds: p.funds ?? [],
       }
       setPlanCache(month, year, fresh)
-      applyPlanData(fresh)
+      setPlan(fresh.plan)
+      setInvestments(fresh.investments)
+      setSavings(fresh.savings)
+      setFixedExpenses(fresh.fixedExpenses)
+      setInsuranceMembers(fresh.insuranceMembers)
+      setOtherExpenses(fresh.otherExpenses)
+      setGoals(fresh.goals)
+      setFunds(fresh.funds)
     } else {
       bustPlanCache(month, year)
       setPlan(null)
