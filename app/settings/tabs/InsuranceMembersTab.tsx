@@ -17,6 +17,24 @@ const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
 
 const emptyForm = { member_name: '', relationship: '', annual_payment_vnd: '', payment_date: '' }
 
+const INS_CACHE_KEY = 'insuranceMembersCache'
+const CACHE_TTL = 2 * 60 * 1000
+function getInsCache(): InsuranceMember[] | null {
+  try {
+    const raw = localStorage.getItem(INS_CACHE_KEY)
+    if (!raw) return null
+    const { data, ts } = JSON.parse(raw)
+    if (Date.now() - ts > CACHE_TTL) return null
+    return data
+  } catch { return null }
+}
+function setInsCache(data: InsuranceMember[]) {
+  try { localStorage.setItem(INS_CACHE_KEY, JSON.stringify({ data, ts: Date.now() })) } catch {}
+}
+function bustInsCache() {
+  try { localStorage.removeItem(INS_CACHE_KEY) } catch {}
+}
+
 export default function InsuranceMembersTab() {
   const [members, setMembers] = useState<InsuranceMember[]>([])
   const [loading, setLoading] = useState(true)
@@ -29,11 +47,19 @@ export default function InsuranceMembersTab() {
   const [confirmMember, setConfirmMember] = useState<InsuranceMember | null>(null)
   const [successMsg, setSuccessMsg] = useState('')
 
-  const fetchMembers = useCallback(async () => {
-    setLoading(true)
+  const fetchMembers = useCallback(async (opts?: { force?: boolean }) => {
+    const cached = !opts?.force && getInsCache()
+    if (cached) {
+      setMembers(cached)
+      setLoading(false)
+    } else {
+      setLoading(true)
+    }
     const res = await fetch('/api/v1/insurance-members')
     const { members } = await res.json()
-    setMembers(members ?? [])
+    const list: InsuranceMember[] = members ?? []
+    setInsCache(list)
+    setMembers(list)
     setLoading(false)
   }, [])
 
@@ -81,7 +107,8 @@ export default function InsuranceMembersTab() {
       setFormError(error ?? 'Đã xảy ra lỗi.')
     } else {
       setShowForm(false)
-      await fetchMembers()
+      bustInsCache()
+      await fetchMembers({ force: true })
     }
     setSaving(false)
   }
@@ -93,7 +120,8 @@ export default function InsuranceMembersTab() {
       setConfirmMember(null)
       setSuccessMsg('Đã xóa thành viên.')
       setTimeout(() => setSuccessMsg(''), 4000)
-      await fetchMembers()
+      bustInsCache()
+      await fetchMembers({ force: true })
     }
     setDeletingId(null)
   }

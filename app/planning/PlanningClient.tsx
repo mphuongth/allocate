@@ -70,6 +70,23 @@ export interface Goal { goal_id: string; goal_name: string }
 
 const MONTHS = ['Tháng 1','Tháng 2','Tháng 3','Tháng 4','Tháng 5','Tháng 6','Tháng 7','Tháng 8','Tháng 9','Tháng 10','Tháng 11','Tháng 12']
 
+const PLAN_CACHE_TTL = 2 * 60 * 1000
+function getPlanCache(month: number, year: number) {
+  try {
+    const raw = localStorage.getItem(`planningCache_${month}_${year}`)
+    if (!raw) return null
+    const { data, ts } = JSON.parse(raw)
+    if (Date.now() - ts > PLAN_CACHE_TTL) return null
+    return data
+  } catch { return null }
+}
+function setPlanCache(month: number, year: number, data: unknown) {
+  try { localStorage.setItem(`planningCache_${month}_${year}`, JSON.stringify({ data, ts: Date.now() })) } catch {}
+}
+function bustPlanCache(month: number, year: number) {
+  try { localStorage.removeItem(`planningCache_${month}_${year}`) } catch {}
+}
+
 function prevMonth(m: number, y: number) { return m === 1 ? { m: 12, y: y - 1 } : { m: m - 1, y } }
 function nextMonth(m: number, y: number) { return m === 12 ? { m: 1, y: y + 1 } : { m: m + 1, y } }
 
@@ -93,25 +110,39 @@ export default function PlanningClient() {
     setTimeout(() => setToast(''), 3000)
   }, [])
 
-  const fetchPlan = useCallback(async () => {
-    setLoading(true)
+  function applyPlanData(p: ReturnType<typeof getPlanCache>) {
+    if (!p) return
+    setPlan(p.plan)
+    setInvestments(p.investments)
+    setSavings(p.savings)
+    setFixedExpenses(p.fixedExpenses)
+    setInsuranceMembers(p.insuranceMembers)
+    setOtherExpenses(p.otherExpenses)
+    setGoals(p.goals)
+    setFunds(p.funds)
+  }
+
+  const fetchPlan = useCallback(async (opts?: { force?: boolean }) => {
+    const cached = !opts?.force && getPlanCache(month, year)
+    if (cached) {
+      applyPlanData(cached)
+      setLoading(false)
+    } else {
+      setLoading(true)
+    }
+
     const res = await fetch(`/api/v1/monthly-plans?month=${month}&year=${year}&full=true`)
     if (res.ok) {
       const p = await res.json()
-      setPlan({ id: p.id, month: p.month, year: p.year, salary_vnd: p.salary_vnd })
-      setInvestments(p.fund_investments ?? [])
-      setSavings(p.direct_savings ?? [])
 
       const overrideMap = new Map(
         (p.fixed_expense_overrides as Array<{ fixed_expense_id: string; monthly_amount_override_vnd: number }>)
           .map((o) => [o.fixed_expense_id, o.monthly_amount_override_vnd])
       )
-      setFixedExpenses(
-        (p.fixed_expenses as Array<{ expense_id: string; expense_name: string; amount_vnd: number }>).map((e) => ({
-          ...e,
-          override: overrideMap.get(e.expense_id),
-        }))
-      )
+      const fixedExpenses = (p.fixed_expenses as Array<{ expense_id: string; expense_name: string; amount_vnd: number }>).map((e) => ({
+        ...e,
+        override: overrideMap.get(e.expense_id),
+      }))
 
       const excludedSet = new Set(
         (p.excluded_insurance as Array<{ member_id: string }>).map((e) => e.member_id)
@@ -120,17 +151,27 @@ export default function PlanningClient() {
         (p.insurance_overrides as Array<{ member_id: string; monthly_amount_override_vnd: number }>)
           .map((o) => [o.member_id, o.monthly_amount_override_vnd])
       )
-      setInsuranceMembers(
-        (p.insurance_members as InsuranceMember[]).map((m) => ({
-          ...m,
-          excluded: excludedSet.has(m.member_id),
-          monthlyOverride: insOverrideMap.get(m.member_id),
-        }))
-      )
-      setOtherExpenses(p.other_expenses ?? [])
-      setGoals(p.goals ?? [])
-      setFunds(p.funds ?? [])
+      const insuranceMembers = (p.insurance_members as InsuranceMember[]).map((m) => ({
+        ...m,
+        excluded: excludedSet.has(m.member_id),
+        monthlyOverride: insOverrideMap.get(m.member_id),
+      }))
+
+      const plan = { id: p.id, month: p.month, year: p.year, salary_vnd: p.salary_vnd }
+      const fresh = {
+        plan,
+        investments: p.fund_investments ?? [],
+        savings: p.direct_savings ?? [],
+        fixedExpenses,
+        insuranceMembers,
+        otherExpenses: p.other_expenses ?? [],
+        goals: p.goals ?? [],
+        funds: p.funds ?? [],
+      }
+      setPlanCache(month, year, fresh)
+      applyPlanData(fresh)
     } else {
+      bustPlanCache(month, year)
       setPlan(null)
       setInvestments([])
       setSavings([])
@@ -158,7 +199,7 @@ export default function PlanningClient() {
     setYear(y)
   }
 
-  const refetch = useCallback(() => fetchPlan(), [fetchPlan])
+  const refetch = useCallback(() => fetchPlan({ force: true }), [fetchPlan])
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
@@ -196,6 +237,7 @@ export default function PlanningClient() {
                 onPlanDeleted={() => {
                   const deletedMonth = MONTHS[month - 1]
                   const deletedYear = year
+                  bustPlanCache(month, year)
                   setPlan(null)
                   setInvestments([])
                   setSavings([])
