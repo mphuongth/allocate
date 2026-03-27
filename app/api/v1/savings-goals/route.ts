@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
   // Fetch transactions with fund NAV in parallel with goals already done
   const { data: transactions, error: txError } = await supabase
     .from('investment_transactions')
-    .select('transaction_id, goal_id, asset_type, amount_vnd, units, unit_price, interest_rate, investment_date, funds(id, name, nav)')
+    .select('transaction_id, goal_id, asset_type, transaction_type, amount_vnd, units, unit_price, interest_rate, investment_date, funds(id, name, nav)')
     .eq('user_id', user.id)
     .not('goal_id', 'is', null)
 
@@ -39,7 +39,8 @@ export async function GET(request: NextRequest) {
   type TxRow = {
     transaction_id: string
     goal_id: string | null
-    asset_type: string
+    asset_type: string | null
+    transaction_type: string
     amount_vnd: number
     units: number | null
     unit_price: number | null
@@ -51,6 +52,11 @@ export async function GET(request: NextRequest) {
   const statsMap = new Map<string, { count: number; invested: number; interest: number }>()
   ;(transactions as TxRow[]).forEach((tx) => {
     if (!tx.goal_id) return
+    const existing = statsMap.get(tx.goal_id) ?? { count: 0, invested: 0, interest: 0 }
+    if (tx.transaction_type === 'withdrawal') {
+      statsMap.set(tx.goal_id, { count: existing.count, invested: existing.invested - tx.amount_vnd, interest: existing.interest })
+      return
+    }
     let gain: number
     if (tx.asset_type === 'fund' && tx.units) {
       const fund = Array.isArray(tx.funds) ? tx.funds[0] : tx.funds
@@ -59,7 +65,6 @@ export async function GET(request: NextRequest) {
     } else {
       gain = calcProjectedInterest(tx.amount_vnd, tx.interest_rate, tx.investment_date)
     }
-    const existing = statsMap.get(tx.goal_id) ?? { count: 0, invested: 0, interest: 0 }
     statsMap.set(tx.goal_id, { count: existing.count + 1, invested: existing.invested + tx.amount_vnd, interest: existing.interest + gain })
   })
 
