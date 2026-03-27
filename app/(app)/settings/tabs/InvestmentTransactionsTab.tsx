@@ -6,7 +6,8 @@ import ConfirmModal from '@/app/components/ConfirmModal'
 interface Transaction {
   transaction_id: string
   goal_id: string | null
-  asset_type: string
+  asset_type: string | null
+  transaction_type: string
   investment_date: string
   amount_vnd: number
   unit_price: number | null
@@ -212,7 +213,7 @@ export default function InvestmentTransactionsTab() {
 
   function openEdit(tx: Transaction) {
     setTxForm({
-      asset_type: tx.asset_type,
+      asset_type: tx.asset_type ?? 'bank',
       investment_date: tx.investment_date,
       amount_vnd: String(tx.amount_vnd),
       unit_price: tx.unit_price != null ? String(tx.unit_price) : '',
@@ -398,9 +399,15 @@ export default function InvestmentTransactionsTab() {
                     <tr key={tx.transaction_id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
                       <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{new Date(tx.investment_date).toLocaleDateString('vi-VN')}</td>
                       <td className="px-4 py-3">
-                        <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${ASSET_COLORS[tx.asset_type as AssetType] ?? 'bg-gray-100 text-gray-700'}`}>
-                          {TYPE_LABELS[tx.asset_type as AssetType] ?? tx.asset_type}
-                        </span>
+                        {tx.transaction_type === 'withdrawal' ? (
+                          <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                            Rút tiền
+                          </span>
+                        ) : (
+                          <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${ASSET_COLORS[tx.asset_type as AssetType] ?? 'bg-gray-100 text-gray-700'}`}>
+                            {TYPE_LABELS[tx.asset_type as AssetType] ?? tx.asset_type}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{fmt(tx.amount_vnd)}</td>
                       <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{tx.units ?? '—'}</td>
