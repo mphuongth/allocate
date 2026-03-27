@@ -34,6 +34,7 @@ interface TxRow {
   fund_display?: string
   _parent_display?: string
   current_value: number
+  withdrawn_from_this: number
 }
 
 const ASSET_COLORS: Record<string, string> = {
@@ -149,6 +150,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
           unit_price: null, units: null, interest_rate: null, expiry_date: null,
           notes: tx.notes, fund_id: null,
           current_value: 0,
+          withdrawn_from_this: 0,
         }
       }
       let currentValue: number
@@ -178,10 +180,24 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
         fund_id: tx.fund_id,
         fund_display: tx.fund_id && fundMap[tx.fund_id] ? `${fundMap[tx.fund_id].code} - ${fundMap[tx.fund_id].name}` : undefined,
         current_value: currentValue,
+        withdrawn_from_this: 0,
       }
     })
 
-    // Build lookup map and resolve _parent_display for withdrawal rows
+    // Compute how much has been withdrawn from each investment transaction
+    const withdrawnByParent: Record<string, number> = {}
+    for (const row of txRows) {
+      if (row._source === 'withdrawal' && row.parent_transaction_id) {
+        withdrawnByParent[row.parent_transaction_id] = (withdrawnByParent[row.parent_transaction_id] ?? 0) + row.amount_vnd
+      }
+    }
+    for (const row of txRows) {
+      if (row.transaction_type === 'investment') {
+        row.withdrawn_from_this = withdrawnByParent[row.transaction_id] ?? 0
+      }
+    }
+
+    // Resolve _parent_display for withdrawal rows
     const txMap: Record<string, TxRow> = {}
     for (const row of txRows) {
       if (row.transaction_type === 'investment') txMap[row.transaction_id] = row
@@ -538,7 +554,12 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                       <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{row.units ?? '—'}</td>
                       <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{row.unit_price != null ? fmt(row.unit_price) : '—'}</td>
                       <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{fmt(currentNav)}</td>
-                      <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{fmt(row.current_value)}</td>
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-gray-900 dark:text-gray-100">{fmt(Math.max(0, row.current_value - row.withdrawn_from_this))}</div>
+                        {row.withdrawn_from_this > 0 && (
+                          <div className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">Đã bán: {fmt(row.withdrawn_from_this)}</div>
+                        )}
+                      </td>
                       <td className={`px-4 py-3 font-medium ${pl >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt(pl)}</td>
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
@@ -596,7 +617,14 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                           {ASSET_LABELS[row.asset_type ?? ''] ?? row.asset_type}
                         </span>
                       </td>
-                      <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{fmt(row.amount_vnd)}</td>
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-gray-900 dark:text-gray-100">{fmt(row.amount_vnd)}</div>
+                        {row.withdrawn_from_this > 0 && (
+                          <div className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+                            Đã rút: {fmt(row.withdrawn_from_this)} · Còn: {fmt(Math.max(0, row.current_value - row.withdrawn_from_this))}
+                          </div>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{row.units ?? '—'}</td>
                       <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{row.interest_rate != null ? `${row.interest_rate}%` : '—'}</td>
                       <td className={`px-4 py-3 font-medium ${gain >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt(gain)}</td>
