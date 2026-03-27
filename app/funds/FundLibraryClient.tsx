@@ -296,7 +296,7 @@ export default function FundLibraryClient() {
           <div className="bg-white dark:bg-gray-900 rounded-lg shadow p-8 text-center border border-gray-100 dark:border-gray-700">
             <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
             <button
-              onClick={loadFunds}
+              onClick={() => loadFunds()}
               className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded hover:bg-indigo-700 transition-colors"
             >
               Retry
