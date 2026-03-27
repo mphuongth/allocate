@@ -21,7 +21,7 @@ export default function UserMenu() {
     } else {
       // Clear all page caches on logout
       Object.keys(localStorage)
-        .filter(k => k.startsWith('dashboardOverviewCache') || k.startsWith('planningCache_') || k.startsWith('savingsGoalsCache') || k.startsWith('fixedExpensesCache') || k.startsWith('insuranceMembersCache'))
+        .filter(k => k.startsWith('dashboardOverviewCache') || k.startsWith('planningCache_') || k.startsWith('savingsGoalsCache') || k.startsWith('fixedExpensesCache') || k.startsWith('insuranceMembersCache') || k.startsWith('fundLibraryCache'))
         .forEach(k => localStorage.removeItem(k))
       toast.success('Đã đăng xuất thành công')
       router.push('/auth/login')

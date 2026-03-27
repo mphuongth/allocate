@@ -35,6 +35,24 @@ const FUND_TYPE_COLORS: Record<FundType, string> = {
 
 let toastId = 0
 
+const FUNDS_CACHE_KEY = 'fundLibraryCache'
+const CACHE_TTL = 2 * 60 * 1000
+function getFundsCache(): Fund[] | null {
+  try {
+    const raw = localStorage.getItem(FUNDS_CACHE_KEY)
+    if (!raw) return null
+    const { data, ts } = JSON.parse(raw)
+    if (Date.now() - ts > CACHE_TTL) return null
+    return data
+  } catch { return null }
+}
+function setFundsCache(data: Fund[]) {
+  try { localStorage.setItem(FUNDS_CACHE_KEY, JSON.stringify({ data, ts: Date.now() })) } catch {}
+}
+function bustFundsCache() {
+  try { localStorage.removeItem(FUNDS_CACHE_KEY) } catch {}
+}
+
 export default function FundLibraryClient() {
   const [funds, setFunds] = useState<Fund[]>([])
   const [loading, setLoading] = useState(true)
@@ -66,13 +84,20 @@ export default function FundLibraryClient() {
     setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 3000)
   }, [])
 
-  const loadFunds = useCallback(async () => {
-    setLoading(true)
+  const loadFunds = useCallback(async (opts?: { force?: boolean }) => {
+    const cached = !opts?.force && getFundsCache()
+    if (cached) {
+      setFunds(cached)
+      setLoading(false)
+    } else {
+      setLoading(true)
+    }
     setError(null)
     try {
       const res = await fetch('/api/funds')
       if (!res.ok) throw new Error('Failed to load funds')
       const data = await res.json()
+      setFundsCache(data.funds)
       setFunds(data.funds)
     } catch {
       setError('Failed to load funds. Please try again.')
@@ -147,7 +172,8 @@ export default function FundLibraryClient() {
         return
       }
       closeModal()
-      await loadFunds()
+      bustFundsCache()
+      await loadFunds({ force: true })
       addToast(modalMode === 'edit' ? 'Fund updated' : 'Fund added')
     } catch {
       setFormError('Something went wrong. Please try again later.')
@@ -163,7 +189,8 @@ export default function FundLibraryClient() {
       const res = await fetch(`/api/funds/${deleteTarget.id}`, { method: 'DELETE' })
       if (!res.ok && res.status !== 204) throw new Error()
       setDeleteTarget(null)
-      await loadFunds()
+      bustFundsCache()
+      await loadFunds({ force: true })
       addToast('Fund deleted')
     } catch {
       addToast('Failed to delete fund. Please try again.', 'error')
@@ -180,7 +207,8 @@ export default function FundLibraryClient() {
       const { results } = await res.json()
       const updated = results.filter((r: { nav?: number }) => r.nav !== undefined).length
       const failed = results.filter((r: { error?: string }) => r.error).length
-      await loadFunds()
+      bustFundsCache()
+      await loadFunds({ force: true })
       addToast(
         `${updated} updated${failed ? `, ${failed} failed` : ''}`,
         failed > 0 && updated === 0 ? 'error' : 'success'
