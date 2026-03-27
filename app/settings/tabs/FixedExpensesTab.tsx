@@ -15,6 +15,26 @@ const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
 
 const emptyForm = { expense_name: '', amount_vnd: '', category: '' }
 
+const FIXED_CACHE_PREFIX = 'fixedExpensesCache'
+const CACHE_TTL = 2 * 60 * 1000
+function getFixedCache(category: string): Expense[] | null {
+  try {
+    const raw = localStorage.getItem(`${FIXED_CACHE_PREFIX}_${category}`)
+    if (!raw) return null
+    const { data, ts } = JSON.parse(raw)
+    if (Date.now() - ts > CACHE_TTL) return null
+    return data
+  } catch { return null }
+}
+function setFixedCache(category: string, data: Expense[]) {
+  try { localStorage.setItem(`${FIXED_CACHE_PREFIX}_${category}`, JSON.stringify({ data, ts: Date.now() })) } catch {}
+}
+function bustFixedCache() {
+  try {
+    Object.keys(localStorage).filter(k => k.startsWith(FIXED_CACHE_PREFIX)).forEach(k => localStorage.removeItem(k))
+  } catch {}
+}
+
 export default function FixedExpensesTab() {
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [loading, setLoading] = useState(true)
@@ -29,16 +49,27 @@ export default function FixedExpensesTab() {
   const [confirmExpense, setConfirmExpense] = useState<Expense | null>(null)
   const [successMsg, setSuccessMsg] = useState('')
 
-  const fetchExpenses = useCallback(async () => {
-    setLoading(true)
+  const fetchExpenses = useCallback(async (opts?: { force?: boolean }) => {
+    const cached = !opts?.force && getFixedCache(filterCategory)
+    if (cached) {
+      setExpenses(cached)
+      setLoading(false)
+      if (!filterCategory && cached.length) {
+        setCategories([...new Set<string>(cached.map((e: Expense) => e.category))])
+      }
+    } else {
+      setLoading(true)
+    }
+
     const params = new URLSearchParams()
     if (filterCategory) params.set('category', filterCategory)
     const res = await fetch(`/api/v1/fixed-expenses?${params}`)
     const { expenses } = await res.json()
-    setExpenses(expenses ?? [])
-    // Collect unique categories
-    if (!filterCategory && expenses?.length) {
-      setCategories([...new Set<string>(expenses.map((e: Expense) => e.category))])
+    const list: Expense[] = expenses ?? []
+    setFixedCache(filterCategory, list)
+    setExpenses(list)
+    if (!filterCategory && list.length) {
+      setCategories([...new Set<string>(list.map((e: Expense) => e.category))])
     }
     setLoading(false)
   }, [filterCategory])
@@ -77,7 +108,8 @@ export default function FixedExpensesTab() {
       setFormError(error ?? 'Đã xảy ra lỗi.')
     } else {
       setShowForm(false)
-      await fetchExpenses()
+      bustFixedCache()
+      await fetchExpenses({ force: true })
     }
     setSaving(false)
   }
@@ -89,7 +121,8 @@ export default function FixedExpensesTab() {
       setConfirmExpense(null)
       setSuccessMsg('Đã xóa chi phí.')
       setTimeout(() => setSuccessMsg(''), 4000)
-      await fetchExpenses()
+      bustFixedCache()
+      await fetchExpenses({ force: true })
     }
     setDeletingId(null)
   }

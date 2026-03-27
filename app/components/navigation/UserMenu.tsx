@@ -19,7 +19,10 @@ export default function UserMenu() {
         action: { label: 'Thử lại', onClick: handleLogout },
       })
     } else {
-      localStorage.removeItem('dashboardOverviewCache')
+      // Clear all page caches on logout
+      Object.keys(localStorage)
+        .filter(k => k.startsWith('dashboardOverviewCache') || k.startsWith('planningCache_') || k.startsWith('savingsGoalsCache') || k.startsWith('fixedExpensesCache') || k.startsWith('insuranceMembersCache'))
+        .forEach(k => localStorage.removeItem(k))
       toast.success('Đã đăng xuất thành công')
       router.push('/auth/login')
     }

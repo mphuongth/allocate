@@ -23,6 +23,24 @@ interface Props {
   onGoalChange?: (id: string | null) => void
 }
 
+const GOALS_CACHE_KEY = 'savingsGoalsCache'
+const CACHE_TTL = 2 * 60 * 1000
+function getGoalsCache(): GoalWithStats[] | null {
+  try {
+    const raw = localStorage.getItem(GOALS_CACHE_KEY)
+    if (!raw) return null
+    const { data, ts } = JSON.parse(raw)
+    if (Date.now() - ts > CACHE_TTL) return null
+    return data
+  } catch { return null }
+}
+function setGoalsCache(data: GoalWithStats[]) {
+  try { localStorage.setItem(GOALS_CACHE_KEY, JSON.stringify({ data, ts: Date.now() })) } catch {}
+}
+function bustGoalsCache() {
+  try { localStorage.removeItem(GOALS_CACHE_KEY) } catch {}
+}
+
 export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) {
   const [goals, setGoals] = useState<GoalWithStats[]>([])
   const [loading, setLoading] = useState(true)
@@ -39,18 +57,28 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
   const [deletingGoal, setDeletingGoal] = useState(false)
   const hasAutoSelected = useRef(false)
 
-  const fetchGoals = useCallback(async () => {
-    setLoading(true)
+  const fetchGoals = useCallback(async (opts?: { force?: boolean }) => {
+    const cached = !opts?.force && getGoalsCache()
+    if (cached) {
+      setGoals(cached)
+      setLoading(false)
+      if (initialGoalId && !hasAutoSelected.current) {
+        const match = cached.find((g: GoalWithStats) => g.goal_id === initialGoalId)
+        if (match) { setSelectedGoal(match); hasAutoSelected.current = true }
+      }
+    } else {
+      setLoading(true)
+    }
+
     const res = await fetch('/api/v1/savings-goals?stats=true')
     const { goals: fetched } = await res.json()
-    setGoals(fetched ?? [])
+    const list: GoalWithStats[] = fetched ?? []
+    setGoalsCache(list)
+    setGoals(list)
 
     if (initialGoalId && !hasAutoSelected.current) {
-      const match = fetched.find((g: GoalWithStats) => g.goal_id === initialGoalId)
-      if (match) {
-        setSelectedGoal(match)
-        hasAutoSelected.current = true
-      }
+      const match = list.find((g: GoalWithStats) => g.goal_id === initialGoalId)
+      if (match) { setSelectedGoal(match); hasAutoSelected.current = true }
     }
 
     setLoading(false)
@@ -66,7 +94,7 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
   function clearGoal() {
     setSelectedGoal(null)
     onGoalChange?.(null)
-    fetchGoals()
+    fetchGoals({ force: true })
   }
 
   function openCreate() {
@@ -103,7 +131,8 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
       setFormError(error ?? 'Đã xảy ra lỗi.')
     } else {
       setShowForm(false)
-      await fetchGoals()
+      bustGoalsCache()
+      await fetchGoals({ force: true })
     }
     setSaving(false)
   }
@@ -116,7 +145,8 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
       const { message } = await res.json()
       setSuccessMsg(message)
       setTimeout(() => setSuccessMsg(''), 5000)
-      await fetchGoals()
+      bustGoalsCache()
+      await fetchGoals({ force: true })
     }
     setDeletingGoal(false)
   }
