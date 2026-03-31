@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import { useTranslations } from 'next-intl'
 
 const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
 const fmtNav = (n: number) => '₫ ' + n.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -29,6 +30,7 @@ export default function FundDetailModal({
   fundName, currentNAV, quantity, currentValue, purchasePrice,
   profitLoss, profitLossPercentage, purchaseHistory, onClose,
 }: Props) {
+  const t = useTranslations('dashboard')
   const overlayRef = useRef<HTMLDivElement>(null)
   const plPositive = profitLoss >= 0
 
@@ -62,26 +64,26 @@ export default function FundDetailModal({
           {/* Summary stats */}
           <div className="grid grid-cols-2 gap-4">
             <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
-              <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">NAV hiện tại</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">{t('currentNav')}</p>
               <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{fmtNav(currentNAV)}</p>
             </div>
             <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
-              <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">Số CCQ nắm giữ</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">{t('unitsHeld')}</p>
               <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{quantity.toLocaleString('vi-VN')}</p>
             </div>
             <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
-              <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">Giá trị hiện tại</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">{t('currentValue')}</p>
               <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{fmt(currentValue)}</p>
             </div>
             <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
-              <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">Giá mua trung bình</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">{t('avgPurchasePrice')}</p>
               <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{fmtNav(purchasePrice)}</p>
             </div>
           </div>
 
           {/* P&L */}
           <div className={`rounded-lg p-4 ${plPositive ? 'bg-green-50 dark:bg-green-900/20' : 'bg-red-50 dark:bg-red-900/20'}`}>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Tổng Lãi / Lỗ</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('totalGainLoss')}</p>
             <p className={`text-xl font-bold ${plPositive ? 'text-green-700' : 'text-red-700'}`}>
               {fmt(profitLoss)}
             </p>
@@ -93,11 +95,11 @@ export default function FundDetailModal({
           {/* Purchase history */}
           {purchaseHistory.length > 0 && (
             <div>
-              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Lịch sử mua</h3>
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">{t('purchaseHistory')}</h3>
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 dark:bg-gray-800">
                   <tr>
-                    {['Ngày', 'CCQ', 'NAV khi mua'].map((h) => (
+                    {[t('colDate'), t('colUnits'), t('colNavAtPurchase')].map((h) => (
                       <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">{h}</th>
                     ))}
                   </tr>
@@ -105,7 +107,7 @@ export default function FundDetailModal({
                 <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
                   {purchaseHistory.map((row, i) => (
                     <tr key={i}>
-                      <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{new Date(row.purchase_date).toLocaleDateString('vi-VN')}</td>
+                      <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{new Date(row.purchase_date).toLocaleDateString()}</td>
                       <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{row.units}</td>
                       <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{fmtNav(row.nav_at_purchase)}</td>
                     </tr>

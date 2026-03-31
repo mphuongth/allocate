@@ -1,6 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 
 const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
 const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`
@@ -20,6 +21,7 @@ export default function GoalCard({
   goalId, goalName, targetAmount, currentValue, totalInvested,
   profitLoss, profitLossPercentage, progressPercentage,
 }: Props) {
+  const t = useTranslations('dashboard')
   const router = useRouter()
   const plPositive = profitLoss >= 0
   const exceededTarget = progressPercentage !== null && progressPercentage >= 100
@@ -38,7 +40,7 @@ export default function GoalCard({
         <p className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">{fmt(currentValue)}</p>
 
         <div className="flex items-center gap-2 mb-3">
-          <span className="text-xs text-gray-400 dark:text-gray-500">Lãi/Lỗ</span>
+          <span className="text-xs text-gray-400 dark:text-gray-500">{t('gainLoss')}</span>
           <span className={`text-xs font-medium ${plPositive ? 'text-green-600' : 'text-red-600'}`}>
             {fmt(profitLoss)} ({fmtPct(profitLossPercentage)})
           </span>
@@ -47,9 +49,9 @@ export default function GoalCard({
         {targetAmount != null && (
           <div>
             <div className="flex items-center justify-between text-xs text-gray-400 dark:text-gray-500 mb-1">
-              <span>Mục tiêu: {fmt(targetAmount)}</span>
+              <span>{t('goalTarget2', { amount: fmt(targetAmount) })}</span>
               {exceededTarget
-                ? <span className="text-green-600 font-medium">Đã vượt mục tiêu</span>
+                ? <span className="text-green-600 font-medium">{t('exceededTarget')}</span>
                 : <span>{Math.round(progressPercentage ?? 0)}%</span>
               }
             </div>
@@ -63,7 +65,7 @@ export default function GoalCard({
         )}
 
         {targetAmount == null && currentValue === 0 && (
-          <p className="text-xs text-gray-400 dark:text-gray-500">Chưa có giao dịch</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500">{t('noTransactions')}</p>
         )}
       </div>
     </div>
