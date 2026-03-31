@@ -81,7 +81,7 @@ export default function AllocationSummary({ plan, investments, savings, fixedExp
     <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden sticky top-6">
       <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700">
         <h2 className="font-semibold text-gray-900 dark:text-gray-100">{t('summaryTitle')}</h2>
-        <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Lương: {fmt(salary)}</p>
+        <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{t('salaryRow', { amount: fmt(salary) })}</p>
       </div>
 
       <div className="p-5">

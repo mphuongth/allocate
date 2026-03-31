@@ -331,6 +331,7 @@
     "deleteSalaryCannotDelete": "Không thể xóa. Vui lòng kiểm tra kết nối và thử lại.",
     "deletedToast": "Đã xóa bản ghi lương {month} {year}",
     "summaryTitle": "Tóm tắt Phân bổ",
+    "salaryRow": "Lương: {amount}",
     "enterSalary": "Nhập lương để xem tóm tắt.",
     "colGoal": "Mục tiêu",
     "colAllocation": "Phân bổ",

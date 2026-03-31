@@ -331,6 +331,7 @@
     "deleteSalaryCannotDelete": "Cannot delete. Please check your connection and try again.",
     "deletedToast": "Deleted salary record for {month} {year}",
     "summaryTitle": "Allocation Summary",
+    "salaryRow": "Salary: {amount}",
     "enterSalary": "Enter salary to see summary.",
     "colGoal": "Goal",
     "colAllocation": "Allocation",
