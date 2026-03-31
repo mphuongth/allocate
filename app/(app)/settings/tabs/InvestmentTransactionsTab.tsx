@@ -549,14 +549,14 @@ export default function InvestmentTransactionsTab() {
                 onClick={() => setShowImport(false)}
                 className="flex-1 px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
               >
-                Hủy
+                {tc('cancel')}
               </button>
               <button
                 onClick={handleImport}
                 disabled={importing || !importFundId || importRows.filter((r) => !r.error).length === 0}
                 className="flex-1 px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
               >
-                {importing ? 'Đang nhập…' : `Nhập ${importRows.filter((r) => !r.error).length} giao dịch`}
+                {importing ? t('importing') : t('importCount', { count: importRows.filter((r) => !r.error).length })}
               </button>
             </div>
           </div>

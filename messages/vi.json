@@ -129,7 +129,9 @@
     "page": "Trang",
     "of": "/",
     "prev": "←",
-    "next": "→"
+    "next": "→",
+    "importing": "Đang nhập…",
+    "importCount": "Nhập {count} giao dịch"
   },
   "expenses": {
     "title": "Chi phí Cố định",
@@ -212,6 +214,13 @@
     "items": "mục",
     "expiry": "exp",
     "perYear": "%/năm",
+    "assignGoalBtn": "Gán",
+    "assigningGoalBtn": "Đang gán…",
+    "markPaidTitle": "Xác nhận thanh toán",
+    "markPaidMessage": "Đánh dấu thanh toán hoàn tất cho {name}?",
+    "annualPayment": "Thanh toán hàng năm: {amount}",
+    "markPaidNote": "Số dư tiết kiệm sẽ được đặt lại về ₫0.",
+    "markPaidProcessing": "Đang xử lý...",
     "goldPrice": "Giá vàng Doji",
     "goldPriceNotUpdated": "Chưa cập nhật",
     "goldPriceRefresh": "Làm mới giá",

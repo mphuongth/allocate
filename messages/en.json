@@ -129,7 +129,9 @@
     "page": "Page",
     "of": "/",
     "prev": "←",
-    "next": "→"
+    "next": "→",
+    "importing": "Importing…",
+    "importCount": "Import {count} transactions"
   },
   "expenses": {
     "title": "Fixed Expenses",
@@ -212,6 +214,13 @@
     "items": "items",
     "expiry": "exp",
     "perYear": "%/yr",
+    "assignGoalBtn": "Assign",
+    "assigningGoalBtn": "Assigning…",
+    "markPaidTitle": "Confirm payment",
+    "markPaidMessage": "Mark payment as complete for {name}?",
+    "annualPayment": "Annual payment: {amount}",
+    "markPaidNote": "Savings balance will be reset to ₫0.",
+    "markPaidProcessing": "Processing…",
     "goldPrice": "Doji Gold Price",
     "goldPriceNotUpdated": "Not updated",
     "goldPriceRefresh": "Refresh price",

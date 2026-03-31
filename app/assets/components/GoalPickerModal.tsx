@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useTranslations } from 'next-intl'
 
 const fmt = (n: number | null) => n != null ? '₫ ' + Math.round(n).toLocaleString('vi-VN') : '—'
 
@@ -23,6 +24,8 @@ interface Props {
 }
 
 export default function GoalPickerModal({ fundName, goals, onConfirm, onCancel, isLoading, error }: Props) {
+  const t = useTranslations('dashboard')
+  const tc = useTranslations('common')
   const [selected, setSelected] = useState<string | null>(null)
   const overlayRef = useRef<HTMLDivElement>(null)
 
@@ -90,7 +93,7 @@ export default function GoalPickerModal({ fundName, goals, onConfirm, onCancel, 
             disabled={isLoading}
             className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 min-h-[44px]"
           >
-            Hủy
+            {tc('cancel')}
           </button>
           <button
             onClick={() => selected && onConfirm(selected)}
@@ -98,7 +101,7 @@ export default function GoalPickerModal({ fundName, goals, onConfirm, onCancel, 
             className="flex-1 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2 min-h-[44px]"
           >
             {isLoading && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-            {isLoading ? 'Đang gán...' : 'Gán'}
+            {isLoading ? t('assigningGoalBtn') : t('assignGoalBtn')}
           </button>
         </div>
       </div>

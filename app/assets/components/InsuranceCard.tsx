@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { Trash2, TriangleAlert } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
 
@@ -70,6 +71,9 @@ export default function InsuranceCard({
 
   const [localAmountSaved, setLocalAmountSaved] = useState(amountSaved)
   const localProgress = Math.min(annualPremium > 0 ? (localAmountSaved / annualPremium) * 100 : 0, 100)
+
+  const t = useTranslations('dashboard')
+  const tc = useTranslations('common')
 
   const [inputAmount, setInputAmount] = useState('')
   const [savingsList, setSavingsList] = useState<SavingsRecord[]>([])
@@ -282,22 +286,22 @@ export default function InsuranceCard({
           onClick={(e) => { if (e.target === e.currentTarget) setShowConfirm(false) }}
         >
           <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-sm p-6 border border-gray-100 dark:border-gray-700">
-            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">Xác nhận thanh toán</h3>
+            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">{t('markPaidTitle')}</h3>
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-              Đánh dấu thanh toán hoàn tất cho <strong>{insuranceName}</strong>?
+              {t('markPaidMessage', { name: insuranceName })}
             </p>
             <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 mb-4 border-l-4 border-indigo-500">
               <p className="text-xs text-gray-700 dark:text-gray-300 font-medium">{insuranceName}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Thanh toán hàng năm: {fmt(annualPremium)}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t('annualPayment', { amount: fmt(annualPremium) })}</p>
             </div>
-            <p className="text-xs text-gray-400 dark:text-gray-500 mb-5">Số dư tiết kiệm sẽ được đặt lại về ₫0.</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mb-5">{t('markPaidNote')}</p>
             <div className="flex gap-3">
               <button
                 onClick={() => setShowConfirm(false)}
                 disabled={markPaidLoading}
                 className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
               >
-                Hủy
+                {tc('cancel')}
               </button>
               <button
                 onClick={handleMarkAsPaid}
@@ -310,9 +314,9 @@ export default function InsuranceCard({
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                     </svg>
-                    Đang xử lý...
+                    {t('markPaidProcessing')}
                   </>
-                ) : 'Xác nhận'}
+                ) : tc('confirm')}
               </button>
             </div>
           </div>
