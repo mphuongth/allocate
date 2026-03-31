@@ -211,7 +211,18 @@
     "unassigned": "Chưa gán",
     "items": "mục",
     "expiry": "exp",
-    "perYear": "%/năm"
+    "perYear": "%/năm",
+    "goldPrice": "Giá vàng Doji",
+    "goldPriceNotUpdated": "Chưa cập nhật",
+    "goldPriceRefresh": "Làm mới giá",
+    "goldPriceRefreshing": "Đang lấy...",
+    "goldPriceError": "Không thể lấy giá vàng",
+    "goldPriceConnError": "Lỗi kết nối",
+    "goldPriceUnit": "/ chỉ",
+    "timeJustNow": "vừa xong",
+    "timeMinsAgo": "{mins} phút trước",
+    "timeHrsAgo": "{hrs} giờ trước",
+    "timeDaysAgo": "{days} ngày trước"
   },
   "funds": {
     "title": "Thư viện Quỹ",

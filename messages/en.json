@@ -211,7 +211,18 @@
     "unassigned": "Unassigned",
     "items": "items",
     "expiry": "exp",
-    "perYear": "%/yr"
+    "perYear": "%/yr",
+    "goldPrice": "Doji Gold Price",
+    "goldPriceNotUpdated": "Not updated",
+    "goldPriceRefresh": "Refresh price",
+    "goldPriceRefreshing": "Fetching...",
+    "goldPriceError": "Cannot fetch gold price",
+    "goldPriceConnError": "Connection error",
+    "goldPriceUnit": "/ chỉ",
+    "timeJustNow": "just now",
+    "timeMinsAgo": "{mins}m ago",
+    "timeHrsAgo": "{hrs}h ago",
+    "timeDaysAgo": "{days}d ago"
   },
   "funds": {
     "title": "Fund Library",
