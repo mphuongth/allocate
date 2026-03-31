@@ -4,11 +4,13 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
+import { useTranslations } from 'next-intl'
 import ThemeToggleButton from '@/app/components/ThemeToggleButton'
 
 const inputCls = 'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500'
 
 export default function SignupPage() {
+  const t = useTranslations('auth')
   const router = useRouter()
 
   const [email, setEmail] = useState('')
@@ -22,7 +24,7 @@ export default function SignupPage() {
 
   function handlePasswordBlur() {
     if (password && password.length < 8) {
-      setPasswordError('Mật khẩu phải có ít nhất 8 ký tự.')
+      setPasswordError(t('passwordTooShort'))
     } else {
       setPasswordError(null)
     }
@@ -30,7 +32,7 @@ export default function SignupPage() {
 
   function handleConfirmBlur() {
     if (confirmPassword && password !== confirmPassword) {
-      setConfirmError('Mật khẩu không khớp.')
+      setConfirmError(t('passwordMismatch'))
     } else {
       setConfirmError(null)
     }
@@ -41,11 +43,11 @@ export default function SignupPage() {
     setFormError(null)
 
     if (password.length < 8) {
-      setPasswordError('Mật khẩu phải có ít nhất 8 ký tự.')
+      setPasswordError(t('passwordTooShort'))
       return
     }
     if (password !== confirmPassword) {
-      setConfirmError('Mật khẩu không khớp.')
+      setConfirmError(t('passwordMismatch'))
       return
     }
 
@@ -61,9 +63,9 @@ export default function SignupPage() {
 
       if (error) {
         if (error.message.toLowerCase().includes('already') || error.status === 422) {
-          setFormError('Email đã được sử dụng.')
+          setFormError(t('emailInUse'))
         } else {
-          setFormError('Không thể tạo tài khoản. Vui lòng thử lại.')
+          setFormError(t('cannotCreateAccount'))
         }
         return
       }
@@ -76,7 +78,7 @@ export default function SignupPage() {
       router.push('/dashboard')
       router.refresh()
     } catch {
-      setFormError('Không thể kết nối. Vui lòng kiểm tra internet và thử lại.')
+      setFormError(t('cannotConnect'))
     } finally {
       setLoading(false)
     }
@@ -87,15 +89,13 @@ export default function SignupPage() {
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
         <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-lg shadow p-8 text-center border border-transparent dark:border-gray-700">
           <div className="text-4xl mb-4">📧</div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-3">Kiểm tra email</h1>
-          <p className="text-gray-600 dark:text-gray-400 text-sm mb-6">
-            Chúng tôi đã gửi liên kết xác nhận đến email của bạn. Nhấp vào đó để kích hoạt tài khoản, sau đó quay lại đăng nhập.
-          </p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-3">{t('checkEmailTitle')}</h1>
+          <p className="text-gray-600 dark:text-gray-400 text-sm mb-6">{t('checkEmailMessage')}</p>
           <Link
             href="/auth/login"
             className="inline-block py-2 px-6 bg-indigo-600 text-white rounded-md font-medium hover:bg-indigo-700 transition-colors"
           >
-            Đi đến đăng nhập
+            {t('goToLogin')}
           </Link>
         </div>
       </div>
@@ -108,14 +108,14 @@ export default function SignupPage() {
         <ThemeToggleButton />
       </div>
       <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-lg shadow p-8 border border-transparent dark:border-gray-700">
-        <h1 className="text-2xl font-bold text-center text-gray-900 dark:text-gray-100 mb-6">Tạo tài khoản</h1>
+        <h1 className="text-2xl font-bold text-center text-gray-900 dark:text-gray-100 mb-6">{t('signupTitle')}</h1>
         {formError && (
           <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-sm rounded-md">{formError}</div>
         )}
         <form onSubmit={handleSignup} className="space-y-4">
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Email
+              {t('emailLabel')}
             </label>
             <input
               type="email"
@@ -130,7 +130,7 @@ export default function SignupPage() {
           </div>
           <div>
             <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Mật khẩu
+              {t('passwordLabel')}
             </label>
             <input
               type="password"
@@ -150,7 +150,7 @@ export default function SignupPage() {
           </div>
           <div>
             <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Xác nhận mật khẩu
+              {t('confirmPasswordLabel')}
             </label>
             <input
               type="password"
@@ -173,13 +173,13 @@ export default function SignupPage() {
             disabled={loading}
             className="w-full py-2 px-4 bg-indigo-600 text-white rounded-md font-medium hover:bg-indigo-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {loading ? 'Đang tạo tài khoản...' : 'Đăng ký'}
+            {loading ? t('signingUp') : t('signupBtn')}
           </button>
         </form>
         <p className="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">
-          Đã có tài khoản?{' '}
+          {t('hasAccount')}{' '}
           <Link href="/auth/login" className="text-indigo-600 dark:text-indigo-400 hover:underline font-medium">
-            Đăng nhập
+            {t('loginLink')}
           </Link>
         </p>
       </div>
