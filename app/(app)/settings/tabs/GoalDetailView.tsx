@@ -41,13 +41,6 @@ const ASSET_COLORS: Record<string, string> = {
   gold: 'bg-amber-100 text-amber-700',
 }
 
-const ASSET_LABELS: Record<string, string> = {
-  fund: 'Quỹ',
-  bank: 'Ngân hàng',
-  stock: 'Cổ phiếu',
-  gold: 'Vàng',
-}
-
 function calcProjectedInterest(amount: number, rate: number | null, investmentDate: string, expiryDate?: string | null): number {
   if (!rate) return 0
   const endMs = expiryDate ? Math.min(Date.now(), new Date(expiryDate).getTime()) : Date.now()
@@ -64,6 +57,7 @@ const emptyFiForm = { fund_id: '', investment_date: '', amount_vnd: '', units: '
 export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: () => void }) {
   const t = useTranslations('goals')
   const tc = useTranslations('common')
+  const tt = useTranslations('transactions')
   const [currentGoal, setCurrentGoal] = useState(goal)
   const [rows, setRows] = useState<TxRow[]>([])
   const [funds, setFunds] = useState<Fund[]>([])
@@ -172,8 +166,8 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
 
   async function handleTxSave() {
     setFormError('')
-    if (!txForm.amount_vnd || Number(txForm.amount_vnd) <= 0) { setFormError('Số tiền phải lớn hơn 0.'); return }
-    if (!txForm.investment_date) { setFormError('Ngày đầu tư là bắt buộc.'); return }
+    if (!txForm.amount_vnd || Number(txForm.amount_vnd) <= 0) { setFormError(t('amountRequired')); return }
+    if (!txForm.investment_date) { setFormError(t('dateRequired')); return }
     const payload = {
       goal_id: currentGoal.goal_id,
       asset_type: txForm.asset_type,
@@ -189,7 +183,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
     setSaving(true)
     const url = editTx ? `/api/v1/investment-transactions/${editTx.transaction_id}` : '/api/v1/investment-transactions'
     const res = await fetch(url, { method: editTx ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-    if (!res.ok) { const { error } = await res.json(); setFormError(error ?? 'Đã xảy ra lỗi.') }
+    if (!res.ok) { const { error } = await res.json(); setFormError(error ?? tc('error')) }
     else { setFormMode(null); await fetchData() }
     setSaving(false)
   }
@@ -201,7 +195,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
       onConfirm: async () => {
         setDeletingId(row.transaction_id)
         const res = await fetch(`/api/v1/investment-transactions/${row.transaction_id}`, { method: 'DELETE' })
-        if (res.ok) { setSuccessMsg('Đã xóa giao dịch.'); setTimeout(() => setSuccessMsg(''), 4000); await fetchData() }
+        if (res.ok) { setSuccessMsg(t('deletedTx')); setTimeout(() => setSuccessMsg(''), 4000); await fetchData() }
         setDeletingId(null)
       },
     })
@@ -230,10 +224,10 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
 
   async function handleFiSave() {
     setFormError('')
-    if (!fiForm.fund_id) { setFormError('Vui lòng chọn quỹ.'); return }
-    if (!fiForm.amount_vnd || Number(fiForm.amount_vnd) <= 0) { setFormError('Số tiền phải lớn hơn 0.'); return }
-    if (!fiForm.units || Number(fiForm.units) <= 0) { setFormError('Số CCQ phải lớn hơn 0.'); return }
-    if (!fiForm.unit_price || Number(fiForm.unit_price) <= 0) { setFormError('NAV khi mua phải dương.'); return }
+    if (!fiForm.fund_id) { setFormError(t('selectFundRequired')); return }
+    if (!fiForm.amount_vnd || Number(fiForm.amount_vnd) <= 0) { setFormError(t('amountRequired')); return }
+    if (!fiForm.units || Number(fiForm.units) <= 0) { setFormError(t('unitsRequired')); return }
+    if (!fiForm.unit_price || Number(fiForm.unit_price) <= 0) { setFormError(t('navRequired')); return }
 
     const payload = {
       asset_type: 'fund',
@@ -247,7 +241,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
     setSaving(true)
     const url = editTx ? `/api/v1/investment-transactions/${editTx.transaction_id}` : '/api/v1/investment-transactions'
     const res = await fetch(url, { method: editTx ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-    if (!res.ok) { const { error } = await res.json(); setFormError(error ?? 'Đã xảy ra lỗi.') }
+    if (!res.ok) { const { error } = await res.json(); setFormError(error ?? tc('error')) }
     else { setFormMode(null); await fetchData() }
     setSaving(false)
   }
@@ -260,7 +254,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
         setDeletingId(row.transaction_id)
         const res = await fetch(`/api/v1/investment-transactions/${row.transaction_id}`, { method: 'DELETE' })
         if (res.ok) {
-          setSuccessMsg('Đã xóa khoản đầu tư.')
+          setSuccessMsg(t('deletedFi'))
           setTimeout(() => setSuccessMsg(''), 4000)
           await fetchData()
         }
@@ -271,8 +265,8 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
 
   async function handleUnassign(row: TxRow) {
     setPendingConfirm({
-      title: 'Bỏ gán Giao dịch',
-      message: 'Bạn có chắc muốn bỏ gán giao dịch này khỏi mục tiêu?',
+      title: t('unassignTitle'),
+      message: t('unassignMessage'),
       onConfirm: async () => {
         const res = await fetch(`/api/v1/investment-transactions/${row.transaction_id}/assign`, {
           method: 'PUT',
@@ -280,7 +274,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
           body: JSON.stringify({ goal_id: null }),
         })
         if (res.ok) {
-          setSuccessMsg('Đã bỏ gán khỏi mục tiêu.')
+          setSuccessMsg(t('unassignSuccess'))
           setTimeout(() => setSuccessMsg(''), 4000)
           await fetchData()
         }
@@ -307,7 +301,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
     })
     if (!res.ok) {
       const { error } = await res.json()
-      setEditGoalError(error ?? 'Đã xảy ra lỗi.')
+      setEditGoalError(error ?? tc('error'))
     } else {
       const updated = await res.json()
       setCurrentGoal({ ...currentGoal, goal_name: updated.goal_name, description: updated.description, target_amount: updated.target_amount })
@@ -377,8 +371,8 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                 <div className="flex items-center justify-between mt-1.5 text-xs text-gray-400 dark:text-gray-500">
                   <span>{Math.round(pct)}%</span>
                   {exceeded
-                    ? <span className="text-green-600 dark:text-green-400 font-medium">Đã đạt mục tiêu!</span>
-                    : <span>{fmt(currentGoal.target_amount! - totalCurrentValue)} còn lại</span>
+                    ? <span className="text-green-600 dark:text-green-400 font-medium">{t('goalReached')}</span>
+                    : <span>{t('remaining', { amount: fmt(currentGoal.target_amount! - totalCurrentValue) })}</span>
                   }
                 </div>
               </>
@@ -406,10 +400,10 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
           <div>
             <h3 className="font-semibold text-gray-900 dark:text-gray-100">{t('fundInvestments')}</h3>
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Từ Cài đặt và Kế hoạch Tháng</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{t('fundInvestmentsSub')}</p>
           </div>
           <button onClick={openFiAdd} className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700">
-            Thêm Đầu tư Quỹ
+            {t('addFundBtn')}
           </button>
         </div>
 
@@ -465,10 +459,10 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
           <div>
             <h3 className="font-semibold text-gray-900 dark:text-gray-100">{t('otherInvestments')}</h3>
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Tiết kiệm ngân hàng, cổ phiếu, vàng</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{t('otherInvestmentsSub')}</p>
           </div>
           <button onClick={openTxAdd} className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700">
-            Thêm Giao dịch
+            {t('addTxBtn')}
           </button>
         </div>
 
@@ -494,7 +488,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                       <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{new Date(row.investment_date).toLocaleDateString('vi-VN')}</td>
                       <td className="px-4 py-3">
                         <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${ASSET_COLORS[row.asset_type] ?? 'bg-gray-100 text-gray-700'}`}>
-                          {ASSET_LABELS[row.asset_type] ?? row.asset_type}
+                          {tt(`asset${row.asset_type.charAt(0).toUpperCase() + row.asset_type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold') ?? row.asset_type}
                         </span>
                       </td>
                       <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{fmt(row.amount_vnd)}</td>
@@ -535,7 +529,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('targetLabel')}</label>
                 <input type="number" value={editGoalTarget} onChange={(e) => setEditGoalTarget(e.target.value)}
-                  placeholder="Tùy chọn"
+                  placeholder={t('targetOptional')}
                   className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div>
@@ -562,35 +556,35 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
             {formError && <p className="text-red-600 dark:text-red-400 text-sm mb-3">{formError}</p>}
             <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Quỹ *</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('fundLabel')}</label>
                 <select
                   value={fiForm.fund_id}
                   onChange={(e) => setFiForm({ ...fiForm, fund_id: e.target.value })}
                   className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
-                  <option value="">Chọn quỹ...</option>
+                  <option value="">{t('selectFund')}</option>
                   {funds.map((f) => <option key={f.id} value={f.id}>{f.code} - {f.name}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Ngày Đầu tư *</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('investmentDateLabel')}</label>
                 <input type="date" value={fiForm.investment_date} max={new Date().toISOString().slice(0, 10)}
                   onChange={(e) => setFiForm({ ...fiForm, investment_date: e.target.value })}
                   className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Số tiền (VND) *</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('amountVndLabel')}</label>
                 <input type="number" value={fiForm.amount_vnd} onChange={(e) => setFiForm({ ...fiForm, amount_vnd: e.target.value })}
                   placeholder="VD: 10000000" className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Số CCQ *</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('fiUnitsLabel')}</label>
                   <input type="number" value={fiForm.units} onChange={(e) => setFiForm({ ...fiForm, units: e.target.value })}
                     className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">NAV khi Mua *</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('navAtBuyLabel')}</label>
                   <input type="number" value={fiForm.unit_price} onChange={(e) => setFiForm({ ...fiForm, unit_price: e.target.value })}
                     className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
@@ -615,50 +609,50 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Loại Tài sản *</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('assetTypeLabel')}</label>
                   <select value={txForm.asset_type} onChange={(e) => setTxForm({ ...txForm, asset_type: e.target.value, fund_id: '' })}
                     className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                    {[{ v: 'bank', l: 'Ngân hàng' }, { v: 'stock', l: 'Cổ phiếu' }, { v: 'gold', l: 'Vàng' }].map((item) => <option key={item.v} value={item.v}>{item.l}</option>)}
+                    {[{ v: 'bank', l: t('assetBank') }, { v: 'stock', l: t('assetStock') }, { v: 'gold', l: t('assetGold') }].map((item) => <option key={item.v} value={item.v}>{item.l}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Ngày Đầu tư *</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('investmentDateLabel')}</label>
                   <input type="date" value={txForm.investment_date} max={new Date().toISOString().slice(0, 10)}
                     onChange={(e) => setTxForm({ ...txForm, investment_date: e.target.value })}
                     className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Số tiền (VND) *</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('amountVndLabel')}</label>
                 <input type="number" value={txForm.amount_vnd} onChange={(e) => setTxForm({ ...txForm, amount_vnd: e.target.value })}
                   placeholder="VD: 10000000" className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Giá Đơn vị</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('unitPriceLabel')}</label>
                   <input type="number" value={txForm.unit_price} onChange={(e) => setTxForm({ ...txForm, unit_price: e.target.value })}
                     className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{txForm.asset_type === 'stock' ? 'CP' : txForm.asset_type === 'gold' ? 'Chỉ' : 'Đơn vị'}</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{txForm.asset_type === 'stock' ? t('unitsStockLabel') : txForm.asset_type === 'gold' ? t('unitsGoldLabel') : t('unitsDefaultLabel')}</label>
                   <input type="number" value={txForm.units} onChange={(e) => setTxForm({ ...txForm, units: e.target.value })}
                     className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Lãi suất (%/năm)</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('interestRateLabel')}</label>
                 <input type="number" step="0.1" value={txForm.interest_rate} onChange={(e) => setTxForm({ ...txForm, interest_rate: e.target.value })}
                   placeholder="VD: 5.5" className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
               {txForm.asset_type === 'bank' && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Ngày Đáo hạn</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('expiryDateLabel')}</label>
                   <input type="date" value={txForm.expiry_date} onChange={(e) => setTxForm({ ...txForm, expiry_date: e.target.value })}
                     className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
               )}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Ghi chú</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{tc('notes')}</label>
                 <textarea value={txForm.notes} onChange={(e) => setTxForm({ ...txForm, notes: e.target.value })} rows={2}
                   className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
               </div>
