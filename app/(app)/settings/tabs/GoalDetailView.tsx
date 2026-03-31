@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useTranslations } from 'next-intl'
 import ConfirmModal from '@/app/components/ConfirmModal'
 
 interface Goal {
@@ -61,6 +62,8 @@ const emptyTxForm = { asset_type: 'bank', investment_date: '', amount_vnd: '', u
 const emptyFiForm = { fund_id: '', investment_date: '', amount_vnd: '', units: '', unit_price: '' }
 
 export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: () => void }) {
+  const t = useTranslations('goals')
+  const tc = useTranslations('common')
   const [currentGoal, setCurrentGoal] = useState(goal)
   const [rows, setRows] = useState<TxRow[]>([])
   const [funds, setFunds] = useState<Fund[]>([])
@@ -193,8 +196,8 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
 
   async function handleTxDelete(row: TxRow) {
     setPendingConfirm({
-      title: 'Xóa Giao dịch',
-      message: 'Bạn có chắc muốn xóa giao dịch đầu tư này?',
+      title: t('deleteTxModal'),
+      message: t('deleteTxMessage'),
       onConfirm: async () => {
         setDeletingId(row.transaction_id)
         const res = await fetch(`/api/v1/investment-transactions/${row.transaction_id}`, { method: 'DELETE' })
@@ -251,8 +254,8 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
 
   async function handleFiDelete(row: TxRow) {
     setPendingConfirm({
-      title: 'Xóa Khoản Đầu tư Quỹ',
-      message: 'Bạn có chắc muốn xóa khoản đầu tư quỹ này?',
+      title: t('deleteTxModal'),
+      message: t('deleteTxMessage'),
       onConfirm: async () => {
         setDeletingId(row.transaction_id)
         const res = await fetch(`/api/v1/investment-transactions/${row.transaction_id}`, { method: 'DELETE' })
@@ -294,7 +297,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
   }
 
   async function handleEditGoalSave() {
-    if (!editGoalName.trim()) { setEditGoalError('Tên mục tiêu là bắt buộc.'); return }
+    if (!editGoalName.trim()) { setEditGoalError(t('nameRequired')); return }
     setEditGoalSaving(true)
     setEditGoalError('')
     const res = await fetch(`/api/v1/savings-goals/${currentGoal.goal_id}`, {
@@ -315,8 +318,8 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
 
   function handleDeleteGoal() {
     setPendingConfirm({
-      title: 'Xóa Mục tiêu',
-      message: `${rows.length} giao dịch trong mục tiêu này sẽ bị bỏ gán.`,
+      title: t('deleteModal'),
+      message: t('deleteMessage', { count: rows.length }),
       onConfirm: async () => {
         const res = await fetch(`/api/v1/savings-goals/${currentGoal.goal_id}`, { method: 'DELETE' })
         if (res.ok) onBack()
@@ -335,15 +338,15 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <button onClick={onBack} className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium">← Quay lại</button>
+          <button onClick={onBack} className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium">{t('back')}</button>
           <div>
             <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">{currentGoal.goal_name}</h2>
             {currentGoal.description && <p className="text-sm text-gray-500 dark:text-gray-400">{currentGoal.description}</p>}
           </div>
         </div>
         <div className="flex gap-2">
-          <button onClick={openEditGoal} className="px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Sửa</button>
-          <button onClick={handleDeleteGoal} className="px-3 py-1.5 text-sm font-medium text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20">Xóa</button>
+          <button onClick={openEditGoal} className="px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">{tc('edit')}</button>
+          <button onClick={handleDeleteGoal} className="px-3 py-1.5 text-sm font-medium text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20">{tc('delete')}</button>
         </div>
       </div>
 
@@ -355,7 +358,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
       {currentGoal.target_amount != null && (
         <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 mb-6">
           <div className="flex items-center justify-between text-sm mb-2">
-            <span className="font-medium text-gray-700 dark:text-gray-300">Tiến độ Mục tiêu</span>
+            <span className="font-medium text-gray-700 dark:text-gray-300">{t('progress')}</span>
             <span className="text-gray-500 dark:text-gray-400">
               {fmt(totalCurrentValue)} / {fmt(currentGoal.target_amount)}
             </span>
@@ -387,15 +390,13 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
       {/* Summary */}
       <div className="grid grid-cols-3 gap-4 mb-6">
         {[
-          { label: 'Giá trị Hiện tại', value: fmt(totalCurrentValue) },
-          { label: 'Tổng Đầu tư', value: fmt(totalInvested) },
-          { label: 'Lãi / Lỗ', value: fmt(totalGain) },
+          { label: t('currentValue'), value: fmt(totalCurrentValue), color: 'text-indigo-700 dark:text-indigo-300' },
+          { label: t('totalInvested'), value: fmt(totalInvested), color: 'text-indigo-700 dark:text-indigo-300' },
+          { label: t('gainLoss'), value: fmt(totalGain), color: totalGain >= 0 ? 'text-green-600' : 'text-red-600' },
         ].map((item) => (
           <div key={item.label} className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 text-center">
             <p className="text-xs text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wide mb-1">{item.label}</p>
-            <p className={`text-xl font-bold ${item.label === 'Lãi / Lỗ' ? (totalGain >= 0 ? 'text-green-600' : 'text-red-600') : 'text-indigo-700 dark:text-indigo-300'}`}>
-              {item.value}
-            </p>
+            <p className={`text-xl font-bold ${item.color}`}>{item.value}</p>
           </div>
         ))}
       </div>
@@ -404,7 +405,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
       <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden mb-4">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
           <div>
-            <h3 className="font-semibold text-gray-900 dark:text-gray-100">Đầu tư Quỹ</h3>
+            <h3 className="font-semibold text-gray-900 dark:text-gray-100">{t('fundInvestments')}</h3>
             <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Từ Cài đặt và Kế hoạch Tháng</p>
           </div>
           <button onClick={openFiAdd} className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700">
@@ -413,15 +414,15 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
         </div>
 
         {loading ? (
-          <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">Đang tải...</div>
+          <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">{tc('loading')}</div>
         ) : fundRows.length === 0 ? (
-          <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">Chưa có đầu tư quỹ nào.</div>
+          <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">{t('noFundInvestments')}</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 dark:bg-gray-800">
                 <tr>
-                  {['Ngày', 'Quỹ', 'Số tiền', 'CCQ', 'NAV khi Mua', 'NAV Hiện tại', 'Giá trị Hiện tại', 'Lãi/Lỗ', 'Thao tác'].map((h) => (
+                  {[t('colDate'), t('colFund'), t('colAmount'), t('colUnits'), t('colNavBuy'), t('colNavCurrent'), t('colCurrentValue'), t('colGainLoss'), tc('actions')].map((h) => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">{h}</th>
                   ))}
                 </tr>
@@ -443,10 +444,10 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                       <td className={`px-4 py-3 font-medium ${pl >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt(pl)}</td>
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
-                          <button onClick={() => openFiEdit(row)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">Sửa</button>
-                          <button onClick={() => handleUnassign(row)} className="text-xs text-amber-600 dark:text-amber-400 hover:underline">Bỏ gán</button>
+                          <button onClick={() => openFiEdit(row)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">{tc('edit')}</button>
+                          <button onClick={() => handleUnassign(row)} className="text-xs text-amber-600 dark:text-amber-400 hover:underline">{tc('unassign')}</button>
                           <button onClick={() => handleFiDelete(row)} disabled={deletingId === row.transaction_id} className="text-xs text-red-500 dark:text-red-400 hover:underline disabled:opacity-50">
-                            {deletingId === row.transaction_id ? 'Đang xóa...' : 'Xóa'}
+                            {deletingId === row.transaction_id ? tc('deleting') : tc('delete')}
                           </button>
                         </div>
                       </td>
@@ -463,7 +464,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
       <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
           <div>
-            <h3 className="font-semibold text-gray-900 dark:text-gray-100">Giao dịch Khác</h3>
+            <h3 className="font-semibold text-gray-900 dark:text-gray-100">{t('otherInvestments')}</h3>
             <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Tiết kiệm ngân hàng, cổ phiếu, vàng</p>
           </div>
           <button onClick={openTxAdd} className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700">
@@ -472,15 +473,15 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
         </div>
 
         {loading ? (
-          <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">Đang tải...</div>
+          <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">{tc('loading')}</div>
         ) : otherRows.length === 0 ? (
-          <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">Chưa có giao dịch nào.</div>
+          <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">{t('noOtherInvestments')}</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 dark:bg-gray-800">
                 <tr>
-                  {['Ngày', 'Loại', 'Số tiền', 'Đơn vị', 'Lãi suất', 'Lãi/Lỗ', 'Ghi chú', 'Thao tác'].map((h) => (
+                  {[t('colDate'), t('colType'), t('colAmount'), t('colUnits'), t('colInterestRate'), t('colGainLoss'), t('colNotes'), tc('actions')].map((h) => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">{h}</th>
                   ))}
                 </tr>
@@ -503,10 +504,10 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                       <td className="px-4 py-3 text-gray-400 dark:text-gray-500 max-w-32 truncate">{row.notes ?? '—'}</td>
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
-                          <button onClick={() => openTxEdit(row)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">Sửa</button>
-                          <button onClick={() => handleUnassign(row)} className="text-xs text-amber-600 dark:text-amber-400 hover:underline">Bỏ gán</button>
+                          <button onClick={() => openTxEdit(row)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">{tc('edit')}</button>
+                          <button onClick={() => handleUnassign(row)} className="text-xs text-amber-600 dark:text-amber-400 hover:underline">{tc('unassign')}</button>
                           <button onClick={() => handleTxDelete(row)} disabled={deletingId === row.transaction_id} className="text-xs text-red-500 dark:text-red-400 hover:underline disabled:opacity-50">
-                            {deletingId === row.transaction_id ? 'Đang xóa...' : 'Xóa'}
+                            {deletingId === row.transaction_id ? tc('deleting') : tc('delete')}
                           </button>
                         </div>
                       </td>
@@ -523,30 +524,30 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
       {showEditGoal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <form onSubmit={(e) => { e.preventDefault(); handleEditGoalSave() }} className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-md p-6 border border-gray-100 dark:border-gray-700">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Sửa Mục tiêu</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{t('editModal')}</h3>
             {editGoalError && <p className="text-red-600 dark:text-red-400 text-sm mb-3">{editGoalError}</p>}
             <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tên Mục tiêu *</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('nameLabel')}</label>
                 <input type="text" value={editGoalName} onChange={(e) => setEditGoalName(e.target.value)}
                   className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Số tiền Mục tiêu (VND)</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('targetLabel')}</label>
                 <input type="number" value={editGoalTarget} onChange={(e) => setEditGoalTarget(e.target.value)}
                   placeholder="Tùy chọn"
                   className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mô tả</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('descLabel')}</label>
                 <textarea value={editGoalDesc} onChange={(e) => setEditGoalDesc(e.target.value)} rows={3}
                   className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
               </div>
             </div>
             <div className="flex gap-3 mt-5">
-              <button type="button" onClick={() => setShowEditGoal(false)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Hủy</button>
+              <button type="button" onClick={() => setShowEditGoal(false)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">{tc('cancel')}</button>
               <button type="submit" disabled={editGoalSaving} className="flex-1 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50">
-                {editGoalSaving ? 'Đang lưu...' : 'Lưu'}
+                {editGoalSaving ? tc('saving') : tc('save')}
               </button>
             </div>
           </form>
@@ -557,7 +558,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
       {(formMode === 'fi-add' || formMode === 'fi-edit') && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-md p-6 border border-gray-100 dark:border-gray-700">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{formMode === 'fi-edit' ? 'Sửa Đầu tư Quỹ' : 'Thêm Đầu tư Quỹ'}</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{formMode === 'fi-edit' ? t('editModal') : t('fundInvestments')}</h3>
             {formError && <p className="text-red-600 dark:text-red-400 text-sm mb-3">{formError}</p>}
             <div className="space-y-3">
               <div>
@@ -596,9 +597,9 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
               </div>
             </div>
             <div className="flex gap-3 mt-5">
-              <button onClick={() => setFormMode(null)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Hủy</button>
+              <button onClick={() => setFormMode(null)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">{tc('cancel')}</button>
               <button onClick={handleFiSave} disabled={saving} className="flex-1 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50">
-                {saving ? 'Đang lưu...' : 'Lưu'}
+                {saving ? tc('saving') : tc('save')}
               </button>
             </div>
           </div>
@@ -609,7 +610,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
       {(formMode === 'tx-add' || formMode === 'tx-edit') && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto border border-gray-100 dark:border-gray-700">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{formMode === 'tx-edit' ? 'Sửa Giao dịch' : 'Thêm Giao dịch'}</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{formMode === 'tx-edit' ? t('editTxModal') : t('otherInvestments')}</h3>
             {formError && <p className="text-red-600 dark:text-red-400 text-sm mb-3">{formError}</p>}
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
@@ -617,7 +618,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Loại Tài sản *</label>
                   <select value={txForm.asset_type} onChange={(e) => setTxForm({ ...txForm, asset_type: e.target.value, fund_id: '' })}
                     className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                    {[{ v: 'bank', l: 'Ngân hàng' }, { v: 'stock', l: 'Cổ phiếu' }, { v: 'gold', l: 'Vàng' }].map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}
+                    {[{ v: 'bank', l: 'Ngân hàng' }, { v: 'stock', l: 'Cổ phiếu' }, { v: 'gold', l: 'Vàng' }].map((item) => <option key={item.v} value={item.v}>{item.l}</option>)}
                   </select>
                 </div>
                 <div>
@@ -663,9 +664,9 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
               </div>
             </div>
             <div className="flex gap-3 mt-5">
-              <button onClick={() => setFormMode(null)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Hủy</button>
+              <button onClick={() => setFormMode(null)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">{tc('cancel')}</button>
               <button onClick={handleTxSave} disabled={saving} className="flex-1 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50">
-                {saving ? 'Đang lưu...' : 'Lưu'}
+                {saving ? tc('saving') : tc('save')}
               </button>
             </div>
           </div>

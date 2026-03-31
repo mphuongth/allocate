@@ -4,13 +4,8 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { BarChart3, Calendar, BookOpen, Settings } from 'lucide-react'
 import { useNavigation } from './NavigationContext'
-
-const NAV_ITEMS = [
-  { label: 'Tổng Quan Tài Sản', href: '/dashboard', icon: BarChart3 },
-  { label: 'Kế Hoạch Tháng', href: '/planning', icon: Calendar },
-  { label: 'Thư Viện Quỹ', href: '/funds', icon: BookOpen },
-  { label: 'Cài Đặt', href: '/settings', icon: Settings },
-]
+import { useTranslations } from 'next-intl'
+import LanguageSwitcher from '../LanguageSwitcher'
 
 interface SidebarProps {
   email: string
@@ -21,6 +16,14 @@ interface SidebarProps {
 export default function Sidebar({ email, initials, onNavClick }: SidebarProps) {
   const pathname = usePathname()
   const { sidebarCollapsed } = useNavigation()
+  const t = useTranslations('nav')
+
+  const NAV_ITEMS = [
+    { label: t('dashboard'), href: '/dashboard', icon: BarChart3 },
+    { label: t('planning'), href: '/planning', icon: Calendar },
+    { label: t('funds'), href: '/funds', icon: BookOpen },
+    { label: t('settings'), href: '/settings', icon: Settings },
+  ]
 
   return (
     <nav
@@ -62,13 +65,18 @@ export default function Sidebar({ email, initials, onNavClick }: SidebarProps) {
         })}
       </ul>
 
-      {/* Profile */}
+      {/* Profile + Language switcher */}
       {!sidebarCollapsed && (
-        <div className="flex items-center gap-3 px-4 py-3 border-t border-gray-100 dark:border-gray-700">
-          <div className="w-8 h-8 rounded-full bg-brand flex items-center justify-center text-white text-xs font-semibold shrink-0">
-            {initials}
+        <div className="border-t border-gray-100 dark:border-gray-700">
+          <div className="flex items-center justify-between px-4 py-2">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-8 h-8 rounded-full bg-brand flex items-center justify-center text-white text-xs font-semibold shrink-0">
+                {initials}
+              </div>
+              <p className="text-xs text-gray-600 dark:text-gray-400 truncate">{email}</p>
+            </div>
+            <LanguageSwitcher />
           </div>
-          <p className="text-xs text-gray-600 dark:text-gray-400 truncate">{email}</p>
         </div>
       )}
     </nav>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useTranslations } from 'next-intl'
 import type { MonthlyPlan, FundInvestment, Fund, Goal } from '../PlanningClient'
 
 interface Props {
@@ -19,6 +20,8 @@ const emptyForm = { fund_id: '', goal_id: '', amount_vnd: '', units: '', unit_pr
 const inputCls = 'w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500'
 
 export default function FundInvestmentsSection({ plan, investments, funds, goals, onRefresh, onToast }: Props) {
+  const t = useTranslations('planning')
+  const tc = useTranslations('common')
   const [showForm, setShowForm] = useState(false)
   const [editItem, setEditItem] = useState<FundInvestment | null>(null)
   const [form, setForm] = useState(emptyForm)
@@ -61,11 +64,11 @@ export default function FundInvestmentsSection({ plan, investments, funds, goals
 
   async function handleSave() {
     setFormError('')
-    if (!form.fund_id) { setFormError('Quỹ là bắt buộc'); return }
-    if (!form.investment_date) { setFormError('Ngày đầu tư là bắt buộc'); return }
-    if (!form.amount_vnd || Number(form.amount_vnd) <= 0) { setFormError('Số tiền và số CCQ là bắt buộc và phải dương'); return }
-    if (!form.units || Number(form.units) <= 0) { setFormError('Số tiền và số CCQ là bắt buộc và phải dương'); return }
-    if (!form.unit_price || Number(form.unit_price) <= 0) { setFormError('NAV khi mua phải dương'); return }
+    if (!form.fund_id) { setFormError(t('fundRequired')); return }
+    if (!form.investment_date) { setFormError(t('dateRequired')); return }
+    if (!form.amount_vnd || Number(form.amount_vnd) <= 0) { setFormError(t('amountUnitsRequired')); return }
+    if (!form.units || Number(form.units) <= 0) { setFormError(t('amountUnitsRequired')); return }
+    if (!form.unit_price || Number(form.unit_price) <= 0) { setFormError(t('navRequiredPositive')); return }
 
     setSaving(true)
     const payload = {
@@ -91,14 +94,14 @@ export default function FundInvestmentsSection({ plan, investments, funds, goals
 
       if (!res.ok) {
         const { error } = await res.json()
-        setFormError(error ?? 'Đã xảy ra lỗi. Vui lòng thử lại sau.')
+        setFormError(error ?? t('cannotSave'))
       } else {
         setShowForm(false)
-        onToast(editItem ? 'Đã cập nhật đầu tư quỹ' : 'Đã thêm đầu tư quỹ')
+        onToast(editItem ? t('fundUpdated') : t('fundAdded'))
         onRefresh()
       }
     } catch {
-      setFormError('Không thể lưu. Vui lòng kiểm tra kết nối và thử lại.')
+      setFormError(t('cannotSave'))
     }
     setSaving(false)
   }
@@ -107,7 +110,7 @@ export default function FundInvestmentsSection({ plan, investments, funds, goals
     const res = await fetch(`/api/v1/investment-transactions/${inv.transaction_id}`, { method: 'DELETE' })
     if (res.ok) {
       setConfirmDelete(null)
-      onToast('Đã xóa đầu tư quỹ')
+      onToast(t('fundDeleted'))
       onRefresh()
     }
   }
@@ -115,19 +118,19 @@ export default function FundInvestmentsSection({ plan, investments, funds, goals
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
       <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
-        <h2 className="font-semibold text-gray-900 dark:text-gray-100">Đầu tư Quỹ</h2>
+        <h2 className="font-semibold text-gray-900 dark:text-gray-100">{t('fundInvestmentsTitle')}</h2>
         <button onClick={openAdd} className="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
-          Thêm Đầu tư Quỹ
+          {t('addFundInvestment')}
         </button>
       </div>
 
       {investments.length === 0 ? (
-        <div className="text-center py-10 text-gray-400 dark:text-gray-500 text-sm">Thêm khoản đầu tư quỹ đầu tiên để bắt đầu</div>
+        <div className="text-center py-10 text-gray-400 dark:text-gray-500 text-sm">{t('addFundInvestmentDesc')}</div>
       ) : (
         <table className="w-full text-sm">
           <thead className="bg-gray-50 dark:bg-gray-800">
             <tr>
-              {['Quỹ', 'Ngày', 'Số tiền', 'CCQ', 'Mục tiêu', 'Thao tác'].map((h) => (
+              {[t('colFund'), t('colDate'), t('colAmount'), t('colUnits'), t('colGoalCol'), tc('actions')].map((h) => (
                 <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">{h}</th>
               ))}
             </tr>
@@ -139,11 +142,11 @@ export default function FundInvestmentsSection({ plan, investments, funds, goals
                 <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{inv.investment_date ?? '—'}</td>
                 <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{fmt(inv.amount_vnd)}</td>
                 <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{inv.units}</td>
-                <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{inv.savings_goals?.goal_name ?? 'Chưa gán'}</td>
+                <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{inv.savings_goals?.goal_name ?? t('unassigned')}</td>
                 <td className="px-4 py-3">
                   <div className="flex gap-3">
-                    <button onClick={() => openEdit(inv)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">Sửa</button>
-                    <button onClick={() => setConfirmDelete(inv)} className="text-xs text-red-500 dark:text-red-400 hover:underline">Xóa</button>
+                    <button onClick={() => openEdit(inv)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">{tc('edit')}</button>
+                    <button onClick={() => setConfirmDelete(inv)} className="text-xs text-red-500 dark:text-red-400 hover:underline">{tc('delete')}</button>
                   </div>
                 </td>
               </tr>
@@ -156,52 +159,52 @@ export default function FundInvestmentsSection({ plan, investments, funds, goals
       {showForm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <form onSubmit={(e) => { e.preventDefault(); handleSave() }} className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto border border-gray-100 dark:border-gray-700">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{editItem ? 'Sửa Đầu tư Quỹ' : 'Thêm Đầu tư Quỹ'}</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{editItem ? t('editFundModal') : t('addFundModal')}</h3>
             {formError && <p className="text-red-600 dark:text-red-400 text-sm mb-3">{formError}</p>}
             <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Quỹ *</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('colFund')} *</label>
                 <select value={form.fund_id} onChange={(e) => handleFundSelect(e.target.value)} className={inputCls}>
-                  <option value="">Chọn quỹ...</option>
+                  <option value="">{t('selectFund')}</option>
                   {funds.map((f) => (
                     <option key={f.id} value={f.id}>{f.name} (NAV: {f.nav})</option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Ngày Đầu tư *</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('dateLabel')}</label>
                 <input type="date" value={form.investment_date} min={minDate} max={maxDate}
                   onChange={(e) => setForm((prev) => ({ ...prev, investment_date: e.target.value }))}
                   className={inputCls} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mục tiêu (tùy chọn)</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('goalLabel')}</label>
                 <select value={form.goal_id} onChange={(e) => setForm({ ...form, goal_id: e.target.value })}
                   disabled={goals.length === 0} className={`${inputCls} disabled:opacity-50`}>
-                  <option value="">{goals.length === 0 ? 'Chưa có mục tiêu' : 'Chưa gán'}</option>
+                  <option value="">{goals.length === 0 ? t('noGoals') : t('unassigned')}</option>
                   {goals.map((g) => <option key={g.goal_id} value={g.goal_id}>{g.goal_name}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Số tiền (VND) *</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('amountLabel')}</label>
                 <input type="number" value={form.amount_vnd} onChange={(e) => setForm({ ...form, amount_vnd: e.target.value })} className={inputCls} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Số CCQ Mua *</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('unitsLabel')}</label>
                   <input type="number" step="0.0001" value={form.units} onChange={(e) => setForm({ ...form, units: e.target.value })} className={inputCls} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">NAV khi Mua *</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('navAtPurchaseLabel')}</label>
                   <input type="number" step="0.0001" value={form.unit_price} onChange={(e) => setForm({ ...form, unit_price: e.target.value })} className={inputCls} />
                 </div>
               </div>
             </div>
             <div className="flex gap-3 mt-5">
-              <button type="button" onClick={() => setShowForm(false)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Hủy</button>
+              <button type="button" onClick={() => setShowForm(false)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">{tc('cancel')}</button>
               <button type="submit" disabled={saving} className="flex-1 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2">
                 {saving && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-                {saving ? 'Đang lưu...' : 'Lưu'}
+                {saving ? tc('saving') : tc('save')}
               </button>
             </div>
           </form>
@@ -212,11 +215,11 @@ export default function FundInvestmentsSection({ plan, investments, funds, goals
       {confirmDelete && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-sm p-6 border border-gray-100 dark:border-gray-700">
-            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">Xóa Đầu tư</h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-5">Bạn có chắc muốn xóa khoản đầu tư này?</p>
+            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">{t('deleteFundModal')}</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-5">{t('deleteFundMessage')}</p>
             <div className="flex gap-3">
-              <button onClick={() => setConfirmDelete(null)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Hủy</button>
-              <button onClick={() => handleDelete(confirmDelete)} className="flex-1 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700">Xác nhận</button>
+              <button onClick={() => setConfirmDelete(null)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">{tc('cancel')}</button>
+              <button onClick={() => handleDelete(confirmDelete)} className="flex-1 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700">{tc('confirm')}</button>
             </div>
           </div>
         </div>
