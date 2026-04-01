@@ -77,7 +77,7 @@ export default function NetWorthCard({
               className={`h-8 px-2.5 text-sm font-medium rounded-lg transition-colors ${
                 timeRange === r
                   ? 'bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900'
-                  : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
               }`}
             >
               {r}
