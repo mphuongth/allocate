@@ -60,6 +60,8 @@ export interface NonFundUnallocatedItem {
   interestRate: number | null
   expiryDate: string | null
   investmentDate: string
+  notes: string | null
+  units: number | null
 }
 
 export interface DashboardData {

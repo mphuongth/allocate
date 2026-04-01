@@ -42,7 +42,7 @@ export async function GET() {
       .eq('user_id', user.id),
     supabase
       .from('investment_transactions')
-      .select('transaction_id, goal_id, amount_vnd, interest_rate, investment_date, asset_type, units, unit_price, fund_id, expiry_date, funds(id, name, nav, updated_at)')
+      .select('transaction_id, goal_id, amount_vnd, interest_rate, investment_date, asset_type, units, unit_price, fund_id, expiry_date, notes, funds(id, name, nav, updated_at)')
       .eq('user_id', user.id),
     supabase
       .from('insurance_members')
@@ -145,7 +145,7 @@ export async function GET() {
   let totalInvestedGlobal = 0
 
   const unallocatedNonFunds: {
-    transactionId: string; type: string; amount: number; currentValue: number; interestRate: number | null; expiryDate: string | null; investmentDate: string
+    transactionId: string; type: string; amount: number; currentValue: number; interestRate: number | null; expiryDate: string | null; investmentDate: string; notes: string | null; units: number | null
   }[] = []
 
   for (const tx of allTxs) {
@@ -203,6 +203,8 @@ export async function GET() {
           interestRate: tx.interest_rate ?? null,
           expiryDate,
           investmentDate: tx.investment_date,
+          notes: tx.notes ?? null,
+          units: tx.units ?? null,
         })
       }
     }
