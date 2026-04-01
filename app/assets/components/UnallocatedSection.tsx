@@ -125,16 +125,21 @@ export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds,
                     </td>
                     <td className="px-5 py-4">
                       {item.notes
-                        ? <p className="font-medium text-gray-900 dark:text-gray-100 text-base">{item.notes}</p>
-                        : null}
-                      <p className={item.notes ? 'text-xs text-gray-400 dark:text-gray-500 mt-0.5' : 'text-sm font-medium text-gray-900 dark:text-gray-100'}>
-                        {new Date(item.investmentDate).toLocaleDateString('vi-VN')}
-                      </p>
-                      {item.expiryDate && (
-                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-                          {t('expiry')} {new Date(item.expiryDate).toLocaleDateString('vi-VN')}
-                        </p>
-                      )}
+                        ? <>
+                            <p className="font-medium text-gray-900 dark:text-gray-100 text-base">{item.notes}</p>
+                            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+                              {new Date(item.investmentDate).toLocaleDateString('vi-VN')}
+                            </p>
+                            {item.expiryDate && (
+                              <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+                                {t('expiry')} {new Date(item.expiryDate).toLocaleDateString('vi-VN')}
+                              </p>
+                            )}
+                          </>
+                        : <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                            {new Date(item.investmentDate).toLocaleDateString('vi-VN')}
+                          </p>
+                      }
                     </td>
                     <td className="px-5 py-4 text-right text-sm text-gray-600 dark:text-gray-400 hidden sm:table-cell">
                       {item.interestRate != null
