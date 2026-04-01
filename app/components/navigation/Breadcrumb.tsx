@@ -33,7 +33,7 @@ export default function Breadcrumb() {
         <span key={crumb.href} className="flex items-center gap-1">
           {i > 0 && <ChevronRight size={12} className="text-gray-400 dark:text-gray-500" />}
           {crumb.current ? (
-            <span aria-current="page" className="text-base font-semibold text-gray-900 dark:text-gray-100">
+            <span aria-current="page" className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               {crumb.label}
             </span>
           ) : (
