@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useTranslations } from 'next-intl'
 
 const fmt = (n: number | null) => n != null ? '₫ ' + Math.round(n).toLocaleString('vi-VN') : '—'
 
@@ -23,6 +24,8 @@ interface Props {
 }
 
 export default function GoalPickerModal({ fundName, goals, onConfirm, onCancel, isLoading, error }: Props) {
+  const t = useTranslations('dashboard')
+  const tc = useTranslations('common')
   const [selected, setSelected] = useState<string | null>(null)
   const overlayRef = useRef<HTMLDivElement>(null)
 
@@ -41,7 +44,7 @@ export default function GoalPickerModal({ fundName, goals, onConfirm, onCancel, 
       <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-sm max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex-shrink-0">
           <div>
-            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Gán vào Mục tiêu</h2>
+            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">{t('assignToGoalTitle')}</h2>
             <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{fundName}</p>
           </div>
           <button
@@ -62,7 +65,7 @@ export default function GoalPickerModal({ fundName, goals, onConfirm, onCancel, 
 
         <div className="overflow-y-auto flex-1 px-2 py-2">
           {goals.length === 0 ? (
-            <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-6">Chưa có mục tiêu nào</p>
+            <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-6">{t('noGoalsYet')}</p>
           ) : (
             goals.map((goal) => (
               <button
@@ -74,9 +77,9 @@ export default function GoalPickerModal({ fundName, goals, onConfirm, onCancel, 
               >
                 <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{goal.name}</p>
                 <div className="flex items-center gap-3 mt-0.5">
-                  <span className="text-xs text-gray-400 dark:text-gray-500">Mục tiêu: {fmt(goal.targetAmount)}</span>
+                  <span className="text-xs text-gray-400 dark:text-gray-500">{t('goalTarget', { amount: fmt(goal.targetAmount) })}</span>
                   {goal.progressPercent != null && (
-                    <span className="text-xs text-gray-400 dark:text-gray-500">{Math.round(goal.progressPercent)}% hoàn thành</span>
+                    <span className="text-xs text-gray-400 dark:text-gray-500">{t('goalProgress', { pct: Math.round(goal.progressPercent) })}</span>
                   )}
                 </div>
               </button>
@@ -90,7 +93,7 @@ export default function GoalPickerModal({ fundName, goals, onConfirm, onCancel, 
             disabled={isLoading}
             className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 min-h-[44px]"
           >
-            Hủy
+            {tc('cancel')}
           </button>
           <button
             onClick={() => selected && onConfirm(selected)}
@@ -98,7 +101,7 @@ export default function GoalPickerModal({ fundName, goals, onConfirm, onCancel, 
             className="flex-1 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2 min-h-[44px]"
           >
             {isLoading && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-            {isLoading ? 'Đang gán...' : 'Gán'}
+            {isLoading ? t('assigningGoalBtn') : t('assignGoalBtn')}
           </button>
         </div>
       </div>

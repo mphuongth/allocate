@@ -1,3 +1,5 @@
+import { useTranslations } from 'next-intl'
+
 const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
 const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`
 
@@ -16,37 +18,38 @@ export default function NetWorthCard({
   totalAssets, totalLiabilities, netWorth, totalInvested, currentValue,
   overallProfitLoss, overallProfitLossPercentage, navStale,
 }: Props) {
+  const t = useTranslations('dashboard')
   const plPositive = overallProfitLoss >= 0
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
-      <p className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Tài sản Ròng</p>
+      <p className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">{t('netWorth')}</p>
       <p className="text-4xl font-bold text-gray-900 dark:text-gray-100 mb-6">{fmt(netWorth)}</p>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 border-t border-gray-100 dark:border-gray-700 pt-5">
         <div>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">Tổng Tài sản</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">{t('totalAssets')}</p>
           <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{fmt(totalAssets)}</p>
         </div>
         <div>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">Tổng Nợ</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">{t('totalLiabilities')}</p>
           <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{fmt(totalLiabilities)}</p>
         </div>
         <div>
           <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">
-            Giá trị Danh mục
-            {navStale && <span title="Dữ liệu NAV có thể chưa cập nhật" className="ml-1 text-amber-500">⚠️</span>}
+            {t('portfolioValue')}
+            {navStale && <span title={t('navStaleTooltip')} className="ml-1 text-amber-500">⚠️</span>}
           </p>
           <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{fmt(currentValue)}</p>
         </div>
         <div>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">Tổng Đầu tư</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">{t('totalInvested')}</p>
           <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{fmt(totalInvested)}</p>
         </div>
       </div>
 
       <div className="mt-4 flex items-center gap-2">
-        <span className="text-xs text-gray-400 dark:text-gray-500">Lãi/Lỗ Tổng</span>
+        <span className="text-xs text-gray-400 dark:text-gray-500">{t('overallGainLoss')}</span>
         <span className={`text-sm font-semibold ${plPositive ? 'text-green-600' : 'text-red-600'}`}>
           {fmt(overallProfitLoss)} ({fmtPct(overallProfitLossPercentage)})
         </span>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslations } from 'next-intl'
 
 type FundType = 'balanced' | 'equity' | 'debt' | 'gold'
 
@@ -19,11 +20,11 @@ type Toast = { id: number; message: string; type: 'success' | 'error' }
 
 type SortKey = 'name' | 'code' | 'fund_type'
 
-const FUND_TYPE_LABELS: Record<FundType, string> = {
-  balanced: 'Cân bằng',
-  equity: 'Cổ phiếu',
-  debt: 'Trái phiếu',
-  gold: 'Vàng',
+const FUND_TYPE_KEYS: Record<FundType, string> = {
+  balanced: 'typeBalanced',
+  equity: 'typeEquity',
+  debt: 'typeDebt',
+  gold: 'typeGold',
 }
 
 const FUND_TYPE_COLORS: Record<FundType, string> = {
@@ -54,6 +55,8 @@ function bustFundsCache() {
 }
 
 export default function FundLibraryClient() {
+  const t = useTranslations('funds')
+  const tc = useTranslations('common')
   const [funds, setFunds] = useState<Fund[]>(() => getFundsCache() ?? [])
   const [loading, setLoading] = useState(() => !getFundsCache())
   const [error, setError] = useState<string | null>(null)
@@ -138,12 +141,12 @@ export default function FundLibraryClient() {
 
   async function handleSave() {
     setFormError(null)
-    if (!formName.trim()) { setFormError('Tên là bắt buộc.'); return }
-    if (!formCode.trim()) { setFormError('Mã là bắt buộc.'); return }
-    if (!formType) { setFormError('Loại quỹ là bắt buộc.'); return }
+    if (!formName.trim()) { setFormError(t('nameRequired')); return }
+    if (!formCode.trim()) { setFormError(t('codeRequired')); return }
+    if (!formType) { setFormError(t('typeRequired')); return }
     const navNum = Number(formNav)
     if (!formNav || isNaN(navNum) || navNum < 0.01) {
-      setFormError('NAV phải lớn hơn 0.')
+      setFormError(t('navRequired'))
       return
     }
 
@@ -159,9 +162,9 @@ export default function FundLibraryClient() {
       const data = await res.json()
       if (!res.ok) {
         if (res.status === 409) {
-          setFormError('Mã quỹ này đã tồn tại. Vui lòng dùng mã khác.')
+          setFormError(t('codeExists'))
         } else {
-          setFormError(data.error || 'Đã xảy ra lỗi. Vui lòng thử lại sau.')
+          setFormError(data.error || t('error'))
         }
         return
       }
@@ -254,8 +257,8 @@ export default function FundLibraryClient() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Thư viện Quỹ</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Quản lý các quỹ đầu tư</p>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('title')}</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t('desc')}</p>
           </div>
           <div className="flex gap-2">
             <button
@@ -263,13 +266,13 @@ export default function FundLibraryClient() {
               disabled={refreshing || !funds.some(f => f.nav_source_url)}
               className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm font-medium rounded hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {refreshing ? 'Đang làm mới…' : '↻ Làm mới NAV'}
+              {refreshing ? t('refreshingNav') : t('refreshNav')}
             </button>
             <button
               onClick={openAddModal}
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded transition-colors"
             >
-              Thêm Quỹ
+              {t('add')}
             </button>
           </div>
         </div>
@@ -299,15 +302,15 @@ export default function FundLibraryClient() {
         ) : funds.length === 0 ? (
           <div className="bg-white dark:bg-gray-900 rounded-lg shadow p-16 text-center border border-gray-100 dark:border-gray-700">
             <div className="text-5xl mb-4">📚</div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">Chưa có quỹ nào</h2>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">{t('empty')}</h2>
             <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">
-              Thêm quỹ đầu tiên để bắt đầu. Bạn có thể chọn các quỹ này khi thiết lập phân bổ.
+              {t('emptyDesc')}
             </p>
             <button
               onClick={openAddModal}
               className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded hover:bg-indigo-700 transition-colors"
             >
-              Thêm Quỹ
+              {t('add')}
             </button>
           </div>
         ) : (
@@ -317,11 +320,11 @@ export default function FundLibraryClient() {
               <table className="w-full">
                 <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
                   <tr>
-                    <th className="px-4 py-3 text-left"><SortButton col="name" label="Tên" /></th>
-                    <th className="px-4 py-3 text-left"><SortButton col="code" label="Mã" /></th>
-                    <th className="px-4 py-3 text-left"><SortButton col="fund_type" label="Loại" /></th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-600 dark:text-gray-400">NAV</th>
-                    <th className="px-4 py-3 text-right text-sm font-semibold text-gray-600 dark:text-gray-400">Thao tác</th>
+                    <th className="px-4 py-3 text-left"><SortButton col="name" label={t('colName')} /></th>
+                    <th className="px-4 py-3 text-left"><SortButton col="code" label={t('colCode')} /></th>
+                    <th className="px-4 py-3 text-left"><SortButton col="fund_type" label={t('colType')} /></th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-600 dark:text-gray-400">{t('colNav')}</th>
+                    <th className="px-4 py-3 text-right text-sm font-semibold text-gray-600 dark:text-gray-400">{tc('actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -331,7 +334,7 @@ export default function FundLibraryClient() {
                       <td className="px-4 py-3 text-sm font-mono text-gray-500 dark:text-gray-400">{fund.code}</td>
                       <td className="px-4 py-3">
                         <span className={`text-xs px-2 py-1 rounded font-medium ${FUND_TYPE_COLORS[fund.fund_type]}`}>
-                          {FUND_TYPE_LABELS[fund.fund_type]}
+                          {t(FUND_TYPE_KEYS[fund.fund_type])}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">
@@ -346,13 +349,13 @@ export default function FundLibraryClient() {
                             onClick={() => openEditModal(fund)}
                             className="text-xs px-3 py-1 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors"
                           >
-                            Sửa
+                            {tc('edit')}
                           </button>
                           <button
                             onClick={() => setDeleteTarget(fund)}
                             className="text-xs px-3 py-1 border border-red-200 dark:border-red-800 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 transition-colors"
                           >
-                            Xóa
+                            {tc('delete')}
                           </button>
                         </div>
                       </td>
@@ -372,7 +375,7 @@ export default function FundLibraryClient() {
                       <p className="text-xs font-mono text-gray-500 dark:text-gray-400">{fund.code}</p>
                     </div>
                     <span className={`text-xs px-2 py-1 rounded font-medium ${FUND_TYPE_COLORS[fund.fund_type]}`}>
-                      {FUND_TYPE_LABELS[fund.fund_type]}
+                      {t(FUND_TYPE_KEYS[fund.fund_type])}
                     </span>
                   </div>
                   <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">
@@ -386,13 +389,13 @@ export default function FundLibraryClient() {
                       onClick={() => openEditModal(fund)}
                       className="flex-1 text-xs px-3 py-2 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors"
                     >
-                      Edit
+                      {tc('edit')}
                     </button>
                     <button
                       onClick={() => setDeleteTarget(fund)}
                       className="flex-1 text-xs px-3 py-2 border border-red-200 dark:border-red-800 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 transition-colors"
                     >
-                      Delete
+                      {tc('delete')}
                     </button>
                   </div>
                 </div>
@@ -407,14 +410,14 @@ export default function FundLibraryClient() {
         <div className="fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-4">
           <form onSubmit={(e) => { e.preventDefault(); handleSave() }} className="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-md p-6 border border-gray-100 dark:border-gray-700">
             <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">
-              {modalMode === 'add' ? 'Thêm Quỹ' : 'Sửa Quỹ'}
+              {modalMode === 'add' ? t('addModal') : t('editModal')}
             </h2>
             {formError && (
               <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-sm rounded border border-red-200 dark:border-red-800">{formError}</div>
             )}
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tên Quỹ *</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('nameLabel')}</label>
                 <input
                   type="text"
                   value={formName}
@@ -426,7 +429,7 @@ export default function FundLibraryClient() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mã *</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('codeLabel')}</label>
                   <input
                     type="text"
                     value={formCode}
@@ -437,21 +440,21 @@ export default function FundLibraryClient() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Loại *</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('typeLabel')}</label>
                   <select
                     value={formType}
                     onChange={(e) => setFormType(e.target.value as FundType)}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                   >
-                    <option value="">Chọn loại</option>
-                    {(Object.keys(FUND_TYPE_LABELS) as FundType[]).map((t) => (
-                      <option key={t} value={t}>{FUND_TYPE_LABELS[t]}</option>
+                    <option value="">{t('selectType')}</option>
+                    {(Object.keys(FUND_TYPE_KEYS) as FundType[]).map((type) => (
+                      <option key={type} value={type}>{t(FUND_TYPE_KEYS[type])}</option>
                     ))}
                   </select>
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">NAV *</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('navLabel')}</label>
                 <input
                   type="number"
                   value={formNav}
@@ -463,7 +466,7 @@ export default function FundLibraryClient() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">URL nguồn NAV <span className="text-gray-400 font-normal">(tùy chọn)</span></label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('navSourceLabel')}</label>
                 <input
                   type="url"
                   value={formNavUrl}
@@ -480,14 +483,14 @@ export default function FundLibraryClient() {
                 disabled={saving}
                 className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
               >
-                Hủy
+                {tc('cancel')}
               </button>
               <button
                 type="submit"
                 disabled={saving}
                 className="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded transition-colors disabled:opacity-50"
               >
-                {saving ? 'Đang lưu…' : 'Lưu quỹ'}
+                {saving ? tc('saving') : t('saveBtn')}
               </button>
             </div>
           </form>
@@ -498,22 +501,22 @@ export default function FundLibraryClient() {
       {deleteTarget && (
         <div className="fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-sm p-6 border border-gray-100 dark:border-gray-700">
-            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-2">Delete {deleteTarget.name}?</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Hành động này không thể hoàn tác.</p>
+            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-2">{t('deleteModal', { name: deleteTarget.name })}</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">{t('deleteCannotUndo')}</p>
             <div className="flex gap-3">
               <button
                 onClick={() => setDeleteTarget(null)}
                 disabled={deleting}
                 className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
               >
-                Hủy
+                {tc('cancel')}
               </button>
               <button
                 onClick={handleDelete}
                 disabled={deleting}
                 className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded transition-colors disabled:opacity-50"
               >
-                {deleting ? 'Đang xóa…' : 'Xóa'}
+                {deleting ? tc('deleting') : tc('delete')}
               </button>
             </div>
           </div>

@@ -1,9 +1,8 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import { useTranslations } from 'next-intl'
 import type { MonthlyPlan } from '../PlanningClient'
-
-const MONTHS = ['Tháng 1','Tháng 2','Tháng 3','Tháng 4','Tháng 5','Tháng 6','Tháng 7','Tháng 8','Tháng 9','Tháng 10','Tháng 11','Tháng 12']
 
 interface Props {
   plan: MonthlyPlan | null
@@ -14,6 +13,10 @@ interface Props {
 }
 
 export default function SalaryInput({ plan, month, year, onPlanCreated, onPlanDeleted }: Props) {
+  const t = useTranslations('planning')
+  const tc = useTranslations('common')
+  const MONTHS = t('months').split(',')
+
   const [value, setValue] = useState(plan ? String(plan.salary_vnd) : '')
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -30,7 +33,7 @@ export default function SalaryInput({ plan, month, year, onPlanCreated, onPlanDe
   async function saveSalary() {
     const num = Number(value)
     if (!value || isNaN(num) || num <= 0) {
-      setError('Lương phải lớn hơn 0')
+      setError(t('salaryRequired'))
       return
     }
     setError('')
@@ -45,7 +48,7 @@ export default function SalaryInput({ plan, month, year, onPlanCreated, onPlanDe
         })
         if (!res.ok) {
           const { error: e } = await res.json()
-          setError(e ?? 'Đã xảy ra lỗi. Vui lòng thử lại sau.')
+          setError(e ?? t('salaryError'))
         }
       } else {
         const res = await fetch('/api/v1/monthly-plans', {
@@ -58,11 +61,11 @@ export default function SalaryInput({ plan, month, year, onPlanCreated, onPlanDe
           onPlanCreated(newPlan)
         } else {
           const { error: e } = await res.json()
-          setError(e ?? 'Đã xảy ra lỗi. Vui lòng thử lại sau.')
+          setError(e ?? t('salaryError'))
         }
       }
     } catch {
-      setError('Không thể lưu. Vui lòng kiểm tra kết nối và thử lại.')
+      setError(t('salaryCannotSave'))
     }
     setSaving(false)
   }
@@ -77,10 +80,10 @@ export default function SalaryInput({ plan, month, year, onPlanCreated, onPlanDe
         onPlanDeleted()
       } else {
         const { error: e } = await res.json()
-        setError(e ?? 'Xóa thất bại. Vui lòng thử lại.')
+        setError(e ?? t('deleteSalaryError'))
       }
     } catch {
-      setError('Không thể xóa. Vui lòng kiểm tra kết nối và thử lại.')
+      setError(t('deleteSalaryCannotDelete'))
     }
     setDeleting(false)
   }
@@ -92,7 +95,7 @@ export default function SalaryInput({ plan, month, year, onPlanCreated, onPlanDe
   return (
     <>
       <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-5">
-        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Lương Tháng (VND)</label>
+        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{t('salaryLabel')}</label>
         {error && <p className="text-red-600 dark:text-red-400 text-sm mb-2">{error}</p>}
         <div className="flex items-center gap-3">
           <div className="relative flex-1">
@@ -104,7 +107,7 @@ export default function SalaryInput({ plan, month, year, onPlanCreated, onPlanDe
               onBlur={saveSalary}
               onKeyDown={handleKeyDown}
               disabled={saving}
-              placeholder="Nhập lương tháng để bắt đầu lập kế hoạch"
+              placeholder={t('salaryPlaceholder')}
               className="w-full pl-7 pr-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60"
             />
           </div>
@@ -120,7 +123,7 @@ export default function SalaryInput({ plan, month, year, onPlanCreated, onPlanDe
               {deleting ? (
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
               ) : (
-                'Xóa'
+                tc('delete')
               )}
             </button>
           )}
@@ -132,24 +135,22 @@ export default function SalaryInput({ plan, month, year, onPlanCreated, onPlanDe
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/40" onClick={() => setShowConfirm(false)} />
           <div className="relative bg-white dark:bg-gray-900 rounded-xl shadow-xl p-6 w-full max-w-sm mx-4 border border-gray-100 dark:border-gray-700">
-            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">Xóa bản ghi lương?</h2>
+            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">{t('deleteSalaryModal')}</h2>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">
-              Thao tác này sẽ xóa vĩnh viễn bản ghi lương của{' '}
-              <span className="font-medium text-gray-700 dark:text-gray-300">{MONTHS[month - 1]} {year}</span>{' '}
-              và tất cả các phân bổ liên quan. Hành động này không thể hoàn tác.
+              {t('deleteSalaryMessage', { month: MONTHS[month - 1], year })}
             </p>
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setShowConfirm(false)}
                 className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700"
               >
-                Hủy
+                {tc('cancel')}
               </button>
               <button
                 onClick={confirmDelete}
                 className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
               >
-                Xóa
+                {tc('delete')}
               </button>
             </div>
           </div>

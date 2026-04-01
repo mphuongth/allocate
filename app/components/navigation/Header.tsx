@@ -5,6 +5,7 @@ import Breadcrumb from './Breadcrumb'
 import UserMenu from './UserMenu'
 import { useNavigation } from './NavigationContext'
 import ThemeToggleButton from '../ThemeToggleButton'
+import { useTranslations } from 'next-intl'
 
 interface HeaderProps {
   onMobileMenuToggle: () => void
@@ -12,6 +13,7 @@ interface HeaderProps {
 
 export default function Header({ onMobileMenuToggle }: HeaderProps) {
   const { sidebarCollapsed, setSidebarCollapsed } = useNavigation()
+  const tc = useTranslations('common')
 
   return (
     <header className="h-16 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 flex items-center px-4 gap-4 shrink-0">
@@ -27,7 +29,7 @@ export default function Header({ onMobileMenuToggle }: HeaderProps) {
       {/* Tablet sidebar toggle */}
       <button
         onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-        aria-label={sidebarCollapsed ? 'Mở rộng menu' : 'Thu gọn menu'}
+        aria-label={sidebarCollapsed ? tc('expandMenu') : tc('collapseMenu')}
         className="hidden md:flex lg:hidden p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-400"
       >
         {sidebarCollapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
