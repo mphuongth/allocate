@@ -51,10 +51,10 @@ export default function Sidebar({ email, initials, onNavClick }: SidebarProps) {
                 onClick={onNavClick}
                 aria-current={active ? 'page' : undefined}
                 title={sidebarCollapsed ? label : undefined}
-                className={`flex items-center gap-3 h-11 px-3 mx-2 rounded-md border-l-4 transition-colors text-sm font-medium ${
+                className={`flex items-center gap-3 h-11 px-3 mx-2 rounded-lg transition-colors text-sm font-medium ${
                   active
-                    ? 'border-brand bg-brand-light dark:bg-brand/20 text-gray-900 dark:text-gray-100 font-semibold'
-                    : 'border-transparent text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100'
+                    ? 'bg-violet-50 dark:bg-brand/20 text-violet-600 dark:text-violet-300'
+                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100'
                 } ${sidebarCollapsed ? 'justify-center px-0 mx-2' : ''}`}
               >
                 <Icon size={18} className="shrink-0" />

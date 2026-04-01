@@ -8,6 +8,7 @@ import NetWorthCard from './components/NetWorthCard'
 import GoalCard from './components/GoalCard'
 import UnallocatedSection from './components/UnallocatedSection'
 import InsuranceCard from './components/InsuranceCard'
+import AssetAllocationPie from './components/AssetAllocationPie'
 
 const FundDetailModal = dynamic(() => import('./components/FundDetailModal'))
 const GoalPickerModal = dynamic(() => import('./components/GoalPickerModal'))
@@ -266,6 +267,21 @@ export default function DashboardClient() {
 
   const sortedGoals = data ? sortGoals(data.goals, sortOrder) : []
 
+  // Compute asset allocation totals for pie chart
+  const allocationTotals = data ? (() => {
+    const fundTotal = [
+      ...data.goals.flatMap((g) => g.funds),
+      ...data.unallocated.funds,
+    ].reduce((s, f) => s + f.currentValue, 0)
+    const nonFundAll = data.unallocated.nonFunds
+    const bankTotal = nonFundAll.filter((i) => i.type === 'bank').reduce((s, i) => s + i.currentValue, 0)
+    const goldTotal = nonFundAll.filter((i) => i.type === 'gold').reduce((s, i) => s + i.currentValue, 0)
+    const stockTotal = nonFundAll.filter((i) => i.type === 'stock').reduce((s, i) => s + i.currentValue, 0)
+    const investedTotal = fundTotal + bankTotal + goldTotal + stockTotal
+    const cashTotal = Math.max(data.netWorth.totalAssets - investedTotal, 0)
+    return { fundTotal, bankTotal, goldTotal, stockTotal, cashTotal }
+  })() : null
+
   // Find fund item for detail modal
   const allFunds = data ? [...data.unallocated.funds, ...data.goals.flatMap((g) => g.funds)] : []
   const detailFund = fundDetailId ? allFunds.find((f) => f.fundId === fundDetailId) : null
@@ -378,7 +394,7 @@ export default function DashboardClient() {
 
         {/* Gold price widget — shown whenever user has any gold investment */}
         {!loading && data?.netWorth.hasGold && (
-          <div className="mb-6 rounded-xl overflow-hidden border border-amber-100 dark:border-amber-800/30">
+          <div className="mb-6 rounded-xl overflow-hidden border border-amber-200 dark:border-amber-800/30 bg-gradient-to-r from-amber-50 to-amber-100 dark:from-amber-900/10 dark:to-amber-900/5">
             <GoldPriceWidget onRefresh={() => fetchData({ force: true })} />
           </div>
         )}
@@ -386,14 +402,24 @@ export default function DashboardClient() {
         {/* Dashboard content */}
         {!loading && data && !isEmpty && (
           <div className="space-y-8">
-            {/* Net Worth */}
-            <NetWorthCard {...data.netWorth} />
+            {/* Net Worth + Asset Allocation */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2">
+                <NetWorthCard {...data.netWorth} />
+              </div>
+              {allocationTotals && (
+                <AssetAllocationPie
+                  {...allocationTotals}
+                  totalAssets={data.netWorth.totalAssets}
+                />
+              )}
+            </div>
 
             {/* Goals */}
             {sortedGoals.length > 0 && (
               <section>
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{t('sectionGoals')}</h2>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                   {sortedGoals.map((goal) => (
                     <GoalCard
                       key={goal.goalId}

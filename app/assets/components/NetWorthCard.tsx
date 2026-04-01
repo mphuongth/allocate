@@ -22,7 +22,7 @@ export default function NetWorthCard({
   const plPositive = overallProfitLoss >= 0
 
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
+    <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 h-full">
       <p className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">{t('netWorth')}</p>
       <p className="text-4xl font-bold text-gray-900 dark:text-gray-100 mb-6">{fmt(netWorth)}</p>
 
