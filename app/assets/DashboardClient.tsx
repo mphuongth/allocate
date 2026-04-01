@@ -462,7 +462,7 @@ export default function DashboardClient() {
                     <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('sectionInsurance')}</h2>
                     <Link
                       href="/settings?tab=insurance"
-                      className="text-sm font-medium px-3 py-1.5 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                      className="text-sm font-medium px-3 py-1.5 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                     >
                       {t('manageInsurance')}
                     </Link>
