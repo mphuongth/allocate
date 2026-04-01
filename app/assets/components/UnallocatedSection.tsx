@@ -1,5 +1,6 @@
 'use client'
 
+import { RefreshCw } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import type { FundBreakdownItem, NonFundUnallocatedItem } from '../DashboardClient'
 
@@ -44,8 +45,9 @@ export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds,
         </div>
         <button
           onClick={onRefresh}
-          className="text-xs px-3 py-1.5 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 whitespace-nowrap"
+          className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors whitespace-nowrap"
         >
+          <RefreshCw className="h-3.5 w-3.5" />
           {t('refreshNav')}
         </button>
       </div>

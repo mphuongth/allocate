@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import Link from 'next/link'
+import { Plus } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import dynamic from 'next/dynamic'
 import { NetWorthSkeleton, GoalSkeleton, InsuranceSkeleton } from './components/Skeletons'
@@ -418,7 +420,16 @@ export default function DashboardClient() {
             {/* Goals */}
             {sortedGoals.length > 0 && (
               <section>
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{t('sectionGoals')}</h2>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('sectionGoals')}</h2>
+                  <Link
+                    href="/settings?tab=goals"
+                    className="inline-flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-lg hover:bg-gray-700 dark:hover:bg-gray-200 transition-colors"
+                  >
+                    <Plus className="h-4 w-4" />
+                    {t('addGoalBtn')}
+                  </Link>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                   {sortedGoals.map((goal) => (
                     <GoalCard

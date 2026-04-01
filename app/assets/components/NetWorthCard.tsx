@@ -1,7 +1,19 @@
+'use client'
+
+import { useState } from 'react'
 import { useTranslations } from 'next-intl'
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
 const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
+const fmtShort = (n: number) => {
+  if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1) + 'B'
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(0) + 'M'
+  return n.toLocaleString('vi-VN')
+}
 const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`
+
+const TIME_RANGES = ['6m', '1y', '3y', 'All'] as const
+type TimeRange = typeof TIME_RANGES[number]
 
 interface Props {
   totalAssets: number
@@ -20,39 +32,92 @@ export default function NetWorthCard({
 }: Props) {
   const t = useTranslations('dashboard')
   const plPositive = overallProfitLoss >= 0
+  const [timeRange, setTimeRange] = useState<TimeRange>('6m')
+
+  // Placeholder chart data — single current point. Real history requires backend support.
+  const chartData = [{ label: t('now'), value: netWorth }]
 
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 h-full">
-      <p className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">{t('netWorth')}</p>
-      <p className="text-4xl font-bold text-gray-900 dark:text-gray-100 mb-6">{fmt(netWorth)}</p>
-
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 border-t border-gray-100 dark:border-gray-700 pt-5">
+    <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 h-full flex flex-col">
+      {/* Header row */}
+      <div className="flex items-start justify-between mb-4">
         <div>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">{t('totalAssets')}</p>
-          <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{fmt(totalAssets)}</p>
-        </div>
-        <div>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">{t('totalLiabilities')}</p>
-          <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{fmt(totalLiabilities)}</p>
-        </div>
-        <div>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">
-            {t('portfolioValue')}
-            {navStale && <span title={t('navStaleTooltip')} className="ml-1 text-amber-500">⚠️</span>}
+          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
+            {t('netWorth')}
           </p>
-          <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{fmt(currentValue)}</p>
+          <p className="text-4xl font-bold text-gray-900 dark:text-gray-100">{fmt(netWorth)}</p>
+
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-1 mt-3">
+            <div>
+              <p className="text-xs text-gray-400 dark:text-gray-500 uppercase">{t('totalGainLoss')}</p>
+              <p className={`text-sm font-semibold ${plPositive ? 'text-green-600' : 'text-red-600'}`}>
+                {fmt(overallProfitLoss)} ({fmtPct(overallProfitLossPercentage)})
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-400 dark:text-gray-500 uppercase">
+                {t('portfolioValue')}
+                {navStale && <span title={t('navStaleTooltip')} className="ml-1 text-amber-500">⚠</span>}
+              </p>
+              <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{fmt(currentValue)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-400 dark:text-gray-500 uppercase">{t('totalAssets')}</p>
+              <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{fmt(totalAssets)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-400 dark:text-gray-500 uppercase">{t('totalInvested')}</p>
+              <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{fmt(totalInvested)}</p>
+            </div>
+          </div>
         </div>
-        <div>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">{t('totalInvested')}</p>
-          <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{fmt(totalInvested)}</p>
+
+        {/* Time range selector */}
+        <div className="flex gap-1 flex-shrink-0 ml-4">
+          {TIME_RANGES.map((r) => (
+            <button
+              key={r}
+              onClick={() => setTimeRange(r)}
+              className={`h-8 px-2.5 text-xs font-medium rounded-lg transition-colors ${
+                timeRange === r
+                  ? 'bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900'
+                  : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            >
+              {r}
+            </button>
+          ))}
         </div>
       </div>
 
-      <div className="mt-4 flex items-center gap-2">
-        <span className="text-xs text-gray-400 dark:text-gray-500">{t('overallGainLoss')}</span>
-        <span className={`text-sm font-semibold ${plPositive ? 'text-green-600' : 'text-red-600'}`}>
-          {fmt(overallProfitLoss)} ({fmtPct(overallProfitLossPercentage)})
-        </span>
+      {/* Chart */}
+      <div className="flex-1 min-h-[160px]">
+        {chartData.length > 1 ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="netWorthGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.25} />
+                  <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis dataKey="label" stroke="#9ca3af" fontSize={11} tickLine={false} axisLine={false} />
+              <YAxis stroke="#9ca3af" fontSize={11} tickLine={false} axisLine={false} tickFormatter={fmtShort} width={55} />
+              <Tooltip
+                formatter={(v) => fmt(Number(v))}
+                contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '12px' }}
+              />
+              <Area type="monotone" dataKey="value" stroke="#8b5cf6" strokeWidth={2} fill="url(#netWorthGradient)" dot={false} />
+            </AreaChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="h-full flex flex-col items-center justify-center text-center">
+            <div className="w-full h-px bg-gradient-to-r from-transparent via-violet-300 dark:via-violet-700 to-transparent mb-3" />
+            <p className="text-xs text-gray-400 dark:text-gray-500">{t('noHistoryYet')}</p>
+            <p className="text-xs text-violet-600 dark:text-violet-400 font-semibold mt-0.5">{fmt(netWorth)}</p>
+          </div>
+        )}
       </div>
     </div>
   )
