@@ -275,7 +275,7 @@
     "expiry": "exp",
     "perYear": "%/yr",
     "totalLabel": "Total",
-    "refreshNav": "Refresh NAV",
+    "refreshNav": "Refresh NAV (Unallocated Only)",
     "colType": "Type",
     "colAsset": "Asset",
     "colNavInterest": "NAV / Interest",

@@ -38,21 +38,20 @@ export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds,
 
   return (
     <section>
-      <div className="flex items-center justify-between mb-4">
+      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+      <div className="flex items-center justify-between px-5 pt-5 pb-4">
         <div>
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('sectionUnallocated')}</h2>
           <p className="text-sm text-gray-500 dark:text-gray-400">{t('totalLabel')}: {fmt(unallocatedAmount)}</p>
         </div>
         <button
           onClick={onRefresh}
-          className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors whitespace-nowrap"
+          className="inline-flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors whitespace-nowrap"
         >
           <RefreshCw className="h-3.5 w-3.5" />
           {t('refreshNav')}
         </button>
       </div>
-
-      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -100,7 +99,7 @@ export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds,
                   <td className="px-5 py-4 text-right">
                     <button
                       onClick={() => onAssignToGoal(fund.fundId)}
-                      className="text-xs px-2.5 py-1.5 border border-violet-300 dark:border-violet-700 text-violet-600 dark:text-violet-400 rounded-lg hover:bg-violet-50 dark:hover:bg-violet-900/20 whitespace-nowrap"
+                      className="text-sm font-medium px-2.5 py-1.5 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 whitespace-nowrap"
                     >
                       {t('assignToGoal')}
                     </button>
@@ -148,7 +147,7 @@ export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds,
                     <td className="px-5 py-4 text-right">
                       <button
                         onClick={() => onAssignNonFundToGoal(item.transactionId)}
-                        className="text-xs px-2.5 py-1.5 border border-violet-300 dark:border-violet-700 text-violet-600 dark:text-violet-400 rounded-lg hover:bg-violet-50 dark:hover:bg-violet-900/20 whitespace-nowrap"
+                        className="text-sm font-medium px-2.5 py-1.5 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 whitespace-nowrap"
                       >
                         {t('assignToGoal')}
                       </button>
