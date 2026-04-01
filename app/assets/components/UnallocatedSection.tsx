@@ -70,7 +70,7 @@ export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds,
               {funds.map((fund) => (
                 <tr key={fund.fundId} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
                   <td className="px-5 py-4">
-                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${TYPE_BADGE.fund}`}>
+                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium uppercase ${TYPE_BADGE.fund}`}>
                       {typeLabelMap.fund}
                     </span>
                   </td>
@@ -116,7 +116,7 @@ export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds,
                 return (
                   <tr key={item.transactionId} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
                     <td className="px-5 py-4">
-                      <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${badgeCls}`}>
+                      <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium uppercase ${badgeCls}`}>
                         {typeLabel}
                       </span>
                     </td>
