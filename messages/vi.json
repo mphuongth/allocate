@@ -345,6 +345,7 @@
     "goldPriceNotUpdated": "Chưa cập nhật",
     "goldPriceRefresh": "Làm mới giá",
     "goldPriceRefreshing": "Đang lấy...",
+    "goldDailyChange": "Thay đổi ngày",
     "goldPriceError": "Không thể lấy giá vàng",
     "goldPriceConnError": "Lỗi kết nối",
     "goldPriceUnit": "/ chỉ",

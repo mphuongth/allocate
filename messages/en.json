@@ -345,6 +345,7 @@
     "goldPriceNotUpdated": "Not updated",
     "goldPriceRefresh": "Refresh price",
     "goldPriceRefreshing": "Fetching...",
+    "goldDailyChange": "Daily change",
     "goldPriceError": "Cannot fetch gold price",
     "goldPriceConnError": "Connection error",
     "goldPriceUnit": "/ chỉ",
