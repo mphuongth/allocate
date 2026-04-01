@@ -457,11 +457,21 @@ export default function DashboardClient() {
             {/* Insurance */}
             {data.insurance.length > 0 && (
               <section>
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{t('sectionInsurance')}</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {data.insurance.map((ins) => (
-                    <InsuranceCard key={ins.insuranceId} {...ins} onSavingsChange={() => fetchData({ force: true })} />
-                  ))}
+                <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
+                  <div className="flex items-center justify-between mb-5">
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('sectionInsurance')}</h2>
+                    <Link
+                      href="/settings?tab=insurance"
+                      className="text-sm px-3 py-1.5 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                    >
+                      {t('manageInsurance')}
+                    </Link>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {data.insurance.map((ins) => (
+                      <InsuranceCard key={ins.insuranceId} {...ins} onSavingsChange={() => fetchData({ force: true })} />
+                    ))}
+                  </div>
                 </div>
               </section>
             )}

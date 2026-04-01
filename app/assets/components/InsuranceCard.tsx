@@ -172,105 +172,98 @@ export default function InsuranceCard({
   }
 
   return (
-    <div className={`rounded-xl border shadow-sm p-5 transition-opacity ${
+    <div className={`rounded-xl border p-5 transition-opacity ${
       isCompleted
         ? 'opacity-60 bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700'
-        : 'bg-gradient-to-br from-violet-100 via-purple-50 to-purple-100 dark:from-violet-900/30 dark:via-purple-900/20 dark:to-purple-900/10 border-violet-300 dark:border-violet-700/60'
+        : 'bg-violet-50 dark:bg-violet-900/10 border-violet-100 dark:border-violet-800/30'
     }`}>
-      {/* Header */}
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="h-10 w-10 rounded-full bg-violet-600 dark:bg-violet-500 flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
-            {insuranceName.charAt(0).toUpperCase()}
-          </div>
-          <div className="min-w-0">
-            <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm truncate">{insuranceName}</h3>
-            {coverageType && (
-              <span className="inline-block mt-0.5 text-xs px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 font-medium">
-                {coverageType}
-              </span>
-            )}
-          </div>
-        </div>
-        <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 ml-2 ${badge.cls}`}>
+      {/* Header — name + status badge */}
+      <div className="flex items-start justify-between mb-1">
+        <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 leading-tight">{insuranceName}</h3>
+        <span className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full flex-shrink-0 ml-3 ${badge.cls}`}>
           {badge.icon && <TriangleAlert size={10} />}
           {statusLabel[displayStatus]}
         </span>
       </div>
 
+      {/* Coverage type pill */}
+      {coverageType && (
+        <span className="inline-block mb-4 text-xs px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
+          {coverageType}
+        </span>
+      )}
+
       {/* Annual / Monthly */}
-      <div className="space-y-2 text-sm mb-3">
+      <div className="space-y-2 text-sm mb-4">
         <div className="flex items-center justify-between">
-          <span className="text-gray-600 dark:text-gray-400">{t('annualFeeLabel')}:</span>
+          <span className="text-gray-500 dark:text-gray-400">{t('annualFeeLabel')}:</span>
           <span className="font-medium text-gray-900 dark:text-gray-100">{fmt(annualPremium)}</span>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-gray-600 dark:text-gray-400">{t('monthlyFeeLabel')}:</span>
+          <span className="text-gray-500 dark:text-gray-400">{t('monthlyFeeLabel')}:</span>
           <span className="font-medium text-gray-900 dark:text-gray-100">{fmt(monthlyFee)}</span>
         </div>
       </div>
 
-      {/* Savings progress */}
-      <div className="border-t border-violet-200/60 dark:border-violet-700/40 pt-3 space-y-2">
+      {/* Savings + progress */}
+      <div className="space-y-2 mb-3">
         <div className="flex items-center justify-between">
-          <span className="text-xs text-gray-600 dark:text-gray-400">{t('savedLabel')}:</span>
-          <span className="text-sm font-bold text-violet-700 dark:text-violet-400">{fmt(localAmountSaved)}</span>
+          <span className="text-sm text-gray-500 dark:text-gray-400">{t('savedLabel')}:</span>
+          <span className="text-sm font-bold text-violet-600 dark:text-violet-400">{fmt(localAmountSaved)}</span>
         </div>
-        <div className="h-2 bg-violet-200/70 dark:bg-violet-800/50 rounded-full overflow-hidden">
+        <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
           <div
-            className={`h-full rounded-full transition-all ${isCompleted ? 'bg-gray-400' : 'bg-violet-600'}`}
+            className={`h-full rounded-full transition-all ${isCompleted ? 'bg-gray-400' : 'bg-gray-900 dark:bg-gray-100'}`}
             style={{ width: `${localProgress}%` }}
           />
         </div>
-        <p className="text-xs text-gray-600 dark:text-gray-400">
+        <p className="text-xs text-gray-500 dark:text-gray-400">
           {Math.round(localProgress)}% {t('ofAnnualFee')}
         </p>
       </div>
 
-      {/* Next payment date */}
+      {/* Next / last payment date */}
       {nextPaymentDate && !isCompleted && (
-        <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
           {t('nextPaymentLabel', { date: fmtDate(nextPaymentDate) })}
         </p>
       )}
       {lastPaymentDate && (
-        <p className="text-xs text-gray-500 dark:text-gray-500 mt-0.5">
+        <p className="text-xs text-gray-400 dark:text-gray-500 mb-3">
           {t('lastPaymentLabel', { date: fmtDate(lastPaymentDate) })}
         </p>
       )}
 
       {/* Toast */}
       {toast && (
-        <p className={`text-xs mt-2 ${toast.type === 'error' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+        <p className={`text-xs mb-2 ${toast.type === 'error' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
           {toast.msg}
         </p>
       )}
 
       {/* Quick save input */}
-      <div className="border-t border-violet-200/60 dark:border-violet-700/40 mt-3 pt-3">
-        <div className="flex gap-2">
-          <input
-            type="number"
-            value={inputAmount}
-            onChange={(e) => setInputAmount(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-            placeholder={t('savingsAmountPlaceholder')}
-            className="flex-1 min-w-0 border border-violet-300 dark:border-violet-700 rounded-lg px-3 py-1.5 text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500"
-          />
-          <button
-            onClick={handleAdd}
-            disabled={isLoading}
-            className="flex items-center justify-center h-8 w-8 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-lg hover:bg-gray-700 dark:hover:bg-gray-200 disabled:opacity-50 flex-shrink-0 transition-colors"
-            title={t('addBtn')}
-          >
-            <Wallet className="h-4 w-4" />
-          </button>
-        </div>
+      <div className="flex gap-2">
+        <input
+          type="number"
+          value={inputAmount}
+          onChange={(e) => setInputAmount(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+          placeholder={t('savingsAmountPlaceholder')}
+          className="flex-1 min-w-0 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-1.5 text-xs bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500"
+        />
+        <button
+          onClick={handleAdd}
+          disabled={isLoading}
+          className="flex items-center justify-center h-8 w-8 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-lg hover:bg-gray-700 dark:hover:bg-gray-200 disabled:opacity-50 flex-shrink-0 transition-colors"
+          title={t('addBtn')}
+        >
+          <Wallet className="h-4 w-4" />
+        </button>
       </div>
 
       {/* Savings records */}
       {savingsList.length > 0 && (
-        <div className="border-t border-violet-200/60 dark:border-violet-700/40 mt-3 pt-3">
+        <div className="border-t border-gray-200/60 dark:border-gray-700/60 mt-3 pt-3">
           <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">{t('savingsHistoryLabel')}</p>
           <ul className="space-y-1">
             {savingsList.map((s) => (
@@ -292,7 +285,7 @@ export default function InsuranceCard({
 
       {/* Mark as Paid */}
       {showMarkAsPaid && (
-        <div className="border-t border-violet-200/60 dark:border-violet-700/40 mt-3 pt-3">
+        <div className="border-t border-gray-200/60 dark:border-gray-700/60 mt-3 pt-3">
           <button
             onClick={() => setShowConfirm(true)}
             className="w-full py-2 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-xs font-medium rounded-lg hover:bg-gray-700 dark:hover:bg-gray-200 transition-colors"
