@@ -16,7 +16,7 @@ export default function Header({ onMobileMenuToggle }: HeaderProps) {
   const tc = useTranslations('common')
 
   return (
-    <header className="h-14 bg-gray-50 dark:bg-gray-950 flex items-center px-6 gap-4 shrink-0">
+    <header className="h-14 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-700 flex items-center px-6 gap-4 shrink-0">
       {/* Mobile hamburger */}
       <button
         onClick={onMobileMenuToggle}
