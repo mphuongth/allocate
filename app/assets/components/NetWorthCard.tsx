@@ -49,21 +49,21 @@ export default function NetWorthCard({
 
           <div className="flex flex-wrap items-center gap-x-5 gap-y-1 mt-3">
             <div>
-              <p className="text-xs text-gray-400 dark:text-gray-500 uppercase">{t('gainLossAll')}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 uppercase">{t('gainLossAll')}</p>
               <p className={`text-sm font-semibold ${plPositive ? 'text-green-600' : 'text-red-600'}`}>
                 {fmt(overallProfitLoss)} ({fmtPct(overallProfitLossPercentage)})
               </p>
             </div>
             <div>
-              <p className="text-xs text-gray-400 dark:text-gray-500 uppercase">
+              <p className="text-xs text-gray-500 dark:text-gray-400 uppercase">
                 {t('plPercent')}
                 {navStale && <span title={t('navStaleTooltip')} className="ml-1 text-amber-500">⚠</span>}
               </p>
-              <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{fmtPct(overallProfitLossPercentage)}</p>
+              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{fmtPct(overallProfitLossPercentage)}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-400 dark:text-gray-500 uppercase">{t('investmentAssets')}</p>
-              <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{fmt(currentValue)}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 uppercase">{t('investmentAssets')}</p>
+              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{fmt(currentValue)}</p>
             </div>
           </div>
         </div>
