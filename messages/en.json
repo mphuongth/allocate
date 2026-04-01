@@ -17,7 +17,9 @@
     "notes": "Notes",
     "noData": "No data yet.",
     "refresh": "Refresh",
-    "reset": "Reset"
+    "reset": "Reset",
+    "expandMenu": "Expand menu",
+    "collapseMenu": "Collapse menu"
   },
   "nav": {
     "dashboard": "Asset Overview",

@@ -17,7 +17,9 @@
     "notes": "Ghi chú",
     "noData": "Chưa có dữ liệu.",
     "refresh": "Làm mới",
-    "reset": "Đặt lại"
+    "reset": "Đặt lại",
+    "expandMenu": "Mở rộng menu",
+    "collapseMenu": "Thu gọn menu"
   },
   "nav": {
     "dashboard": "Tổng Quan Tài Sản",
