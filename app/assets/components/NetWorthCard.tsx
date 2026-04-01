@@ -43,31 +43,27 @@ export default function NetWorthCard({
       <div className="flex items-start justify-between mb-4">
         <div>
           <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
-            {t('netWorth')}
+            {t('totalAssets')}
           </p>
-          <p className="text-4xl font-bold text-gray-900 dark:text-gray-100">{fmt(netWorth)}</p>
+          <p className="text-4xl font-bold text-gray-900 dark:text-gray-100">{fmt(totalAssets)}</p>
 
           <div className="flex flex-wrap items-center gap-x-5 gap-y-1 mt-3">
             <div>
-              <p className="text-xs text-gray-400 dark:text-gray-500 uppercase">{t('totalGainLoss')}</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 uppercase">{t('gainLossAll')}</p>
               <p className={`text-sm font-semibold ${plPositive ? 'text-green-600' : 'text-red-600'}`}>
                 {fmt(overallProfitLoss)} ({fmtPct(overallProfitLossPercentage)})
               </p>
             </div>
             <div>
               <p className="text-xs text-gray-400 dark:text-gray-500 uppercase">
-                {t('portfolioValue')}
+                {t('plPercent')}
                 {navStale && <span title={t('navStaleTooltip')} className="ml-1 text-amber-500">⚠</span>}
               </p>
+              <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{fmtPct(overallProfitLossPercentage)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-400 dark:text-gray-500 uppercase">{t('investmentAssets')}</p>
               <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{fmt(currentValue)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-400 dark:text-gray-500 uppercase">{t('totalAssets')}</p>
-              <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{fmt(totalAssets)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-400 dark:text-gray-500 uppercase">{t('totalInvested')}</p>
-              <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{fmt(totalInvested)}</p>
             </div>
           </div>
         </div>
@@ -78,7 +74,7 @@ export default function NetWorthCard({
             <button
               key={r}
               onClick={() => setTimeRange(r)}
-              className={`h-8 px-2.5 text-xs font-medium rounded-lg transition-colors ${
+              className={`h-8 px-2.5 text-sm font-medium rounded-lg transition-colors ${
                 timeRange === r
                   ? 'bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900'
                   : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'

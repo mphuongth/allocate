@@ -10,7 +10,6 @@ const PALETTE = [
   { key: 'bank',  color: '#06b6d4', labelKey: 'assetBank' },
   { key: 'gold',  color: '#f59e0b', labelKey: 'assetGold' },
   { key: 'stock', color: '#10b981', labelKey: 'assetStock' },
-  { key: 'cash',  color: '#e5e7eb', labelKey: 'assetCash' },
 ] as const
 
 interface Props {
@@ -30,7 +29,6 @@ export default function AssetAllocationPie({ fundTotal, bankTotal, goldTotal, st
     { key: 'bank',  value: bankTotal },
     { key: 'gold',  value: goldTotal },
     { key: 'stock', value: stockTotal },
-    { key: 'cash',  value: cashTotal },
   ].filter((d) => d.value > 0)
 
   const labelMap: Record<string, string> = {
@@ -38,7 +36,6 @@ export default function AssetAllocationPie({ fundTotal, bankTotal, goldTotal, st
     bank:  tt('assetBank'),
     gold:  tt('assetGold'),
     stock: tt('assetStock'),
-    cash:  tt('assetCash'),
   }
 
   const colorMap = Object.fromEntries(PALETTE.map((p) => [p.key, p.color]))
