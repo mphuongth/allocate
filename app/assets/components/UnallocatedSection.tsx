@@ -60,7 +60,7 @@ export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds,
                 <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colAsset')}</th>
                 <th className="px-5 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase hidden sm:table-cell">{t('colNavInterest')}</th>
                 <th className="px-5 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase hidden md:table-cell">{t('colUnits')}</th>
-                <th className="px-5 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colValue')}</th>
+                <th className="px-5 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colCurrentValue')}</th>
                 <th className="px-5 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase hidden sm:table-cell">{t('colGainLoss')}</th>
                 <th className="px-5 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colActions')}</th>
               </tr>
@@ -79,7 +79,7 @@ export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds,
                       onClick={() => onFundClick(fund.fundId)}
                       className="text-left hover:text-violet-600 dark:hover:text-violet-400 transition-colors"
                     >
-                      <p className="font-medium text-gray-900 dark:text-gray-100 text-sm">{fund.fundName}</p>
+                      <p className="font-medium text-gray-900 dark:text-gray-100 text-base">{fund.fundName}</p>
                     </button>
                   </td>
                   <td className="px-5 py-4 text-right text-sm text-gray-600 dark:text-gray-400 hidden sm:table-cell">
@@ -93,6 +93,9 @@ export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds,
                   </td>
                   <td className="px-5 py-4 text-right hidden sm:table-cell">
                     <p className={`text-sm font-medium ${fund.profitLoss >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {fmt(fund.profitLoss)}
+                    </p>
+                    <p className={`text-xs ${fund.profitLoss >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                       {fmtPct(fund.profitLossPercentage)}
                     </p>
                   </td>
@@ -121,7 +124,10 @@ export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds,
                       </span>
                     </td>
                     <td className="px-5 py-4">
-                      <p className="text-sm text-gray-900 dark:text-gray-100 font-medium">
+                      {item.notes
+                        ? <p className="font-medium text-gray-900 dark:text-gray-100 text-base">{item.notes}</p>
+                        : null}
+                      <p className={item.notes ? 'text-xs text-gray-400 dark:text-gray-500 mt-0.5' : 'text-sm font-medium text-gray-900 dark:text-gray-100'}>
                         {new Date(item.investmentDate).toLocaleDateString('vi-VN')}
                       </p>
                       {item.expiryDate && (
@@ -132,15 +138,22 @@ export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds,
                     </td>
                     <td className="px-5 py-4 text-right text-sm text-gray-600 dark:text-gray-400 hidden sm:table-cell">
                       {item.interestRate != null
-                        ? <span className="text-cyan-600 dark:text-cyan-400">{item.interestRate}{t('perYear')}</span>
+                        ? <span className="text-gray-900 dark:text-gray-100">{item.interestRate}%</span>
                         : '—'}
                     </td>
-                    <td className="px-5 py-4 text-right text-sm text-gray-500 dark:text-gray-400 hidden md:table-cell">—</td>
+                    <td className="px-5 py-4 text-right text-sm text-gray-500 dark:text-gray-400 hidden md:table-cell">
+                      {item.type === 'gold' && item.units != null
+                        ? item.units.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                        : '—'}
+                    </td>
                     <td className="px-5 py-4 text-right">
                       <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{fmt(item.currentValue)}</p>
                     </td>
                     <td className="px-5 py-4 text-right hidden sm:table-cell">
                       <p className={`text-sm font-medium ${pl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {fmt(pl)}
+                      </p>
+                      <p className={`text-xs ${pl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                         {fmtPct(plPct)}
                       </p>
                     </td>
