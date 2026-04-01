@@ -42,7 +42,7 @@ export default function NetWorthCard({
       {/* Header row */}
       <div className="flex items-start justify-between mb-4">
         <div>
-          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
+          <p className="text-sm text-gray-500 dark:text-gray-400 uppercase mb-1">
             {t('totalAssets')}
           </p>
           <p className="text-4xl font-bold text-gray-900 dark:text-gray-100">{fmt(totalAssets)}</p>
