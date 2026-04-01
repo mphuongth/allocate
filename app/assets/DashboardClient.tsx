@@ -300,7 +300,7 @@ export default function DashboardClient() {
               <select
                 value={sortOrder}
                 onChange={(e) => handleSortChange(e.target.value as SortOrder)}
-                className="text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-1.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-1.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-500"
               >
                 <option value="manual">{t('sortManual')}</option>
                 <option value="progress-desc">{t('sortProgressDesc')}</option>
@@ -311,7 +311,7 @@ export default function DashboardClient() {
             <button
               onClick={() => fetchData({ force: true })}
               disabled={loading}
-              className="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+              className="px-3 py-1.5 text-sm font-medium bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-lg hover:bg-gray-700 dark:hover:bg-gray-200 disabled:opacity-50"
             >
               {loading ? tc('loading') : tc('refresh')}
             </button>
