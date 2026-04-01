@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import Link from 'next/link'
+import { Plus } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import dynamic from 'next/dynamic'
 import { NetWorthSkeleton, GoalSkeleton, InsuranceSkeleton } from './components/Skeletons'
@@ -8,6 +10,7 @@ import NetWorthCard from './components/NetWorthCard'
 import GoalCard from './components/GoalCard'
 import UnallocatedSection from './components/UnallocatedSection'
 import InsuranceCard from './components/InsuranceCard'
+import AssetAllocationPie from './components/AssetAllocationPie'
 
 const FundDetailModal = dynamic(() => import('./components/FundDetailModal'))
 const GoalPickerModal = dynamic(() => import('./components/GoalPickerModal'))
@@ -57,6 +60,8 @@ export interface NonFundUnallocatedItem {
   interestRate: number | null
   expiryDate: string | null
   investmentDate: string
+  notes: string | null
+  units: number | null
 }
 
 export interface DashboardData {
@@ -76,9 +81,6 @@ export interface DashboardData {
   insurance: InsuranceData[]
 }
 
-type SortOrder = 'manual' | 'progress-desc' | 'progress-asc' | 'alpha'
-
-const SORT_KEY = 'assetsSortOrder'
 const OVERVIEW_CACHE_KEY = 'dashboardOverviewCache'
 const OVERVIEW_CACHE_TTL = 2 * 60 * 1000 // 2 minutes
 
@@ -96,20 +98,6 @@ function setCachedOverview(data: DashboardData) {
   try { localStorage.setItem(OVERVIEW_CACHE_KEY, JSON.stringify({ data, ts: Date.now() })) } catch { /* ignore */ }
 }
 
-function sortGoals(goals: GoalData[], order: SortOrder): GoalData[] {
-  const copy = [...goals]
-  switch (order) {
-    case 'progress-desc':
-      return copy.sort((a, b) => (b.progressPercentage ?? 0) - (a.progressPercentage ?? 0))
-    case 'progress-asc':
-      return copy.sort((a, b) => (a.progressPercentage ?? 0) - (b.progressPercentage ?? 0))
-    case 'alpha':
-      return copy.sort((a, b) => a.goalName.localeCompare(b.goalName))
-    default:
-      return copy
-  }
-}
-
 // Fetch fund detail (purchase history) from investment_transactions
 interface PurchaseHistory { purchase_date: string; units: number; nav_at_purchase: number }
 
@@ -120,7 +108,6 @@ export default function DashboardClient() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [sortOrder, setSortOrder] = useState<SortOrder>('manual')
   const [fundDetailId, setFundDetailId] = useState<string | null>(null)
   const [goalPickerFundId, setGoalPickerFundId] = useState<string | null>(null)
   const [assignLoading, setAssignLoading] = useState(false)
@@ -129,12 +116,6 @@ export default function DashboardClient() {
   const [nonFundPickerTxId, setNonFundPickerTxId] = useState<string | null>(null)
   const [nonFundAssignLoading, setNonFundAssignLoading] = useState(false)
   const [nonFundAssignError, setNonFundAssignError] = useState('')
-
-  // Load sort preference from localStorage
-  useEffect(() => {
-    const saved = typeof window !== 'undefined' ? localStorage.getItem(SORT_KEY) : null
-    if (saved) setSortOrder(saved as SortOrder)
-  }, [])
 
   const fetchData = useCallback(async (opts?: { force?: boolean }) => {
     const cached = !opts?.force && getCachedOverview()
@@ -162,11 +143,6 @@ export default function DashboardClient() {
   }, [])
 
   useEffect(() => { fetchData() }, [fetchData])
-
-  function handleSortChange(order: SortOrder) {
-    setSortOrder(order)
-    localStorage.setItem(SORT_KEY, order)
-  }
 
   async function handleFundClick(fundId: string) {
     setFundDetailId(fundId)
@@ -264,42 +240,29 @@ export default function DashboardClient() {
 
   const isEmpty = data && data.goals.length === 0 && data.unallocated.funds.length === 0 && data.unallocated.nonFunds.length === 0 && data.insurance.length === 0
 
-  const sortedGoals = data ? sortGoals(data.goals, sortOrder) : []
+  const sortedGoals = data ? data.goals : []
+
+  // Compute asset allocation totals for pie chart
+  const allocationTotals = data ? (() => {
+    const fundTotal = [
+      ...data.goals.flatMap((g) => g.funds),
+      ...data.unallocated.funds,
+    ].reduce((s, f) => s + f.currentValue, 0)
+    const nonFundAll = data.unallocated.nonFunds
+    const bankTotal = nonFundAll.filter((i) => i.type === 'bank').reduce((s, i) => s + i.currentValue, 0)
+    const goldTotal = nonFundAll.filter((i) => i.type === 'gold').reduce((s, i) => s + i.currentValue, 0)
+    const stockTotal = nonFundAll.filter((i) => i.type === 'stock').reduce((s, i) => s + i.currentValue, 0)
+    const investedTotal = fundTotal + bankTotal + goldTotal + stockTotal
+    const cashTotal = Math.max(data.netWorth.totalAssets - investedTotal, 0)
+    return { fundTotal, bankTotal, goldTotal, stockTotal, cashTotal }
+  })() : null
 
   // Find fund item for detail modal
   const allFunds = data ? [...data.unallocated.funds, ...data.goals.flatMap((g) => g.funds)] : []
   const detailFund = fundDetailId ? allFunds.find((f) => f.fundId === fundDetailId) : null
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8 flex-wrap gap-3">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('title')}</h1>
-          <div className="flex items-center gap-3 flex-wrap">
-            {/* Sort dropdown */}
-            {!loading && data && (
-              <select
-                value={sortOrder}
-                onChange={(e) => handleSortChange(e.target.value as SortOrder)}
-                className="text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-1.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                <option value="manual">{t('sortManual')}</option>
-                <option value="progress-desc">{t('sortProgressDesc')}</option>
-                <option value="progress-asc">{t('sortProgressAsc')}</option>
-                <option value="alpha">{t('sortAlpha')}</option>
-              </select>
-            )}
-            <button
-              onClick={() => fetchData({ force: true })}
-              disabled={loading}
-              className="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
-            >
-              {loading ? tc('loading') : tc('refresh')}
-            </button>
-          </div>
-        </div>
-
+    <div className="space-y-6">
         {/* Error state */}
         {error && (
           <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl flex items-center justify-between">
@@ -378,7 +341,7 @@ export default function DashboardClient() {
 
         {/* Gold price widget — shown whenever user has any gold investment */}
         {!loading && data?.netWorth.hasGold && (
-          <div className="mb-6 rounded-xl overflow-hidden border border-amber-100 dark:border-amber-800/30">
+          <div className="mb-6 rounded-xl overflow-hidden border border-amber-200 dark:border-amber-800/30 bg-gradient-to-r from-amber-50 to-amber-100 dark:from-amber-900/10 dark:to-amber-900/5">
             <GoldPriceWidget onRefresh={() => fetchData({ force: true })} />
           </div>
         )}
@@ -386,14 +349,33 @@ export default function DashboardClient() {
         {/* Dashboard content */}
         {!loading && data && !isEmpty && (
           <div className="space-y-8">
-            {/* Net Worth */}
-            <NetWorthCard {...data.netWorth} />
+            {/* Net Worth + Asset Allocation */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2">
+                <NetWorthCard {...data.netWorth} />
+              </div>
+              {allocationTotals && (
+                <AssetAllocationPie
+                  {...allocationTotals}
+                  totalAssets={data.netWorth.totalAssets}
+                />
+              )}
+            </div>
 
             {/* Goals */}
             {sortedGoals.length > 0 && (
               <section>
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{t('sectionGoals')}</h2>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('sectionGoals')}</h2>
+                  <Link
+                    href="/settings?tab=goals"
+                    className="inline-flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-lg hover:bg-gray-700 dark:hover:bg-gray-200 transition-colors"
+                  >
+                    <Plus className="h-4 w-4" />
+                    {t('addGoalBtn')}
+                  </Link>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                   {sortedGoals.map((goal) => (
                     <GoalCard
                       key={goal.goalId}
@@ -420,17 +402,26 @@ export default function DashboardClient() {
             {/* Insurance */}
             {data.insurance.length > 0 && (
               <section>
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{t('sectionInsurance')}</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {data.insurance.map((ins) => (
-                    <InsuranceCard key={ins.insuranceId} {...ins} onSavingsChange={() => fetchData({ force: true })} />
-                  ))}
+                <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
+                  <div className="flex items-center justify-between mb-5">
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('sectionInsurance')}</h2>
+                    <Link
+                      href="/settings?tab=insurance"
+                      className="text-sm font-medium px-3 py-1.5 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                    >
+                      {t('manageInsurance')}
+                    </Link>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {data.insurance.map((ins) => (
+                      <InsuranceCard key={ins.insuranceId} {...ins} onSavingsChange={() => fetchData({ force: true })} />
+                    ))}
+                  </div>
                 </div>
               </section>
             )}
           </div>
         )}
-      </div>
 
       {/* Fund Detail Modal */}
       {fundDetailId && detailFund && (

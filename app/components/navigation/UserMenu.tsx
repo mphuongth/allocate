@@ -34,7 +34,7 @@ export default function UserMenu() {
     <button
       onClick={handleLogout}
       aria-label={t('logoutLabel')}
-      className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+      className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
     >
       <LogOut size={15} />
       <span className="hidden sm:inline">{t('logoutLabel')}</span>

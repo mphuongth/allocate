@@ -1,10 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { TrendingUp, ArrowUpRight, ArrowDownRight, Minus, RefreshCw } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 
 interface GoldPriceData {
   price_per_chi: number
+  previous_price_per_chi: number | null
   updated_at: string
 }
 
@@ -59,32 +61,72 @@ export default function GoldPriceWidget({ onRefresh }: Props) {
     setLoading(false)
   }
 
+  const changePct = priceData?.previous_price_per_chi && priceData.previous_price_per_chi > 0
+    ? ((priceData.price_per_chi - priceData.previous_price_per_chi) / priceData.previous_price_per_chi) * 100
+    : null
+
+  const changePositive = changePct !== null && changePct > 0
+  const changeNegative = changePct !== null && changePct < 0
+
   return (
-    <div className="flex items-center justify-between px-5 py-3 bg-amber-50 dark:bg-amber-900/10 border-b border-amber-100 dark:border-amber-800/30">
-      <div className="flex items-center gap-2 min-w-0">
-        <span className="text-amber-600 dark:text-amber-400 text-sm">{t('goldPrice')}</span>
-        {priceData ? (
-          <span className="font-semibold text-amber-800 dark:text-amber-200 text-sm">
-            {fmt(priceData.price_per_chi)} {t('goldPriceUnit')}
-          </span>
-        ) : (
-          <span className="text-amber-400 dark:text-amber-600 text-sm">{t('goldPriceNotUpdated')}</span>
-        )}
-        {priceData && (
-          <span className="text-xs text-amber-500 dark:text-amber-500 hidden sm:inline">
-            · {timeAgo(priceData.updated_at)}
-          </span>
-        )}
-      </div>
-      <div className="flex items-center gap-2 ml-3 flex-shrink-0">
-        {error && <span className="text-xs text-red-500">{error}</span>}
-        <button
-          onClick={handleRefresh}
-          disabled={loading}
-          className="text-xs px-2.5 py-1 border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 rounded-md hover:bg-amber-100 dark:hover:bg-amber-900/30 disabled:opacity-50 whitespace-nowrap"
-        >
-          {loading ? t('goldPriceRefreshing') : t('goldPriceRefresh')}
-        </button>
+    <div className="bg-gradient-to-r from-amber-50 to-amber-100 dark:from-amber-900/10 dark:to-amber-900/20 border border-amber-200 dark:border-amber-800/30 rounded-xl px-6 py-4">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        {/* Left: icon + price info */}
+        <div className="flex items-center gap-4">
+          {/* Gold icon — matches redesign */}
+          <div className="h-10 w-10 rounded-full bg-amber-500 flex items-center justify-center flex-shrink-0">
+            <TrendingUp className="h-5 w-5 text-white" />
+          </div>
+
+          <div>
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+              {t('goldPrice')}
+            </p>
+            {priceData ? (
+              <div className="flex items-baseline gap-2 mt-0.5">
+                <span className="text-lg font-semibold text-amber-900 dark:text-amber-100">
+                  {fmt(priceData.price_per_chi)}
+                </span>
+                <span className="text-xs text-amber-700 dark:text-amber-400">{t('goldPriceUnit')}</span>
+              </div>
+            ) : (
+              <span className="text-sm text-amber-500 dark:text-amber-600">{t('goldPriceNotUpdated')}</span>
+            )}
+            {priceData && (
+              <p className="text-xs text-amber-700 dark:text-amber-500 mt-0.5">
+                {timeAgo(priceData.updated_at)}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Right: daily change + refresh */}
+        <div className="flex items-center gap-4 flex-shrink-0">
+          {changePct !== null && (
+            <div className="text-right">
+              <span className={`inline-flex items-center gap-0.5 text-sm font-medium ${
+                changePositive ? 'text-green-600 dark:text-green-400' :
+                changeNegative ? 'text-red-500 dark:text-red-400' :
+                'text-gray-500 dark:text-gray-400'
+              }`}>
+                {changePositive ? <ArrowUpRight className="h-4 w-4" /> : changeNegative ? <ArrowDownRight className="h-4 w-4" /> : <Minus className="h-4 w-4" />}
+                {changePct >= 0 ? '+' : ''}{changePct.toFixed(2)}%
+              </span>
+              <p className="text-xs text-amber-700 dark:text-amber-500 mt-0.5">{t('goldDailyChange')}</p>
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            {error && <span className="text-xs text-red-500">{error}</span>}
+            <button
+              onClick={handleRefresh}
+              disabled={loading}
+              className="inline-flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 rounded-lg hover:bg-amber-200/60 dark:hover:bg-amber-900/30 disabled:opacity-50 whitespace-nowrap transition-colors"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+              {loading ? t('goldPriceRefreshing') : t('goldPriceRefresh')}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   )

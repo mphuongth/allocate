@@ -43,10 +43,22 @@ export async function POST() {
     return NextResponse.json({ error: msg }, { status: 502 })
   }
 
+  // Read current price before overwriting so we can store it as previous
+  const { data: existing } = await supabase
+    .from('gold_price_settings')
+    .select('price_per_chi')
+    .eq('user_id', user.id)
+    .single()
+
   const { data, error } = await supabase
     .from('gold_price_settings')
-    .upsert({ user_id: user.id, price_per_chi: price, updated_at: new Date().toISOString() })
-    .select('price_per_chi, updated_at')
+    .upsert({
+      user_id: user.id,
+      price_per_chi: price,
+      previous_price_per_chi: existing?.price_per_chi ?? null,
+      updated_at: new Date().toISOString(),
+    })
+    .select('price_per_chi, previous_price_per_chi, updated_at')
     .single()
 
   if (error || !data) {

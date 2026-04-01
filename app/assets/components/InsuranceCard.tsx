@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Trash2, TriangleAlert } from 'lucide-react'
+import { Wallet, Trash2, TriangleAlert } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 
 const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
@@ -53,11 +53,11 @@ interface Props {
   onSavingsChange?: () => void
 }
 
-const statusClassName: Record<DisplayStatus | 'completed', { className: string; icon?: boolean }> = {
-  not_due_yet: { className: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' },
-  due: { className: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400' },
-  overdue: { className: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400', icon: true },
-  completed: { className: 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400' },
+const STATUS_BADGE: Record<DisplayStatus | 'completed', { cls: string; icon?: boolean }> = {
+  not_due_yet: { cls: 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300' },
+  due:         { cls: 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300' },
+  overdue:     { cls: 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300', icon: true },
+  completed:   { cls: 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400' },
 }
 
 export default function InsuranceCard({
@@ -69,14 +69,15 @@ export default function InsuranceCard({
 
   const isCompleted = status === 'completed'
   const displayStatus: DisplayStatus | 'completed' = isCompleted ? 'completed' : computeDisplayStatus(nextPaymentDate)
-  const cfg = statusClassName[displayStatus]
-  const statusLabelMap: Record<DisplayStatus | 'completed', string> = {
+  const badge = STATUS_BADGE[displayStatus]
+  const statusLabel: Record<DisplayStatus | 'completed', string> = {
     not_due_yet: t('statusNotDue'),
-    due: t('statusDue'),
-    overdue: t('statusOverdue'),
-    completed: t('statusCompleted'),
+    due:         t('statusDue'),
+    overdue:     t('statusOverdue'),
+    completed:   t('statusCompleted'),
   }
   const showMarkAsPaid = status === 'upcoming' || status === 'overdue'
+  const monthlyFee = Math.round(annualPremium / 12)
 
   const [localAmountSaved, setLocalAmountSaved] = useState(amountSaved)
   const localProgress = Math.min(annualPremium > 0 ? (localAmountSaved / annualPremium) * 100 : 0, 100)
@@ -105,9 +106,7 @@ export default function InsuranceCard({
 
   useEffect(() => {
     if (!showConfirm) return
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') setShowConfirm(false)
-    }
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') setShowConfirm(false) }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [showConfirm])
@@ -173,89 +172,100 @@ export default function InsuranceCard({
   }
 
   return (
-    <div className={`bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 ${isCompleted ? 'opacity-60' : ''}`}>
-      {/* Header */}
+    <div className={`rounded-xl border p-5 transition-opacity ${
+      isCompleted
+        ? 'opacity-60 bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700'
+        : 'bg-violet-50 dark:bg-violet-900/10 border-violet-100 dark:border-violet-800/30'
+    }`}>
+      {/* Header — name + status badge */}
       <div className="flex items-start justify-between mb-1">
-        <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">{insuranceName}</h3>
-        <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${cfg.className}`}>
-          {cfg.icon && <TriangleAlert size={11} />}
-          {statusLabelMap[displayStatus]}
+        <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 leading-tight">{insuranceName}</h3>
+        <span className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full flex-shrink-0 ml-3 ${badge.cls}`}>
+          {badge.icon && <TriangleAlert size={10} />}
+          {statusLabel[displayStatus]}
         </span>
       </div>
 
+      {/* Coverage type pill */}
       {coverageType && (
-        <p className="text-xs text-gray-400 dark:text-gray-500 mb-3">{coverageType}</p>
+        <span className="inline-block mb-4 text-xs px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
+          {coverageType}
+        </span>
       )}
 
-      <div className="grid grid-cols-2 gap-3 mb-3 text-xs">
-        <div>
-          <p className="text-gray-400 dark:text-gray-500 mb-0.5">{t('annualFeeLabel')}</p>
-          <p className="font-medium text-gray-800 dark:text-gray-200">{fmt(annualPremium)}</p>
+      {/* Annual / Monthly */}
+      <div className="space-y-2 text-sm mb-4">
+        <div className="flex items-center justify-between">
+          <span className="text-gray-500 dark:text-gray-400">{t('annualFeeLabel')}:</span>
+          <span className="font-medium text-gray-900 dark:text-gray-100">{fmt(annualPremium)}</span>
         </div>
-        <div>
-          <p className="text-gray-400 dark:text-gray-500 mb-0.5">{t('savedLabel')}</p>
-          <p className="font-medium text-gray-800 dark:text-gray-200">{fmt(localAmountSaved)}</p>
+        <div className="flex items-center justify-between">
+          <span className="text-gray-500 dark:text-gray-400">{t('monthlyFeeLabel')}:</span>
+          <span className="font-medium text-gray-900 dark:text-gray-100">{fmt(monthlyFee)}</span>
         </div>
       </div>
 
-      <div>
-        <div className="flex items-center justify-between text-xs text-gray-400 dark:text-gray-500 mb-1">
-          <span>{t('savingsProgressLabel')}</span>
-          <span>{Math.round(localProgress)}%</span>
+      {/* Savings + progress */}
+      <div className="space-y-2 mb-3">
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-gray-500 dark:text-gray-400">{t('savedLabel')}:</span>
+          <span className="text-sm font-bold text-violet-600 dark:text-violet-400">{fmt(localAmountSaved)}</span>
         </div>
-        <div className="h-1.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+        <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
           <div
-            className={`h-full rounded-full ${isCompleted ? 'bg-gray-400 dark:bg-gray-500' : 'bg-indigo-500'}`}
+            className={`h-full rounded-full transition-all ${isCompleted ? 'bg-gray-400' : 'bg-gray-900 dark:bg-gray-100'}`}
             style={{ width: `${localProgress}%` }}
           />
         </div>
+        <p className="text-xs text-gray-500 dark:text-gray-400">
+          {Math.round(localProgress)}% {t('ofAnnualFee')}
+        </p>
       </div>
 
+      {/* Next / last payment date */}
       {nextPaymentDate && !isCompleted && (
-        <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
           {t('nextPaymentLabel', { date: fmtDate(nextPaymentDate) })}
         </p>
       )}
       {lastPaymentDate && (
-        <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+        <p className="text-xs text-gray-400 dark:text-gray-500 mb-3">
           {t('lastPaymentLabel', { date: fmtDate(lastPaymentDate) })}
         </p>
       )}
 
       {/* Toast */}
       {toast && (
-        <p className={`text-xs mt-2 ${toast.type === 'error' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+        <p className={`text-xs mb-2 ${toast.type === 'error' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
           {toast.msg}
         </p>
       )}
 
-      {/* Add Savings */}
-      <div className="border-t border-gray-100 dark:border-gray-700 mt-3 pt-3">
-        <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">{t('addSavingsLabel')}</p>
-        <div className="flex gap-2">
-          <input
-            type="number"
-            value={inputAmount}
-            onChange={(e) => setInputAmount(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-            placeholder={t('savingsAmountPlaceholder')}
-            className="flex-1 min-w-0 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
-          <button
-            onClick={handleAdd}
-            disabled={isLoading}
-            className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 whitespace-nowrap"
-          >
-            {t('addBtn')}
-          </button>
-        </div>
+      {/* Quick save input */}
+      <div className="flex gap-2">
+        <input
+          type="number"
+          value={inputAmount}
+          onChange={(e) => setInputAmount(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+          placeholder={t('savingsAmountPlaceholder')}
+          className="flex-1 min-w-0 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-1.5 text-xs bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500"
+        />
+        <button
+          onClick={handleAdd}
+          disabled={isLoading}
+          className="flex items-center justify-center h-8 w-8 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-lg hover:bg-gray-700 dark:hover:bg-gray-200 disabled:opacity-50 flex-shrink-0 transition-colors"
+          title={t('addBtn')}
+        >
+          <Wallet className="h-4 w-4" />
+        </button>
       </div>
 
-      {/* Savings Records */}
+      {/* Savings records */}
       {savingsList.length > 0 && (
-        <div className="border-t border-gray-100 dark:border-gray-700 mt-3 pt-3">
+        <div className="border-t border-gray-200/60 dark:border-gray-700/60 mt-3 pt-3">
           <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">{t('savingsHistoryLabel')}</p>
-          <ul className="space-y-1.5">
+          <ul className="space-y-1">
             {savingsList.map((s) => (
               <li key={s.id} className="flex items-center justify-between">
                 <span className="text-xs text-gray-700 dark:text-gray-300">{fmt(s.amount_saved_vnd)}</span>
@@ -265,7 +275,7 @@ export default function InsuranceCard({
                   className="text-gray-300 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-400 disabled:opacity-40 transition-colors"
                   aria-label="Delete"
                 >
-                  <Trash2 size={13} />
+                  <Trash2 size={12} />
                 </button>
               </li>
             ))}
@@ -275,17 +285,17 @@ export default function InsuranceCard({
 
       {/* Mark as Paid */}
       {showMarkAsPaid && (
-        <div className="border-t border-gray-100 dark:border-gray-700 mt-3 pt-3">
+        <div className="border-t border-gray-200/60 dark:border-gray-700/60 mt-3 pt-3">
           <button
             onClick={() => setShowConfirm(true)}
-            className="w-full py-2 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 transition-colors"
+            className="w-full py-2 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-xs font-medium rounded-lg hover:bg-gray-700 dark:hover:bg-gray-200 transition-colors"
           >
             {t('markPaidBtn')}
           </button>
         </div>
       )}
 
-      {/* Confirmation Dialog */}
+      {/* Confirmation dialog */}
       {showConfirm && (
         <div
           className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
@@ -296,7 +306,7 @@ export default function InsuranceCard({
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
               {t('markPaidMessage', { name: insuranceName })}
             </p>
-            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 mb-4 border-l-4 border-indigo-500">
+            <div className="bg-violet-50 dark:bg-violet-900/20 rounded-lg p-3 mb-4 border-l-4 border-violet-500">
               <p className="text-xs text-gray-700 dark:text-gray-300 font-medium">{insuranceName}</p>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t('annualPayment', { amount: fmt(annualPremium) })}</p>
             </div>
@@ -312,7 +322,7 @@ export default function InsuranceCard({
               <button
                 onClick={handleMarkAsPaid}
                 disabled={markPaidLoading}
-                className="flex-1 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                className="flex-1 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {markPaidLoading ? (
                   <>

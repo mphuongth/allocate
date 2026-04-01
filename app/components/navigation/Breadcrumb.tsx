@@ -5,8 +5,8 @@ import { usePathname } from 'next/navigation'
 import { ChevronRight } from 'lucide-react'
 
 const BREADCRUMB_MAP: Record<string, { label: string }> = {
-  '/dashboard': { label: 'Assets Dashboard' },
-  '/planning': { label: 'Monthly Planning' },
+  '/dashboard': { label: 'Asset Overview' },
+  '/planning': { label: 'Monthly Plan' },
   '/funds': { label: 'Fund Library' },
   '/settings': { label: 'Settings' },
 }
@@ -33,7 +33,7 @@ export default function Breadcrumb() {
         <span key={crumb.href} className="flex items-center gap-1">
           {i > 0 && <ChevronRight size={12} className="text-gray-400 dark:text-gray-500" />}
           {crumb.current ? (
-            <span aria-current="page" className="text-xs text-gray-400 dark:text-gray-500 font-medium">
+            <span aria-current="page" className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               {crumb.label}
             </span>
           ) : (

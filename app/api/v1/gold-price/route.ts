@@ -8,7 +8,7 @@ export async function GET() {
 
   const { data } = await supabase
     .from('gold_price_settings')
-    .select('price_per_chi, updated_at')
+    .select('price_per_chi, previous_price_per_chi, updated_at')
     .eq('user_id', user.id)
     .single()
 
