@@ -172,10 +172,10 @@ export default function InsuranceCard({
   }
 
   return (
-    <div className={`rounded-xl border p-5 transition-opacity ${
+    <div className={`rounded-xl border shadow-sm p-5 transition-opacity ${
       isCompleted
         ? 'opacity-60 bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700'
-        : 'bg-gradient-to-br from-violet-50 to-purple-50 dark:from-violet-900/20 dark:to-purple-900/10 border-violet-200 dark:border-violet-800/50'
+        : 'bg-gradient-to-br from-violet-100 via-purple-50 to-purple-100 dark:from-violet-900/30 dark:via-purple-900/20 dark:to-purple-900/10 border-violet-300 dark:border-violet-700/60'
     }`}>
       {/* Header */}
       <div className="flex items-start justify-between mb-3">
@@ -199,42 +199,42 @@ export default function InsuranceCard({
       </div>
 
       {/* Annual / Monthly */}
-      <div className="grid grid-cols-2 gap-3 text-sm mb-3">
-        <div>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-0.5">{t('annualFeeLabel')}</p>
-          <p className="font-semibold text-gray-900 dark:text-gray-100">{fmt(annualPremium)}</p>
+      <div className="space-y-2 text-sm mb-3">
+        <div className="flex items-center justify-between">
+          <span className="text-gray-600 dark:text-gray-400">{t('annualFeeLabel')}:</span>
+          <span className="font-medium text-gray-900 dark:text-gray-100">{fmt(annualPremium)}</span>
         </div>
-        <div>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-0.5">{t('monthlyFeeLabel')}</p>
-          <p className="font-semibold text-violet-600 dark:text-violet-400">{fmt(monthlyFee)}</p>
+        <div className="flex items-center justify-between">
+          <span className="text-gray-600 dark:text-gray-400">{t('monthlyFeeLabel')}:</span>
+          <span className="font-medium text-gray-900 dark:text-gray-100">{fmt(monthlyFee)}</span>
         </div>
       </div>
 
       {/* Savings progress */}
-      <div className="border-t border-violet-100 dark:border-violet-800/30 pt-3 space-y-2">
+      <div className="border-t border-violet-200/60 dark:border-violet-700/40 pt-3 space-y-2">
         <div className="flex items-center justify-between">
-          <span className="text-xs text-gray-500 dark:text-gray-400">{t('savedLabel')}</span>
-          <span className="text-sm font-bold text-violet-600 dark:text-violet-400">{fmt(localAmountSaved)}</span>
+          <span className="text-xs text-gray-600 dark:text-gray-400">{t('savedLabel')}:</span>
+          <span className="text-sm font-bold text-violet-700 dark:text-violet-400">{fmt(localAmountSaved)}</span>
         </div>
-        <div className="h-2 bg-white/60 dark:bg-gray-700/60 rounded-full overflow-hidden">
+        <div className="h-2 bg-violet-200/70 dark:bg-violet-800/50 rounded-full overflow-hidden">
           <div
-            className={`h-full rounded-full transition-all ${isCompleted ? 'bg-gray-400' : 'bg-violet-500'}`}
+            className={`h-full rounded-full transition-all ${isCompleted ? 'bg-gray-400' : 'bg-violet-600'}`}
             style={{ width: `${localProgress}%` }}
           />
         </div>
-        <p className="text-xs text-gray-500 dark:text-gray-400">
+        <p className="text-xs text-gray-600 dark:text-gray-400">
           {Math.round(localProgress)}% {t('ofAnnualFee')}
         </p>
       </div>
 
       {/* Next payment date */}
       {nextPaymentDate && !isCompleted && (
-        <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+        <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">
           {t('nextPaymentLabel', { date: fmtDate(nextPaymentDate) })}
         </p>
       )}
       {lastPaymentDate && (
-        <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+        <p className="text-xs text-gray-500 dark:text-gray-500 mt-0.5">
           {t('lastPaymentLabel', { date: fmtDate(lastPaymentDate) })}
         </p>
       )}
@@ -247,7 +247,7 @@ export default function InsuranceCard({
       )}
 
       {/* Quick save input */}
-      <div className="border-t border-violet-100 dark:border-violet-800/30 mt-3 pt-3">
+      <div className="border-t border-violet-200/60 dark:border-violet-700/40 mt-3 pt-3">
         <div className="flex gap-2">
           <input
             type="number"
@@ -255,12 +255,12 @@ export default function InsuranceCard({
             onChange={(e) => setInputAmount(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
             placeholder={t('savingsAmountPlaceholder')}
-            className="flex-1 min-w-0 border border-violet-200 dark:border-violet-700 rounded-lg px-3 py-1.5 text-xs bg-white/80 dark:bg-gray-800/80 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-400"
+            className="flex-1 min-w-0 border border-violet-300 dark:border-violet-700 rounded-lg px-3 py-1.5 text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500"
           />
           <button
             onClick={handleAdd}
             disabled={isLoading}
-            className="flex items-center justify-center h-8 w-8 bg-violet-600 dark:bg-violet-500 text-white rounded-lg hover:bg-violet-700 dark:hover:bg-violet-600 disabled:opacity-50 flex-shrink-0 transition-colors"
+            className="flex items-center justify-center h-8 w-8 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-lg hover:bg-gray-700 dark:hover:bg-gray-200 disabled:opacity-50 flex-shrink-0 transition-colors"
             title={t('addBtn')}
           >
             <Wallet className="h-4 w-4" />
@@ -270,7 +270,7 @@ export default function InsuranceCard({
 
       {/* Savings records */}
       {savingsList.length > 0 && (
-        <div className="border-t border-violet-100 dark:border-violet-800/30 mt-3 pt-3">
+        <div className="border-t border-violet-200/60 dark:border-violet-700/40 mt-3 pt-3">
           <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">{t('savingsHistoryLabel')}</p>
           <ul className="space-y-1">
             {savingsList.map((s) => (
@@ -292,10 +292,10 @@ export default function InsuranceCard({
 
       {/* Mark as Paid */}
       {showMarkAsPaid && (
-        <div className="border-t border-violet-100 dark:border-violet-800/30 mt-3 pt-3">
+        <div className="border-t border-violet-200/60 dark:border-violet-700/40 mt-3 pt-3">
           <button
             onClick={() => setShowConfirm(true)}
-            className="w-full py-2 bg-violet-600 dark:bg-violet-500 text-white text-xs font-medium rounded-lg hover:bg-violet-700 dark:hover:bg-violet-600 transition-colors"
+            className="w-full py-2 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-xs font-medium rounded-lg hover:bg-gray-700 dark:hover:bg-gray-200 transition-colors"
           >
             {t('markPaidBtn')}
           </button>
