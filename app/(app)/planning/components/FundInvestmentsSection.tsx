@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import type { MonthlyPlan, FundInvestment, Fund, Goal } from '../PlanningClient'
 
@@ -118,8 +119,9 @@ export default function FundInvestmentsSection({ plan, investments, funds, goals
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
       <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
-        <h2 className="font-semibold text-gray-900 dark:text-gray-100">{t('fundInvestmentsTitle')}</h2>
-        <button onClick={openAdd} className="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('fundInvestmentsTitle')}</h2>
+        <button onClick={openAdd} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+          <Plus className="h-3.5 w-3.5" />
           {t('addFundInvestment')}
         </button>
       </div>
@@ -128,25 +130,33 @@ export default function FundInvestmentsSection({ plan, investments, funds, goals
         <div className="text-center py-10 text-gray-400 dark:text-gray-500 text-sm">{t('addFundInvestmentDesc')}</div>
       ) : (
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 dark:bg-gray-800">
-            <tr>
+          <thead>
+            <tr className="border-b border-gray-100 dark:border-gray-700">
               {[t('colFund'), t('colDate'), t('colAmount'), t('colUnits'), t('colGoalCol'), tc('actions')].map((h) => (
-                <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">{h}</th>
+                <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{h}</th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+          <tbody className="divide-y divide-gray-50 dark:divide-gray-700/50">
             {investments.map((inv) => (
-              <tr key={inv.transaction_id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+              <tr key={inv.transaction_id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
                 <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{inv.funds?.name ?? '—'}</td>
                 <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{inv.investment_date ?? '—'}</td>
-                <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{fmt(inv.amount_vnd)}</td>
+                <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{fmt(inv.amount_vnd)}</td>
                 <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{inv.units}</td>
-                <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{inv.savings_goals?.goal_name ?? t('unassigned')}</td>
                 <td className="px-4 py-3">
-                  <div className="flex gap-3">
-                    <button onClick={() => openEdit(inv)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">{tc('edit')}</button>
-                    <button onClick={() => setConfirmDelete(inv)} className="text-xs text-red-500 dark:text-red-400 hover:underline">{tc('delete')}</button>
+                  <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${inv.savings_goals ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'}`}>
+                    {inv.savings_goals?.goal_name ?? t('unassigned')}
+                  </span>
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex gap-1">
+                    <button onClick={() => openEdit(inv)} className="h-8 w-8 inline-flex items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                      <Pencil className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                    </button>
+                    <button onClick={() => setConfirmDelete(inv)} className="h-8 w-8 inline-flex items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                      <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
+                    </button>
                   </div>
                 </td>
               </tr>

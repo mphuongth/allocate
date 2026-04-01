@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { Pencil } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import type { MonthlyPlan, InsuranceMember } from '../PlanningClient'
 
@@ -97,24 +98,24 @@ export default function InsuranceSection({ plan, insuranceMembers, onRefresh, on
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
       <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700">
-        <h2 className="font-semibold text-gray-900 dark:text-gray-100">{t('insuranceTitle')}</h2>
-        <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{t('insuranceDesc')}</p>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('insuranceTitle')}</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{t('insuranceDesc')}</p>
       </div>
 
       <table className="w-full text-sm">
-        <thead className="bg-gray-50 dark:bg-gray-800">
-          <tr>
+        <thead>
+          <tr className="border-b border-gray-100 dark:border-gray-700">
             {[t('colMember'), t('colRelationship'), t('colDefault'), t('colThisMonth'), tc('actions')].map((h) => (
-              <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">{h}</th>
+              <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{h}</th>
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+        <tbody className="divide-y divide-gray-50 dark:divide-gray-700/50">
           {insuranceMembers.map((m) => {
             const defaultMonthly = Math.round(m.annual_payment_vnd / 12)
             const hasOverride = m.monthlyOverride != null && m.monthlyOverride !== defaultMonthly
             return (
-              <tr key={m.member_id} className={`hover:bg-gray-50 dark:hover:bg-gray-800 ${m.excluded ? 'opacity-60' : ''}`}>
+              <tr key={m.member_id} className={`hover:bg-gray-50 dark:hover:bg-gray-800/50 ${m.excluded ? 'opacity-60' : ''}`}>
                 <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{m.member_name}</td>
                 <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{m.relationship}</td>
                 <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{fmt(defaultMonthly)}</td>
@@ -125,21 +126,23 @@ export default function InsuranceSection({ plan, insuranceMembers, onRefresh, on
                     </span>
                   ) : (
                     <>
-                      <span className={hasOverride ? 'text-indigo-600 dark:text-indigo-400 font-medium' : 'text-gray-700 dark:text-gray-300'}>
+                      <span className={`font-medium ${hasOverride ? 'text-amber-600 dark:text-amber-400' : 'text-gray-900 dark:text-gray-100'}`}>
                         {fmt(m.monthlyOverride ?? defaultMonthly)}
                       </span>
-                      {hasOverride && <span className="ml-1.5 text-xs text-indigo-400 dark:text-indigo-500">{t('overridden')}</span>}
+                      {hasOverride && <span className="ml-1.5 text-xs text-amber-500 dark:text-amber-400">({t('overridden')})</span>}
                     </>
                   )}
                 </td>
                 <td className="px-4 py-3">
-                  <div className="flex gap-3">
+                  <div className="flex gap-1">
                     {m.excluded ? (
-                      <button onClick={() => handleRestore(m)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">{t('restore')}</button>
+                      <button onClick={() => handleRestore(m)} className="px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">{t('restore')}</button>
                     ) : (
                       <>
-                        <button onClick={() => openEdit(m)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">{tc('edit')}</button>
-                        <button onClick={() => setConfirmSkip(m)} className="text-xs text-red-500 dark:text-red-400 hover:underline">{t('skip')}</button>
+                        <button onClick={() => openEdit(m)} className="h-8 w-8 inline-flex items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                          <Pencil className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                        </button>
+                        <button onClick={() => setConfirmSkip(m)} className="px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">{t('skip')}</button>
                       </>
                     )}
                   </div>
@@ -149,7 +152,7 @@ export default function InsuranceSection({ plan, insuranceMembers, onRefresh, on
           })}
         </tbody>
         <tfoot>
-          <tr className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+          <tr className="border-t border-gray-200 dark:border-gray-700">
             <td colSpan={3} className="px-4 py-3 text-sm font-semibold text-gray-700 dark:text-gray-300">{t('colTotalMonth')}</td>
             <td colSpan={2} className="px-4 py-3 text-sm font-semibold text-gray-900 dark:text-gray-100">{fmt(totalMonthly)}</td>
           </tr>
