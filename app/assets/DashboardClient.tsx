@@ -260,8 +260,7 @@ export default function DashboardClient() {
   const detailFund = fundDetailId ? allFunds.find((f) => f.fundId === fundDetailId) : null
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-      <div className="max-w-6xl mx-auto px-4 py-8">
+    <div className="space-y-6">
         {/* Error state */}
         {error && (
           <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl flex items-center justify-between">
@@ -421,7 +420,6 @@ export default function DashboardClient() {
             )}
           </div>
         )}
-      </div>
 
       {/* Fund Detail Modal */}
       {fundDetailId && detailFund && (
