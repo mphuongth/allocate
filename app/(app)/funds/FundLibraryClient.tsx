@@ -468,7 +468,7 @@ export default function FundLibraryClient() {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                        <span className="font-semibold text-gray-900 dark:text-gray-100">
                           {fund.nav.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                       </td>
