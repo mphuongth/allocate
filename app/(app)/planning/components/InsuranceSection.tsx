@@ -155,8 +155,8 @@ export default function InsuranceSection({ plan, insuranceMembers, onRefresh, on
         </tbody>
         <tfoot>
           <tr className="border-t border-gray-200 dark:border-gray-700">
-            <td colSpan={3} className="px-4 py-3 text-sm font-semibold text-gray-700 dark:text-gray-300">{t('colTotalMonth')}</td>
-            <td colSpan={2} className="px-4 py-3 text-sm font-semibold text-gray-900 dark:text-gray-100">{fmt(totalMonthly)}</td>
+            <td colSpan={3} className="px-4 py-3 text-base font-medium text-gray-900 dark:text-gray-100">{t('colTotalMonth')}</td>
+            <td colSpan={2} className="px-4 py-3 text-lg font-semibold text-gray-900 dark:text-gray-100 text-right">{fmt(totalMonthly)}</td>
           </tr>
         </tfoot>
       </table>
