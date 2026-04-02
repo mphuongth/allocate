@@ -101,7 +101,7 @@ export default function SalaryInput({ plan, month, year, onPlanCreated, onPlanDe
             <button
               onClick={() => setShowConfirm(true)}
               disabled={deleting || saving}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center gap-1.5 px-3 h-9 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
             >
               {deleting ? (
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -123,7 +123,7 @@ export default function SalaryInput({ plan, month, year, onPlanCreated, onPlanDe
               onKeyDown={handleKeyDown}
               disabled={saving}
               placeholder={t('salaryPlaceholder')}
-              className="w-full pl-7 pr-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500 disabled:opacity-60"
+              className="w-full pl-7 pr-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-lg font-medium bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500 disabled:opacity-60"
             />
           </div>
           {saving && (
