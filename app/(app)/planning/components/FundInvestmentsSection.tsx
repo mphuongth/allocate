@@ -143,7 +143,7 @@ export default function FundInvestmentsSection({ plan, investments, funds, goals
           <tbody className="divide-y divide-gray-50 dark:divide-gray-700/50">
             {investments.map((inv) => (
               <tr key={inv.transaction_id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">{inv.funds?.name ?? '—'}</td>
+                <td className="px-4 py-3 text-base font-medium text-gray-900 dark:text-gray-100">{inv.funds?.name ?? '—'}</td>
                 <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{inv.investment_date ?? '—'}</td>
                 <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100 text-right">{fmt(inv.amount_vnd)}</td>
                 <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 text-right">{inv.units}</td>
