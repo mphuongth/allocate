@@ -48,7 +48,7 @@ export default function SettingsClient({ initialTab, initialGoalId }: Props) {
 
       {/* Tabs */}
       <div className="flex flex-col gap-2">
-        <div className="inline-flex h-9 w-fit items-center rounded-xl bg-[#ececf0] dark:bg-gray-800 p-[3px] overflow-x-auto">
+        <div className="grid grid-cols-4 lg:w-auto w-full h-9 items-center rounded-xl bg-[#ececf0] dark:bg-gray-800 p-[3px]">
           {TAB_IDS.map((tabId) => (
             <button
               key={tabId}
