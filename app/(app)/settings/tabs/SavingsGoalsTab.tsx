@@ -222,7 +222,7 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
                 </div>
 
                 {/* Footer */}
-                <div className="flex items-center justify-between pt-2 border-t dark:border-gray-700 text-sm text-gray-500 dark:text-gray-400">
+                <div className="flex items-center justify-between pt-2 border-t border-black/10 dark:border-gray-700 text-sm text-gray-500 dark:text-gray-400">
                   <span>{t('transactions', { count: goal.transactionCount })}</span>
                   <span>{new Date(goal.created_at).toLocaleDateString('vi-VN')}</span>
                 </div>
