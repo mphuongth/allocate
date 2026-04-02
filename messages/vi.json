@@ -51,6 +51,7 @@
     "back": "← Mục tiêu Tiết kiệm",
     "progress": "Tiến độ",
     "transactions": "{count} giao dịch",
+    "totalAcrossGoals": "Tổng tất cả mục tiêu",
     "createModal": "Tạo Mục tiêu",
     "editModal": "Sửa Mục tiêu",
     "deleteModal": "Xóa Mục tiêu",

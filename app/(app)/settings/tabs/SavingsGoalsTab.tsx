@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslations } from 'next-intl'
-import { Plus, Edit, Trash2 } from 'lucide-react'
+import { Plus, Edit, Trash2, TrendingUp } from 'lucide-react'
 import GoalDetailView from './GoalDetailView'
 import ConfirmModal from '@/app/components/ConfirmModal'
 
@@ -235,6 +235,34 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
               </button>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Summary Card */}
+      {goals.length > 0 && (
+        <div className="p-6 rounded-xl border border-violet-200 dark:border-violet-800 bg-gradient-to-br from-violet-50 to-purple-50 dark:from-violet-900/20 dark:to-purple-900/20">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-medium text-violet-900 dark:text-violet-300 mb-2">{t('totalAcrossGoals')}</h3>
+              <div className="flex items-baseline gap-6">
+                <div>
+                  <p className="text-xs text-violet-700 dark:text-violet-400">{t('currentValue')}</p>
+                  <p className="text-3xl font-bold text-violet-900 dark:text-violet-200">
+                    {fmt(goals.reduce((sum, g) => sum + g.totalInvested + g.projectedInterest, 0))}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-violet-700 dark:text-violet-400">{t('interest')}</p>
+                  <p className="text-xl font-semibold text-green-600 dark:text-green-400">
+                    +{fmt(goals.reduce((sum, g) => sum + g.projectedInterest, 0))}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-violet-500 text-white shrink-0">
+              <TrendingUp className="h-8 w-8" />
+            </div>
+          </div>
         </div>
       )}
 

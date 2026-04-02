@@ -51,6 +51,7 @@
     "back": "← Savings Goals",
     "progress": "Progress",
     "transactions": "{count} transactions",
+    "totalAcrossGoals": "Total Across All Goals",
     "createModal": "Create Goal",
     "editModal": "Edit Goal",
     "deleteModal": "Delete Goal",
