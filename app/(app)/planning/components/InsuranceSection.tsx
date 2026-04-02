@@ -118,7 +118,7 @@ export default function InsuranceSection({ plan, insuranceMembers, onRefresh, on
             const hasOverride = m.monthlyOverride != null && m.monthlyOverride !== defaultMonthly
             return (
               <tr key={m.member_id} className={`hover:bg-gray-50 dark:hover:bg-gray-800/50 ${m.excluded ? 'opacity-60' : ''}`}>
-                <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">{m.member_name}</td>
+                <td className="px-4 py-3 text-base font-medium text-gray-900 dark:text-gray-100">{m.member_name}</td>
                 <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{m.relationship}</td>
                 <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 text-right">{fmt(defaultMonthly)}</td>
                 <td className="px-4 py-3 text-right">

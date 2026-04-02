@@ -111,7 +111,7 @@ export default function OtherExpensesSection({ plan, otherExpenses, onRefresh, o
           <tbody className="divide-y divide-gray-50 dark:divide-gray-700/50">
             {otherExpenses.map((item) => (
               <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">{item.description}</td>
+                <td className="px-4 py-3 text-base font-medium text-gray-900 dark:text-gray-100">{item.description}</td>
                 <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100 text-right">{fmt(item.amount_vnd)}</td>
                 <td className="px-4 py-3 text-center">
                   <div className="flex gap-1 justify-center">

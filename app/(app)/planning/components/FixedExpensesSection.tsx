@@ -124,7 +124,7 @@ export default function FixedExpensesSection({ plan, fixedExpenses, onRefresh, o
             const thisMonth = expense.override ?? expense.amount_vnd
             return (
               <tr key={expense.expense_id} className={`hover:bg-gray-50 dark:hover:bg-gray-800/50 ${isSkipped ? 'opacity-60' : ''}`}>
-                <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">{expense.expense_name}</td>
+                <td className="px-4 py-3 text-base font-medium text-gray-900 dark:text-gray-100">{expense.expense_name}</td>
                 <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 text-right">{fmt(expense.amount_vnd)}</td>
                 <td className="px-4 py-3 text-right">
                   {isSkipped ? (
