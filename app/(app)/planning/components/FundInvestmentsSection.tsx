@@ -145,7 +145,7 @@ export default function FundInvestmentsSection({ plan, investments, funds, goals
                 <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{fmt(inv.amount_vnd)}</td>
                 <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{inv.units}</td>
                 <td className="px-4 py-3">
-                  <span className={`inline-block px-2.5 py-0.5 rounded-md text-xs font-medium ${inv.savings_goals ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'}`}>
+                  <span className={`inline-block px-2.5 py-0.5 rounded-md text-xs font-medium ${inv.savings_goals ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900' : 'border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400'}`}>
                     {inv.savings_goals?.goal_name ?? t('unassigned')}
                   </span>
                 </td>
