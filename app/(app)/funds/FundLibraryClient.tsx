@@ -368,13 +368,15 @@ export default function FundLibraryClient() {
       {/* Search */}
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
         <div className="flex items-center gap-4">
-          <input
-            type="text"
-            placeholder="Search by fund name or code..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="flex-1 max-w-md h-9 px-3 py-1 text-base md:text-sm border border-black/10 dark:border-gray-600 rounded-md bg-[#f3f3f5] dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder:text-[#717182] dark:placeholder:text-gray-500 outline-none focus-visible:border-gray-400 focus-visible:ring-2 focus-visible:ring-gray-300 transition-[color,box-shadow]"
-          />
+          <div className="flex-1">
+            <input
+              type="text"
+              placeholder="Search by fund name or code..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full max-w-md h-9 px-3 py-1 text-base md:text-sm border border-black/10 dark:border-gray-600 rounded-md bg-[#f3f3f5] dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder:text-[#717182] dark:placeholder:text-gray-500 outline-none focus-visible:border-gray-400 focus-visible:ring-2 focus-visible:ring-gray-300 transition-[color,box-shadow]"
+            />
+          </div>
           <span className="text-sm text-gray-500 dark:text-gray-400">{filteredFunds.length} funds</span>
         </div>
       </div>
