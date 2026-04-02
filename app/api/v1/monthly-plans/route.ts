@@ -61,10 +61,13 @@ export async function GET(request: NextRequest) {
         .from('plan_other_expenses')
         .select('id, description, amount_vnd, created_at').eq('plan_id', plan.id).order('created_at', { ascending: true }),
     ])
-    // Auto-seed DCA fund entries that don't have a row for this plan yet
+    // Auto-seed DCA fund entries and keep pending rows in sync with current DCA amount
     const allFunds = fundsRes.data ?? []
     const dcaFunds = allFunds.filter((f) => f.is_dca && f.dca_monthly_amount_vnd)
-    const existingFundIds = new Set((invRes.data ?? []).map((i) => i.fund_id))
+    const existingInvestments = invRes.data ?? []
+
+    // Insert rows for DCA funds that have no entry yet for this plan
+    const existingFundIds = new Set(existingInvestments.map((i) => i.fund_id))
     const missingDca = dcaFunds.filter((f) => !existingFundIds.has(f.id))
     if (missingDca.length > 0) {
       const firstOfMonth = `${plan.year}-${String(plan.month).padStart(2, '0')}-01`
@@ -81,6 +84,28 @@ export async function GET(request: NextRequest) {
           is_dca_seeded: true,
         }))
       )
+    }
+
+    // Update pending DCA rows whose amount no longer matches the fund's current DCA setting
+    // (happens when DCA is toggled off→on with a new amount)
+    const staleRows = existingInvestments.filter((inv) => {
+      if (!inv.is_dca_seeded || inv.units !== null) return false
+      const fund = dcaFunds.find((f) => f.id === inv.fund_id)
+      return fund && fund.dca_monthly_amount_vnd !== inv.amount_vnd
+    })
+    if (staleRows.length > 0) {
+      await Promise.all(
+        staleRows.map((inv) => {
+          const fund = dcaFunds.find((f) => f.id === inv.fund_id)!
+          return supabase
+            .from('investment_transactions')
+            .update({ amount_vnd: fund.dca_monthly_amount_vnd })
+            .eq('transaction_id', inv.transaction_id)
+        })
+      )
+    }
+
+    if (missingDca.length > 0 || staleRows.length > 0) {
       const { data: refreshed } = await supabase
         .from('investment_transactions')
         .select('transaction_id, plan_id, fund_id, goal_id, amount_vnd, units, unit_price, investment_date, is_dca_seeded, funds(name, nav), savings_goals(goal_name)')
