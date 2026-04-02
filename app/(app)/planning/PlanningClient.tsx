@@ -24,9 +24,10 @@ export interface FundInvestment {
   fund_id: string
   goal_id: string | null
   amount_vnd: number
-  units: number
-  unit_price: number
+  units: number | null
+  unit_price: number | null
   investment_date: string | null
+  is_dca_seeded: boolean
   funds: { name: string; nav: number } | null
   savings_goals: { goal_name: string } | null
 }

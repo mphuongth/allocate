@@ -12,6 +12,8 @@ type Fund = {
   fund_type: FundType
   nav: number
   nav_source_url: string | null
+  is_dca: boolean
+  dca_monthly_amount_vnd: number | null
   created_at: string
   updated_at: string
 }
@@ -77,6 +79,11 @@ export default function FundLibraryClient() {
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+
+  // Inline DCA state
+  const [dcaAmountEditId, setDcaAmountEditId] = useState<string | null>(null)
+  const [dcaAmountEditValue, setDcaAmountEditValue] = useState('')
+  const [togglingDcaIds, setTogglingDcaIds] = useState<Set<string>>(new Set())
 
   // Toasts
   const [toasts, setToasts] = useState<Toast[]>([])
@@ -217,6 +224,66 @@ export default function FundLibraryClient() {
     }
   }
 
+  async function handleToggleDca(fund: Fund) {
+    const turningOn = !fund.is_dca
+    // Optimistic update
+    setFunds((prev) => prev.map((f) => f.id === fund.id ? { ...f, is_dca: turningOn, dca_monthly_amount_vnd: turningOn ? f.dca_monthly_amount_vnd : null } : f))
+
+    if (turningOn) {
+      setDcaAmountEditId(fund.id)
+      setDcaAmountEditValue('')
+      return // wait for amount input before saving
+    }
+
+    // Turning off — save immediately
+    setTogglingDcaIds((prev) => new Set([...prev, fund.id]))
+    try {
+      const res = await fetch(`/api/funds/${fund.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: fund.name, code: fund.code, fund_type: fund.fund_type, nav: fund.nav, nav_source_url: fund.nav_source_url, is_dca: false, dca_monthly_amount_vnd: null }),
+      })
+      if (!res.ok) throw new Error()
+      bustFundsCache()
+      await loadFunds({ force: true })
+    } catch {
+      setFunds((prev) => prev.map((f) => f.id === fund.id ? { ...f, is_dca: true } : f))
+      addToast('Failed to update DCA', 'error')
+    } finally {
+      setTogglingDcaIds((prev) => { const s = new Set(prev); s.delete(fund.id); return s })
+    }
+  }
+
+  async function handleSaveDcaAmount(fund: Fund) {
+    const amount = Number(dcaAmountEditValue)
+    const valid = dcaAmountEditValue !== '' && !isNaN(amount) && amount > 0
+
+    if (!valid) {
+      // Revert toggle if no valid amount provided
+      setFunds((prev) => prev.map((f) => f.id === fund.id ? { ...f, is_dca: false, dca_monthly_amount_vnd: null } : f))
+      setDcaAmountEditId(null)
+      return
+    }
+
+    setDcaAmountEditId(null)
+    setTogglingDcaIds((prev) => new Set([...prev, fund.id]))
+    try {
+      const res = await fetch(`/api/funds/${fund.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: fund.name, code: fund.code, fund_type: fund.fund_type, nav: fund.nav, nav_source_url: fund.nav_source_url, is_dca: true, dca_monthly_amount_vnd: amount }),
+      })
+      if (!res.ok) throw new Error()
+      bustFundsCache()
+      await loadFunds({ force: true })
+    } catch {
+      setFunds((prev) => prev.map((f) => f.id === fund.id ? { ...f, is_dca: false, dca_monthly_amount_vnd: null } : f))
+      addToast('Failed to update DCA', 'error')
+    } finally {
+      setTogglingDcaIds((prev) => { const s = new Set(prev); s.delete(fund.id); return s })
+    }
+  }
+
   function formatRelativeDate(dateStr: string): string {
     const date = new Date(dateStr)
     const now = new Date()
@@ -324,6 +391,7 @@ export default function FundLibraryClient() {
                     <th className="px-4 py-3 text-left"><SortButton col="code" label={t('colCode')} /></th>
                     <th className="px-4 py-3 text-left"><SortButton col="fund_type" label={t('colType')} /></th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-600 dark:text-gray-400">{t('colNav')}</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-600 dark:text-gray-400">DCA</th>
                     <th className="px-4 py-3 text-right text-sm font-semibold text-gray-600 dark:text-gray-400">{tc('actions')}</th>
                   </tr>
                 </thead>
@@ -342,6 +410,40 @@ export default function FundLibraryClient() {
                         {fund.nav_source_url && fund.updated_at && (
                           <span className="text-xs text-gray-400 ml-1">{formatRelativeDate(fund.updated_at)}</span>
                         )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleDca(fund)}
+                            disabled={togglingDcaIds.has(fund.id)}
+                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none disabled:opacity-50 ${fund.is_dca ? 'bg-indigo-600' : 'bg-gray-300 dark:bg-gray-600'}`}
+                          >
+                            <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transform transition-transform ${fund.is_dca ? 'translate-x-4.5' : 'translate-x-0.5'}`} />
+                          </button>
+                          {fund.is_dca && dcaAmountEditId === fund.id ? (
+                            <input
+                              autoFocus
+                              type="number"
+                              min="1"
+                              step="1"
+                              value={dcaAmountEditValue}
+                              onChange={(e) => setDcaAmountEditValue(e.target.value)}
+                              onBlur={() => handleSaveDcaAmount(fund)}
+                              onKeyDown={(e) => { if (e.key === 'Enter') handleSaveDcaAmount(fund); if (e.key === 'Escape') { setFunds((prev) => prev.map((f) => f.id === fund.id ? { ...f, is_dca: false } : f)); setDcaAmountEditId(null) } }}
+                              placeholder="Amount ₫"
+                              className="w-28 px-2 py-0.5 text-xs border border-indigo-300 dark:border-indigo-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            />
+                          ) : fund.is_dca && fund.dca_monthly_amount_vnd ? (
+                            <button
+                              type="button"
+                              onClick={() => { setDcaAmountEditId(fund.id); setDcaAmountEditValue(String(fund.dca_monthly_amount_vnd)) }}
+                              className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+                            >
+                              {fund.dca_monthly_amount_vnd.toLocaleString('vi-VN')}₫
+                            </button>
+                          ) : null}
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex gap-2 justify-end">
@@ -377,6 +479,39 @@ export default function FundLibraryClient() {
                     <span className={`text-xs px-2 py-1 rounded font-medium ${FUND_TYPE_COLORS[fund.fund_type]}`}>
                       {t(FUND_TYPE_KEYS[fund.fund_type])}
                     </span>
+                  </div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-xs text-gray-500 dark:text-gray-400">DCA</span>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleDca(fund)}
+                      disabled={togglingDcaIds.has(fund.id)}
+                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none disabled:opacity-50 ${fund.is_dca ? 'bg-indigo-600' : 'bg-gray-300 dark:bg-gray-600'}`}
+                    >
+                      <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transform transition-transform ${fund.is_dca ? 'translate-x-4.5' : 'translate-x-0.5'}`} />
+                    </button>
+                    {fund.is_dca && dcaAmountEditId === fund.id ? (
+                      <input
+                        autoFocus
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={dcaAmountEditValue}
+                        onChange={(e) => setDcaAmountEditValue(e.target.value)}
+                        onBlur={() => handleSaveDcaAmount(fund)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleSaveDcaAmount(fund); if (e.key === 'Escape') { setFunds((prev) => prev.map((f) => f.id === fund.id ? { ...f, is_dca: false } : f)); setDcaAmountEditId(null) } }}
+                        placeholder="Amount ₫"
+                        className="w-28 px-2 py-0.5 text-xs border border-indigo-300 dark:border-indigo-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
+                    ) : fund.is_dca && fund.dca_monthly_amount_vnd ? (
+                      <button
+                        type="button"
+                        onClick={() => { setDcaAmountEditId(fund.id); setDcaAmountEditValue(String(fund.dca_monthly_amount_vnd)) }}
+                        className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+                      >
+                        {fund.dca_monthly_amount_vnd.toLocaleString('vi-VN')}₫
+                      </button>
+                    ) : null}
                   </div>
                   <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">
                     NAV: <span className="font-medium">{fund.nav.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
