@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Pencil } from 'lucide-react'
+import { Edit } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import type { MonthlyPlan, FixedExpense } from '../PlanningClient'
 
@@ -111,9 +111,10 @@ export default function FixedExpensesSection({ plan, fixedExpenses, onRefresh, o
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-gray-100 dark:border-gray-700">
-            {[t('colExpense'), t('colDefault'), t('colThisMonth'), tc('actions')].map((h) => (
-              <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{h}</th>
-            ))}
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colExpense')}</th>
+            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colDefault')}</th>
+            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colThisMonth')}</th>
+            <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{tc('actions')}</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-50 dark:divide-gray-700/50">
@@ -123,30 +124,30 @@ export default function FixedExpensesSection({ plan, fixedExpenses, onRefresh, o
             const thisMonth = expense.override ?? expense.amount_vnd
             return (
               <tr key={expense.expense_id} className={`hover:bg-gray-50 dark:hover:bg-gray-800/50 ${isSkipped ? 'opacity-60' : ''}`}>
-                <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{expense.expense_name}</td>
-                <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{fmt(expense.amount_vnd)}</td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">{expense.expense_name}</td>
+                <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 text-right">{fmt(expense.amount_vnd)}</td>
+                <td className="px-4 py-3 text-right">
                   {isSkipped ? (
                     <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
                       {t('skipped')}
                     </span>
                   ) : (
                     <>
-                      <span className={hasOverride ? 'text-amber-600 dark:text-amber-400 font-medium' : 'text-gray-900 dark:text-gray-100 font-medium'}>
+                      <span className={`text-sm font-medium ${hasOverride ? 'text-amber-600 dark:text-amber-400' : 'text-gray-900 dark:text-gray-100'}`}>
                         {fmt(thisMonth)}
                       </span>
-                      {hasOverride && <span className="ml-1.5 text-xs text-amber-500 dark:text-amber-400">({t('overridden')})</span>}
+                      {hasOverride && <div className="text-xs text-amber-500 dark:text-amber-400">({t('overridden')})</div>}
                     </>
                   )}
                 </td>
-                <td className="px-4 py-3">
-                  <div className="flex gap-1">
+                <td className="px-4 py-3 text-center">
+                  <div className="flex gap-1 justify-center">
                     {isSkipped ? (
                       <button onClick={() => handleRestore(expense)} className="px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">{t('restore')}</button>
                     ) : (
                       <>
                         <button onClick={() => openEdit(expense)} className="h-8 w-8 inline-flex items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                          <Pencil className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                          <Edit className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                         </button>
                         <button onClick={() => setConfirmSkip(expense)} className="px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">{t('skip')}</button>
                       </>

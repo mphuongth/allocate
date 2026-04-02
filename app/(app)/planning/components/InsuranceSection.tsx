@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Pencil } from 'lucide-react'
+import { Edit } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import type { MonthlyPlan, InsuranceMember } from '../PlanningClient'
 
@@ -105,9 +105,11 @@ export default function InsuranceSection({ plan, insuranceMembers, onRefresh, on
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-gray-100 dark:border-gray-700">
-            {[t('colMember'), t('colRelationship'), t('colDefault'), t('colThisMonth'), tc('actions')].map((h) => (
-              <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{h}</th>
-            ))}
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colMember')}</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colRelationship')}</th>
+            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colDefault')}</th>
+            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colThisMonth')}</th>
+            <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{tc('actions')}</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-50 dark:divide-gray-700/50">
@@ -116,31 +118,31 @@ export default function InsuranceSection({ plan, insuranceMembers, onRefresh, on
             const hasOverride = m.monthlyOverride != null && m.monthlyOverride !== defaultMonthly
             return (
               <tr key={m.member_id} className={`hover:bg-gray-50 dark:hover:bg-gray-800/50 ${m.excluded ? 'opacity-60' : ''}`}>
-                <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{m.member_name}</td>
-                <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{m.relationship}</td>
-                <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{fmt(defaultMonthly)}</td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">{m.member_name}</td>
+                <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{m.relationship}</td>
+                <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 text-right">{fmt(defaultMonthly)}</td>
+                <td className="px-4 py-3 text-right">
                   {m.excluded ? (
                     <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
                       {t('skipped')}
                     </span>
                   ) : (
                     <>
-                      <span className={`font-medium ${hasOverride ? 'text-amber-600 dark:text-amber-400' : 'text-gray-900 dark:text-gray-100'}`}>
+                      <span className={`text-sm font-medium ${hasOverride ? 'text-amber-600 dark:text-amber-400' : 'text-gray-900 dark:text-gray-100'}`}>
                         {fmt(m.monthlyOverride ?? defaultMonthly)}
                       </span>
-                      {hasOverride && <span className="ml-1.5 text-xs text-amber-500 dark:text-amber-400">({t('overridden')})</span>}
+                      {hasOverride && <div className="text-xs text-amber-500 dark:text-amber-400">({t('overridden')})</div>}
                     </>
                   )}
                 </td>
-                <td className="px-4 py-3">
-                  <div className="flex gap-1">
+                <td className="px-4 py-3 text-center">
+                  <div className="flex gap-1 justify-center">
                     {m.excluded ? (
                       <button onClick={() => handleRestore(m)} className="px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">{t('restore')}</button>
                     ) : (
                       <>
                         <button onClick={() => openEdit(m)} className="h-8 w-8 inline-flex items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                          <Pencil className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                          <Edit className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                         </button>
                         <button onClick={() => setConfirmSkip(m)} className="px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">{t('skip')}</button>
                       </>

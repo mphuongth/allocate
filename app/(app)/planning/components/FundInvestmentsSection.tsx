@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Edit, Trash2 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import type { MonthlyPlan, FundInvestment, Fund, Goal } from '../PlanningClient'
 
@@ -132,30 +132,33 @@ export default function FundInvestmentsSection({ plan, investments, funds, goals
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-100 dark:border-gray-700">
-              {[t('colFund'), t('colDate'), t('colAmount'), t('colUnits'), t('colGoalCol'), tc('actions')].map((h) => (
-                <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{h}</th>
-              ))}
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colFund')}</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colDate')}</th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colAmount')}</th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colUnits')}</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colGoalCol')}</th>
+              <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{tc('actions')}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50 dark:divide-gray-700/50">
             {investments.map((inv) => (
               <tr key={inv.transaction_id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                <td className="px-4 py-3 font-semibold text-gray-900 dark:text-gray-100 text-base">{inv.funds?.name ?? '—'}</td>
-                <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{inv.investment_date ?? '—'}</td>
-                <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{fmt(inv.amount_vnd)}</td>
-                <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{inv.units}</td>
+                <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">{inv.funds?.name ?? '—'}</td>
+                <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{inv.investment_date ?? '—'}</td>
+                <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100 text-right">{fmt(inv.amount_vnd)}</td>
+                <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 text-right">{inv.units}</td>
                 <td className="px-4 py-3">
-                  <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs ${inv.savings_goals ? 'font-medium bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900' : 'font-normal bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'}`}>
+                  <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs ${inv.savings_goals ? 'font-medium bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900' : 'font-normal bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'}`}>
                     {inv.savings_goals?.goal_name ?? t('unassigned')}
                   </span>
                 </td>
-                <td className="px-4 py-3">
-                  <div className="flex gap-1">
+                <td className="px-4 py-3 text-center">
+                  <div className="flex gap-1 justify-center">
                     <button onClick={() => openEdit(inv)} className="h-8 w-8 inline-flex items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                      <Pencil className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                      <Edit className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                     </button>
                     <button onClick={() => setConfirmDelete(inv)} className="h-8 w-8 inline-flex items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                      <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
+                      <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
                     </button>
                   </div>
                 </td>
