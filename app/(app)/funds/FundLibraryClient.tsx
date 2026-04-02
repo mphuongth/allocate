@@ -451,7 +451,7 @@ export default function FundLibraryClient() {
                             {fund.code.substring(0, 2)}
                           </div>
                           <div>
-                            <p className="font-medium text-gray-900 dark:text-gray-100 text-sm">{fund.name}</p>
+                            <p className="font-medium text-gray-900 dark:text-gray-100">{fund.name}</p>
                             {fund.nav_source_url && fund.updated_at && (
                               <p className="text-xs text-gray-400 mt-0.5">Updated {formatRelativeDate(fund.updated_at)}</p>
                             )}
