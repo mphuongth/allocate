@@ -353,7 +353,7 @@ export default function FundLibraryClient() {
           <button
             onClick={handleRefreshNav}
             disabled={refreshing || !funds.some(f => f.nav_source_url)}
-            className="h-9 px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="h-9 px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm font-medium rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {refreshing ? t('refreshingNav') : t('refreshNav')}
           </button>
