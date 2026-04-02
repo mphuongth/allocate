@@ -175,7 +175,7 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {goals.map((goal) => (
-            <div key={goal.goal_id} className="bg-white dark:bg-gray-900 rounded-xl border-2 border-gray-100 dark:border-gray-700 p-5 hover:shadow-lg hover:border-violet-200 dark:hover:border-violet-700 transition-all cursor-pointer">
+            <div key={goal.goal_id} className="bg-white dark:bg-gray-900 rounded-xl border-2 border-black/10 dark:border-gray-700 p-5 hover:shadow-lg hover:border-violet-200 dark:hover:border-violet-700 transition-all cursor-pointer">
               {/* Header */}
               <div className="flex items-start justify-between mb-4">
                 <div className="flex-1 min-w-0">
