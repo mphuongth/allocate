@@ -23,8 +23,8 @@ export default function AllocationSummary({ plan, investments, savings, fixedExp
   const t = useTranslations('planning')
   if (!plan) {
     return (
-      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-5">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">{t('summaryTitle')}</h2>
+      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{t('summaryTitle')}</h2>
         <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-6">{t('enterSalary')}</p>
       </div>
     )
@@ -75,91 +75,96 @@ export default function AllocationSummary({ plan, investments, savings, fixedExp
   const pct = (n: number) => salary > 0 ? `${Math.round((n / salary) * 100)}%` : '—'
 
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden sticky top-6">
-      <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('summaryTitle')}</h2>
-        <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{t('salaryRow', { amount: fmt(salary) })}</p>
-      </div>
+    <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 sticky top-6">
+      <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{t('summaryTitle')}</h2>
 
-      <div className="p-5 space-y-4">
-        {/* Goal rows */}
-        <div>
-          <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-wide">{t('colGoal')}</p>
-          <div className="space-y-2">
-            {goalRows.length === 0 ? (
-              <p className="text-sm text-gray-400 dark:text-gray-500">{t('noAllocations')}</p>
-            ) : (
-              goalRows.map((row) => (
-                <div key={row.label} className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600 dark:text-gray-400">{row.label}</span>
-                  <div className="text-right">
-                    <span className="font-medium text-gray-900 dark:text-gray-100">{fmt(row.total)}</span>
-                    <span className="text-gray-500 dark:text-gray-400 ml-2">{pct(row.total)}</span>
+      <div className="space-y-4">
+        {/* Salary */}
+        <div className="pb-4 border-b border-gray-200 dark:border-gray-700">
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t('salaryLabel')}</p>
+          <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{fmt(salary)}</p>
+        </div>
+
+        <div className="space-y-3">
+          {/* Goal rows */}
+          <div>
+            <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">{t('colGoal')}</p>
+            <div className="space-y-2">
+              {goalRows.length === 0 ? (
+                <p className="text-sm text-gray-400 dark:text-gray-500">{t('noAllocations')}</p>
+              ) : (
+                goalRows.map((row) => (
+                  <div key={row.label} className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600 dark:text-gray-400">{row.label}</span>
+                    <div className="text-right">
+                      <span className="font-medium text-gray-900 dark:text-gray-100">{fmt(row.total)}</span>
+                      <span className="text-gray-500 dark:text-gray-400 ml-2">{pct(row.total)}</span>
+                    </div>
                   </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Expenses */}
+          <div className="space-y-2 pt-3 border-t border-gray-200 dark:border-gray-700">
+            {fixedExpenses.length > 0 && (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-600 dark:text-gray-400">{t('rowFixedExpenses')}</span>
+                <div className="text-right">
+                  <span className="font-medium text-gray-900 dark:text-gray-100">{fmt(totalFixed)}</span>
+                  <span className="text-gray-500 dark:text-gray-400 ml-2">{pct(totalFixed)}</span>
                 </div>
-              ))
+              </div>
+            )}
+            {insuranceMembers.length > 0 && (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-600 dark:text-gray-400">{t('rowInsurance')}</span>
+                <div className="text-right">
+                  <span className="font-medium text-gray-900 dark:text-gray-100">{fmt(totalInsurance)}</span>
+                  <span className="text-gray-500 dark:text-gray-400 ml-2">{pct(totalInsurance)}</span>
+                </div>
+              </div>
+            )}
+            {otherExpenses.length > 0 && (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-600 dark:text-gray-400">{t('rowOtherExpenses')}</span>
+                <div className="text-right">
+                  <span className="font-medium text-gray-900 dark:text-gray-100">{fmt(totalOther)}</span>
+                  <span className="text-gray-500 dark:text-gray-400 ml-2">{pct(totalOther)}</span>
+                </div>
+              </div>
             )}
           </div>
-        </div>
 
-        {/* Expenses */}
-        <div className="space-y-2 pt-3 border-t border-gray-100 dark:border-gray-700">
-          {fixedExpenses.length > 0 && (
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-600 dark:text-gray-400">{t('rowFixedExpenses')}</span>
+          {/* Total + Remaining */}
+          <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between mb-2">
+              <span className="font-medium text-gray-900 dark:text-gray-100">{t('rowTotal')}</span>
               <div className="text-right">
-                <span className="font-medium text-gray-900 dark:text-gray-100">{fmt(totalFixed)}</span>
-                <span className="text-gray-500 dark:text-gray-400 ml-2">{pct(totalFixed)}</span>
+                <span className="font-semibold text-gray-900 dark:text-gray-100">{fmt(totalAllocated)}</span>
+                <span className="text-gray-500 dark:text-gray-400 ml-2">{pct(totalAllocated)}</span>
               </div>
             </div>
-          )}
-          {insuranceMembers.length > 0 && (
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-600 dark:text-gray-400">{t('rowInsurance')}</span>
-              <div className="text-right">
-                <span className="font-medium text-gray-900 dark:text-gray-100">{fmt(totalInsurance)}</span>
-                <span className="text-gray-500 dark:text-gray-400 ml-2">{pct(totalInsurance)}</span>
-              </div>
-            </div>
-          )}
-          {otherExpenses.length > 0 && (
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-600 dark:text-gray-400">{t('rowOtherExpenses')}</span>
-              <div className="text-right">
-                <span className="font-medium text-gray-900 dark:text-gray-100">{fmt(totalOther)}</span>
-                <span className="text-gray-500 dark:text-gray-400 ml-2">{pct(totalOther)}</span>
-              </div>
-            </div>
-          )}
-        </div>
 
-        {/* Total + Remaining */}
-        <div className="pt-3 border-t border-gray-100 dark:border-gray-700">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('rowTotal')}</span>
-            <div className="text-right">
-              <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{fmt(totalAllocated)}</span>
-              <span className="text-sm text-gray-500 dark:text-gray-400 ml-2">{pct(totalAllocated)}</span>
-            </div>
-          </div>
-
-          <div className={`flex items-center justify-between p-3 rounded-lg ${remaining >= 0 ? 'bg-green-50 dark:bg-green-900/20' : 'bg-red-50 dark:bg-red-900/20'}`}>
-            <span className={`text-sm font-semibold ${remaining >= 0 ? 'text-green-900 dark:text-green-400' : 'text-red-900 dark:text-red-400'}`}>
-              {t('rowRemaining')}
-            </span>
-            <div className="text-right">
-              <span className={`text-sm font-bold ${remaining >= 0 ? 'text-green-900 dark:text-green-400' : 'text-red-900 dark:text-red-400'}`}>
-                {fmt(remaining)}
+            <div className={`flex items-center justify-between p-3 rounded-lg ${remaining >= 0 ? 'bg-green-50 dark:bg-green-900/20' : 'bg-red-50 dark:bg-red-900/20'}`}>
+              <span className={`font-semibold ${remaining >= 0 ? 'text-green-900 dark:text-green-400' : 'text-red-900 dark:text-red-400'}`}>
+                {t('rowRemaining')}
               </span>
-              <span className={`text-sm ml-2 ${remaining >= 0 ? 'text-green-700 dark:text-green-500' : 'text-red-700 dark:text-red-400'}`}>
-                {pct(Math.abs(remaining))}
-              </span>
+              <div className="text-right">
+                <span className={`font-bold ${remaining >= 0 ? 'text-green-900 dark:text-green-400' : 'text-red-900 dark:text-red-400'}`}>
+                  {fmt(remaining)}
+                </span>
+                <span className={`ml-2 ${remaining >= 0 ? 'text-green-700 dark:text-green-500' : 'text-red-700 dark:text-red-400'}`}>
+                  {pct(Math.abs(remaining))}
+                </span>
+              </div>
             </div>
-          </div>
 
-          {remaining < 0 && (
-            <p className="text-xs text-red-500 dark:text-red-400 text-center mt-2">{t('overAllocated', { amount: fmt(Math.abs(remaining)) })}</p>
-          )}
+            {remaining < 0 && (
+              <p className="text-xs text-red-500 dark:text-red-400 text-center mt-2">{t('overAllocated', { amount: fmt(Math.abs(remaining)) })}</p>
+            )}
+          </div>
         </div>
       </div>
     </div>
