@@ -82,7 +82,7 @@ export default function InsuranceSection({ plan, insuranceMembers, onRefresh, on
   if (insuranceMembers.length === 0) {
     return (
       <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
+        <div className="px-5 py-4">
           <h2 className="font-semibold text-gray-900 dark:text-gray-100">{t('insuranceTitle')}</h2>
         </div>
         <div className="text-center py-10 text-gray-400 dark:text-gray-500 text-sm">{t('insuranceDesc')}</div>
@@ -97,14 +97,14 @@ export default function InsuranceSection({ plan, insuranceMembers, onRefresh, on
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
-      <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
+      <div className="px-5 py-4">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('insuranceTitle')}</h2>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{t('insuranceDesc')}</p>
       </div>
 
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-t border-b border-gray-200 dark:border-gray-700">
+          <tr className="border-b border-gray-200 dark:border-gray-700">
             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colMember')}</th>
             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colRelationship')}</th>
             <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colDefault')}</th>
