@@ -138,13 +138,13 @@ export default function InsuranceSection({ plan, insuranceMembers, onRefresh, on
                 <td className="px-4 py-3 text-center">
                   <div className="flex gap-1 justify-center">
                     {m.excluded ? (
-                      <button onClick={() => handleRestore(m)} className="h-8 px-2 text-xs font-medium text-gray-600 dark:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">{t('restore')}</button>
+                      <button onClick={() => handleRestore(m)} className="h-8 px-2 text-xs font-medium text-gray-900 dark:text-gray-100 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">{t('restore')}</button>
                     ) : (
                       <>
                         <button onClick={() => openEdit(m)} className="h-8 w-8 inline-flex items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
                           <Edit className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                         </button>
-                        <button onClick={() => setConfirmSkip(m)} className="h-8 px-2 text-xs font-medium text-gray-600 dark:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">{t('skip')}</button>
+                        <button onClick={() => setConfirmSkip(m)} className="h-8 px-2 text-xs font-medium text-gray-900 dark:text-gray-100 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">{t('skip')}</button>
                       </>
                     )}
                   </div>
