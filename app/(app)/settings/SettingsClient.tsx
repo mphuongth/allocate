@@ -56,7 +56,7 @@ export default function SettingsClient({ initialTab, initialGoalId }: Props) {
               className={`inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center whitespace-nowrap rounded-xl border px-3 py-1 text-sm font-medium transition-[color,box-shadow] ${
                 activeTab === tabId
                   ? 'border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
-                  : 'border-transparent text-[#717182] dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                  : 'border-transparent text-gray-900 dark:text-gray-400'
               }`}
             >
               {t(`tabs.${tabId}`)}
