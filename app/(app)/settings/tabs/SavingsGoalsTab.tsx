@@ -157,8 +157,11 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
         <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-300 rounded-lg text-sm">{successMsg}</div>
       )}
 
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('title')}</h2>
+      <div className="flex items-start justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('title')}</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t('desc')}</p>
+        </div>
         <button onClick={openCreate} className="flex items-center gap-2 h-9 px-4 py-2 bg-gray-950 hover:bg-gray-800 text-white text-sm font-semibold rounded-md transition-colors">
           <Plus className="h-4 w-4" />
           {t('create')}

@@ -50,6 +50,7 @@
     "viewDetails": "Xem Chi tiết",
     "back": "← Mục tiêu Tiết kiệm",
     "progress": "Tiến độ",
+    "desc": "Quản lý mục tiêu tài chính và theo dõi tiến độ",
     "transactions": "{count} giao dịch",
     "totalAcrossGoals": "Tổng tất cả mục tiêu",
     "createModal": "Tạo Mục tiêu",

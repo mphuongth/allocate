@@ -50,6 +50,7 @@
     "viewDetails": "View Details",
     "back": "← Savings Goals",
     "progress": "Progress",
+    "desc": "Manage your financial goals and track progress",
     "transactions": "{count, plural, one {# transaction} other {# transactions}}",
     "totalAcrossGoals": "Total Across All Goals",
     "createModal": "Create Goal",
