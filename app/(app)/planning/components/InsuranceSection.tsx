@@ -127,12 +127,10 @@ export default function InsuranceSection({ plan, insuranceMembers, onRefresh, on
                       {t('skipped')}
                     </span>
                   ) : (
-                    <>
-                      <span className={`text-sm font-medium ${hasOverride ? 'text-amber-600 dark:text-amber-400' : 'text-gray-900 dark:text-gray-100'}`}>
-                        {fmt(m.monthlyOverride ?? defaultMonthly)}
-                      </span>
-                      {hasOverride && <div className="text-xs text-amber-500 dark:text-amber-400">({t('overridden')})</div>}
-                    </>
+                    <div className={`text-sm font-medium ${hasOverride ? 'text-amber-600 dark:text-amber-400' : 'text-gray-900 dark:text-gray-100'}`}>
+                      <div>{fmt(m.monthlyOverride ?? defaultMonthly)}</div>
+                      {hasOverride && <div className="text-xs">{t('overridden')}</div>}
+                    </div>
                   )}
                 </td>
                 <td className="px-4 py-3 text-center">
