@@ -95,30 +95,13 @@ export default function SalaryInput({ plan, month, year, onPlanCreated, onPlanDe
   return (
     <>
       <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-5">
-        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{t('salaryLabel')}</label>
-        {error && <p className="text-red-600 dark:text-red-400 text-sm mb-2">{error}</p>}
-        <div className="flex items-center gap-3">
-          <div className="relative flex-1">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 text-sm font-medium">₫</span>
-            <input
-              type="number"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              onBlur={saveSalary}
-              onKeyDown={handleKeyDown}
-              disabled={saving}
-              placeholder={t('salaryPlaceholder')}
-              className="w-full pl-7 pr-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60"
-            />
-          </div>
-          {saving && (
-            <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-          )}
+        <div className="flex items-center justify-between mb-4">
+          <label className="text-sm font-medium text-gray-900 dark:text-gray-100">{t('salaryLabel')}</label>
           {plan && (
             <button
               onClick={() => setShowConfirm(true)}
               disabled={deleting || saving}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
+              className="px-3 h-9 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
             >
               {deleting ? (
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -126,6 +109,22 @@ export default function SalaryInput({ plan, month, year, onPlanCreated, onPlanDe
                 tc('delete')
               )}
             </button>
+          )}
+        </div>
+        {error && <p className="text-red-600 dark:text-red-400 text-sm mb-2">{error}</p>}
+        <div className="flex items-center gap-3">
+          <input
+            type="number"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onBlur={saveSalary}
+            onKeyDown={handleKeyDown}
+            disabled={saving}
+            placeholder={t('salaryPlaceholder')}
+            className="flex-1 px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-md text-lg font-medium bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500 disabled:opacity-60"
+          />
+          {saving && (
+            <div className="w-5 h-5 border-2 border-violet-600 border-t-transparent rounded-full animate-spin" />
           )}
         </div>
       </div>

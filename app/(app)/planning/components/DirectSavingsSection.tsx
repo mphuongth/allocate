@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { Plus, Edit, Trash2 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import type { MonthlyPlan, DirectSaving, Goal } from '../PlanningClient'
 
@@ -108,9 +109,10 @@ export default function DirectSavingsSection({ plan, savings, goals, onRefresh, 
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
-      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
-        <h2 className="font-semibold text-gray-900 dark:text-gray-100">{t('directSavingsTitle')}</h2>
-        <button onClick={openAdd} className="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
+      <div className="flex items-center justify-between px-5 py-4">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('directSavingsTitle')}</h2>
+        <button onClick={openAdd} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-lg hover:bg-gray-700 dark:hover:bg-gray-200 transition-colors">
+          <Plus className="h-3.5 w-3.5" />
           {t('addSavings')}
         </button>
       </div>
@@ -119,25 +121,36 @@ export default function DirectSavingsSection({ plan, savings, goals, onRefresh, 
         <div className="text-center py-10 text-gray-400 dark:text-gray-500 text-sm">{t('addSavingsDesc')}</div>
       ) : (
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 dark:bg-gray-800">
-            <tr>
-              {[t('colDate'), t('colAmount'), t('colInterest'), t('colExpiry'), t('colGoalCol'), tc('actions')].map((h) => (
-                <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">{h}</th>
-              ))}
+          <thead>
+            <tr className="border-b border-gray-200 dark:border-gray-700">
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colDate')}</th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colAmount')}</th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colInterest')}</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colExpiry')}</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colGoalCol')}</th>
+              <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{tc('actions')}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+          <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
             {savings.map((item) => (
-              <tr key={item.transaction_id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{item.investment_date ? new Date(item.investment_date).toLocaleDateString('vi-VN') : '—'}</td>
-                <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{fmt(item.amount_vnd)}</td>
-                <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{item.interest_rate != null ? `${item.interest_rate}%` : '—'}</td>
-                <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{item.expiry_date ? new Date(item.expiry_date).toLocaleDateString('vi-VN') : '—'}</td>
-                <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{item.savings_goals?.goal_name ?? t('unassigned')}</td>
+              <tr key={item.transaction_id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{item.investment_date ? new Date(item.investment_date).toLocaleDateString('vi-VN') : '—'}</td>
+                <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100 text-right">{fmt(item.amount_vnd)}</td>
+                <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 text-right">{item.interest_rate != null ? `${item.interest_rate}%` : '—'}</td>
+                <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{item.expiry_date ? new Date(item.expiry_date).toLocaleDateString('vi-VN') : '—'}</td>
                 <td className="px-4 py-3">
-                  <div className="flex gap-3">
-                    <button onClick={() => openEdit(item)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">{tc('edit')}</button>
-                    <button onClick={() => setConfirmDelete(item)} className="text-xs text-red-500 dark:text-red-400 hover:underline">{tc('delete')}</button>
+                  <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs ${item.savings_goals ? 'font-medium bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900' : 'font-medium bg-gray-100 text-gray-900 dark:bg-gray-700 dark:text-gray-100'}`}>
+                    {item.savings_goals?.goal_name ?? t('unassigned')}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-center">
+                  <div className="flex gap-1 justify-center">
+                    <button onClick={() => openEdit(item)} className="h-8 w-8 inline-flex items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                      <Edit className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                    </button>
+                    <button onClick={() => setConfirmDelete(item)} className="h-8 w-8 inline-flex items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                      <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
+                    </button>
                   </div>
                 </td>
               </tr>
