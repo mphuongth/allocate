@@ -139,7 +139,7 @@ export default function DirectSavingsSection({ plan, savings, goals, onRefresh, 
                 <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 text-right">{item.interest_rate != null ? `${item.interest_rate}%` : '—'}</td>
                 <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{item.expiry_date ? new Date(item.expiry_date).toLocaleDateString('vi-VN') : '—'}</td>
                 <td className="px-4 py-3">
-                  <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs ${item.savings_goals ? 'font-medium bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900' : 'font-medium bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'}`}>
+                  <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs ${item.savings_goals ? 'font-medium bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900' : 'font-medium bg-gray-100 text-gray-900 dark:bg-gray-700 dark:text-gray-100'}`}>
                     {item.savings_goals?.goal_name ?? t('unassigned')}
                   </span>
                 </td>
