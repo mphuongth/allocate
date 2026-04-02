@@ -616,10 +616,9 @@ export default function FundLibraryClient() {
           <Info className="h-4 w-4" />
         </div>
         <div>
-          <h4 className="font-medium text-blue-900 dark:text-blue-300 text-sm mb-1">About NAV Updates</h4>
+          <h4 className="font-medium text-blue-900 dark:text-blue-300 text-sm mb-1">{t('navInfoTitle')}</h4>
           <p className="text-sm text-blue-800 dark:text-blue-400">
-            NAV (Net Asset Value) is updated daily by fund providers. Click &ldquo;{t('refreshNav')}&rdquo; to fetch the latest prices.
-            Prices are typically updated after market close.
+            {t('navInfoDesc', { refreshNav: t('refreshNav') })}
           </p>
         </div>
       </div>
