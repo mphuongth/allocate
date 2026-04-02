@@ -120,7 +120,7 @@ export default function FundInvestmentsSection({ plan, investments, funds, goals
     <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
       <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('fundInvestmentsTitle')}</h2>
-        <button onClick={openAdd} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+        <button onClick={openAdd} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-lg hover:bg-gray-700 dark:hover:bg-gray-200 transition-colors">
           <Plus className="h-3.5 w-3.5" />
           {t('addFundInvestment')}
         </button>
@@ -140,12 +140,12 @@ export default function FundInvestmentsSection({ plan, investments, funds, goals
           <tbody className="divide-y divide-gray-50 dark:divide-gray-700/50">
             {investments.map((inv) => (
               <tr key={inv.transaction_id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{inv.funds?.name ?? '—'}</td>
+                <td className="px-4 py-3 font-semibold text-gray-900 dark:text-gray-100 text-base">{inv.funds?.name ?? '—'}</td>
                 <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{inv.investment_date ?? '—'}</td>
-                <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{fmt(inv.amount_vnd)}</td>
+                <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{fmt(inv.amount_vnd)}</td>
                 <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{inv.units}</td>
                 <td className="px-4 py-3">
-                  <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${inv.savings_goals ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'}`}>
+                  <span className={`inline-block px-2.5 py-0.5 rounded-md text-xs font-medium ${inv.savings_goals ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'}`}>
                     {inv.savings_goals?.goal_name ?? t('unassigned')}
                   </span>
                 </td>
