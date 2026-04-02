@@ -390,7 +390,9 @@
     "typeRequired": "Fund type is required.",
     "navRequired": "NAV must be greater than 0.",
     "codeExists": "This fund code already exists. Please use a different code.",
-    "error": "An error occurred. Please try again later."
+    "error": "An error occurred. Please try again later.",
+    "navInfoTitle": "About NAV Updates",
+    "navInfoDesc": "NAV (Net Asset Value) is updated daily by fund providers. Click \"{refreshNav}\" to fetch the latest prices. Prices are typically updated after market close."
   },
   "planning": {
     "title": "Monthly Plan",
