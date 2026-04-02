@@ -200,36 +200,38 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
                 </div>
               </div>
 
-              {/* Current value */}
-              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg mb-3">
-                <p className="text-xs text-blue-700 dark:text-blue-400 font-medium uppercase mb-1">{t('currentValue')}</p>
-                <p className="text-2xl font-bold text-blue-900 dark:text-blue-200">{fmt(goal.totalInvested + goal.projectedInterest)}</p>
-              </div>
-
-              {/* Stats grid */}
-              <div className="grid grid-cols-2 gap-2 mb-3">
-                <div className="p-2 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('totalInvested')}</p>
-                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{fmt(goal.totalInvested)}</p>
+              <div className="space-y-3">
+                {/* Current value */}
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                  <p className="text-xs text-blue-700 dark:text-blue-400 font-medium uppercase mb-1">{t('currentValue')}</p>
+                  <p className="text-2xl font-bold text-blue-900 dark:text-blue-200">{fmt(goal.totalInvested + goal.projectedInterest)}</p>
                 </div>
-                <div className="p-2 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('interest')}</p>
-                  <p className={`text-sm font-medium ${goal.projectedInterest >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                    {fmt(goal.projectedInterest)}
-                  </p>
-                </div>
-              </div>
 
-              {/* Footer */}
-              <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400 mb-4">
-                <span>{t('transactions', { count: goal.transactionCount })}</span>
-                <span>{new Date(goal.created_at).toLocaleDateString('vi-VN')}</span>
+                {/* Stats grid */}
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="p-2 bg-gray-50 dark:bg-gray-800 rounded">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('totalInvested')}</p>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{fmt(goal.totalInvested)}</p>
+                  </div>
+                  <div className="p-2 bg-gray-50 dark:bg-gray-800 rounded">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('interest')}</p>
+                    <p className={`font-medium ${goal.projectedInterest >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                      {fmt(goal.projectedInterest)}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <div className="flex items-center justify-between pt-2 border-t dark:border-gray-700 text-sm text-gray-500 dark:text-gray-400">
+                  <span>{t('transactions', { count: goal.transactionCount })}</span>
+                  <span>{new Date(goal.created_at).toLocaleDateString('vi-VN')}</span>
+                </div>
               </div>
 
               {/* View Details */}
               <button
                 onClick={() => selectGoal(goal)}
-                className="w-full h-9 text-sm font-medium text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                className="w-full h-9 mt-4 text-sm font-medium text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
               >
                 {t('viewDetails')}
               </button>
