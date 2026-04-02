@@ -104,7 +104,7 @@ export default function InsuranceSection({ plan, insuranceMembers, onRefresh, on
 
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-gray-200 dark:border-gray-700">
+          <tr className="border-t border-b border-gray-200 dark:border-gray-700">
             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colMember')}</th>
             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colRelationship')}</th>
             <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colDefault')}</th>
@@ -151,13 +151,11 @@ export default function InsuranceSection({ plan, insuranceMembers, onRefresh, on
             )
           })}
         </tbody>
-        <tfoot>
-          <tr className="border-t border-gray-200 dark:border-gray-700">
-            <td colSpan={3} className="px-4 py-3 text-base font-medium text-gray-900 dark:text-gray-100">{t('colTotalMonth')}</td>
-            <td colSpan={2} className="px-4 py-3 text-lg font-semibold text-gray-900 dark:text-gray-100 text-right">{fmt(totalMonthly)}</td>
-          </tr>
-        </tfoot>
       </table>
+      <div className="px-4 mt-4 flex items-center justify-between border-t border-gray-200 dark:border-gray-700 pt-4 pb-4">
+        <span className="text-base font-medium text-gray-900 dark:text-gray-100">{t('colTotalMonth')}</span>
+        <span className="text-lg font-semibold text-gray-900 dark:text-gray-100">{fmt(totalMonthly)}</span>
+      </div>
 
       {/* Edit Override Modal */}
       {editItem && (
