@@ -459,7 +459,7 @@ export default function FundLibraryClient() {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <code className="text-xs font-mono text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">
+                        <code className="text-sm font-mono text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">
                           {fund.code}
                         </code>
                       </td>
