@@ -12,6 +12,8 @@ type Fund = {
   fund_type: FundType
   nav: number
   nav_source_url: string | null
+  is_dca: boolean
+  dca_monthly_amount_vnd: number | null
   created_at: string
   updated_at: string
 }
@@ -73,6 +75,8 @@ export default function FundLibraryClient() {
   const [formType, setFormType] = useState<FundType | ''>('')
   const [formNav, setFormNav] = useState('')
   const [formNavUrl, setFormNavUrl] = useState('')
+  const [formIsDca, setFormIsDca] = useState(false)
+  const [formDcaAmount, setFormDcaAmount] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -117,6 +121,8 @@ export default function FundLibraryClient() {
     setFormType('')
     setFormNav('')
     setFormNavUrl('')
+    setFormIsDca(false)
+    setFormDcaAmount('')
     setFormError(null)
     setSelectedFund(null)
     setModalMode('add')
@@ -128,6 +134,8 @@ export default function FundLibraryClient() {
     setFormType(fund.fund_type)
     setFormNav(String(fund.nav))
     setFormNavUrl(fund.nav_source_url ?? '')
+    setFormIsDca(fund.is_dca)
+    setFormDcaAmount(fund.dca_monthly_amount_vnd ? String(fund.dca_monthly_amount_vnd) : '')
     setFormError(null)
     setSelectedFund(fund)
     setModalMode('edit')
@@ -157,7 +165,15 @@ export default function FundLibraryClient() {
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: formName.trim(), code: formCode.trim(), fund_type: formType, nav: navNum, nav_source_url: formNavUrl.trim() || null }),
+        body: JSON.stringify({
+          name: formName.trim(),
+          code: formCode.trim(),
+          fund_type: formType,
+          nav: navNum,
+          nav_source_url: formNavUrl.trim() || null,
+          is_dca: formIsDca,
+          dca_monthly_amount_vnd: formIsDca && formDcaAmount ? Number(formDcaAmount) : null,
+        }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -330,7 +346,12 @@ export default function FundLibraryClient() {
                 <tbody>
                   {sortedFunds.map((fund) => (
                     <tr key={fund.id} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-                      <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">{fund.name}</td>
+                      <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">
+                        <span>{fund.name}</span>
+                        {fund.is_dca && (
+                          <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 font-medium">DCA</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-sm font-mono text-gray-500 dark:text-gray-400">{fund.code}</td>
                       <td className="px-4 py-3">
                         <span className={`text-xs px-2 py-1 rounded font-medium ${FUND_TYPE_COLORS[fund.fund_type]}`}>
@@ -371,7 +392,12 @@ export default function FundLibraryClient() {
                 <div key={fund.id} className="bg-white dark:bg-gray-900 rounded-lg shadow p-4 border border-gray-100 dark:border-gray-700">
                   <div className="flex items-start justify-between mb-2">
                     <div>
-                      <p className="font-semibold text-gray-900 dark:text-gray-100 text-sm">{fund.name}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-semibold text-gray-900 dark:text-gray-100 text-sm">{fund.name}</p>
+                        {fund.is_dca && (
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 font-medium">DCA</span>
+                        )}
+                      </div>
                       <p className="text-xs font-mono text-gray-500 dark:text-gray-400">{fund.code}</p>
                     </div>
                     <span className={`text-xs px-2 py-1 rounded font-medium ${FUND_TYPE_COLORS[fund.fund_type]}`}>
@@ -475,6 +501,33 @@ export default function FundLibraryClient() {
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                 />
               </div>
+              <div className="flex items-center justify-between py-1">
+                <div>
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">DCA</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500">Auto-add fixed amount each month</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFormIsDca((v) => !v)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 ${formIsDca ? 'bg-indigo-600' : 'bg-gray-300 dark:bg-gray-600'}`}
+                >
+                  <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform ${formIsDca ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
+              </div>
+              {formIsDca && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Monthly DCA Amount (₫)</label>
+                  <input
+                    type="number"
+                    value={formDcaAmount}
+                    onChange={(e) => setFormDcaAmount(e.target.value)}
+                    min="1"
+                    step="1"
+                    placeholder="e.g., 5000000"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                  />
+                </div>
+              )}
             </div>
             <div className="flex gap-3 mt-6">
               <button

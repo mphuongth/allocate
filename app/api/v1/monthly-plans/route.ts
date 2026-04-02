@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     const [invRes, savRes, overridesRes, expRes, insRes, exclRes, insOverridesRes, goalsRes, fundsRes, otherExpRes] = await Promise.all([
       supabase
         .from('investment_transactions')
-        .select('transaction_id, plan_id, fund_id, goal_id, amount_vnd, units, unit_price, investment_date, funds(name, nav), savings_goals(goal_name)')
+        .select('transaction_id, plan_id, fund_id, goal_id, amount_vnd, units, unit_price, investment_date, is_dca_seeded, funds(name, nav), savings_goals(goal_name)')
         .eq('plan_id', plan.id).eq('asset_type', 'fund'),
       supabase
         .from('investment_transactions')
@@ -56,11 +56,38 @@ export async function GET(request: NextRequest) {
         .select('goal_id, goal_name').eq('user_id', user.id).order('created_at', { ascending: false }),
       supabase
         .from('funds')
-        .select('id, name, nav').eq('user_id', user.id).order('name', { ascending: true }),
+        .select('id, name, nav, is_dca, dca_monthly_amount_vnd').eq('user_id', user.id).order('name', { ascending: true }),
       supabase
         .from('plan_other_expenses')
         .select('id, description, amount_vnd, created_at').eq('plan_id', plan.id).order('created_at', { ascending: true }),
     ])
+    // Auto-seed DCA fund entries that don't have a row for this plan yet
+    const allFunds = fundsRes.data ?? []
+    const dcaFunds = allFunds.filter((f) => f.is_dca && f.dca_monthly_amount_vnd)
+    const existingFundIds = new Set((invRes.data ?? []).map((i) => i.fund_id))
+    const missingDca = dcaFunds.filter((f) => !existingFundIds.has(f.id))
+    if (missingDca.length > 0) {
+      const firstOfMonth = `${plan.year}-${String(plan.month).padStart(2, '0')}-01`
+      await supabase.from('investment_transactions').insert(
+        missingDca.map((f) => ({
+          user_id: user.id,
+          plan_id: plan.id,
+          fund_id: f.id,
+          asset_type: 'fund',
+          amount_vnd: f.dca_monthly_amount_vnd,
+          units: null,
+          unit_price: null,
+          investment_date: firstOfMonth,
+          is_dca_seeded: true,
+        }))
+      )
+      const { data: refreshed } = await supabase
+        .from('investment_transactions')
+        .select('transaction_id, plan_id, fund_id, goal_id, amount_vnd, units, unit_price, investment_date, is_dca_seeded, funds(name, nav), savings_goals(goal_name)')
+        .eq('plan_id', plan.id).eq('asset_type', 'fund')
+      invRes.data = refreshed
+    }
+
     return NextResponse.json({
       ...plan,
       fund_investments:        invRes.data ?? [],
