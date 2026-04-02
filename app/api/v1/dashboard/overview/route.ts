@@ -75,7 +75,8 @@ export async function GET() {
   }
 
   const goals = goalsRes.data ?? []
-  const allTxs = txRes.data ?? []
+  // Exclude pending DCA-seeded fund rows (units not yet filled after order matching)
+  const allTxs = (txRes.data ?? []).filter((tx) => !(tx.asset_type === 'fund' && tx.units == null))
   const insuranceMembers = insuranceRes.data ?? []
   const goldPricePerChi: number | null = goldPriceRes.data?.price_per_chi ?? null
 
