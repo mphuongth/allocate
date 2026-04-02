@@ -431,7 +431,9 @@ export default function FundLibraryClient() {
                     <th className="px-6 py-4 text-left"><SortButton col="name" label={t('colName')} /></th>
                     <th className="px-6 py-4 text-left"><SortButton col="code" label={t('colCode')} /></th>
                     <th className="px-6 py-4 text-left"><SortButton col="fund_type" label={t('colType')} /></th>
-                    <th className="px-6 py-4 text-right"><SortButton col="nav" label={t('colNav')} /></th>
+                    <th className="px-6 py-4 text-right">
+                      <div className="flex justify-end"><SortButton col="nav" label={t('colNav')} /></div>
+                    </th>
                     <th className="px-6 py-4 text-left">
                       <span className="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">DCA</span>
                     </th>
