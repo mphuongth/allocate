@@ -320,12 +320,10 @@ export default function FundLibraryClient() {
   const SortButton = ({ col, label }: { col: SortKey; label: string }) => (
     <button
       onClick={() => handleSort(col)}
-      className={`flex items-center gap-1.5 text-xs font-medium uppercase hover:text-gray-700 dark:hover:text-gray-200 transition-colors ${
-        sortBy === col ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400'
-      }`}
+      className="flex items-center gap-1.5 text-xs font-medium uppercase text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
     >
       {label}
-      <ArrowUpDown className={`h-3 w-3 ${sortBy === col ? 'opacity-100' : 'opacity-50'}`} />
+      <ArrowUpDown className="h-3 w-3 opacity-50" />
     </button>
   )
 
