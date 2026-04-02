@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { BarChart3, Calendar, BookOpen, Settings } from 'lucide-react'
+import { LayoutDashboard, Calendar, LineChart, Settings } from 'lucide-react'
 import { useNavigation } from './NavigationContext'
 import { useTranslations } from 'next-intl'
 import LanguageSwitcher from '../LanguageSwitcher'
@@ -19,9 +19,9 @@ export default function Sidebar({ email, initials, onNavClick }: SidebarProps) {
   const t = useTranslations('nav')
 
   const NAV_ITEMS = [
-    { label: t('dashboard'), href: '/dashboard', icon: BarChart3 },
+    { label: t('dashboard'), href: '/dashboard', icon: LayoutDashboard },
     { label: t('planning'), href: '/planning', icon: Calendar },
-    { label: t('funds'), href: '/funds', icon: BookOpen },
+    { label: t('funds'), href: '/funds', icon: LineChart },
     { label: t('settings'), href: '/settings', icon: Settings },
   ]
 
