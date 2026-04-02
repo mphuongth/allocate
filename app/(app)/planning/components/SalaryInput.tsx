@@ -101,7 +101,7 @@ export default function SalaryInput({ plan, month, year, onPlanCreated, onPlanDe
             <button
               onClick={() => setShowConfirm(true)}
               disabled={deleting || saving}
-              className="flex items-center gap-1.5 px-3 h-9 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+              className="px-4 h-10 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
             >
               {deleting ? (
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
