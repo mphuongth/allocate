@@ -508,7 +508,7 @@ export default function FundLibraryClient() {
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => openEditModal(fund)}
-                            className="p-2 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 transition-colors"
+                            className="p-2 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-900 dark:text-gray-100 transition-colors"
                           >
                             <Edit className="h-4 w-4" />
                           </button>
