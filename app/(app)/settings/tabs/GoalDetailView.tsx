@@ -392,16 +392,16 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
 
       {/* Summary */}
       <div className="grid md:grid-cols-3 gap-4 mb-6">
-        <div className="p-6 rounded-xl border border-blue-200 dark:border-blue-800 bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20">
-          <p className="text-sm text-blue-700 dark:text-blue-400 mb-2">{t('currentValue')}</p>
+        <div className="px-6 py-8 rounded-xl border border-blue-200 dark:border-blue-800 bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20">
+          <p className="text-xs uppercase tracking-wide text-blue-700 dark:text-blue-400 mb-2">{t('currentValue')}</p>
           <p className="text-3xl font-bold text-blue-900 dark:text-blue-200">{fmt(totalCurrentValue)}</p>
         </div>
-        <div className="p-6 rounded-xl border border-purple-200 dark:border-purple-800 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20">
-          <p className="text-sm text-purple-700 dark:text-purple-400 mb-2">{t('totalInvested')}</p>
+        <div className="px-6 py-8 rounded-xl border border-purple-200 dark:border-purple-800 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20">
+          <p className="text-xs uppercase tracking-wide text-purple-700 dark:text-purple-400 mb-2">{t('totalInvested')}</p>
           <p className="text-3xl font-bold text-purple-900 dark:text-purple-200">{fmt(totalInvested)}</p>
         </div>
-        <div className={`p-6 rounded-xl border ${totalGain >= 0 ? 'border-green-200 dark:border-green-800 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20' : 'border-red-200 dark:border-red-800 bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-900/20 dark:to-rose-900/20'}`}>
-          <p className={`text-sm mb-2 ${totalGain >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>{t('gainLoss')}</p>
+        <div className={`px-6 py-8 rounded-xl border ${totalGain >= 0 ? 'border-green-200 dark:border-green-800 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20' : 'border-red-200 dark:border-red-800 bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-900/20 dark:to-rose-900/20'}`}>
+          <p className={`text-xs uppercase tracking-wide mb-2 ${totalGain >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>{t('gainLoss')}</p>
           <p className={`text-3xl font-bold ${totalGain >= 0 ? 'text-green-900 dark:text-green-200' : 'text-red-900 dark:text-red-200'}`}>{fmt(totalGain)}</p>
         </div>
       </div>
