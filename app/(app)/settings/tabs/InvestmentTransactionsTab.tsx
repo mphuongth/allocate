@@ -389,15 +389,15 @@ export default function InvestmentTransactionsTab() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-black/10 dark:border-gray-700 text-left">
-                  <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colDate')}</th>
-                  <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colAsset')}</th>
-                  <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colAmount')}</th>
-                  <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colTransaction')}</th>
-                  <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colInterest')}</th>
-                  <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colExpiry')}</th>
-                  <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colGoal')}</th>
-                  <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colNotes')}</th>
-                  <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{tc('actions')}</th>
+                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colDate')}</th>
+                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colAsset')}</th>
+                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colAmount')}</th>
+                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colTransaction')}</th>
+                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colInterest')}</th>
+                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colExpiry')}</th>
+                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colGoal')}</th>
+                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colNotes')}</th>
+                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{tc('actions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/5 dark:divide-gray-700">
