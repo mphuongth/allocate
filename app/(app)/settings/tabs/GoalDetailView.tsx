@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslations } from 'next-intl'
-import { ArrowLeft, Edit, Trash2, Plus } from 'lucide-react'
+import { ArrowLeft, Edit, Trash2, Plus, Unlink } from 'lucide-react'
 import ConfirmModal from '@/app/components/ConfirmModal'
 
 interface Goal {
@@ -468,7 +468,9 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                             <button onClick={() => openFiEdit(row)} className="p-1.5 rounded-md text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
                               <Edit className="h-4 w-4" />
                             </button>
-                            <button onClick={() => handleUnassign(row)} className="text-xs text-amber-600 dark:text-amber-400 hover:underline px-1">{tc('unassign')}</button>
+                            <button onClick={() => handleUnassign(row)} className="p-1.5 rounded-md text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors">
+                              <Unlink className="h-4 w-4" />
+                            </button>
                             <button onClick={() => handleFiDelete(row)} disabled={deletingId === row.transaction_id} className="p-1.5 rounded-md text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50">
                               <Trash2 className="h-4 w-4" />
                             </button>
@@ -532,7 +534,9 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                             <button onClick={() => openTxEdit(row)} className="p-1.5 rounded-md text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
                               <Edit className="h-4 w-4" />
                             </button>
-                            <button onClick={() => handleUnassign(row)} className="text-xs text-amber-600 dark:text-amber-400 hover:underline px-1">{tc('unassign')}</button>
+                            <button onClick={() => handleUnassign(row)} className="p-1.5 rounded-md text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors">
+                              <Unlink className="h-4 w-4" />
+                            </button>
                             <button onClick={() => handleTxDelete(row)} disabled={deletingId === row.transaction_id} className="p-1.5 rounded-md text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50">
                               <Trash2 className="h-4 w-4" />
                             </button>
