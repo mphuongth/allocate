@@ -333,23 +333,21 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <button onClick={onBack} className="p-1.5 rounded-md text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-            <ArrowLeft className="h-5 w-5" />
-          </button>
-          <div>
+      <div className="flex items-center gap-4 mb-6">
+        <button onClick={onBack} className="p-1.5 rounded-md text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+          <ArrowLeft className="h-5 w-5" />
+        </button>
+        <div className="flex-1">
+          <div className="flex items-center gap-3">
             <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">{currentGoal.goal_name}</h2>
-            {currentGoal.description && <p className="text-sm text-gray-500 dark:text-gray-400">{currentGoal.description}</p>}
+            <button onClick={openEditGoal} className="p-1.5 rounded-md text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+              <Edit className="h-4 w-4" />
+            </button>
+            <button onClick={handleDeleteGoal} className="p-1.5 rounded-md text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+              <Trash2 className="h-4 w-4" />
+            </button>
           </div>
-        </div>
-        <div className="flex gap-1">
-          <button onClick={openEditGoal} className="p-1.5 rounded-md text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
-            <Edit className="h-4 w-4" />
-          </button>
-          <button onClick={handleDeleteGoal} className="p-1.5 rounded-md text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
-            <Trash2 className="h-4 w-4" />
-          </button>
+          {currentGoal.description && <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{currentGoal.description}</p>}
         </div>
       </div>
 
