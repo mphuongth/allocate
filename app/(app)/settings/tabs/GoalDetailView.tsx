@@ -407,7 +407,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
       </div>
 
       {/* Tab switcher */}
-      <div className="grid grid-cols-2 h-9 bg-[#ececf0] dark:bg-gray-800 rounded-xl p-[3px] mb-4">
+      <div className="grid grid-cols-2 h-9 items-center bg-[#ececf0] dark:bg-gray-800 rounded-xl p-[3px] mb-4">
         {(['fund', 'other'] as const).map((tab) => (
           <button
             key={tab}
