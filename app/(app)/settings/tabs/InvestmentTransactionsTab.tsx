@@ -344,7 +344,7 @@ export default function InvestmentTransactionsTab() {
             <select
               value={filters.asset_type}
               onChange={(e) => setSelectFilter('asset_type', e.target.value)}
-              className={`w-full border border-black/10 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-[#f3f3f5] dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${filters.asset_type ? 'text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'}`}
+              className="w-full border border-black/10 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-[#f3f3f5] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
               <option value="">{t('filterAll')}</option>
               {ASSET_TYPES.map((type) => <option key={type} value={type}>{t(`asset${type.charAt(0).toUpperCase() + type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold')}</option>)}
@@ -355,7 +355,7 @@ export default function InvestmentTransactionsTab() {
             <select
               value={filters.goal_id}
               onChange={(e) => setSelectFilter('goal_id', e.target.value)}
-              className={`w-full border border-black/10 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-[#f3f3f5] dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${filters.goal_id ? 'text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'}`}
+              className="w-full border border-black/10 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-[#f3f3f5] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
               <option value="">{t('allGoals')}</option>
               <option value="unassigned">{t('noGoal')}</option>
@@ -365,12 +365,12 @@ export default function InvestmentTransactionsTab() {
           <div>
             <label className="text-sm text-gray-600 dark:text-gray-400 mb-2 block">{t('filterFrom')}</label>
             <input type="date" value={dateFrom} onChange={(e) => setDateFilter('from_date', e.target.value, setDateFrom)}
-              className={`w-full border border-black/10 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-[#f3f3f5] dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${dateFrom ? 'text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'}`} />
+              className="w-full border border-black/10 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-[#f3f3f5] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
           </div>
           <div>
             <label className="text-sm text-gray-600 dark:text-gray-400 mb-2 block">{t('filterTo')}</label>
             <input type="date" value={dateTo} onChange={(e) => setDateFilter('to_date', e.target.value, setDateTo)}
-              className={`w-full border border-black/10 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-[#f3f3f5] dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${dateTo ? 'text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'}`} />
+              className="w-full border border-black/10 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-[#f3f3f5] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
           </div>
         </div>
         <div className="flex justify-end mt-4">
