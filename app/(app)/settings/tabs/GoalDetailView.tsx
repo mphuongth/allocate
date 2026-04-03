@@ -131,7 +131,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
         expiry_date: tx.expiry_date,
         notes: tx.notes,
         fund_id: tx.fund_id,
-        fund_display: tx.fund_id && fundMap[tx.fund_id] ? `${fundMap[tx.fund_id].code} - ${fundMap[tx.fund_id].name}` : undefined,
+        fund_display: tx.fund_id && fundMap[tx.fund_id] ? fundMap[tx.fund_id].code : undefined,
         current_value: currentValue,
       }
     })

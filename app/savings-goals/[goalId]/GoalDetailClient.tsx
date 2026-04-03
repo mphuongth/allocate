@@ -60,7 +60,7 @@ export default function GoalDetailClient({ goalId }: { goalId: string }) {
       const { transactions: txs } = await txRes.json()
       const { funds: allFunds } = fundsRes.ok ? await fundsRes.json() : { funds: [] }
       const fundMap: Record<string, string> = {}
-      for (const f of (allFunds ?? [])) fundMap[f.id] = f.name
+      for (const f of (allFunds ?? [])) fundMap[f.id] = f.code
 
       setTransactions(
         (txs ?? []).map((tx: Transaction) => ({
