@@ -491,8 +491,8 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-black/10 dark:border-gray-700 overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-black/10 dark:border-gray-700">
             <div>
-              <h3 className="font-semibold text-gray-900 dark:text-gray-100">{t('otherInvestments')}</h3>
-              <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{t('otherInvestmentsSub')}</p>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('otherInvestments')}</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{t('otherInvestmentsSub')}</p>
             </div>
             <button onClick={openTxAdd} className="flex items-center gap-2 h-9 px-4 bg-gray-950 hover:bg-gray-800 text-white text-sm font-semibold rounded-md transition-colors">
               <Plus className="h-4 w-4" />{t('addTxBtn')}
