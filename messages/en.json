@@ -547,8 +547,8 @@
     "logoutLabel": "Sign out"
   },
   "landing": {
-    "loginLink": "Sign in",
-    "signupLink": "Sign up",
+    "loginLink": "Sign In",
+    "signupLink": "Get Started",
     "heroTitle": "Take Control of Your",
     "heroTitleGradient": "Financial Future",
     "heroSubtitle": "All-in-one platform to manage investments, track goals, and plan your monthly finances with ease",

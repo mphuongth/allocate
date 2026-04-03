@@ -39,13 +39,13 @@ export default async function HomePage() {
               <ThemeToggleButton />
               <Link
                 href="/auth/login"
-                className="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 transition-colors px-3 py-2"
+                className="inline-flex items-center h-10 px-4 text-sm font-medium text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
               >
                 {t('loginLink')}
               </Link>
               <Link
                 href="/auth/signup"
-                className="text-sm font-medium px-4 py-2 bg-violet-600 text-white rounded-md hover:bg-violet-700 transition-colors"
+                className="inline-flex items-center h-10 px-4 text-sm font-medium bg-violet-600 text-white rounded-md hover:bg-violet-700 transition-colors"
               >
                 {t('signupLink')}
               </Link>
