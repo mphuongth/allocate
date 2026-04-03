@@ -416,7 +416,7 @@ export default function InvestmentTransactionsTab() {
                     <tr key={tx.transaction_id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
                       <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{new Date(tx.investment_date).toLocaleDateString('vi-VN')}</td>
                       <td className="px-4 py-3">
-                        <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${ASSET_COLORS[tx.asset_type as AssetType] ?? 'bg-gray-100 text-gray-700'}`}>
+                        <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${ASSET_COLORS[tx.asset_type as AssetType] ?? 'bg-gray-100 text-gray-700'}`}>
                           {t(`asset${tx.asset_type.charAt(0).toUpperCase() + tx.asset_type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold') ?? tx.asset_type}
                         </span>
                       </td>
@@ -426,8 +426,8 @@ export default function InvestmentTransactionsTab() {
                       <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-gray-100">{fmt(currentValue)}</td>
                       <td className="px-4 py-3">
                         {tx.savings_goals?.goal_name
-                          ? <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900">{tx.savings_goals.goal_name}</span>
-                          : <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400">{t('noGoal')}</span>
+                          ? <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900">{tx.savings_goals.goal_name}</span>
+                          : <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400">{t('noGoal')}</span>
                         }
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 max-w-32 truncate">{tx.notes ?? '—'}</td>
