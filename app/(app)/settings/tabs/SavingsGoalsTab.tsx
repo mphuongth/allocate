@@ -231,6 +231,13 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
                 </div>
               </div>
 
+              {/* View Details */}
+              <button
+                onClick={(e) => { e.stopPropagation(); selectGoal(goal) }}
+                className="w-full h-9 mt-3 text-sm font-medium text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              >
+                {t('viewDetails')}
+              </button>
             </div>
           ))}
         </div>
