@@ -403,7 +403,7 @@ export default function InvestmentTransactionsTab() {
                   <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colExpiry')}</th>
                   <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colGoal')}</th>
                   <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colNotes')}</th>
-                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{tc('actions')}</th>
+                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-center">{tc('actions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/5 dark:divide-gray-700">
@@ -431,13 +431,13 @@ export default function InvestmentTransactionsTab() {
                         }
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 max-w-32 truncate">{tx.notes ?? '—'}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1">
-                          <button onClick={() => openEdit(tx)} className="p-1.5 rounded-md text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
-                            <Edit className="h-4 w-4" />
+                      <td className="px-4 py-3 text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <button onClick={() => openEdit(tx)} className="h-8 w-8 p-0 flex items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                            <Edit className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                           </button>
-                          <button onClick={() => setConfirmTx(tx)} className="p-1.5 rounded-md text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
-                            <Trash2 className="h-4 w-4" />
+                          <button onClick={() => setConfirmTx(tx)} className="h-8 w-8 p-0 flex items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                            <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
                           </button>
                         </div>
                       </td>
