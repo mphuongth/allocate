@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslations } from 'next-intl'
-import { Plus, Download, Edit, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Download, Edit, Trash2, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
 import ConfirmModal from '@/app/components/ConfirmModal'
 
 interface Transaction {
@@ -341,26 +341,32 @@ export default function InvestmentTransactionsTab() {
         <div className="grid gap-4 md:grid-cols-4">
           <div>
             <label className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2 block">{t('filterAssetType')}</label>
-            <select
-              value={filters.asset_type}
-              onChange={(e) => setSelectFilter('asset_type', e.target.value)}
-              className="w-full border border-black/10 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-[#f3f3f5] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="">{t('filterAll')}</option>
-              {ASSET_TYPES.map((type) => <option key={type} value={type}>{t(`asset${type.charAt(0).toUpperCase() + type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold')}</option>)}
-            </select>
+            <div className="relative">
+              <select
+                value={filters.asset_type}
+                onChange={(e) => setSelectFilter('asset_type', e.target.value)}
+                className="w-full appearance-none border border-black/10 dark:border-gray-600 rounded-lg px-3 py-2 pr-8 text-sm font-medium bg-[#f3f3f5] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="">{t('filterAll')}</option>
+                {ASSET_TYPES.map((type) => <option key={type} value={type}>{t(`asset${type.charAt(0).toUpperCase() + type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold')}</option>)}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            </div>
           </div>
           <div>
             <label className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2 block">{t('filterGoal')}</label>
-            <select
-              value={filters.goal_id}
-              onChange={(e) => setSelectFilter('goal_id', e.target.value)}
-              className="w-full border border-black/10 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-[#f3f3f5] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="">{t('allGoals')}</option>
-              <option value="unassigned">{t('noGoal')}</option>
-              {goals.map((g) => <option key={g.goal_id} value={g.goal_id}>{g.goal_name}</option>)}
-            </select>
+            <div className="relative">
+              <select
+                value={filters.goal_id}
+                onChange={(e) => setSelectFilter('goal_id', e.target.value)}
+                className="w-full appearance-none border border-black/10 dark:border-gray-600 rounded-lg px-3 py-2 pr-8 text-sm font-medium bg-[#f3f3f5] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="">{t('allGoals')}</option>
+                <option value="unassigned">{t('noGoal')}</option>
+                {goals.map((g) => <option key={g.goal_id} value={g.goal_id}>{g.goal_name}</option>)}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            </div>
           </div>
           <div>
             <label className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2 block">{t('filterFrom')}</label>
