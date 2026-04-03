@@ -249,7 +249,9 @@
     "annualPlaceholder": "e.g., 12000000",
     "annualRequired": "Annual fee must be greater than 0.",
     "paymentDateLabel": "Payment Date",
-    "monthly": "Monthly"
+    "monthly": "Monthly",
+    "infoTitle": "About Insurance",
+    "infoDesc": "Monthly fees (annual / 12) are automatically added to your Monthly Plan. You can override or skip for any specific month."
   },
   "dashboard": {
     "title": "Asset Overview",
