@@ -466,11 +466,11 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1">
                             <button onClick={() => openFiEdit(row)} className="p-1.5 rounded-md text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
-                              <Edit className="h-3.5 w-3.5" />
+                              <Edit className="h-4 w-4" />
                             </button>
                             <button onClick={() => handleUnassign(row)} className="text-xs text-amber-600 dark:text-amber-400 hover:underline px-1">{tc('unassign')}</button>
                             <button onClick={() => handleFiDelete(row)} disabled={deletingId === row.transaction_id} className="p-1.5 rounded-md text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50">
-                              <Trash2 className="h-3.5 w-3.5" />
+                              <Trash2 className="h-4 w-4" />
                             </button>
                           </div>
                         </td>
@@ -530,11 +530,11 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1">
                             <button onClick={() => openTxEdit(row)} className="p-1.5 rounded-md text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
-                              <Edit className="h-3.5 w-3.5" />
+                              <Edit className="h-4 w-4" />
                             </button>
                             <button onClick={() => handleUnassign(row)} className="text-xs text-amber-600 dark:text-amber-400 hover:underline px-1">{tc('unassign')}</button>
                             <button onClick={() => handleTxDelete(row)} disabled={deletingId === row.transaction_id} className="p-1.5 rounded-md text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50">
-                              <Trash2 className="h-3.5 w-3.5" />
+                              <Trash2 className="h-4 w-4" />
                             </button>
                           </div>
                         </td>
