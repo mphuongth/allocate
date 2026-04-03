@@ -29,7 +29,7 @@ export default async function HomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-2">
-              <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-violet-600 to-purple-600 flex items-center justify-center text-white font-bold text-lg">
+              <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-violet-600 to-purple-600 flex items-center justify-center text-white font-bold text-xl">
                 A
               </div>
               <span className="text-xl font-bold text-gray-900 dark:text-gray-100">Allocate</span>
@@ -69,13 +69,13 @@ export default async function HomePage() {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link
               href="/auth/signup"
-              className="px-8 py-4 bg-violet-600 text-white text-lg font-semibold rounded-lg hover:bg-violet-700 transition-colors shadow-sm"
+              className="px-8 py-4 bg-violet-600 text-white text-lg font-medium rounded-lg hover:bg-violet-700 transition-colors shadow-sm"
             >
               {t('heroSignupBtn')}
             </Link>
             <Link
               href="/auth/login"
-              className="px-8 py-4 border-2 border-violet-600 text-violet-700 dark:text-violet-400 text-lg font-semibold rounded-lg hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors"
+              className="px-8 py-4 border-2 border-violet-600 text-violet-700 dark:text-violet-400 text-lg font-medium rounded-lg hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors"
             >
               {t('heroLoginBtn')}
             </Link>
@@ -97,7 +97,7 @@ export default async function HomePage() {
             >
               <div className="flex items-start gap-4">
                 <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 shrink-0">
-                  <feature.Icon className="h-6 w-6" />
+                  <feature.Icon className="h-8 w-8" />
                 </div>
                 <div>
                   <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">{feature.title}</h3>
@@ -116,7 +116,7 @@ export default async function HomePage() {
           <p className="text-xl text-violet-100 mb-8 max-w-2xl mx-auto">{t('ctaSub')}</p>
           <Link
             href="/auth/signup"
-            className="inline-block px-8 py-4 bg-white text-violet-600 text-lg font-semibold rounded-lg hover:bg-gray-100 transition-colors"
+            className="inline-block px-8 py-4 bg-white text-violet-600 text-lg font-medium rounded-lg hover:bg-gray-100 transition-colors"
           >
             {t('ctaBtn')}
           </Link>
