@@ -146,7 +146,7 @@ export default function FixedExpensesTab() {
       {categories.length > 0 && (
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-black/10 dark:border-gray-700 p-4">
           <div className="flex items-center gap-4">
-            <label className="text-sm font-medium text-gray-600 dark:text-gray-400 shrink-0">{t('filterCategory')}</label>
+            <label className="text-sm font-medium text-gray-900 dark:text-gray-100 shrink-0">{t('filterCategory')}</label>
             <div className="relative">
               <select
                 value={filterCategory}
