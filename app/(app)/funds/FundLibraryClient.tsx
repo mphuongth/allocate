@@ -357,7 +357,7 @@ export default function FundLibraryClient() {
           </button>
           <button
             onClick={openAddModal}
-            className="flex items-center gap-2 h-9 px-4 py-2 bg-gray-950 hover:bg-gray-800 text-white text-sm font-semibold rounded-md transition-colors"
+            className="flex items-center gap-2 h-9 px-4 py-2 bg-gray-950 hover:bg-gray-800 text-white text-sm font-bold rounded-md transition-colors"
           >
             <Plus className="h-4 w-4" />
             {t('add')}
