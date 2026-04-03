@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslations } from 'next-intl'
+import { ArrowLeft, Edit, Trash2 } from 'lucide-react'
 import ConfirmModal from '@/app/components/ConfirmModal'
 
 interface Goal {
@@ -76,6 +77,8 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
   const [editGoalTarget, setEditGoalTarget] = useState('')
   const [editGoalError, setEditGoalError] = useState('')
   const [editGoalSaving, setEditGoalSaving] = useState(false)
+
+  const [activeDetailTab, setActiveDetailTab] = useState<'fund' | 'other'>('fund')
 
   // Form mode: null = closed, 'tx-add', 'tx-edit', 'fi-add', 'fi-edit'
   const [formMode, setFormMode] = useState<'tx-add' | 'tx-edit' | 'fi-add' | 'fi-edit' | null>(null)
@@ -332,15 +335,21 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <button onClick={onBack} className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium">{t('back')}</button>
+          <button onClick={onBack} className="p-1.5 rounded-md text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+            <ArrowLeft className="h-5 w-5" />
+          </button>
           <div>
-            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">{currentGoal.goal_name}</h2>
+            <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">{currentGoal.goal_name}</h2>
             {currentGoal.description && <p className="text-sm text-gray-500 dark:text-gray-400">{currentGoal.description}</p>}
           </div>
         </div>
-        <div className="flex gap-2">
-          <button onClick={openEditGoal} className="px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">{tc('edit')}</button>
-          <button onClick={handleDeleteGoal} className="px-3 py-1.5 text-sm font-medium text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20">{tc('delete')}</button>
+        <div className="flex gap-1">
+          <button onClick={openEditGoal} className="p-1.5 rounded-md text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
+            <Edit className="h-4 w-4" />
+          </button>
+          <button onClick={handleDeleteGoal} className="p-1.5 rounded-md text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+            <Trash2 className="h-4 w-4" />
+          </button>
         </div>
       </div>
 
@@ -382,137 +391,164 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
       )}
 
       {/* Summary */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        {[
-          { label: t('currentValue'), value: fmt(totalCurrentValue), color: 'text-indigo-700 dark:text-indigo-300' },
-          { label: t('totalInvested'), value: fmt(totalInvested), color: 'text-indigo-700 dark:text-indigo-300' },
-          { label: t('gainLoss'), value: fmt(totalGain), color: totalGain >= 0 ? 'text-green-600' : 'text-red-600' },
-        ].map((item) => (
-          <div key={item.label} className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 text-center">
-            <p className="text-xs text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wide mb-1">{item.label}</p>
-            <p className={`text-xl font-bold ${item.color}`}>{item.value}</p>
-          </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="p-5 rounded-xl border border-blue-200 dark:border-blue-800 bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20">
+          <p className="text-xs font-medium text-blue-700 dark:text-blue-400 uppercase mb-1">{t('currentValue')}</p>
+          <p className="text-3xl font-bold text-blue-900 dark:text-blue-200">{fmt(totalCurrentValue)}</p>
+        </div>
+        <div className="p-5 rounded-xl border border-purple-200 dark:border-purple-800 bg-gradient-to-br from-purple-50 to-violet-50 dark:from-purple-900/20 dark:to-violet-900/20">
+          <p className="text-xs font-medium text-purple-700 dark:text-purple-400 uppercase mb-1">{t('totalInvested')}</p>
+          <p className="text-3xl font-bold text-purple-900 dark:text-purple-200">{fmt(totalInvested)}</p>
+        </div>
+        <div className={`p-5 rounded-xl border ${totalGain >= 0 ? 'border-green-200 dark:border-green-800 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20' : 'border-red-200 dark:border-red-800 bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-900/20 dark:to-rose-900/20'}`}>
+          <p className={`text-xs font-medium uppercase mb-1 ${totalGain >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>{t('gainLoss')}</p>
+          <p className={`text-3xl font-bold ${totalGain >= 0 ? 'text-green-900 dark:text-green-200' : 'text-red-900 dark:text-red-200'}`}>{fmt(totalGain)}</p>
+        </div>
+      </div>
+
+      {/* Tab switcher */}
+      <div className="grid grid-cols-2 h-9 bg-[#ececf0] dark:bg-gray-800 rounded-xl p-[3px] mb-4">
+        {(['fund', 'other'] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveDetailTab(tab)}
+            className={`inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center whitespace-nowrap rounded-xl border px-3 py-1 text-sm font-medium transition-[color,box-shadow] ${
+              activeDetailTab === tab
+                ? 'border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
+                : 'border-transparent text-gray-900 dark:text-gray-400'
+            }`}
+          >
+            {tab === 'fund' ? t('fundInvestments') : t('otherInvestments')}
+          </button>
         ))}
       </div>
 
-      {/* Fund Investments */}
-      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden mb-4">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
-          <div>
-            <h3 className="font-semibold text-gray-900 dark:text-gray-100">{t('fundInvestments')}</h3>
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{t('fundInvestmentsSub')}</p>
+      {/* Fund Investments Tab */}
+      {activeDetailTab === 'fund' && (
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-black/10 dark:border-gray-700 overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-black/10 dark:border-gray-700">
+            <div>
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100">{t('fundInvestments')}</h3>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{t('fundInvestmentsSub')}</p>
+            </div>
+            <button onClick={openFiAdd} className="flex items-center gap-2 h-9 px-4 bg-gray-950 hover:bg-gray-800 text-white text-sm font-semibold rounded-md transition-colors">
+              {t('addFundBtn')}
+            </button>
           </div>
-          <button onClick={openFiAdd} className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700">
-            {t('addFundBtn')}
-          </button>
+
+          {loading ? (
+            <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">{tc('loading')}</div>
+          ) : fundRows.length === 0 ? (
+            <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">{t('noFundInvestments')}</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 dark:bg-gray-800">
+                  <tr>
+                    {[t('colDate'), t('colFund'), t('colAmount'), t('colUnits'), t('colNavBuy'), t('colNavCurrent'), t('colCurrentValue'), t('colGainLoss'), tc('actions')].map((h) => (
+                      <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-black/5 dark:divide-gray-700">
+                  {fundRows.map((row) => {
+                    const pl = row.current_value - row.amount_vnd
+                    const fund = funds.find((f) => f.id === row.fund_id)
+                    const currentNav = fund?.nav ?? row.unit_price ?? 0
+                    return (
+                      <tr key={row.transaction_id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                        <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{new Date(row.investment_date).toLocaleDateString('vi-VN')}</td>
+                        <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{row.fund_display ?? row.fund_id ?? '—'}</td>
+                        <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{fmt(row.amount_vnd)}</td>
+                        <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{row.units ?? '—'}</td>
+                        <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{row.unit_price != null ? fmt(row.unit_price) : '—'}</td>
+                        <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{fmt(currentNav)}</td>
+                        <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{fmt(row.current_value)}</td>
+                        <td className={`px-4 py-3 font-medium ${pl >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt(pl)}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1">
+                            <button onClick={() => openFiEdit(row)} className="p-1.5 rounded-md text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
+                              <Edit className="h-3.5 w-3.5" />
+                            </button>
+                            <button onClick={() => handleUnassign(row)} className="text-xs text-amber-600 dark:text-amber-400 hover:underline px-1">{tc('unassign')}</button>
+                            <button onClick={() => handleFiDelete(row)} disabled={deletingId === row.transaction_id} className="p-1.5 rounded-md text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
+      )}
 
-        {loading ? (
-          <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">{tc('loading')}</div>
-        ) : fundRows.length === 0 ? (
-          <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">{t('noFundInvestments')}</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 dark:bg-gray-800">
-                <tr>
-                  {[t('colDate'), t('colFund'), t('colAmount'), t('colUnits'), t('colNavBuy'), t('colNavCurrent'), t('colCurrentValue'), t('colGainLoss'), tc('actions')].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
-                {fundRows.map((row) => {
-                  const pl = row.current_value - row.amount_vnd
-                  const fund = funds.find((f) => f.id === row.fund_id)
-                  const currentNav = fund?.nav ?? row.unit_price ?? 0
-                  return (
-                    <tr key={row.transaction_id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                      <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{new Date(row.investment_date).toLocaleDateString('vi-VN')}</td>
-                      <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{row.fund_display ?? row.fund_id ?? '—'}</td>
-                      <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{fmt(row.amount_vnd)}</td>
-                      <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{row.units ?? '—'}</td>
-                      <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{row.unit_price != null ? fmt(row.unit_price) : '—'}</td>
-                      <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{fmt(currentNav)}</td>
-                      <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{fmt(row.current_value)}</td>
-                      <td className={`px-4 py-3 font-medium ${pl >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt(pl)}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex gap-2">
-                          <button onClick={() => openFiEdit(row)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">{tc('edit')}</button>
-                          <button onClick={() => handleUnassign(row)} className="text-xs text-amber-600 dark:text-amber-400 hover:underline">{tc('unassign')}</button>
-                          <button onClick={() => handleFiDelete(row)} disabled={deletingId === row.transaction_id} className="text-xs text-red-500 dark:text-red-400 hover:underline disabled:opacity-50">
-                            {deletingId === row.transaction_id ? tc('deleting') : tc('delete')}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+      {/* Other Transactions Tab (bank/stock/gold) */}
+      {activeDetailTab === 'other' && (
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-black/10 dark:border-gray-700 overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-black/10 dark:border-gray-700">
+            <div>
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100">{t('otherInvestments')}</h3>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{t('otherInvestmentsSub')}</p>
+            </div>
+            <button onClick={openTxAdd} className="flex items-center gap-2 h-9 px-4 bg-gray-950 hover:bg-gray-800 text-white text-sm font-semibold rounded-md transition-colors">
+              {t('addTxBtn')}
+            </button>
           </div>
-        )}
-      </div>
 
-      {/* Other Transactions (bank/stock/gold) */}
-      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
-          <div>
-            <h3 className="font-semibold text-gray-900 dark:text-gray-100">{t('otherInvestments')}</h3>
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{t('otherInvestmentsSub')}</p>
-          </div>
-          <button onClick={openTxAdd} className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700">
-            {t('addTxBtn')}
-          </button>
+          {loading ? (
+            <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">{tc('loading')}</div>
+          ) : otherRows.length === 0 ? (
+            <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">{t('noOtherInvestments')}</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 dark:bg-gray-800">
+                  <tr>
+                    {[t('colDate'), t('colType'), t('colAmount'), t('colUnits'), t('colInterestRate'), t('colGainLoss'), t('colNotes'), tc('actions')].map((h) => (
+                      <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-black/5 dark:divide-gray-700">
+                  {otherRows.map((row) => {
+                    const gain = row.current_value - row.amount_vnd
+                    return (
+                      <tr key={row.transaction_id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                        <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{new Date(row.investment_date).toLocaleDateString('vi-VN')}</td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${ASSET_COLORS[row.asset_type] ?? 'bg-gray-100 text-gray-700'}`}>
+                            {tt(`asset${row.asset_type.charAt(0).toUpperCase() + row.asset_type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold') ?? row.asset_type}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{fmt(row.amount_vnd)}</td>
+                        <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{row.units ?? '—'}</td>
+                        <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{row.interest_rate != null ? `${row.interest_rate}%` : '—'}</td>
+                        <td className={`px-4 py-3 font-medium ${gain >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt(gain)}</td>
+                        <td className="px-4 py-3 text-gray-400 dark:text-gray-500 max-w-32 truncate">{row.notes ?? '—'}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1">
+                            <button onClick={() => openTxEdit(row)} className="p-1.5 rounded-md text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
+                              <Edit className="h-3.5 w-3.5" />
+                            </button>
+                            <button onClick={() => handleUnassign(row)} className="text-xs text-amber-600 dark:text-amber-400 hover:underline px-1">{tc('unassign')}</button>
+                            <button onClick={() => handleTxDelete(row)} disabled={deletingId === row.transaction_id} className="p-1.5 rounded-md text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
-
-        {loading ? (
-          <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">{tc('loading')}</div>
-        ) : otherRows.length === 0 ? (
-          <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">{t('noOtherInvestments')}</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 dark:bg-gray-800">
-                <tr>
-                  {[t('colDate'), t('colType'), t('colAmount'), t('colUnits'), t('colInterestRate'), t('colGainLoss'), t('colNotes'), tc('actions')].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
-                {otherRows.map((row) => {
-                  const gain = row.current_value - row.amount_vnd
-                  return (
-                    <tr key={row.transaction_id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                      <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{new Date(row.investment_date).toLocaleDateString('vi-VN')}</td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${ASSET_COLORS[row.asset_type] ?? 'bg-gray-100 text-gray-700'}`}>
-                          {tt(`asset${row.asset_type.charAt(0).toUpperCase() + row.asset_type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold') ?? row.asset_type}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{fmt(row.amount_vnd)}</td>
-                      <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{row.units ?? '—'}</td>
-                      <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{row.interest_rate != null ? `${row.interest_rate}%` : '—'}</td>
-                      <td className={`px-4 py-3 font-medium ${gain >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt(gain)}</td>
-                      <td className="px-4 py-3 text-gray-400 dark:text-gray-500 max-w-32 truncate">{row.notes ?? '—'}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex gap-2">
-                          <button onClick={() => openTxEdit(row)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">{tc('edit')}</button>
-                          <button onClick={() => handleUnassign(row)} className="text-xs text-amber-600 dark:text-amber-400 hover:underline">{tc('unassign')}</button>
-                          <button onClick={() => handleTxDelete(row)} disabled={deletingId === row.transaction_id} className="text-xs text-red-500 dark:text-red-400 hover:underline disabled:opacity-50">
-                            {deletingId === row.transaction_id ? tc('deleting') : tc('delete')}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      )}
 
       {/* Edit Goal Modal */}
       {showEditGoal && (
