@@ -442,7 +442,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
             <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">{t('noFundInvestments')}</div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full">
                 <thead className="bg-gray-50 dark:bg-gray-800">
                   <tr>
                     {[t('colDate'), t('colFund'), t('colAmount'), t('colUnits'), t('colNavBuy'), t('colNavCurrent'), t('colCurrentValue'), t('colGainLoss'), tc('actions')].map((h) => (
@@ -457,12 +457,12 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                     const currentNav = fund?.nav ?? row.unit_price ?? 0
                     return (
                       <tr key={row.transaction_id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                        <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{new Date(row.investment_date).toLocaleDateString('vi-VN')}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{new Date(row.investment_date).toLocaleDateString('vi-VN')}</td>
                         <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{row.fund_display ?? row.fund_id ?? '—'}</td>
-                        <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{fmt(row.amount_vnd)}</td>
-                        <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{row.units ?? '—'}</td>
-                        <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{row.unit_price != null ? fmt(row.unit_price) : '—'}</td>
-                        <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{fmt(currentNav)}</td>
+                        <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{fmt(row.amount_vnd)}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{row.units ?? '—'}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{row.unit_price != null ? fmt(row.unit_price) : '—'}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{fmt(currentNav)}</td>
                         <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{fmt(row.current_value)}</td>
                         <td className={`px-4 py-3 font-medium ${pl >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt(pl)}</td>
                         <td className="px-4 py-3">
@@ -505,7 +505,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
             <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">{t('noOtherInvestments')}</div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full">
                 <thead className="bg-gray-50 dark:bg-gray-800">
                   <tr>
                     {[t('colDate'), t('colType'), t('colAmount'), t('colUnits'), t('colInterestRate'), t('colGainLoss'), t('colNotes'), tc('actions')].map((h) => (
@@ -518,17 +518,17 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                     const gain = row.current_value - row.amount_vnd
                     return (
                       <tr key={row.transaction_id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                        <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{new Date(row.investment_date).toLocaleDateString('vi-VN')}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{new Date(row.investment_date).toLocaleDateString('vi-VN')}</td>
                         <td className="px-4 py-3">
                           <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${ASSET_COLORS[row.asset_type] ?? 'bg-gray-100 text-gray-700'}`}>
                             {tt(`asset${row.asset_type.charAt(0).toUpperCase() + row.asset_type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold') ?? row.asset_type}
                           </span>
                         </td>
                         <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{fmt(row.amount_vnd)}</td>
-                        <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{row.units ?? '—'}</td>
-                        <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{row.interest_rate != null ? `${row.interest_rate}%` : '—'}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{row.units ?? '—'}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{row.interest_rate != null ? `${row.interest_rate}%` : '—'}</td>
                         <td className={`px-4 py-3 font-medium ${gain >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt(gain)}</td>
-                        <td className="px-4 py-3 text-gray-400 dark:text-gray-500 max-w-32 truncate">{row.notes ?? '—'}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-500 max-w-32 truncate">{row.notes ?? '—'}</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1">
                             <button onClick={() => openTxEdit(row)} className="p-1.5 rounded-md text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
