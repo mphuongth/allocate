@@ -178,7 +178,7 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {goals.map((goal) => (
-            <div key={goal.goal_id} className="bg-white dark:bg-gray-900 rounded-xl border-2 border-black/10 dark:border-gray-700 p-5 hover:shadow-lg hover:border-violet-200 dark:hover:border-violet-700 transition-all cursor-pointer">
+            <div key={goal.goal_id} onClick={() => selectGoal(goal)} className="bg-white dark:bg-gray-900 rounded-xl border-2 border-black/10 dark:border-gray-700 p-5 hover:shadow-lg hover:border-violet-200 dark:hover:border-violet-700 transition-all cursor-pointer">
               {/* Header */}
               <div className="flex items-start justify-between mb-4">
                 <div className="flex-1 min-w-0">
@@ -189,13 +189,13 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
                 </div>
                 <div className="flex gap-1 ml-2 shrink-0">
                   <button
-                    onClick={() => openEdit(goal)}
+                    onClick={(e) => { e.stopPropagation(); openEdit(goal) }}
                     className="p-1.5 rounded-md text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                   >
                     <Edit className="h-4 w-4" />
                   </button>
                   <button
-                    onClick={() => setConfirmGoal(goal)}
+                    onClick={(e) => { e.stopPropagation(); setConfirmGoal(goal) }}
                     className="p-1.5 rounded-md text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -231,13 +231,6 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
                 </div>
               </div>
 
-              {/* View Details */}
-              <button
-                onClick={() => selectGoal(goal)}
-                className="w-full h-9 mt-3 text-sm font-medium text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-              >
-                {t('viewDetails')}
-              </button>
             </div>
           ))}
         </div>
