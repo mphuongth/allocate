@@ -426,7 +426,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
       {/* Fund Investments Tab */}
       {activeDetailTab === 'fund' && (
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-black/10 dark:border-gray-700 overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-black/10 dark:border-gray-700">
+          <div className="flex items-center justify-between px-5 py-4 border-black/10 dark:border-gray-700">
             <div>
               <h3 className="font-semibold text-gray-900 dark:text-gray-100">{t('fundInvestments')}</h3>
               <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{t('fundInvestmentsSub')}</p>
@@ -444,7 +444,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-black/10 dark:border-gray-700 text-left">
+                  <tr className="border-black/10 dark:border-gray-700 text-left">
                     {[t('colDate'), t('colFund'), t('colAmount'), t('colUnits'), t('colNavBuy'), t('colNavCurrent'), t('colCurrentValue'), t('colGainLoss'), tc('actions')].map((h) => (
                       <th key={h} className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{h}</th>
                     ))}
@@ -489,7 +489,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
       {/* Other Transactions Tab (bank/stock/gold) */}
       {activeDetailTab === 'other' && (
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-black/10 dark:border-gray-700 overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-black/10 dark:border-gray-700">
+          <div className="flex items-center justify-between px-5 py-4 border-black/10 dark:border-gray-700">
             <div>
               <h3 className="font-semibold text-gray-900 dark:text-gray-100">{t('otherInvestments')}</h3>
               <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{t('otherInvestmentsSub')}</p>
@@ -507,7 +507,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-black/10 dark:border-gray-700 text-left">
+                  <tr className="border-black/10 dark:border-gray-700 text-left">
                     {[t('colDate'), t('colType'), t('colAmount'), t('colUnits'), t('colInterestRate'), t('colGainLoss'), t('colNotes'), tc('actions')].map((h) => (
                       <th key={h} className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{h}</th>
                     ))}
