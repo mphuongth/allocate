@@ -380,7 +380,7 @@ export default function InvestmentTransactionsTab() {
           </div>
         </div>
         <div className="flex justify-end mt-4">
-          <button onClick={resetFilters} className="h-8 px-3 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">{tc('reset')}</button>
+          <button onClick={resetFilters} className="h-9 px-4 text-sm font-medium text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">{tc('reset')}</button>
         </div>
       </div>
 
