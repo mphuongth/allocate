@@ -429,7 +429,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
               <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('fundInvestments')}</h3>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{t('fundInvestmentsSub')}</p>
             </div>
-            <button onClick={openFiAdd} className="flex items-center gap-2 h-9 px-4 bg-gray-950 hover:bg-gray-800 text-white text-sm font-semibold rounded-md transition-colors">
+            <button onClick={openFiAdd} className="flex items-center gap-2 h-9 px-4 bg-gray-950 hover:bg-gray-800 text-white text-sm font-bold rounded-md transition-colors">
               <Plus className="h-4 w-4" />{t('addFundBtn')}
             </button>
           </div>
@@ -494,7 +494,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
               <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('otherInvestments')}</h3>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{t('otherInvestmentsSub')}</p>
             </div>
-            <button onClick={openTxAdd} className="flex items-center gap-2 h-9 px-4 bg-gray-950 hover:bg-gray-800 text-white text-sm font-semibold rounded-md transition-colors">
+            <button onClick={openTxAdd} className="flex items-center gap-2 h-9 px-4 bg-gray-950 hover:bg-gray-800 text-white text-sm font-bold rounded-md transition-colors">
               <Plus className="h-4 w-4" />{t('addTxBtn')}
             </button>
           </div>
