@@ -369,7 +369,7 @@ export default function DashboardClient() {
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('sectionGoals')}</h2>
                   <Link
                     href="/settings?tab=goals"
-                    className="inline-flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-lg hover:bg-gray-700 dark:hover:bg-gray-200 transition-colors"
+                    className="flex items-center gap-2 h-9 px-4 bg-gray-950 hover:bg-gray-800 text-white text-sm font-bold rounded-md transition-colors"
                   >
                     <Plus className="h-4 w-4" />
                     {t('addGoalBtn')}

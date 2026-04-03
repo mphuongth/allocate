@@ -177,7 +177,7 @@ export default function FixedExpensesTab() {
                   <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colCategory')}</th>
                   <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colAmount')}</th>
                   <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colCreated')}</th>
-                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{tCommon('actions')}</th>
+                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-center">{tCommon('actions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/5 dark:divide-gray-700">
@@ -189,12 +189,12 @@ export default function FixedExpensesTab() {
                     </td>
                     <td className="px-4 py-4 text-right font-semibold text-gray-900 dark:text-gray-100">{fmt(expense.amount_vnd)}</td>
                     <td className="px-4 py-4 text-sm text-gray-600 dark:text-gray-400">{new Date(expense.created_at).toLocaleDateString('vi-VN')}</td>
-                    <td className="px-4 py-4">
-                      <div className="flex items-center justify-end gap-2">
-                        <button onClick={() => openEdit(expense)} className="h-8 px-2 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                    <td className="px-4 py-4 text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        <button onClick={() => openEdit(expense)} className="h-8 w-8 p-0 flex items-center justify-center border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                           <Edit className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                         </button>
-                        <button onClick={() => setConfirmExpense(expense)} className="h-8 px-2 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                        <button onClick={() => setConfirmExpense(expense)} className="h-8 w-8 p-0 flex items-center justify-center border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                           <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
                         </button>
                       </div>
