@@ -160,7 +160,7 @@ export default function InsuranceMembersTab() {
           <div className="text-center py-10 text-gray-400 dark:text-gray-500 text-sm">{t('empty')}</div>
         ) : (
           <div className="overflow-x-auto p-6">
-            <table className="w-full">
+            <table className="w-full table-fixed">
               <thead>
                 <tr className="border-b border-black/10 dark:border-gray-700 text-left">
                   <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colName')}</th>
@@ -168,7 +168,7 @@ export default function InsuranceMembersTab() {
                   <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colAnnual')}</th>
                   <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colMonthly')}</th>
                   <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colPaymentDate')}</th>
-                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{tCommon('actions')}</th>
+                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-center">{tCommon('actions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/5 dark:divide-gray-700">
@@ -193,11 +193,11 @@ export default function InsuranceMembersTab() {
                       {member.payment_date ? new Date(member.payment_date).toLocaleDateString('vi-VN') : '—'}
                     </td>
                     <td className="px-4 py-4">
-                      <div className="flex items-center justify-end gap-2">
-                        <button onClick={() => openEdit(member)} className="h-8 px-2 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                      <div className="flex items-center justify-center gap-1">
+                        <button onClick={() => openEdit(member)} className="h-8 w-8 p-0 flex items-center justify-center border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                           <Edit className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                         </button>
-                        <button onClick={() => setConfirmMember(member)} className="h-8 px-2 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                        <button onClick={() => setConfirmMember(member)} className="h-8 w-8 p-0 flex items-center justify-center border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                           <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
                         </button>
                       </div>
@@ -209,43 +209,6 @@ export default function InsuranceMembersTab() {
           </div>
         )}
       </div>
-
-      {/* Member Cards */}
-      {members.length > 0 && (
-        <div className="grid gap-4 md:grid-cols-3">
-          {members.map((member) => (
-            <div key={member.member_id} className="p-5 rounded-xl border border-violet-200 dark:border-violet-800 bg-gradient-to-br from-violet-50 to-purple-50 dark:from-violet-900/20 dark:to-purple-900/20">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-violet-600 text-white font-semibold text-lg shrink-0">
-                  {member.member_name.charAt(0)}
-                </div>
-                <div>
-                  <h4 className="font-semibold text-gray-900 dark:text-gray-100">{member.member_name}</h4>
-                  <span className={`inline-flex items-center mt-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${RELATIONSHIP_COLORS[member.relationship] ?? 'bg-gray-100 text-gray-700'}`}>
-                    {member.relationship}
-                  </span>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600 dark:text-gray-400">{t('colAnnual')}:</span>
-                  <span className="font-medium text-gray-900 dark:text-gray-100">{fmt(member.annual_payment_vnd)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600 dark:text-gray-400">{t('colMonthly')}:</span>
-                  <span className="font-semibold text-violet-600 dark:text-violet-400">{fmt(member.monthly_premium_vnd)}</span>
-                </div>
-                <div className="pt-2 border-t border-violet-200 dark:border-violet-800">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">{t('colPaymentDate')}</p>
-                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mt-0.5">
-                    {member.payment_date ? new Date(member.payment_date).toLocaleDateString('vi-VN') : '—'}
-                  </p>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* Info Card */}
       <div className="p-6 rounded-xl border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20">
