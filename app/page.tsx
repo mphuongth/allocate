@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { getTranslations } from 'next-intl/server'
 import ThemeToggleButton from './components/ThemeToggleButton'
+import LanguageSwitcher from './components/LanguageSwitcher'
 import { TrendingUp, PieChart, Target, Shield, Clock, BarChart3 } from 'lucide-react'
 
 export default async function HomePage() {
@@ -34,6 +35,7 @@ export default async function HomePage() {
               <span className="text-xl font-bold text-gray-900 dark:text-gray-100">Allocate</span>
             </div>
             <div className="flex items-center gap-3">
+              <LanguageSwitcher />
               <ThemeToggleButton />
               <Link
                 href="/auth/login"
