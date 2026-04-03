@@ -218,7 +218,9 @@
     "categoryRequired": "Danh mục là bắt buộc.",
     "amountLabel": "Số tiền (VND) *",
     "amountPlaceholder": "VD: 5000000",
-    "amountRequired": "Số tiền phải lớn hơn 0."
+    "amountRequired": "Số tiền phải lớn hơn 0.",
+    "infoTitle": "Về Chi phí Cố định",
+    "infoDesc": "Chi phí cố định được tự động thêm vào Kế hoạch Tháng mỗi tháng. Bạn có thể điều chỉnh số tiền cho từng tháng cụ thể khi lên kế hoạch."
   },
   "insurance": {
     "title": "Thành viên Bảo hiểm",
