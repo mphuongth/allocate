@@ -446,7 +446,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                 <thead>
                   <tr className="border-black/10 dark:border-gray-700 text-left">
                     {[t('colDate'), t('colFund'), t('colAmount'), t('colUnits'), t('colNavBuy'), t('colNavCurrent'), t('colCurrentValue'), t('colGainLoss'), tc('actions')].map((h) => (
-                      <th key={h} className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{h}</th>
+                      <th key={h} className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -509,7 +509,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                 <thead>
                   <tr className="border-black/10 dark:border-gray-700 text-left">
                     {[t('colDate'), t('colType'), t('colAmount'), t('colUnits'), t('colInterestRate'), t('colGainLoss'), t('colNotes'), tc('actions')].map((h) => (
-                      <th key={h} className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{h}</th>
+                      <th key={h} className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{h}</th>
                     ))}
                   </tr>
                 </thead>
