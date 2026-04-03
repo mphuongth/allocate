@@ -218,7 +218,9 @@
     "categoryRequired": "Category is required.",
     "amountLabel": "Amount (VND) *",
     "amountPlaceholder": "e.g., 5000000",
-    "amountRequired": "Amount must be greater than 0."
+    "amountRequired": "Amount must be greater than 0.",
+    "infoTitle": "About Fixed Expenses",
+    "infoDesc": "Fixed expenses are automatically added to your Monthly Plan each month. You can override the amount for any specific month when planning."
   },
   "insurance": {
     "title": "Insurance Members",
