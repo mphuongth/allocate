@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslations } from 'next-intl'
-import { ArrowLeft, Edit, Trash2 } from 'lucide-react'
+import { ArrowLeft, Edit, Trash2, Plus } from 'lucide-react'
 import ConfirmModal from '@/app/components/ConfirmModal'
 
 interface Goal {
@@ -432,7 +432,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
               <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{t('fundInvestmentsSub')}</p>
             </div>
             <button onClick={openFiAdd} className="flex items-center gap-2 h-9 px-4 bg-gray-950 hover:bg-gray-800 text-white text-sm font-semibold rounded-md transition-colors">
-              {t('addFundBtn')}
+              <Plus className="h-4 w-4" />{t('addFundBtn')}
             </button>
           </div>
 
@@ -495,7 +495,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
               <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{t('otherInvestmentsSub')}</p>
             </div>
             <button onClick={openTxAdd} className="flex items-center gap-2 h-9 px-4 bg-gray-950 hover:bg-gray-800 text-white text-sm font-semibold rounded-md transition-colors">
-              {t('addTxBtn')}
+              <Plus className="h-4 w-4" />{t('addTxBtn')}
             </button>
           </div>
 
