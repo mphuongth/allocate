@@ -407,12 +407,12 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
       </div>
 
       {/* Tab switcher */}
-      <div className="grid grid-cols-2 lg:w-auto w-full h-9 items-center bg-[#ececf0] dark:bg-gray-800 rounded-xl p-[3px] mb-4">
+      <div className="inline-flex h-9 items-center bg-[#ececf0] dark:bg-gray-800 rounded-xl p-[3px] mb-4">
         {(['fund', 'other'] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveDetailTab(tab)}
-            className={`inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center whitespace-nowrap rounded-xl border px-3 py-1 text-sm font-medium transition-[color,box-shadow] ${
+            className={`inline-flex h-[calc(100%-1px)] items-center justify-center whitespace-nowrap rounded-xl border px-3 py-1 text-sm font-medium transition-[color,box-shadow] ${
               activeDetailTab === tab
                 ? 'border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
                 : 'border-transparent text-gray-900 dark:text-gray-400'
