@@ -133,7 +133,7 @@ export default async function HomePage() {
               </div>
               <span className="text-lg font-bold text-gray-900 dark:text-gray-100">Allocate</span>
             </div>
-            <p className="text-sm text-gray-500 dark:text-gray-400">© 2026 Allocate. All rights reserved.</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">© 2026 Allocate. All rights reserved.</p>
           </div>
         </div>
       </footer>
