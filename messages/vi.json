@@ -249,7 +249,9 @@
     "annualPlaceholder": "VD: 12000000",
     "annualRequired": "Phí hàng năm phải lớn hơn 0.",
     "paymentDateLabel": "Ngày Thanh toán",
-    "monthly": "Hàng tháng"
+    "monthly": "Hàng tháng",
+    "infoTitle": "Về Bảo hiểm",
+    "infoDesc": "Phí hàng tháng (năm / 12) được tự động thêm vào Kế hoạch Tháng. Bạn có thể điều chỉnh hoặc bỏ qua cho từng tháng cụ thể."
   },
   "dashboard": {
     "title": "Tổng Quan Tài Sản",
