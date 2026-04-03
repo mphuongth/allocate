@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslations } from 'next-intl'
+import { Plus, Download, Edit, Trash2, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
 import ConfirmModal from '@/app/components/ConfirmModal'
 
 interface Transaction {
@@ -310,82 +311,102 @@ export default function InvestmentTransactionsTab() {
   const totalPages = Math.max(1, Math.ceil(total / 20))
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('title')}</h2>
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-gray-500 dark:text-gray-400">{t('totalCount', { count: total })}</span>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('title')}</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t('totalCount', { count: total })}</p>
+        </div>
+        <div className="flex gap-3">
           <button
             onClick={() => { setShowImport(true); setImportRaw(''); setImportRows([]); setImportFundId('') }}
-            className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
+            className="flex items-center gap-2 h-9 px-4 text-sm font-medium text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           >
+            <Download className="h-4 w-4" />
             {t('importFromExcel')}
           </button>
           <button
             onClick={openAdd}
-            className="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+            className="flex items-center gap-2 h-9 px-4 bg-gray-950 hover:bg-gray-800 text-white text-sm font-semibold rounded-md transition-colors"
           >
-            + {t('create')}
+            <Plus className="h-4 w-4" />
+            {t('create')}
           </button>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm p-4 mb-4 flex flex-wrap gap-3 items-end">
-        <div>
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t('filterAssetType')}</label>
-          <select
-            value={filters.asset_type}
-            onChange={(e) => setSelectFilter('asset_type', e.target.value)}
-            className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            <option value="">{t('filterAll')}</option>
-            {ASSET_TYPES.map((type) => <option key={type} value={type}>{t(`asset${type.charAt(0).toUpperCase() + type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold')}</option>)}
-          </select>
+      <div className="bg-white dark:bg-gray-900 rounded-xl border border-black/10 dark:border-gray-700 p-4">
+        <div className="grid gap-4 md:grid-cols-4">
+          <div>
+            <label className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2 block">{t('filterAssetType')}</label>
+            <div className="relative">
+              <select
+                value={filters.asset_type}
+                onChange={(e) => setSelectFilter('asset_type', e.target.value)}
+                className="w-full appearance-none border border-black/10 dark:border-gray-600 rounded-lg px-3 py-2 pr-8 text-sm font-medium bg-[#f3f3f5] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="">{t('filterAll')}</option>
+                {ASSET_TYPES.map((type) => <option key={type} value={type}>{t(`asset${type.charAt(0).toUpperCase() + type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold')}</option>)}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            </div>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2 block">{t('filterGoal')}</label>
+            <div className="relative">
+              <select
+                value={filters.goal_id}
+                onChange={(e) => setSelectFilter('goal_id', e.target.value)}
+                className="w-full appearance-none border border-black/10 dark:border-gray-600 rounded-lg px-3 py-2 pr-8 text-sm font-medium bg-[#f3f3f5] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="">{t('allGoals')}</option>
+                <option value="unassigned">{t('noGoal')}</option>
+                {goals.map((g) => <option key={g.goal_id} value={g.goal_id}>{g.goal_name}</option>)}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            </div>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2 block">{t('filterFrom')}</label>
+            <input type="date" value={dateFrom} onChange={(e) => setDateFilter('from_date', e.target.value, setDateFrom)}
+              className="w-full border border-black/10 dark:border-gray-600 rounded-lg px-3 py-2 text-sm font-medium bg-[#f3f3f5] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          </div>
+          <div>
+            <label className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2 block">{t('filterTo')}</label>
+            <input type="date" value={dateTo} onChange={(e) => setDateFilter('to_date', e.target.value, setDateTo)}
+              className="w-full border border-black/10 dark:border-gray-600 rounded-lg px-3 py-2 text-sm font-medium bg-[#f3f3f5] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          </div>
         </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t('filterGoal')}</label>
-          <select
-            value={filters.goal_id}
-            onChange={(e) => setSelectFilter('goal_id', e.target.value)}
-            className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            <option value="">{t('allGoals')}</option>
-            <option value="unassigned">{t('noGoal')}</option>
-            {goals.map((g) => <option key={g.goal_id} value={g.goal_id}>{g.goal_name}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t('filterFrom')}</label>
-          <input type="date" value={dateFrom} onChange={(e) => setDateFilter('from_date', e.target.value, setDateFrom)}
-            className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t('filterTo')}</label>
-          <input type="date" value={dateTo} onChange={(e) => setDateFilter('to_date', e.target.value, setDateTo)}
-            className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-        </div>
-        <div>
-          <button onClick={resetFilters} className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">{tc('reset')}</button>
+        <div className="flex justify-end mt-4">
+          <button onClick={resetFilters} className="h-9 px-4 text-sm font-medium text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">{tc('reset')}</button>
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+      {/* Table */}
+      <div className="bg-white dark:bg-gray-900 rounded-xl border border-black/10 dark:border-gray-700 overflow-hidden">
         {loading ? (
           <div className="text-center py-10 text-gray-400 dark:text-gray-500 text-sm">{tc('loading')}</div>
         ) : transactions.length === 0 ? (
           <div className="text-center py-10 text-gray-400 dark:text-gray-500 text-sm">{t('empty')}</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 dark:bg-gray-800">
-                <tr>
-                  {[t('colDate'), t('colAsset'), t('colAmount'), t('colTransaction'), t('colInterest'), t('colExpiry'), t('colGoal'), t('colNotes'), tc('actions')].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">{h}</th>
-                  ))}
+          <div className="overflow-x-auto p-6">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-black/10 dark:border-gray-700 text-left">
+                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colDate')}</th>
+                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colAsset')}</th>
+                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colAmount')}</th>
+                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colTransaction')}</th>
+                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colInterest')}</th>
+                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colExpiry')}</th>
+                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colGoal')}</th>
+                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colNotes')}</th>
+                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{tc('actions')}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
+              <tbody className="divide-y divide-black/5 dark:divide-gray-700">
                 {transactions.map((tx) => {
                   const currentValue = calcCurrentValue(tx)
                   const rateOrNav = tx.asset_type === 'fund'
@@ -393,59 +414,59 @@ export default function InvestmentTransactionsTab() {
                     : (tx.interest_rate != null ? `${tx.interest_rate}%` : '—')
                   return (
                     <tr key={tx.transaction_id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                      <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{new Date(tx.investment_date).toLocaleDateString('vi-VN')}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{new Date(tx.investment_date).toLocaleDateString('vi-VN')}</td>
                       <td className="px-4 py-3">
-                        <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${ASSET_COLORS[tx.asset_type as AssetType] ?? 'bg-gray-100 text-gray-700'}`}>
+                        <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${ASSET_COLORS[tx.asset_type as AssetType] ?? 'bg-gray-100 text-gray-700'}`}>
                           {t(`asset${tx.asset_type.charAt(0).toUpperCase() + tx.asset_type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold') ?? tx.asset_type}
                         </span>
                       </td>
-                      <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{fmt(tx.amount_vnd)}</td>
-                      <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{tx.units ?? '—'}</td>
-                      <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{rateOrNav}</td>
-                      <td className="px-4 py-3 text-indigo-600 dark:text-indigo-400 font-medium">{fmt(currentValue)}</td>
-                      <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
-                        {tx.savings_goals?.goal_name ?? <span className="text-gray-300 dark:text-gray-600">{t('noGoal')}</span>}
+                      <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-gray-100">{fmt(tx.amount_vnd)}</td>
+                      <td className="px-4 py-3 text-right text-sm text-gray-600 dark:text-gray-400">{tx.units ?? '—'}</td>
+                      <td className="px-4 py-3 text-right text-sm text-gray-600 dark:text-gray-400">{rateOrNav}</td>
+                      <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-gray-100">{fmt(currentValue)}</td>
+                      <td className="px-4 py-3">
+                        {tx.savings_goals?.goal_name
+                          ? <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900">{tx.savings_goals.goal_name}</span>
+                          : <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400">{t('noGoal')}</span>
+                        }
                       </td>
-                      <td className="px-4 py-3 text-gray-400 dark:text-gray-500 max-w-32 truncate">{tx.notes ?? '—'}</td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <button
-                          onClick={() => openEdit(tx)}
-                          className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline mr-3"
-                        >
-                          {tc('edit')}
-                        </button>
-                        <button
-                          onClick={() => setConfirmTx(tx)}
-                          className="text-xs text-red-500 dark:text-red-400 hover:underline"
-                        >
-                          {tc('delete')}
-                        </button>
+                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 max-w-32 truncate">{tx.notes ?? '—'}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => openEdit(tx)} className="p-1.5 rounded-md text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
+                            <Edit className="h-4 w-4" />
+                          </button>
+                          <button onClick={() => setConfirmTx(tx)} className="p-1.5 rounded-md text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   )
                 })}
               </tbody>
             </table>
-          </div>
-        )}
 
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 dark:border-gray-700">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300"
-            >
-              {t('prev')}
-            </button>
-            <span className="text-sm text-gray-500 dark:text-gray-400">{t('page')} {page} {t('of')} {totalPages}</span>
-            <button
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
-              className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300"
-            >
-              {t('next')}
-            </button>
+            {/* Pagination */}
+            <div className="flex items-center justify-between mt-6 pt-4 border-t border-black/10 dark:border-gray-700">
+              <p className="text-sm text-gray-600 dark:text-gray-400">{t('page')} {page} / {totalPages}</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="h-9 px-3 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-40 transition-colors"
+                >
+                  <ChevronLeft className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+                </button>
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  className="h-9 px-3 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-40 transition-colors"
+                >
+                  <ChevronRight className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
