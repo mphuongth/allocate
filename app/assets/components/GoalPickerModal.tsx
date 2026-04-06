@@ -35,17 +35,17 @@ export default function GoalPickerModal({ open, onOpenChange, fundName, goals, o
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o && !isLoading) { onCancel(); onOpenChange(false) } }}>
-      <DialogContent className="sm:max-w-[400px]">
+      <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
           <DialogTitle>{t('assignToGoalTitle')}</DialogTitle>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{fundName}</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{fundName}</p>
         </DialogHeader>
 
         {error && (
           <p className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2">{error}</p>
         )}
 
-        <div className="overflow-y-auto max-h-[340px] -mx-1 px-1 py-1 space-y-1">
+        <div className="overflow-y-auto max-h-[400px] space-y-3 py-2">
           {goals.length === 0 ? (
             <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-6">{t('noGoalsYet')}</p>
           ) : (
@@ -53,33 +53,35 @@ export default function GoalPickerModal({ open, onOpenChange, fundName, goals, o
               <button
                 key={goal.id}
                 onClick={() => setSelected(goal.id)}
-                className={`w-full text-left px-4 py-3 rounded-lg transition-colors border min-h-[44px] ${
+                className={`w-full text-left p-4 rounded-lg transition-colors border ${
                   selected === goal.id
                     ? 'border-violet-300 bg-violet-50 dark:bg-violet-900/20'
-                    : 'border-transparent hover:border-violet-300 hover:bg-violet-50 dark:hover:bg-violet-900/10'
+                    : 'border-gray-200 dark:border-gray-700 hover:border-violet-300 hover:bg-violet-50 dark:hover:bg-violet-900/10'
                 }`}
               >
-                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{goal.name}</p>
-                <div className="flex items-center gap-3 mt-0.5">
-                  <span className="text-xs text-gray-400 dark:text-gray-500">{t('goalTarget', { amount: fmt(goal.targetAmount) })}</span>
-                  {goal.progressPercent != null && (
-                    <span className="text-xs text-gray-400 dark:text-gray-500">{t('goalProgress', { pct: Math.round(goal.progressPercent) })}</span>
-                  )}
+                <div className="mb-3">
+                  <p className="font-medium text-gray-900 dark:text-gray-100 mb-1">{goal.name}</p>
+                  <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
+                    <span>{t('goalTarget', { amount: fmt(goal.targetAmount) })}</span>
+                    {goal.progressPercent != null && (
+                      <span className="font-medium text-violet-600 dark:text-violet-400">{t('goalProgress', { pct: Math.round(goal.progressPercent) })}</span>
+                    )}
+                  </div>
                 </div>
                 {goal.progressPercent != null && (
-                  <Progress value={Math.min(100, Math.max(0, goal.progressPercent))} className="h-1 mt-2" />
+                  <Progress value={Math.min(100, Math.max(0, goal.progressPercent))} className="h-2" />
                 )}
               </button>
             ))
           )}
         </div>
 
-        <div className="flex gap-3">
+        <div className="flex gap-3 mt-2">
           <Button variant="outline" className="flex-1" onClick={onCancel} disabled={isLoading}>
             {tc('cancel')}
           </Button>
           <Button
-            className="flex-1 bg-gray-950 hover:bg-gray-800"
+            className="flex-1 bg-violet-600 hover:bg-violet-700"
             onClick={() => selected && onConfirm(selected)}
             disabled={!selected || isLoading}
           >
