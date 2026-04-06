@@ -375,7 +375,7 @@ export default function DashboardClient() {
                     {t('addGoalBtn')}
                   </Link>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {sortedGoals.map((goal) => (
                     <GoalCard
                       key={goal.goalId}
@@ -412,7 +412,7 @@ export default function DashboardClient() {
                       {t('manageInsurance')}
                     </Link>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {data.insurance.map((ins) => (
                       <InsuranceCard key={ins.insuranceId} {...ins} onSavingsChange={() => fetchData({ force: true })} />
                     ))}

@@ -56,12 +56,10 @@ export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds,
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-100 dark:border-gray-700">
-                <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colType')}</th>
                 <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colAsset')}</th>
                 <th className="px-5 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase hidden sm:table-cell">{t('colNavInterest')}</th>
                 <th className="px-5 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase hidden md:table-cell">{t('colUnits')}</th>
                 <th className="px-5 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colCurrentValue')}</th>
-                <th className="px-5 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase hidden sm:table-cell">{t('colGainLoss')}</th>
                 <th className="px-5 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colActions')}</th>
               </tr>
             </thead>
@@ -70,16 +68,14 @@ export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds,
               {funds.map((fund) => (
                 <tr key={fund.fundId} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
                   <td className="px-5 py-4">
-                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium uppercase ${TYPE_BADGE.fund}`}>
+                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium uppercase mb-1 ${TYPE_BADGE.fund}`}>
                       {typeLabelMap.fund}
                     </span>
-                  </td>
-                  <td className="px-5 py-4">
                     <button
                       onClick={() => onFundClick(fund.fundId)}
-                      className="text-left hover:text-violet-600 dark:hover:text-violet-400 transition-colors"
+                      className="block text-left hover:text-violet-600 dark:hover:text-violet-400 transition-colors"
                     >
-                      <p className="font-medium text-gray-900 dark:text-gray-100 text-base">{fund.fundName}</p>
+                      <p className="font-medium text-gray-900 dark:text-gray-100">{fund.fundName}</p>
                     </button>
                   </td>
                   <td className="px-5 py-4 text-right text-sm text-gray-600 dark:text-gray-400 hidden sm:table-cell">
@@ -90,12 +86,7 @@ export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds,
                   </td>
                   <td className="px-5 py-4 text-right">
                     <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{fmt(fund.currentValue)}</p>
-                  </td>
-                  <td className="px-5 py-4 text-right hidden sm:table-cell">
-                    <p className={`text-sm font-medium ${fund.profitLoss >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {fmt(fund.profitLoss)}
-                    </p>
-                    <p className={`text-xs ${fund.profitLoss >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    <p className={`text-xs mt-0.5 ${fund.profitLoss >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                       {fmtPct(fund.profitLossPercentage)}
                     </p>
                   </td>
@@ -119,14 +110,12 @@ export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds,
                 return (
                   <tr key={item.transactionId} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
                     <td className="px-5 py-4">
-                      <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium uppercase ${badgeCls}`}>
+                      <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium uppercase mb-1 ${badgeCls}`}>
                         {typeLabel}
                       </span>
-                    </td>
-                    <td className="px-5 py-4">
                       {item.notes
                         ? <>
-                            <p className="font-medium text-gray-900 dark:text-gray-100 text-base">{item.notes}</p>
+                            <p className="font-medium text-gray-900 dark:text-gray-100">{item.notes}</p>
                             <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
                               {new Date(item.investmentDate).toLocaleDateString('vi-VN')}
                             </p>
@@ -136,7 +125,7 @@ export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds,
                               </p>
                             )}
                           </>
-                        : <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        : <p className="font-medium text-gray-900 dark:text-gray-100">
                             {new Date(item.investmentDate).toLocaleDateString('vi-VN')}
                           </p>
                       }
@@ -153,12 +142,7 @@ export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds,
                     </td>
                     <td className="px-5 py-4 text-right">
                       <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{fmt(item.currentValue)}</p>
-                    </td>
-                    <td className="px-5 py-4 text-right hidden sm:table-cell">
-                      <p className={`text-sm font-medium ${pl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {fmt(pl)}
-                      </p>
-                      <p className={`text-xs ${pl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      <p className={`text-xs mt-0.5 ${pl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                         {fmtPct(plPct)}
                       </p>
                     </td>
