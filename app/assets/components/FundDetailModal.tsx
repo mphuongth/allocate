@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
 import { useTranslations } from 'next-intl'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
 const fmtNav = (n: number) => '₫ ' + n.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -14,6 +14,8 @@ interface PurchaseHistory {
 }
 
 interface Props {
+  open: boolean
+  onOpenChange: (open: boolean) => void
   fundId: string
   fundName: string
   currentNAV: number
@@ -27,40 +29,21 @@ interface Props {
 }
 
 export default function FundDetailModal({
+  open, onOpenChange,
   fundName, currentNAV, quantity, currentValue, purchasePrice,
   profitLoss, profitLossPercentage, purchaseHistory, onClose,
 }: Props) {
   const t = useTranslations('dashboard')
-  const overlayRef = useRef<HTMLDivElement>(null)
   const plPositive = profitLoss >= 0
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    document.addEventListener('keydown', handler)
-    return () => document.removeEventListener('keydown', handler)
-  }, [onClose])
-
   return (
-    <div
-      ref={overlayRef}
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-      onClick={(e) => { if (e.target === overlayRef.current) onClose() }}
-    >
-      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex-shrink-0">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{fundName}</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl leading-none w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
-            aria-label="Close"
-          >
-            ×
-          </button>
-        </div>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); onOpenChange(o) }}>
+      <DialogContent className="sm:max-w-[520px] max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{fundName}</DialogTitle>
+        </DialogHeader>
 
-        {/* Scrollable content */}
-        <div className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
+        <div className="space-y-5">
           {/* Summary stats */}
           <div className="grid grid-cols-2 gap-4">
             <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
@@ -117,7 +100,7 @@ export default function FundDetailModal({
             </div>
           )}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }

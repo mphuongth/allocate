@@ -1,7 +1,10 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { useTranslations } from 'next-intl'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Progress } from '@/components/ui/progress'
 
 const fmt = (n: number | null) => n != null ? '₫ ' + Math.round(n).toLocaleString('vi-VN') : '—'
 
@@ -14,6 +17,8 @@ interface GoalOption {
 }
 
 interface Props {
+  open: boolean
+  onOpenChange: (open: boolean) => void
   fundId: string
   fundName: string
   goals: GoalOption[]
@@ -23,47 +28,24 @@ interface Props {
   error: string
 }
 
-export default function GoalPickerModal({ fundName, goals, onConfirm, onCancel, isLoading, error }: Props) {
+export default function GoalPickerModal({ open, onOpenChange, fundName, goals, onConfirm, onCancel, isLoading, error }: Props) {
   const t = useTranslations('dashboard')
   const tc = useTranslations('common')
   const [selected, setSelected] = useState<string | null>(null)
-  const overlayRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel() }
-    document.addEventListener('keydown', handler)
-    return () => document.removeEventListener('keydown', handler)
-  }, [onCancel])
 
   return (
-    <div
-      ref={overlayRef}
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-      onClick={(e) => { if (e.target === overlayRef.current && !isLoading) onCancel() }}
-    >
-      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-[440px] max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex-shrink-0">
-          <div>
-            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">{t('assignToGoalTitle')}</h2>
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{fundName}</p>
-          </div>
-          <button
-            onClick={onCancel}
-            disabled={isLoading}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl leading-none w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50"
-            aria-label="Close"
-          >
-            ×
-          </button>
-        </div>
+    <Dialog open={open} onOpenChange={(o) => { if (!o && !isLoading) { onCancel(); onOpenChange(false) } }}>
+      <DialogContent className="sm:max-w-[400px]">
+        <DialogHeader>
+          <DialogTitle>{t('assignToGoalTitle')}</DialogTitle>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{fundName}</p>
+        </DialogHeader>
 
         {error && (
-          <div className="px-6 pt-4">
-            <p className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2">{error}</p>
-          </div>
+          <p className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2">{error}</p>
         )}
 
-        <div className="overflow-y-auto flex-1 px-2 py-2">
+        <div className="overflow-y-auto max-h-[340px] -mx-1 px-1 py-1 space-y-1">
           {goals.length === 0 ? (
             <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-6">{t('noGoalsYet')}</p>
           ) : (
@@ -71,8 +53,10 @@ export default function GoalPickerModal({ fundName, goals, onConfirm, onCancel, 
               <button
                 key={goal.id}
                 onClick={() => setSelected(goal.id)}
-                className={`w-full text-left px-4 py-3 rounded-lg mb-1 transition-colors min-h-[44px] ${
-                  selected === goal.id ? 'bg-violet-50 dark:bg-violet-900/20 border border-violet-300 dark:border-violet-700' : 'hover:bg-gray-50 dark:hover:bg-gray-800 border border-transparent'
+                className={`w-full text-left px-4 py-3 rounded-lg transition-colors border min-h-[44px] ${
+                  selected === goal.id
+                    ? 'border-violet-300 bg-violet-50 dark:bg-violet-900/20'
+                    : 'border-transparent hover:border-violet-300 hover:bg-violet-50 dark:hover:bg-violet-900/10'
                 }`}
               >
                 <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{goal.name}</p>
@@ -83,33 +67,27 @@ export default function GoalPickerModal({ fundName, goals, onConfirm, onCancel, 
                   )}
                 </div>
                 {goal.progressPercent != null && (
-                  <div className="mt-2 h-1.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-                    <div className="h-full bg-violet-500 rounded-full" style={{ width: `${Math.min(goal.progressPercent, 100)}%` }} />
-                  </div>
+                  <Progress value={Math.min(100, Math.max(0, goal.progressPercent))} className="h-1 mt-2" />
                 )}
               </button>
             ))
           )}
         </div>
 
-        <div className="flex gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex-shrink-0">
-          <button
-            onClick={onCancel}
-            disabled={isLoading}
-            className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 min-h-[44px]"
-          >
+        <div className="flex gap-3">
+          <Button variant="outline" className="flex-1" onClick={onCancel} disabled={isLoading}>
             {tc('cancel')}
-          </button>
-          <button
+          </Button>
+          <Button
+            className="flex-1 bg-gray-950 hover:bg-gray-800"
             onClick={() => selected && onConfirm(selected)}
             disabled={!selected || isLoading}
-            className="flex-1 py-2 text-sm font-medium text-white bg-gray-950 rounded-lg hover:bg-gray-800 disabled:opacity-50 flex items-center justify-center gap-2 min-h-[44px]"
           >
-            {isLoading && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+            {isLoading && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />}
             {isLoading ? t('assigningGoalBtn') : t('assignGoalBtn')}
-          </button>
+          </Button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }

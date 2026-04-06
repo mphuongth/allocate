@@ -319,16 +319,15 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
         </div>
       )}
 
-      {confirmGoal && (
-        <ConfirmModal
-          title={t('deleteModal')}
-          message={t('deleteMessage', { count: confirmGoal.transactionCount })}
-          detail={`"${confirmGoal.goal_name}"`}
-          confirming={deletingGoal}
-          onConfirm={() => handleDelete(confirmGoal)}
-          onCancel={() => setConfirmGoal(null)}
-        />
-      )}
+      <ConfirmModal
+        open={!!confirmGoal}
+        title={t('deleteModal')}
+        message={confirmGoal ? t('deleteMessage', { count: confirmGoal.transactionCount }) : ''}
+        detail={confirmGoal ? `"${confirmGoal.goal_name}"` : undefined}
+        confirming={deletingGoal}
+        onConfirm={() => confirmGoal && handleDelete(confirmGoal)}
+        onCancel={() => setConfirmGoal(null)}
+      />
     </div>
   )
 }

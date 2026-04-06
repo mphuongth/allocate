@@ -3,6 +3,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { Plus, Edit, Trash2, RefreshCw, ArrowUpDown, Info } from 'lucide-react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 type FundType = 'balanced' | 'equity' | 'debt' | 'gold'
 
@@ -623,151 +628,112 @@ export default function FundLibraryClient() {
       </div>
 
       {/* Add/Edit Modal */}
-      {modalMode && (
-        <div className="fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-4">
-          <form onSubmit={(e) => { e.preventDefault(); handleSave() }} className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-[480px] max-h-[90vh] flex flex-col">
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex-shrink-0">
-              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">
-                {modalMode === 'add' ? t('addModal') : t('editModal')}
-              </h2>
-              <button
-                type="button"
-                onClick={closeModal}
-                disabled={saving}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
-                aria-label="Close"
-              >
-                ×
-              </button>
-            </div>
-            {/* Body */}
-            <div className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
+      <Dialog open={!!modalMode} onOpenChange={(o) => { if (!o) closeModal() }}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>
+              {modalMode === 'add' ? t('addModal') : t('editModal')}
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={(e) => { e.preventDefault(); handleSave() }}>
+            <div className="space-y-4 py-2">
               {formError && (
                 <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-sm rounded-lg border border-red-200 dark:border-red-800">{formError}</div>
               )}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t('nameLabel')}</label>
-                <input
+              <div className="space-y-2">
+                <Label htmlFor="fund_name">{t('nameLabel')} <span className="text-red-500">*</span></Label>
+                <Input
+                  id="fund_name"
                   type="text"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                   maxLength={255}
                   placeholder="e.g., Vanguard S&P 500 ETF"
-                  className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent text-sm"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t('codeLabel')}</label>
-                  <input
+                <div className="space-y-2">
+                  <Label htmlFor="fund_code">{t('codeLabel')} <span className="text-red-500">*</span></Label>
+                  <Input
+                    id="fund_code"
                     type="text"
                     value={formCode}
                     onChange={(e) => setFormCode(e.target.value.toUpperCase())}
                     maxLength={50}
                     placeholder="e.g., VOO"
-                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent text-sm font-mono"
+                    className="font-mono"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t('typeLabel')}</label>
-                  <select
-                    value={formType}
-                    onChange={(e) => setFormType(e.target.value as FundType)}
-                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent text-sm"
+                <div className="space-y-2">
+                  <Label htmlFor="fund_type">{t('typeLabel')} <span className="text-red-500">*</span></Label>
+                  <Select
+                    value={formType || '__none__'}
+                    onValueChange={(value) => { if (value) setFormType(value === '__none__' ? '' : value as FundType) }}
                   >
-                    <option value="">{t('selectType')}</option>
-                    {(Object.keys(FUND_TYPE_KEYS) as FundType[]).map((type) => (
-                      <option key={type} value={type}>{t(FUND_TYPE_KEYS[type])}</option>
-                    ))}
-                  </select>
+                    <SelectTrigger id="fund_type">
+                      <SelectValue placeholder={t('selectType')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">{t('selectType')}</SelectItem>
+                      {(Object.keys(FUND_TYPE_KEYS) as FundType[]).map((type) => (
+                        <SelectItem key={type} value={type}>{t(FUND_TYPE_KEYS[type])}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t('navLabel')}</label>
-                <input
+              <div className="space-y-2">
+                <Label htmlFor="fund_nav">{t('navLabel')} <span className="text-red-500">*</span></Label>
+                <Input
+                  id="fund_nav"
                   type="number"
                   value={formNav}
                   onChange={(e) => setFormNav(e.target.value)}
                   min="0.01"
                   step="0.01"
                   placeholder="e.g., 450.25"
-                  className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent text-sm"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t('navSourceLabel')}</label>
-                <input
+              <div className="space-y-2">
+                <Label htmlFor="fund_nav_url">{t('navSourceLabel')}</Label>
+                <Input
+                  id="fund_nav_url"
                   type="url"
                   value={formNavUrl}
                   onChange={(e) => setFormNavUrl(e.target.value)}
                   placeholder="e.g., https://www.vcbf.com/quy-trai-phieu"
-                  className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent text-sm"
                 />
               </div>
             </div>
-            {/* Footer */}
-            <div className="flex gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex-shrink-0">
-              <button
-                type="button"
-                onClick={closeModal}
-                disabled={saving}
-                className="flex-1 h-9 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
-              >
+            <div className="flex gap-3 pt-2">
+              <Button type="button" variant="outline" className="flex-1" onClick={closeModal} disabled={saving}>
                 {tc('cancel')}
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="flex-1 h-9 text-sm font-bold text-white bg-gray-950 hover:bg-gray-800 rounded-md transition-colors disabled:opacity-50"
-              >
+              </Button>
+              <Button type="submit" className="flex-1 bg-gray-950 hover:bg-gray-800" disabled={saving}>
                 {saving ? tc('saving') : t('saveBtn')}
-              </button>
+              </Button>
             </div>
           </form>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation Modal */}
-      {deleteTarget && (
-        <div className="fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-[400px] flex flex-col">
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex-shrink-0">
-              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">{t('deleteModal', { name: deleteTarget.name })}</h2>
-              <button
-                onClick={() => setDeleteTarget(null)}
-                disabled={deleting}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
-                aria-label="Close"
-              >
-                ×
-              </button>
-            </div>
-            {/* Body */}
-            <div className="px-6 py-5">
-              <p className="text-sm text-gray-500 dark:text-gray-400">{t('deleteCannotUndo')}</p>
-            </div>
-            {/* Footer */}
-            <div className="flex gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex-shrink-0">
-              <button
-                onClick={() => setDeleteTarget(null)}
-                disabled={deleting}
-                className="flex-1 h-9 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
-              >
-                {tc('cancel')}
-              </button>
-              <button
-                onClick={handleDelete}
-                disabled={deleting}
-                className="flex-1 h-9 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors disabled:opacity-50"
-              >
-                {deleting ? tc('deleting') : tc('delete')}
-              </button>
-            </div>
+      <Dialog open={!!deleteTarget} onOpenChange={(o) => { if (!o && !deleting) setDeleteTarget(null) }}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>{deleteTarget ? t('deleteModal', { name: deleteTarget.name }) : ''}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-500 dark:text-gray-400 py-2">{t('deleteCannotUndo')}</p>
+          <div className="flex gap-3">
+            <Button variant="outline" className="flex-1" onClick={() => setDeleteTarget(null)} disabled={deleting}>
+              {tc('cancel')}
+            </Button>
+            <Button className="flex-1 bg-red-600 hover:bg-red-700" onClick={handleDelete} disabled={deleting}>
+              {deleting ? tc('deleting') : tc('delete')}
+            </Button>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

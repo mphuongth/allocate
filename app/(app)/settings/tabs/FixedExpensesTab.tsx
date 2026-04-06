@@ -1,9 +1,13 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useTranslations } from 'next-intl'
 import { Plus, Edit, Trash2, ChevronDown } from 'lucide-react'
 import ConfirmModal from '@/app/components/ConfirmModal'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
 interface Expense {
   expense_id: string
@@ -35,86 +39,6 @@ function bustFixedCache() {
   try {
     Object.keys(localStorage).filter(k => k.startsWith(FIXED_CACHE_PREFIX)).forEach(k => localStorage.removeItem(k))
   } catch {}
-}
-
-type ExpenseForm = { expense_name: string; amount_vnd: string; category: string }
-
-function FixedExpenseModal({
-  editExpense,
-  form,
-  setForm,
-  formError,
-  saving,
-  onClose,
-  onSave,
-}: {
-  editExpense: Expense | null
-  form: ExpenseForm
-  setForm: (f: ExpenseForm) => void
-  formError: string
-  saving: boolean
-  onClose: () => void
-  onSave: () => void
-}) {
-  const t = useTranslations('expenses')
-  const tCommon = useTranslations('common')
-  const overlayRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape' && !saving) onClose() }
-    document.addEventListener('keydown', handler)
-    return () => document.removeEventListener('keydown', handler)
-  }, [onClose, saving])
-
-  return (
-    <div
-      ref={overlayRef}
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-      onClick={(e) => { if (e.target === overlayRef.current && !saving) onClose() }}
-    >
-      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-[480px] max-h-[90vh] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex-shrink-0">
-          <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">{editExpense ? t('editModal') : t('createModal')}</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={saving}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
-            aria-label="Close"
-          >
-            ×
-          </button>
-        </div>
-        {/* Body */}
-        <div className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
-          {formError && <p className="text-red-600 dark:text-red-400 text-sm">{formError}</p>}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t('nameLabel')}</label>
-            <input type="text" value={form.expense_name} onChange={(e) => setForm({ ...form, expense_name: e.target.value })}
-              placeholder={t('namePlaceholder')} className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t('categoryLabel')}</label>
-            <input type="text" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}
-              placeholder={t('categoryPlaceholder')} className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t('amountLabel')}</label>
-            <input type="number" value={form.amount_vnd} onChange={(e) => setForm({ ...form, amount_vnd: e.target.value })}
-              placeholder={t('amountPlaceholder')} className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent" />
-          </div>
-        </div>
-        {/* Footer */}
-        <div className="flex gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex-shrink-0">
-          <button type="button" onClick={onClose} disabled={saving} className="flex-1 h-9 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50">{tCommon('cancel')}</button>
-          <button type="button" onClick={onSave} disabled={saving} className="flex-1 h-9 text-sm font-bold text-white bg-gray-950 hover:bg-gray-800 rounded-md transition-colors disabled:opacity-50">
-            {saving ? tCommon('saving') : tCommon('save')}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
 }
 
 export default function FixedExpensesTab() {
@@ -303,26 +227,64 @@ export default function FixedExpensesTab() {
       </div>
 
       {/* Create/Edit Modal */}
-      {showForm && <FixedExpenseModal
-        editExpense={editExpense}
-        form={form}
-        setForm={setForm}
-        formError={formError}
-        saving={saving}
-        onClose={() => setShowForm(false)}
-        onSave={handleSave}
-      />}
+      <Dialog open={showForm} onOpenChange={(o) => { if (!o) setShowForm(false) }}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>{editExpense ? t('editModal') : t('createModal')}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={(e) => { e.preventDefault(); handleSave() }}>
+            <div className="space-y-5 py-4">
+              {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
+              <div className="space-y-2">
+                <Label htmlFor="expense_name">{t('nameLabel')} <span className="text-red-500">*</span></Label>
+                <Input
+                  id="expense_name"
+                  type="text"
+                  value={form.expense_name}
+                  onChange={(e) => setForm({ ...form, expense_name: e.target.value })}
+                  placeholder={t('namePlaceholder')}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="category">{t('categoryLabel')} <span className="text-red-500">*</span></Label>
+                <Input
+                  id="category"
+                  type="text"
+                  value={form.category}
+                  onChange={(e) => setForm({ ...form, category: e.target.value })}
+                  placeholder={t('categoryPlaceholder')}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="amount_vnd">{t('amountLabel')} <span className="text-red-500">*</span></Label>
+                <Input
+                  id="amount_vnd"
+                  type="number"
+                  value={form.amount_vnd}
+                  onChange={(e) => setForm({ ...form, amount_vnd: e.target.value })}
+                  placeholder={t('amountPlaceholder')}
+                />
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <Button type="button" variant="outline" className="flex-1" onClick={() => setShowForm(false)}>{tCommon('cancel')}</Button>
+              <Button type="submit" className="flex-1 bg-gray-950 hover:bg-gray-800" disabled={saving}>
+                {saving ? tCommon('saving') : tCommon('save')}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
 
-      {confirmExpense && (
-        <ConfirmModal
-          title={t('deleteModal')}
-          message={t('deleteMessage')}
-          detail={`${confirmExpense.expense_name} — ${fmt(confirmExpense.amount_vnd)}`}
-          confirming={deletingId === confirmExpense.expense_id}
-          onConfirm={() => handleDelete(confirmExpense)}
-          onCancel={() => setConfirmExpense(null)}
-        />
-      )}
+      <ConfirmModal
+        open={!!confirmExpense}
+        title={t('deleteModal')}
+        message={confirmExpense ? t('deleteMessage') : ''}
+        detail={confirmExpense ? `${confirmExpense.expense_name} — ${fmt(confirmExpense.amount_vnd)}` : undefined}
+        confirming={deletingId === confirmExpense?.expense_id}
+        onConfirm={() => confirmExpense && handleDelete(confirmExpense)}
+        onCancel={() => setConfirmExpense(null)}
+      />
     </div>
   )
 }

@@ -424,57 +424,59 @@ export default function DashboardClient() {
         )}
 
       {/* Fund Detail Modal */}
-      {fundDetailId && detailFund && (
-        <FundDetailModal
-          fundId={detailFund.fundId}
-          fundName={detailFund.fundName}
-          currentNAV={detailFund.currentNAV}
-          quantity={detailFund.quantity}
-          currentValue={detailFund.currentValue}
-          purchasePrice={detailFund.purchasePrice}
-          profitLoss={detailFund.profitLoss}
-          profitLossPercentage={detailFund.profitLossPercentage}
-          purchaseHistory={purchaseHistory}
-          onClose={() => { setFundDetailId(null); setPurchaseHistory([]) }}
-        />
-      )}
+      <FundDetailModal
+        open={!!(fundDetailId && detailFund)}
+        onOpenChange={(o) => { if (!o) { setFundDetailId(null); setPurchaseHistory([]) } }}
+        fundId={detailFund?.fundId ?? ''}
+        fundName={detailFund?.fundName ?? ''}
+        currentNAV={detailFund?.currentNAV ?? 0}
+        quantity={detailFund?.quantity ?? 0}
+        currentValue={detailFund?.currentValue ?? 0}
+        purchasePrice={detailFund?.purchasePrice ?? 0}
+        profitLoss={detailFund?.profitLoss ?? 0}
+        profitLossPercentage={detailFund?.profitLossPercentage ?? 0}
+        purchaseHistory={purchaseHistory}
+        onClose={() => { setFundDetailId(null); setPurchaseHistory([]) }}
+      />
 
       {/* Goal Picker Modal — funds */}
-      {goalPickerFundId && data && (
-        <GoalPickerModal
-          fundId={goalPickerFundId}
-          fundName={allFunds.find((f) => f.fundId === goalPickerFundId)?.fundName ?? ''}
-          goals={data.goals.map((g) => ({
-            id: g.goalId,
-            name: g.goalName,
-            targetAmount: g.targetAmount,
-            currentValue: g.currentValue,
-            progressPercent: g.progressPercentage,
-          }))}
-          onConfirm={(goalId) => handleAssignToGoal(goalPickerFundId, goalId)}
-          onCancel={() => { setGoalPickerFundId(null); setAssignError('') }}
-          isLoading={assignLoading}
-          error={assignError}
-        />
-      )}
+      <GoalPickerModal
+        open={!!(goalPickerFundId && data)}
+        onOpenChange={(o) => { if (!o) { setGoalPickerFundId(null); setAssignError('') } }}
+        fundId={goalPickerFundId ?? ''}
+        fundName={allFunds.find((f) => f.fundId === goalPickerFundId)?.fundName ?? ''}
+        goals={data ? data.goals.map((g) => ({
+          id: g.goalId,
+          name: g.goalName,
+          targetAmount: g.targetAmount,
+          currentValue: g.currentValue,
+          progressPercent: g.progressPercentage,
+        })) : []}
+        onConfirm={(goalId) => goalPickerFundId && handleAssignToGoal(goalPickerFundId, goalId)}
+        onCancel={() => { setGoalPickerFundId(null); setAssignError('') }}
+        isLoading={assignLoading}
+        error={assignError}
+      />
 
       {/* Goal Picker Modal — non-funds (gold, bank, stock) */}
-      {nonFundPickerTxId && data && (() => {
-        const item = data.unallocated.nonFunds.find((i) => i.transactionId === nonFundPickerTxId)
+      {(() => {
+        const item = data?.unallocated.nonFunds.find((i) => i.transactionId === nonFundPickerTxId)
         const typeLabel = item ? (item.type === 'gold' ? tt('assetGold') : item.type === 'bank' ? tt('assetBank') : tt('assetStock')) : ''
         const label = item ? `${typeLabel} · ${new Date(item.investmentDate).toLocaleDateString('vi-VN')}` : ''
         return (
           <GoalPickerModal
-            fundId={nonFundPickerTxId}
+            open={!!(nonFundPickerTxId && data)}
+            onOpenChange={(o) => { if (!o) { setNonFundPickerTxId(null); setNonFundAssignError('') } }}
+            fundId={nonFundPickerTxId ?? ''}
             fundName={label}
-            goals={data.goals.map((g) => ({
+            goals={data ? data.goals.map((g) => ({
               id: g.goalId,
               name: g.goalName,
               targetAmount: g.targetAmount,
               currentValue: g.currentValue,
               progressPercent: g.progressPercentage,
-            }))}
-            onConfirm={(goalId) => handleAssignNonFundToGoal(nonFundPickerTxId, goalId)}
+            })) : []}
+            onConfirm={(goalId) => nonFundPickerTxId && handleAssignNonFundToGoal(nonFundPickerTxId, goalId)}
             onCancel={() => { setNonFundPickerTxId(null); setNonFundAssignError('') }}
             isLoading={nonFundAssignLoading}
             error={nonFundAssignError}
