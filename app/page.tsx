@@ -69,13 +69,13 @@ export default async function HomePage() {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link
               href="/auth/signup"
-              className="px-8 py-6 bg-violet-600 text-white text-lg font-medium rounded-md hover:bg-violet-700 transition-colors"
+              className="px-8 py-3 bg-violet-600 text-white text-lg font-medium rounded-md hover:bg-violet-700 transition-colors"
             >
               {t('heroSignupBtn')}
             </Link>
             <Link
               href="/auth/login"
-              className="px-8 py-6 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-lg font-medium rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              className="px-8 py-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-lg font-medium rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               {t('heroLoginBtn')}
             </Link>
@@ -116,7 +116,7 @@ export default async function HomePage() {
           <p className="text-xl text-violet-100 mb-8 max-w-2xl mx-auto">{t('ctaSub')}</p>
           <Link
             href="/auth/signup"
-            className="inline-block px-8 py-6 bg-white text-violet-600 text-lg font-medium rounded-md hover:bg-gray-100 transition-colors"
+            className="inline-block px-8 py-3 bg-white text-violet-600 text-lg font-medium rounded-md hover:bg-gray-100 transition-colors"
           >
             {t('ctaBtn')}
           </Link>
