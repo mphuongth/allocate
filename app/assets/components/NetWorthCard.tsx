@@ -45,7 +45,7 @@ export default function NetWorthCard({
           <p className="text-sm text-gray-500 dark:text-gray-400 uppercase mb-1">
             {t('totalAssets')}
           </p>
-          <p className="text-4xl font-bold text-gray-900 dark:text-gray-100">{fmt(totalAssets)}</p>
+          <p className="text-4xl font-bold text-gray-900 dark:text-gray-100 whitespace-nowrap">{fmt(totalAssets)}</p>
 
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mt-3">
             <div>
