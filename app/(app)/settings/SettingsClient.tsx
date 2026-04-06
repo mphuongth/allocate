@@ -42,8 +42,7 @@ export default function SettingsClient({ initialTab, initialGoalId }: Props) {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">{t('title')}</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t('description')}</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400">{t('description')}</p>
       </div>
 
       {/* Tabs */}
