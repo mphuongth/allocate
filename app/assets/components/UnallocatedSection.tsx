@@ -85,7 +85,7 @@ export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds,
                     {fund.quantity.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
                   <td className="px-5 py-4 text-right">
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{fmt(fund.currentValue)}</p>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{fmt(fund.currentValue)}</p>
                     <p className={`text-xs mt-0.5 ${fund.profitLoss >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                       {fmtPct(fund.profitLossPercentage)}
                     </p>
@@ -141,7 +141,7 @@ export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds,
                         : '—'}
                     </td>
                     <td className="px-5 py-4 text-right">
-                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{fmt(item.currentValue)}</p>
+                      <p className="font-medium text-gray-900 dark:text-gray-100">{fmt(item.currentValue)}</p>
                       <p className={`text-xs mt-0.5 ${pl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                         {fmtPct(plPct)}
                       </p>
