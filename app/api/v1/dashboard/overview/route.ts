@@ -304,6 +304,13 @@ export async function GET() {
 
   const hasGold = allTxs.some((tx) => tx.asset_type === 'gold')
 
+  // Upsert today's snapshot for the history chart (fire-and-forget)
+  const today = new Date().toISOString().split('T')[0]
+  supabase.from('net_worth_snapshots').upsert(
+    { user_id: user.id, snapshot_date: today, total_assets: Math.round(totalAssets) },
+    { onConflict: 'user_id,snapshot_date' }
+  ).then(() => { /* ignore errors */ })
+
   return NextResponse.json({
     netWorth: {
       totalAssets,
