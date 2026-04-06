@@ -1,10 +1,13 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import { Inter, Geist } from 'next/font/google'
 import { Toaster } from 'sonner'
 import ThemeProvider from './components/ThemeProvider'
 import { NextIntlClientProvider } from 'next-intl'
 import { getMessages, getLocale } from 'next-intl/server'
 import './globals.css'
+import { cn } from "@/lib/utils";
+
+const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 const inter = Inter({
   subsets: ['latin'],
@@ -25,7 +28,7 @@ export default async function RootLayout({
   const locale = await getLocale()
 
   return (
-    <html lang={locale} suppressHydrationWarning>
+    <html lang={locale} suppressHydrationWarning className={cn("font-sans", geist.variable)}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: `try{var t=localStorage.getItem('theme');if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.classList.add('dark')}}catch(e){}` }} />
       </head>

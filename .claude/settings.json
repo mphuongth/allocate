@@ -1,0 +1,89 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "TaskUpdate",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/sync-braingrid-task.sh",
+            "timeout": 10000
+          },
+          {
+            "type": "command",
+            "command": ".claude/hooks/post-task-update-prompt.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "TaskCreate",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/create-braingrid-task.sh",
+            "timeout": 10000
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "TaskCreate",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/pre-task-create-naming.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "TaskUpdate",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/pre-task-update-instructions.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/verify-acceptance-criteria.sh"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/check-stale-build-sentinel.sh"
+          }
+        ]
+      }
+    ],
+    "TaskCompleted": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/task-completed-validate.sh"
+          }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": ".claude/statusline.sh",
+    "padding": 0
+  },
+  "enabledPlugins": {
+    "skill-creator@claude-plugins-official": true,
+    "supabase@claude-plugins-official": true
+  }
+}
