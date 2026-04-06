@@ -75,7 +75,7 @@ export default async function HomePage() {
             </Link>
             <Link
               href="/auth/login"
-              className="px-8 py-6 border-2 border-violet-600 text-violet-700 dark:text-violet-400 text-lg font-medium rounded-md hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors"
+              className="px-8 py-6 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-lg font-medium rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               {t('heroLoginBtn')}
             </Link>
