@@ -43,7 +43,7 @@ export default function FundDetailModal({
   return (
     <div
       ref={overlayRef}
-      className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
       onClick={(e) => { if (e.target === overlayRef.current) onClose() }}
     >
       <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">

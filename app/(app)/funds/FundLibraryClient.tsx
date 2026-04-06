@@ -625,43 +625,56 @@ export default function FundLibraryClient() {
       {/* Add/Edit Modal */}
       {modalMode && (
         <div className="fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-4">
-          <form onSubmit={(e) => { e.preventDefault(); handleSave() }} className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-md p-6 border border-gray-200 dark:border-gray-700">
-            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">
-              {modalMode === 'add' ? t('addModal') : t('editModal')}
-            </h2>
-            {formError && (
-              <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-sm rounded-lg border border-red-200 dark:border-red-800">{formError}</div>
-            )}
-            <div className="space-y-4">
+          <form onSubmit={(e) => { e.preventDefault(); handleSave() }} className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-[480px] max-h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex-shrink-0">
+              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                {modalMode === 'add' ? t('addModal') : t('editModal')}
+              </h2>
+              <button
+                type="button"
+                onClick={closeModal}
+                disabled={saving}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            {/* Body */}
+            <div className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
+              {formError && (
+                <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-sm rounded-lg border border-red-200 dark:border-red-800">{formError}</div>
+              )}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('nameLabel')}</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t('nameLabel')}</label>
                 <input
                   type="text"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                   maxLength={255}
                   placeholder="e.g., Vanguard S&P 500 ETF"
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                  className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent text-sm"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('codeLabel')}</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t('codeLabel')}</label>
                   <input
                     type="text"
                     value={formCode}
                     onChange={(e) => setFormCode(e.target.value.toUpperCase())}
                     maxLength={50}
                     placeholder="e.g., VOO"
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-mono"
+                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent text-sm font-mono"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('typeLabel')}</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t('typeLabel')}</label>
                   <select
                     value={formType}
                     onChange={(e) => setFormType(e.target.value as FundType)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent text-sm"
                   >
                     <option value="">{t('selectType')}</option>
                     {(Object.keys(FUND_TYPE_KEYS) as FundType[]).map((type) => (
@@ -671,7 +684,7 @@ export default function FundLibraryClient() {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('navLabel')}</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t('navLabel')}</label>
                 <input
                   type="number"
                   value={formNav}
@@ -679,33 +692,34 @@ export default function FundLibraryClient() {
                   min="0.01"
                   step="0.01"
                   placeholder="e.g., 450.25"
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                  className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent text-sm"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('navSourceLabel')}</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t('navSourceLabel')}</label>
                 <input
                   type="url"
                   value={formNavUrl}
                   onChange={(e) => setFormNavUrl(e.target.value)}
                   placeholder="e.g., https://www.vcbf.com/quy-trai-phieu"
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                  className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent text-sm"
                 />
               </div>
             </div>
-            <div className="flex gap-3 mt-6">
+            {/* Footer */}
+            <div className="flex gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex-shrink-0">
               <button
                 type="button"
                 onClick={closeModal}
                 disabled={saving}
-                className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
+                className="flex-1 h-9 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
               >
                 {tc('cancel')}
               </button>
               <button
                 type="submit"
                 disabled={saving}
-                className="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+                className="flex-1 h-9 text-sm font-bold text-white bg-gray-950 hover:bg-gray-800 rounded-md transition-colors disabled:opacity-50"
               >
                 {saving ? tc('saving') : t('saveBtn')}
               </button>
@@ -717,21 +731,36 @@ export default function FundLibraryClient() {
       {/* Delete Confirmation Modal */}
       {deleteTarget && (
         <div className="fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-sm p-6 border border-gray-200 dark:border-gray-700">
-            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-2">{t('deleteModal', { name: deleteTarget.name })}</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">{t('deleteCannotUndo')}</p>
-            <div className="flex gap-3">
+          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-[400px] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex-shrink-0">
+              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">{t('deleteModal', { name: deleteTarget.name })}</h2>
               <button
                 onClick={() => setDeleteTarget(null)}
                 disabled={deleting}
-                className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            {/* Body */}
+            <div className="px-6 py-5">
+              <p className="text-sm text-gray-500 dark:text-gray-400">{t('deleteCannotUndo')}</p>
+            </div>
+            {/* Footer */}
+            <div className="flex gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex-shrink-0">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                disabled={deleting}
+                className="flex-1 h-9 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
               >
                 {tc('cancel')}
               </button>
               <button
                 onClick={handleDelete}
                 disabled={deleting}
-                className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+                className="flex-1 h-9 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors disabled:opacity-50"
               >
                 {deleting ? tc('deleting') : tc('delete')}
               </button>

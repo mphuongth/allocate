@@ -482,11 +482,12 @@ export default function InvestmentTransactionsTab() {
       {showImport && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex-shrink-0">
               <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">{t('importModalTitle')}</h3>
               <button
                 onClick={() => setShowImport(false)}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl leading-none"
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                aria-label="Close"
               >
                 ×
               </button>
@@ -494,11 +495,11 @@ export default function InvestmentTransactionsTab() {
 
             <div className="px-6 py-5 space-y-4 overflow-y-auto flex-1">
               <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t('assetFund')}</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t('assetFund')}</label>
                 <select
                   value={importFundId}
                   onChange={(e) => setImportFundId(e.target.value)}
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
                 >
                   <option value="">{t('selectFund')}</option>
                   {funds.map((f) => (
@@ -508,7 +509,7 @@ export default function InvestmentTransactionsTab() {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   {t('pasteFromExcel')}
                 </label>
                 <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">
@@ -519,7 +520,7 @@ export default function InvestmentTransactionsTab() {
                   onChange={(e) => handleImportPaste(e.target.value)}
                   rows={6}
                   placeholder={"7/2023\t10,000,000\t9,876,543\t23,375.28\t42.78\n8/2023\t10,000,000\t9,876,543\t24,100.00\t40.98"}
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm font-mono bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm font-mono bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent resize-none"
                 />
               </div>
 
@@ -562,14 +563,14 @@ export default function InvestmentTransactionsTab() {
             <div className="flex gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700">
               <button
                 onClick={() => setShowImport(false)}
-                className="flex-1 px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+                className="flex-1 h-9 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
               >
                 {tc('cancel')}
               </button>
               <button
                 onClick={handleImport}
                 disabled={importing || !importFundId || importRows.filter((r) => !r.error).length === 0}
-                className="flex-1 px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                className="flex-1 h-9 text-sm font-bold bg-gray-950 text-white rounded-md hover:bg-gray-800 transition-colors disabled:opacity-50"
               >
                 {importing ? t('importing') : t('importCount', { count: importRows.filter((r) => !r.error).length })}
               </button>
@@ -581,28 +582,29 @@ export default function InvestmentTransactionsTab() {
       {/* Add/Edit Modal */}
       {formMode && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <form onSubmit={(e) => { e.preventDefault(); handleSave() }} className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+          <form onSubmit={(e) => { e.preventDefault(); handleSave() }} className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-[480px] max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex-shrink-0">
               <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
                 {formMode === 'add' ? t('create') : tc('edit')}
               </h3>
               <button
                 type="button"
                 onClick={() => setFormMode(null)}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl leading-none"
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                aria-label="Close"
               >
                 ×
               </button>
             </div>
 
-            <div className="px-6 py-5 space-y-4">
+            <div className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
               {/* Asset Type */}
               <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t('filterAssetType')}</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t('filterAssetType')}</label>
                 <select
                   value={txForm.asset_type}
                   onChange={(e) => setTxForm((f) => ({ ...f, asset_type: e.target.value, fund_id: '', unit_price: '', units: '', interest_rate: '', expiry_date: '' }))}
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
                 >
                   {ASSET_TYPES.map((type) => (
                     <option key={type} value={type}>{t(`asset${type.charAt(0).toUpperCase() + type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold')}</option>
@@ -612,11 +614,11 @@ export default function InvestmentTransactionsTab() {
 
               {/* Goal */}
               <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t('colGoal')}</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t('colGoal')}</label>
                 <select
                   value={txForm.goal_id}
                   onChange={(e) => setTxForm((f) => ({ ...f, goal_id: e.target.value }))}
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
                 >
                   <option value="">{t('noGoal')}</option>
                   {goals.map((g) => (
@@ -628,11 +630,11 @@ export default function InvestmentTransactionsTab() {
               {/* Fund picker — only for fund type */}
               {txForm.asset_type === 'fund' && (
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t('assetFund')}</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t('assetFund')}</label>
                   <select
                     value={txForm.fund_id}
                     onChange={(e) => setTxForm((f) => ({ ...f, fund_id: e.target.value }))}
-                    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
                   >
                     <option value="">{t('selectFund')}</option>
                     {funds.map((f) => (
@@ -644,24 +646,24 @@ export default function InvestmentTransactionsTab() {
 
               {/* Date */}
               <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t('colDate')}</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t('colDate')}</label>
                 <input
                   type="date"
                   value={txForm.investment_date}
                   onChange={(e) => setTxForm((f) => ({ ...f, investment_date: e.target.value }))}
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
                 />
               </div>
 
               {/* Amount */}
               <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t('colAmount')}</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t('colAmount')}</label>
                 <input
                   type="number"
                   value={txForm.amount_vnd}
                   onChange={(e) => setTxForm((f) => ({ ...f, amount_vnd: e.target.value }))}
                   placeholder="VD: 10000000"
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
                 />
               </div>
 
@@ -669,23 +671,23 @@ export default function InvestmentTransactionsTab() {
               {txForm.asset_type !== 'bank' && (
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                       {txForm.asset_type === 'fund' ? t('navAtBuy') : t('unitPrice')}
                     </label>
                     <input
                       type="number"
                       value={txForm.unit_price}
                       onChange={(e) => setTxForm((f) => ({ ...f, unit_price: e.target.value }))}
-                      className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{txForm.asset_type === 'fund' ? t('unitsFund') : txForm.asset_type === 'stock' ? t('unitsStock') : txForm.asset_type === 'gold' ? t('unitsGold') : t('unitsDefault')}</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{txForm.asset_type === 'fund' ? t('unitsFund') : txForm.asset_type === 'stock' ? t('unitsStock') : txForm.asset_type === 'gold' ? t('unitsGold') : t('unitsDefault')}</label>
                     <input
                       type="number"
                       value={txForm.units}
                       onChange={(e) => setTxForm((f) => ({ ...f, units: e.target.value }))}
-                      className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
                     />
                   </div>
                 </div>
@@ -695,23 +697,23 @@ export default function InvestmentTransactionsTab() {
               {txForm.asset_type === 'bank' && (
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t('colInterest')}</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t('colInterest')}</label>
                     <input
                       type="number"
                       step="0.01"
                       value={txForm.interest_rate}
                       onChange={(e) => setTxForm((f) => ({ ...f, interest_rate: e.target.value }))}
                       placeholder="VD: 6.5"
-                      className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t('colExpiry')}</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t('colExpiry')}</label>
                     <input
                       type="date"
                       value={txForm.expiry_date}
                       onChange={(e) => setTxForm((f) => ({ ...f, expiry_date: e.target.value }))}
-                      className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
                     />
                   </div>
                 </div>
@@ -719,12 +721,12 @@ export default function InvestmentTransactionsTab() {
 
               {/* Notes */}
               <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{tc('notes')}</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{tc('notes')}</label>
                 <input
                   type="text"
                   value={txForm.notes}
                   onChange={(e) => setTxForm((f) => ({ ...f, notes: e.target.value }))}
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
                 />
               </div>
 
@@ -733,18 +735,18 @@ export default function InvestmentTransactionsTab() {
               )}
             </div>
 
-            <div className="flex gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700">
+            <div className="flex gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex-shrink-0">
               <button
                 type="button"
                 onClick={() => setFormMode(null)}
-                className="flex-1 px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+                className="flex-1 h-9 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
               >
                 {tc('cancel')}
               </button>
               <button
                 type="submit"
                 disabled={saving}
-                className="flex-1 px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                className="flex-1 h-9 text-sm font-bold text-white bg-gray-950 hover:bg-gray-800 rounded-md transition-colors disabled:opacity-50"
               >
                 {saving ? tc('saving') : tc('save')}
               </button>

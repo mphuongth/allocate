@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslations } from 'next-intl'
 import { Plus, Edit, Trash2 } from 'lucide-react'
 import ConfirmModal from '@/app/components/ConfirmModal'
@@ -35,6 +35,98 @@ function setInsCache(data: InsuranceMember[]) {
 }
 function bustInsCache() {
   try { localStorage.removeItem(INS_CACHE_KEY) } catch {}
+}
+
+type InsuranceForm = { member_name: string; relationship: string; annual_payment_vnd: string; payment_date: string }
+
+function InsuranceMemberModal({
+  editMember,
+  form,
+  setForm,
+  formError,
+  saving,
+  onClose,
+  onSave,
+}: {
+  editMember: InsuranceMember | null
+  form: InsuranceForm
+  setForm: (f: InsuranceForm) => void
+  formError: string
+  saving: boolean
+  onClose: () => void
+  onSave: () => void
+}) {
+  const t = useTranslations('insurance')
+  const tCommon = useTranslations('common')
+  const overlayRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape' && !saving) onClose() }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [onClose, saving])
+
+  return (
+    <div
+      ref={overlayRef}
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      onClick={(e) => { if (e.target === overlayRef.current && !saving) onClose() }}
+    >
+      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-[480px] max-h-[90vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex-shrink-0">
+          <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">{editMember ? t('editModal') : t('addModal')}</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
+            aria-label="Close"
+          >
+            ×
+          </button>
+        </div>
+        {/* Body */}
+        <div className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
+          {formError && <p className="text-red-600 dark:text-red-400 text-sm">{formError}</p>}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t('nameLabel')}</label>
+            <input type="text" value={form.member_name} onChange={(e) => setForm({ ...form, member_name: e.target.value })}
+              placeholder={t('namePlaceholder')} className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t('relationshipLabel')}</label>
+            <input type="text" value={form.relationship} onChange={(e) => setForm({ ...form, relationship: e.target.value })}
+              placeholder={t('relationshipPlaceholder')} className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t('annualLabel')}</label>
+            <input type="number" value={form.annual_payment_vnd} onChange={(e) => setForm({ ...form, annual_payment_vnd: e.target.value })}
+              placeholder={t('annualPlaceholder')} className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent" />
+            {form.annual_payment_vnd && Number(form.annual_payment_vnd) > 0 && (
+              <div className="mt-2 bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-lg px-3 py-2">
+                <p className="text-sm text-violet-800 dark:text-violet-300">
+                  <span className="font-medium">{t('monthly')}:</span> {fmt(Math.round(Number(form.annual_payment_vnd) / 12))}
+                </p>
+              </div>
+            )}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t('paymentDateLabel')}</label>
+            <input type="date" value={form.payment_date} onChange={(e) => setForm({ ...form, payment_date: e.target.value })}
+              className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent" />
+          </div>
+        </div>
+        {/* Footer */}
+        <div className="flex gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex-shrink-0">
+          <button type="button" onClick={onClose} disabled={saving} className="flex-1 h-9 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50">{tCommon('cancel')}</button>
+          <button type="button" onClick={onSave} disabled={saving} className="flex-1 h-9 text-sm font-bold text-white bg-gray-950 hover:bg-gray-800 rounded-md transition-colors disabled:opacity-50">
+            {saving ? tCommon('saving') : tCommon('save')}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export default function InsuranceMembersTab() {
@@ -226,45 +318,15 @@ export default function InsuranceMembersTab() {
       </div>
 
       {/* Create/Edit Modal */}
-      {showForm && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <form onSubmit={(e) => { e.preventDefault(); handleSave() }} className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-sm p-6 border border-gray-100 dark:border-gray-700">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{editMember ? t('editModal') : t('addModal')}</h3>
-            {formError && <p className="text-red-600 dark:text-red-400 text-sm mb-3">{formError}</p>}
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('nameLabel')}</label>
-                <input type="text" value={form.member_name} onChange={(e) => setForm({ ...form, member_name: e.target.value })}
-                  placeholder={t('namePlaceholder')} className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('relationshipLabel')}</label>
-                <input type="text" value={form.relationship} onChange={(e) => setForm({ ...form, relationship: e.target.value })}
-                  placeholder={t('relationshipPlaceholder')} className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('annualLabel')}</label>
-                <input type="number" value={form.annual_payment_vnd} onChange={(e) => setForm({ ...form, annual_payment_vnd: e.target.value })}
-                  placeholder={t('annualPlaceholder')} className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                {form.annual_payment_vnd && Number(form.annual_payment_vnd) > 0 && (
-                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{t('monthly')}: {fmt(Math.round(Number(form.annual_payment_vnd) / 12))}</p>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('paymentDateLabel')}</label>
-                <input type="date" value={form.payment_date} onChange={(e) => setForm({ ...form, payment_date: e.target.value })}
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-              </div>
-            </div>
-            <div className="flex gap-3 mt-5">
-              <button type="button" onClick={() => setShowForm(false)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">{tCommon('cancel')}</button>
-              <button type="submit" disabled={saving} className="flex-1 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50">
-                {saving ? tCommon('saving') : tCommon('save')}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+      {showForm && <InsuranceMemberModal
+        editMember={editMember}
+        form={form}
+        setForm={setForm}
+        formError={formError}
+        saving={saving}
+        onClose={() => setShowForm(false)}
+        onSave={handleSave}
+      />}
 
       {confirmMember && (
         <ConfirmModal
