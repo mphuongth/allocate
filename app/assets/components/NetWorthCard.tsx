@@ -40,17 +40,17 @@ export default function NetWorthCard({
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 h-full flex flex-col">
       {/* Header row */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-6">
         <div>
           <p className="text-sm text-gray-500 dark:text-gray-400 uppercase mb-1">
             {t('totalAssets')}
           </p>
           <p className="text-4xl font-bold text-gray-900 dark:text-gray-100">{fmt(totalAssets)}</p>
 
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-1 mt-3">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mt-3">
             <div>
               <p className="text-xs text-gray-500 dark:text-gray-400 uppercase">{t('gainLossAll')}</p>
-              <p className={`text-sm font-semibold ${plPositive ? 'text-green-600' : 'text-red-600'}`}>
+              <p className={`text-sm font-semibold mt-0.5 ${plPositive ? 'text-green-600' : 'text-red-600'}`}>
                 {fmt(overallProfitLoss)} ({fmtPct(overallProfitLossPercentage)})
               </p>
             </div>
@@ -59,17 +59,17 @@ export default function NetWorthCard({
                 {t('plPercent')}
                 {navStale && <span title={t('navStaleTooltip')} className="ml-1 text-amber-500">⚠</span>}
               </p>
-              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{fmtPct(overallProfitLossPercentage)}</p>
+              <p className="text-sm font-semibold mt-0.5 text-gray-900 dark:text-gray-100">{fmtPct(overallProfitLossPercentage)}</p>
             </div>
             <div>
               <p className="text-xs text-gray-500 dark:text-gray-400 uppercase">{t('investmentAssets')}</p>
-              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{fmt(currentValue)}</p>
+              <p className="text-sm font-semibold mt-0.5 text-gray-900 dark:text-gray-100">{fmt(currentValue)}</p>
             </div>
           </div>
         </div>
 
         {/* Time range selector */}
-        <div className="flex gap-1 flex-shrink-0 ml-4">
+        <div className="flex gap-1.5 flex-shrink-0 ml-4">
           {TIME_RANGES.map((r) => (
             <button
               key={r}
