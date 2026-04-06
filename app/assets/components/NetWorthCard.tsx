@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useTranslations } from 'next-intl'
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 
 const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
 const fmtShort = (n: number) => {
@@ -14,6 +14,12 @@ const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`
 
 const TIME_RANGES = ['6m', '1y', '3y', 'All'] as const
 type TimeRange = typeof TIME_RANGES[number]
+
+const RANGE_PARAM: Record<TimeRange, string> = {
+  '6m': '6m', '1y': '1y', '3y': '3y', 'All': 'all',
+}
+
+interface ChartPoint { label: string; value: number }
 
 interface Props {
   totalAssets: number
@@ -32,10 +38,17 @@ export default function NetWorthCard({
 }: Props) {
   const t = useTranslations('dashboard')
   const plPositive = overallProfitLoss >= 0
-  const [timeRange, setTimeRange] = useState<TimeRange>('6m')
+  const [timeRange, setTimeRange] = useState<TimeRange>('All')
+  const [history, setHistory] = useState<ChartPoint[]>([])
 
-  // Placeholder chart data — single current point. Real history requires backend support.
-  const chartData = [{ label: t('now'), value: netWorth }]
+  useEffect(() => {
+    fetch(`/api/v1/dashboard/history?range=${RANGE_PARAM[timeRange]}`)
+      .then((r) => r.ok ? r.json() : [])
+      .then((data: ChartPoint[]) => setHistory(data))
+      .catch(() => setHistory([]))
+  }, [timeRange])
+
+  const hasChart = history.length > 1
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 h-full flex flex-col">
@@ -88,20 +101,19 @@ export default function NetWorthCard({
 
       {/* Chart */}
       <div className="flex-1 min-h-[160px]">
-        {chartData.length > 1 ? (
+        {hasChart ? (
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+            <AreaChart data={history} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="netWorthGradient" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.25} />
                   <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis dataKey="label" stroke="#9ca3af" fontSize={11} tickLine={false} axisLine={false} />
               <YAxis stroke="#9ca3af" fontSize={11} tickLine={false} axisLine={false} tickFormatter={fmtShort} width={55} />
               <Tooltip
-                formatter={(v) => fmt(Number(v))}
+                formatter={(v) => [fmt(Number(v)), t('totalAssets')]}
                 contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '12px' }}
               />
               <Area type="monotone" dataKey="value" stroke="#8b5cf6" strokeWidth={2} fill="url(#netWorthGradient)" dot={false} />
