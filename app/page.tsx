@@ -69,13 +69,13 @@ export default async function HomePage() {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link
               href="/auth/signup"
-              className="px-8 py-4 bg-violet-600 text-white text-lg font-medium rounded-lg hover:bg-violet-700 transition-colors shadow-sm"
+              className="px-8 py-6 bg-violet-600 text-white text-lg font-medium rounded-md hover:bg-violet-700 transition-colors"
             >
               {t('heroSignupBtn')}
             </Link>
             <Link
               href="/auth/login"
-              className="px-8 py-4 border-2 border-violet-600 text-violet-700 dark:text-violet-400 text-lg font-medium rounded-lg hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors"
+              className="px-8 py-6 border-2 border-violet-600 text-violet-700 dark:text-violet-400 text-lg font-medium rounded-md hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors"
             >
               {t('heroLoginBtn')}
             </Link>
@@ -116,7 +116,7 @@ export default async function HomePage() {
           <p className="text-xl text-violet-100 mb-8 max-w-2xl mx-auto">{t('ctaSub')}</p>
           <Link
             href="/auth/signup"
-            className="inline-block px-8 py-4 bg-white text-violet-600 text-lg font-medium rounded-lg hover:bg-gray-100 transition-colors"
+            className="inline-block px-8 py-6 bg-white text-violet-600 text-lg font-medium rounded-md hover:bg-gray-100 transition-colors"
           >
             {t('ctaBtn')}
           </Link>
