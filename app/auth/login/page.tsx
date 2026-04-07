@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
+import { Eye, EyeOff } from 'lucide-react'
 
 function LoginForm() {
   const t = useTranslations('auth')
@@ -22,6 +23,7 @@ function LoginForm() {
   const [error, setError] = useState<string | null>(expired ? t('sessionExpired') : null)
   const [loading, setLoading] = useState(false)
   const [redirecting, setRedirecting] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -90,15 +92,26 @@ function LoginForm() {
                 {t('forgotPassword')}
               </span>
             </div>
-            <Input
-              id="password"
-              type="password"
-              name="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-            />
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                name="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="pr-10"
+              />
+              <button
+                type="button"
+                tabIndex={-1}
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
           </div>
 
           <Button

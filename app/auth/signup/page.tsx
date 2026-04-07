@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
+import { Eye, EyeOff } from 'lucide-react'
 
 export default function SignupPage() {
   const t = useTranslations('auth')
@@ -23,6 +24,8 @@ export default function SignupPage() {
   const [formError, setFormError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [confirmSent, setConfirmSent] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
 
   function handlePasswordBlur() {
     if (password && password.length < 8) {
@@ -146,17 +149,28 @@ export default function SignupPage() {
 
             <div className="space-y-2">
               <Label htmlFor="password">{t('passwordLabel')} <span className="text-red-500">*</span></Label>
-              <Input
-                id="password"
-                type="password"
-                name="password"
-                required
-                minLength={8}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                onBlur={handlePasswordBlur}
-                placeholder="••••••••"
-              />
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  name="password"
+                  required
+                  minLength={8}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onBlur={handlePasswordBlur}
+                  placeholder="••••••••"
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
               {passwordError
                 ? <p className="text-sm text-red-600 dark:text-red-400">{passwordError}</p>
                 : <p className="text-xs text-gray-500 dark:text-gray-400">{t('passwordTooShort')}</p>
@@ -165,17 +179,28 @@ export default function SignupPage() {
 
             <div className="space-y-2">
               <Label htmlFor="confirmPassword">{t('confirmPasswordLabel')} <span className="text-red-500">*</span></Label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                name="confirmPassword"
-                required
-                minLength={8}
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                onBlur={handleConfirmBlur}
-                placeholder="••••••••"
-              />
+              <div className="relative">
+                <Input
+                  id="confirmPassword"
+                  type={showConfirm ? 'text' : 'password'}
+                  name="confirmPassword"
+                  required
+                  minLength={8}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  onBlur={handleConfirmBlur}
+                  placeholder="••••••••"
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  onClick={() => setShowConfirm((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                >
+                  {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
               {confirmError && (
                 <p className="text-sm text-red-600 dark:text-red-400">{confirmError}</p>
               )}
