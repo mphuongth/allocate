@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslations } from 'next-intl'
-import { Plus, Download, Edit, Trash2, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
+import { Plus, FileSpreadsheet, Edit, Trash2, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
 import ConfirmModal from '@/app/components/ConfirmModal'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -329,7 +329,7 @@ export default function InvestmentTransactionsTab() {
             onClick={() => { setShowImport(true); setImportRaw(''); setImportRows([]); setImportFundId('') }}
             className="flex items-center gap-2 h-9 px-3 sm:px-4 text-sm font-medium text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           >
-            <Download className="h-4 w-4 shrink-0" />
+            <FileSpreadsheet className="h-4 w-4 shrink-0" />
             <span className="hidden sm:inline">{t('importFromExcel')}</span>
           </button>
           <button
