@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Edit } from 'lucide-react'
+import { Edit, AlertTriangle } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -201,20 +201,23 @@ export default function InsuranceSection({ plan, insuranceMembers, onRefresh, on
 
       {/* Skip Confirmation */}
       <Dialog open={!!confirmSkip} onOpenChange={(o) => { if (!o) setConfirmSkip(null) }}>
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent className="sm:max-w-[440px]">
           <DialogHeader>
-            <DialogTitle>{t('skipModal')}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-600" />
+              {t('skipModal')}
+            </DialogTitle>
           </DialogHeader>
-          {confirmSkip && (
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-5">
-              {t('skipMessage', { name: confirmSkip.member_name })}
-            </p>
-          )}
-          <div className="flex gap-3 mt-4">
-            <Button variant="outline" className="flex-1" onClick={() => setConfirmSkip(null)}>{tc('cancel')}</Button>
+          <div className="py-4">
             {confirmSkip && (
-              <Button className="flex-1 bg-red-600 hover:bg-red-700" onClick={() => handleSkip(confirmSkip)}>{t('skipConfirm')}</Button>
+              <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                {t('skipMessage', { name: confirmSkip.member_name })}
+              </p>
             )}
+          </div>
+          <div className="flex gap-3">
+            <Button variant="outline" className="flex-1" onClick={() => setConfirmSkip(null)}>{tc('cancel')}</Button>
+            <Button className="flex-1 bg-red-600 hover:bg-red-700" onClick={() => confirmSkip && handleSkip(confirmSkip)}>{t('skipConfirm')}</Button>
           </div>
         </DialogContent>
       </Dialog>

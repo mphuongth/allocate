@@ -20,15 +20,15 @@ export default function ConfirmModal({ open, title, message, detail, confirmLabe
   const tc = useTranslations('common')
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o && !confirming) onCancel() }}>
-      <DialogContent className="sm:max-w-[420px]">
+      <DialogContent className="sm:max-w-[440px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-red-600" />
             {title}
           </DialogTitle>
         </DialogHeader>
-        <div className="py-2">
-          <p className="text-sm text-gray-600 dark:text-gray-400">{message}</p>
+        <div className="py-4">
+          <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{message}</p>
           {detail && <p className="text-sm font-medium text-gray-800 dark:text-gray-200 mt-1">{detail}</p>}
         </div>
         <div className="flex gap-3">

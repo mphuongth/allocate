@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
-import { Plus, Edit, Trash2, RefreshCw, ArrowUpDown, Info } from 'lucide-react'
+import { Plus, Edit, Trash2, RefreshCw, ArrowUpDown, Info, AlertTriangle } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -718,11 +718,16 @@ export default function FundLibraryClient() {
 
       {/* Delete Confirmation Modal */}
       <Dialog open={!!deleteTarget} onOpenChange={(o) => { if (!o && !deleting) setDeleteTarget(null) }}>
-        <DialogContent className="sm:max-w-[420px]">
+        <DialogContent className="sm:max-w-[440px]">
           <DialogHeader>
-            <DialogTitle>{deleteTarget ? t('deleteModal', { name: deleteTarget.name }) : ''}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-600" />
+              {deleteTarget ? t('deleteModal', { name: deleteTarget.name }) : ''}
+            </DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-gray-500 dark:text-gray-400 py-2">{t('deleteCannotUndo')}</p>
+          <div className="py-4">
+            <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{t('deleteCannotUndo')}</p>
+          </div>
           <div className="flex gap-3">
             <Button variant="outline" className="flex-1" onClick={() => setDeleteTarget(null)} disabled={deleting}>
               {tc('cancel')}

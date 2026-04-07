@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Edit, Trash2 } from 'lucide-react'
+import { Plus, Edit, Trash2, AlertTriangle } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -214,16 +214,19 @@ export default function DirectSavingsSection({ plan, savings, goals, onRefresh, 
 
       {/* Delete Confirmation */}
       <Dialog open={!!confirmDelete} onOpenChange={(o) => { if (!o) setConfirmDelete(null) }}>
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent className="sm:max-w-[440px]">
           <DialogHeader>
-            <DialogTitle>{t('deleteSavingsModal')}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-600" />
+              {t('deleteSavingsModal')}
+            </DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-5">{t('deleteSavingsMessage')}</p>
-          <div className="flex gap-3 mt-4">
+          <div className="py-4">
+            <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{t('deleteSavingsMessage')}</p>
+          </div>
+          <div className="flex gap-3">
             <Button variant="outline" className="flex-1" onClick={() => setConfirmDelete(null)}>{tc('cancel')}</Button>
-            {confirmDelete && (
-              <Button className="flex-1 bg-red-600 hover:bg-red-700" onClick={() => handleDelete(confirmDelete)}>{tc('confirm')}</Button>
-            )}
+            <Button className="flex-1 bg-red-600 hover:bg-red-700" onClick={() => confirmDelete && handleDelete(confirmDelete)}>{tc('delete')}</Button>
           </div>
         </DialogContent>
       </Dialog>
