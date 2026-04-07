@@ -406,12 +406,16 @@ export default function InvestmentTransactionsTab() {
                   ? (tx.unit_price != null ? fmtNav(tx.unit_price) : '—')
                   : (tx.interest_rate != null ? `${tx.interest_rate}%` : '—')
                 const rateOrNavLabel = tx.asset_type === 'fund' ? t('colTransaction') : t('colInterest')
+                const fundCode = tx.asset_type === 'fund' ? funds.find(f => f.id === tx.fund_id)?.code : null
                 return (
                   <div key={tx.transaction_id} className="py-3 space-y-2">
                     <div className="flex items-start justify-between gap-2">
-                      <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${ASSET_COLORS[tx.asset_type as AssetType] ?? 'bg-gray-100 text-gray-700'}`}>
-                        {t(`asset${tx.asset_type.charAt(0).toUpperCase() + tx.asset_type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold') ?? tx.asset_type}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${ASSET_COLORS[tx.asset_type as AssetType] ?? 'bg-gray-100 text-gray-700'}`}>
+                          {t(`asset${tx.asset_type.charAt(0).toUpperCase() + tx.asset_type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold') ?? tx.asset_type}
+                        </span>
+                        {fundCode && <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{fundCode}</span>}
+                      </div>
                       <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">{new Date(tx.investment_date).toLocaleDateString('vi-VN')}</span>
                     </div>
                     <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
@@ -479,13 +483,17 @@ export default function InvestmentTransactionsTab() {
                     const rateOrNav = tx.asset_type === 'fund'
                       ? (tx.unit_price != null ? fmtNav(tx.unit_price) : '—')
                       : (tx.interest_rate != null ? `${tx.interest_rate}%` : '—')
+                    const fundCode = tx.asset_type === 'fund' ? funds.find(f => f.id === tx.fund_id)?.code : null
                     return (
                       <tr key={tx.transaction_id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
                         <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{new Date(tx.investment_date).toLocaleDateString('vi-VN')}</td>
                         <td className="px-4 py-3">
-                          <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${ASSET_COLORS[tx.asset_type as AssetType] ?? 'bg-gray-100 text-gray-700'}`}>
-                            {t(`asset${tx.asset_type.charAt(0).toUpperCase() + tx.asset_type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold') ?? tx.asset_type}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${ASSET_COLORS[tx.asset_type as AssetType] ?? 'bg-gray-100 text-gray-700'}`}>
+                              {t(`asset${tx.asset_type.charAt(0).toUpperCase() + tx.asset_type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold') ?? tx.asset_type}
+                            </span>
+                            {fundCode && <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{fundCode}</span>}
+                          </div>
                         </td>
                         <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-gray-100">{fmt(tx.amount_vnd)}</td>
                         <td className="px-4 py-3 text-right text-sm text-gray-600 dark:text-gray-400">{tx.units ?? '—'}</td>
