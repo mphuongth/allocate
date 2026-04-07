@@ -8,6 +8,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+
+const EXPENSE_CATEGORIES = ['Housing', 'Utilities', 'Transportation', 'Insurance', 'Parents', 'Education', 'Subscriptions', 'Other']
 
 interface Expense {
   expense_id: string
@@ -247,13 +250,13 @@ export default function FixedExpensesTab() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="category">{t('categoryLabel')} <span className="text-red-500">*</span></Label>
-                <Input
-                  id="category"
-                  type="text"
-                  value={form.category}
-                  onChange={(e) => setForm({ ...form, category: e.target.value })}
-                  placeholder={t('categoryPlaceholder')}
-                />
+                <Select value={form.category || '__none__'} onValueChange={(v) => setForm({ ...form, category: !v || v === '__none__' ? '' : v })}>
+                  <SelectTrigger id="category"><SelectValue placeholder={t('categoryPlaceholder')} /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">{t('categoryPlaceholder')}</SelectItem>
+                    {EXPENSE_CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="amount_vnd">{t('amountLabel')} <span className="text-red-500">*</span></Label>
@@ -268,7 +271,7 @@ export default function FixedExpensesTab() {
             </div>
             <div className="flex gap-3">
               <Button type="button" variant="outline" className="flex-1" onClick={() => setShowForm(false)}>{tCommon('cancel')}</Button>
-              <Button type="submit" className="flex-1 bg-gray-950 hover:bg-gray-800" disabled={saving}>
+              <Button type="submit" className="flex-1 bg-violet-600 hover:bg-violet-700" disabled={saving}>
                 {saving ? tCommon('saving') : tCommon('save')}
               </Button>
             </div>

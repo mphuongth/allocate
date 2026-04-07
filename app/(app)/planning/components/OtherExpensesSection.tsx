@@ -134,7 +134,7 @@ export default function OtherExpensesSection({ plan, otherExpenses, onRefresh, o
 
       {/* Add/Edit Modal */}
       <Dialog open={showForm} onOpenChange={(o) => { if (!o && !saving) setShowForm(false) }}>
-        <DialogContent className="sm:max-w-[480px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[420px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editItem ? t('editOtherModal') : t('addOtherModal')}</DialogTitle>
           </DialogHeader>

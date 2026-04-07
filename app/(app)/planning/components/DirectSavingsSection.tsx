@@ -165,7 +165,7 @@ export default function DirectSavingsSection({ plan, savings, goals, onRefresh, 
 
       {/* Add/Edit Modal */}
       <Dialog open={showForm} onOpenChange={(o) => { if (!o && !saving) setShowForm(false) }}>
-        <DialogContent className="sm:max-w-[480px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[440px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editItem ? t('editSavingsModal') : t('addSavingsModal')}</DialogTitle>
           </DialogHeader>

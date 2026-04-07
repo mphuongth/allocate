@@ -8,6 +8,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+
+const RELATIONSHIPS = ['Self', 'Spouse', 'Husband', 'Wife', 'Child', 'Parent', 'Other']
 
 interface InsuranceMember {
   member_id: string
@@ -250,13 +253,13 @@ export default function InsuranceMembersTab() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="relationship">{t('relationshipLabel')} <span className="text-red-500">*</span></Label>
-                <Input
-                  id="relationship"
-                  type="text"
-                  value={form.relationship}
-                  onChange={(e) => setForm({ ...form, relationship: e.target.value })}
-                  placeholder={t('relationshipPlaceholder')}
-                />
+                <Select value={form.relationship || '__none__'} onValueChange={(v) => setForm({ ...form, relationship: !v || v === '__none__' ? '' : v })}>
+                  <SelectTrigger id="relationship"><SelectValue placeholder={t('relationshipPlaceholder')} /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">{t('relationshipPlaceholder')}</SelectItem>
+                    {RELATIONSHIPS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="annual_payment_vnd">{t('annualLabel')} <span className="text-red-500">*</span></Label>
@@ -287,7 +290,7 @@ export default function InsuranceMembersTab() {
             </div>
             <div className="flex gap-3">
               <Button type="button" variant="outline" className="flex-1" onClick={() => setShowForm(false)}>{tCommon('cancel')}</Button>
-              <Button type="submit" className="flex-1 bg-gray-950 hover:bg-gray-800" disabled={saving}>
+              <Button type="submit" className="flex-1 bg-violet-600 hover:bg-violet-700" disabled={saving}>
                 {saving ? tCommon('saving') : tCommon('save')}
               </Button>
             </div>

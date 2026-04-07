@@ -486,11 +486,11 @@ export default function InvestmentTransactionsTab() {
 
       {/* Import from Excel Modal */}
       <Dialog open={showImport} onOpenChange={(o) => { if (!o) setShowImport(false) }}>
-        <DialogContent className="sm:max-w-[640px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{t('importModalTitle')}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+          <div className="space-y-5 py-4">
             <div className="space-y-2">
               <Label htmlFor="import_fund_id">{t('assetFund')}</Label>
               <select
@@ -563,7 +563,7 @@ export default function InvestmentTransactionsTab() {
               {tc('cancel')}
             </Button>
             <Button
-              className="flex-1 bg-gray-950 hover:bg-gray-800"
+              className="flex-1 bg-violet-600 hover:bg-violet-700"
               onClick={handleImport}
               disabled={importing || !importFundId || importRows.filter((r) => !r.error).length === 0}
             >
