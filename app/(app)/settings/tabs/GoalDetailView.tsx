@@ -668,13 +668,16 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                         <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">{new Date(row.investment_date).toLocaleDateString('vi-VN')}</span>
                       </div>
                       <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                        <div><span className="text-gray-500 dark:text-gray-400">{t('colAmount')}: </span><span className="font-medium text-gray-900 dark:text-gray-100">{fmt(row.amount_vnd)}</span></div>
+                        <div>
+                          <span className="text-gray-500 dark:text-gray-400">{t('colAmount')}: </span>
+                          <span className="font-medium text-gray-900 dark:text-gray-100">{fmt(row.amount_vnd)}</span>
+                          {row.total_principal_withdrawn > 0 && (
+                            <div className="text-red-500 dark:text-red-400 mt-0.5">↓ Đã rút: {fmt(row.total_principal_withdrawn)}</div>
+                          )}
+                        </div>
                         <div><span className="text-gray-500 dark:text-gray-400">Giá trị còn: </span><span className="font-medium text-gray-900 dark:text-gray-100">{fmt(currentValue)}</span></div>
                         {row.asset_type === 'gold' && remainingUnits !== null && (
                           <div><span className="text-gray-500 dark:text-gray-400">Chi còn: </span><span className="text-gray-700 dark:text-gray-300">{fmtUnits(remainingUnits)}</span></div>
-                        )}
-                        {row.asset_type === 'bank' && row.total_principal_withdrawn > 0 && (
-                          <div><span className="text-gray-500 dark:text-gray-400">Vốn còn: </span><span className="text-gray-700 dark:text-gray-300">{fmt(remainingPrincipal)}</span></div>
                         )}
                         {row.interest_rate != null && <div><span className="text-gray-500 dark:text-gray-400">{t('colInterestRate')}: </span><span className="text-gray-700 dark:text-gray-300">{row.interest_rate}%</span></div>}
                         <div><span className="text-gray-500 dark:text-gray-400">{t('colGainLoss')}: </span><span className={`font-medium ${gain >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt(gain)}</span></div>
@@ -724,7 +727,12 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                               {tt(`asset${row.asset_type.charAt(0).toUpperCase() + row.asset_type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold') ?? row.asset_type}
                             </span>
                           </td>
-                          <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{fmt(row.amount_vnd)}</td>
+                          <td className="px-4 py-3">
+                            <div className="font-medium text-gray-900 dark:text-gray-100">{fmt(row.amount_vnd)}</div>
+                            {row.total_principal_withdrawn > 0 && (
+                              <div className="text-xs text-red-500 dark:text-red-400 mt-0.5">↓ Đã rút: {fmt(row.total_principal_withdrawn)}</div>
+                            )}
+                          </td>
                           <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{row.interest_rate != null ? `${row.interest_rate}%` : '—'}</td>
                           <td className="px-4 py-3 text-sm">
                             {isFullyWithdrawn
