@@ -629,14 +629,14 @@ export default function FundLibraryClient() {
 
       {/* Add/Edit Modal */}
       <Dialog open={!!modalMode} onOpenChange={(o) => { if (!o) closeModal() }}>
-        <DialogContent className="sm:max-w-[480px]">
+        <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>
               {modalMode === 'add' ? t('addModal') : t('editModal')}
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={(e) => { e.preventDefault(); handleSave() }}>
-            <div className="space-y-4 py-2">
+            <div className="space-y-5 py-4">
               {formError && (
                 <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-sm rounded-lg border border-red-200 dark:border-red-800">{formError}</div>
               )}
@@ -651,7 +651,7 @@ export default function FundLibraryClient() {
                   placeholder="e.g., Vanguard S&P 500 ETF"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="fund_code">{t('codeLabel')} <span className="text-red-500">*</span></Label>
                   <Input
@@ -705,11 +705,11 @@ export default function FundLibraryClient() {
                 />
               </div>
             </div>
-            <div className="flex gap-3 pt-2">
+            <div className="flex gap-3">
               <Button type="button" variant="outline" className="flex-1" onClick={closeModal} disabled={saving}>
                 {tc('cancel')}
               </Button>
-              <Button type="submit" className="flex-1 bg-gray-950 hover:bg-gray-800" disabled={saving}>
+              <Button type="submit" className="flex-1 bg-violet-600 hover:bg-violet-700" disabled={saving}>
                 {saving ? tc('saving') : t('saveBtn')}
               </Button>
             </div>
