@@ -120,12 +120,6 @@ function LoginForm() {
         </p>
       </div>
 
-      {/* Footer */}
-      <div className="mt-8 text-center text-xs text-gray-400 dark:text-gray-500 flex items-center justify-center gap-4">
-        <span className="cursor-not-allowed hover:text-gray-500 dark:hover:text-gray-400 transition-colors">Terms of Service</span>
-        <span>·</span>
-        <span className="cursor-not-allowed hover:text-gray-500 dark:hover:text-gray-400 transition-colors">Privacy Policy</span>
-      </div>
     </div>
   )
 }
