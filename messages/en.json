@@ -519,6 +519,7 @@
     "loginTitle": "Welcome back",
     "loginSubtitle": "Sign in to your account to continue",
     "signupTitle": "Create account",
+    "signupSubtitle": "Start managing your finances today",
     "emailLabel": "Email",
     "passwordLabel": "Password",
     "confirmPasswordLabel": "Confirm password",
