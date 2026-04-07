@@ -143,7 +143,11 @@ export default function SalaryInput({ plan, month, year, onPlanCreated, onPlanDe
           </DialogHeader>
           <div className="py-4">
             <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-              {t('deleteSalaryMessage', { month: MONTHS[month - 1], year })}
+              {t.rich('deleteSalaryMessage', {
+                month: MONTHS[month - 1],
+                year,
+                b: (chunks) => <span className="font-semibold text-gray-900 dark:text-gray-100">{chunks}</span>,
+              })}
             </p>
           </div>
           <div className="flex gap-3">

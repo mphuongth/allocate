@@ -411,7 +411,7 @@
     "salaryError": "Đã xảy ra lỗi. Vui lòng thử lại sau.",
     "salaryCannotSave": "Không thể lưu. Vui lòng kiểm tra kết nối và thử lại.",
     "deleteSalaryModal": "Xóa bản ghi lương?",
-    "deleteSalaryMessage": "Thao tác này sẽ xóa vĩnh viễn bản ghi lương của {month} {year} và tất cả các phân bổ liên quan. Hành động này không thể hoàn tác.",
+    "deleteSalaryMessage": "Thao tác này sẽ xóa vĩnh viễn bản ghi lương của <b>{month} {year}</b> và tất cả các phân bổ liên quan. Hành động này không thể hoàn tác.",
     "deleteSalaryError": "Xóa thất bại. Vui lòng thử lại.",
     "deleteSalaryCannotDelete": "Không thể xóa. Vui lòng kiểm tra kết nối và thử lại.",
     "deletedToast": "Đã xóa bản ghi lương {month} {year}",
