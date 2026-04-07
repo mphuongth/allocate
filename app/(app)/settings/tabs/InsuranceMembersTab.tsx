@@ -142,14 +142,14 @@ export default function InsuranceMembersTab() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('title')}</h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             {t('total')}: {fmt(totalAnnual)} {t('perYear')} · {fmt(totalMonthly)} {t('perMonth')}
           </p>
         </div>
-        <button onClick={openCreate} className="flex items-center gap-2 h-9 px-4 bg-gray-950 hover:bg-gray-800 text-white text-sm font-bold rounded-md transition-colors">
+        <button onClick={openCreate} className="flex items-center gap-2 h-9 px-4 bg-gray-950 hover:bg-gray-800 text-white text-sm font-bold rounded-md transition-colors shrink-0 self-start sm:self-auto">
           <Plus className="h-4 w-4" />
           {t('add')}
         </button>
@@ -171,10 +171,10 @@ export default function InsuranceMembersTab() {
               <thead>
                 <tr className="border-b border-black/10 dark:border-gray-700 text-left">
                   <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colName')}</th>
-                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colRelationship')}</th>
-                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colAnnual')}</th>
+                  <th className="hidden sm:table-cell px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colRelationship')}</th>
+                  <th className="hidden sm:table-cell px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colAnnual')}</th>
                   <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colMonthly')}</th>
-                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colPaymentDate')}</th>
+                  <th className="hidden sm:table-cell px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colPaymentDate')}</th>
                   <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-center">{tCommon('actions')}</th>
                 </tr>
               </thead>
@@ -189,14 +189,14 @@ export default function InsuranceMembersTab() {
                         <span className="font-medium text-gray-900 dark:text-gray-100">{member.member_name}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-4">
+                    <td className="hidden sm:table-cell px-4 py-4">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${RELATIONSHIP_COLORS[member.relationship] ?? 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'}`}>
                         {member.relationship}
                       </span>
                     </td>
-                    <td className="px-4 py-4 text-right font-medium text-gray-900 dark:text-gray-100">{fmt(member.annual_payment_vnd)}</td>
+                    <td className="hidden sm:table-cell px-4 py-4 text-right font-medium text-gray-900 dark:text-gray-100">{fmt(member.annual_payment_vnd)}</td>
                     <td className="px-4 py-4 text-right font-semibold text-violet-600 dark:text-violet-400">{fmt(member.monthly_premium_vnd)}</td>
-                    <td className="px-4 py-4 text-sm text-gray-600 dark:text-gray-400">
+                    <td className="hidden sm:table-cell px-4 py-4 text-sm text-gray-600 dark:text-gray-400">
                       {member.payment_date ? new Date(member.payment_date).toLocaleDateString('vi-VN') : '—'}
                     </td>
                     <td className="px-4 py-4">
