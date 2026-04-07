@@ -111,6 +111,7 @@ export default function FixedExpensesSection({ plan, fixedExpenses, onRefresh, o
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{t('fixedExpensesDesc')}</p>
       </div>
 
+      <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-gray-200 dark:border-gray-700">
@@ -160,6 +161,7 @@ export default function FixedExpensesSection({ plan, fixedExpenses, onRefresh, o
           })}
         </tbody>
       </table>
+      </div>
 
       {/* Edit Override Modal */}
       <Dialog open={!!editItem} onOpenChange={(o) => { if (!o && !saving) setEditItem(null) }}>

@@ -105,6 +105,7 @@ export default function InsuranceSection({ plan, insuranceMembers, onRefresh, on
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{t('insuranceDesc')}</p>
       </div>
 
+      <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-gray-200 dark:border-gray-700">
@@ -155,6 +156,7 @@ export default function InsuranceSection({ plan, insuranceMembers, onRefresh, on
           })}
         </tbody>
       </table>
+      </div>
       <div className="px-4 mt-4 flex items-center justify-between border-t border-gray-200 dark:border-gray-700 pt-4 pb-4">
         <span className="text-base font-medium text-gray-900 dark:text-gray-100">{t('colTotalMonth')}</span>
         <span className="text-lg font-semibold text-gray-900 dark:text-gray-100">{fmt(totalMonthly)}</span>
