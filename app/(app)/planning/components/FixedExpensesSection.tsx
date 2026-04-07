@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Edit } from 'lucide-react'
 import { useTranslations } from 'next-intl'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import type { MonthlyPlan, FixedExpense } from '../PlanningClient'
 
 interface Props {
@@ -159,25 +160,29 @@ export default function FixedExpensesSection({ plan, fixedExpenses, onRefresh, o
       </table>
 
       {/* Edit Override Modal */}
-      {editItem && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <form onSubmit={(e) => { e.preventDefault(); handleSaveOverride() }} className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-sm p-6 border border-gray-100 dark:border-gray-700">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">{t('overrideModal')}</h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{editItem.expense_name}</p>
+      <Dialog open={!!editItem} onOpenChange={(o) => { if (!o && !saving) setEditItem(null) }}>
+        <DialogContent className="sm:max-w-[480px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{t('overrideModal')}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={(e) => { e.preventDefault(); handleSaveOverride() }}>
+            {editItem && <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{editItem.expense_name}</p>}
             {formError && <p className="text-red-600 dark:text-red-400 text-sm mb-3">{formError}</p>}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('overrideLabel')}</label>
               <div className="flex gap-2">
                 <input type="number" value={overrideValue} onChange={(e) => setOverrideValue(e.target.value)} className={inputCls} />
-                <button
-                  type="button"
-                  onClick={() => setOverrideValue(String(editItem.amount_vnd))}
-                  className="shrink-0 px-3 py-2 text-xs font-medium text-indigo-600 dark:text-indigo-400 border border-indigo-300 dark:border-indigo-700 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 whitespace-nowrap"
-                >
-                  {t('colDefault')}
-                </button>
+                {editItem && (
+                  <button
+                    type="button"
+                    onClick={() => setOverrideValue(String(editItem.amount_vnd))}
+                    className="shrink-0 px-3 py-2 text-xs font-medium text-indigo-600 dark:text-indigo-400 border border-indigo-300 dark:border-indigo-700 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 whitespace-nowrap"
+                  >
+                    {t('colDefault')}
+                  </button>
+                )}
               </div>
-              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{t('defaultPerMonth', { amount: fmt(editItem.amount_vnd) })}</p>
+              {editItem && <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{t('defaultPerMonth', { amount: fmt(editItem.amount_vnd) })}</p>}
             </div>
             <div className="flex gap-3 mt-5">
               <button type="button" onClick={() => setEditItem(null)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">{tc('cancel')}</button>
@@ -187,24 +192,28 @@ export default function FixedExpensesSection({ plan, fixedExpenses, onRefresh, o
               </button>
             </div>
           </form>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
       {/* Skip Confirmation */}
-      {confirmSkip && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-sm p-6 border border-gray-100 dark:border-gray-700">
-            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">{t('skipModal')}</h3>
+      <Dialog open={!!confirmSkip} onOpenChange={(o) => { if (!o) setConfirmSkip(null) }}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>{t('skipModal')}</DialogTitle>
+          </DialogHeader>
+          {confirmSkip && (
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-5">
               {t('skipMessage', { name: confirmSkip.expense_name })}
             </p>
-            <div className="flex gap-3">
-              <button onClick={() => setConfirmSkip(null)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">{tc('cancel')}</button>
+          )}
+          <div className="flex gap-3">
+            <button onClick={() => setConfirmSkip(null)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">{tc('cancel')}</button>
+            {confirmSkip && (
               <button onClick={() => handleSkip(confirmSkip)} className="flex-1 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700">{t('skipConfirm')}</button>
-            </div>
+            )}
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

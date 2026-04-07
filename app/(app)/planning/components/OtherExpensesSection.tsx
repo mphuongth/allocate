@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Plus, Edit, Trash2 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import type { MonthlyPlan, OtherExpense } from '../PlanningClient'
 
 interface Props {
@@ -129,11 +130,13 @@ export default function OtherExpensesSection({ plan, otherExpenses, onRefresh, o
         </table>
       )}
 
-      {/* Add Modal */}
-      {showForm && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <form onSubmit={(e) => { e.preventDefault(); handleSave() }} className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-sm p-6 border border-gray-100 dark:border-gray-700">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{editItem ? t('editOtherModal') : t('addOtherModal')}</h3>
+      {/* Add/Edit Modal */}
+      <Dialog open={showForm} onOpenChange={(o) => { if (!o && !saving) setShowForm(false) }}>
+        <DialogContent className="sm:max-w-[480px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editItem ? t('editOtherModal') : t('addOtherModal')}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={(e) => { e.preventDefault(); handleSave() }}>
             {formError && <p className="text-red-600 dark:text-red-400 text-sm mb-3">{formError}</p>}
             <div className="space-y-3">
               <div>
@@ -164,25 +167,27 @@ export default function OtherExpensesSection({ plan, otherExpenses, onRefresh, o
               </button>
             </div>
           </form>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation */}
-      {confirmDelete && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-sm p-6 border border-gray-100 dark:border-gray-700">
-            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">{t('deleteOtherModal')}</h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">{t('deleteOtherMessage')}</p>
-            <p className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-5">{confirmDelete.description} — {fmt(confirmDelete.amount_vnd)}</p>
-            <div className="flex gap-3">
-              <button onClick={() => setConfirmDelete(null)} disabled={deleting} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50">{tc('cancel')}</button>
+      <Dialog open={!!confirmDelete} onOpenChange={(o) => { if (!o) setConfirmDelete(null) }}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>{t('deleteOtherModal')}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">{t('deleteOtherMessage')}</p>
+          {confirmDelete && <p className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-5">{confirmDelete.description} — {fmt(confirmDelete.amount_vnd)}</p>}
+          <div className="flex gap-3">
+            <button onClick={() => setConfirmDelete(null)} disabled={deleting} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50">{tc('cancel')}</button>
+            {confirmDelete && (
               <button onClick={() => handleDelete(confirmDelete)} disabled={deleting} className="flex-1 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50">
                 {deleting ? tc('deleting') : tc('confirm')}
               </button>
-            </div>
+            )}
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
