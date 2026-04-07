@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from('investment_transactions')
-    .select('transaction_id, goal_id, asset_type, transaction_type, parent_transaction_id, investment_date, amount_vnd, unit_price, units, interest_rate, expiry_date, notes, fund_id, savings_goals(goal_name), funds(id, name, nav)', { count: 'exact' })
+    .select('transaction_id, goal_id, asset_type, transaction_type, parent_transaction_id, investment_date, amount_vnd, unit_price, units, interest_rate, expiry_date, notes, fund_id, principal_withdrawn, units_withdrawn, savings_goals(goal_name), funds(id, name, nav)', { count: 'exact' })
     .eq('user_id', user.id)
     .order('investment_date', { ascending: false })
     .range(offset, offset + limit - 1)
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { goal_id, asset_type, transaction_type = 'investment', investment_date, amount_vnd, unit_price, units, interest_rate, notes, fund_id, plan_id, expiry_date, parent_transaction_id } = body
+  const { goal_id, asset_type, transaction_type = 'investment', investment_date, amount_vnd, unit_price, units, interest_rate, notes, fund_id, plan_id, expiry_date, parent_transaction_id, principal_withdrawn, units_withdrawn } = body
 
   const isWithdrawal = transaction_type === 'withdrawal'
 
@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
       user_id: user.id,
       goal_id: goal_id || null,
       transaction_type,
-      asset_type: isWithdrawal ? null : asset_type,
+      asset_type: isWithdrawal ? (asset_type || null) : asset_type,
       investment_date,
       amount_vnd: amountNum,
       unit_price: unit_price ? Number(unit_price) : null,
@@ -115,6 +115,8 @@ export async function POST(request: NextRequest) {
       plan_id: plan_id || null,
       expiry_date: expiry_date || null,
       parent_transaction_id: parent_transaction_id || null,
+      principal_withdrawn: principal_withdrawn ? Number(principal_withdrawn) : null,
+      units_withdrawn: units_withdrawn ? Number(units_withdrawn) : null,
     })
     .select()
     .single()
