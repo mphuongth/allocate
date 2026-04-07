@@ -523,7 +523,7 @@ export default function InvestmentTransactionsTab() {
               </table>
             </div>
             {/* Pagination */}
-            <div className="flex items-center justify-between px-4 sm:px-6 mt-4 pt-4 border-t border-black/10 dark:border-gray-700">
+            <div className="flex items-center justify-between px-4 py-4 border-t border-black/10 dark:border-gray-700">
               <p className="text-sm text-gray-600 dark:text-gray-400">{t('page')} {page} / {totalPages}</p>
               <div className="flex gap-2">
                 <button
