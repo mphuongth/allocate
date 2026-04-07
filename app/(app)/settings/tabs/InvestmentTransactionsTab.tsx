@@ -575,17 +575,17 @@ export default function InvestmentTransactionsTab() {
 
       {/* Add/Edit Modal */}
       <Dialog open={!!formMode} onOpenChange={(o) => { if (!o) setFormMode(null) }}>
-        <DialogContent className="sm:max-w-[480px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {formMode === 'add' ? t('create') : tc('edit')}
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={(e) => { e.preventDefault(); handleSave() }}>
-            <div className="space-y-4 py-2">
+            <div className="space-y-5 py-4">
               {/* Asset Type */}
               <div className="space-y-2">
-                <Label htmlFor="asset_type">{t('filterAssetType')}</Label>
+                <Label htmlFor="asset_type">{t('filterAssetType')} <span className="text-red-500">*</span></Label>
                 <Select
                   value={txForm.asset_type}
                   onValueChange={(value) => { if (value) setTxForm((f) => ({ ...f, asset_type: value, fund_id: '', unit_price: '', units: '', interest_rate: '', expiry_date: '' })) }}
@@ -601,6 +601,38 @@ export default function InvestmentTransactionsTab() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              {/* Fund picker — only for fund type */}
+              {txForm.asset_type === 'fund' && (
+                <div className="space-y-2">
+                  <Label htmlFor="fund_id">{t('assetFund')} <span className="text-red-500">*</span></Label>
+                  <Select
+                    value={txForm.fund_id || '__none__'}
+                    onValueChange={(value) => { if (value) setTxForm((f) => ({ ...f, fund_id: value === '__none__' ? '' : value })) }}
+                  >
+                    <SelectTrigger id="fund_id">
+                      <SelectValue placeholder={t('selectFund')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">{t('selectFund')}</SelectItem>
+                      {funds.map((f) => (
+                        <SelectItem key={f.id} value={f.id}>{f.code} - {f.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* Date */}
+              <div className="space-y-2">
+                <Label htmlFor="investment_date">{t('colDate')} <span className="text-red-500">*</span></Label>
+                <Input
+                  id="investment_date"
+                  type="date"
+                  value={txForm.investment_date}
+                  onChange={(e) => setTxForm((f) => ({ ...f, investment_date: e.target.value }))}
+                />
               </div>
 
               {/* Goal */}
@@ -622,41 +654,9 @@ export default function InvestmentTransactionsTab() {
                 </Select>
               </div>
 
-              {/* Fund picker — only for fund type */}
-              {txForm.asset_type === 'fund' && (
-                <div className="space-y-2">
-                  <Label htmlFor="fund_id">{t('assetFund')}</Label>
-                  <Select
-                    value={txForm.fund_id || '__none__'}
-                    onValueChange={(value) => { if (value) setTxForm((f) => ({ ...f, fund_id: value === '__none__' ? '' : value })) }}
-                  >
-                    <SelectTrigger id="fund_id">
-                      <SelectValue placeholder={t('selectFund')} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">{t('selectFund')}</SelectItem>
-                      {funds.map((f) => (
-                        <SelectItem key={f.id} value={f.id}>{f.code} - {f.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
-              {/* Date */}
-              <div className="space-y-2">
-                <Label htmlFor="investment_date">{t('colDate')}</Label>
-                <Input
-                  id="investment_date"
-                  type="date"
-                  value={txForm.investment_date}
-                  onChange={(e) => setTxForm((f) => ({ ...f, investment_date: e.target.value }))}
-                />
-              </div>
-
               {/* Amount */}
               <div className="space-y-2">
-                <Label htmlFor="amount_vnd">{t('colAmount')}</Label>
+                <Label htmlFor="amount_vnd">{t('colAmount')} <span className="text-red-500">*</span></Label>
                 <Input
                   id="amount_vnd"
                   type="number"
@@ -668,23 +668,27 @@ export default function InvestmentTransactionsTab() {
 
               {/* Unit Price + Units — non-bank */}
               {txForm.asset_type !== 'bank' && (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="unit_price">
-                      {txForm.asset_type === 'fund' ? t('navAtBuy') : t('unitPrice')}
+                      {txForm.asset_type === 'fund' ? t('navAtBuy') : t('unitPrice')} <span className="text-red-500">*</span>
                     </Label>
                     <Input
                       id="unit_price"
                       type="number"
+                      step="0.01"
                       value={txForm.unit_price}
                       onChange={(e) => setTxForm((f) => ({ ...f, unit_price: e.target.value }))}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="units">{txForm.asset_type === 'fund' ? t('unitsFund') : txForm.asset_type === 'stock' ? t('unitsStock') : txForm.asset_type === 'gold' ? t('unitsGold') : t('unitsDefault')}</Label>
+                    <Label htmlFor="units">
+                      {txForm.asset_type === 'fund' ? t('unitsFund') : txForm.asset_type === 'stock' ? t('unitsStock') : txForm.asset_type === 'gold' ? t('unitsGold') : t('unitsDefault')} <span className="text-red-500">*</span>
+                    </Label>
                     <Input
                       id="units"
                       type="number"
+                      step="0.01"
                       value={txForm.units}
                       onChange={(e) => setTxForm((f) => ({ ...f, units: e.target.value }))}
                     />
@@ -694,7 +698,7 @@ export default function InvestmentTransactionsTab() {
 
               {/* Interest Rate + Expiry — bank only */}
               {txForm.asset_type === 'bank' && (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="interest_rate">{t('colInterest')}</Label>
                     <Input
@@ -735,11 +739,11 @@ export default function InvestmentTransactionsTab() {
               )}
             </div>
 
-            <div className="flex gap-3 pt-2">
+            <div className="flex gap-3">
               <Button type="button" variant="outline" className="flex-1" onClick={() => setFormMode(null)}>
                 {tc('cancel')}
               </Button>
-              <Button type="submit" className="flex-1 bg-gray-950 hover:bg-gray-800" disabled={saving}>
+              <Button type="submit" className="flex-1 bg-violet-600 hover:bg-violet-700" disabled={saving}>
                 {saving ? tc('saving') : tc('save')}
               </Button>
             </div>
