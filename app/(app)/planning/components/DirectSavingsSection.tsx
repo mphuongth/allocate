@@ -4,6 +4,10 @@ import { useState } from 'react'
 import { Plus, Edit, Trash2 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Button } from '@/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { MonthlyPlan, DirectSaving, Goal } from '../PlanningClient'
 
 interface Props {
@@ -17,7 +21,6 @@ interface Props {
 const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
 const emptyForm = { goal_id: '', amount_vnd: '', interest_rate: '', expiry_date: '', investment_date: '' }
 
-const inputCls = 'w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500'
 
 export default function DirectSavingsSection({ plan, savings, goals, onRefresh, onToast }: Props) {
   const t = useTranslations('planning')
@@ -167,41 +170,43 @@ export default function DirectSavingsSection({ plan, savings, goals, onRefresh, 
             <DialogTitle>{editItem ? t('editSavingsModal') : t('addSavingsModal')}</DialogTitle>
           </DialogHeader>
           <form onSubmit={(e) => { e.preventDefault(); handleSave() }}>
-            {formError && <p className="text-red-600 dark:text-red-400 text-sm mb-3">{formError}</p>}
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('dateLabel')}</label>
-                <input type="date" value={form.investment_date} min={minDate} max={maxDate}
-                  onChange={(e) => setForm({ ...form, investment_date: e.target.value })} className={inputCls} />
+            <div className="space-y-5 py-4">
+              {formError && <p className="text-red-600 dark:text-red-400 text-sm">{formError}</p>}
+              <div className="space-y-2">
+                <Label>{t('dateLabel')}</Label>
+                <Input type="date" value={form.investment_date} min={minDate} max={maxDate}
+                  onChange={(e) => setForm({ ...form, investment_date: e.target.value })} />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('goalLabel')}</label>
-                <select value={form.goal_id} onChange={(e) => setForm({ ...form, goal_id: e.target.value })}
-                  disabled={goals.length === 0} className={`${inputCls} disabled:opacity-50`}>
-                  <option value="">{goals.length === 0 ? t('noGoals') : t('unassigned')}</option>
-                  {goals.map((g) => <option key={g.goal_id} value={g.goal_id}>{g.goal_name}</option>)}
-                </select>
+              <div className="space-y-2">
+                <Label>{t('goalLabel')}</Label>
+                <Select value={form.goal_id || '__none__'} onValueChange={(v) => setForm({ ...form, goal_id: v === '__none__' ? '' : v })} disabled={goals.length === 0}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">{goals.length === 0 ? t('noGoals') : t('unassigned')}</SelectItem>
+                    {goals.map((g) => <SelectItem key={g.goal_id} value={g.goal_id}>{g.goal_name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('amountLabel')}</label>
-                <input type="number" value={form.amount_vnd} onChange={(e) => setForm({ ...form, amount_vnd: e.target.value })} className={inputCls} />
+              <div className="space-y-2">
+                <Label>{t('amountLabel')}</Label>
+                <Input type="number" value={form.amount_vnd} onChange={(e) => setForm({ ...form, amount_vnd: e.target.value })} />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('interestLabel')}</label>
-                <input type="number" step="0.01" value={form.interest_rate} onChange={(e) => setForm({ ...form, interest_rate: e.target.value })}
-                  placeholder={t('interestPlaceholder')} className={inputCls} />
+              <div className="space-y-2">
+                <Label>{t('interestLabel')}</Label>
+                <Input type="number" step="0.01" value={form.interest_rate} onChange={(e) => setForm({ ...form, interest_rate: e.target.value })}
+                  placeholder={t('interestPlaceholder')} />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('expiryLabel')}</label>
-                <input type="date" value={form.expiry_date} onChange={(e) => setForm({ ...form, expiry_date: e.target.value })} className={inputCls} />
+              <div className="space-y-2">
+                <Label>{t('expiryLabel')}</Label>
+                <Input type="date" value={form.expiry_date} onChange={(e) => setForm({ ...form, expiry_date: e.target.value })} />
               </div>
             </div>
-            <div className="flex gap-3 mt-5">
-              <button type="button" onClick={() => setShowForm(false)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">{tc('cancel')}</button>
-              <button type="submit" disabled={saving} className="flex-1 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2">
+            <div className="flex gap-3">
+              <Button type="button" variant="outline" className="flex-1" onClick={() => setShowForm(false)}>{tc('cancel')}</Button>
+              <Button type="submit" className="flex-1 bg-violet-600 hover:bg-violet-700" disabled={saving}>
                 {saving && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
                 {saving ? tc('saving') : tc('save')}
-              </button>
+              </Button>
             </div>
           </form>
         </DialogContent>
@@ -214,10 +219,10 @@ export default function DirectSavingsSection({ plan, savings, goals, onRefresh, 
             <DialogTitle>{t('deleteSavingsModal')}</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-5">{t('deleteSavingsMessage')}</p>
-          <div className="flex gap-3">
-            <button onClick={() => setConfirmDelete(null)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">{tc('cancel')}</button>
+          <div className="flex gap-3 mt-4">
+            <Button variant="outline" className="flex-1" onClick={() => setConfirmDelete(null)}>{tc('cancel')}</Button>
             {confirmDelete && (
-              <button onClick={() => handleDelete(confirmDelete)} className="flex-1 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700">{tc('confirm')}</button>
+              <Button className="flex-1 bg-red-600 hover:bg-red-700" onClick={() => handleDelete(confirmDelete)}>{tc('confirm')}</Button>
             )}
           </div>
         </DialogContent>

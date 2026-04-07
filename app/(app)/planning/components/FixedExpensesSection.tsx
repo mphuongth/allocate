@@ -4,6 +4,9 @@ import { useState } from 'react'
 import { Edit } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Button } from '@/components/ui/button'
 import type { MonthlyPlan, FixedExpense } from '../PlanningClient'
 
 interface Props {
@@ -15,7 +18,6 @@ interface Props {
 
 const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
 
-const inputCls = 'w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500'
 
 export default function FixedExpensesSection({ plan, fixedExpenses, onRefresh, onToast }: Props) {
   const t = useTranslations('planning')
@@ -166,30 +168,33 @@ export default function FixedExpensesSection({ plan, fixedExpenses, onRefresh, o
             <DialogTitle>{t('overrideModal')}</DialogTitle>
           </DialogHeader>
           <form onSubmit={(e) => { e.preventDefault(); handleSaveOverride() }}>
-            {editItem && <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{editItem.expense_name}</p>}
-            {formError && <p className="text-red-600 dark:text-red-400 text-sm mb-3">{formError}</p>}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('overrideLabel')}</label>
-              <div className="flex gap-2">
-                <input type="number" value={overrideValue} onChange={(e) => setOverrideValue(e.target.value)} className={inputCls} />
-                {editItem && (
-                  <button
-                    type="button"
-                    onClick={() => setOverrideValue(String(editItem.amount_vnd))}
-                    className="shrink-0 px-3 py-2 text-xs font-medium text-indigo-600 dark:text-indigo-400 border border-indigo-300 dark:border-indigo-700 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 whitespace-nowrap"
-                  >
-                    {t('colDefault')}
-                  </button>
-                )}
+            <div className="space-y-5 py-4">
+              {editItem && <p className="text-sm text-gray-500 dark:text-gray-400">{editItem.expense_name}</p>}
+              {formError && <p className="text-red-600 dark:text-red-400 text-sm">{formError}</p>}
+              <div className="space-y-2">
+                <Label>{t('overrideLabel')}</Label>
+                <div className="flex gap-2">
+                  <Input type="number" value={overrideValue} onChange={(e) => setOverrideValue(e.target.value)} />
+                  {editItem && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setOverrideValue(String(editItem.amount_vnd))}
+                      className="shrink-0 whitespace-nowrap"
+                    >
+                      {t('colDefault')}
+                    </Button>
+                  )}
+                </div>
+                {editItem && <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{t('defaultPerMonth', { amount: fmt(editItem.amount_vnd) })}</p>}
               </div>
-              {editItem && <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{t('defaultPerMonth', { amount: fmt(editItem.amount_vnd) })}</p>}
             </div>
-            <div className="flex gap-3 mt-5">
-              <button type="button" onClick={() => setEditItem(null)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">{tc('cancel')}</button>
-              <button type="submit" disabled={saving} className="flex-1 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2">
+            <div className="flex gap-3">
+              <Button type="button" variant="outline" className="flex-1" onClick={() => setEditItem(null)}>{tc('cancel')}</Button>
+              <Button type="submit" className="flex-1 bg-violet-600 hover:bg-violet-700" disabled={saving}>
                 {saving && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
                 {saving ? tc('saving') : tc('save')}
-              </button>
+              </Button>
             </div>
           </form>
         </DialogContent>
@@ -206,10 +211,10 @@ export default function FixedExpensesSection({ plan, fixedExpenses, onRefresh, o
               {t('skipMessage', { name: confirmSkip.expense_name })}
             </p>
           )}
-          <div className="flex gap-3">
-            <button onClick={() => setConfirmSkip(null)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">{tc('cancel')}</button>
+          <div className="flex gap-3 mt-4">
+            <Button variant="outline" className="flex-1" onClick={() => setConfirmSkip(null)}>{tc('cancel')}</Button>
             {confirmSkip && (
-              <button onClick={() => handleSkip(confirmSkip)} className="flex-1 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700">{t('skipConfirm')}</button>
+              <Button className="flex-1 bg-red-600 hover:bg-red-700" onClick={() => handleSkip(confirmSkip)}>{t('skipConfirm')}</Button>
             )}
           </div>
         </DialogContent>
