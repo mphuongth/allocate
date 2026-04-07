@@ -111,12 +111,11 @@ export default function FixedExpensesSection({ plan, fixedExpenses, onRefresh, o
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{t('fixedExpensesDesc')}</p>
       </div>
 
-      <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-gray-200 dark:border-gray-700">
             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colExpense')}</th>
-            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colDefault')}</th>
+            <th className="hidden sm:table-cell px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colDefault')}</th>
             <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colThisMonth')}</th>
             <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{tc('actions')}</th>
           </tr>
@@ -129,7 +128,7 @@ export default function FixedExpensesSection({ plan, fixedExpenses, onRefresh, o
             return (
               <tr key={expense.expense_id} className={`hover:bg-gray-50 dark:hover:bg-gray-800/50 ${isSkipped ? 'opacity-60' : ''}`}>
                 <td className="px-4 py-3 text-base font-medium text-gray-900 dark:text-gray-100">{expense.expense_name}</td>
-                <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 text-right">{fmt(expense.amount_vnd)}</td>
+                <td className="hidden sm:table-cell px-4 py-3 text-sm text-gray-600 dark:text-gray-400 text-right">{fmt(expense.amount_vnd)}</td>
                 <td className="px-4 py-3 text-right">
                   {isSkipped ? (
                     <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
@@ -161,7 +160,6 @@ export default function FixedExpensesSection({ plan, fixedExpenses, onRefresh, o
           })}
         </tbody>
       </table>
-      </div>
 
       {/* Edit Override Modal */}
       <Dialog open={!!editItem} onOpenChange={(o) => { if (!o && !saving) setEditItem(null) }}>

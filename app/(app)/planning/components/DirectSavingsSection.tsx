@@ -124,15 +124,14 @@ export default function DirectSavingsSection({ plan, savings, goals, onRefresh, 
       {savings.length === 0 ? (
         <div className="text-center py-10 text-gray-400 dark:text-gray-500 text-sm">{t('addSavingsDesc')}</div>
       ) : (
-        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-200 dark:border-gray-700">
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colDate')}</th>
               <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colAmount')}</th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colInterest')}</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colExpiry')}</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colGoalCol')}</th>
+              <th className="hidden sm:table-cell px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colInterest')}</th>
+              <th className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colExpiry')}</th>
+              <th className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colGoalCol')}</th>
               <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{tc('actions')}</th>
             </tr>
           </thead>
@@ -141,9 +140,9 @@ export default function DirectSavingsSection({ plan, savings, goals, onRefresh, 
               <tr key={item.transaction_id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
                 <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{item.investment_date ? new Date(item.investment_date).toLocaleDateString('vi-VN') : '—'}</td>
                 <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100 text-right">{fmt(item.amount_vnd)}</td>
-                <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 text-right">{item.interest_rate != null ? `${item.interest_rate}%` : '—'}</td>
-                <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{item.expiry_date ? new Date(item.expiry_date).toLocaleDateString('vi-VN') : '—'}</td>
-                <td className="px-4 py-3">
+                <td className="hidden sm:table-cell px-4 py-3 text-sm text-gray-600 dark:text-gray-400 text-right">{item.interest_rate != null ? `${item.interest_rate}%` : '—'}</td>
+                <td className="hidden sm:table-cell px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{item.expiry_date ? new Date(item.expiry_date).toLocaleDateString('vi-VN') : '—'}</td>
+                <td className="hidden sm:table-cell px-4 py-3">
                   <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs ${item.savings_goals ? 'font-medium bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900' : 'font-medium bg-gray-100 text-gray-900 dark:bg-gray-700 dark:text-gray-100'}`}>
                     {item.savings_goals?.goal_name ?? t('unassigned')}
                   </span>
@@ -162,7 +161,6 @@ export default function DirectSavingsSection({ plan, savings, goals, onRefresh, 
             ))}
           </tbody>
         </table>
-        </div>
       )}
 
       {/* Add/Edit Modal */}
