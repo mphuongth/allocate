@@ -179,7 +179,7 @@ export default function DirectSavingsSection({ plan, savings, goals, onRefresh, 
               </div>
               <div className="space-y-2">
                 <Label>{t('goalLabel')}</Label>
-                <Select value={form.goal_id || '__none__'} onValueChange={(v) => setForm({ ...form, goal_id: v === '__none__' ? '' : v })} disabled={goals.length === 0}>
+                <Select value={form.goal_id || '__none__'} onValueChange={(v) => setForm({ ...form, goal_id: !v || v === '__none__' ? '' : v })} disabled={goals.length === 0}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">{goals.length === 0 ? t('noGoals') : t('unassigned')}</SelectItem>

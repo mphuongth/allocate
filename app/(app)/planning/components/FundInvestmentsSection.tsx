@@ -193,7 +193,7 @@ export default function FundInvestmentsSection({ plan, investments, funds, goals
               {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
               <div className="space-y-2">
                 <Label>{t('colFund')} <span className="text-red-500">*</span></Label>
-                <Select value={form.fund_id || '__none__'} onValueChange={(v) => handleFundSelect(v === '__none__' ? '' : v)}>
+                <Select value={form.fund_id || '__none__'} onValueChange={(v) => handleFundSelect(!v || v === '__none__' ? '' : v)}>
                   <SelectTrigger><SelectValue placeholder={t('selectFund')} /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">{t('selectFund')}</SelectItem>
@@ -210,7 +210,7 @@ export default function FundInvestmentsSection({ plan, investments, funds, goals
               </div>
               <div className="space-y-2">
                 <Label>{t('goalLabel')}</Label>
-                <Select value={form.goal_id || '__none__'} onValueChange={(v) => setForm({ ...form, goal_id: v === '__none__' ? '' : v })} disabled={goals.length === 0}>
+                <Select value={form.goal_id || '__none__'} onValueChange={(v) => setForm({ ...form, goal_id: !v || v === '__none__' ? '' : v })} disabled={goals.length === 0}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">{goals.length === 0 ? t('noGoals') : t('unassigned')}</SelectItem>
