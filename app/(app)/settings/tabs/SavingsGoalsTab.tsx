@@ -162,14 +162,14 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
         <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-300 rounded-lg text-sm">{successMsg}</div>
       )}
 
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('title')}</h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t('desc')}</p>
         </div>
-        <button onClick={openCreate} className="flex items-center gap-2 h-9 px-4 py-2 bg-gray-950 hover:bg-gray-800 text-white text-sm font-bold rounded-md transition-colors">
-          <Plus className="h-4 w-4" />
-          {t('create')}
+        <button onClick={openCreate} className="flex items-center gap-2 h-9 px-3 sm:px-4 py-2 bg-gray-950 hover:bg-gray-800 text-white text-sm font-bold rounded-md transition-colors shrink-0 self-start sm:self-auto">
+          <Plus className="h-4 w-4 shrink-0" />
+          <span className="hidden sm:inline">{t('create')}</span>
         </button>
       </div>
 
@@ -251,25 +251,25 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
       {/* Summary Card */}
       {goals.length > 0 && (
         <div className="p-6 rounded-xl border border-violet-200 dark:border-violet-800 bg-gradient-to-br from-violet-50 to-purple-50 dark:from-violet-900/20 dark:to-purple-900/20">
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
               <h3 className="text-sm font-medium text-violet-900 dark:text-violet-300 mb-2">{t('totalAcrossGoals')}</h3>
-              <div className="flex items-baseline gap-6">
+              <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
                 <div>
                   <p className="text-xs text-violet-700 dark:text-violet-400">{t('currentValue')}</p>
-                  <p className="text-3xl font-bold text-violet-900 dark:text-violet-200">
+                  <p className="text-xl sm:text-3xl font-bold text-violet-900 dark:text-violet-200 whitespace-nowrap">
                     {fmt(goals.reduce((sum, g) => sum + g.totalInvested + g.projectedInterest, 0))}
                   </p>
                 </div>
                 <div>
                   <p className="text-xs text-violet-700 dark:text-violet-400">{t('interest')}</p>
-                  <p className="text-xl font-semibold text-green-600 dark:text-green-400">
+                  <p className="text-base sm:text-xl font-semibold text-green-600 dark:text-green-400 whitespace-nowrap">
                     +{fmt(goals.reduce((sum, g) => sum + g.projectedInterest, 0))}
                   </p>
                 </div>
               </div>
             </div>
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-violet-500 text-white shrink-0">
+            <div className="hidden sm:flex h-16 w-16 items-center justify-center rounded-full bg-violet-500 text-white shrink-0">
               <TrendingUp className="h-8 w-8" />
             </div>
           </div>

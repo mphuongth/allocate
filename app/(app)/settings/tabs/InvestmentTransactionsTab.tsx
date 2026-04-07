@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslations } from 'next-intl'
-import { Plus, Download, Edit, Trash2, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
+import { Plus, FileSpreadsheet, Edit, Trash2, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
 import ConfirmModal from '@/app/components/ConfirmModal'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -319,25 +319,25 @@ export default function InvestmentTransactionsTab() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('title')}</h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t('totalCount', { count: total })}</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-2 shrink-0 self-start sm:self-auto">
           <button
             onClick={() => { setShowImport(true); setImportRaw(''); setImportRows([]); setImportFundId('') }}
-            className="flex items-center gap-2 h-9 px-4 text-sm font-medium text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            className="flex items-center gap-2 h-9 px-3 sm:px-4 text-sm font-medium text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           >
-            <Download className="h-4 w-4" />
-            {t('importFromExcel')}
+            <FileSpreadsheet className="h-4 w-4 shrink-0" />
+            <span className="hidden sm:inline">{t('importFromExcel')}</span>
           </button>
           <button
             onClick={openAdd}
-            className="flex items-center gap-2 h-9 px-4 bg-gray-950 hover:bg-gray-800 text-white text-sm font-bold rounded-md transition-colors"
+            className="flex items-center gap-2 h-9 px-3 sm:px-4 bg-gray-950 hover:bg-gray-800 text-white text-sm font-bold rounded-md transition-colors"
           >
-            <Plus className="h-4 w-4" />
-            {t('create')}
+            <Plus className="h-4 w-4 shrink-0" />
+            <span className="hidden sm:inline">{t('create')}</span>
           </button>
         </div>
       </div>
@@ -397,64 +397,133 @@ export default function InvestmentTransactionsTab() {
         ) : transactions.length === 0 ? (
           <div className="text-center py-10 text-gray-400 dark:text-gray-500 text-sm">{t('empty')}</div>
         ) : (
-          <div className="overflow-x-auto p-6">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-black/10 dark:border-gray-700 text-left">
-                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colDate')}</th>
-                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colAsset')}</th>
-                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colAmount')}</th>
-                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colTransaction')}</th>
-                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colInterest')}</th>
-                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colExpiry')}</th>
-                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colGoal')}</th>
-                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colNotes')}</th>
-                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-center">{tc('actions')}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-black/5 dark:divide-gray-700">
-                {transactions.map((tx) => {
-                  const currentValue = calcCurrentValue(tx)
-                  const rateOrNav = tx.asset_type === 'fund'
-                    ? (tx.unit_price != null ? fmtNav(tx.unit_price) : '—')
-                    : (tx.interest_rate != null ? `${tx.interest_rate}%` : '—')
-                  return (
-                    <tr key={tx.transaction_id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{new Date(tx.investment_date).toLocaleDateString('vi-VN')}</td>
-                      <td className="px-4 py-3">
+          <>
+            {/* Mobile card layout */}
+            <div className="sm:hidden divide-y divide-black/5 dark:divide-gray-700 px-4 py-2">
+              {transactions.map((tx) => {
+                const currentValue = calcCurrentValue(tx)
+                const rateOrNav = tx.asset_type === 'fund'
+                  ? (tx.unit_price != null ? fmtNav(tx.unit_price) : '—')
+                  : (tx.interest_rate != null ? `${tx.interest_rate}%` : '—')
+                const rateOrNavLabel = tx.asset_type === 'fund' ? t('colTransaction') : t('colInterest')
+                const fundCode = tx.asset_type === 'fund' ? funds.find(f => f.id === tx.fund_id)?.code : null
+                return (
+                  <div key={tx.transaction_id} className="py-3 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
                         <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${ASSET_COLORS[tx.asset_type as AssetType] ?? 'bg-gray-100 text-gray-700'}`}>
                           {t(`asset${tx.asset_type.charAt(0).toUpperCase() + tx.asset_type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold') ?? tx.asset_type}
                         </span>
-                      </td>
-                      <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-gray-100">{fmt(tx.amount_vnd)}</td>
-                      <td className="px-4 py-3 text-right text-sm text-gray-600 dark:text-gray-400">{tx.units ?? '—'}</td>
-                      <td className="px-4 py-3 text-right text-sm text-gray-600 dark:text-gray-400">{rateOrNav}</td>
-                      <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-gray-100">{fmt(currentValue)}</td>
-                      <td className="px-4 py-3">
+                        {fundCode && <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{fundCode}</span>}
+                      </div>
+                      <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">{new Date(tx.investment_date).toLocaleDateString('vi-VN')}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                      <div>
+                        <span className="text-gray-500 dark:text-gray-400">{t('colAmount')}: </span>
+                        <span className="font-medium text-gray-900 dark:text-gray-100">{fmt(tx.amount_vnd)}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 dark:text-gray-400">{t('colExpiry')}: </span>
+                        <span className="font-medium text-gray-900 dark:text-gray-100">{fmt(currentValue)}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 dark:text-gray-400">{t('colTransaction')}: </span>
+                        <span className="text-gray-700 dark:text-gray-300">{tx.units ?? '—'}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 dark:text-gray-400">{rateOrNavLabel}: </span>
+                        <span className="text-gray-700 dark:text-gray-300">{rateOrNav}</span>
+                      </div>
+                      <div className="col-span-2">
+                        <span className="text-gray-500 dark:text-gray-400">{t('colGoal')}: </span>
                         {tx.savings_goals?.goal_name
-                          ? <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900">{tx.savings_goals.goal_name}</span>
-                          : <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400">{t('noGoal')}</span>
+                          ? <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900">{tx.savings_goals.goal_name}</span>
+                          : <span className="text-gray-400 dark:text-gray-500">{t('noGoal')}</span>
                         }
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 max-w-32 truncate">{tx.notes ?? '—'}</td>
-                      <td className="px-4 py-3 text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          <button onClick={() => openEdit(tx)} className="h-8 w-8 p-0 flex items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                            <Edit className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                          </button>
-                          <button onClick={() => setConfirmTx(tx)} className="h-8 w-8 p-0 flex items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                            <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
-                          </button>
+                      </div>
+                      {tx.notes && (
+                        <div className="col-span-2">
+                          <span className="text-gray-500 dark:text-gray-400">{t('colNotes')}: </span>
+                          <span className="text-gray-700 dark:text-gray-300">{tx.notes}</span>
                         </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 pt-0.5">
+                      <button onClick={() => openEdit(tx)} className="h-8 w-8 p-0 flex items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                        <Edit className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                      </button>
+                      <button onClick={() => setConfirmTx(tx)} className="h-8 w-8 p-0 flex items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                        <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            {/* Desktop table layout */}
+            <div className="hidden sm:block overflow-x-auto p-6">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-black/10 dark:border-gray-700 text-left">
+                    <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colDate')}</th>
+                    <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colAsset')}</th>
+                    <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colAmount')}</th>
+                    <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colTransaction')}</th>
+                    <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colInterest')}</th>
+                    <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colExpiry')}</th>
+                    <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colGoal')}</th>
+                    <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colNotes')}</th>
+                    <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-center">{tc('actions')}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-black/5 dark:divide-gray-700">
+                  {transactions.map((tx) => {
+                    const currentValue = calcCurrentValue(tx)
+                    const rateOrNav = tx.asset_type === 'fund'
+                      ? (tx.unit_price != null ? fmtNav(tx.unit_price) : '—')
+                      : (tx.interest_rate != null ? `${tx.interest_rate}%` : '—')
+                    const fundCode = tx.asset_type === 'fund' ? funds.find(f => f.id === tx.fund_id)?.code : null
+                    return (
+                      <tr key={tx.transaction_id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{new Date(tx.investment_date).toLocaleDateString('vi-VN')}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${ASSET_COLORS[tx.asset_type as AssetType] ?? 'bg-gray-100 text-gray-700'}`}>
+                              {t(`asset${tx.asset_type.charAt(0).toUpperCase() + tx.asset_type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold') ?? tx.asset_type}
+                            </span>
+                            {fundCode && <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{fundCode}</span>}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-gray-100">{fmt(tx.amount_vnd)}</td>
+                        <td className="px-4 py-3 text-right text-sm text-gray-600 dark:text-gray-400">{tx.units ?? '—'}</td>
+                        <td className="px-4 py-3 text-right text-sm text-gray-600 dark:text-gray-400">{rateOrNav}</td>
+                        <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-gray-100">{fmt(currentValue)}</td>
+                        <td className="px-4 py-3">
+                          {tx.savings_goals?.goal_name
+                            ? <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900">{tx.savings_goals.goal_name}</span>
+                            : <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400">{t('noGoal')}</span>
+                          }
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 max-w-32 truncate">{tx.notes ?? '—'}</td>
+                        <td className="px-4 py-3 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <button onClick={() => openEdit(tx)} className="h-8 w-8 p-0 flex items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                              <Edit className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                            </button>
+                            <button onClick={() => setConfirmTx(tx)} className="h-8 w-8 p-0 flex items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                              <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
             {/* Pagination */}
-            <div className="flex items-center justify-between mt-6 pt-4 border-t border-black/10 dark:border-gray-700">
+            <div className="flex items-center justify-between px-4 py-4 border-t border-black/10 dark:border-gray-700">
               <p className="text-sm text-gray-600 dark:text-gray-400">{t('page')} {page} / {totalPages}</p>
               <div className="flex gap-2">
                 <button
@@ -473,7 +542,7 @@ export default function InvestmentTransactionsTab() {
                 </button>
               </div>
             </div>
-          </div>
+          </>
         )}
       </div>
 

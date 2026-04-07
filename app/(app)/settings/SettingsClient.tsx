@@ -47,12 +47,12 @@ export default function SettingsClient({ initialTab, initialGoalId }: Props) {
 
       {/* Tabs */}
       <div className="flex flex-col gap-2">
-        <div className="grid grid-cols-4 lg:w-auto w-full h-9 items-center rounded-xl bg-[#ececf0] dark:bg-gray-800 p-[3px]">
+        <div className="grid grid-cols-2 sm:grid-cols-4 w-full items-center rounded-xl bg-[#ececf0] dark:bg-gray-800 p-[3px] gap-[3px]">
           {TAB_IDS.map((tabId) => (
             <button
               key={tabId}
               onClick={() => handleTabChange(tabId)}
-              className={`inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center whitespace-nowrap rounded-xl border px-3 py-1 text-sm font-medium transition-[color,box-shadow] ${
+              className={`inline-flex items-center justify-center rounded-[10px] border px-3 py-2 text-xs sm:text-sm font-medium text-center leading-tight transition-[color,box-shadow] ${
                 activeTab === tabId
                   ? 'border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
                   : 'border-transparent text-gray-900 dark:text-gray-400'
