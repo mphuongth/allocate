@@ -516,8 +516,10 @@
     "cannotSave": "Không thể lưu. Vui lòng kiểm tra kết nối và thử lại."
   },
   "auth": {
-    "loginTitle": "Đăng nhập vào Allocate",
+    "loginTitle": "Chào mừng trở lại",
+    "loginSubtitle": "Đăng nhập vào tài khoản của bạn để tiếp tục",
     "signupTitle": "Tạo tài khoản",
+    "signupSubtitle": "Bắt đầu quản lý tài chính của bạn ngay hôm nay",
     "emailLabel": "Email",
     "passwordLabel": "Mật khẩu",
     "confirmPasswordLabel": "Xác nhận mật khẩu",

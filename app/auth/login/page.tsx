@@ -6,8 +6,11 @@ import { useState, Suspense } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { useTranslations } from 'next-intl'
 import ThemeToggleButton from '@/app/components/ThemeToggleButton'
-
-const inputCls = 'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500'
+import { Card } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Button } from '@/components/ui/button'
+import { Eye, EyeOff } from 'lucide-react'
 
 function LoginForm() {
   const t = useTranslations('auth')
@@ -20,6 +23,7 @@ function LoginForm() {
   const [error, setError] = useState<string | null>(expired ? t('sessionExpired') : null)
   const [loading, setLoading] = useState(false)
   const [redirecting, setRedirecting] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -49,70 +53,95 @@ function LoginForm() {
   }
 
   return (
-    <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-lg shadow p-8 border border-transparent dark:border-gray-700">
-      <h1 className="text-2xl font-bold text-center text-gray-900 dark:text-gray-100 mb-6">{t('loginTitle')}</h1>
-      {error && (
-        <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-sm rounded-md">{error}</div>
-      )}
-      <form onSubmit={handleLogin} className="space-y-4">
-        <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            {t('emailLabel')}
-          </label>
-          <input
-            type="email"
-            id="email"
-            name="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className={inputCls}
-            placeholder="you@example.com"
-          />
+    <div className="w-full max-w-md">
+      {/* Logo + heading */}
+      <div className="text-center mb-8">
+        <div className="inline-flex items-center justify-center h-12 w-12 rounded-lg bg-gradient-to-br from-violet-600 to-purple-600 text-white font-bold text-2xl mb-4 shadow-lg shadow-violet-200 dark:shadow-violet-900/30">
+          A
         </div>
-        <div>
-          <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            {t('passwordLabel')}
-          </label>
-          <input
-            type="password"
-            id="password"
-            name="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className={inputCls}
-            placeholder="••••••••"
-          />
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">{t('loginTitle')}</h1>
+        <p className="text-gray-600 dark:text-gray-400">{t('loginSubtitle')}</p>
+      </div>
+
+      {/* Card */}
+      <Card className="p-8">
+        {error && (
+          <div className="mb-5 px-4 py-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-sm rounded-lg border border-red-100 dark:border-red-900/40">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleLogin} className="space-y-6">
+          <div className="space-y-2">
+            <Label htmlFor="email">{t('emailLabel')}</Label>
+            <Input
+              id="email"
+              type="email"
+              name="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password">{t('passwordLabel')}</Label>
+              <span className="text-sm text-gray-400 dark:text-gray-500 cursor-not-allowed select-none">
+                {t('forgotPassword')}
+              </span>
+            </div>
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                name="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="pr-10"
+              />
+              <button
+                type="button"
+                tabIndex={-1}
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+
+          <Button
+            type="submit"
+            disabled={loading || redirecting}
+            className="w-full bg-violet-600 hover:bg-violet-700 dark:bg-violet-600 dark:hover:bg-violet-700 text-white dark:text-white"
+            size="lg"
+          >
+            {redirecting ? t('redirecting') : loading ? t('loggingIn') : t('loginBtn')}
+          </Button>
+        </form>
+
+        <div className="mt-6 text-center text-sm">
+          <span className="text-gray-600 dark:text-gray-400">{t('noAccount')} </span>
+          <Link href="/auth/signup" className="text-violet-600 dark:text-violet-400 hover:text-violet-700 font-medium">
+            {t('signupLink')}
+          </Link>
         </div>
-        <div className="text-right">
-          <span className="text-sm text-gray-400 dark:text-gray-500 cursor-not-allowed">{t('forgotPassword')}</span>
-        </div>
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full py-2 px-4 bg-indigo-600 text-white rounded-md font-medium hover:bg-indigo-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-        >
-          {redirecting ? t('redirecting') : loading ? t('loggingIn') : t('loginBtn')}
-        </button>
-      </form>
-      <p className="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">
-        {t('noAccount')}{' '}
-        <Link href="/auth/signup" className="text-indigo-600 dark:text-indigo-400 hover:underline font-medium">
-          {t('signupLink')}
-        </Link>
-      </p>
+      </Card>
     </div>
   )
 }
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 relative">
+    <div className="min-h-screen bg-gradient-to-br from-violet-50 via-purple-50 to-pink-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 flex items-center justify-center p-4 relative">
       <div className="absolute top-4 right-4">
         <ThemeToggleButton />
       </div>
-      <Suspense fallback={<div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-lg shadow p-8 animate-pulse h-80" />}>
+      <Suspense fallback={<div className="w-full max-w-md h-96 rounded-2xl bg-white dark:bg-gray-900 animate-pulse" />}>
         <LoginForm />
       </Suspense>
     </div>
