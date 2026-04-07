@@ -60,7 +60,7 @@ export default function GoalPickerModal({ open, onOpenChange, fundName, goals, o
                 }`}
               >
                 <div className="mb-3">
-                  <p className="font-semibold text-gray-900 dark:text-gray-100 mb-1">{goal.name}</p>
+                  <p className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">{goal.name}</p>
                   <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
                     <span>{t('goalTarget', { amount: fmt(goal.targetAmount) })}</span>
                     {goal.progressPercent != null && (
