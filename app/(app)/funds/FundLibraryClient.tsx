@@ -667,14 +667,13 @@ export default function FundLibraryClient() {
                 <div className="space-y-2">
                   <Label htmlFor="fund_type">{t('typeLabel')} <span className="text-red-500">*</span></Label>
                   <Select
-                    value={formType || '__none__'}
-                    onValueChange={(value) => { if (value) setFormType(value === '__none__' ? '' : value as FundType) }}
+                    value={formType || undefined}
+                    onValueChange={(value) => { if (value) setFormType(value as FundType) }}
                   >
                     <SelectTrigger id="fund_type">
                       <SelectValue placeholder={t('selectType')} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__none__">{t('selectType')}</SelectItem>
                       {(Object.keys(FUND_TYPE_KEYS) as FundType[]).map((type) => (
                         <SelectItem key={type} value={type}>{t(FUND_TYPE_KEYS[type])}</SelectItem>
                       ))}

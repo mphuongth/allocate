@@ -608,15 +608,14 @@ export default function InvestmentTransactionsTab() {
                 <div className="space-y-2">
                   <Label htmlFor="fund_id">{t('assetFund')} <span className="text-red-500">*</span></Label>
                   <Select
-                    value={txForm.fund_id || '__none__'}
-                    onValueChange={(value) => { if (value) setTxForm((f) => ({ ...f, fund_id: value === '__none__' ? '' : value })) }}
+                    value={txForm.fund_id || undefined}
+                    onValueChange={(value) => { if (value) setTxForm((f) => ({ ...f, fund_id: value })) }}
                   >
                     <SelectTrigger id="fund_id">
                       <SelectValue placeholder={t('selectFund')} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__none__">{t('selectFund')}</SelectItem>
-                      {funds.map((f) => (
+                        {funds.map((f) => (
                         <SelectItem key={f.id} value={f.id}>{f.code} - {f.name}</SelectItem>
                       ))}
                     </SelectContent>
@@ -639,14 +638,14 @@ export default function InvestmentTransactionsTab() {
               <div className="space-y-2">
                 <Label htmlFor="goal_id">{t('colGoal')}</Label>
                 <Select
-                  value={txForm.goal_id || '__none__'}
-                  onValueChange={(value) => { if (value) setTxForm((f) => ({ ...f, goal_id: value === '__none__' ? '' : value })) }}
+                  value={txForm.goal_id || 'unassigned'}
+                  onValueChange={(value) => { if (value) setTxForm((f) => ({ ...f, goal_id: value === 'unassigned' ? '' : value })) }}
                 >
                   <SelectTrigger id="goal_id">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__none__">{t('noGoal')}</SelectItem>
+                    <SelectItem value="unassigned">{t('noGoal')}</SelectItem>
                     {goals.map((g) => (
                       <SelectItem key={g.goal_id} value={g.goal_id}>{g.goal_name}</SelectItem>
                     ))}

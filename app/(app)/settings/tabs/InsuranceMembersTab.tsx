@@ -253,10 +253,9 @@ export default function InsuranceMembersTab() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="relationship">{t('relationshipLabel')} <span className="text-red-500">*</span></Label>
-                <Select value={form.relationship || '__none__'} onValueChange={(v) => setForm({ ...form, relationship: !v || v === '__none__' ? '' : v })}>
+                <Select value={form.relationship || undefined} onValueChange={(v) => setForm({ ...form, relationship: v || '' })}>
                   <SelectTrigger id="relationship"><SelectValue placeholder={t('relationshipPlaceholder')} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__none__">{t('relationshipPlaceholder')}</SelectItem>
                     {RELATIONSHIPS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
                   </SelectContent>
                 </Select>

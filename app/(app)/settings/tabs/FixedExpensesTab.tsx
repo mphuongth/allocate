@@ -250,10 +250,9 @@ export default function FixedExpensesTab() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="category">{t('categoryLabel')} <span className="text-red-500">*</span></Label>
-                <Select value={form.category || '__none__'} onValueChange={(v) => setForm({ ...form, category: !v || v === '__none__' ? '' : v })}>
+                <Select value={form.category || undefined} onValueChange={(v) => setForm({ ...form, category: v || '' })}>
                   <SelectTrigger id="category"><SelectValue placeholder={t('categoryPlaceholder')} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__none__">{t('categoryPlaceholder')}</SelectItem>
                     {EXPENSE_CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                   </SelectContent>
                 </Select>
