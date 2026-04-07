@@ -4,6 +4,13 @@ import { useState, useEffect, useCallback } from 'react'
 import { useTranslations } from 'next-intl'
 import { Plus, Edit, Trash2 } from 'lucide-react'
 import ConfirmModal from '@/app/components/ConfirmModal'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+
+const RELATIONSHIPS = ['Self', 'Spouse', 'Husband', 'Wife', 'Child', 'Parent', 'Other']
 
 interface InsuranceMember {
   member_id: string
@@ -226,56 +233,79 @@ export default function InsuranceMembersTab() {
       </div>
 
       {/* Create/Edit Modal */}
-      {showForm && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <form onSubmit={(e) => { e.preventDefault(); handleSave() }} className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-sm p-6 border border-gray-100 dark:border-gray-700">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{editMember ? t('editModal') : t('addModal')}</h3>
-            {formError && <p className="text-red-600 dark:text-red-400 text-sm mb-3">{formError}</p>}
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('nameLabel')}</label>
-                <input type="text" value={form.member_name} onChange={(e) => setForm({ ...form, member_name: e.target.value })}
-                  placeholder={t('namePlaceholder')} className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+      <Dialog open={showForm} onOpenChange={(o) => { if (!o) setShowForm(false) }}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>{editMember ? t('editModal') : t('addModal')}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={(e) => { e.preventDefault(); handleSave() }}>
+            <div className="space-y-5 py-4">
+              {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
+              <div className="space-y-2">
+                <Label htmlFor="member_name">{t('nameLabel')} <span className="text-red-500">*</span></Label>
+                <Input
+                  id="member_name"
+                  type="text"
+                  value={form.member_name}
+                  onChange={(e) => setForm({ ...form, member_name: e.target.value })}
+                  placeholder={t('namePlaceholder')}
+                />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('relationshipLabel')}</label>
-                <input type="text" value={form.relationship} onChange={(e) => setForm({ ...form, relationship: e.target.value })}
-                  placeholder={t('relationshipPlaceholder')} className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <div className="space-y-2">
+                <Label htmlFor="relationship">{t('relationshipLabel')} <span className="text-red-500">*</span></Label>
+                <Select value={form.relationship || undefined} onValueChange={(v) => setForm({ ...form, relationship: v || '' })}>
+                  <SelectTrigger id="relationship"><SelectValue placeholder={t('relationshipPlaceholder')} /></SelectTrigger>
+                  <SelectContent>
+                    {RELATIONSHIPS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('annualLabel')}</label>
-                <input type="number" value={form.annual_payment_vnd} onChange={(e) => setForm({ ...form, annual_payment_vnd: e.target.value })}
-                  placeholder={t('annualPlaceholder')} className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <div className="space-y-2">
+                <Label htmlFor="annual_payment_vnd">{t('annualLabel')} <span className="text-red-500">*</span></Label>
+                <Input
+                  id="annual_payment_vnd"
+                  type="number"
+                  value={form.annual_payment_vnd}
+                  onChange={(e) => setForm({ ...form, annual_payment_vnd: e.target.value })}
+                  placeholder={t('annualPlaceholder')}
+                />
                 {form.annual_payment_vnd && Number(form.annual_payment_vnd) > 0 && (
-                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{t('monthly')}: {fmt(Math.round(Number(form.annual_payment_vnd) / 12))}</p>
+                  <div className="bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-lg px-3 py-2">
+                    <p className="text-sm text-violet-800 dark:text-violet-300">
+                      <span className="font-medium">{t('monthly')}:</span> {fmt(Math.round(Number(form.annual_payment_vnd) / 12))}
+                    </p>
+                  </div>
                 )}
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('paymentDateLabel')}</label>
-                <input type="date" value={form.payment_date} onChange={(e) => setForm({ ...form, payment_date: e.target.value })}
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <div className="space-y-2">
+                <Label htmlFor="payment_date">{t('paymentDateLabel')}</Label>
+                <Input
+                  id="payment_date"
+                  type="date"
+                  value={form.payment_date}
+                  onChange={(e) => setForm({ ...form, payment_date: e.target.value })}
+                />
               </div>
             </div>
-            <div className="flex gap-3 mt-5">
-              <button type="button" onClick={() => setShowForm(false)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">{tCommon('cancel')}</button>
-              <button type="submit" disabled={saving} className="flex-1 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+            <div className="flex gap-3">
+              <Button type="button" variant="outline" className="flex-1" onClick={() => setShowForm(false)}>{tCommon('cancel')}</Button>
+              <Button type="submit" className="flex-1 bg-violet-600 hover:bg-violet-700" disabled={saving}>
                 {saving ? tCommon('saving') : tCommon('save')}
-              </button>
+              </Button>
             </div>
           </form>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
-      {confirmMember && (
-        <ConfirmModal
-          title={t('deleteModal')}
-          message={t('deleteMessage')}
-          detail={confirmMember.member_name}
-          confirming={deletingId === confirmMember.member_id}
-          onConfirm={() => handleDelete(confirmMember)}
-          onCancel={() => setConfirmMember(null)}
-        />
-      )}
+      <ConfirmModal
+        open={!!confirmMember}
+        title={t('deleteModal')}
+        message={confirmMember ? t('deleteMessage') : ''}
+        detail={confirmMember?.member_name}
+        confirming={deletingId === confirmMember?.member_id}
+        onConfirm={() => confirmMember && handleDelete(confirmMember)}
+        onCancel={() => setConfirmMember(null)}
+      />
     </div>
   )
 }

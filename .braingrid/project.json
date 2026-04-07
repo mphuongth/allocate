@@ -1,0 +1,15 @@
+{
+  "organization_id": "42878fdb-8f9f-432e-a450-025fe151f9ff",
+  "project_id": "97ae9fb6-ed0f-4f19-b8c2-aa3df6ce3267",
+  "project_short_id": "PROJ-1",
+  "project_name": "Allocate",
+  "project_description": "I want to build a website application to help me manage my financial. When receiving salary, I will divide into some fixed pieces, incl. fixed invoices, insurances, fixed investment that I will DCA per month. Then, the remaining amount will be expenses. I need this tool help me calculate that total my assets, how many amounts that I invested for each fund, how much percentage for insurance.",
+  "repository": {
+    "id": "f53fc174-302e-4e7c-9b82-331a91ff3071",
+    "owner": "mphuongth",
+    "name": "allocate",
+    "full_name": "mphuongth/allocate",
+    "url": "https://github.com/mphuongth/allocate.git"
+  },
+  "created_at": "2026-03-14T08:30:21.306Z"
+}

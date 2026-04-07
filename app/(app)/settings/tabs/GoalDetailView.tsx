@@ -705,20 +705,20 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
         </div>
       )}
 
-      {pendingConfirm && (
-        <ConfirmModal
-          title={pendingConfirm.title}
-          message={pendingConfirm.message}
-          confirming={confirming}
-          onConfirm={async () => {
-            setConfirming(true)
-            await pendingConfirm.onConfirm()
-            setConfirming(false)
-            setPendingConfirm(null)
-          }}
-          onCancel={() => setPendingConfirm(null)}
-        />
-      )}
+      <ConfirmModal
+        open={!!pendingConfirm}
+        title={pendingConfirm?.title ?? ''}
+        message={pendingConfirm?.message ?? ''}
+        confirming={confirming}
+        onConfirm={async () => {
+          if (!pendingConfirm) return
+          setConfirming(true)
+          await pendingConfirm.onConfirm()
+          setConfirming(false)
+          setPendingConfirm(null)
+        }}
+        onCancel={() => setPendingConfirm(null)}
+      />
     </div>
   )
 }

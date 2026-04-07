@@ -1,8 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Edit, Trash2 } from 'lucide-react'
+import { Plus, Edit, Trash2, AlertTriangle } from 'lucide-react'
 import { useTranslations } from 'next-intl'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Button } from '@/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { MonthlyPlan, FundInvestment, Fund, Goal } from '../PlanningClient'
 
 interface Props {
@@ -18,7 +23,6 @@ const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
 
 const emptyForm = { fund_id: '', goal_id: '', amount_vnd: '', units: '', unit_price: '', investment_date: '' }
 
-const inputCls = 'w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500'
 
 export default function FundInvestmentsSection({ plan, investments, funds, goals, onRefresh, onToast }: Props) {
   const t = useTranslations('planning')
@@ -179,74 +183,84 @@ export default function FundInvestmentsSection({ plan, investments, funds, goals
       )}
 
       {/* Add/Edit Modal */}
-      {showForm && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <form onSubmit={(e) => { e.preventDefault(); handleSave() }} className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto border border-gray-100 dark:border-gray-700">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{editItem ? t('editFundModal') : t('addFundModal')}</h3>
-            {formError && <p className="text-red-600 dark:text-red-400 text-sm mb-3">{formError}</p>}
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('colFund')} *</label>
-                <select value={form.fund_id} onChange={(e) => handleFundSelect(e.target.value)} className={inputCls}>
-                  <option value="">{t('selectFund')}</option>
-                  {funds.map((f) => (
-                    <option key={f.id} value={f.id}>{f.name} (NAV: {f.nav})</option>
-                  ))}
-                </select>
+      <Dialog open={showForm} onOpenChange={(o) => { if (!o && !saving) setShowForm(false) }}>
+        <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editItem ? t('editFundModal') : t('addFundModal')}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={(e) => { e.preventDefault(); handleSave() }}>
+            <div className="space-y-5 py-4">
+              {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
+              <div className="space-y-2">
+                <Label>{t('colFund')} <span className="text-red-500">*</span></Label>
+                <Select value={form.fund_id || undefined} onValueChange={(v) => handleFundSelect(v || '')}>
+                  <SelectTrigger><SelectValue placeholder={t('selectFund')}>{form.fund_id ? funds.find(f => f.id === form.fund_id)?.name : undefined}</SelectValue></SelectTrigger>
+                  <SelectContent>
+                    {funds.map((f) => (
+                      <SelectItem key={f.id} value={f.id}>{f.name} (NAV: {f.nav})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('dateLabel')}</label>
-                <input type="date" value={form.investment_date} min={minDate} max={maxDate}
-                  onChange={(e) => setForm((prev) => ({ ...prev, investment_date: e.target.value }))}
-                  className={inputCls} />
+              <div className="space-y-2">
+                <Label>{t('dateLabel')} <span className="text-red-500">*</span></Label>
+                <Input type="date" value={form.investment_date} min={minDate} max={maxDate}
+                  onChange={(e) => setForm((prev) => ({ ...prev, investment_date: e.target.value }))} />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('goalLabel')}</label>
-                <select value={form.goal_id} onChange={(e) => setForm({ ...form, goal_id: e.target.value })}
-                  disabled={goals.length === 0} className={`${inputCls} disabled:opacity-50`}>
-                  <option value="">{goals.length === 0 ? t('noGoals') : t('unassigned')}</option>
-                  {goals.map((g) => <option key={g.goal_id} value={g.goal_id}>{g.goal_name}</option>)}
-                </select>
+              <div className="space-y-2">
+                <Label>{t('goalLabel')}</Label>
+                <Select value={form.goal_id || 'unassigned'} onValueChange={(v) => setForm({ ...form, goal_id: !v || v === 'unassigned' ? '' : v })} disabled={goals.length === 0}>
+                  <SelectTrigger><SelectValue>{form.goal_id ? goals.find(g => g.goal_id === form.goal_id)?.goal_name : (goals.length === 0 ? t('noGoals') : t('unassigned'))}</SelectValue></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unassigned">{goals.length === 0 ? t('noGoals') : t('unassigned')}</SelectItem>
+                    {goals.map((g) => <SelectItem key={g.goal_id} value={g.goal_id}>{g.goal_name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('amountLabel')}</label>
-                <input type="number" value={form.amount_vnd} onChange={(e) => setForm({ ...form, amount_vnd: e.target.value })} className={inputCls} />
+              <div className="space-y-2">
+                <Label>{t('amountLabel')} <span className="text-red-500">*</span></Label>
+                <Input type="number" value={form.amount_vnd} onChange={(e) => setForm({ ...form, amount_vnd: e.target.value })} />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('unitsLabel')}</label>
-                  <input type="number" step="0.0001" value={form.units} onChange={(e) => setForm({ ...form, units: e.target.value })} className={inputCls} />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>{t('unitsLabel')} <span className="text-red-500">*</span></Label>
+                  <Input type="number" step="0.0001" placeholder="e.g., 450.25" value={form.units} onChange={(e) => setForm({ ...form, units: e.target.value })} />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('navAtPurchaseLabel')}</label>
-                  <input type="number" step="0.0001" value={form.unit_price} onChange={(e) => setForm({ ...form, unit_price: e.target.value })} className={inputCls} />
+                <div className="space-y-2">
+                  <Label>{t('navAtPurchaseLabel')} <span className="text-red-500">*</span></Label>
+                  <Input type="number" step="0.0001" placeholder="e.g., 22215.12" value={form.unit_price} onChange={(e) => setForm({ ...form, unit_price: e.target.value })} />
                 </div>
               </div>
             </div>
-            <div className="flex gap-3 mt-5">
-              <button type="button" onClick={() => setShowForm(false)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">{tc('cancel')}</button>
-              <button type="submit" disabled={saving} className="flex-1 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2">
+            <div className="flex gap-3">
+              <Button type="button" variant="outline" className="flex-1" onClick={() => setShowForm(false)}>{tc('cancel')}</Button>
+              <Button type="submit" className="flex-1 bg-violet-600 hover:bg-violet-700" disabled={saving}>
                 {saving && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
                 {saving ? tc('saving') : tc('save')}
-              </button>
+              </Button>
             </div>
           </form>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation */}
-      {confirmDelete && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-sm p-6 border border-gray-100 dark:border-gray-700">
-            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">{t('deleteFundModal')}</h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-5">{t('deleteFundMessage')}</p>
-            <div className="flex gap-3">
-              <button onClick={() => setConfirmDelete(null)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">{tc('cancel')}</button>
-              <button onClick={() => handleDelete(confirmDelete)} className="flex-1 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700">{tc('confirm')}</button>
-            </div>
+      <Dialog open={!!confirmDelete} onOpenChange={(o) => { if (!o) setConfirmDelete(null) }}>
+        <DialogContent className="sm:max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-600" />
+              {t('deleteFundModal')}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{t('deleteFundMessage')}</p>
           </div>
-        </div>
-      )}
+          <div className="flex gap-3">
+            <Button variant="outline" className="flex-1" onClick={() => setConfirmDelete(null)}>{tc('cancel')}</Button>
+            <Button className="flex-1 bg-red-600 hover:bg-red-700" onClick={() => confirmDelete && handleDelete(confirmDelete)}>{tc('delete')}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

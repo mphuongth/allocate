@@ -1,8 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Edit, Trash2 } from 'lucide-react'
+import { Plus, Edit, Trash2, AlertTriangle } from 'lucide-react'
 import { useTranslations } from 'next-intl'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Button } from '@/components/ui/button'
 import type { MonthlyPlan, OtherExpense } from '../PlanningClient'
 
 interface Props {
@@ -13,7 +17,6 @@ interface Props {
 }
 
 const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
-const inputCls = 'w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500'
 
 export default function OtherExpensesSection({ plan, otherExpenses, onRefresh, onToast }: Props) {
   const t = useTranslations('planning')
@@ -129,60 +132,66 @@ export default function OtherExpensesSection({ plan, otherExpenses, onRefresh, o
         </table>
       )}
 
-      {/* Add Modal */}
-      {showForm && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <form onSubmit={(e) => { e.preventDefault(); handleSave() }} className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-sm p-6 border border-gray-100 dark:border-gray-700">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{editItem ? t('editOtherModal') : t('addOtherModal')}</h3>
-            {formError && <p className="text-red-600 dark:text-red-400 text-sm mb-3">{formError}</p>}
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('descLabel')}</label>
-                <input
+      {/* Add/Edit Modal */}
+      <Dialog open={showForm} onOpenChange={(o) => { if (!o && !saving) setShowForm(false) }}>
+        <DialogContent className="sm:max-w-[420px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editItem ? t('editOtherModal') : t('addOtherModal')}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={(e) => { e.preventDefault(); handleSave() }}>
+            <div className="space-y-5 py-4">
+              {formError && <p className="text-red-600 dark:text-red-400 text-sm">{formError}</p>}
+              <div className="space-y-2">
+                <Label>{t('descLabel')} <span className="text-red-500">*</span></Label>
+                <Input
                   type="text"
                   value={form.description}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
                   placeholder={t('descPlaceholder')}
-                  className={inputCls}
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('amountLabel')}</label>
-                <input
+              <div className="space-y-2">
+                <Label>{t('amountLabel')} <span className="text-red-500">*</span></Label>
+                <Input
                   type="number"
                   value={form.amount_vnd}
                   onChange={(e) => setForm({ ...form, amount_vnd: e.target.value })}
-                  className={inputCls}
+                  placeholder="e.g., 15000000"
                 />
               </div>
             </div>
-            <div className="flex gap-3 mt-5">
-              <button type="button" onClick={() => setShowForm(false)} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">{tc('cancel')}</button>
-              <button type="submit" disabled={saving} className="flex-1 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2">
+            <div className="flex gap-3">
+              <Button type="button" variant="outline" className="flex-1" onClick={() => setShowForm(false)}>{tc('cancel')}</Button>
+              <Button type="submit" className="flex-1 bg-violet-600 hover:bg-violet-700" disabled={saving}>
                 {saving && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
                 {saving ? tc('saving') : tc('save')}
-              </button>
+              </Button>
             </div>
           </form>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation */}
-      {confirmDelete && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-sm p-6 border border-gray-100 dark:border-gray-700">
-            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">{t('deleteOtherModal')}</h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">{t('deleteOtherMessage')}</p>
-            <p className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-5">{confirmDelete.description} — {fmt(confirmDelete.amount_vnd)}</p>
-            <div className="flex gap-3">
-              <button onClick={() => setConfirmDelete(null)} disabled={deleting} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50">{tc('cancel')}</button>
-              <button onClick={() => handleDelete(confirmDelete)} disabled={deleting} className="flex-1 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50">
-                {deleting ? tc('deleting') : tc('confirm')}
-              </button>
-            </div>
+      <Dialog open={!!confirmDelete} onOpenChange={(o) => { if (!o) setConfirmDelete(null) }}>
+        <DialogContent className="sm:max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-600" />
+              {t('deleteOtherModal')}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{t('deleteOtherMessage')}</p>
+            {confirmDelete && <p className="text-sm font-medium text-gray-800 dark:text-gray-200 mt-1">{confirmDelete.description} — {fmt(confirmDelete.amount_vnd)}</p>}
           </div>
-        </div>
-      )}
+          <div className="flex gap-3">
+            <Button variant="outline" className="flex-1" onClick={() => setConfirmDelete(null)} disabled={deleting}>{tc('cancel')}</Button>
+            <Button className="flex-1 bg-red-600 hover:bg-red-700" onClick={() => confirmDelete && handleDelete(confirmDelete)} disabled={deleting}>
+              {deleting ? tc('deleting') : tc('delete')}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

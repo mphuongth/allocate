@@ -4,6 +4,12 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslations } from 'next-intl'
 import { Plus, Download, Edit, Trash2, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
 import ConfirmModal from '@/app/components/ConfirmModal'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
 
 interface Transaction {
   transaction_id: string
@@ -479,213 +485,237 @@ export default function InvestmentTransactionsTab() {
       )}
 
       {/* Import from Excel Modal */}
-      {showImport && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
-              <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">{t('importModalTitle')}</h3>
-              <button
-                onClick={() => setShowImport(false)}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl leading-none"
+      <Dialog open={showImport} onOpenChange={(o) => { if (!o) setShowImport(false) }}>
+        <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{t('importModalTitle')}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-5 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="import_fund_id">{t('assetFund')}</Label>
+              <select
+                id="import_fund_id"
+                value={importFundId}
+                onChange={(e) => setImportFundId(e.target.value)}
+                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
-                ×
-              </button>
+                <option value="">{t('selectFund')}</option>
+                {funds.map((f) => (
+                  <option key={f.id} value={f.id}>{f.code} - {f.name}</option>
+                ))}
+              </select>
             </div>
 
-            <div className="px-6 py-5 space-y-4 overflow-y-auto flex-1">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t('assetFund')}</label>
-                <select
-                  value={importFundId}
-                  onChange={(e) => setImportFundId(e.target.value)}
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  <option value="">{t('selectFund')}</option>
-                  {funds.map((f) => (
-                    <option key={f.id} value={f.id}>{f.code} - {f.name}</option>
-                  ))}
-                </select>
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="import_raw">
+                {t('pasteFromExcel')}
+              </Label>
+              <p className="text-xs text-gray-400 dark:text-gray-500">
+                Column order: Tháng | Tiền chuyển | Tiền mua (skip) | NAV mua | CCQ mua
+              </p>
+              <Textarea
+                id="import_raw"
+                value={importRaw}
+                onChange={(e) => handleImportPaste(e.target.value)}
+                rows={6}
+                placeholder={"7/2023\t10,000,000\t9,876,543\t23,375.28\t42.78\n8/2023\t10,000,000\t9,876,543\t24,100.00\t40.98"}
+                className="font-mono resize-none"
+              />
+            </div>
 
+            {importRows.length > 0 && (
               <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-                  {t('pasteFromExcel')}
-                </label>
-                <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">
-                  Column order: Tháng | Tiền chuyển | Tiền mua (skip) | NAV mua | CCQ mua
+                <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                  {t('importPreview', { valid: importRows.filter((r) => !r.error).length, total: importRows.length })}
                 </p>
-                <textarea
-                  value={importRaw}
-                  onChange={(e) => handleImportPaste(e.target.value)}
-                  rows={6}
-                  placeholder={"7/2023\t10,000,000\t9,876,543\t23,375.28\t42.78\n8/2023\t10,000,000\t9,876,543\t24,100.00\t40.98"}
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm font-mono bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-                />
-              </div>
-
-              {importRows.length > 0 && (
-                <div>
-                  <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
-                    {t('importPreview', { valid: importRows.filter((r) => !r.error).length, total: importRows.length })}
-                  </p>
-                  <div className="overflow-x-auto rounded-lg border border-gray-100 dark:border-gray-700">
-                    <table className="w-full text-xs">
-                      <thead className="bg-gray-50 dark:bg-gray-800">
-                        <tr>
-                          {[t('colImportDate'), t('colImportAmount'), t('colImportNav'), t('colImportUnits'), t('colImportStatus')].map((h) => (
-                            <th key={h} className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
-                        {importRows.map((row, i) => (
-                          <tr key={i} className={row.error ? 'bg-red-50 dark:bg-red-900/10' : ''}>
-                            <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{row.investment_date || '—'}</td>
-                            <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{isNaN(row.amount_vnd) ? '—' : Math.round(row.amount_vnd).toLocaleString('vi-VN')}</td>
-                            <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{isNaN(row.unit_price) ? '—' : row.unit_price.toLocaleString('vi-VN')}</td>
-                            <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{isNaN(row.units) ? '—' : row.units}</td>
-                            <td className="px-3 py-2">
-                              {row.error
-                                ? <span className="text-red-500 dark:text-red-400">{row.error}</span>
-                                : <span className="text-green-600 dark:text-green-400">✓</span>
-                              }
-                            </td>
-                          </tr>
+                <div className="overflow-x-auto rounded-lg border border-gray-100 dark:border-gray-700">
+                  <table className="w-full text-xs">
+                    <thead className="bg-gray-50 dark:bg-gray-800">
+                      <tr>
+                        {[t('colImportDate'), t('colImportAmount'), t('colImportNav'), t('colImportUnits'), t('colImportStatus')].map((h) => (
+                          <th key={h} className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">{h}</th>
                         ))}
-                      </tbody>
-                    </table>
-                  </div>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
+                      {importRows.map((row, i) => (
+                        <tr key={i} className={row.error ? 'bg-red-50 dark:bg-red-900/10' : ''}>
+                          <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{row.investment_date || '—'}</td>
+                          <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{isNaN(row.amount_vnd) ? '—' : Math.round(row.amount_vnd).toLocaleString('vi-VN')}</td>
+                          <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{isNaN(row.unit_price) ? '—' : row.unit_price.toLocaleString('vi-VN')}</td>
+                          <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{isNaN(row.units) ? '—' : row.units}</td>
+                          <td className="px-3 py-2">
+                            {row.error
+                              ? <span className="text-red-500 dark:text-red-400">{row.error}</span>
+                              : <span className="text-green-600 dark:text-green-400">✓</span>
+                            }
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              )}
-            </div>
-
-            <div className="flex gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700">
-              <button
-                onClick={() => setShowImport(false)}
-                className="flex-1 px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
-              >
-                {tc('cancel')}
-              </button>
-              <button
-                onClick={handleImport}
-                disabled={importing || !importFundId || importRows.filter((r) => !r.error).length === 0}
-                className="flex-1 px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
-              >
-                {importing ? t('importing') : t('importCount', { count: importRows.filter((r) => !r.error).length })}
-              </button>
-            </div>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+          <div className="flex gap-3">
+            <Button variant="outline" className="flex-1" onClick={() => setShowImport(false)}>
+              {tc('cancel')}
+            </Button>
+            <Button
+              className="flex-1 bg-violet-600 hover:bg-violet-700"
+              onClick={handleImport}
+              disabled={importing || !importFundId || importRows.filter((r) => !r.error).length === 0}
+            >
+              {importing ? t('importing') : t('importCount', { count: importRows.filter((r) => !r.error).length })}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Add/Edit Modal */}
-      {formMode && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <form onSubmit={(e) => { e.preventDefault(); handleSave() }} className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
-              <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
-                {formMode === 'add' ? t('create') : tc('edit')}
-              </h3>
-              <button
-                type="button"
-                onClick={() => setFormMode(null)}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl leading-none"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="px-6 py-5 space-y-4">
+      <Dialog open={!!formMode} onOpenChange={(o) => { if (!o) setFormMode(null) }}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>
+              {formMode === 'add' ? t('create') : tc('edit')}
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={(e) => { e.preventDefault(); handleSave() }}>
+            <div className="space-y-5 py-4 max-h-[500px] overflow-y-auto">
               {/* Asset Type */}
-              <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t('filterAssetType')}</label>
-                <select
+              <div className="space-y-2">
+                <Label htmlFor="asset_type">{t('filterAssetType')} <span className="text-red-500">*</span></Label>
+                <Select
                   value={txForm.asset_type}
-                  onChange={(e) => setTxForm((f) => ({ ...f, asset_type: e.target.value, fund_id: '', unit_price: '', units: '', interest_rate: '', expiry_date: '' }))}
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  onValueChange={(value) => { if (value) setTxForm((f) => ({ ...f, asset_type: value, fund_id: '', unit_price: '', units: '', interest_rate: '', expiry_date: '' })) }}
                 >
-                  {ASSET_TYPES.map((type) => (
-                    <option key={type} value={type}>{t(`asset${type.charAt(0).toUpperCase() + type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold')}</option>
-                  ))}
-                </select>
+                  <SelectTrigger id="asset_type">
+                    <SelectValue>{t(`asset${txForm.asset_type.charAt(0).toUpperCase() + txForm.asset_type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold')}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ASSET_TYPES.map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {t(`asset${type.charAt(0).toUpperCase() + type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold')}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Goal */}
-              <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t('colGoal')}</label>
-                <select
-                  value={txForm.goal_id}
-                  onChange={(e) => setTxForm((f) => ({ ...f, goal_id: e.target.value }))}
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              <div className="space-y-2">
+                <Label htmlFor="goal_id">{t('colGoal')}</Label>
+                <Select
+                  value={txForm.goal_id || 'unassigned'}
+                  onValueChange={(value) => { if (value) setTxForm((f) => ({ ...f, goal_id: value === 'unassigned' ? '' : value })) }}
                 >
-                  <option value="">{t('noGoal')}</option>
-                  {goals.map((g) => (
-                    <option key={g.goal_id} value={g.goal_id}>{g.goal_name}</option>
-                  ))}
-                </select>
+                  <SelectTrigger id="goal_id">
+                    <SelectValue>{txForm.goal_id ? goals.find(g => g.goal_id === txForm.goal_id)?.goal_name : t('noGoal')}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unassigned">{t('noGoal')}</SelectItem>
+                    {goals.map((g) => (
+                      <SelectItem key={g.goal_id} value={g.goal_id}>{g.goal_name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Fund picker — only for fund type */}
               {txForm.asset_type === 'fund' && (
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t('assetFund')}</label>
-                  <select
-                    value={txForm.fund_id}
-                    onChange={(e) => setTxForm((f) => ({ ...f, fund_id: e.target.value }))}
-                    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                <div className="space-y-2">
+                  <Label htmlFor="fund_id">{t('assetFund')} <span className="text-red-500">*</span></Label>
+                  <Select
+                    value={txForm.fund_id || undefined}
+                    onValueChange={(value) => { if (value) setTxForm((f) => ({ ...f, fund_id: value })) }}
                   >
-                    <option value="">{t('selectFund')}</option>
-                    {funds.map((f) => (
-                      <option key={f.id} value={f.id}>{f.code} - {f.name}</option>
-                    ))}
-                  </select>
+                    <SelectTrigger id="fund_id">
+                      <SelectValue placeholder={t('selectFund')}>{txForm.fund_id ? funds.find(f => f.id === txForm.fund_id)?.name : undefined}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {funds.map((f) => (
+                        <SelectItem key={f.id} value={f.id}>{f.code} - {f.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               )}
 
               {/* Date */}
-              <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t('colDate')}</label>
-                <input
+              <div className="space-y-2">
+                <Label htmlFor="investment_date">{t('colDate')} <span className="text-red-500">*</span></Label>
+                <Input
+                  id="investment_date"
                   type="date"
                   value={txForm.investment_date}
                   onChange={(e) => setTxForm((f) => ({ ...f, investment_date: e.target.value }))}
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
 
               {/* Amount */}
-              <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t('colAmount')}</label>
-                <input
+              <div className="space-y-2">
+                <Label htmlFor="amount_vnd">{t('colAmount')} <span className="text-red-500">*</span></Label>
+                <Input
+                  id="amount_vnd"
                   type="number"
                   value={txForm.amount_vnd}
                   onChange={(e) => setTxForm((f) => ({ ...f, amount_vnd: e.target.value }))}
-                  placeholder="VD: 10000000"
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  placeholder="e.g., 10000000"
                 />
               </div>
 
-              {/* Unit Price + Units — non-bank */}
-              {txForm.asset_type !== 'bank' && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-                      {txForm.asset_type === 'fund' ? t('navAtBuy') : t('unitPrice')}
-                    </label>
-                    <input
+              {/* NAV + Units — fund only */}
+              {txForm.asset_type === 'fund' && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="unit_price">{t('navAtBuy')} <span className="text-red-500">*</span></Label>
+                    <Input
+                      id="unit_price"
                       type="number"
+                      step="0.01"
+                      placeholder="e.g., 22215.12"
                       value={txForm.unit_price}
                       onChange={(e) => setTxForm((f) => ({ ...f, unit_price: e.target.value }))}
-                      className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{txForm.asset_type === 'fund' ? t('unitsFund') : txForm.asset_type === 'stock' ? t('unitsStock') : txForm.asset_type === 'gold' ? t('unitsGold') : t('unitsDefault')}</label>
-                    <input
+                  <div className="space-y-2">
+                    <Label htmlFor="units">{t('unitsFund')} <span className="text-red-500">*</span></Label>
+                    <Input
+                      id="units"
                       type="number"
+                      step="0.01"
+                      placeholder="e.g., 450.25"
                       value={txForm.units}
                       onChange={(e) => setTxForm((f) => ({ ...f, units: e.target.value }))}
-                      className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Unit Price + Units — non-fund, non-bank */}
+              {txForm.asset_type !== 'bank' && txForm.asset_type !== 'fund' && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="unit_price">{t('unitPrice')} <span className="text-red-500">*</span></Label>
+                    <Input
+                      id="unit_price"
+                      type="number"
+                      step="0.01"
+                      value={txForm.unit_price}
+                      onChange={(e) => setTxForm((f) => ({ ...f, unit_price: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="units">
+                      {txForm.asset_type === 'stock' ? t('unitsStock') : txForm.asset_type === 'gold' ? t('unitsGold') : t('unitsDefault')} <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id="units"
+                      type="number"
+                      step="0.01"
+                      value={txForm.units}
+                      onChange={(e) => setTxForm((f) => ({ ...f, units: e.target.value }))}
                     />
                   </div>
                 </div>
@@ -693,38 +723,40 @@ export default function InvestmentTransactionsTab() {
 
               {/* Interest Rate + Expiry — bank only */}
               {txForm.asset_type === 'bank' && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t('colInterest')}</label>
-                    <input
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="interest_rate">{t('colInterest')}</Label>
+                    <Input
+                      id="interest_rate"
                       type="number"
                       step="0.01"
                       value={txForm.interest_rate}
                       onChange={(e) => setTxForm((f) => ({ ...f, interest_rate: e.target.value }))}
-                      placeholder="VD: 6.5"
-                      className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      placeholder="e.g., 6.5"
                     />
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t('colExpiry')}</label>
-                    <input
+                  <div className="space-y-2">
+                    <Label htmlFor="expiry_date">{t('colExpiry')}</Label>
+                    <Input
+                      id="expiry_date"
                       type="date"
                       value={txForm.expiry_date}
                       onChange={(e) => setTxForm((f) => ({ ...f, expiry_date: e.target.value }))}
-                      className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>
                 </div>
               )}
 
               {/* Notes */}
-              <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{tc('notes')}</label>
-                <input
-                  type="text"
+              <div className="space-y-2">
+                <Label htmlFor="notes">{tc('notes')}</Label>
+                <Textarea
+                  id="notes"
                   value={txForm.notes}
                   onChange={(e) => setTxForm((f) => ({ ...f, notes: e.target.value }))}
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  rows={3}
+                  placeholder="Additional notes..."
+                  className="resize-none"
                 />
               </div>
 
@@ -733,35 +765,26 @@ export default function InvestmentTransactionsTab() {
               )}
             </div>
 
-            <div className="flex gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700">
-              <button
-                type="button"
-                onClick={() => setFormMode(null)}
-                className="flex-1 px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
-              >
+            <div className="flex gap-3">
+              <Button type="button" variant="outline" className="flex-1" onClick={() => setFormMode(null)}>
                 {tc('cancel')}
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="flex-1 px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
-              >
+              </Button>
+              <Button type="submit" className="flex-1 bg-violet-600 hover:bg-violet-700" disabled={saving}>
                 {saving ? tc('saving') : tc('save')}
-              </button>
+              </Button>
             </div>
           </form>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
-      {confirmTx && (
-        <ConfirmModal
-          title={tc('delete')}
-          message={t('deleteMessage')}
-          confirming={deletingId === confirmTx.transaction_id}
-          onConfirm={() => handleDelete(confirmTx)}
-          onCancel={() => setConfirmTx(null)}
-        />
-      )}
+      <ConfirmModal
+        open={!!confirmTx}
+        title={tc('delete')}
+        message={confirmTx ? t('deleteMessage') : ''}
+        confirming={deletingId === confirmTx?.transaction_id}
+        onConfirm={() => confirmTx && handleDelete(confirmTx)}
+        onCancel={() => setConfirmTx(null)}
+      />
     </div>
   )
 }
