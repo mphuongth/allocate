@@ -319,25 +319,25 @@ export default function InvestmentTransactionsTab() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('title')}</h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t('totalCount', { count: total })}</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-2 shrink-0 self-start sm:self-auto">
           <button
             onClick={() => { setShowImport(true); setImportRaw(''); setImportRows([]); setImportFundId('') }}
-            className="flex items-center gap-2 h-9 px-4 text-sm font-medium text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            className="flex items-center gap-2 h-9 px-3 sm:px-4 text-sm font-medium text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           >
-            <Download className="h-4 w-4" />
-            {t('importFromExcel')}
+            <Download className="h-4 w-4 shrink-0" />
+            <span className="hidden sm:inline">{t('importFromExcel')}</span>
           </button>
           <button
             onClick={openAdd}
-            className="flex items-center gap-2 h-9 px-4 bg-gray-950 hover:bg-gray-800 text-white text-sm font-bold rounded-md transition-colors"
+            className="flex items-center gap-2 h-9 px-3 sm:px-4 bg-gray-950 hover:bg-gray-800 text-white text-sm font-bold rounded-md transition-colors"
           >
-            <Plus className="h-4 w-4" />
-            {t('create')}
+            <Plus className="h-4 w-4 shrink-0" />
+            <span className="hidden sm:inline">{t('create')}</span>
           </button>
         </div>
       </div>
@@ -404,11 +404,11 @@ export default function InvestmentTransactionsTab() {
                   <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colDate')}</th>
                   <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colAsset')}</th>
                   <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colAmount')}</th>
-                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colTransaction')}</th>
-                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colInterest')}</th>
+                  <th className="hidden sm:table-cell px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colTransaction')}</th>
+                  <th className="hidden sm:table-cell px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colInterest')}</th>
                   <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colExpiry')}</th>
-                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colGoal')}</th>
-                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colNotes')}</th>
+                  <th className="hidden sm:table-cell px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colGoal')}</th>
+                  <th className="hidden sm:table-cell px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colNotes')}</th>
                   <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-center">{tc('actions')}</th>
                 </tr>
               </thead>
@@ -427,16 +427,16 @@ export default function InvestmentTransactionsTab() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-gray-100">{fmt(tx.amount_vnd)}</td>
-                      <td className="px-4 py-3 text-right text-sm text-gray-600 dark:text-gray-400">{tx.units ?? '—'}</td>
-                      <td className="px-4 py-3 text-right text-sm text-gray-600 dark:text-gray-400">{rateOrNav}</td>
+                      <td className="hidden sm:table-cell px-4 py-3 text-right text-sm text-gray-600 dark:text-gray-400">{tx.units ?? '—'}</td>
+                      <td className="hidden sm:table-cell px-4 py-3 text-right text-sm text-gray-600 dark:text-gray-400">{rateOrNav}</td>
                       <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-gray-100">{fmt(currentValue)}</td>
-                      <td className="px-4 py-3">
+                      <td className="hidden sm:table-cell px-4 py-3">
                         {tx.savings_goals?.goal_name
                           ? <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900">{tx.savings_goals.goal_name}</span>
                           : <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400">{t('noGoal')}</span>
                         }
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 max-w-32 truncate">{tx.notes ?? '—'}</td>
+                      <td className="hidden sm:table-cell px-4 py-3 text-sm text-gray-600 dark:text-gray-400 max-w-32 truncate">{tx.notes ?? '—'}</td>
                       <td className="px-4 py-3 text-center">
                         <div className="flex items-center justify-center gap-1">
                           <button onClick={() => openEdit(tx)} className="h-8 w-8 p-0 flex items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
