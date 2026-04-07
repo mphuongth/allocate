@@ -251,25 +251,25 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
       {/* Summary Card */}
       {goals.length > 0 && (
         <div className="p-6 rounded-xl border border-violet-200 dark:border-violet-800 bg-gradient-to-br from-violet-50 to-purple-50 dark:from-violet-900/20 dark:to-purple-900/20">
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
               <h3 className="text-sm font-medium text-violet-900 dark:text-violet-300 mb-2">{t('totalAcrossGoals')}</h3>
-              <div className="flex items-baseline gap-6">
+              <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
                 <div>
                   <p className="text-xs text-violet-700 dark:text-violet-400">{t('currentValue')}</p>
-                  <p className="text-3xl font-bold text-violet-900 dark:text-violet-200 whitespace-nowrap">
+                  <p className="text-xl sm:text-3xl font-bold text-violet-900 dark:text-violet-200 whitespace-nowrap">
                     {fmt(goals.reduce((sum, g) => sum + g.totalInvested + g.projectedInterest, 0))}
                   </p>
                 </div>
                 <div>
                   <p className="text-xs text-violet-700 dark:text-violet-400">{t('interest')}</p>
-                  <p className="text-xl font-semibold text-green-600 dark:text-green-400 whitespace-nowrap">
+                  <p className="text-base sm:text-xl font-semibold text-green-600 dark:text-green-400 whitespace-nowrap">
                     +{fmt(goals.reduce((sum, g) => sum + g.projectedInterest, 0))}
                   </p>
                 </div>
               </div>
             </div>
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-violet-500 text-white shrink-0">
+            <div className="hidden sm:flex h-16 w-16 items-center justify-center rounded-full bg-violet-500 text-white shrink-0">
               <TrendingUp className="h-8 w-8" />
             </div>
           </div>
