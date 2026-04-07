@@ -677,6 +677,7 @@ export default function InvestmentTransactionsTab() {
                       id="unit_price"
                       type="number"
                       step="0.01"
+                      placeholder={txForm.asset_type === 'fund' ? 'e.g., 22215.12' : ''}
                       value={txForm.unit_price}
                       onChange={(e) => setTxForm((f) => ({ ...f, unit_price: e.target.value }))}
                     />
@@ -689,6 +690,7 @@ export default function InvestmentTransactionsTab() {
                       id="units"
                       type="number"
                       step="0.01"
+                      placeholder={txForm.asset_type === 'fund' ? 'e.g., 450.25' : ''}
                       value={txForm.units}
                       onChange={(e) => setTxForm((f) => ({ ...f, units: e.target.value }))}
                     />
