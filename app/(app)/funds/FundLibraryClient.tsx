@@ -671,7 +671,7 @@ export default function FundLibraryClient() {
                     onValueChange={(value) => { if (value) setFormType(value as FundType) }}
                   >
                     <SelectTrigger id="fund_type">
-                      <SelectValue placeholder={t('selectType')} />
+                      <SelectValue placeholder={t('selectType')}>{formType ? t(FUND_TYPE_KEYS[formType]) : undefined}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {(Object.keys(FUND_TYPE_KEYS) as FundType[]).map((type) => (

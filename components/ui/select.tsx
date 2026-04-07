@@ -18,7 +18,13 @@ function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   )
 }
 
-function SelectValue({ className, ...props }: SelectPrimitive.Value.Props) {
+function SelectValue({ className, children, ...props }: Omit<SelectPrimitive.Value.Props, 'children'> & { children?: React.ReactNode }) {
+  // @base-ui/react Select.Value shows the raw value string because SelectItems
+  // only register via context when the popup is open. When children are provided
+  // explicitly, render them directly as a plain span to bypass this.
+  if (children !== undefined && children !== null) {
+    return <span data-slot="select-value" className={cn("flex flex-1 text-left", className)}>{children}</span>
+  }
   return (
     <SelectPrimitive.Value
       data-slot="select-value"

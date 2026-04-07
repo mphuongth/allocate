@@ -194,7 +194,7 @@ export default function FundInvestmentsSection({ plan, investments, funds, goals
               <div className="space-y-2">
                 <Label>{t('colFund')} <span className="text-red-500">*</span></Label>
                 <Select value={form.fund_id || undefined} onValueChange={(v) => handleFundSelect(v || '')}>
-                  <SelectTrigger><SelectValue placeholder={t('selectFund')} /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t('selectFund')}>{form.fund_id ? funds.find(f => f.id === form.fund_id)?.name : undefined}</SelectValue></SelectTrigger>
                   <SelectContent>
                     {funds.map((f) => (
                       <SelectItem key={f.id} value={f.id}>{f.name} (NAV: {f.nav})</SelectItem>
@@ -210,7 +210,7 @@ export default function FundInvestmentsSection({ plan, investments, funds, goals
               <div className="space-y-2">
                 <Label>{t('goalLabel')}</Label>
                 <Select value={form.goal_id || 'unassigned'} onValueChange={(v) => setForm({ ...form, goal_id: !v || v === 'unassigned' ? '' : v })} disabled={goals.length === 0}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger><SelectValue>{form.goal_id ? goals.find(g => g.goal_id === form.goal_id)?.goal_name : (goals.length === 0 ? t('noGoals') : t('unassigned'))}</SelectValue></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="unassigned">{goals.length === 0 ? t('noGoals') : t('unassigned')}</SelectItem>
                     {goals.map((g) => <SelectItem key={g.goal_id} value={g.goal_id}>{g.goal_name}</SelectItem>)}

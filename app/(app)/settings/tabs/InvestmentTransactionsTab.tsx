@@ -591,7 +591,7 @@ export default function InvestmentTransactionsTab() {
                   onValueChange={(value) => { if (value) setTxForm((f) => ({ ...f, asset_type: value, fund_id: '', unit_price: '', units: '', interest_rate: '', expiry_date: '' })) }}
                 >
                   <SelectTrigger id="asset_type">
-                    <SelectValue />
+                    <SelectValue>{t(`asset${txForm.asset_type.charAt(0).toUpperCase() + txForm.asset_type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold')}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {ASSET_TYPES.map((type) => (
@@ -611,7 +611,7 @@ export default function InvestmentTransactionsTab() {
                   onValueChange={(value) => { if (value) setTxForm((f) => ({ ...f, goal_id: value === 'unassigned' ? '' : value })) }}
                 >
                   <SelectTrigger id="goal_id">
-                    <SelectValue />
+                    <SelectValue>{txForm.goal_id ? goals.find(g => g.goal_id === txForm.goal_id)?.goal_name : t('noGoal')}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="unassigned">{t('noGoal')}</SelectItem>
@@ -631,7 +631,7 @@ export default function InvestmentTransactionsTab() {
                     onValueChange={(value) => { if (value) setTxForm((f) => ({ ...f, fund_id: value })) }}
                   >
                     <SelectTrigger id="fund_id">
-                      <SelectValue placeholder={t('selectFund')} />
+                      <SelectValue placeholder={t('selectFund')}>{txForm.fund_id ? funds.find(f => f.id === txForm.fund_id)?.name : undefined}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {funds.map((f) => (
