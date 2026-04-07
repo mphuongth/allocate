@@ -176,41 +176,67 @@ export default function FixedExpensesTab() {
         ) : expenses.length === 0 ? (
           <div className="text-center py-10 text-gray-400 dark:text-gray-500 text-sm">{t('empty')}</div>
         ) : (
-          <div className="overflow-x-auto p-6">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-black/10 dark:border-gray-700 text-left">
-                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colName')}</th>
-                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colCategory')}</th>
-                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colAmount')}</th>
-                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colCreated')}</th>
-                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-center">{tCommon('actions')}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-black/5 dark:divide-gray-700">
-                {expenses.map((expense) => (
-                  <tr key={expense.expense_id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                    <td className="px-4 py-4 font-medium text-gray-900 dark:text-gray-100">{expense.expense_name}</td>
-                    <td className="px-4 py-4">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">{expense.category}</span>
-                    </td>
-                    <td className="px-4 py-4 text-right font-semibold text-gray-900 dark:text-gray-100">{fmt(expense.amount_vnd)}</td>
-                    <td className="px-4 py-4 text-sm text-gray-600 dark:text-gray-400">{new Date(expense.created_at).toLocaleDateString('vi-VN')}</td>
-                    <td className="px-4 py-4 text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        <button onClick={() => openEdit(expense)} className="h-8 w-8 p-0 flex items-center justify-center border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                          <Edit className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                        </button>
-                        <button onClick={() => setConfirmExpense(expense)} className="h-8 w-8 p-0 flex items-center justify-center border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                          <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
-                        </button>
-                      </div>
-                    </td>
+          <>
+            {/* Mobile card layout */}
+            <div className="sm:hidden divide-y divide-black/5 dark:divide-gray-700 px-4 py-2">
+              {expenses.map((expense) => (
+                <div key={expense.expense_id} className="py-3 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="font-medium text-gray-900 dark:text-gray-100 text-sm">{expense.expense_name}</span>
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 shrink-0">{expense.category}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-gray-900 dark:text-gray-100">{fmt(expense.amount_vnd)}</span>
+                    <span className="text-gray-500 dark:text-gray-400">{new Date(expense.created_at).toLocaleDateString('vi-VN')}</span>
+                  </div>
+                  <div className="flex items-center gap-1 pt-0.5">
+                    <button onClick={() => openEdit(expense)} className="h-8 w-8 p-0 flex items-center justify-center border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                      <Edit className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                    </button>
+                    <button onClick={() => setConfirmExpense(expense)} className="h-8 w-8 p-0 flex items-center justify-center border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                      <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Desktop table layout */}
+            <div className="hidden sm:block overflow-x-auto p-6">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-black/10 dark:border-gray-700 text-left">
+                    <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colName')}</th>
+                    <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colCategory')}</th>
+                    <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colAmount')}</th>
+                    <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colCreated')}</th>
+                    <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-center">{tCommon('actions')}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-black/5 dark:divide-gray-700">
+                  {expenses.map((expense) => (
+                    <tr key={expense.expense_id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                      <td className="px-4 py-4 font-medium text-gray-900 dark:text-gray-100">{expense.expense_name}</td>
+                      <td className="px-4 py-4">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">{expense.category}</span>
+                      </td>
+                      <td className="px-4 py-4 text-right font-semibold text-gray-900 dark:text-gray-100">{fmt(expense.amount_vnd)}</td>
+                      <td className="px-4 py-4 text-sm text-gray-600 dark:text-gray-400">{new Date(expense.created_at).toLocaleDateString('vi-VN')}</td>
+                      <td className="px-4 py-4 text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <button onClick={() => openEdit(expense)} className="h-8 w-8 p-0 flex items-center justify-center border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                            <Edit className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                          </button>
+                          <button onClick={() => setConfirmExpense(expense)} className="h-8 w-8 p-0 flex items-center justify-center border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                            <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
 
