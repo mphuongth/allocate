@@ -384,7 +384,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
   async function handleWithdrawalDelete(w: WithdrawalRow) {
     setPendingConfirm({ title: 'Xóa giao dịch rút', message: 'Bạn có chắc muốn xóa giao dịch rút/bán này?', onConfirm: async () => {
       const res = await fetch(`/api/v1/investment-transactions/${w.transaction_id}`, { method: 'DELETE' })
-      if (res.ok) { setSuccessMsg('Đã xóa giao dịch rút'); setTimeout(() => setSuccessMsg(''), 4000); await fetchData() }
+      if (res.ok) { setSuccessMsg(t('deletedWithdrawal')); setTimeout(() => setSuccessMsg(''), 4000); await fetchData() }
     }})
   }
 
@@ -537,11 +537,11 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                       )}
                     </div>
                     <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                      <div><span className="text-gray-500 dark:text-gray-400">Còn lại: </span><span className="font-medium text-gray-900 dark:text-gray-100">{fmtUnits(g.remaining_units)} đvị</span></div>
-                      <div><span className="text-gray-500 dark:text-gray-400">Giá trị: </span><span className="font-medium text-gray-900 dark:text-gray-100">{fmt(g.current_value)}</span></div>
-                      <div><span className="text-gray-500 dark:text-gray-400">NAV tb mua: </span><span className="text-gray-700 dark:text-gray-300">{fmt(g.avg_cost_per_unit)}</span></div>
-                      <div><span className="text-gray-500 dark:text-gray-400">NAV hiện tại: </span><span className="text-gray-700 dark:text-gray-300">{fmt(g.current_nav)}</span></div>
-                      <div className="col-span-2"><span className="text-gray-500 dark:text-gray-400">Lãi/Lỗ: </span><span className={`font-medium ${g.total_pl >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt(g.total_pl)}</span></div>
+                      <div><span className="text-gray-500 dark:text-gray-400">{t('colRemaining')}: </span><span className="font-medium text-gray-900 dark:text-gray-100">{fmtUnits(g.remaining_units)} {t('unitsShort')}</span></div>
+                      <div><span className="text-gray-500 dark:text-gray-400">{t('colValue')}: </span><span className="font-medium text-gray-900 dark:text-gray-100">{fmt(g.current_value)}</span></div>
+                      <div><span className="text-gray-500 dark:text-gray-400">{t('colAvgNav')}: </span><span className="text-gray-700 dark:text-gray-300">{fmt(g.avg_cost_per_unit)}</span></div>
+                      <div><span className="text-gray-500 dark:text-gray-400">{t('colCurrentNav')}: </span><span className="text-gray-700 dark:text-gray-300">{fmt(g.current_nav)}</span></div>
+                      <div className="col-span-2"><span className="text-gray-500 dark:text-gray-400">{t('colGainLoss')}: </span><span className={`font-medium ${g.total_pl >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt(g.total_pl)}</span></div>
                     </div>
                     {g.remaining_units > 0 && (
                       <button onClick={() => openWithdrawFund(g)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/30 rounded-md transition-colors">
@@ -556,12 +556,12 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-black/10 dark:border-gray-700 text-left">
-                      <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Quỹ</th>
-                      <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">Còn lại</th>
-                      <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">NAV tb mua</th>
-                      <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">NAV hiện tại</th>
-                      <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">Giá trị</th>
-                      <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">Lãi/Lỗ</th>
+                      <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colFund')}</th>
+                      <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colRemaining')}</th>
+                      <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colAvgNav')}</th>
+                      <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colCurrentNav')}</th>
+                      <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colValue')}</th>
+                      <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colGainLoss')}</th>
                       <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{tc('actions')}</th>
                     </tr>
                   </thead>
@@ -600,7 +600,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
           {/* Fund purchase history (collapsible-style subheader) */}
           {fundInvestmentRows.length > 0 && (
             <div className="border-t border-black/5 dark:border-gray-700 px-5 py-3">
-              <p className="text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-3">Lịch sử mua</p>
+              <p className="text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-3">{t('purchaseHistory')}</p>
               <div className="space-y-1">
                 {fundInvestmentRows.map(row => {
                   const fund = funds.find(f => f.id === row.fund_id)
@@ -609,7 +609,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="font-medium text-gray-700 dark:text-gray-300 shrink-0">{row.fund_code ?? '—'}</span>
                         <span className="text-gray-500 dark:text-gray-400 text-xs">{new Date(row.investment_date).toLocaleDateString('vi-VN')}</span>
-                        <span className="text-gray-500 dark:text-gray-400 text-xs">{row.units != null ? `${fmtUnits(row.units)} đvị` : ''}</span>
+                        <span className="text-gray-500 dark:text-gray-400 text-xs">{row.units != null ? `${fmtUnits(row.units)} ${t('unitsShort')}` : ''}</span>
                         <span className="text-gray-500 dark:text-gray-400 text-xs">@ {row.unit_price != null ? fmt(row.unit_price) : (fund ? fmt(fund.nav) : '—')}</span>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
@@ -663,7 +663,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                           <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${ASSET_COLORS[row.asset_type] ?? 'bg-gray-100 text-gray-700'}`}>
                             {tt(`asset${row.asset_type.charAt(0).toUpperCase() + row.asset_type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold') ?? row.asset_type}
                           </span>
-                          {isFullyWithdrawn && <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400">Đã rút hết</span>}
+                          {isFullyWithdrawn && <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400">{t('fullyWithdrawn')}</span>}
                         </div>
                         <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">{new Date(row.investment_date).toLocaleDateString('vi-VN')}</span>
                       </div>
@@ -672,12 +672,12 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                           <span className="text-gray-500 dark:text-gray-400">{t('colAmount')}: </span>
                           <span className="font-medium text-gray-900 dark:text-gray-100">{fmt(row.amount_vnd)}</span>
                           {row.total_principal_withdrawn > 0 && (
-                            <div className="text-red-500 dark:text-red-400 mt-0.5">↓ Đã rút: {fmt(row.total_principal_withdrawn)}</div>
+                            <div className="text-red-500 dark:text-red-400 mt-0.5">↓ {t('withdrawnLabel')} {fmt(row.total_principal_withdrawn)}</div>
                           )}
                         </div>
-                        <div><span className="text-gray-500 dark:text-gray-400">Giá trị còn: </span><span className="font-medium text-gray-900 dark:text-gray-100">{fmt(currentValue)}</span></div>
+                        <div><span className="text-gray-500 dark:text-gray-400">{t('remainingValueLabel')}: </span><span className="font-medium text-gray-900 dark:text-gray-100">{fmt(currentValue)}</span></div>
                         {row.asset_type === 'gold' && remainingUnits !== null && (
-                          <div><span className="text-gray-500 dark:text-gray-400">Chi còn: </span><span className="text-gray-700 dark:text-gray-300">{fmtUnits(remainingUnits)}</span></div>
+                          <div><span className="text-gray-500 dark:text-gray-400">{t('remainingChiLabel')}: </span><span className="text-gray-700 dark:text-gray-300">{fmtUnits(remainingUnits)}</span></div>
                         )}
                         {row.interest_rate != null && <div><span className="text-gray-500 dark:text-gray-400">{t('colInterestRate')}: </span><span className="text-gray-700 dark:text-gray-300">{row.interest_rate}%</span></div>}
                         <div><span className="text-gray-500 dark:text-gray-400">{t('colGainLoss')}: </span><span className={`font-medium ${gain >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt(gain)}</span></div>
@@ -706,7 +706,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                       <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colType')}</th>
                       <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colAmount')}</th>
                       <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colInterestRate')}</th>
-                      <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Còn lại</th>
+                      <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colRemaining')}</th>
                       <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colGainLoss')}</th>
                       <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colNotes')}</th>
                       <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{tc('actions')}</th>
@@ -730,7 +730,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                           <td className="px-4 py-3">
                             <div className="font-medium text-gray-900 dark:text-gray-100">{fmt(row.amount_vnd)}</div>
                             {row.total_principal_withdrawn > 0 && (
-                              <div className="text-xs text-red-500 dark:text-red-400 mt-0.5">↓ Đã rút: {fmt(row.total_principal_withdrawn)}</div>
+                              <div className="text-xs text-red-500 dark:text-red-400 mt-0.5">↓ {t('withdrawnLabel')} {fmt(row.total_principal_withdrawn)}</div>
                             )}
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{row.interest_rate != null ? `${row.interest_rate}%` : '—'}</td>
@@ -901,13 +901,13 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
             {/* Context info */}
             <div className="text-sm text-gray-500 dark:text-gray-400 mb-4">
               {wType === 'fund' && wGroup && (
-                <span>{wGroup.fund_code} · NAV hiện tại: <strong className="text-gray-800 dark:text-gray-200">{fmt(wGroup.current_nav)}</strong> · Còn: <strong className="text-gray-800 dark:text-gray-200">{fmtUnits(wGroup.remaining_units)} đvị</strong></span>
+                <span>{wGroup.fund_code} · {t('colCurrentNav')}: <strong className="text-gray-800 dark:text-gray-200">{fmt(wGroup.current_nav)}</strong> · {t('colRemaining')}: <strong className="text-gray-800 dark:text-gray-200">{fmtUnits(wGroup.remaining_units)} {t('unitsShort')}</strong></span>
               )}
               {wType === 'gold' && wRow && goldPrice && (
-                <span>Vàng · Giá hiện tại: <strong className="text-gray-800 dark:text-gray-200">{fmt(goldPrice)}/chi</strong> · Còn: <strong className="text-gray-800 dark:text-gray-200">{fmtUnits((wRow.units ?? 0) - wRow.total_units_withdrawn)} chi</strong></span>
+                <span>{t('assetGold')} · {t('currentPriceLabel')}: <strong className="text-gray-800 dark:text-gray-200">{fmt(goldPrice)}/chi</strong> · {t('colRemaining')}: <strong className="text-gray-800 dark:text-gray-200">{fmtUnits((wRow.units ?? 0) - wRow.total_units_withdrawn)} chi</strong></span>
               )}
               {wType === 'bank' && wRow && (
-                <span>Tiết kiệm · Vốn còn: <strong className="text-gray-800 dark:text-gray-200">{fmt(wRow.amount_vnd - wRow.total_principal_withdrawn)}</strong>{wRow.interest_rate ? ` · ${wRow.interest_rate}%/năm` : ''}</span>
+                <span>{t('assetBank')} · {t('remainingPrincipalLabel')}: <strong className="text-gray-800 dark:text-gray-200">{fmt(wRow.amount_vnd - wRow.total_principal_withdrawn)}</strong>{wRow.interest_rate ? ` · ${wRow.interest_rate}${t('perYearShort')}` : ''}</span>
               )}
             </div>
 
@@ -915,19 +915,19 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
 
             <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Ngày {wType === 'bank' ? 'rút' : 'bán'}</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{wType === 'bank' ? t('dateWithdrawLabel') : t('dateSellLabel')}</label>
                 <input type="date" value={withdrawForm.investment_date} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setWithdrawForm({ ...withdrawForm, investment_date: e.target.value })} className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
 
               {wType === 'bank' && (
                 <>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Vốn rút</label>
-                    <input type="number" value={withdrawForm.principal_withdrawn} onChange={(e) => setWithdrawForm({ ...withdrawForm, principal_withdrawn: e.target.value })} placeholder="Số tiền gốc rút ra" className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('principalWithdrawnLabel')}</label>
+                    <input type="number" value={withdrawForm.principal_withdrawn} onChange={(e) => setWithdrawForm({ ...withdrawForm, principal_withdrawn: e.target.value })} placeholder={t('principalWithdrawnPlaceholder')} className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Số tiền thực nhận</label>
-                    <input type="number" value={withdrawForm.amount_vnd} onChange={(e) => setWithdrawForm({ ...withdrawForm, amount_vnd: e.target.value })} placeholder="Tổng tiền ngân hàng trả" className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('amountReceivedLabel')}</label>
+                    <input type="number" value={withdrawForm.amount_vnd} onChange={(e) => setWithdrawForm({ ...withdrawForm, amount_vnd: e.target.value })} placeholder={t('amountReceivedPlaceholder')} className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                   </div>
                 </>
               )}
@@ -936,7 +936,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                 <>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{wType === 'gold' ? 'Chi bán' : 'Đơn vị bán'}</label>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{wType === 'gold' ? t('unitsToSellGold') : t('unitsToSellFund')}</label>
                       <input
                         type="number"
                         value={withdrawForm.units_withdrawn}
@@ -950,7 +950,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Số tiền nhận</label>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('amountReceivedLabel')}</label>
                       <input
                         type="number"
                         value={withdrawForm.amount_vnd}
@@ -976,17 +976,17 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
             {/* Live preview */}
             {(wAmtNum > 0 || wUnitsNum > 0) && (
               <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg space-y-1 text-xs">
-                {wPrinNum > 0 && <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">Giá vốn:</span><span className="font-medium text-gray-700 dark:text-gray-300">{fmt(wPrinNum)}</span></div>}
-                {wAmtNum > 0 && <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">Nhận được:</span><span className="font-medium text-gray-700 dark:text-gray-300">{fmt(wAmtNum)}</span></div>}
+                {wPrinNum > 0 && <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">{t('costBasisLabel')}:</span><span className="font-medium text-gray-700 dark:text-gray-300">{fmt(wPrinNum)}</span></div>}
+                {wAmtNum > 0 && <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">{t('receivedLabel')}:</span><span className="font-medium text-gray-700 dark:text-gray-300">{fmt(wAmtNum)}</span></div>}
                 <div className="flex justify-between border-t border-gray-200 dark:border-gray-700 pt-1 mt-1">
-                  <span className="text-gray-500 dark:text-gray-400">Lãi/Lỗ:</span>
+                  <span className="text-gray-500 dark:text-gray-400">{t('colGainLoss')}:</span>
                   <span className={`font-semibold ${wGain >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt(wGain)}</span>
                 </div>
                 {wRemainingUnits !== null && wUnitsNum > 0 && (
-                  <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">Còn lại:</span><span className="font-medium text-gray-700 dark:text-gray-300">{fmtUnits(Math.max(0, wRemainingUnits))} {wType === 'gold' ? 'chi' : 'đvị'}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">{t('colRemaining')}:</span><span className="font-medium text-gray-700 dark:text-gray-300">{fmtUnits(Math.max(0, wRemainingUnits))} {wType === 'gold' ? 'chi' : t('unitsShort')}</span></div>
                 )}
                 {wRemainingPrincipal !== null && Number(withdrawForm.principal_withdrawn) > 0 && (
-                  <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">Vốn còn lại:</span><span className="font-medium text-gray-700 dark:text-gray-300">{fmt(Math.max(0, wRemainingPrincipal))}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">{t('remainingPrincipalLabel')}:</span><span className="font-medium text-gray-700 dark:text-gray-300">{fmt(Math.max(0, wRemainingPrincipal))}</span></div>
                 )}
               </div>
             )}
