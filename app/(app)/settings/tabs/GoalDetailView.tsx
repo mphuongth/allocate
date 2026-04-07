@@ -566,55 +566,109 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
           ) : otherRows.length === 0 ? (
             <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">{t('noOtherInvestments')}</div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-black/10 dark:border-gray-700 text-left">
-                    <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colDate')}</th>
-                    <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colType')}</th>
-                    <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colAmount')}</th>
-                    <th className="hidden sm:table-cell px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colUnits')}</th>
-                    <th className="hidden sm:table-cell px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colInterestRate')}</th>
-                    <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colGainLoss')}</th>
-                    <th className="hidden sm:table-cell px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colNotes')}</th>
-                    <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{tc('actions')}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-black/5 dark:divide-gray-700">
-                  {otherRows.map((row) => {
-                    const gain = row.current_value - row.amount_vnd
-                    return (
-                      <tr key={row.transaction_id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{new Date(row.investment_date).toLocaleDateString('vi-VN')}</td>
-                        <td className="px-4 py-3">
-                          <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${ASSET_COLORS[row.asset_type] ?? 'bg-gray-100 text-gray-700'}`}>
-                            {tt(`asset${row.asset_type.charAt(0).toUpperCase() + row.asset_type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold') ?? row.asset_type}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{fmt(row.amount_vnd)}</td>
-                        <td className="hidden sm:table-cell px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{row.units ?? '—'}</td>
-                        <td className="hidden sm:table-cell px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{row.interest_rate != null ? `${row.interest_rate}%` : '—'}</td>
-                        <td className={`px-4 py-3 font-medium ${gain >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt(gain)}</td>
-                        <td className="hidden sm:table-cell px-4 py-3 text-sm text-gray-600 dark:text-gray-500 max-w-32 truncate">{row.notes ?? '—'}</td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-1">
-                            <button onClick={() => openTxEdit(row)} className="p-1.5 rounded-md text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
-                              <Edit className="h-4 w-4" />
-                            </button>
-                            <button onClick={() => handleUnassign(row)} className="p-1.5 rounded-md text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors">
-                              <Unlink className="h-4 w-4" />
-                            </button>
-                            <button onClick={() => handleTxDelete(row)} disabled={deletingId === row.transaction_id} className="p-1.5 rounded-md text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50">
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+            <>
+              {/* Mobile card layout */}
+              <div className="sm:hidden divide-y divide-black/5 dark:divide-gray-700">
+                {otherRows.map((row) => {
+                  const gain = row.current_value - row.amount_vnd
+                  return (
+                    <div key={row.transaction_id} className="px-4 py-3 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${ASSET_COLORS[row.asset_type] ?? 'bg-gray-100 text-gray-700'}`}>
+                          {tt(`asset${row.asset_type.charAt(0).toUpperCase() + row.asset_type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold') ?? row.asset_type}
+                        </span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">{new Date(row.investment_date).toLocaleDateString('vi-VN')}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                        <div>
+                          <span className="text-gray-500 dark:text-gray-400">{t('colAmount')}: </span>
+                          <span className="font-medium text-gray-900 dark:text-gray-100">{fmt(row.amount_vnd)}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 dark:text-gray-400">{t('colGainLoss')}: </span>
+                          <span className={`font-medium ${gain >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt(gain)}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 dark:text-gray-400">{t('colUnits')}: </span>
+                          <span className="text-gray-700 dark:text-gray-300">{row.units ?? '—'}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 dark:text-gray-400">{t('colInterestRate')}: </span>
+                          <span className="text-gray-700 dark:text-gray-300">{row.interest_rate != null ? `${row.interest_rate}%` : '—'}</span>
+                        </div>
+                        {row.notes && (
+                          <div className="col-span-2">
+                            <span className="text-gray-500 dark:text-gray-400">{t('colNotes')}: </span>
+                            <span className="text-gray-700 dark:text-gray-300">{row.notes}</span>
                           </div>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 pt-0.5">
+                        <button onClick={() => openTxEdit(row)} className="p-1.5 rounded-md text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
+                          <Edit className="h-4 w-4" />
+                        </button>
+                        <button onClick={() => handleUnassign(row)} className="p-1.5 rounded-md text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors">
+                          <Unlink className="h-4 w-4" />
+                        </button>
+                        <button onClick={() => handleTxDelete(row)} disabled={deletingId === row.transaction_id} className="p-1.5 rounded-md text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              {/* Desktop table layout */}
+              <div className="hidden sm:block overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-black/10 dark:border-gray-700 text-left">
+                      <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colDate')}</th>
+                      <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colType')}</th>
+                      <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colAmount')}</th>
+                      <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colUnits')}</th>
+                      <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colInterestRate')}</th>
+                      <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colGainLoss')}</th>
+                      <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colNotes')}</th>
+                      <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{tc('actions')}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-black/5 dark:divide-gray-700">
+                    {otherRows.map((row) => {
+                      const gain = row.current_value - row.amount_vnd
+                      return (
+                        <tr key={row.transaction_id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                          <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{new Date(row.investment_date).toLocaleDateString('vi-VN')}</td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${ASSET_COLORS[row.asset_type] ?? 'bg-gray-100 text-gray-700'}`}>
+                              {tt(`asset${row.asset_type.charAt(0).toUpperCase() + row.asset_type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold') ?? row.asset_type}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{fmt(row.amount_vnd)}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{row.units ?? '—'}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{row.interest_rate != null ? `${row.interest_rate}%` : '—'}</td>
+                          <td className={`px-4 py-3 font-medium ${gain >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt(gain)}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-500 max-w-32 truncate">{row.notes ?? '—'}</td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1">
+                              <button onClick={() => openTxEdit(row)} className="p-1.5 rounded-md text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
+                                <Edit className="h-4 w-4" />
+                              </button>
+                              <button onClick={() => handleUnassign(row)} className="p-1.5 rounded-md text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors">
+                                <Unlink className="h-4 w-4" />
+                              </button>
+                              <button onClick={() => handleTxDelete(row)} disabled={deletingId === row.transaction_id} className="p-1.5 rounded-md text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50">
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       )}
