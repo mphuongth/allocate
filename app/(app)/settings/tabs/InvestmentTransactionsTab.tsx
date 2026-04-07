@@ -1,13 +1,20 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useTranslations } from 'next-intl'
+import { Plus, FileSpreadsheet, Edit, Trash2, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
 import ConfirmModal from '@/app/components/ConfirmModal'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
 
 interface Transaction {
   transaction_id: string
   goal_id: string | null
-  asset_type: string | null
-  transaction_type: string
+  asset_type: string
   investment_date: string
   amount_vnd: number
   unit_price: number | null
@@ -35,12 +42,6 @@ interface Fund {
 const ASSET_TYPES = ['fund', 'bank', 'stock', 'gold'] as const
 type AssetType = typeof ASSET_TYPES[number]
 
-const TYPE_LABELS: Record<AssetType, string> = {
-  fund: 'Quỹ',
-  bank: 'Ngân hàng',
-  stock: 'Cổ phiếu',
-  gold: 'Vàng',
-}
 
 const ASSET_COLORS: Record<AssetType, string> = {
   fund: 'bg-purple-100 text-purple-700',
@@ -123,6 +124,8 @@ const emptyTxForm = {
 }
 
 export default function InvestmentTransactionsTab() {
+  const t = useTranslations('transactions')
+  const tc = useTranslations('common')
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [goals, setGoals] = useState<Goal[]>([])
   const [funds, setFunds] = useState<Fund[]>([])
@@ -213,7 +216,7 @@ export default function InvestmentTransactionsTab() {
 
   function openEdit(tx: Transaction) {
     setTxForm({
-      asset_type: tx.asset_type ?? 'bank',
+      asset_type: tx.asset_type,
       investment_date: tx.investment_date,
       amount_vnd: String(tx.amount_vnd),
       unit_price: tx.unit_price != null ? String(tx.unit_price) : '',
@@ -231,8 +234,8 @@ export default function InvestmentTransactionsTab() {
 
   async function handleSave() {
     setFormError('')
-    if (!txForm.amount_vnd || Number(txForm.amount_vnd) <= 0) { setFormError('Số tiền phải lớn hơn 0.'); return }
-    if (!txForm.investment_date) { setFormError('Ngày đầu tư là bắt buộc.'); return }
+    if (!txForm.amount_vnd || Number(txForm.amount_vnd) <= 0) { setFormError(t('amountRequired')); return }
+    if (!txForm.investment_date) { setFormError(t('dateRequired')); return }
 
     const payload = {
       asset_type: txForm.asset_type,
@@ -258,7 +261,7 @@ export default function InvestmentTransactionsTab() {
     })
     if (!res.ok) {
       const { error } = await res.json()
-      setFormError(error ?? 'Đã xảy ra lỗi.')
+      setFormError(error ?? tc('error'))
     } else {
       setFormMode(null)
       await fetchTransactions()
@@ -295,7 +298,7 @@ export default function InvestmentTransactionsTab() {
       setImportRaw('')
       setImportRows([])
       setImportFundId('')
-      setImportToast(`Đã nhập ${inserted} giao dịch`)
+      setImportToast(t('importedToast', { count: inserted }))
       setTimeout(() => setImportToast(''), 4000)
       await fetchTransactions()
     }
@@ -314,149 +317,232 @@ export default function InvestmentTransactionsTab() {
   const totalPages = Math.max(1, Math.ceil(total / 20))
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Giao dịch Đầu tư</h2>
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-gray-500 dark:text-gray-400">{total} giao dịch</span>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('title')}</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t('totalCount', { count: total })}</p>
+        </div>
+        <div className="flex gap-2 shrink-0 self-start sm:self-auto">
           <button
             onClick={() => { setShowImport(true); setImportRaw(''); setImportRows([]); setImportFundId('') }}
-            className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
+            className="flex items-center gap-2 h-9 px-3 sm:px-4 text-sm font-medium text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           >
-            ↑ Nhập từ Excel
+            <FileSpreadsheet className="h-4 w-4 shrink-0" />
+            <span className="hidden sm:inline">{t('importFromExcel')}</span>
           </button>
           <button
             onClick={openAdd}
-            className="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+            className="flex items-center gap-2 h-9 px-3 sm:px-4 bg-gray-950 hover:bg-gray-800 text-white text-sm font-bold rounded-md transition-colors"
           >
-            + Thêm Giao dịch
+            <Plus className="h-4 w-4 shrink-0" />
+            <span className="hidden sm:inline">{t('create')}</span>
           </button>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm p-4 mb-4 flex flex-wrap gap-3 items-end">
-        <div>
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Loại Tài sản</label>
-          <select
-            value={filters.asset_type}
-            onChange={(e) => setSelectFilter('asset_type', e.target.value)}
-            className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            <option value="">Tất cả</option>
-            {ASSET_TYPES.map((t) => <option key={t} value={t}>{TYPE_LABELS[t] ?? t}</option>)}
-          </select>
+      <div className="bg-white dark:bg-gray-900 rounded-xl border border-black/10 dark:border-gray-700 p-4">
+        <div className="grid gap-4 md:grid-cols-4">
+          <div>
+            <label className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2 block">{t('filterAssetType')}</label>
+            <div className="relative">
+              <select
+                value={filters.asset_type}
+                onChange={(e) => setSelectFilter('asset_type', e.target.value)}
+                className="w-full appearance-none border border-black/10 dark:border-gray-600 rounded-lg px-3 py-2 pr-8 text-sm font-medium bg-[#f3f3f5] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="">{t('filterAll')}</option>
+                {ASSET_TYPES.map((type) => <option key={type} value={type}>{t(`asset${type.charAt(0).toUpperCase() + type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold')}</option>)}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            </div>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2 block">{t('filterGoal')}</label>
+            <div className="relative">
+              <select
+                value={filters.goal_id}
+                onChange={(e) => setSelectFilter('goal_id', e.target.value)}
+                className="w-full appearance-none border border-black/10 dark:border-gray-600 rounded-lg px-3 py-2 pr-8 text-sm font-medium bg-[#f3f3f5] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="">{t('allGoals')}</option>
+                <option value="unassigned">{t('noGoal')}</option>
+                {goals.map((g) => <option key={g.goal_id} value={g.goal_id}>{g.goal_name}</option>)}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            </div>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2 block">{t('filterFrom')}</label>
+            <input type="date" value={dateFrom} onChange={(e) => setDateFilter('from_date', e.target.value, setDateFrom)}
+              className="w-full border border-black/10 dark:border-gray-600 rounded-lg px-3 py-2 text-sm font-medium bg-[#f3f3f5] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          </div>
+          <div>
+            <label className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2 block">{t('filterTo')}</label>
+            <input type="date" value={dateTo} onChange={(e) => setDateFilter('to_date', e.target.value, setDateTo)}
+              className="w-full border border-black/10 dark:border-gray-600 rounded-lg px-3 py-2 text-sm font-medium bg-[#f3f3f5] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          </div>
         </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Mục tiêu</label>
-          <select
-            value={filters.goal_id}
-            onChange={(e) => setSelectFilter('goal_id', e.target.value)}
-            className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            <option value="">Tất cả Mục tiêu</option>
-            <option value="unassigned">Chưa gán</option>
-            {goals.map((g) => <option key={g.goal_id} value={g.goal_id}>{g.goal_name}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Từ Ngày</label>
-          <input type="date" value={dateFrom} onChange={(e) => setDateFilter('from_date', e.target.value, setDateFrom)}
-            className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Đến Ngày</label>
-          <input type="date" value={dateTo} onChange={(e) => setDateFilter('to_date', e.target.value, setDateTo)}
-            className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-        </div>
-        <div>
-          <button onClick={resetFilters} className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Đặt lại</button>
+        <div className="flex justify-end mt-4">
+          <button onClick={resetFilters} className="h-9 px-4 text-sm font-medium text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">{tc('reset')}</button>
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+      {/* Table */}
+      <div className="bg-white dark:bg-gray-900 rounded-xl border border-black/10 dark:border-gray-700 overflow-hidden">
         {loading ? (
-          <div className="text-center py-10 text-gray-400 dark:text-gray-500 text-sm">Đang tải...</div>
+          <div className="text-center py-10 text-gray-400 dark:text-gray-500 text-sm">{tc('loading')}</div>
         ) : transactions.length === 0 ? (
-          <div className="text-center py-10 text-gray-400 dark:text-gray-500 text-sm">Không tìm thấy giao dịch.</div>
+          <div className="text-center py-10 text-gray-400 dark:text-gray-500 text-sm">{t('empty')}</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 dark:bg-gray-800">
-                <tr>
-                  {['Ngày', 'Tài sản', 'Số tiền', 'Đơn vị', 'Lãi suất / NAV', 'Giá trị Hiện tại', 'Mục tiêu', 'Ghi chú', 'Thao tác'].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
-                {transactions.map((tx) => {
-                  const currentValue = calcCurrentValue(tx)
-                  const rateOrNav = tx.asset_type === 'fund'
-                    ? (tx.unit_price != null ? fmtNav(tx.unit_price) : '—')
-                    : (tx.interest_rate != null ? `${tx.interest_rate}%` : '—')
-                  return (
-                    <tr key={tx.transaction_id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                      <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{new Date(tx.investment_date).toLocaleDateString('vi-VN')}</td>
-                      <td className="px-4 py-3">
-                        {tx.transaction_type === 'withdrawal' ? (
-                          <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
-                            Rút tiền
-                          </span>
-                        ) : (
-                          <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${ASSET_COLORS[tx.asset_type as AssetType] ?? 'bg-gray-100 text-gray-700'}`}>
-                            {TYPE_LABELS[tx.asset_type as AssetType] ?? tx.asset_type}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{fmt(tx.amount_vnd)}</td>
-                      <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{tx.units ?? '—'}</td>
-                      <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{rateOrNav}</td>
-                      <td className="px-4 py-3 text-indigo-600 dark:text-indigo-400 font-medium">{fmt(currentValue)}</td>
-                      <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
-                        {tx.savings_goals?.goal_name ?? <span className="text-gray-300 dark:text-gray-600">Chưa gán</span>}
-                      </td>
-                      <td className="px-4 py-3 text-gray-400 dark:text-gray-500 max-w-32 truncate">{tx.notes ?? '—'}</td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <button
-                          onClick={() => openEdit(tx)}
-                          className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline mr-3"
-                        >
-                          Sửa
-                        </button>
-                        <button
-                          onClick={() => setConfirmTx(tx)}
-                          className="text-xs text-red-500 dark:text-red-400 hover:underline"
-                        >
-                          Xóa
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 dark:border-gray-700">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300"
-            >
-              Trước
-            </button>
-            <span className="text-sm text-gray-500 dark:text-gray-400">Trang {page} / {totalPages}</span>
-            <button
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
-              className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300"
-            >
-              Tiếp
-            </button>
-          </div>
+          <>
+            {/* Mobile card layout */}
+            <div className="sm:hidden divide-y divide-black/5 dark:divide-gray-700 px-4 py-2">
+              {transactions.map((tx) => {
+                const currentValue = calcCurrentValue(tx)
+                const rateOrNav = tx.asset_type === 'fund'
+                  ? (tx.unit_price != null ? fmtNav(tx.unit_price) : '—')
+                  : (tx.interest_rate != null ? `${tx.interest_rate}%` : '—')
+                const rateOrNavLabel = tx.asset_type === 'fund' ? t('colTransaction') : t('colInterest')
+                const fundCode = tx.asset_type === 'fund' ? funds.find(f => f.id === tx.fund_id)?.code : null
+                return (
+                  <div key={tx.transaction_id} className="py-3 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${ASSET_COLORS[tx.asset_type as AssetType] ?? 'bg-gray-100 text-gray-700'}`}>
+                          {t(`asset${tx.asset_type.charAt(0).toUpperCase() + tx.asset_type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold') ?? tx.asset_type}
+                        </span>
+                        {fundCode && <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{fundCode}</span>}
+                      </div>
+                      <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">{new Date(tx.investment_date).toLocaleDateString('vi-VN')}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                      <div>
+                        <span className="text-gray-500 dark:text-gray-400">{t('colAmount')}: </span>
+                        <span className="font-medium text-gray-900 dark:text-gray-100">{fmt(tx.amount_vnd)}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 dark:text-gray-400">{t('colExpiry')}: </span>
+                        <span className="font-medium text-gray-900 dark:text-gray-100">{fmt(currentValue)}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 dark:text-gray-400">{t('colTransaction')}: </span>
+                        <span className="text-gray-700 dark:text-gray-300">{tx.units ?? '—'}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 dark:text-gray-400">{rateOrNavLabel}: </span>
+                        <span className="text-gray-700 dark:text-gray-300">{rateOrNav}</span>
+                      </div>
+                      <div className="col-span-2">
+                        <span className="text-gray-500 dark:text-gray-400">{t('colGoal')}: </span>
+                        {tx.savings_goals?.goal_name
+                          ? <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900">{tx.savings_goals.goal_name}</span>
+                          : <span className="text-gray-400 dark:text-gray-500">{t('noGoal')}</span>
+                        }
+                      </div>
+                      {tx.notes && (
+                        <div className="col-span-2">
+                          <span className="text-gray-500 dark:text-gray-400">{t('colNotes')}: </span>
+                          <span className="text-gray-700 dark:text-gray-300">{tx.notes}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 pt-0.5">
+                      <button onClick={() => openEdit(tx)} className="h-8 w-8 p-0 flex items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                        <Edit className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                      </button>
+                      <button onClick={() => setConfirmTx(tx)} className="h-8 w-8 p-0 flex items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                        <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            {/* Desktop table layout */}
+            <div className="hidden sm:block overflow-x-auto p-6">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-black/10 dark:border-gray-700 text-left">
+                    <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colDate')}</th>
+                    <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colAsset')}</th>
+                    <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colAmount')}</th>
+                    <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colTransaction')}</th>
+                    <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colInterest')}</th>
+                    <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colExpiry')}</th>
+                    <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colGoal')}</th>
+                    <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colNotes')}</th>
+                    <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-center">{tc('actions')}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-black/5 dark:divide-gray-700">
+                  {transactions.map((tx) => {
+                    const currentValue = calcCurrentValue(tx)
+                    const rateOrNav = tx.asset_type === 'fund'
+                      ? (tx.unit_price != null ? fmtNav(tx.unit_price) : '—')
+                      : (tx.interest_rate != null ? `${tx.interest_rate}%` : '—')
+                    const fundCode = tx.asset_type === 'fund' ? funds.find(f => f.id === tx.fund_id)?.code : null
+                    return (
+                      <tr key={tx.transaction_id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{new Date(tx.investment_date).toLocaleDateString('vi-VN')}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${ASSET_COLORS[tx.asset_type as AssetType] ?? 'bg-gray-100 text-gray-700'}`}>
+                              {t(`asset${tx.asset_type.charAt(0).toUpperCase() + tx.asset_type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold') ?? tx.asset_type}
+                            </span>
+                            {fundCode && <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{fundCode}</span>}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-gray-100">{fmt(tx.amount_vnd)}</td>
+                        <td className="px-4 py-3 text-right text-sm text-gray-600 dark:text-gray-400">{tx.units ?? '—'}</td>
+                        <td className="px-4 py-3 text-right text-sm text-gray-600 dark:text-gray-400">{rateOrNav}</td>
+                        <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-gray-100">{fmt(currentValue)}</td>
+                        <td className="px-4 py-3">
+                          {tx.savings_goals?.goal_name
+                            ? <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900">{tx.savings_goals.goal_name}</span>
+                            : <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400">{t('noGoal')}</span>
+                          }
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 max-w-32 truncate">{tx.notes ?? '—'}</td>
+                        <td className="px-4 py-3 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <button onClick={() => openEdit(tx)} className="h-8 w-8 p-0 flex items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                              <Edit className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                            </button>
+                            <button onClick={() => setConfirmTx(tx)} className="h-8 w-8 p-0 flex items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                              <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {/* Pagination */}
+            <div className="flex items-center justify-between px-4 py-4 border-t border-black/10 dark:border-gray-700">
+              <p className="text-sm text-gray-600 dark:text-gray-400">{t('page')} {page} / {totalPages}</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="h-9 px-3 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-40 transition-colors"
+                >
+                  <ChevronLeft className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+                </button>
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  className="h-9 px-3 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-40 transition-colors"
+                >
+                  <ChevronRight className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+                </button>
+              </div>
+            </div>
+          </>
         )}
       </div>
 
@@ -468,213 +554,237 @@ export default function InvestmentTransactionsTab() {
       )}
 
       {/* Import from Excel Modal */}
-      {showImport && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
-              <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Nhập từ Excel</h3>
-              <button
-                onClick={() => setShowImport(false)}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl leading-none"
+      <Dialog open={showImport} onOpenChange={(o) => { if (!o) setShowImport(false) }}>
+        <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{t('importModalTitle')}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-5 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="import_fund_id">{t('assetFund')}</Label>
+              <select
+                id="import_fund_id"
+                value={importFundId}
+                onChange={(e) => setImportFundId(e.target.value)}
+                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
-                ×
-              </button>
+                <option value="">{t('selectFund')}</option>
+                {funds.map((f) => (
+                  <option key={f.id} value={f.id}>{f.code} - {f.name}</option>
+                ))}
+              </select>
             </div>
 
-            <div className="px-6 py-5 space-y-4 overflow-y-auto flex-1">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Quỹ</label>
-                <select
-                  value={importFundId}
-                  onChange={(e) => setImportFundId(e.target.value)}
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  <option value="">Chọn quỹ…</option>
-                  {funds.map((f) => (
-                    <option key={f.id} value={f.id}>{f.code} - {f.name}</option>
-                  ))}
-                </select>
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="import_raw">
+                {t('pasteFromExcel')}
+              </Label>
+              <p className="text-xs text-gray-400 dark:text-gray-500">
+                Column order: Tháng | Tiền chuyển | Tiền mua (skip) | NAV mua | CCQ mua
+              </p>
+              <Textarea
+                id="import_raw"
+                value={importRaw}
+                onChange={(e) => handleImportPaste(e.target.value)}
+                rows={6}
+                placeholder={"7/2023\t10,000,000\t9,876,543\t23,375.28\t42.78\n8/2023\t10,000,000\t9,876,543\t24,100.00\t40.98"}
+                className="font-mono resize-none"
+              />
+            </div>
 
+            {importRows.length > 0 && (
               <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-                  Dán dữ liệu từ Excel
-                </label>
-                <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">
-                  Column order: Tháng | Tiền chuyển | Tiền mua (skip) | NAV mua | CCQ mua
+                <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                  {t('importPreview', { valid: importRows.filter((r) => !r.error).length, total: importRows.length })}
                 </p>
-                <textarea
-                  value={importRaw}
-                  onChange={(e) => handleImportPaste(e.target.value)}
-                  rows={6}
-                  placeholder={"7/2023\t10,000,000\t9,876,543\t23,375.28\t42.78\n8/2023\t10,000,000\t9,876,543\t24,100.00\t40.98"}
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm font-mono bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-                />
-              </div>
-
-              {importRows.length > 0 && (
-                <div>
-                  <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
-                    Xem trước — {importRows.filter((r) => !r.error).length} hợp lệ / {importRows.length} dòng
-                  </p>
-                  <div className="overflow-x-auto rounded-lg border border-gray-100 dark:border-gray-700">
-                    <table className="w-full text-xs">
-                      <thead className="bg-gray-50 dark:bg-gray-800">
-                        <tr>
-                          {['Ngày', 'Số tiền (₫)', 'NAV', 'CCQ', 'Trạng thái'].map((h) => (
-                            <th key={h} className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
-                        {importRows.map((row, i) => (
-                          <tr key={i} className={row.error ? 'bg-red-50 dark:bg-red-900/10' : ''}>
-                            <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{row.investment_date || '—'}</td>
-                            <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{isNaN(row.amount_vnd) ? '—' : Math.round(row.amount_vnd).toLocaleString('vi-VN')}</td>
-                            <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{isNaN(row.unit_price) ? '—' : row.unit_price.toLocaleString('vi-VN')}</td>
-                            <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{isNaN(row.units) ? '—' : row.units}</td>
-                            <td className="px-3 py-2">
-                              {row.error
-                                ? <span className="text-red-500 dark:text-red-400">{row.error}</span>
-                                : <span className="text-green-600 dark:text-green-400">✓</span>
-                              }
-                            </td>
-                          </tr>
+                <div className="overflow-x-auto rounded-lg border border-gray-100 dark:border-gray-700">
+                  <table className="w-full text-xs">
+                    <thead className="bg-gray-50 dark:bg-gray-800">
+                      <tr>
+                        {[t('colImportDate'), t('colImportAmount'), t('colImportNav'), t('colImportUnits'), t('colImportStatus')].map((h) => (
+                          <th key={h} className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">{h}</th>
                         ))}
-                      </tbody>
-                    </table>
-                  </div>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
+                      {importRows.map((row, i) => (
+                        <tr key={i} className={row.error ? 'bg-red-50 dark:bg-red-900/10' : ''}>
+                          <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{row.investment_date || '—'}</td>
+                          <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{isNaN(row.amount_vnd) ? '—' : Math.round(row.amount_vnd).toLocaleString('vi-VN')}</td>
+                          <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{isNaN(row.unit_price) ? '—' : row.unit_price.toLocaleString('vi-VN')}</td>
+                          <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{isNaN(row.units) ? '—' : row.units}</td>
+                          <td className="px-3 py-2">
+                            {row.error
+                              ? <span className="text-red-500 dark:text-red-400">{row.error}</span>
+                              : <span className="text-green-600 dark:text-green-400">✓</span>
+                            }
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              )}
-            </div>
-
-            <div className="flex gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700">
-              <button
-                onClick={() => setShowImport(false)}
-                className="flex-1 px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
-              >
-                Hủy
-              </button>
-              <button
-                onClick={handleImport}
-                disabled={importing || !importFundId || importRows.filter((r) => !r.error).length === 0}
-                className="flex-1 px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
-              >
-                {importing ? 'Đang nhập…' : `Nhập ${importRows.filter((r) => !r.error).length} giao dịch`}
-              </button>
-            </div>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+          <div className="flex gap-3">
+            <Button variant="outline" className="flex-1" onClick={() => setShowImport(false)}>
+              {tc('cancel')}
+            </Button>
+            <Button
+              className="flex-1 bg-violet-600 hover:bg-violet-700"
+              onClick={handleImport}
+              disabled={importing || !importFundId || importRows.filter((r) => !r.error).length === 0}
+            >
+              {importing ? t('importing') : t('importCount', { count: importRows.filter((r) => !r.error).length })}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Add/Edit Modal */}
-      {formMode && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <form onSubmit={(e) => { e.preventDefault(); handleSave() }} className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
-              <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
-                {formMode === 'add' ? 'Thêm Giao dịch' : 'Sửa Giao dịch'}
-              </h3>
-              <button
-                type="button"
-                onClick={() => setFormMode(null)}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl leading-none"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="px-6 py-5 space-y-4">
+      <Dialog open={!!formMode} onOpenChange={(o) => { if (!o) setFormMode(null) }}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>
+              {formMode === 'add' ? t('create') : tc('edit')}
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={(e) => { e.preventDefault(); handleSave() }}>
+            <div className="space-y-5 py-4 max-h-[500px] overflow-y-auto">
               {/* Asset Type */}
-              <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Loại Tài sản</label>
-                <select
+              <div className="space-y-2">
+                <Label htmlFor="asset_type">{t('filterAssetType')} <span className="text-red-500">*</span></Label>
+                <Select
                   value={txForm.asset_type}
-                  onChange={(e) => setTxForm((f) => ({ ...f, asset_type: e.target.value, fund_id: '', unit_price: '', units: '', interest_rate: '', expiry_date: '' }))}
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  onValueChange={(value) => { if (value) setTxForm((f) => ({ ...f, asset_type: value, fund_id: '', unit_price: '', units: '', interest_rate: '', expiry_date: '' })) }}
                 >
-                  {ASSET_TYPES.map((t) => (
-                    <option key={t} value={t}>{TYPE_LABELS[t] ?? t}</option>
-                  ))}
-                </select>
+                  <SelectTrigger id="asset_type">
+                    <SelectValue>{t(`asset${txForm.asset_type.charAt(0).toUpperCase() + txForm.asset_type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold')}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ASSET_TYPES.map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {t(`asset${type.charAt(0).toUpperCase() + type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold')}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Goal */}
-              <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Mục tiêu</label>
-                <select
-                  value={txForm.goal_id}
-                  onChange={(e) => setTxForm((f) => ({ ...f, goal_id: e.target.value }))}
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              <div className="space-y-2">
+                <Label htmlFor="goal_id">{t('colGoal')}</Label>
+                <Select
+                  value={txForm.goal_id || 'unassigned'}
+                  onValueChange={(value) => { if (value) setTxForm((f) => ({ ...f, goal_id: value === 'unassigned' ? '' : value })) }}
                 >
-                  <option value="">Không có Mục tiêu (Chưa gán)</option>
-                  {goals.map((g) => (
-                    <option key={g.goal_id} value={g.goal_id}>{g.goal_name}</option>
-                  ))}
-                </select>
+                  <SelectTrigger id="goal_id">
+                    <SelectValue>{txForm.goal_id ? goals.find(g => g.goal_id === txForm.goal_id)?.goal_name : t('noGoal')}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unassigned">{t('noGoal')}</SelectItem>
+                    {goals.map((g) => (
+                      <SelectItem key={g.goal_id} value={g.goal_id}>{g.goal_name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Fund picker — only for fund type */}
               {txForm.asset_type === 'fund' && (
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Quỹ</label>
-                  <select
-                    value={txForm.fund_id}
-                    onChange={(e) => setTxForm((f) => ({ ...f, fund_id: e.target.value }))}
-                    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                <div className="space-y-2">
+                  <Label htmlFor="fund_id">{t('assetFund')} <span className="text-red-500">*</span></Label>
+                  <Select
+                    value={txForm.fund_id || undefined}
+                    onValueChange={(value) => { if (value) setTxForm((f) => ({ ...f, fund_id: value })) }}
                   >
-                    <option value="">Chọn quỹ…</option>
-                    {funds.map((f) => (
-                      <option key={f.id} value={f.id}>{f.code} - {f.name}</option>
-                    ))}
-                  </select>
+                    <SelectTrigger id="fund_id">
+                      <SelectValue placeholder={t('selectFund')}>{txForm.fund_id ? funds.find(f => f.id === txForm.fund_id)?.name : undefined}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {funds.map((f) => (
+                        <SelectItem key={f.id} value={f.id}>{f.code} - {f.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               )}
 
               {/* Date */}
-              <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Ngày Đầu tư</label>
-                <input
+              <div className="space-y-2">
+                <Label htmlFor="investment_date">{t('colDate')} <span className="text-red-500">*</span></Label>
+                <Input
+                  id="investment_date"
                   type="date"
                   value={txForm.investment_date}
                   onChange={(e) => setTxForm((f) => ({ ...f, investment_date: e.target.value }))}
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
 
               {/* Amount */}
-              <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Số tiền (VND)</label>
-                <input
+              <div className="space-y-2">
+                <Label htmlFor="amount_vnd">{t('colAmount')} <span className="text-red-500">*</span></Label>
+                <Input
+                  id="amount_vnd"
                   type="number"
                   value={txForm.amount_vnd}
                   onChange={(e) => setTxForm((f) => ({ ...f, amount_vnd: e.target.value }))}
-                  placeholder="VD: 10000000"
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  placeholder="e.g., 10000000"
                 />
               </div>
 
-              {/* Unit Price + Units — non-bank */}
-              {txForm.asset_type !== 'bank' && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-                      {txForm.asset_type === 'fund' ? 'NAV khi Mua' : 'Giá Đơn vị'}
-                    </label>
-                    <input
+              {/* NAV + Units — fund only */}
+              {txForm.asset_type === 'fund' && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="unit_price">{t('navAtBuy')} <span className="text-red-500">*</span></Label>
+                    <Input
+                      id="unit_price"
                       type="number"
+                      step="0.01"
+                      placeholder="e.g., 22215.12"
                       value={txForm.unit_price}
                       onChange={(e) => setTxForm((f) => ({ ...f, unit_price: e.target.value }))}
-                      className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{txForm.asset_type === 'fund' ? 'CCQ' : txForm.asset_type === 'stock' ? 'CP' : txForm.asset_type === 'gold' ? 'Chỉ' : 'Đơn vị'}</label>
-                    <input
+                  <div className="space-y-2">
+                    <Label htmlFor="units">{t('unitsFund')} <span className="text-red-500">*</span></Label>
+                    <Input
+                      id="units"
                       type="number"
+                      step="0.01"
+                      placeholder="e.g., 450.25"
                       value={txForm.units}
                       onChange={(e) => setTxForm((f) => ({ ...f, units: e.target.value }))}
-                      className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Unit Price + Units — non-fund, non-bank */}
+              {txForm.asset_type !== 'bank' && txForm.asset_type !== 'fund' && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="unit_price">{t('unitPrice')} <span className="text-red-500">*</span></Label>
+                    <Input
+                      id="unit_price"
+                      type="number"
+                      step="0.01"
+                      value={txForm.unit_price}
+                      onChange={(e) => setTxForm((f) => ({ ...f, unit_price: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="units">
+                      {txForm.asset_type === 'stock' ? t('unitsStock') : txForm.asset_type === 'gold' ? t('unitsGold') : t('unitsDefault')} <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id="units"
+                      type="number"
+                      step="0.01"
+                      value={txForm.units}
+                      onChange={(e) => setTxForm((f) => ({ ...f, units: e.target.value }))}
                     />
                   </div>
                 </div>
@@ -682,38 +792,40 @@ export default function InvestmentTransactionsTab() {
 
               {/* Interest Rate + Expiry — bank only */}
               {txForm.asset_type === 'bank' && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Lãi suất (%/năm)</label>
-                    <input
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="interest_rate">{t('colInterest')}</Label>
+                    <Input
+                      id="interest_rate"
                       type="number"
                       step="0.01"
                       value={txForm.interest_rate}
                       onChange={(e) => setTxForm((f) => ({ ...f, interest_rate: e.target.value }))}
-                      placeholder="VD: 6.5"
-                      className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      placeholder="e.g., 6.5"
                     />
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Ngày Đáo hạn</label>
-                    <input
+                  <div className="space-y-2">
+                    <Label htmlFor="expiry_date">{t('colExpiry')}</Label>
+                    <Input
+                      id="expiry_date"
                       type="date"
                       value={txForm.expiry_date}
                       onChange={(e) => setTxForm((f) => ({ ...f, expiry_date: e.target.value }))}
-                      className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>
                 </div>
               )}
 
               {/* Notes */}
-              <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Ghi chú</label>
-                <input
-                  type="text"
+              <div className="space-y-2">
+                <Label htmlFor="notes">{tc('notes')}</Label>
+                <Textarea
+                  id="notes"
                   value={txForm.notes}
                   onChange={(e) => setTxForm((f) => ({ ...f, notes: e.target.value }))}
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  rows={3}
+                  placeholder="Additional notes..."
+                  className="resize-none"
                 />
               </div>
 
@@ -722,35 +834,26 @@ export default function InvestmentTransactionsTab() {
               )}
             </div>
 
-            <div className="flex gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700">
-              <button
-                type="button"
-                onClick={() => setFormMode(null)}
-                className="flex-1 px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
-              >
-                Hủy
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="flex-1 px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
-              >
-                {saving ? 'Đang lưu…' : 'Lưu'}
-              </button>
+            <div className="flex gap-3">
+              <Button type="button" variant="outline" className="flex-1" onClick={() => setFormMode(null)}>
+                {tc('cancel')}
+              </Button>
+              <Button type="submit" className="flex-1 bg-violet-600 hover:bg-violet-700" disabled={saving}>
+                {saving ? tc('saving') : tc('save')}
+              </Button>
             </div>
           </form>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
-      {confirmTx && (
-        <ConfirmModal
-          title="Xóa Giao dịch"
-          message="Bạn có chắc muốn xóa giao dịch đầu tư này?"
-          confirming={deletingId === confirmTx.transaction_id}
-          onConfirm={() => handleDelete(confirmTx)}
-          onCancel={() => setConfirmTx(null)}
-        />
-      )}
+      <ConfirmModal
+        open={!!confirmTx}
+        title={tc('delete')}
+        message={confirmTx ? t('deleteMessage') : ''}
+        confirming={deletingId === confirmTx?.transaction_id}
+        onConfirm={() => confirmTx && handleDelete(confirmTx)}
+        onCancel={() => setConfirmTx(null)}
+      />
     </div>
   )
 }

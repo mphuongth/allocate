@@ -1,12 +1,21 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import Link from 'next/link'
+import { Plus } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 import dynamic from 'next/dynamic'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { NetWorthSkeleton, GoalSkeleton, InsuranceSkeleton } from './components/Skeletons'
 import NetWorthCard from './components/NetWorthCard'
 import GoalCard from './components/GoalCard'
 import UnallocatedSection from './components/UnallocatedSection'
 import InsuranceCard from './components/InsuranceCard'
+import AssetAllocationPie from './components/AssetAllocationPie'
 
 const FundDetailModal = dynamic(() => import('./components/FundDetailModal'))
 const GoalPickerModal = dynamic(() => import('./components/GoalPickerModal'))
@@ -56,6 +65,8 @@ export interface NonFundUnallocatedItem {
   interestRate: number | null
   expiryDate: string | null
   investmentDate: string
+  notes: string | null
+  units: number | null
 }
 
 export interface DashboardData {
@@ -75,9 +86,6 @@ export interface DashboardData {
   insurance: InsuranceData[]
 }
 
-type SortOrder = 'manual' | 'progress-desc' | 'progress-asc' | 'alpha'
-
-const SORT_KEY = 'assetsSortOrder'
 const OVERVIEW_CACHE_KEY = 'dashboardOverviewCache'
 const OVERVIEW_CACHE_TTL = 2 * 60 * 1000 // 2 minutes
 
@@ -95,28 +103,17 @@ function setCachedOverview(data: DashboardData) {
   try { localStorage.setItem(OVERVIEW_CACHE_KEY, JSON.stringify({ data, ts: Date.now() })) } catch { /* ignore */ }
 }
 
-function sortGoals(goals: GoalData[], order: SortOrder): GoalData[] {
-  const copy = [...goals]
-  switch (order) {
-    case 'progress-desc':
-      return copy.sort((a, b) => (b.progressPercentage ?? 0) - (a.progressPercentage ?? 0))
-    case 'progress-asc':
-      return copy.sort((a, b) => (a.progressPercentage ?? 0) - (b.progressPercentage ?? 0))
-    case 'alpha':
-      return copy.sort((a, b) => a.goalName.localeCompare(b.goalName))
-    default:
-      return copy
-  }
-}
-
 // Fetch fund detail (purchase history) from investment_transactions
 interface PurchaseHistory { purchase_date: string; units: number; nav_at_purchase: number }
 
 export default function DashboardClient() {
+  const t = useTranslations('dashboard')
+  const tc = useTranslations('common')
+  const tt = useTranslations('transactions')
+  const tg = useTranslations('goals')
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [sortOrder, setSortOrder] = useState<SortOrder>('manual')
   const [fundDetailId, setFundDetailId] = useState<string | null>(null)
   const [goalPickerFundId, setGoalPickerFundId] = useState<string | null>(null)
   const [assignLoading, setAssignLoading] = useState(false)
@@ -125,12 +122,12 @@ export default function DashboardClient() {
   const [nonFundPickerTxId, setNonFundPickerTxId] = useState<string | null>(null)
   const [nonFundAssignLoading, setNonFundAssignLoading] = useState(false)
   const [nonFundAssignError, setNonFundAssignError] = useState('')
-
-  // Load sort preference from localStorage
-  useEffect(() => {
-    const saved = typeof window !== 'undefined' ? localStorage.getItem(SORT_KEY) : null
-    if (saved) setSortOrder(saved as SortOrder)
-  }, [])
+  const [showGoalForm, setShowGoalForm] = useState(false)
+  const [goalName, setGoalName] = useState('')
+  const [goalTarget, setGoalTarget] = useState('')
+  const [goalDesc, setGoalDesc] = useState('')
+  const [goalSaving, setGoalSaving] = useState(false)
+  const [goalError, setGoalError] = useState('')
 
   const fetchData = useCallback(async (opts?: { force?: boolean }) => {
     const cached = !opts?.force && getCachedOverview()
@@ -145,24 +142,19 @@ export default function DashboardClient() {
       const res = await fetch('/api/v1/dashboard/overview')
       if (!res.ok) {
         const { error: e } = await res.json()
-        setError(e ?? 'Không thể tải dữ liệu.')
+        setError(e ?? tc('error'))
       } else {
         const json = await res.json()
         setData(json)
         setCachedOverview(json)
       }
     } catch {
-      setError('Không thể tải dữ liệu. Vui lòng kiểm tra kết nối và thử lại.')
+      setError(tc('error'))
     }
     setLoading(false)
   }, [])
 
   useEffect(() => { fetchData() }, [fetchData])
-
-  function handleSortChange(order: SortOrder) {
-    setSortOrder(order)
-    localStorage.setItem(SORT_KEY, order)
-  }
 
   async function handleFundClick(fundId: string) {
     setFundDetailId(fundId)
@@ -178,6 +170,36 @@ export default function DashboardClient() {
         )
       }
     } catch { /* ignore — show modal without history */ }
+  }
+
+  async function handleGoalSave() {
+    setGoalError('')
+    if (!goalName.trim()) { setGoalError('Goal name is required'); return }
+    setGoalSaving(true)
+    try {
+      const res = await fetch('/api/v1/savings-goals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          goal_name: goalName.trim(),
+          target_amount: goalTarget ? Number(goalTarget) : null,
+          description: goalDesc.trim() || null,
+        }),
+      })
+      if (!res.ok) {
+        const { error } = await res.json()
+        setGoalError(error ?? 'Could not save goal')
+      } else {
+        setShowGoalForm(false)
+        setGoalName('')
+        setGoalTarget('')
+        setGoalDesc('')
+        fetchData({ force: true })
+      }
+    } catch {
+      setGoalError('Could not save goal')
+    }
+    setGoalSaving(false)
   }
 
   async function handleAssignToGoal(fundId: string, goalId: string) {
@@ -260,47 +282,34 @@ export default function DashboardClient() {
 
   const isEmpty = data && data.goals.length === 0 && data.unallocated.funds.length === 0 && data.unallocated.nonFunds.length === 0 && data.insurance.length === 0
 
-  const sortedGoals = data ? sortGoals(data.goals, sortOrder) : []
+  const sortedGoals = data ? data.goals : []
+
+  // Compute asset allocation totals for pie chart
+  const allocationTotals = data ? (() => {
+    const fundTotal = [
+      ...data.goals.flatMap((g) => g.funds),
+      ...data.unallocated.funds,
+    ].reduce((s, f) => s + f.currentValue, 0)
+    const nonFundAll = data.unallocated.nonFunds
+    const bankTotal = nonFundAll.filter((i) => i.type === 'bank').reduce((s, i) => s + i.currentValue, 0)
+    const goldTotal = nonFundAll.filter((i) => i.type === 'gold').reduce((s, i) => s + i.currentValue, 0)
+    const stockTotal = nonFundAll.filter((i) => i.type === 'stock').reduce((s, i) => s + i.currentValue, 0)
+    const investedTotal = fundTotal + bankTotal + goldTotal + stockTotal
+    const cashTotal = Math.max(data.netWorth.totalAssets - investedTotal, 0)
+    return { fundTotal, bankTotal, goldTotal, stockTotal, cashTotal }
+  })() : null
 
   // Find fund item for detail modal
   const allFunds = data ? [...data.unallocated.funds, ...data.goals.flatMap((g) => g.funds)] : []
   const detailFund = fundDetailId ? allFunds.find((f) => f.fundId === fundDetailId) : null
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8 flex-wrap gap-3">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Tổng Quan Tài Sản</h1>
-          <div className="flex items-center gap-3 flex-wrap">
-            {/* Sort dropdown */}
-            {!loading && data && (
-              <select
-                value={sortOrder}
-                onChange={(e) => handleSortChange(e.target.value as SortOrder)}
-                className="text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-1.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                <option value="manual">Sắp xếp thủ công</option>
-                <option value="progress-desc">Tiến độ: Cao → Thấp</option>
-                <option value="progress-asc">Tiến độ: Thấp → Cao</option>
-                <option value="alpha">Theo bảng chữ cái (A-Z)</option>
-              </select>
-            )}
-            <button
-              onClick={() => fetchData({ force: true })}
-              disabled={loading}
-              className="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
-            >
-              {loading ? 'Đang tải...' : 'Làm mới'}
-            </button>
-          </div>
-        </div>
-
+    <div className="space-y-6">
         {/* Error state */}
         {error && (
           <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl flex items-center justify-between">
             <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
-            <button onClick={() => fetchData({ force: true })} className="text-sm text-red-600 dark:text-red-400 font-medium hover:underline ml-4">Thử lại</button>
+            <button onClick={() => fetchData({ force: true })} className="text-sm text-red-600 dark:text-red-400 font-medium hover:underline ml-4">{tc('tryAgain')}</button>
           </div>
         )}
 
@@ -328,17 +337,17 @@ export default function DashboardClient() {
             </div>
 
             {/* Title & description */}
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Chưa có tài sản nào</h2>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">{t('empty')}</h2>
             <p className="text-gray-500 dark:text-gray-400 text-center max-w-sm mb-10">
-              Bắt đầu bằng cách thêm mục tiêu tài chính, quỹ đầu tư hoặc bảo hiểm để theo dõi tài sản.
+              {t('emptyDesc')}
             </p>
 
             {/* Action cards */}
             <div className="w-full max-w-md space-y-3 mb-8">
               {[
-                { icon: '🎯', title: 'Thêm Mục tiêu Tài chính', desc: 'Tạo mục tiêu tiết kiệm hoặc đầu tư' },
-                { icon: '💰', title: 'Thêm Quỹ Đầu tư', desc: 'Ghi lại các quỹ và chứng chỉ của bạn' },
-                { icon: '🛡️', title: 'Thêm Bảo hiểm', desc: 'Quản lý các hợp đồng bảo hiểm' },
+                { icon: '🎯', title: t('addGoal'), desc: t('addGoalDesc') },
+                { icon: '💰', title: t('addFund'), desc: t('addFundDesc') },
+                { icon: '🛡️', title: t('addInsurance'), desc: t('addInsuranceDesc') },
               ].map(({ icon, title, desc }) => (
                 <a
                   key={title}
@@ -360,21 +369,21 @@ export default function DashboardClient() {
             {/* Divider + Settings button */}
             <div className="flex items-center gap-3 w-full max-w-md mb-5">
               <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
-              <span className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">Hoặc quản lý mọi thứ trong</span>
+              <span className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">{t('orManage')}</span>
               <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
             </div>
             <a
               href="/settings"
               className="px-6 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
             >
-              Settings
+              {t('settingsLink')}
             </a>
           </div>
         )}
 
         {/* Gold price widget — shown whenever user has any gold investment */}
         {!loading && data?.netWorth.hasGold && (
-          <div className="mb-6 rounded-xl overflow-hidden border border-amber-100 dark:border-amber-800/30">
+          <div className="mb-6 rounded-xl overflow-hidden border border-amber-200 dark:border-amber-800/30 bg-gradient-to-r from-amber-50 to-amber-100 dark:from-amber-900/10 dark:to-amber-900/5">
             <GoldPriceWidget onRefresh={() => fetchData({ force: true })} />
           </div>
         )}
@@ -382,14 +391,33 @@ export default function DashboardClient() {
         {/* Dashboard content */}
         {!loading && data && !isEmpty && (
           <div className="space-y-8">
-            {/* Net Worth */}
-            <NetWorthCard {...data.netWorth} />
+            {/* Net Worth + Asset Allocation */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2">
+                <NetWorthCard {...data.netWorth} />
+              </div>
+              {allocationTotals && (
+                <AssetAllocationPie
+                  {...allocationTotals}
+                  totalAssets={data.netWorth.totalAssets}
+                />
+              )}
+            </div>
 
             {/* Goals */}
             {sortedGoals.length > 0 && (
               <section>
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Mục tiêu</h2>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('sectionGoals')}</h2>
+                  <button
+                    onClick={() => { setGoalName(''); setGoalTarget(''); setGoalDesc(''); setGoalError(''); setShowGoalForm(true) }}
+                    className="flex items-center gap-2 h-9 px-4 bg-gray-950 hover:bg-gray-800 text-white text-sm font-bold rounded-md transition-colors"
+                  >
+                    <Plus className="h-4 w-4" />
+                    {t('addGoalBtn')}
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {sortedGoals.map((goal) => (
                     <GoalCard
                       key={goal.goalId}
@@ -416,69 +444,114 @@ export default function DashboardClient() {
             {/* Insurance */}
             {data.insurance.length > 0 && (
               <section>
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Bảo hiểm</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {data.insurance.map((ins) => (
-                    <InsuranceCard key={ins.insuranceId} {...ins} onSavingsChange={() => fetchData({ force: true })} />
-                  ))}
+                <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
+                  <div className="flex items-center justify-between mb-5">
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('sectionInsurance')}</h2>
+                    <Link
+                      href="/settings?tab=insurance"
+                      className="text-sm font-medium px-3 py-1.5 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                    >
+                      {t('manageInsurance')}
+                    </Link>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {data.insurance.map((ins) => (
+                      <InsuranceCard key={ins.insuranceId} {...ins} onSavingsChange={() => fetchData({ force: true })} />
+                    ))}
+                  </div>
                 </div>
               </section>
             )}
           </div>
         )}
-      </div>
 
       {/* Fund Detail Modal */}
-      {fundDetailId && detailFund && (
-        <FundDetailModal
-          fundId={detailFund.fundId}
-          fundName={detailFund.fundName}
-          currentNAV={detailFund.currentNAV}
-          quantity={detailFund.quantity}
-          currentValue={detailFund.currentValue}
-          purchasePrice={detailFund.purchasePrice}
-          profitLoss={detailFund.profitLoss}
-          profitLossPercentage={detailFund.profitLossPercentage}
-          purchaseHistory={purchaseHistory}
-          onClose={() => { setFundDetailId(null); setPurchaseHistory([]) }}
-        />
-      )}
+      <FundDetailModal
+        open={!!(fundDetailId && detailFund)}
+        onOpenChange={(o) => { if (!o) { setFundDetailId(null); setPurchaseHistory([]) } }}
+        fundId={detailFund?.fundId ?? ''}
+        fundName={detailFund?.fundName ?? ''}
+        currentNAV={detailFund?.currentNAV ?? 0}
+        quantity={detailFund?.quantity ?? 0}
+        currentValue={detailFund?.currentValue ?? 0}
+        purchasePrice={detailFund?.purchasePrice ?? 0}
+        profitLoss={detailFund?.profitLoss ?? 0}
+        profitLossPercentage={detailFund?.profitLossPercentage ?? 0}
+        purchaseHistory={purchaseHistory}
+        onClose={() => { setFundDetailId(null); setPurchaseHistory([]) }}
+      />
 
       {/* Goal Picker Modal — funds */}
-      {goalPickerFundId && data && (
-        <GoalPickerModal
-          fundId={goalPickerFundId}
-          fundName={allFunds.find((f) => f.fundId === goalPickerFundId)?.fundName ?? ''}
-          goals={data.goals.map((g) => ({
-            id: g.goalId,
-            name: g.goalName,
-            targetAmount: g.targetAmount,
-            currentValue: g.currentValue,
-            progressPercent: g.progressPercentage,
-          }))}
-          onConfirm={(goalId) => handleAssignToGoal(goalPickerFundId, goalId)}
-          onCancel={() => { setGoalPickerFundId(null); setAssignError('') }}
-          isLoading={assignLoading}
-          error={assignError}
-        />
-      )}
+      <GoalPickerModal
+        open={!!(goalPickerFundId && data)}
+        onOpenChange={(o) => { if (!o) { setGoalPickerFundId(null); setAssignError('') } }}
+        fundId={goalPickerFundId ?? ''}
+        fundName={allFunds.find((f) => f.fundId === goalPickerFundId)?.fundName ?? ''}
+        goals={data ? data.goals.map((g) => ({
+          id: g.goalId,
+          name: g.goalName,
+          targetAmount: g.targetAmount,
+          currentValue: g.currentValue,
+          progressPercent: g.progressPercentage,
+        })) : []}
+        onConfirm={(goalId) => goalPickerFundId && handleAssignToGoal(goalPickerFundId, goalId)}
+        onCancel={() => { setGoalPickerFundId(null); setAssignError('') }}
+        isLoading={assignLoading}
+        error={assignError}
+      />
 
       {/* Goal Picker Modal — non-funds (gold, bank, stock) */}
-      {nonFundPickerTxId && data && (() => {
-        const item = data.unallocated.nonFunds.find((i) => i.transactionId === nonFundPickerTxId)
-        const label = item ? `${item.type === 'gold' ? 'Vàng' : item.type === 'bank' ? 'Ngân hàng' : 'Cổ phiếu'} · ${new Date(item.investmentDate).toLocaleDateString('vi-VN')}` : ''
+      {/* Add Goal Modal */}
+      <Dialog open={showGoalForm} onOpenChange={(o) => { if (!o && !goalSaving) setShowGoalForm(false) }}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>{tg('createModal')}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={(e) => { e.preventDefault(); handleGoalSave() }}>
+            <div className="space-y-5 py-4">
+              {goalError && <p className="text-sm text-red-600 dark:text-red-400">{goalError}</p>}
+              <div className="space-y-2">
+                <Label>{tg('nameLabel')} <span className="text-red-500">*</span></Label>
+                <Input type="text" value={goalName} onChange={(e) => setGoalName(e.target.value)} placeholder={tg('namePlaceholder')} />
+              </div>
+              <div className="space-y-2">
+                <Label>{tg('targetLabel')}</Label>
+                <Input type="number" value={goalTarget} onChange={(e) => setGoalTarget(e.target.value)} placeholder={tg('targetPlaceholder')} />
+              </div>
+              <div className="space-y-2">
+                <Label>{tg('descLabel')}</Label>
+                <Textarea value={goalDesc} onChange={(e) => setGoalDesc(e.target.value)} placeholder={tg('descPlaceholder')} rows={3} />
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <Button type="button" variant="outline" className="flex-1" onClick={() => setShowGoalForm(false)}>{tc('cancel')}</Button>
+              <Button type="submit" className="flex-1 bg-violet-600 hover:bg-violet-700" disabled={goalSaving}>
+                {goalSaving && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                {goalSaving ? tc('saving') : tc('save')}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {(() => {
+        const item = data?.unallocated.nonFunds.find((i) => i.transactionId === nonFundPickerTxId)
+        const typeLabel = item ? (item.type === 'gold' ? tt('assetGold') : item.type === 'bank' ? tt('assetBank') : tt('assetStock')) : ''
+        const label = item ? `${typeLabel} · ${new Date(item.investmentDate).toLocaleDateString('vi-VN')}` : ''
         return (
           <GoalPickerModal
-            fundId={nonFundPickerTxId}
+            open={!!(nonFundPickerTxId && data)}
+            onOpenChange={(o) => { if (!o) { setNonFundPickerTxId(null); setNonFundAssignError('') } }}
+            fundId={nonFundPickerTxId ?? ''}
             fundName={label}
-            goals={data.goals.map((g) => ({
+            goals={data ? data.goals.map((g) => ({
               id: g.goalId,
               name: g.goalName,
               targetAmount: g.targetAmount,
               currentValue: g.currentValue,
               progressPercent: g.progressPercentage,
-            }))}
-            onConfirm={(goalId) => handleAssignNonFundToGoal(nonFundPickerTxId, goalId)}
+            })) : []}
+            onConfirm={(goalId) => nonFundPickerTxId && handleAssignNonFundToGoal(nonFundPickerTxId, goalId)}
             onCancel={() => { setNonFundPickerTxId(null); setNonFundAssignError('') }}
             isLoading={nonFundAssignLoading}
             error={nonFundAssignError}

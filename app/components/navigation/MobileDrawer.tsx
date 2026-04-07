@@ -76,7 +76,7 @@ export default function MobileDrawer({ open, onClose, email, initials }: MobileD
           </button>
         </div>
         <div className="flex-1 overflow-y-auto">
-          <Sidebar email={email} initials={initials} onNavClick={onClose} />
+          <Sidebar email={email} initials={initials} onNavClick={onClose} hideLogo />
         </div>
       </div>
     </div>

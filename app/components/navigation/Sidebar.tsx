@@ -2,43 +2,49 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { BarChart3, Calendar, BookOpen, Settings } from 'lucide-react'
+import { LayoutDashboard, Calendar, LineChart, Settings } from 'lucide-react'
 import { useNavigation } from './NavigationContext'
-
-const NAV_ITEMS = [
-  { label: 'Tổng Quan Tài Sản', href: '/dashboard', icon: BarChart3 },
-  { label: 'Kế Hoạch Tháng', href: '/planning', icon: Calendar },
-  { label: 'Thư Viện Quỹ', href: '/funds', icon: BookOpen },
-  { label: 'Cài Đặt', href: '/settings', icon: Settings },
-]
+import { useTranslations } from 'next-intl'
+import LanguageSwitcher from '../LanguageSwitcher'
 
 interface SidebarProps {
   email: string
   initials: string
   onNavClick?: () => void
+  hideLogo?: boolean
 }
 
-export default function Sidebar({ email, initials, onNavClick }: SidebarProps) {
+export default function Sidebar({ email, initials, onNavClick, hideLogo = false }: SidebarProps) {
   const pathname = usePathname()
   const { sidebarCollapsed } = useNavigation()
+  const t = useTranslations('nav')
+
+  const NAV_ITEMS = [
+    { label: t('dashboard'), href: '/dashboard', icon: LayoutDashboard },
+    { label: t('planning'), href: '/planning', icon: Calendar },
+    { label: t('funds'), href: '/funds', icon: LineChart },
+    { label: t('settings'), href: '/settings', icon: Settings },
+  ]
 
   return (
     <nav
       className={`flex flex-col h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 transition-all duration-200 ${
-        sidebarCollapsed ? 'w-16' : 'w-60'
+        sidebarCollapsed ? 'w-16' : 'w-64'
       }`}
     >
       {/* Logo */}
-      <div className={`flex items-center h-16 px-4 border-b border-gray-100 dark:border-gray-700 ${sidebarCollapsed ? 'justify-center' : ''}`}>
-        {sidebarCollapsed ? (
-          <span className="text-brand font-bold text-lg">A</span>
-        ) : (
-          <span className="text-brand font-bold text-xl tracking-tight">Allocate</span>
-        )}
-      </div>
+      {!hideLogo && (
+        <div className={`flex items-center h-16 px-6 border-b border-gray-100 dark:border-gray-700 ${sidebarCollapsed ? 'justify-center px-0' : ''}`}>
+          {sidebarCollapsed ? (
+            <span className="text-violet-600 font-semibold text-lg">A</span>
+          ) : (
+            <span className="text-violet-600 font-semibold text-xl">Allocate</span>
+          )}
+        </div>
+      )}
 
       {/* Nav items */}
-      <ul className="flex-1 py-3 space-y-0.5">
+      <ul className="flex-1 p-4 space-y-1">
         {NAV_ITEMS.map(({ label, href, icon: Icon }) => {
           const active = pathname === href
           return (
@@ -48,13 +54,13 @@ export default function Sidebar({ email, initials, onNavClick }: SidebarProps) {
                 onClick={onNavClick}
                 aria-current={active ? 'page' : undefined}
                 title={sidebarCollapsed ? label : undefined}
-                className={`flex items-center gap-3 h-11 px-3 mx-2 rounded-md border-l-4 transition-colors text-sm font-medium ${
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm font-medium ${
                   active
-                    ? 'border-brand bg-brand-light dark:bg-brand/20 text-gray-900 dark:text-gray-100 font-semibold'
-                    : 'border-transparent text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100'
-                } ${sidebarCollapsed ? 'justify-center px-0 mx-2' : ''}`}
+                    ? 'bg-violet-50 dark:bg-brand/20 text-violet-600 dark:text-violet-300'
+                    : 'text-gray-700 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                } ${sidebarCollapsed ? 'justify-center' : ''}`}
               >
-                <Icon size={18} className="shrink-0" />
+                <Icon size={20} className="shrink-0" />
                 {!sidebarCollapsed && <span>{label}</span>}
               </Link>
             </li>
@@ -62,13 +68,18 @@ export default function Sidebar({ email, initials, onNavClick }: SidebarProps) {
         })}
       </ul>
 
-      {/* Profile */}
+      {/* Profile + Language switcher */}
       {!sidebarCollapsed && (
-        <div className="flex items-center gap-3 px-4 py-3 border-t border-gray-100 dark:border-gray-700">
-          <div className="w-8 h-8 rounded-full bg-brand flex items-center justify-center text-white text-xs font-semibold shrink-0">
-            {initials}
+        <div className="border-t border-gray-100 dark:border-gray-700 p-4">
+          <div className="flex items-center gap-3 rounded-lg bg-gray-50 dark:bg-gray-800 p-3">
+            <div className="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center text-white text-xs font-semibold shrink-0">
+              {initials}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{email}</p>
+              <LanguageSwitcher />
+            </div>
           </div>
-          <p className="text-xs text-gray-600 dark:text-gray-400 truncate">{email}</p>
         </div>
       )}
     </nav>

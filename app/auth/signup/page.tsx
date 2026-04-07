@@ -4,11 +4,16 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
+import { useTranslations } from 'next-intl'
 import ThemeToggleButton from '@/app/components/ThemeToggleButton'
-
-const inputCls = 'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500'
+import { Card } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Button } from '@/components/ui/button'
+import { Eye, EyeOff } from 'lucide-react'
 
 export default function SignupPage() {
+  const t = useTranslations('auth')
   const router = useRouter()
 
   const [email, setEmail] = useState('')
@@ -19,10 +24,12 @@ export default function SignupPage() {
   const [formError, setFormError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [confirmSent, setConfirmSent] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
 
   function handlePasswordBlur() {
     if (password && password.length < 8) {
-      setPasswordError('Mật khẩu phải có ít nhất 8 ký tự.')
+      setPasswordError(t('passwordTooShort'))
     } else {
       setPasswordError(null)
     }
@@ -30,7 +37,7 @@ export default function SignupPage() {
 
   function handleConfirmBlur() {
     if (confirmPassword && password !== confirmPassword) {
-      setConfirmError('Mật khẩu không khớp.')
+      setConfirmError(t('passwordMismatch'))
     } else {
       setConfirmError(null)
     }
@@ -41,11 +48,11 @@ export default function SignupPage() {
     setFormError(null)
 
     if (password.length < 8) {
-      setPasswordError('Mật khẩu phải có ít nhất 8 ký tự.')
+      setPasswordError(t('passwordTooShort'))
       return
     }
     if (password !== confirmPassword) {
-      setConfirmError('Mật khẩu không khớp.')
+      setConfirmError(t('passwordMismatch'))
       return
     }
 
@@ -61,9 +68,9 @@ export default function SignupPage() {
 
       if (error) {
         if (error.message.toLowerCase().includes('already') || error.status === 422) {
-          setFormError('Email đã được sử dụng.')
+          setFormError(t('emailInUse'))
         } else {
-          setFormError('Không thể tạo tài khoản. Vui lòng thử lại.')
+          setFormError(t('cannotCreateAccount'))
         }
         return
       }
@@ -76,7 +83,7 @@ export default function SignupPage() {
       router.push('/dashboard')
       router.refresh()
     } catch {
-      setFormError('Không thể kết nối. Vui lòng kiểm tra internet và thử lại.')
+      setFormError(t('cannotConnect'))
     } finally {
       setLoading(false)
     }
@@ -84,18 +91,18 @@ export default function SignupPage() {
 
   if (confirmSent) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
-        <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-lg shadow p-8 text-center border border-transparent dark:border-gray-700">
-          <div className="text-4xl mb-4">📧</div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-3">Kiểm tra email</h1>
-          <p className="text-gray-600 dark:text-gray-400 text-sm mb-6">
-            Chúng tôi đã gửi liên kết xác nhận đến email của bạn. Nhấp vào đó để kích hoạt tài khoản, sau đó quay lại đăng nhập.
-          </p>
+      <div className="min-h-screen bg-gradient-to-br from-violet-50 via-purple-50 to-pink-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 flex items-center justify-center p-4">
+        <div className="w-full max-w-md text-center">
+          <div className="inline-flex items-center justify-center h-12 w-12 rounded-lg bg-gradient-to-br from-violet-600 to-purple-600 text-2xl mb-4 shadow-lg shadow-violet-200 dark:shadow-violet-900/30">
+            📧
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-3">{t('checkEmailTitle')}</h1>
+          <p className="text-gray-600 dark:text-gray-400 text-sm mb-8">{t('checkEmailMessage')}</p>
           <Link
             href="/auth/login"
-            className="inline-block py-2 px-6 bg-indigo-600 text-white rounded-md font-medium hover:bg-indigo-700 transition-colors"
+            className="inline-block py-2.5 px-6 bg-violet-600 text-white rounded-lg font-semibold hover:bg-violet-700 transition-colors"
           >
-            Đi đến đăng nhập
+            {t('goToLogin')}
           </Link>
         </div>
       </div>
@@ -103,85 +110,119 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 relative">
+    <div className="min-h-screen bg-gradient-to-br from-violet-50 via-purple-50 to-pink-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 flex items-center justify-center p-4 relative">
       <div className="absolute top-4 right-4">
         <ThemeToggleButton />
       </div>
-      <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-lg shadow p-8 border border-transparent dark:border-gray-700">
-        <h1 className="text-2xl font-bold text-center text-gray-900 dark:text-gray-100 mb-6">Tạo tài khoản</h1>
-        {formError && (
-          <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-sm rounded-md">{formError}</div>
-        )}
-        <form onSubmit={handleSignup} className="space-y-4">
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Email
-            </label>
-            <input
-              type="email"
-              id="email"
-              name="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className={inputCls}
-              placeholder="you@example.com"
-            />
+
+      <div className="w-full max-w-md">
+        {/* Logo + heading */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center h-12 w-12 rounded-lg bg-gradient-to-br from-violet-600 to-purple-600 text-white font-bold text-2xl mb-4 shadow-lg shadow-violet-200 dark:shadow-violet-900/30">
+            A
           </div>
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Mật khẩu
-            </label>
-            <input
-              type="password"
-              id="password"
-              name="password"
-              required
-              minLength={8}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onBlur={handlePasswordBlur}
-              className={inputCls}
-              placeholder="••••••••"
-            />
-            {passwordError && (
-              <p className="mt-1 text-xs text-red-600 dark:text-red-400">{passwordError}</p>
-            )}
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">{t('signupTitle')}</h1>
+          <p className="text-gray-600 dark:text-gray-400">{t('signupSubtitle')}</p>
+        </div>
+
+        {/* Card */}
+        <Card className="p-8">
+          {formError && (
+            <div className="mb-5 px-4 py-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-sm rounded-lg border border-red-100 dark:border-red-900/40">
+              {formError}
+            </div>
+          )}
+
+          <form onSubmit={handleSignup} className="space-y-5">
+            <div className="space-y-2">
+              <Label htmlFor="email">{t('emailLabel')} <span className="text-red-500">*</span></Label>
+              <Input
+                id="email"
+                type="email"
+                name="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="password">{t('passwordLabel')} <span className="text-red-500">*</span></Label>
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  name="password"
+                  required
+                  minLength={8}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onBlur={handlePasswordBlur}
+                  placeholder="••••••••"
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              {passwordError
+                ? <p className="text-sm text-red-600 dark:text-red-400">{passwordError}</p>
+                : <p className="text-xs text-gray-500 dark:text-gray-400">{t('passwordTooShort')}</p>
+              }
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">{t('confirmPasswordLabel')} <span className="text-red-500">*</span></Label>
+              <div className="relative">
+                <Input
+                  id="confirmPassword"
+                  type={showConfirm ? 'text' : 'password'}
+                  name="confirmPassword"
+                  required
+                  minLength={8}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  onBlur={handleConfirmBlur}
+                  placeholder="••••••••"
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  onClick={() => setShowConfirm((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                >
+                  {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              {confirmError && (
+                <p className="text-sm text-red-600 dark:text-red-400">{confirmError}</p>
+              )}
+            </div>
+
+            <Button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-violet-600 hover:bg-violet-700 dark:bg-violet-600 dark:hover:bg-violet-700 text-white dark:text-white"
+              size="lg"
+            >
+              {loading ? t('signingUp') : t('signupBtn')}
+            </Button>
+          </form>
+
+          <div className="mt-6 text-center text-sm">
+            <span className="text-gray-600 dark:text-gray-400">{t('hasAccount')} </span>
+            <Link href="/auth/login" className="text-violet-600 dark:text-violet-400 hover:text-violet-700 font-medium">
+              {t('loginLink')}
+            </Link>
           </div>
-          <div>
-            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Xác nhận mật khẩu
-            </label>
-            <input
-              type="password"
-              id="confirmPassword"
-              name="confirmPassword"
-              required
-              minLength={8}
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              onBlur={handleConfirmBlur}
-              className={inputCls}
-              placeholder="••••••••"
-            />
-            {confirmError && (
-              <p className="mt-1 text-xs text-red-600 dark:text-red-400">{confirmError}</p>
-            )}
-          </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-2 px-4 bg-indigo-600 text-white rounded-md font-medium hover:bg-indigo-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            {loading ? 'Đang tạo tài khoản...' : 'Đăng ký'}
-          </button>
-        </form>
-        <p className="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">
-          Đã có tài khoản?{' '}
-          <Link href="/auth/login" className="text-indigo-600 dark:text-indigo-400 hover:underline font-medium">
-            Đăng nhập
-          </Link>
-        </p>
+        </Card>
       </div>
     </div>
   )

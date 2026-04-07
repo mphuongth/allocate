@@ -42,7 +42,7 @@ export async function GET() {
       .eq('user_id', user.id),
     supabase
       .from('investment_transactions')
-      .select('transaction_id, goal_id, amount_vnd, interest_rate, investment_date, asset_type, units, unit_price, fund_id, expiry_date, funds(id, name, nav, updated_at)')
+      .select('transaction_id, goal_id, amount_vnd, interest_rate, investment_date, asset_type, units, unit_price, fund_id, expiry_date, notes, funds(id, name, nav, updated_at)')
       .eq('user_id', user.id),
     supabase
       .from('insurance_members')
@@ -75,7 +75,8 @@ export async function GET() {
   }
 
   const goals = goalsRes.data ?? []
-  const allTxs = txRes.data ?? []
+  // Exclude pending DCA-seeded fund rows (units not yet filled after order matching)
+  const allTxs = (txRes.data ?? []).filter((tx) => !(tx.asset_type === 'fund' && tx.units == null))
   const insuranceMembers = insuranceRes.data ?? []
   const goldPricePerChi: number | null = goldPriceRes.data?.price_per_chi ?? null
 
@@ -145,7 +146,7 @@ export async function GET() {
   let totalInvestedGlobal = 0
 
   const unallocatedNonFunds: {
-    transactionId: string; type: string; amount: number; currentValue: number; interestRate: number | null; expiryDate: string | null; investmentDate: string
+    transactionId: string; type: string; amount: number; currentValue: number; interestRate: number | null; expiryDate: string | null; investmentDate: string; notes: string | null; units: number | null
   }[] = []
 
   for (const tx of allTxs) {
@@ -203,6 +204,8 @@ export async function GET() {
           interestRate: tx.interest_rate ?? null,
           expiryDate,
           investmentDate: tx.investment_date,
+          notes: tx.notes ?? null,
+          units: tx.units ?? null,
         })
       }
     }
@@ -300,6 +303,13 @@ export async function GET() {
     : 0
 
   const hasGold = allTxs.some((tx) => tx.asset_type === 'gold')
+
+  // Upsert today's snapshot for the history chart (fire-and-forget)
+  const today = new Date().toISOString().split('T')[0]
+  supabase.from('net_worth_snapshots').upsert(
+    { user_id: user.id, snapshot_date: today, total_assets: Math.round(totalAssets) },
+    { onConflict: 'user_id,snapshot_date' }
+  ).then(() => { /* ignore errors */ })
 
   return NextResponse.json({
     netWorth: {
