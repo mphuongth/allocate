@@ -142,7 +142,7 @@ export default function OtherExpensesSection({ plan, otherExpenses, onRefresh, o
             <div className="space-y-5 py-4">
               {formError && <p className="text-red-600 dark:text-red-400 text-sm">{formError}</p>}
               <div className="space-y-2">
-                <Label>{t('descLabel')}</Label>
+                <Label>{t('descLabel')} <span className="text-red-500">*</span></Label>
                 <Input
                   type="text"
                   value={form.description}
@@ -151,11 +151,12 @@ export default function OtherExpensesSection({ plan, otherExpenses, onRefresh, o
                 />
               </div>
               <div className="space-y-2">
-                <Label>{t('amountLabel')}</Label>
+                <Label>{t('amountLabel')} <span className="text-red-500">*</span></Label>
                 <Input
                   type="number"
                   value={form.amount_vnd}
                   onChange={(e) => setForm({ ...form, amount_vnd: e.target.value })}
+                  placeholder="e.g., 15000000"
                 />
               </div>
             </div>
