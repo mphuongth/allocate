@@ -149,9 +149,9 @@ export default function InsuranceMembersTab() {
             {t('total')}: {fmt(totalAnnual)} {t('perYear')} · {fmt(totalMonthly)} {t('perMonth')}
           </p>
         </div>
-        <button onClick={openCreate} className="flex items-center gap-2 h-9 px-4 bg-gray-950 hover:bg-gray-800 text-white text-sm font-bold rounded-md transition-colors shrink-0 self-start sm:self-auto">
-          <Plus className="h-4 w-4" />
-          {t('add')}
+        <button onClick={openCreate} className="flex items-center gap-2 h-9 px-3 sm:px-4 bg-gray-950 hover:bg-gray-800 text-white text-sm font-bold rounded-md transition-colors shrink-0 self-start sm:self-auto">
+          <Plus className="h-4 w-4 shrink-0" />
+          <span className="hidden sm:inline">{t('add')}</span>
         </button>
       </div>
 
