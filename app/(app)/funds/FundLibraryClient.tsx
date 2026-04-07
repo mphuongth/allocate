@@ -347,22 +347,23 @@ export default function FundLibraryClient() {
       </div>
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <p className="text-sm text-gray-500 dark:text-gray-400">{t('desc')}</p>
-        <div className="flex gap-2">
+        <div className="flex gap-2 shrink-0">
           <button
             onClick={handleRefreshNav}
             disabled={refreshing || !funds.some(f => f.nav_source_url)}
-            className="h-9 px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm font-medium rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 h-9 px-3 sm:px-4 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm font-medium rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {refreshing ? t('refreshingNav') : t('refreshNav')}
+            <RefreshCw className={`h-4 w-4 shrink-0 ${refreshing ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">{refreshing ? t('refreshingNav') : t('refreshNav')}</span>
           </button>
           <button
             onClick={openAddModal}
-            className="flex items-center gap-2 h-9 px-4 py-2 bg-gray-950 hover:bg-gray-800 text-white text-sm font-bold rounded-md transition-colors"
+            className="flex items-center gap-2 h-9 px-3 sm:px-4 bg-gray-950 hover:bg-gray-800 text-white text-sm font-bold rounded-md transition-colors"
           >
-            <Plus className="h-4 w-4" />
-            {t('add')}
+            <Plus className="h-4 w-4 shrink-0" />
+            <span className="hidden sm:inline">{t('add')}</span>
           </button>
         </div>
       </div>
