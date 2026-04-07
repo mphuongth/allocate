@@ -11,9 +11,10 @@ interface SidebarProps {
   email: string
   initials: string
   onNavClick?: () => void
+  hideLogo?: boolean
 }
 
-export default function Sidebar({ email, initials, onNavClick }: SidebarProps) {
+export default function Sidebar({ email, initials, onNavClick, hideLogo = false }: SidebarProps) {
   const pathname = usePathname()
   const { sidebarCollapsed } = useNavigation()
   const t = useTranslations('nav')
@@ -32,13 +33,15 @@ export default function Sidebar({ email, initials, onNavClick }: SidebarProps) {
       }`}
     >
       {/* Logo */}
-      <div className={`flex items-center h-16 px-6 border-b border-gray-100 dark:border-gray-700 ${sidebarCollapsed ? 'justify-center px-0' : ''}`}>
-        {sidebarCollapsed ? (
-          <span className="text-violet-600 font-semibold text-lg">A</span>
-        ) : (
-          <span className="text-violet-600 font-semibold text-xl">Allocate</span>
-        )}
-      </div>
+      {!hideLogo && (
+        <div className={`flex items-center h-16 px-6 border-b border-gray-100 dark:border-gray-700 ${sidebarCollapsed ? 'justify-center px-0' : ''}`}>
+          {sidebarCollapsed ? (
+            <span className="text-violet-600 font-semibold text-lg">A</span>
+          ) : (
+            <span className="text-violet-600 font-semibold text-xl">Allocate</span>
+          )}
+        </div>
+      )}
 
       {/* Nav items */}
       <ul className="flex-1 p-4 space-y-1">
