@@ -230,7 +230,7 @@ export default function PlanningClient() {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left col: salary + sections */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-6 order-2 lg:order-1">
             <SalaryInput
               plan={plan}
               month={month}
@@ -292,7 +292,7 @@ export default function PlanningClient() {
           </div>
 
           {/* Right col: allocation summary */}
-          <div>
+          <div className="order-1 lg:order-2">
             <AllocationSummary
               plan={plan}
               investments={investments}

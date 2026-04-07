@@ -124,9 +124,9 @@ export default function FundInvestmentsSection({ plan, investments, funds, goals
     <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
       <div className="flex items-center justify-between px-5 py-4">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('fundInvestmentsTitle')}</h2>
-        <button onClick={openAdd} className="flex items-center gap-2 h-9 px-4 bg-gray-950 hover:bg-gray-800 text-white text-sm font-bold rounded-md transition-colors">
-          <Plus className="h-3.5 w-3.5" />
-          {t('addFundInvestment')}
+        <button onClick={openAdd} className="flex items-center gap-2 h-9 px-3 sm:px-4 bg-gray-950 hover:bg-gray-800 text-white text-sm font-bold rounded-md transition-colors">
+          <Plus className="h-3.5 w-3.5 shrink-0" />
+          <span className="hidden sm:inline">{t('addFundInvestment')}</span>
         </button>
       </div>
 
@@ -137,10 +137,10 @@ export default function FundInvestmentsSection({ plan, investments, funds, goals
           <thead>
             <tr className="border-b border-gray-200 dark:border-gray-700">
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colFund')}</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colDate')}</th>
+              <th className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colDate')}</th>
               <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colAmount')}</th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colUnits')}</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colGoalCol')}</th>
+              <th className="hidden sm:table-cell px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colUnits')}</th>
+              <th className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colGoalCol')}</th>
               <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{tc('actions')}</th>
             </tr>
           </thead>
@@ -153,15 +153,15 @@ export default function FundInvestmentsSection({ plan, investments, funds, goals
                     <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 font-medium">DCA</span>
                   )}
                 </td>
-                <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{inv.investment_date ?? '—'}</td>
+                <td className="hidden sm:table-cell px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{inv.investment_date ?? '—'}</td>
                 <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100 text-right">{fmt(inv.amount_vnd)}</td>
-                <td className="px-4 py-3 text-sm text-right">
+                <td className="hidden sm:table-cell px-4 py-3 text-sm text-right">
                   {inv.units != null
                     ? <span className="text-gray-600 dark:text-gray-400">{inv.units}</span>
                     : <span className="text-amber-500 dark:text-amber-400 italic">Pending</span>
                   }
                 </td>
-                <td className="px-4 py-3">
+                <td className="hidden sm:table-cell px-4 py-3">
                   <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs ${inv.savings_goals ? 'font-medium bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900' : 'font-medium bg-gray-100 text-gray-900 dark:bg-gray-700 dark:text-gray-100'}`}>
                     {inv.savings_goals?.goal_name ?? t('unassigned')}
                   </span>
