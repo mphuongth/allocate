@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useTranslations } from 'next-intl'
 import { ArrowLeft, Edit, Trash2, Plus, Unlink, TrendingDown } from 'lucide-react'
 import ConfirmModal from '@/app/components/ConfirmModal'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 interface Goal {
   goal_id: string
@@ -895,111 +896,109 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
       )}
 
       {/* Withdraw / Sell Modal */}
-      {formMode === 'withdraw' && withdrawSource && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-md p-6 border border-gray-100 dark:border-gray-700">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">{withdrawModalTitle}</h3>
+      <Dialog open={formMode === 'withdraw' && !!withdrawSource} onOpenChange={(open) => { if (!open) { setFormMode(null); setWithdrawSource(null) } }}>
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{withdrawModalTitle}</DialogTitle>
+          </DialogHeader>
 
-            {/* Context info */}
-            <div className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-              {wType === 'fund' && wGroup && (
-                <span>{wGroup.fund_code} · {t('colCurrentNav')}: <strong className="text-gray-800 dark:text-gray-200">{fmt(wGroup.current_nav)}</strong> · {t('colRemaining')}: <strong className="text-gray-800 dark:text-gray-200">{fmtUnits(wGroup.remaining_units)} {t('unitsShort')}</strong></span>
-              )}
-              {wType === 'gold' && wRow && goldPrice && (
-                <span>{t('assetGold')} · {t('currentPriceLabel')}: <strong className="text-gray-800 dark:text-gray-200">{fmt(goldPrice)}/chi</strong> · {t('colRemaining')}: <strong className="text-gray-800 dark:text-gray-200">{fmtUnits((wRow.units ?? 0) - wRow.total_units_withdrawn)} chi</strong></span>
-              )}
-              {wType === 'bank' && wRow && (
-                <span>{t('assetBank')} · {t('remainingPrincipalLabel')}: <strong className="text-gray-800 dark:text-gray-200">{fmt(wRow.amount_vnd - wRow.total_principal_withdrawn)}</strong>{wRow.interest_rate ? ` · ${wRow.interest_rate}${t('perYearShort')}` : ''}</span>
-              )}
+          {/* Context info */}
+          <div className="text-sm text-gray-500 dark:text-gray-400 -mt-2">
+            {wType === 'fund' && wGroup && (
+              <span>{wGroup.fund_code} · {t('colCurrentNav')}: <strong className="text-gray-800 dark:text-gray-200">{fmt(wGroup.current_nav)}</strong> · {t('colRemaining')}: <strong className="text-gray-800 dark:text-gray-200">{fmtUnits(wGroup.remaining_units)} {t('unitsShort')}</strong></span>
+            )}
+            {wType === 'gold' && wRow && goldPrice && (
+              <span>{t('assetGold')} · {t('currentPriceLabel')}: <strong className="text-gray-800 dark:text-gray-200">{fmt(goldPrice)}/chi</strong> · {t('colRemaining')}: <strong className="text-gray-800 dark:text-gray-200">{fmtUnits((wRow.units ?? 0) - wRow.total_units_withdrawn)} chi</strong></span>
+            )}
+            {wType === 'bank' && wRow && (
+              <span>{t('assetBank')} · {t('remainingPrincipalLabel')}: <strong className="text-gray-800 dark:text-gray-200">{fmt(wRow.amount_vnd - wRow.total_principal_withdrawn)}</strong>{wRow.interest_rate ? ` · ${wRow.interest_rate}${t('perYearShort')}` : ''}</span>
+            )}
+          </div>
+
+          {formError && <p className="text-red-600 dark:text-red-400 text-sm">{formError}</p>}
+
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{wType === 'bank' ? t('dateWithdrawLabel') : t('dateSellLabel')}</label>
+              <input type="date" value={withdrawForm.investment_date} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setWithdrawForm({ ...withdrawForm, investment_date: e.target.value })} className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
             </div>
 
-            {formError && <p className="text-red-600 dark:text-red-400 text-sm mb-3">{formError}</p>}
-
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{wType === 'bank' ? t('dateWithdrawLabel') : t('dateSellLabel')}</label>
-                <input type="date" value={withdrawForm.investment_date} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setWithdrawForm({ ...withdrawForm, investment_date: e.target.value })} className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-              </div>
-
-              {wType === 'bank' && (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('principalWithdrawnLabel')}</label>
-                    <input type="number" value={withdrawForm.principal_withdrawn} onChange={(e) => setWithdrawForm({ ...withdrawForm, principal_withdrawn: e.target.value })} placeholder={t('principalWithdrawnPlaceholder')} className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('amountReceivedLabel')}</label>
-                    <input type="number" value={withdrawForm.amount_vnd} onChange={(e) => setWithdrawForm({ ...withdrawForm, amount_vnd: e.target.value })} placeholder={t('amountReceivedPlaceholder')} className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                  </div>
-                </>
-              )}
-
-              {(wType === 'fund' || wType === 'gold') && (
-                <>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{wType === 'gold' ? t('unitsToSellGold') : t('unitsToSellFund')}</label>
-                      <input
-                        type="number"
-                        value={withdrawForm.units_withdrawn}
-                        onChange={(e) => {
-                          const u = e.target.value
-                          const uNum = Number(u) || 0
-                          const price = wType === 'fund' ? (wGroup?.current_nav ?? 0) : (goldPrice ?? 0)
-                          setWithdrawForm({ ...withdrawForm, units_withdrawn: u, amount_vnd: uNum > 0 && price > 0 ? String(Math.round(uNum * price)) : withdrawForm.amount_vnd })
-                        }}
-                        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('amountReceivedLabel')}</label>
-                      <input
-                        type="number"
-                        value={withdrawForm.amount_vnd}
-                        onChange={(e) => {
-                          const a = e.target.value
-                          const aNum = Number(a) || 0
-                          const price = wType === 'fund' ? (wGroup?.current_nav ?? 0) : (goldPrice ?? 0)
-                          setWithdrawForm({ ...withdrawForm, amount_vnd: a, units_withdrawn: aNum > 0 && price > 0 ? String(+(aNum / price).toFixed(4)) : withdrawForm.units_withdrawn })
-                        }}
-                        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      />
-                    </div>
-                  </div>
-                </>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{tc('notes')}</label>
-                <input type="text" value={withdrawForm.notes} onChange={(e) => setWithdrawForm({ ...withdrawForm, notes: e.target.value })} className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-              </div>
-            </div>
-
-            {/* Live preview */}
-            {(wAmtNum > 0 || wUnitsNum > 0) && (
-              <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg space-y-1 text-xs">
-                {wPrinNum > 0 && <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">{t('costBasisLabel')}:</span><span className="font-medium text-gray-700 dark:text-gray-300">{fmt(wPrinNum)}</span></div>}
-                {wAmtNum > 0 && <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">{t('receivedLabel')}:</span><span className="font-medium text-gray-700 dark:text-gray-300">{fmt(wAmtNum)}</span></div>}
-                <div className="flex justify-between border-t border-gray-200 dark:border-gray-700 pt-1 mt-1">
-                  <span className="text-gray-500 dark:text-gray-400">{t('colGainLoss')}:</span>
-                  <span className={`font-semibold ${wGain >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt(wGain)}</span>
+            {wType === 'bank' && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('principalWithdrawnLabel')}</label>
+                  <input type="number" value={withdrawForm.principal_withdrawn} onChange={(e) => setWithdrawForm({ ...withdrawForm, principal_withdrawn: e.target.value })} placeholder={t('principalWithdrawnPlaceholder')} className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
-                {wRemainingUnits !== null && wUnitsNum > 0 && (
-                  <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">{t('colRemaining')}:</span><span className="font-medium text-gray-700 dark:text-gray-300">{fmtUnits(Math.max(0, wRemainingUnits))} {wType === 'gold' ? 'chi' : t('unitsShort')}</span></div>
-                )}
-                {wRemainingPrincipal !== null && Number(withdrawForm.principal_withdrawn) > 0 && (
-                  <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">{t('remainingPrincipalLabel')}:</span><span className="font-medium text-gray-700 dark:text-gray-300">{fmt(Math.max(0, wRemainingPrincipal))}</span></div>
-                )}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('amountReceivedLabel')}</label>
+                  <input type="number" value={withdrawForm.amount_vnd} onChange={(e) => setWithdrawForm({ ...withdrawForm, amount_vnd: e.target.value })} placeholder={t('amountReceivedPlaceholder')} className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+              </>
+            )}
+
+            {(wType === 'fund' || wType === 'gold') && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{wType === 'gold' ? t('unitsToSellGold') : t('unitsToSellFund')}</label>
+                  <input
+                    type="number"
+                    value={withdrawForm.units_withdrawn}
+                    onChange={(e) => {
+                      const u = e.target.value
+                      const uNum = Number(u) || 0
+                      const price = wType === 'fund' ? (wGroup?.current_nav ?? 0) : (goldPrice ?? 0)
+                      setWithdrawForm({ ...withdrawForm, units_withdrawn: u, amount_vnd: uNum > 0 && price > 0 ? String(Math.round(uNum * price)) : withdrawForm.amount_vnd })
+                    }}
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('amountReceivedLabel')}</label>
+                  <input
+                    type="number"
+                    value={withdrawForm.amount_vnd}
+                    onChange={(e) => {
+                      const a = e.target.value
+                      const aNum = Number(a) || 0
+                      const price = wType === 'fund' ? (wGroup?.current_nav ?? 0) : (goldPrice ?? 0)
+                      setWithdrawForm({ ...withdrawForm, amount_vnd: a, units_withdrawn: aNum > 0 && price > 0 ? String(+(aNum / price).toFixed(4)) : withdrawForm.units_withdrawn })
+                    }}
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
               </div>
             )}
 
-            <div className="flex gap-3 mt-5">
-              <button onClick={() => { setFormMode(null); setWithdrawSource(null) }} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">{tc('cancel')}</button>
-              <button onClick={handleWithdrawSave} disabled={saving} className="flex-1 py-2 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50">{saving ? tc('saving') : (wType === 'bank' ? t('withdraw') : t('sell'))}</button>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{tc('notes')}</label>
+              <input type="text" value={withdrawForm.notes} onChange={(e) => setWithdrawForm({ ...withdrawForm, notes: e.target.value })} className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
             </div>
           </div>
-        </div>
-      )}
+
+          {/* Live preview */}
+          {(wAmtNum > 0 || wUnitsNum > 0) && (
+            <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg space-y-1 text-xs">
+              {wPrinNum > 0 && <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">{t('costBasisLabel')}:</span><span className="font-medium text-gray-700 dark:text-gray-300">{fmt(wPrinNum)}</span></div>}
+              {wAmtNum > 0 && <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">{t('receivedLabel')}:</span><span className="font-medium text-gray-700 dark:text-gray-300">{fmt(wAmtNum)}</span></div>}
+              <div className="flex justify-between border-t border-gray-200 dark:border-gray-700 pt-1 mt-1">
+                <span className="text-gray-500 dark:text-gray-400">{t('colGainLoss')}:</span>
+                <span className={`font-semibold ${wGain >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt(wGain)}</span>
+              </div>
+              {wRemainingUnits !== null && wUnitsNum > 0 && (
+                <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">{t('colRemaining')}:</span><span className="font-medium text-gray-700 dark:text-gray-300">{fmtUnits(Math.max(0, wRemainingUnits))} {wType === 'gold' ? 'chi' : t('unitsShort')}</span></div>
+              )}
+              {wRemainingPrincipal !== null && Number(withdrawForm.principal_withdrawn) > 0 && (
+                <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">{t('remainingPrincipalLabel')}:</span><span className="font-medium text-gray-700 dark:text-gray-300">{fmt(Math.max(0, wRemainingPrincipal))}</span></div>
+              )}
+            </div>
+          )}
+
+          <div className="flex gap-3">
+            <button onClick={() => { setFormMode(null); setWithdrawSource(null) }} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">{tc('cancel')}</button>
+            <button onClick={handleWithdrawSave} disabled={saving} className="flex-1 py-2 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50">{saving ? tc('saving') : (wType === 'bank' ? t('withdraw') : t('sell'))}</button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <ConfirmModal
         open={!!pendingConfirm}
