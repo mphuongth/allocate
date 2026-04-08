@@ -548,7 +548,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                   <thead>
                     <tr className="border-b border-black/10 dark:border-gray-700 text-left">
                       <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colFund')}</th>
-                      <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colRemaining')}</th>
+                      <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colUnits')}</th>
                       <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colAvgNav')}</th>
                       <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colCurrentNav')}</th>
                       <th className="px-4 pt-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colValue')}</th>
