@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
       units: units ? Number(units) : null,
       interest_rate: interest_rate ? Number(interest_rate) : null,
       notes: notes?.trim() || null,
-      fund_id: !isWithdrawal && asset_type === 'fund' ? (fund_id || null) : null,
+      fund_id: asset_type === 'fund' ? (fund_id || null) : null,
       plan_id: plan_id || null,
       expiry_date: expiry_date || null,
       parent_transaction_id: parent_transaction_id || null,
