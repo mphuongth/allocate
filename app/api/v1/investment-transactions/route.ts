@@ -65,9 +65,6 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  if (isWithdrawal && !goal_id) {
-    return NextResponse.json({ error: 'Withdrawals must be associated with a goal.' }, { status: 400 })
-  }
 
   if (!investment_date) {
     return NextResponse.json({ error: 'Investment date is required.' }, { status: 400 })

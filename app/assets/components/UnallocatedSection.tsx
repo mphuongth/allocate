@@ -21,13 +21,15 @@ interface Props {
   nonFunds: NonFundUnallocatedItem[]
   onFundClick: (fundId: string) => void
   onAssignToGoal: (fundId: string) => void
+  onSellFund: (fund: FundBreakdownItem) => void
   onAssignNonFundToGoal: (transactionId: string) => void
   onRefresh: () => void
 }
 
-export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds, onFundClick, onAssignToGoal, onAssignNonFundToGoal, onRefresh }: Props) {
+export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds, onFundClick, onAssignToGoal, onSellFund, onAssignNonFundToGoal, onRefresh }: Props) {
   const t = useTranslations('dashboard')
   const tt = useTranslations('transactions')
+  const tg = useTranslations('goals')
 
   const typeLabelMap: Record<string, string> = {
     fund:  tt('assetFund'),
@@ -91,12 +93,20 @@ export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds,
                     </p>
                   </td>
                   <td className="px-5 py-4 text-right">
-                    <button
-                      onClick={() => onAssignToGoal(fund.fundId)}
-                      className="text-sm font-medium px-2.5 py-1.5 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 whitespace-nowrap"
-                    >
-                      {t('assignToGoal')}
-                    </button>
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => onSellFund(fund)}
+                        className="text-sm font-medium px-2.5 py-1.5 border border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-400 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap"
+                      >
+                        {tg('sell')}
+                      </button>
+                      <button
+                        onClick={() => onAssignToGoal(fund.fundId)}
+                        className="text-sm font-medium px-2.5 py-1.5 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 whitespace-nowrap"
+                      >
+                        {t('assignToGoal')}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
