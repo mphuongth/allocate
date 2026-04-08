@@ -351,13 +351,15 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
       }
     }
 
-    const principalWithdrawn = type === 'bank'
-      ? Number(withdrawForm.principal_withdrawn)
-      : type === 'fund' && withdrawSource.fund_group
-        ? Number(withdrawForm.units_withdrawn) * withdrawSource.fund_group.avg_cost_per_unit
-        : type === 'gold' && withdrawSource.row
-          ? Number(withdrawForm.units_withdrawn) * (withdrawSource.row.unit_price ?? 0)
-          : 0
+    const principalWithdrawn = Math.round(
+      type === 'bank'
+        ? Number(withdrawForm.principal_withdrawn)
+        : type === 'fund' && withdrawSource.fund_group
+          ? Number(withdrawForm.units_withdrawn) * withdrawSource.fund_group.avg_cost_per_unit
+          : type === 'gold' && withdrawSource.row
+            ? Number(withdrawForm.units_withdrawn) * (withdrawSource.row.unit_price ?? 0)
+            : 0
+    )
 
     const payload = {
       transaction_type: 'withdrawal',
