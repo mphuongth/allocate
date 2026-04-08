@@ -1,6 +1,6 @@
 'use client'
 
-import { RefreshCw, ArrowUpFromLine, Target } from 'lucide-react'
+import { RefreshCw, TrendingDown, Target } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import type { FundBreakdownItem, NonFundUnallocatedItem } from '../DashboardClient'
 
@@ -100,7 +100,7 @@ export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds,
                         title={tg('sell')}
                         className="inline-flex items-center gap-1.5 text-sm font-medium px-2 py-1.5 sm:px-2.5 border border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-400 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-900/20"
                       >
-                        <ArrowUpFromLine className="h-3.5 w-3.5 shrink-0" />
+                        <TrendingDown className="h-3.5 w-3.5 shrink-0" />
                         <span className="hidden sm:inline whitespace-nowrap">{tg('sell')}</span>
                       </button>
                       <button
@@ -169,7 +169,7 @@ export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds,
                             title={item.type === 'bank' ? tg('withdraw') : tg('sell')}
                             className="inline-flex items-center gap-1.5 text-sm font-medium px-2 py-1.5 sm:px-2.5 border border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-400 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-900/20"
                           >
-                            <ArrowUpFromLine className="h-3.5 w-3.5 shrink-0" />
+                            <TrendingDown className="h-3.5 w-3.5 shrink-0" />
                             <span className="hidden sm:inline whitespace-nowrap">
                               {item.type === 'bank' ? tg('withdraw') : tg('sell')}
                             </span>
