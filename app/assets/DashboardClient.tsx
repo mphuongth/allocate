@@ -134,6 +134,13 @@ export default function DashboardClient() {
   const [sellAmount, setSellAmount] = useState('')
   const [sellSaving, setSellSaving] = useState(false)
   const [sellError, setSellError] = useState('')
+  const [sellNonFund, setSellNonFund] = useState<NonFundUnallocatedItem | null>(null)
+  const [nfDate, setNfDate] = useState('')
+  const [nfPrincipal, setNfPrincipal] = useState('')
+  const [nfUnits, setNfUnits] = useState('')
+  const [nfAmount, setNfAmount] = useState('')
+  const [nfSaving, setNfSaving] = useState(false)
+  const [nfError, setNfError] = useState('')
 
   const fetchData = useCallback(async (opts?: { force?: boolean }) => {
     const cached = !opts?.force && getCachedOverview()
@@ -254,6 +261,73 @@ export default function DashboardClient() {
       setSellError('Unable to save. Please check your connection.')
     }
     setSellSaving(false)
+  }
+
+  function openSellNonFund(item: NonFundUnallocatedItem) {
+    setSellNonFund(item)
+    setNfDate(new Date().toISOString().slice(0, 10))
+    setNfPrincipal('')
+    setNfUnits('')
+    setNfAmount('')
+    setNfError('')
+  }
+
+  async function handleSellNonFundSubmit() {
+    if (!sellNonFund) return
+    const date = nfDate
+    if (!date) { setNfError('Date is required'); return }
+
+    let principalWithdrawn: number
+    let unitsWithdrawn: number | null = null
+    let amountVnd: number
+
+    if (sellNonFund.type === 'bank') {
+      principalWithdrawn = parseFloat(nfPrincipal)
+      amountVnd = parseFloat(nfAmount)
+      if (!principalWithdrawn || principalWithdrawn <= 0) { setNfError('Principal withdrawn is required'); return }
+      if (!amountVnd || amountVnd <= 0) { setNfError('Amount received is required'); return }
+    } else {
+      // gold
+      const units = parseFloat(nfUnits)
+      amountVnd = parseFloat(nfAmount)
+      if (!units || units <= 0) { setNfError('Chi to sell is required'); return }
+      if (!amountVnd || amountVnd <= 0) { setNfError('Amount received is required'); return }
+      const originalPricePerUnit = sellNonFund.units && sellNonFund.units > 0
+        ? sellNonFund.amount / sellNonFund.units : 0
+      principalWithdrawn = Math.round(units * originalPricePerUnit)
+      unitsWithdrawn = units
+    }
+
+    setNfSaving(true)
+    setNfError('')
+    try {
+      const body: Record<string, unknown> = {
+        transaction_type: 'withdrawal',
+        asset_type: sellNonFund.type,
+        parent_transaction_id: sellNonFund.transactionId,
+        investment_date: date,
+        amount_vnd: Math.round(amountVnd),
+        principal_withdrawn: Math.round(principalWithdrawn),
+        goal_id: null,
+      }
+      if (unitsWithdrawn !== null) body.units_withdrawn = unitsWithdrawn
+
+      const res = await fetch('/api/v1/investment-transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) {
+        const { error } = await res.json()
+        setNfError(error ?? 'Failed to record transaction')
+      } else {
+        setSellNonFund(null)
+        await fetchData({ force: true })
+      }
+    } catch {
+      setNfError('Unable to save. Please check your connection.')
+    }
+    setNfSaving(false)
   }
 
   async function handleAssignToGoal(fundId: string, goalId: string) {
@@ -492,6 +566,7 @@ export default function DashboardClient() {
                 onAssignToGoal={(fundId) => setGoalPickerFundId(fundId)}
                 onSellFund={openSellFund}
                 onAssignNonFundToGoal={(txId) => setNonFundPickerTxId(txId)}
+                onSellNonFund={openSellNonFund}
                 onRefresh={() => fetchData({ force: true })}
               />
             )}
@@ -692,6 +767,184 @@ export default function DashboardClient() {
                   <Button type="button" className="flex-1 bg-amber-600 hover:bg-amber-700" disabled={sellSaving || !sellUnits || !sellAmount} onClick={handleSellFundSubmit}>
                     {sellSaving && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-1" />}
                     {sellSaving ? tc('saving') : tg('sell')}
+                  </Button>
+                </div>
+              </div>
+            )
+          })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* Sell / Withdraw Non-Fund (bank/gold) Modal */}
+      <Dialog open={!!sellNonFund} onOpenChange={(o) => { if (!o && !nfSaving) setSellNonFund(null) }}>
+        <DialogContent className="sm:max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle>
+              {sellNonFund?.type === 'bank' ? tg('withdrawBankModal') : tg('sellGoldModal')}
+              {sellNonFund?.notes ? ` — ${sellNonFund.notes}` : ''}
+            </DialogTitle>
+          </DialogHeader>
+          {sellNonFund && (() => {
+            const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
+            const isBank = sellNonFund.type === 'bank'
+            const originalPricePerUnit = sellNonFund.units && sellNonFund.units > 0
+              ? sellNonFund.amount / sellNonFund.units : 0
+            const currentPricePerUnit = sellNonFund.units && sellNonFund.units > 0
+              ? sellNonFund.currentValue / sellNonFund.units : 0
+            const nfUnitsNum = parseFloat(nfUnits) || 0
+            const nfAmountNum = parseFloat(nfAmount) || 0
+            const nfPrincipalNum = parseFloat(nfPrincipal) || 0
+
+            // bank: gain = amountReceived - principalWithdrawn
+            const bankGain = nfAmountNum - nfPrincipalNum
+            const bankRemaining = sellNonFund.amount - nfPrincipalNum
+
+            // gold: cost basis = units × original price, gain = amount - cost basis
+            const goldCostBasis = Math.round(nfUnitsNum * originalPricePerUnit)
+            const goldGain = nfAmountNum - goldCostBasis
+            const goldRemaining = (sellNonFund.units ?? 0) - nfUnitsNum
+
+            return (
+              <div className="space-y-4 py-2">
+                <div className="grid grid-cols-2 gap-3 text-sm bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3">
+                  {isBank ? (
+                    <>
+                      <div>
+                        <p className="text-gray-500 dark:text-gray-400">{tg('principalLabel')}</p>
+                        <p className="font-medium text-gray-900 dark:text-gray-100">{fmt(sellNonFund.amount)}</p>
+                      </div>
+                      {sellNonFund.interestRate != null && (
+                        <div>
+                          <p className="text-gray-500 dark:text-gray-400">{tg('perYearShort')}</p>
+                          <p className="font-medium text-gray-900 dark:text-gray-100">{sellNonFund.interestRate}%</p>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <p className="text-gray-500 dark:text-gray-400">{tg('colRemaining')}</p>
+                        <p className="font-medium text-gray-900 dark:text-gray-100">
+                          {(sellNonFund.units ?? 0).toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} chi
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-gray-500 dark:text-gray-400">{tg('currentPriceLabel')}</p>
+                        <p className="font-medium text-gray-900 dark:text-gray-100">{fmt(currentPricePerUnit)}/chi</p>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label>{isBank ? tg('dateWithdrawLabel') : tg('dateSellLabel')}</Label>
+                  <Input type="date" value={nfDate} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setNfDate(e.target.value)} />
+                </div>
+
+                {isBank ? (
+                  <>
+                    <div className="space-y-2">
+                      <Label>{tg('principalWithdrawnLabel')}</Label>
+                      <Input
+                        type="number"
+                        value={nfPrincipal}
+                        min={0}
+                        step="1000"
+                        placeholder={tg('principalWithdrawnPlaceholder')}
+                        onChange={(e) => setNfPrincipal(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>{tg('amountReceivedLabel')}</Label>
+                      <Input
+                        type="number"
+                        value={nfAmount}
+                        min={0}
+                        step="1000"
+                        placeholder={tg('amountReceivedPlaceholder')}
+                        onChange={(e) => setNfAmount(e.target.value)}
+                      />
+                    </div>
+                    {nfPrincipalNum > 0 && nfAmountNum > 0 && (
+                      <div className="text-sm bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 space-y-1">
+                        <div className="flex justify-between border-t border-gray-200 dark:border-gray-700 pt-1">
+                          <span className="text-gray-500 dark:text-gray-400">P&amp;L</span>
+                          <span className={`font-semibold ${bankGain >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {bankGain >= 0 ? '+' : ''}{fmt(bankGain)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500 dark:text-gray-400">{tg('remainingPrincipalLabel')}</span>
+                          <span className="font-medium text-gray-900 dark:text-gray-100">{fmt(Math.max(bankRemaining, 0))}</span>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      <Label>{tg('unitsToSellGold')}</Label>
+                      <Input
+                        type="number"
+                        value={nfUnits}
+                        min={0}
+                        max={sellNonFund.units ?? undefined}
+                        step="0.01"
+                        placeholder="0.00"
+                        onChange={(e) => {
+                          setNfUnits(e.target.value)
+                          const u = parseFloat(e.target.value) || 0
+                          if (u > 0) setNfAmount(String(Math.round(u * currentPricePerUnit)))
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>{tg('amountReceivedLabel')}</Label>
+                      <Input
+                        type="number"
+                        value={nfAmount}
+                        min={0}
+                        step="1000"
+                        placeholder="0"
+                        onChange={(e) => {
+                          setNfAmount(e.target.value)
+                          const a = parseFloat(e.target.value) || 0
+                          if (a > 0 && currentPricePerUnit > 0) setNfUnits(String(Math.round((a / currentPricePerUnit) * 100) / 100))
+                        }}
+                      />
+                    </div>
+                    {nfUnitsNum > 0 && (
+                      <div className="text-sm bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 space-y-1">
+                        <div className="flex justify-between">
+                          <span className="text-gray-500 dark:text-gray-400">{tg('costBasisLabel')}</span>
+                          <span className="font-medium text-gray-900 dark:text-gray-100">{fmt(goldCostBasis)}</span>
+                        </div>
+                        <div className="flex justify-between border-t border-gray-200 dark:border-gray-700 pt-1 mt-1">
+                          <span className="text-gray-500 dark:text-gray-400">P&amp;L</span>
+                          <span className={`font-semibold ${goldGain >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {goldGain >= 0 ? '+' : ''}{fmt(goldGain)}
+                          </span>
+                        </div>
+                        {goldRemaining >= 0 && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-500 dark:text-gray-400">{tg('remainingChiLabel')}</span>
+                            <span className="font-medium text-gray-900 dark:text-gray-100">
+                              {goldRemaining.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} chi
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {nfError && <p className="text-sm text-red-600 dark:text-red-400">{nfError}</p>}
+
+                <div className="flex gap-3 pt-1">
+                  <Button type="button" variant="outline" className="flex-1" onClick={() => setSellNonFund(null)} disabled={nfSaving}>{tc('cancel')}</Button>
+                  <Button type="button" className="flex-1 bg-amber-600 hover:bg-amber-700" disabled={nfSaving} onClick={handleSellNonFundSubmit}>
+                    {nfSaving && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-1" />}
+                    {nfSaving ? tc('saving') : (isBank ? tg('withdraw') : tg('sell'))}
                   </Button>
                 </div>
               </div>

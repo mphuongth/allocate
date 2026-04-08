@@ -160,7 +160,8 @@
     "remainingPrincipalLabel": "Vốn còn lại",
     "perYearShort": "%/năm",
     "remainingValueLabel": "Giá trị còn",
-    "remainingChiLabel": "Chi còn"
+    "remainingChiLabel": "Chi còn",
+    "principalLabel": "Vốn gốc"
   },
   "transactions": {
     "title": "Giao dịch Đầu tư",

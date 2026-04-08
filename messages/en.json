@@ -160,7 +160,8 @@
     "remainingPrincipalLabel": "Remaining balance",
     "perYearShort": "%/yr",
     "remainingValueLabel": "Remaining value",
-    "remainingChiLabel": "Remaining chi"
+    "remainingChiLabel": "Remaining chi",
+    "principalLabel": "Principal"
   },
   "transactions": {
     "title": "Investment Transactions",
