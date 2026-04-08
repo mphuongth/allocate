@@ -394,7 +394,7 @@
   "funds": {
     "title": "Fund Library",
     "desc": "Manage investment funds",
-    "refreshNav": "↻ Refresh NAV",
+    "refreshNav": "Refresh NAV",
     "refreshingNav": "Refreshing…",
     "add": "Add Fund",
     "empty": "No funds yet",
@@ -425,7 +425,9 @@
     "codeExists": "This fund code already exists. Please use a different code.",
     "error": "An error occurred. Please try again later.",
     "navInfoTitle": "About NAV Updates",
-    "navInfoDesc": "NAV (Net Asset Value) is updated daily by fund providers. Click \"{refreshNav}\" to fetch the latest prices. Prices are typically updated after market close."
+    "navInfoDesc": "NAV (Net Asset Value) is updated daily by fund providers. Click \"{refreshNav}\" to fetch the latest prices. Prices are typically updated after market close.",
+    "searchPlaceholder": "Search by fund name or code...",
+    "fundsCount": "{count} funds"
   },
   "planning": {
     "title": "Monthly Plan",

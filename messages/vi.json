@@ -394,7 +394,7 @@
   "funds": {
     "title": "Thư viện Quỹ",
     "desc": "Quản lý các quỹ đầu tư",
-    "refreshNav": "↻ Làm mới NAV",
+    "refreshNav": "Làm mới NAV",
     "refreshingNav": "Đang làm mới…",
     "add": "Thêm Quỹ",
     "empty": "Chưa có quỹ nào",
@@ -425,7 +425,9 @@
     "codeExists": "Mã quỹ này đã tồn tại. Vui lòng dùng mã khác.",
     "error": "Đã xảy ra lỗi. Vui lòng thử lại sau.",
     "navInfoTitle": "Về cập nhật NAV",
-    "navInfoDesc": "NAV (Giá trị tài sản ròng) được cập nhật hàng ngày bởi các công ty quản lý quỹ. Nhấn \"{refreshNav}\" để lấy giá mới nhất. Giá thường được cập nhật sau khi thị trường đóng cửa."
+    "navInfoDesc": "NAV (Giá trị tài sản ròng) được cập nhật hàng ngày bởi các công ty quản lý quỹ. Nhấn \"{refreshNav}\" để lấy giá mới nhất. Giá thường được cập nhật sau khi thị trường đóng cửa.",
+    "searchPlaceholder": "Tìm theo tên hoặc mã quỹ...",
+    "fundsCount": "{count} quỹ"
   },
   "planning": {
     "title": "Kế hoạch Tháng",
