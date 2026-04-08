@@ -394,7 +394,7 @@
   "funds": {
     "title": "Thư viện Quỹ",
     "desc": "Quản lý các quỹ đầu tư",
-    "refreshNav": "↻ Làm mới NAV",
+    "refreshNav": "Làm mới NAV",
     "refreshingNav": "Đang làm mới…",
     "add": "Thêm Quỹ",
     "empty": "Chưa có quỹ nào",

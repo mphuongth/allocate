@@ -394,7 +394,7 @@
   "funds": {
     "title": "Fund Library",
     "desc": "Manage investment funds",
-    "refreshNav": "↻ Refresh NAV",
+    "refreshNav": "Refresh NAV",
     "refreshingNav": "Refreshing…",
     "add": "Add Fund",
     "empty": "No funds yet",
