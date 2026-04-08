@@ -42,7 +42,7 @@ export async function GET() {
       .eq('user_id', user.id),
     supabase
       .from('investment_transactions')
-      .select('transaction_id, goal_id, amount_vnd, interest_rate, investment_date, asset_type, units, unit_price, fund_id, expiry_date, notes, funds(id, name, nav, updated_at)')
+      .select('transaction_id, goal_id, amount_vnd, interest_rate, investment_date, asset_type, transaction_type, units, unit_price, units_withdrawn, principal_withdrawn, fund_id, parent_transaction_id, expiry_date, notes, funds(id, name, nav, updated_at)')
       .eq('user_id', user.id),
     supabase
       .from('insurance_members')
@@ -59,7 +59,7 @@ export async function GET() {
       .single(),
   ])
 
-  const planIds = (plansRes.data ?? []).map((p) => p.id)
+  const planIds = (plansRes.data ?? []).map((p: { id: string }) => p.id)
 
   const [insExclusionsRes, insOverridesRes] = await Promise.all([
     planIds.length > 0
@@ -75,8 +75,34 @@ export async function GET() {
   }
 
   const goals = goalsRes.data ?? []
-  // Exclude pending DCA-seeded fund rows (units not yet filled after order matching)
-  const allTxs = (txRes.data ?? []).filter((tx) => !(tx.asset_type === 'fund' && tx.units == null))
+  const allTxsRaw = txRes.data ?? []
+
+  // Separate investment vs withdrawal rows
+  const investments = allTxsRaw.filter((tx) =>
+    tx.transaction_type !== 'withdrawal' &&
+    !(tx.asset_type === 'fund' && tx.units == null) // exclude pending DCA-seeded fund rows
+  )
+  const withdrawals = allTxsRaw.filter((tx) => tx.transaction_type === 'withdrawal')
+
+  // Build withdrawal lookup: parent_transaction_id → { principal, units } (bank/gold)
+  const parentWdMap = new Map<string, { principal: number; units: number }>()
+  // Build fund withdrawal lookup: "goal_key::fund_id" → { units, cost }
+  const fundWdMap = new Map<string, { units: number; cost: number }>()
+  for (const wd of withdrawals) {
+    if (wd.asset_type === 'fund' && wd.fund_id) {
+      const key = `${wd.goal_id ?? 'unallocated'}::${wd.fund_id}`
+      const e = fundWdMap.get(key) ?? { units: 0, cost: 0 }
+      e.units += wd.units_withdrawn ?? 0
+      e.cost += wd.principal_withdrawn ?? 0
+      fundWdMap.set(key, e)
+    } else if (wd.parent_transaction_id) {
+      const e = parentWdMap.get(wd.parent_transaction_id) ?? { principal: 0, units: 0 }
+      e.principal += wd.principal_withdrawn ?? 0
+      e.units += wd.units_withdrawn ?? 0
+      parentWdMap.set(wd.parent_transaction_id, e)
+    }
+  }
+
   const insuranceMembers = insuranceRes.data ?? []
   const goldPricePerChi: number | null = goldPriceRes.data?.price_per_chi ?? null
 
@@ -149,7 +175,7 @@ export async function GET() {
     transactionId: string; type: string; amount: number; currentValue: number; interestRate: number | null; expiryDate: string | null; investmentDate: string; notes: string | null; units: number | null
   }[] = []
 
-  for (const tx of allTxs) {
+  for (const tx of investments) {
     if (tx.asset_type === 'fund' && tx.units) {
       const fund = Array.isArray(tx.funds)
         ? tx.funds[0] as { id: string; name: string; nav: number; updated_at: string } | undefined
@@ -177,38 +203,59 @@ export async function GET() {
         })
       }
     } else {
-      // bank / stock / gold
+      // bank / stock / gold — apply any partial withdrawals
+      const wd = parentWdMap.get(tx.transaction_id)
+      const withdrawnPrincipal = wd?.principal ?? 0
+      const withdrawnUnits = wd?.units ?? 0
+
       let currentValue: number
+      let effectiveAmount: number
+      let effectiveUnits: number | null = tx.units ?? null
+
       if (tx.asset_type === 'gold' && goldPricePerChi && tx.units) {
-        currentValue = tx.units * goldPricePerChi
+        effectiveUnits = tx.units - withdrawnUnits
+        if (effectiveUnits <= 0) continue // fully sold
+        currentValue = effectiveUnits * goldPricePerChi
+        effectiveAmount = tx.amount_vnd - withdrawnPrincipal
       } else {
-        const interest = calcProjectedInterest(tx.amount_vnd, tx.interest_rate, tx.investment_date, (tx as { expiry_date?: string | null }).expiry_date)
-        currentValue = tx.amount_vnd + interest
+        effectiveAmount = tx.amount_vnd - withdrawnPrincipal
+        if (effectiveAmount <= 0) continue // fully withdrawn
+        const interest = calcProjectedInterest(effectiveAmount, tx.interest_rate, tx.investment_date, tx.expiry_date)
+        currentValue = effectiveAmount + interest
       }
 
       totalAssets += currentValue
-      totalInvestedGlobal += tx.amount_vnd
+      totalInvestedGlobal += effectiveAmount
 
       if (tx.goal_id && goalMap.has(tx.goal_id)) {
         const goalEntry = goalMap.get(tx.goal_id)!
-        goalEntry.totalInvested += tx.amount_vnd
+        goalEntry.totalInvested += effectiveAmount
         goalEntry.currentValue += currentValue
       } else {
         unallocatedNonFundValue += currentValue
-        const expiryDate = (tx as { expiry_date?: string | null }).expiry_date ?? null
         unallocatedNonFunds.push({
           transactionId: tx.transaction_id,
           type: tx.asset_type,
-          amount: tx.amount_vnd,
+          amount: effectiveAmount,
           currentValue,
           interestRate: tx.interest_rate ?? null,
-          expiryDate,
+          expiryDate: tx.expiry_date ?? null,
           investmentDate: tx.investment_date,
           notes: tx.notes ?? null,
-          units: tx.units ?? null,
+          units: effectiveUnits,
         })
       }
     }
+  }
+
+  // Subtract fund sell withdrawals from fund accumulators
+  for (const [key, wd] of fundWdMap) {
+    const acc = fundAccumMap.get(key)
+    if (!acc || wd.units <= 0) continue
+    const totalUnitsBefore = acc.totalUnits
+    acc.totalNavCost -= totalUnitsBefore > 0 ? (wd.units / totalUnitsBefore) * acc.totalNavCost : 0
+    acc.totalUnits -= wd.units
+    acc.totalInvested -= wd.cost
   }
 
   // Convert fund accumulators to breakdown items
@@ -219,6 +266,7 @@ export async function GET() {
   let unallocatedFundValue = 0
 
   for (const [, acc] of fundAccumMap) {
+    if (acc.totalUnits <= 0) continue // fully sold
     const currentValue = acc.currentNAV * acc.totalUnits
     const profitLoss = currentValue - acc.totalInvested
     const profitLossPercentage = acc.totalInvested > 0 ? (profitLoss / acc.totalInvested) * 100 : 0
@@ -302,7 +350,7 @@ export async function GET() {
     ? (overallProfitLoss / totalInvestedGlobal) * 100
     : 0
 
-  const hasGold = allTxs.some((tx) => tx.asset_type === 'gold')
+  const hasGold = allTxsRaw.some((tx) => tx.asset_type === 'gold')
 
   // Upsert today's snapshot for the history chart (fire-and-forget)
   const today = new Date().toISOString().split('T')[0]
