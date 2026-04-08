@@ -254,10 +254,6 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
     setFiForm({ ...emptyFiForm, investment_date: new Date().toISOString().slice(0, 10) })
     setEditTx(null); setFormError(''); setFormMode('fi-add')
   }
-  function openFiEdit(row: TxRow) {
-    setFiForm({ fund_id: row.fund_id ?? '', investment_date: row.investment_date, amount_vnd: String(row.amount_vnd), units: row.units != null ? String(row.units) : '', unit_price: row.unit_price != null ? String(row.unit_price) : '' })
-    setEditTx(row); setFormError(''); setFormMode('fi-edit')
-  }
   async function handleFiSave() {
     setFormError('')
     if (!fiForm.fund_id) { setFormError(t('selectFundRequired')); return }
@@ -271,14 +267,6 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
     if (!res.ok) { const { error } = await res.json(); setFormError(error ?? tc('error')) }
     else { setFormMode(null); await fetchData() }
     setSaving(false)
-  }
-  async function handleFiDelete(row: TxRow) {
-    setPendingConfirm({ title: t('deleteTxModal'), message: t('deleteTxMessage'), onConfirm: async () => {
-      setDeletingId(row.transaction_id)
-      const res = await fetch(`/api/v1/investment-transactions/${row.transaction_id}`, { method: 'DELETE' })
-      if (res.ok) { setSuccessMsg(t('deletedFi')); setTimeout(() => setSuccessMsg(''), 4000); await fetchData() }
-      setDeletingId(null)
-    }})
   }
 
   // --- Other tx handlers ---
@@ -600,35 +588,6 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
             </>
           )}
 
-          {/* Fund purchase history (collapsible-style subheader) */}
-          {fundInvestmentRows.length > 0 && (
-            <div className="border-t border-black/5 dark:border-gray-700 px-5 py-3">
-              <p className="text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-3">{t('purchaseHistory')}</p>
-              <div className="space-y-1">
-                {fundInvestmentRows.map(row => {
-                  const fund = funds.find(f => f.id === row.fund_id)
-                  return (
-                    <div key={row.transaction_id} className="flex items-center justify-between text-sm py-1 gap-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="font-medium text-gray-700 dark:text-gray-300 shrink-0">{row.fund_code ?? '—'}</span>
-                        <span className="text-gray-500 dark:text-gray-400 text-xs">{new Date(row.investment_date).toLocaleDateString('vi-VN')}</span>
-                        <span className="text-gray-500 dark:text-gray-400 text-xs">{row.units != null ? `${fmtUnits(row.units)} ${t('unitsShort')}` : ''}</span>
-                        <span className="text-gray-500 dark:text-gray-400 text-xs">@ {row.unit_price != null ? fmt(row.unit_price) : (fund ? fmt(fund.nav) : '—')}</span>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button onClick={() => openFiEdit(row)} className="p-1 rounded text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
-                          <Edit className="h-3.5 w-3.5" />
-                        </button>
-                        <button onClick={() => handleFiDelete(row)} disabled={deletingId === row.transaction_id} className="p-1 rounded text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50">
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
         </div>
       )}
 
