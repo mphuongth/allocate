@@ -94,7 +94,7 @@ export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds,
                     </p>
                   </td>
                   <td className="px-5 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2">
+                    <div className="flex flex-col items-end gap-1.5">
                       <button
                         onClick={() => onSellFund(fund)}
                         className="text-sm font-medium px-2.5 py-1.5 border border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-400 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap"
@@ -158,7 +158,7 @@ export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds,
                       </p>
                     </td>
                     <td className="px-5 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex flex-col items-end gap-1.5">
                         {(item.type === 'bank' || item.type === 'gold') && (
                           <button
                             onClick={() => onSellNonFund(item)}
