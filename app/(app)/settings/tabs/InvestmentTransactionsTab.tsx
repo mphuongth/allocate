@@ -14,7 +14,8 @@ import { Textarea } from '@/components/ui/textarea'
 interface Transaction {
   transaction_id: string
   goal_id: string | null
-  asset_type: string
+  asset_type: string | null
+  transaction_type?: string
   investment_date: string
   amount_vnd: number
   unit_price: number | null
@@ -23,6 +24,8 @@ interface Transaction {
   expiry_date: string | null
   fund_id: string | null
   notes: string | null
+  principal_withdrawn?: number | null
+  units_withdrawn?: number | null
   savings_goals?: { goal_name: string } | null
   funds?: { id: string; name: string; nav: number } | { id: string; name: string; nav: number }[] | null
 }
@@ -51,6 +54,7 @@ const ASSET_COLORS: Record<AssetType, string> = {
 }
 
 function calcCurrentValue(tx: Transaction): number {
+  if (tx.transaction_type === 'withdrawal') return tx.amount_vnd
   if (tx.asset_type === 'fund' && tx.units) {
     const fund = Array.isArray(tx.funds) ? tx.funds[0] : tx.funds
     return tx.units * (fund?.nav ?? tx.unit_price ?? 0)
@@ -216,7 +220,7 @@ export default function InvestmentTransactionsTab() {
 
   function openEdit(tx: Transaction) {
     setTxForm({
-      asset_type: tx.asset_type,
+      asset_type: tx.asset_type ?? 'bank',
       investment_date: tx.investment_date,
       amount_vnd: String(tx.amount_vnd),
       unit_price: tx.unit_price != null ? String(tx.unit_price) : '',
@@ -401,7 +405,9 @@ export default function InvestmentTransactionsTab() {
             {/* Mobile card layout */}
             <div className="sm:hidden divide-y divide-black/5 dark:divide-gray-700 px-4 py-2">
               {transactions.map((tx) => {
+                const isWithdrawal = tx.transaction_type === 'withdrawal'
                 const currentValue = calcCurrentValue(tx)
+                const gain = isWithdrawal && tx.principal_withdrawn != null ? tx.amount_vnd - tx.principal_withdrawn : null
                 const rateOrNav = tx.asset_type === 'fund'
                   ? (tx.unit_price != null ? fmtNav(tx.unit_price) : '—')
                   : (tx.interest_rate != null ? `${tx.interest_rate}%` : '—')
@@ -411,30 +417,51 @@ export default function InvestmentTransactionsTab() {
                   <div key={tx.transaction_id} className="py-3 space-y-2">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2">
-                        <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${ASSET_COLORS[tx.asset_type as AssetType] ?? 'bg-gray-100 text-gray-700'}`}>
-                          {t(`asset${tx.asset_type.charAt(0).toUpperCase() + tx.asset_type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold') ?? tx.asset_type}
-                        </span>
+                        {isWithdrawal ? (
+                          <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                            {t('withdrawal')}
+                          </span>
+                        ) : (
+                          <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${ASSET_COLORS[tx.asset_type as AssetType] ?? 'bg-gray-100 text-gray-700'}`}>
+                            {tx.asset_type ? (t(`asset${tx.asset_type.charAt(0).toUpperCase() + tx.asset_type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold') ?? tx.asset_type) : '—'}
+                          </span>
+                        )}
                         {fundCode && <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{fundCode}</span>}
                       </div>
                       <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">{new Date(tx.investment_date).toLocaleDateString('vi-VN')}</span>
                     </div>
                     <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
                       <div>
-                        <span className="text-gray-500 dark:text-gray-400">{t('colAmount')}: </span>
+                        <span className="text-gray-500 dark:text-gray-400">{isWithdrawal ? t('amountReceived') : t('colAmount')}: </span>
                         <span className="font-medium text-gray-900 dark:text-gray-100">{fmt(tx.amount_vnd)}</span>
                       </div>
-                      <div>
-                        <span className="text-gray-500 dark:text-gray-400">{t('colExpiry')}: </span>
-                        <span className="font-medium text-gray-900 dark:text-gray-100">{fmt(currentValue)}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500 dark:text-gray-400">{t('colTransaction')}: </span>
-                        <span className="text-gray-700 dark:text-gray-300">{tx.units ?? '—'}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500 dark:text-gray-400">{rateOrNavLabel}: </span>
-                        <span className="text-gray-700 dark:text-gray-300">{rateOrNav}</span>
-                      </div>
+                      {isWithdrawal ? (
+                        <div>
+                          <span className="text-gray-500 dark:text-gray-400">{t('gainLoss')}: </span>
+                          {gain != null ? (
+                            <span className={`font-medium ${gain >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                              {gain >= 0 ? '+' : ''}{fmt(gain)}
+                            </span>
+                          ) : <span className="text-gray-400">—</span>}
+                        </div>
+                      ) : (
+                        <div>
+                          <span className="text-gray-500 dark:text-gray-400">{t('colExpiry')}: </span>
+                          <span className="font-medium text-gray-900 dark:text-gray-100">{fmt(currentValue)}</span>
+                        </div>
+                      )}
+                      {!isWithdrawal && (
+                        <>
+                          <div>
+                            <span className="text-gray-500 dark:text-gray-400">{t('colTransaction')}: </span>
+                            <span className="text-gray-700 dark:text-gray-300">{tx.units ?? '—'}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-500 dark:text-gray-400">{rateOrNavLabel}: </span>
+                            <span className="text-gray-700 dark:text-gray-300">{rateOrNav}</span>
+                          </div>
+                        </>
+                      )}
                       <div className="col-span-2">
                         <span className="text-gray-500 dark:text-gray-400">{t('colGoal')}: </span>
                         {tx.savings_goals?.goal_name
@@ -450,9 +477,11 @@ export default function InvestmentTransactionsTab() {
                       )}
                     </div>
                     <div className="flex items-center gap-1 pt-0.5">
-                      <button onClick={() => openEdit(tx)} className="h-8 w-8 p-0 flex items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                        <Edit className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                      </button>
+                      {!isWithdrawal && (
+                        <button onClick={() => openEdit(tx)} className="h-8 w-8 p-0 flex items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                          <Edit className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                        </button>
+                      )}
                       <button onClick={() => setConfirmTx(tx)} className="h-8 w-8 p-0 flex items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
                         <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
                       </button>
@@ -479,7 +508,9 @@ export default function InvestmentTransactionsTab() {
                 </thead>
                 <tbody className="divide-y divide-black/5 dark:divide-gray-700">
                   {transactions.map((tx) => {
+                    const isWithdrawal = tx.transaction_type === 'withdrawal'
                     const currentValue = calcCurrentValue(tx)
+                    const gain = isWithdrawal && tx.principal_withdrawn != null ? tx.amount_vnd - tx.principal_withdrawn : null
                     const rateOrNav = tx.asset_type === 'fund'
                       ? (tx.unit_price != null ? fmtNav(tx.unit_price) : '—')
                       : (tx.interest_rate != null ? `${tx.interest_rate}%` : '—')
@@ -489,16 +520,34 @@ export default function InvestmentTransactionsTab() {
                         <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{new Date(tx.investment_date).toLocaleDateString('vi-VN')}</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
-                            <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${ASSET_COLORS[tx.asset_type as AssetType] ?? 'bg-gray-100 text-gray-700'}`}>
-                              {t(`asset${tx.asset_type.charAt(0).toUpperCase() + tx.asset_type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold') ?? tx.asset_type}
-                            </span>
+                            {isWithdrawal ? (
+                              <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                                {t('withdrawal')}
+                              </span>
+                            ) : (
+                              <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${ASSET_COLORS[tx.asset_type as AssetType] ?? 'bg-gray-100 text-gray-700'}`}>
+                                {tx.asset_type ? (t(`asset${tx.asset_type.charAt(0).toUpperCase() + tx.asset_type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold') ?? tx.asset_type) : '—'}
+                              </span>
+                            )}
                             {fundCode && <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{fundCode}</span>}
                           </div>
                         </td>
                         <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-gray-100">{fmt(tx.amount_vnd)}</td>
-                        <td className="px-4 py-3 text-right text-sm text-gray-600 dark:text-gray-400">{tx.units ?? '—'}</td>
-                        <td className="px-4 py-3 text-right text-sm text-gray-600 dark:text-gray-400">{rateOrNav}</td>
-                        <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-gray-100">{fmt(currentValue)}</td>
+                        <td className="px-4 py-3 text-right text-sm text-gray-600 dark:text-gray-400">
+                          {isWithdrawal ? (tx.units_withdrawn ?? '—') : (tx.units ?? '—')}
+                        </td>
+                        <td className="px-4 py-3 text-right text-sm text-gray-600 dark:text-gray-400">{isWithdrawal ? '—' : rateOrNav}</td>
+                        <td className="px-4 py-3 text-right font-medium">
+                          {isWithdrawal ? (
+                            gain != null ? (
+                              <span className={gain >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                                {gain >= 0 ? '+' : ''}{fmt(gain)}
+                              </span>
+                            ) : <span className="text-gray-400">—</span>
+                          ) : (
+                            <span className="text-gray-900 dark:text-gray-100">{fmt(currentValue)}</span>
+                          )}
+                        </td>
                         <td className="px-4 py-3">
                           {tx.savings_goals?.goal_name
                             ? <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900">{tx.savings_goals.goal_name}</span>
@@ -508,9 +557,11 @@ export default function InvestmentTransactionsTab() {
                         <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 max-w-32 truncate">{tx.notes ?? '—'}</td>
                         <td className="px-4 py-3 text-center">
                           <div className="flex items-center justify-center gap-1">
-                            <button onClick={() => openEdit(tx)} className="h-8 w-8 p-0 flex items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                              <Edit className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                            </button>
+                            {!isWithdrawal && (
+                              <button onClick={() => openEdit(tx)} className="h-8 w-8 p-0 flex items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                                <Edit className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                              </button>
+                            )}
                             <button onClick={() => setConfirmTx(tx)} className="h-8 w-8 p-0 flex items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
                               <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
                             </button>

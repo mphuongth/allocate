@@ -1,6 +1,6 @@
 'use client'
 
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, TrendingDown, Target } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import type { FundBreakdownItem, NonFundUnallocatedItem } from '../DashboardClient'
 
@@ -21,13 +21,16 @@ interface Props {
   nonFunds: NonFundUnallocatedItem[]
   onFundClick: (fundId: string) => void
   onAssignToGoal: (fundId: string) => void
+  onSellFund: (fund: FundBreakdownItem) => void
   onAssignNonFundToGoal: (transactionId: string) => void
+  onSellNonFund: (item: NonFundUnallocatedItem) => void
   onRefresh: () => void
 }
 
-export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds, onFundClick, onAssignToGoal, onAssignNonFundToGoal, onRefresh }: Props) {
+export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds, onFundClick, onAssignToGoal, onSellFund, onAssignNonFundToGoal, onSellNonFund, onRefresh }: Props) {
   const t = useTranslations('dashboard')
   const tt = useTranslations('transactions')
+  const tg = useTranslations('goals')
 
   const typeLabelMap: Record<string, string> = {
     fund:  tt('assetFund'),
@@ -60,7 +63,7 @@ export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds,
                 <th className="px-5 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase hidden sm:table-cell">{t('colNavInterest')}</th>
                 <th className="px-5 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase hidden md:table-cell">{t('colUnits')}</th>
                 <th className="px-5 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colCurrentValue')}</th>
-                <th className="px-5 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colActions')}</th>
+                <th className="px-3 sm:px-5 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colActions')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50 dark:divide-gray-700/50">
@@ -90,13 +93,25 @@ export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds,
                       {fmtPct(fund.profitLossPercentage)}
                     </p>
                   </td>
-                  <td className="px-5 py-4 text-right">
-                    <button
-                      onClick={() => onAssignToGoal(fund.fundId)}
-                      className="text-sm font-medium px-2.5 py-1.5 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 whitespace-nowrap"
-                    >
-                      {t('assignToGoal')}
-                    </button>
+                  <td className="px-3 sm:px-5 py-4 text-right">
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        onClick={() => onSellFund(fund)}
+                        title={tg('sell')}
+                        className="inline-flex items-center gap-1.5 text-sm font-medium px-2 py-1.5 sm:px-2.5 border border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-400 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-900/20"
+                      >
+                        <TrendingDown className="h-3.5 w-3.5 shrink-0" />
+                        <span className="hidden sm:inline whitespace-nowrap">{tg('sell')}</span>
+                      </button>
+                      <button
+                        onClick={() => onAssignToGoal(fund.fundId)}
+                        title={t('assignToGoal')}
+                        className="inline-flex items-center gap-1.5 text-sm font-medium px-2 py-1.5 sm:px-2.5 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
+                      >
+                        <Target className="h-3.5 w-3.5 shrink-0" />
+                        <span className="hidden sm:inline whitespace-nowrap">{t('assignToGoal')}</span>
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -146,13 +161,29 @@ export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds,
                         {fmtPct(plPct)}
                       </p>
                     </td>
-                    <td className="px-5 py-4 text-right">
-                      <button
-                        onClick={() => onAssignNonFundToGoal(item.transactionId)}
-                        className="text-sm font-medium px-2.5 py-1.5 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 whitespace-nowrap"
-                      >
-                        {t('assignToGoal')}
-                      </button>
+                    <td className="px-3 sm:px-5 py-4 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        {(item.type === 'bank' || item.type === 'gold') && (
+                          <button
+                            onClick={() => onSellNonFund(item)}
+                            title={item.type === 'bank' ? tg('withdraw') : tg('sell')}
+                            className="inline-flex items-center gap-1.5 text-sm font-medium px-2 py-1.5 sm:px-2.5 border border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-400 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-900/20"
+                          >
+                            <TrendingDown className="h-3.5 w-3.5 shrink-0" />
+                            <span className="hidden sm:inline whitespace-nowrap">
+                              {item.type === 'bank' ? tg('withdraw') : tg('sell')}
+                            </span>
+                          </button>
+                        )}
+                        <button
+                          onClick={() => onAssignNonFundToGoal(item.transactionId)}
+                          title={t('assignToGoal')}
+                          className="inline-flex items-center gap-1.5 text-sm font-medium px-2 py-1.5 sm:px-2.5 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
+                        >
+                          <Target className="h-3.5 w-3.5 shrink-0" />
+                          <span className="hidden sm:inline whitespace-nowrap">{t('assignToGoal')}</span>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 )
