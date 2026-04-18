@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v1'
+const CACHE_VERSION = 'v2'
 const API_CACHE = `api-v1-${CACHE_VERSION}`
 const STATIC_CACHE = `static-assets-${CACHE_VERSION}`
 const OFFLINE_URL = '/~offline'
@@ -61,6 +61,12 @@ self.addEventListener('fetch', (event) => {
           return offline ?? new Response('Offline', { status: 503 })
         })
     )
+    return
+  }
+
+  // Next.js static chunks — immutable (content-hashed filenames), CacheFirst
+  if (url.pathname.startsWith('/_next/static/')) {
+    event.respondWith(cacheFirst(request, STATIC_CACHE))
     return
   }
 
