@@ -36,9 +36,9 @@ export default function Sidebar({ email, initials, onNavClick, hideLogo = false 
       {!hideLogo && (
         <div className={`flex items-center h-16 px-6 border-b border-gray-100 dark:border-gray-700 ${sidebarCollapsed ? 'justify-center px-0' : ''}`}>
           {sidebarCollapsed ? (
-            <span className="text-violet-600 font-semibold text-lg">A</span>
+            <span className="text-violet-600 font-semibold text-lg">C</span>
           ) : (
-            <span className="text-violet-600 font-semibold text-xl">Allocate</span>
+            <span className="text-violet-600 font-semibold text-xl">Cairn</span>
           )}
         </div>
       )}

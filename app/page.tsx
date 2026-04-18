@@ -29,10 +29,15 @@ export default async function HomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-2">
-              <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-violet-600 to-purple-600 flex items-center justify-center text-white font-bold text-xl">
-                A
-              </div>
-              <span className="text-xl font-bold text-gray-900 dark:text-gray-100">Allocate</span>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/cairn-icon.svg"
+                alt="Cairn logo"
+                width={40}
+                height={40}
+                className="h-10 w-10 rounded-lg"
+              />
+              <span className="text-xl font-bold text-gray-900 dark:text-gray-100">Cairn</span>
             </div>
             <div className="flex items-center gap-2 sm:gap-3">
               <LanguageSwitcher />
@@ -128,12 +133,17 @@ export default async function HomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <div className="text-center">
             <div className="flex items-center justify-center gap-2 mb-4">
-              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-violet-600 to-purple-600 flex items-center justify-center text-white font-bold text-xs">
-                A
-              </div>
-              <span className="text-lg font-bold text-gray-900 dark:text-gray-100">Allocate</span>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/cairn-icon.svg"
+                alt="Cairn logo"
+                width={32}
+                height={32}
+                className="h-8 w-8 rounded-lg"
+              />
+              <span className="text-lg font-bold text-gray-900 dark:text-gray-100">Cairn</span>
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">© 2026 Allocate. All rights reserved.</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">© 2026 Cairn. All rights reserved.</p>
           </div>
         </div>
       </footer>

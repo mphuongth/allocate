@@ -18,7 +18,7 @@ const mobileSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="390" height="8
   <!-- Status bar area -->
   <rect width="390" height="52" fill="#7c3aed"/>
   <!-- App name in header -->
-  <text x="20" y="34" font-family="system-ui,sans-serif" font-weight="700" font-size="18" fill="white">Allocate</text>
+  <text x="20" y="34" font-family="system-ui,sans-serif" font-weight="700" font-size="18" fill="white">Cairn</text>
   <!-- Nav tabs -->
   <rect y="52" width="390" height="48" fill="white"/>
   <rect x="0" y="94" width="390" height="2" fill="#ede9fe"/>
@@ -70,8 +70,8 @@ const desktopSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height=
   <rect x="240" width="1" height="800" fill="#e5e7eb"/>
   <!-- Sidebar logo -->
   <rect x="20" y="20" width="36" height="36" rx="8" fill="#7c3aed"/>
-  <text x="38" y="44" font-family="system-ui,sans-serif" font-weight="700" font-size="18" fill="white" text-anchor="middle">A</text>
-  <text x="68" y="44" font-family="system-ui,sans-serif" font-weight="700" font-size="16" fill="#111827">Allocate</text>
+  <text x="38" y="44" font-family="system-ui,sans-serif" font-weight="700" font-size="18" fill="white" text-anchor="middle">C</text>
+  <text x="68" y="44" font-family="system-ui,sans-serif" font-weight="700" font-size="16" fill="#111827">Cairn</text>
   <!-- Sidebar items -->
   <rect x="12" y="76" width="216" height="36" rx="8" fill="#f5f3ff"/>
   <text x="44" y="100" font-family="system-ui,sans-serif" font-size="13" font-weight="600" fill="#7c3aed">Asset Overview</text>

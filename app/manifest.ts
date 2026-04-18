@@ -3,13 +3,13 @@ import type { MetadataRoute } from 'next'
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: '/dashboard',
-    name: 'Allocate',
-    short_name: 'Allocate',
-    description: 'Personal finance allocation manager',
+    name: 'Cairn',
+    short_name: 'Cairn',
+    description: 'Personal finance, one stone at a time. Plan, track, and grow toward every goal.',
     start_url: '/dashboard',
     display: 'standalone',
-    background_color: '#f9fafb',
-    theme_color: '#7c3aed',
+    background_color: '#0F2A4A',
+    theme_color: '#0F2A4A',
     orientation: 'portrait',
     icons: [
       { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },

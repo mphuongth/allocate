@@ -1,6 +1,8 @@
-# Allocate
+# Cairn
 
-A personal finance allocation manager built with Next.js, Supabase, and Tailwind CSS. Supports Vietnamese and English.
+Personal finance, one stone at a time. A plan-and-track app for goals, investments, and monthly budgets — built with Next.js, Supabase, and Tailwind CSS. Supports Vietnamese and English.
+
+> A cairn is a stack of stones that marks a trail. Every saving, every fund, every monthly plan is a stone on your financial journey.
 
 Production: https://allocate-kohl.vercel.app/
 
