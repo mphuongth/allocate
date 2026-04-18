@@ -6,8 +6,8 @@ import { writeFileSync } from 'node:fs'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const publicDir = resolve(__dirname, '../public')
 
-// Allocate brand palette — navy base, emerald lead, mint secondary.
-// Keeping these in one place makes a future rebrand a one-line change.
+// Cairn brand palette — navy base, emerald lead, mint secondary.
+// Keeping these in one place makes a future palette tweak a one-line change.
 const COLORS = {
   navy:      '#0F2A4A',
   navyDeep:  '#081A30',
@@ -18,61 +18,42 @@ const COLORS = {
   cream:     '#F8FAFC',
 }
 
-// Donut allocation segments. Percentages sum to 100; order is clockwise from 12.
-// The first (lead) segment gets the strongest color.
-const SHARES = [
-  { pct: 40, color: COLORS.emerald },
-  { pct: 25, color: COLORS.mint    },
-  { pct: 20, color: COLORS.blueMid },
-  { pct: 15, color: COLORS.navyMid },
+// Cairn mark: four stacked "stones" of decreasing width, slightly offset for
+// the hand-balanced feel of a real trail cairn. Each entry is specified as
+// ratios of the canvas size so the glyph scales crisply from 32 → 1024.
+//
+// Stones are listed bottom → top. `w` is width ratio, `h` is height ratio,
+// `dx` is horizontal offset (ratio) from the canvas center, positive = right.
+// `y` is the top-edge y-position as a ratio of the canvas.
+const STONES = [
+  { w: 0.547, h: 0.113, y: 0.703, dx: -0.008, color: COLORS.blueMid }, // widest base
+  { w: 0.430, h: 0.098, y: 0.574, dx:  0.012, color: COLORS.navyMid }, // slight right
+  { w: 0.328, h: 0.086, y: 0.457, dx: -0.016, color: COLORS.emerald }, // brand pop
+  { w: 0.203, h: 0.070, y: 0.355, dx:  0.008, color: COLORS.cream    }, // peak marker
 ]
 
-// Visual knobs, all as ratios of `size` so the glyph scales crisply from 32 → 1024.
+// Visual knobs. `stoneRadiusScale` sets each stone's corner radius as a
+// fraction of its own height — higher = pebbles, lower = slabs.
 const GEOM = {
-  cornerRadius: 0.203, // ~104/512 — a friendly squircle-like curvature
-  ringOuter:    0.344, // ~176/512
-  ringInner:    0.203, // ~104/512
-  centerDot:    0.047, // ~24/512
-  segmentGapDeg: 3,    // angular gap between segments, in degrees
+  cornerRadius: 0.203,      // ~104/512 squircle-ish rounded square
+  stoneRadiusScale: 0.42,   // stones read as rounded-rectangles, not ovals
 }
 
-function ringSegment(cx, cy, rOut, rIn, aStart, aEnd, fill) {
-  const rad = (deg) => (deg * Math.PI) / 180
-  const x1o = cx + rOut * Math.cos(rad(aStart))
-  const y1o = cy + rOut * Math.sin(rad(aStart))
-  const x2o = cx + rOut * Math.cos(rad(aEnd))
-  const y2o = cy + rOut * Math.sin(rad(aEnd))
-  const x2i = cx + rIn  * Math.cos(rad(aEnd))
-  const y2i = cy + rIn  * Math.sin(rad(aEnd))
-  const x1i = cx + rIn  * Math.cos(rad(aStart))
-  const y1i = cy + rIn  * Math.sin(rad(aStart))
-  const large = (((aEnd - aStart) % 360) + 360) % 360 > 180 ? 1 : 0
-  const d =
-    `M ${x1o.toFixed(3)} ${y1o.toFixed(3)} ` +
-    `A ${rOut} ${rOut} 0 ${large} 1 ${x2o.toFixed(3)} ${y2o.toFixed(3)} ` +
-    `L ${x2i.toFixed(3)} ${y2i.toFixed(3)} ` +
-    `A ${rIn} ${rIn} 0 ${large} 0 ${x1i.toFixed(3)} ${y1i.toFixed(3)} Z`
-  return `<path d="${d}" fill="${fill}"/>`
+function stoneRect(size, stone, { withShadow = false } = {}) {
+  const w = size * stone.w
+  const h = size * stone.h
+  const x = (size - w) / 2 + size * stone.dx
+  const y = size * stone.y
+  const r = Math.min(h * GEOM.stoneRadiusScale, w / 2)
+  const shadow = withShadow
+    ? `<rect x="${x}" y="${y + h * 0.18}" width="${w}" height="${h}" rx="${r}" ry="${r}" fill="#000" opacity="0.08"/>`
+    : ''
+  return `${shadow}<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${r}" ry="${r}" fill="${stone.color}"/>`
 }
 
 function buildSvg(size, { withBackground = true } = {}) {
-  const cx = size / 2
-  const cy = size / 2
-  const rOut   = size * GEOM.ringOuter
-  const rIn    = size * GEOM.ringInner
-  const dotR   = size * GEOM.centerDot
   const radius = withBackground ? Math.round(size * GEOM.cornerRadius) : 0
-
-  // Build segments walking clockwise from top (-90°), leaving equal angular gaps.
-  const totalGap = GEOM.segmentGapDeg * SHARES.length
-  const totalDeg = 360 - totalGap
-  let angle = -90
-  const segs = SHARES.map(({ pct, color }) => {
-    const span = totalDeg * (pct / 100)
-    const path = ringSegment(cx, cy, rOut, rIn, angle, angle + span, color)
-    angle += span + GEOM.segmentGapDeg
-    return path
-  }).join('')
+  const stones = STONES.map((s) => stoneRect(size, s)).join('')
 
   const defs = withBackground
     ? `<defs>
@@ -85,11 +66,8 @@ function buildSvg(size, { withBackground = true } = {}) {
   const bgRect = withBackground
     ? `<rect width="${size}" height="${size}" rx="${radius}" ry="${radius}" fill="url(#bg)"/>`
     : ''
-  const centerDot = withBackground
-    ? `<circle cx="${cx}" cy="${cy}" r="${dotR}" fill="${COLORS.cream}"/>`
-    : '' // on a transparent version the hole shows through — no dot
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${defs}${bgRect}${segs}${centerDot}</svg>`
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${defs}${bgRect}${stones}</svg>`
 }
 
 const pngIcons = [
