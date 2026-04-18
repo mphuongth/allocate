@@ -37,7 +37,7 @@ export default function Header({ onMobileMenuToggle }: HeaderProps) {
 
       {/* Mobile center logo */}
       <span className="lg:hidden flex-1 text-center text-brand font-bold text-lg tracking-tight">
-        Allocate
+        Cairn
       </span>
 
       {/* Breadcrumb (desktop/tablet only) */}

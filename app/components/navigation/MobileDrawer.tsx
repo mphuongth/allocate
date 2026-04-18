@@ -66,7 +66,7 @@ export default function MobileDrawer({ open, onClose, email, initials }: MobileD
         aria-label="Navigation menu"
       >
         <div className="flex items-center justify-between px-4 h-14 border-b border-gray-100 dark:border-gray-700">
-          <span className="text-brand font-bold text-xl tracking-tight">Allocate</span>
+          <span className="text-brand font-bold text-xl tracking-tight">Cairn</span>
           <button
             onClick={onClose}
             aria-label="Close navigation menu"

@@ -19,16 +19,16 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#7c3aed' },
-    { media: '(prefers-color-scheme: dark)',  color: '#7c3aed' },
+    { media: '(prefers-color-scheme: light)', color: '#f8fafc' },
+    { media: '(prefers-color-scheme: dark)',  color: '#0F2A4A' },
   ],
 }
 
 export const metadata: Metadata = {
-  title: 'Allocate',
-  description: 'Personal finance allocation manager',
+  title: 'Cairn',
+  description: 'Personal finance, one stone at a time. Plan, track, and grow toward every goal.',
   manifest: '/manifest.webmanifest',
-  appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Allocate' },
+  appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Cairn' },
   icons: {
     icon: [
       { url: '/favicon-32.png', sizes: '32x32', type: 'image/png' },

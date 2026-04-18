@@ -108,11 +108,11 @@ for (const { filename, size } of pngIcons) {
 
 // Also emit a crisp master SVG (rendered version matches the 512 PNG) and a
 // transparent variant handy for embedding in dark-mode UIs or marketing pages.
-writeFileSync(resolve(publicDir, 'allocate-icon.svg'), buildSvg(512))
-console.log('Generated public/allocate-icon.svg')
+writeFileSync(resolve(publicDir, 'cairn-icon.svg'), buildSvg(512))
+console.log('Generated public/cairn-icon.svg')
 
 writeFileSync(
-  resolve(publicDir, 'allocate-icon-transparent.svg'),
+  resolve(publicDir, 'cairn-icon-transparent.svg'),
   buildSvg(512, { withBackground: false }),
 )
-console.log('Generated public/allocate-icon-transparent.svg')
+console.log('Generated public/cairn-icon-transparent.svg')
