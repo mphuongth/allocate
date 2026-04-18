@@ -34,10 +34,16 @@ export default function Sidebar({ email, initials, onNavClick, hideLogo = false 
     >
       {/* Logo */}
       {!hideLogo && (
-        <div className={`flex items-center h-16 px-6 border-b border-gray-100 dark:border-gray-700 ${sidebarCollapsed ? 'justify-center px-0' : ''}`}>
-          {sidebarCollapsed ? (
-            <span className="text-brand font-semibold text-lg">C</span>
-          ) : (
+        <div className={`flex items-center gap-2 h-16 px-6 border-b border-gray-100 dark:border-gray-700 ${sidebarCollapsed ? 'justify-center px-0' : ''}`}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/cairn-icon.svg"
+            alt="Cairn logo"
+            width={32}
+            height={32}
+            className="h-8 w-8 rounded-lg shrink-0"
+          />
+          {!sidebarCollapsed && (
             <span className="text-brand font-semibold text-xl">Cairn</span>
           )}
         </div>

@@ -36,9 +36,17 @@ export default function Header({ onMobileMenuToggle }: HeaderProps) {
       </button>
 
       {/* Mobile center logo */}
-      <span className="lg:hidden flex-1 text-center text-brand font-bold text-lg tracking-tight">
-        Cairn
-      </span>
+      <div className="lg:hidden flex-1 flex items-center justify-center gap-2">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/cairn-icon.svg"
+          alt="Cairn logo"
+          width={28}
+          height={28}
+          className="h-7 w-7 rounded-md"
+        />
+        <span className="text-brand font-bold text-lg tracking-tight">Cairn</span>
+      </div>
 
       {/* Breadcrumb (desktop/tablet only) */}
       <div className="hidden md:block flex-1">
