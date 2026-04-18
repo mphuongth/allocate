@@ -1,6 +1,7 @@
-const CACHE_VERSION = 'v2'
+const CACHE_VERSION = 'v3'
 const API_CACHE = `api-v1-${CACHE_VERSION}`
 const STATIC_CACHE = `static-assets-${CACHE_VERSION}`
+const PAGE_CACHE = `pages-${CACHE_VERSION}`
 const OFFLINE_URL = '/~offline'
 
 // ── Install ───────────────────────────────────────────────────────────────────
@@ -15,7 +16,7 @@ self.addEventListener('install', (event) => {
 // ── Activate ──────────────────────────────────────────────────────────────────
 // Remove stale caches from previous versions.
 self.addEventListener('activate', (event) => {
-  const currentCaches = [API_CACHE, STATIC_CACHE]
+  const currentCaches = [API_CACHE, STATIC_CACHE, PAGE_CACHE]
   event.waitUntil(
     caches
       .keys()
@@ -40,27 +41,14 @@ self.addEventListener('fetch', (event) => {
 
   // API routes — NetworkFirst, 24 h cache, 10 s timeout
   if (url.pathname.startsWith('/api/v1/')) {
-    event.respondWith(networkFirst(request, API_CACHE, 10_000))
+    event.respondWith(networkFirst(event, request, API_CACHE, 10_000))
     return
   }
 
-  // Page navigation — NetworkFirst, cache on success, fallback to cached page or offline
+  // Page navigation — NetworkFirst, keyed by URL string (avoids Vary mismatches),
+  // falls back to cached page then offline fallback.
   if (request.mode === 'navigate') {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          if (response.ok) {
-            caches.open(STATIC_CACHE).then((cache) => cache.put(request, response.clone()))
-          }
-          return response
-        })
-        .catch(async () => {
-          const cached = await caches.match(request)
-          if (cached) return cached
-          const offline = await caches.match(OFFLINE_URL)
-          return offline ?? new Response('Offline', { status: 503 })
-        })
-    )
+    event.respondWith(navigateHandler(event, request))
     return
   }
 
@@ -76,13 +64,41 @@ self.addEventListener('fetch', (event) => {
   }
 })
 
+// ── Handlers ──────────────────────────────────────────────────────────────────
+
+async function navigateHandler(event, request) {
+  try {
+    const response = await fetch(request)
+    // Only cache full 200 responses (not 304 or redirects)
+    if (response.status === 200) {
+      // Use event.waitUntil so the SW stays alive until the write completes.
+      // Use request.url (string) as the cache key — avoids Vary header mismatches
+      // that occur when storing/matching with a Request object.
+      event.waitUntil(
+        caches.open(PAGE_CACHE).then((cache) => cache.put(request.url, response.clone()))
+      )
+    }
+    return response
+  } catch {
+    // Network failed — serve cached page by URL (no Vary check)
+    const pageCache = await caches.open(PAGE_CACHE)
+    const cached = await pageCache.match(request.url)
+    if (cached) return cached
+
+    // No cached page — show offline fallback
+    const staticCache = await caches.open(STATIC_CACHE)
+    const offline = await staticCache.match(OFFLINE_URL)
+    return offline ?? new Response('Offline', { status: 503 })
+  }
+}
+
 // ── Strategies ────────────────────────────────────────────────────────────────
 
 /**
  * NetworkFirst: try network with a timeout, fall back to cache.
  * Cached responses expire after 24 h (checked on retrieval).
  */
-async function networkFirst(request, cacheName, timeoutMs) {
+async function networkFirst(event, request, cacheName, timeoutMs) {
   const cache = await caches.open(cacheName)
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
@@ -92,16 +108,16 @@ async function networkFirst(request, cacheName, timeoutMs) {
     clearTimeout(timeoutId)
 
     if (response.ok) {
-      const toCache = response.clone()
-      // Attach a timestamp header for TTL checks
-      const headers = new Headers(toCache.headers)
+      const blob = await response.clone().blob()
+      const headers = new Headers(response.headers)
       headers.set('sw-cached-at', Date.now().toString())
-      const timestamped = new Response(await toCache.blob(), {
-        status: toCache.status,
-        statusText: toCache.statusText,
+      const timestamped = new Response(blob, {
+        status: response.status,
+        statusText: response.statusText,
         headers,
       })
-      cache.put(request, timestamped)
+      // Extend SW lifetime so the cache write finishes before idle
+      event.waitUntil(cache.put(request, timestamped))
     }
     return response
   } catch {
