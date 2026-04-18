@@ -36,9 +36,10 @@ export default function Header({ onMobileMenuToggle }: HeaderProps) {
       </button>
 
       {/* Mobile center logo */}
-      <span className="lg:hidden flex-1 text-center text-brand font-bold text-lg tracking-tight">
-        Allocate
-      </span>
+      <div className="lg:hidden flex-1 flex justify-center">
+        <img src="/allocate-wordmark.svg" alt="Allocate" className="h-7 w-auto dark:hidden" />
+        <img src="/allocate-wordmark-white.svg" alt="Allocate" className="h-7 w-auto hidden dark:block" />
+      </div>
 
       {/* Breadcrumb (desktop/tablet only) */}
       <div className="hidden md:block flex-1">

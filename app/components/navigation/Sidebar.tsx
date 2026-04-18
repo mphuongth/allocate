@@ -34,11 +34,14 @@ export default function Sidebar({ email, initials, onNavClick, hideLogo = false 
     >
       {/* Logo */}
       {!hideLogo && (
-        <div className={`flex items-center h-16 px-6 border-b border-gray-100 dark:border-gray-700 ${sidebarCollapsed ? 'justify-center px-0' : ''}`}>
+        <div className={`flex items-center h-16 border-b border-gray-100 dark:border-gray-700 ${sidebarCollapsed ? 'justify-center' : 'px-5'}`}>
           {sidebarCollapsed ? (
-            <span className="text-violet-600 font-semibold text-lg">A</span>
+            <img src="/allocate-icon.svg" alt="Allocate" width={32} height={32} className="rounded-lg shrink-0" />
           ) : (
-            <span className="text-violet-600 font-semibold text-xl">Allocate</span>
+            <>
+              <img src="/allocate-wordmark.svg" alt="Allocate" height={28} className="h-7 w-auto dark:hidden" />
+              <img src="/allocate-wordmark-white.svg" alt="Allocate" height={28} className="h-7 w-auto hidden dark:block" />
+            </>
           )}
         </div>
       )}
