@@ -44,14 +44,22 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // Page navigation — NetworkFirst with offline fallback page
+  // Page navigation — NetworkFirst, cache on success, fallback to cached page or offline
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request).catch(() =>
-        caches
-          .match(OFFLINE_URL)
-          .then((r) => r ?? new Response('Offline', { status: 503 }))
-      )
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            caches.open(STATIC_CACHE).then((cache) => cache.put(request, response.clone()))
+          }
+          return response
+        })
+        .catch(async () => {
+          const cached = await caches.match(request)
+          if (cached) return cached
+          const offline = await caches.match(OFFLINE_URL)
+          return offline ?? new Response('Offline', { status: 503 })
+        })
     )
     return
   }
