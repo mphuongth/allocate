@@ -9,6 +9,7 @@ import Sidebar from '../navigation/Sidebar'
 import Header from '../navigation/Header'
 import MobileDrawer from '../navigation/MobileDrawer'
 import { PageTitle } from '../navigation/Breadcrumb'
+import OfflineBanner from '@/app/components/OfflineBanner'
 
 function getInitials(email: string): string {
   const parts = email.split('@')[0].split(/[._-]/)
@@ -51,6 +52,7 @@ function AuthenticatedLayoutInner({ children, email, initials }: { children: Rea
           {children}
         </main>
       </div>
+      <OfflineBanner />
     </div>
   )
 }
