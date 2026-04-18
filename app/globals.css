@@ -7,9 +7,13 @@
 @variant dark (&:where(.dark, .dark *));
 
 :root {
-  --brand: #7c3aed;
-  --brand-light: #f3f0ff;
-  --brand-dark: #6d28d9;
+  /* Cairn brand — navy primary, emerald accent. See also:
+     - app/layout.tsx (viewport.themeColor)
+     - app/manifest.ts (theme_color / background_color)
+     - scripts/generate-icons.mjs (COLORS constant) */
+  --brand: #0F2A4A;            /* navy — wordmark, primary brand text */
+  --brand-light: #ecfdf5;      /* emerald-50 — soft accent bg / hover surface */
+  --brand-dark: #10B981;       /* emerald — active state / strong accent */
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -94,9 +98,12 @@
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
-  --brand: #a78bfa;
-  --brand-light: #3730a3;
-  --brand-dark: #c4b5fd;
+  /* Dark-mode brand. `--brand` flips to cream (matches the icon peak stone)
+     so the wordmark reads on dark surfaces; `--brand-light` becomes a navy
+     chip that still feels brand-y against the dark background. */
+  --brand: #F8FAFC;            /* cream — wordmark on dark */
+  --brand-light: #0F2A4A;      /* navy — brand-tinted surface in dark mode */
+  --brand-dark: #34D399;       /* mint — active state / strong accent */
   --card: oklch(0.205 0 0);
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);

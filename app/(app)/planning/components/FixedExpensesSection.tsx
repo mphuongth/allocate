@@ -191,7 +191,7 @@ export default function FixedExpensesSection({ plan, fixedExpenses, onRefresh, o
             </div>
             <div className="flex gap-3">
               <Button type="button" variant="outline" className="flex-1" onClick={() => setEditItem(null)}>{tc('cancel')}</Button>
-              <Button type="submit" className="flex-1 bg-violet-600 hover:bg-violet-700" disabled={saving}>
+              <Button type="submit" className="flex-1 bg-emerald-600 hover:bg-emerald-700" disabled={saving}>
                 {saving && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
                 {saving ? tc('saving') : tc('save')}
               </Button>

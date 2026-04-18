@@ -23,7 +23,7 @@ export default async function HomePage() {
   ]
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-violet-50 via-purple-50 to-pink-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-emerald-50/40 dark:from-slate-950 dark:via-[#081A30] dark:to-slate-950">
       {/* Header */}
       <header className="border-b border-black/5 dark:border-white/5 bg-white/80 dark:bg-gray-950/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -50,7 +50,7 @@ export default async function HomePage() {
               </Link>
               <Link
                 href="/auth/signup"
-                className="inline-flex items-center h-10 px-3 sm:px-4 text-sm font-medium bg-violet-600 text-white rounded-md hover:bg-violet-700 transition-colors whitespace-nowrap"
+                className="inline-flex items-center h-10 px-3 sm:px-4 text-sm font-medium bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors whitespace-nowrap"
               >
                 {t('signupLink')}
               </Link>
@@ -65,7 +65,7 @@ export default async function HomePage() {
           <div className="space-y-4">
             <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-gray-900 dark:text-gray-100 leading-tight">
               {t('heroTitle')}
-              <span className="bg-gradient-to-r from-violet-600 to-purple-600 bg-clip-text text-transparent"> {t('heroTitleGradient')}</span>
+              <span className="bg-gradient-to-r from-[#0F2A4A] to-emerald-600 dark:from-slate-100 dark:to-emerald-400 bg-clip-text text-transparent"> {t('heroTitleGradient')}</span>
             </h1>
             <p className="text-xl md:text-2xl text-gray-600 dark:text-gray-400 max-w-3xl mx-auto">
               {t('heroSubtitle')}
@@ -74,7 +74,7 @@ export default async function HomePage() {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link
               href="/auth/signup"
-              className="px-8 py-3 bg-violet-600 text-white text-lg font-medium rounded-md hover:bg-violet-700 transition-colors"
+              className="px-8 py-3 bg-emerald-600 text-white text-lg font-medium rounded-md hover:bg-emerald-700 transition-colors"
             >
               {t('heroSignupBtn')}
             </Link>
@@ -98,10 +98,10 @@ export default async function HomePage() {
           {FEATURES.map((feature) => (
             <div
               key={feature.title}
-              className="bg-white dark:bg-gray-900 rounded-xl p-6 shadow-sm border-2 border-transparent hover:border-violet-200 dark:hover:border-violet-800 hover:shadow-lg transition-all"
+              className="bg-white dark:bg-gray-900 rounded-xl p-6 shadow-sm border-2 border-transparent hover:border-emerald-200 dark:hover:border-emerald-800 hover:shadow-lg transition-all"
             >
               <div className="flex items-start gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 shrink-0">
+                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 shrink-0">
                   <feature.Icon className="h-8 w-8" />
                 </div>
                 <div>
@@ -116,12 +116,12 @@ export default async function HomePage() {
 
       {/* CTA Section */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
-        <div className="bg-gradient-to-br from-violet-600 to-purple-600 rounded-2xl p-12 md:p-16 text-center">
+        <div className="bg-gradient-to-br from-[#0F2A4A] to-emerald-700 rounded-2xl p-12 md:p-16 text-center">
           <h2 className="text-4xl font-bold text-white mb-4">{t('ctaTitle')}</h2>
-          <p className="text-xl text-violet-100 mb-8 max-w-2xl mx-auto">{t('ctaSub')}</p>
+          <p className="text-xl text-emerald-100 mb-8 max-w-2xl mx-auto">{t('ctaSub')}</p>
           <Link
             href="/auth/signup"
-            className="inline-block px-8 py-3 bg-white text-violet-600 text-lg font-medium rounded-md hover:bg-gray-100 transition-colors"
+            className="inline-block px-8 py-3 bg-white text-[#0F2A4A] text-lg font-medium rounded-md hover:bg-slate-50 transition-colors"
           >
             {t('ctaBtn')}
           </Link>

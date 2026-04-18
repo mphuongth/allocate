@@ -183,7 +183,7 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {goals.map((goal) => (
-            <div key={goal.goal_id} onClick={() => selectGoal(goal)} className="bg-white dark:bg-gray-900 rounded-xl border-2 border-black/10 dark:border-gray-700 p-5 hover:shadow-lg hover:border-violet-200 dark:hover:border-violet-700 transition-all cursor-pointer">
+            <div key={goal.goal_id} onClick={() => selectGoal(goal)} className="bg-white dark:bg-gray-900 rounded-xl border-2 border-black/10 dark:border-gray-700 p-5 hover:shadow-lg hover:border-emerald-200 dark:hover:border-emerald-700 transition-all cursor-pointer">
               {/* Header */}
               <div className="flex items-start justify-between mb-4">
                 <div className="flex-1 min-w-0">
@@ -250,26 +250,26 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
 
       {/* Summary Card */}
       {goals.length > 0 && (
-        <div className="p-6 rounded-xl border border-violet-200 dark:border-violet-800 bg-gradient-to-br from-violet-50 to-purple-50 dark:from-violet-900/20 dark:to-purple-900/20">
+        <div className="p-6 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-gradient-to-br from-emerald-50 to-purple-50 dark:from-emerald-900/20 dark:to-purple-900/20">
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0">
-              <h3 className="text-sm font-medium text-violet-900 dark:text-violet-300 mb-2">{t('totalAcrossGoals')}</h3>
+              <h3 className="text-sm font-medium text-emerald-900 dark:text-emerald-300 mb-2">{t('totalAcrossGoals')}</h3>
               <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
                 <div>
-                  <p className="text-xs text-violet-700 dark:text-violet-400">{t('currentValue')}</p>
-                  <p className="text-xl sm:text-3xl font-bold text-violet-900 dark:text-violet-200 whitespace-nowrap">
+                  <p className="text-xs text-emerald-700 dark:text-emerald-400">{t('currentValue')}</p>
+                  <p className="text-xl sm:text-3xl font-bold text-emerald-900 dark:text-emerald-200 whitespace-nowrap">
                     {fmt(goals.reduce((sum, g) => sum + g.totalInvested + g.projectedInterest, 0))}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-violet-700 dark:text-violet-400">{t('interest')}</p>
+                  <p className="text-xs text-emerald-700 dark:text-emerald-400">{t('interest')}</p>
                   <p className="text-base sm:text-xl font-semibold text-green-600 dark:text-green-400 whitespace-nowrap">
                     +{fmt(goals.reduce((sum, g) => sum + g.projectedInterest, 0))}
                   </p>
                 </div>
               </div>
             </div>
-            <div className="hidden sm:flex h-16 w-16 items-center justify-center rounded-full bg-violet-500 text-white shrink-0">
+            <div className="hidden sm:flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500 text-white shrink-0">
               <TrendingUp className="h-8 w-8" />
             </div>
           </div>
@@ -315,7 +315,7 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
             </div>
             <div className="flex gap-3">
               <Button type="button" variant="outline" className="flex-1" onClick={() => setShowForm(false)} disabled={saving}>{tCommon('cancel')}</Button>
-              <Button type="submit" className="flex-1 bg-violet-600 hover:bg-violet-700" disabled={saving}>
+              <Button type="submit" className="flex-1 bg-emerald-600 hover:bg-emerald-700" disabled={saving}>
                 {saving && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
                 {saving ? tCommon('saving') : tCommon('save')}
               </Button>

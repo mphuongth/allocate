@@ -133,7 +133,10 @@ export default function InsuranceMembersTab() {
   const totalMonthly = members.reduce((s, m) => s + m.monthly_premium_vnd, 0)
 
   const RELATIONSHIP_COLORS: Record<string, string> = {
-    'Self': 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300',
+    // Categorical color for the "Self" relationship. Indigo keeps this
+    // tag distinct from brand emerald and from the blue/green used for
+    // other relationships.
+    'Self': 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300',
     'Husband': 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
     'Wife': 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
     'Child': 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
@@ -183,7 +186,7 @@ export default function InsuranceMembersTab() {
                   <tr key={member.member_id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-600 text-white font-semibold shrink-0">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-600 text-white font-semibold shrink-0">
                           {member.member_name.charAt(0)}
                         </div>
                         <span className="font-medium text-gray-900 dark:text-gray-100">{member.member_name}</span>
@@ -195,7 +198,7 @@ export default function InsuranceMembersTab() {
                       </span>
                     </td>
                     <td className="hidden sm:table-cell px-4 py-4 text-right font-medium text-gray-900 dark:text-gray-100">{fmt(member.annual_payment_vnd)}</td>
-                    <td className="px-4 py-4 text-right font-semibold text-violet-600 dark:text-violet-400">{fmt(member.monthly_premium_vnd)}</td>
+                    <td className="px-4 py-4 text-right font-semibold text-emerald-600 dark:text-emerald-400">{fmt(member.monthly_premium_vnd)}</td>
                     <td className="hidden sm:table-cell px-4 py-4 text-sm text-gray-600 dark:text-gray-400">
                       {member.payment_date ? new Date(member.payment_date).toLocaleDateString('vi-VN') : '—'}
                     </td>
@@ -270,8 +273,8 @@ export default function InsuranceMembersTab() {
                   placeholder={t('annualPlaceholder')}
                 />
                 {form.annual_payment_vnd && Number(form.annual_payment_vnd) > 0 && (
-                  <div className="bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-lg px-3 py-2">
-                    <p className="text-sm text-violet-800 dark:text-violet-300">
+                  <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg px-3 py-2">
+                    <p className="text-sm text-emerald-800 dark:text-emerald-300">
                       <span className="font-medium">{t('monthly')}:</span> {fmt(Math.round(Number(form.annual_payment_vnd) / 12))}
                     </p>
                   </div>
@@ -289,7 +292,7 @@ export default function InsuranceMembersTab() {
             </div>
             <div className="flex gap-3">
               <Button type="button" variant="outline" className="flex-1" onClick={() => setShowForm(false)}>{tCommon('cancel')}</Button>
-              <Button type="submit" className="flex-1 bg-violet-600 hover:bg-violet-700" disabled={saving}>
+              <Button type="submit" className="flex-1 bg-emerald-600 hover:bg-emerald-700" disabled={saving}>
                 {saving ? tCommon('saving') : tCommon('save')}
               </Button>
             </div>

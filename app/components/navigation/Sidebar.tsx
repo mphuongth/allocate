@@ -36,9 +36,9 @@ export default function Sidebar({ email, initials, onNavClick, hideLogo = false 
       {!hideLogo && (
         <div className={`flex items-center h-16 px-6 border-b border-gray-100 dark:border-gray-700 ${sidebarCollapsed ? 'justify-center px-0' : ''}`}>
           {sidebarCollapsed ? (
-            <span className="text-violet-600 font-semibold text-lg">C</span>
+            <span className="text-brand font-semibold text-lg">C</span>
           ) : (
-            <span className="text-violet-600 font-semibold text-xl">Cairn</span>
+            <span className="text-brand font-semibold text-xl">Cairn</span>
           )}
         </div>
       )}
@@ -56,7 +56,7 @@ export default function Sidebar({ email, initials, onNavClick, hideLogo = false 
                 title={sidebarCollapsed ? label : undefined}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm font-medium ${
                   active
-                    ? 'bg-violet-50 dark:bg-brand/20 text-violet-600 dark:text-violet-300'
+                    ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300'
                     : 'text-gray-700 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
                 } ${sidebarCollapsed ? 'justify-center' : ''}`}
               >
@@ -72,7 +72,7 @@ export default function Sidebar({ email, initials, onNavClick, hideLogo = false 
       {!sidebarCollapsed && (
         <div className="border-t border-gray-100 dark:border-gray-700 p-4">
           <div className="flex items-center gap-3 rounded-lg bg-gray-50 dark:bg-gray-800 p-3">
-            <div className="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center text-white text-xs font-semibold shrink-0">
+            <div className="w-8 h-8 rounded-full bg-emerald-600 flex items-center justify-center text-white text-xs font-semibold shrink-0">
               {initials}
             </div>
             <div className="flex-1 min-w-0">

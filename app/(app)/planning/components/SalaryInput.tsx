@@ -124,10 +124,10 @@ export default function SalaryInput({ plan, month, year, onPlanCreated, onPlanDe
             onKeyDown={handleKeyDown}
             disabled={saving}
             placeholder={t('salaryPlaceholder')}
-            className="flex-1 px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-md text-lg font-medium bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500 disabled:opacity-60"
+            className="flex-1 px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-md text-lg font-medium bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-60"
           />
           {saving && (
-            <div className="w-5 h-5 border-2 border-violet-600 border-t-transparent rounded-full animate-spin" />
+            <div className="w-5 h-5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
           )}
         </div>
       </div>

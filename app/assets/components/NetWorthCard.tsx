@@ -106,8 +106,8 @@ export default function NetWorthCard({
             <AreaChart data={history} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="netWorthGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.25} />
-                  <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.25} />
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <XAxis dataKey="label" stroke="#9ca3af" fontSize={11} tickLine={false} axisLine={false} />
@@ -116,14 +116,14 @@ export default function NetWorthCard({
                 formatter={(v) => [fmt(Number(v)), t('totalAssets')]}
                 contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '12px' }}
               />
-              <Area type="monotone" dataKey="value" stroke="#8b5cf6" strokeWidth={2} fill="url(#netWorthGradient)" dot={false} />
+              <Area type="monotone" dataKey="value" stroke="#10b981" strokeWidth={2} fill="url(#netWorthGradient)" dot={false} />
             </AreaChart>
           </ResponsiveContainer>
         ) : (
           <div className="h-full flex flex-col items-center justify-center text-center">
-            <div className="w-full h-px bg-gradient-to-r from-transparent via-violet-300 dark:via-violet-700 to-transparent mb-3" />
+            <div className="w-full h-px bg-gradient-to-r from-transparent via-emerald-300 dark:via-emerald-700 to-transparent mb-3" />
             <p className="text-xs text-gray-400 dark:text-gray-500">{t('noHistoryYet')}</p>
-            <p className="text-xs text-violet-600 dark:text-violet-400 font-semibold mt-0.5">{fmt(netWorth)}</p>
+            <p className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5">{fmt(netWorth)}</p>
           </div>
         )}
       </div>
