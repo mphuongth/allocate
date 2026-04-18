@@ -69,13 +69,12 @@ self.addEventListener('fetch', (event) => {
 async function navigateHandler(event, request) {
   try {
     const response = await fetch(request)
-    // Only cache full 200 responses (not 304 or redirects)
+    // Clone BEFORE returning the response — once the browser starts reading
+    // the body the stream is disturbed and clone() silently produces an empty body.
     if (response.status === 200) {
-      // Use event.waitUntil so the SW stays alive until the write completes.
-      // Use request.url (string) as the cache key — avoids Vary header mismatches
-      // that occur when storing/matching with a Request object.
+      const clone = response.clone()
       event.waitUntil(
-        caches.open(PAGE_CACHE).then((cache) => cache.put(request.url, response.clone()))
+        caches.open(PAGE_CACHE).then((cache) => cache.put(request.url, clone))
       )
     }
     return response
