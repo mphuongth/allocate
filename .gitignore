@@ -24,6 +24,8 @@
 .DS_Store
 *.pem
 
+# PWA — sw.js is a static committed file; no generated artifacts
+
 # debug
 npm-debug.log*
 yarn-debug.log*

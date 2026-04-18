@@ -1,7 +1,8 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Inter, Geist } from 'next/font/google'
 import { Toaster } from 'sonner'
 import ThemeProvider from './components/ThemeProvider'
+import ServiceWorkerRegistration from './components/ServiceWorkerRegistration'
 import { NextIntlClientProvider } from 'next-intl'
 import { getMessages, getLocale } from 'next-intl/server'
 import './globals.css'
@@ -14,9 +15,27 @@ const inter = Inter({
   variable: '--font-inter',
 })
 
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#7c3aed' },
+    { media: '(prefers-color-scheme: dark)',  color: '#7c3aed' },
+  ],
+}
+
 export const metadata: Metadata = {
   title: 'Allocate',
   description: 'Personal finance allocation manager',
+  manifest: '/manifest.webmanifest',
+  appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Allocate' },
+  icons: {
+    icon: [
+      { url: '/favicon-32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/icon-192.png',   sizes: '192x192', type: 'image/png' },
+    ],
+    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
+  },
 }
 
 export default async function RootLayout({
@@ -37,6 +56,7 @@ export default async function RootLayout({
           <ThemeProvider>
             {children}
             <Toaster position="top-right" richColors />
+            <ServiceWorkerRegistration />
           </ThemeProvider>
         </NextIntlClientProvider>
       </body>
