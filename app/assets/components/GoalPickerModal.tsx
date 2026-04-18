@@ -55,8 +55,8 @@ export default function GoalPickerModal({ open, onOpenChange, fundName, goals, o
                 onClick={() => setSelected(goal.id)}
                 className={`w-full text-left p-4 rounded-lg transition-colors border ${
                   selected === goal.id
-                    ? 'border-violet-300 bg-violet-50 dark:bg-violet-900/20'
-                    : 'border-gray-200 dark:border-gray-700 hover:border-violet-300 hover:bg-violet-50 dark:hover:bg-violet-900/10'
+                    ? 'border-emerald-300 bg-emerald-50 dark:bg-emerald-900/20'
+                    : 'border-gray-200 dark:border-gray-700 hover:border-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/10'
                 }`}
               >
                 <div className="mb-3">
@@ -64,7 +64,7 @@ export default function GoalPickerModal({ open, onOpenChange, fundName, goals, o
                   <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
                     <span>{t('goalTarget', { amount: fmt(goal.targetAmount) })}</span>
                     {goal.progressPercent != null && (
-                      <span className="font-medium text-violet-600 dark:text-violet-400">{t('goalProgress', { pct: Math.round(goal.progressPercent) })}</span>
+                      <span className="font-medium text-emerald-600 dark:text-emerald-400">{t('goalProgress', { pct: Math.round(goal.progressPercent) })}</span>
                     )}
                   </div>
                 </div>
@@ -81,7 +81,7 @@ export default function GoalPickerModal({ open, onOpenChange, fundName, goals, o
             {tc('cancel')}
           </Button>
           <Button
-            className="flex-1 bg-violet-600 hover:bg-violet-700"
+            className="flex-1 bg-emerald-600 hover:bg-emerald-700"
             onClick={() => selected && onConfirm(selected)}
             disabled={!selected || isLoading}
           >

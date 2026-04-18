@@ -683,7 +683,7 @@ export default function InvestmentTransactionsTab() {
               {tc('cancel')}
             </Button>
             <Button
-              className="flex-1 bg-violet-600 hover:bg-violet-700"
+              className="flex-1 bg-emerald-600 hover:bg-emerald-700"
               onClick={handleImport}
               disabled={importing || !importFundId || importRows.filter((r) => !r.error).length === 0}
             >
@@ -889,7 +889,7 @@ export default function InvestmentTransactionsTab() {
               <Button type="button" variant="outline" className="flex-1" onClick={() => setFormMode(null)}>
                 {tc('cancel')}
               </Button>
-              <Button type="submit" className="flex-1 bg-violet-600 hover:bg-violet-700" disabled={saving}>
+              <Button type="submit" className="flex-1 bg-emerald-600 hover:bg-emerald-700" disabled={saving}>
                 {saving ? tc('saving') : tc('save')}
               </Button>
             </div>

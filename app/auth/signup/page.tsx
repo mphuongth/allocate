@@ -91,16 +91,16 @@ export default function SignupPage() {
 
   if (confirmSent) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-violet-50 via-purple-50 to-pink-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-emerald-50/40 dark:from-slate-950 dark:via-[#081A30] dark:to-slate-950 flex items-center justify-center p-4">
         <div className="w-full max-w-md text-center">
-          <div className="inline-flex items-center justify-center h-12 w-12 rounded-lg bg-gradient-to-br from-violet-600 to-purple-600 text-2xl mb-4 shadow-lg shadow-violet-200 dark:shadow-violet-900/30">
+          <div className="inline-flex items-center justify-center h-12 w-12 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-2xl mb-4">
             📧
           </div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-3">{t('checkEmailTitle')}</h1>
           <p className="text-gray-600 dark:text-gray-400 text-sm mb-8">{t('checkEmailMessage')}</p>
           <Link
             href="/auth/login"
-            className="inline-block py-2.5 px-6 bg-violet-600 text-white rounded-lg font-semibold hover:bg-violet-700 transition-colors"
+            className="inline-block py-2.5 px-6 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 transition-colors"
           >
             {t('goToLogin')}
           </Link>
@@ -110,7 +110,7 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-violet-50 via-purple-50 to-pink-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 flex items-center justify-center p-4 relative">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-emerald-50/40 dark:from-slate-950 dark:via-[#081A30] dark:to-slate-950 flex items-center justify-center p-4 relative">
       <div className="absolute top-4 right-4">
         <ThemeToggleButton />
       </div>
@@ -118,9 +118,14 @@ export default function SignupPage() {
       <div className="w-full max-w-md">
         {/* Logo + heading */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center h-12 w-12 rounded-lg bg-gradient-to-br from-violet-600 to-purple-600 text-white font-bold text-2xl mb-4 shadow-lg shadow-violet-200 dark:shadow-violet-900/30">
-            A
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/cairn-icon.svg"
+            alt="Cairn logo"
+            width={48}
+            height={48}
+            className="inline-block h-12 w-12 rounded-lg mb-4 shadow-lg shadow-slate-200 dark:shadow-slate-900/30"
+          />
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">{t('signupTitle')}</h1>
           <p className="text-gray-600 dark:text-gray-400">{t('signupSubtitle')}</p>
         </div>
@@ -209,7 +214,7 @@ export default function SignupPage() {
             <Button
               type="submit"
               disabled={loading}
-              className="w-full bg-violet-600 hover:bg-violet-700 dark:bg-violet-600 dark:hover:bg-violet-700 text-white dark:text-white"
+              className="w-full bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-700 text-white dark:text-white"
               size="lg"
             >
               {loading ? t('signingUp') : t('signupBtn')}
@@ -218,7 +223,7 @@ export default function SignupPage() {
 
           <div className="mt-6 text-center text-sm">
             <span className="text-gray-600 dark:text-gray-400">{t('hasAccount')} </span>
-            <Link href="/auth/login" className="text-violet-600 dark:text-violet-400 hover:text-violet-700 font-medium">
+            <Link href="/auth/login" className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 font-medium">
               {t('loginLink')}
             </Link>
           </div>

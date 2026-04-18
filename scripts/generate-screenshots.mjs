@@ -9,25 +9,25 @@ const publicDir = resolve(__dirname, '../public')
 const mobileSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="390" height="844" viewBox="0 0 390 844">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#f5f3ff"/>
-      <stop offset="100%" stop-color="#ede9fe"/>
+      <stop offset="0%" stop-color="#f8fafc"/>
+      <stop offset="100%" stop-color="#ecfdf5"/>
     </linearGradient>
   </defs>
   <!-- Background -->
   <rect width="390" height="844" fill="url(#bg)"/>
   <!-- Status bar area -->
-  <rect width="390" height="52" fill="#7c3aed"/>
+  <rect width="390" height="52" fill="#0F2A4A"/>
   <!-- App name in header -->
   <text x="20" y="34" font-family="system-ui,sans-serif" font-weight="700" font-size="18" fill="white">Cairn</text>
   <!-- Nav tabs -->
   <rect y="52" width="390" height="48" fill="white"/>
-  <rect x="0" y="94" width="390" height="2" fill="#ede9fe"/>
-  <text x="20" y="80" font-family="system-ui,sans-serif" font-size="13" font-weight="600" fill="#7c3aed">Overview</text>
+  <rect x="0" y="94" width="390" height="2" fill="#e2e8f0"/>
+  <text x="20" y="80" font-family="system-ui,sans-serif" font-size="13" font-weight="600" fill="#0F2A4A">Overview</text>
   <text x="110" y="80" font-family="system-ui,sans-serif" font-size="13" fill="#9ca3af">Planning</text>
   <text x="190" y="80" font-family="system-ui,sans-serif" font-size="13" fill="#9ca3af">Goals</text>
   <!-- Net worth card -->
-  <rect x="16" y="110" width="358" height="110" rx="16" fill="#7c3aed"/>
-  <text x="32" y="140" font-family="system-ui,sans-serif" font-size="11" fill="#c4b5fd">Portfolio Value</text>
+  <rect x="16" y="110" width="358" height="110" rx="16" fill="#0F2A4A"/>
+  <text x="32" y="140" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">Portfolio Value</text>
   <text x="32" y="172" font-family="system-ui,sans-serif" font-weight="700" font-size="28" fill="white">₫2,456,800,000</text>
   <text x="32" y="200" font-family="system-ui,sans-serif" font-size="12" fill="#a5f3fc">↑ +12.4% this month</text>
   <!-- Asset cards -->
@@ -44,13 +44,13 @@ const mobileSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="390" height="8
   <rect x="16" y="370" width="358" height="72" rx="12" fill="white"/>
   <text x="30" y="396" font-family="system-ui,sans-serif" font-size="13" font-weight="500" fill="#111827">Emergency Fund</text>
   <rect x="30" y="406" width="280" height="6" rx="3" fill="#f3f4f6"/>
-  <rect x="30" y="406" width="224" height="6" rx="3" fill="#7c3aed"/>
+  <rect x="30" y="406" width="224" height="6" rx="3" fill="#10b981"/>
   <text x="320" y="416" font-family="system-ui,sans-serif" font-size="11" fill="#6b7280">80%</text>
   <text x="30" y="432" font-family="system-ui,sans-serif" font-size="11" fill="#9ca3af">₫80M of ₫100M</text>
   <rect x="16" y="452" width="358" height="72" rx="12" fill="white"/>
   <text x="30" y="478" font-family="system-ui,sans-serif" font-size="13" font-weight="500" fill="#111827">House Down Payment</text>
   <rect x="30" y="488" width="280" height="6" rx="3" fill="#f3f4f6"/>
-  <rect x="30" y="488" width="126" height="6" rx="3" fill="#7c3aed"/>
+  <rect x="30" y="488" width="126" height="6" rx="3" fill="#10b981"/>
   <text x="320" y="498" font-family="system-ui,sans-serif" font-size="11" fill="#6b7280">45%</text>
   <text x="30" y="514" font-family="system-ui,sans-serif" font-size="11" fill="#9ca3af">₫450M of ₫1B</text>
 </svg>`
@@ -60,7 +60,7 @@ const desktopSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height=
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#f9fafb"/>
-      <stop offset="100%" stop-color="#f5f3ff"/>
+      <stop offset="100%" stop-color="#ecfdf5"/>
     </linearGradient>
   </defs>
   <!-- Background -->
@@ -69,12 +69,12 @@ const desktopSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height=
   <rect width="240" height="800" fill="white"/>
   <rect x="240" width="1" height="800" fill="#e5e7eb"/>
   <!-- Sidebar logo -->
-  <rect x="20" y="20" width="36" height="36" rx="8" fill="#7c3aed"/>
+  <rect x="20" y="20" width="36" height="36" rx="8" fill="#0F2A4A"/>
   <text x="38" y="44" font-family="system-ui,sans-serif" font-weight="700" font-size="18" fill="white" text-anchor="middle">C</text>
   <text x="68" y="44" font-family="system-ui,sans-serif" font-weight="700" font-size="16" fill="#111827">Cairn</text>
   <!-- Sidebar items -->
-  <rect x="12" y="76" width="216" height="36" rx="8" fill="#f5f3ff"/>
-  <text x="44" y="100" font-family="system-ui,sans-serif" font-size="13" font-weight="600" fill="#7c3aed">Asset Overview</text>
+  <rect x="12" y="76" width="216" height="36" rx="8" fill="#ecfdf5"/>
+  <text x="44" y="100" font-family="system-ui,sans-serif" font-size="13" font-weight="600" fill="#10b981">Asset Overview</text>
   <text x="44" y="136" font-family="system-ui,sans-serif" font-size="13" fill="#6b7280">Monthly Plan</text>
   <text x="44" y="172" font-family="system-ui,sans-serif" font-size="13" fill="#6b7280">Fund Library</text>
   <text x="44" y="208" font-family="system-ui,sans-serif" font-size="13" fill="#6b7280">Settings</text>
@@ -84,8 +84,8 @@ const desktopSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height=
   <rect x="240" y="60" width="1040" height="1" fill="#e5e7eb"/>
   <text x="268" y="38" font-family="system-ui,sans-serif" font-weight="700" font-size="20" fill="#111827">Asset Overview</text>
   <!-- Stat cards -->
-  <rect x="268" y="84" width="220" height="96" rx="12" fill="#7c3aed"/>
-  <text x="288" y="110" font-family="system-ui,sans-serif" font-size="11" fill="#c4b5fd">Portfolio Value</text>
+  <rect x="268" y="84" width="220" height="96" rx="12" fill="#0F2A4A"/>
+  <text x="288" y="110" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">Portfolio Value</text>
   <text x="288" y="140" font-family="system-ui,sans-serif" font-weight="700" font-size="20" fill="white">₫2,456,800,000</text>
   <text x="288" y="164" font-family="system-ui,sans-serif" font-size="11" fill="#a5f3fc">↑ +12.4%</text>
   <rect x="508" y="84" width="220" height="96" rx="12" fill="white"/>
@@ -101,12 +101,12 @@ const desktopSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height=
   <rect x="268" y="228" width="330" height="140" rx="12" fill="white"/>
   <text x="288" y="256" font-family="system-ui,sans-serif" font-size="13" font-weight="500" fill="#111827">Emergency Fund</text>
   <rect x="288" y="268" width="270" height="8" rx="4" fill="#f3f4f6"/>
-  <rect x="288" y="268" width="216" height="8" rx="4" fill="#7c3aed"/>
+  <rect x="288" y="268" width="216" height="8" rx="4" fill="#10b981"/>
   <text x="288" y="296" font-family="system-ui,sans-serif" font-size="12" fill="#9ca3af">₫80M of ₫100M · 80% complete</text>
   <rect x="618" y="228" width="330" height="140" rx="12" fill="white"/>
   <text x="638" y="256" font-family="system-ui,sans-serif" font-size="13" font-weight="500" fill="#111827">House Down Payment</text>
   <rect x="638" y="268" width="270" height="8" rx="4" fill="#f3f4f6"/>
-  <rect x="638" y="268" width="121" height="8" rx="4" fill="#7c3aed"/>
+  <rect x="638" y="268" width="121" height="8" rx="4" fill="#10b981"/>
   <text x="638" y="296" font-family="system-ui,sans-serif" font-size="12" fill="#9ca3af">₫450M of ₫1B · 45% complete</text>
   <!-- Allocation table -->
   <text x="268" y="398" font-family="system-ui,sans-serif" font-weight="600" font-size="15" fill="#111827">Allocation</text>

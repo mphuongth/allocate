@@ -9,7 +9,10 @@ const fmtNav = (n: number) => '₫ ' + n.toLocaleString('vi-VN', { minimumFracti
 const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`
 
 const TYPE_BADGE: Record<string, string> = {
-  fund:  'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300',
+  // Unified with the `fund:` entry in the ASSET_COLORS maps in
+  // GoalDetailClient / GoalDetailView / InvestmentTransactionsTab. Purple
+  // keeps the "fund" category visually distinct from the brand emerald.
+  fund:  'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
   bank:  'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300',
   gold:  'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
   stock: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
@@ -76,7 +79,7 @@ export default function UnallocatedSection({ unallocatedAmount, funds, nonFunds,
                     </span>
                     <button
                       onClick={() => onFundClick(fund.fundId)}
-                      className="block text-left hover:text-violet-600 dark:hover:text-violet-400 transition-colors"
+                      className="block text-left hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
                     >
                       <p className="font-medium text-gray-900 dark:text-gray-100">{fund.fundName}</p>
                     </button>

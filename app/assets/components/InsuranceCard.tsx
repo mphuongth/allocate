@@ -175,7 +175,7 @@ export default function InsuranceCard({
     <div className={`rounded-xl border p-5 transition-opacity ${
       isCompleted
         ? 'opacity-60 bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700'
-        : 'bg-violet-50 dark:bg-violet-900/10 border-violet-100 dark:border-violet-800/30'
+        : 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-800/30'
     }`}>
       {/* Header — name + status badge */}
       <div className="flex items-start justify-between mb-1">
@@ -209,7 +209,7 @@ export default function InsuranceCard({
       <div className="space-y-2 mb-3">
         <div className="flex items-center justify-between">
           <span className="text-sm text-gray-500 dark:text-gray-400">{t('savedLabel')}:</span>
-          <span className="text-sm font-bold text-violet-600 dark:text-violet-400">{fmt(localAmountSaved)}</span>
+          <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{fmt(localAmountSaved)}</span>
         </div>
         <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
           <div
@@ -249,7 +249,7 @@ export default function InsuranceCard({
           onChange={(e) => setInputAmount(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
           placeholder={t('savingsAmountPlaceholder')}
-          className="flex-1 min-w-0 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-1.5 text-xs bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500"
+          className="flex-1 min-w-0 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-1.5 text-xs bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
         />
         <button
           onClick={handleAdd}
@@ -306,7 +306,7 @@ export default function InsuranceCard({
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
               {t('markPaidMessage', { name: insuranceName })}
             </p>
-            <div className="bg-violet-50 dark:bg-violet-900/20 rounded-lg p-3 mb-4 border-l-4 border-violet-500">
+            <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-lg p-3 mb-4 border-l-4 border-emerald-500">
               <p className="text-xs text-gray-700 dark:text-gray-300 font-medium">{insuranceName}</p>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t('annualPayment', { amount: fmt(annualPremium) })}</p>
             </div>
@@ -322,7 +322,7 @@ export default function InsuranceCard({
               <button
                 onClick={handleMarkAsPaid}
                 disabled={markPaidLoading}
-                className="flex-1 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                className="flex-1 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {markPaidLoading ? (
                   <>
