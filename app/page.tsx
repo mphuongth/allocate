@@ -34,18 +34,18 @@ export default async function HomePage() {
               </div>
               <span className="text-xl font-bold text-gray-900 dark:text-gray-100">Allocate</span>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
               <LanguageSwitcher />
               <ThemeToggleButton />
               <Link
                 href="/auth/login"
-                className="inline-flex items-center h-10 px-4 text-sm font-medium text-gray-900 dark:text-gray-100 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                className="hidden sm:inline-flex items-center h-10 px-4 text-sm font-medium text-gray-900 dark:text-gray-100 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors whitespace-nowrap"
               >
                 {t('loginLink')}
               </Link>
               <Link
                 href="/auth/signup"
-                className="inline-flex items-center h-10 px-4 text-sm font-medium bg-violet-600 text-white rounded-md hover:bg-violet-700 transition-colors"
+                className="inline-flex items-center h-10 px-3 sm:px-4 text-sm font-medium bg-violet-600 text-white rounded-md hover:bg-violet-700 transition-colors whitespace-nowrap"
               >
                 {t('signupLink')}
               </Link>
