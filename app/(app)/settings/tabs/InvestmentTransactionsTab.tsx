@@ -347,7 +347,7 @@ export default function InvestmentTransactionsTab() {
       </div>
 
       {/* Filters */}
-      <div className="bg-white dark:bg-gray-900 rounded-xl border border-black/10 dark:border-gray-700 p-4">
+      <div className="bg-white dark:bg-gray-900 rounded-xl border border-black/10 dark:border-gray-700 p-4 overflow-hidden">
         <div className="grid gap-4 grid-cols-1 md:grid-cols-4">
           <div className="min-w-0">
             <label className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2 block">{t('filterAssetType')}</label>
