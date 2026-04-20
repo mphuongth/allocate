@@ -657,7 +657,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                         <div className="space-y-1 border-t border-red-100 dark:border-red-900/30 pt-2">
                           {rowWithdrawals.map(w => (
                             <div key={w.transaction_id} className="flex items-center justify-between gap-2 text-xs text-red-600 dark:text-red-400">
-                              <span className="min-w-0 truncate">↓ {new Date(w.investment_date).toLocaleDateString('vi-VN')}: {t('withdrawnLabel')} {fmt(w.principal_withdrawn ?? 0)}, {t('amountReceived')}: {fmt(w.amount_vnd)}</span>
+                              <span className="min-w-0 truncate">↓ {new Date(w.investment_date).toLocaleDateString('vi-VN')}: {t('withdrawnLabel')} {fmt(w.principal_withdrawn ?? 0)}, {tt('amountReceived')}: {fmt(w.amount_vnd)}</span>
                               <button onClick={() => handleWithdrawalDelete(w)} className="p-1 shrink-0 rounded-md hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>
                             </div>
                           ))}
@@ -743,7 +743,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                             <tr key={w.transaction_id} className="bg-red-50/40 dark:bg-red-900/10">
                               <td className="pl-8 pr-4 py-2 text-xs text-gray-400 dark:text-gray-500">{new Date(w.investment_date).toLocaleDateString('vi-VN')}</td>
                               <td colSpan={6} className="px-4 py-2 text-xs text-red-600 dark:text-red-400">
-                                ↓ {t('withdrawnLabel')} {fmt(w.principal_withdrawn ?? 0)} · {t('amountReceived')}: {fmt(w.amount_vnd)}{w.notes ? ` · ${w.notes}` : ''}
+                                ↓ {t('withdrawnLabel')} {fmt(w.principal_withdrawn ?? 0)} · {tt('amountReceived')}: {fmt(w.amount_vnd)}{w.notes ? ` · ${w.notes}` : ''}
                               </td>
                               <td className="px-4 py-2">
                                 <button onClick={() => handleWithdrawalDelete(w)} className="p-1 rounded-md text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>
