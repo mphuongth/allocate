@@ -806,13 +806,13 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
             {formError && <p className="text-red-600 dark:text-red-400 text-sm mb-3">{formError}</p>}
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
-                <div>
+                <div className="min-w-0">
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('assetTypeLabel')}</label>
                   <select value={txForm.asset_type} onChange={(e) => setTxForm({ ...txForm, asset_type: e.target.value, fund_id: '' })} className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
                     {[{ v: 'bank', l: t('assetBank') }, { v: 'stock', l: t('assetStock') }, { v: 'gold', l: t('assetGold') }].map((item) => <option key={item.v} value={item.v}>{item.l}</option>)}
                   </select>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('investmentDateLabel')}</label>
                   <input type="date" value={txForm.investment_date} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setTxForm({ ...txForm, investment_date: e.target.value })} className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
