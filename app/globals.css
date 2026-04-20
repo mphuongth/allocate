@@ -145,4 +145,13 @@
   html {
     @apply font-sans;
   }
+  /* In a flex context, date inputs respect flex-1 min-w-0 for sizing.
+     This baseline ensures they never exceed their container in other contexts. */
+  input[type="date"],
+  input[type="datetime-local"],
+  input[type="time"],
+  input[type="month"] {
+    min-width: 0;
+    max-width: 100%;
+  }
 }
