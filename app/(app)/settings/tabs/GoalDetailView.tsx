@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useTranslations } from 'next-intl'
 import { ArrowLeft, Edit, Trash2, Plus, Unlink, TrendingDown } from 'lucide-react'
 import ConfirmModal from '@/app/components/ConfirmModal'
@@ -316,7 +316,14 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
   function openWithdrawOther(row: TxRow) {
     const type = row.asset_type === 'gold' ? 'gold' : 'bank'
     setWithdrawSource({ type, row })
-    setWithdrawForm({ ...emptyWithdrawForm, investment_date: new Date().toISOString().slice(0, 10) })
+    const base = { ...emptyWithdrawForm, investment_date: new Date().toISOString().slice(0, 10) }
+    if (type === 'bank') {
+      const remainingPrincipal = Math.max(0, row.amount_vnd - row.total_principal_withdrawn)
+      const interest = calcProjectedInterest(remainingPrincipal, row.interest_rate, row.investment_date, row.expiry_date)
+      base.principal_withdrawn = String(Math.round(remainingPrincipal))
+      base.amount_vnd = String(Math.round(remainingPrincipal + interest))
+    }
+    setWithdrawForm(base)
     setFormError('')
     setFormMode('withdraw')
   }
@@ -618,6 +625,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                   const remainingPrincipal = row.amount_vnd - row.total_principal_withdrawn
                   const remainingUnits = row.units != null ? row.units - row.total_units_withdrawn : null
                   const isFullyWithdrawn = row.asset_type === 'gold' ? remainingUnits !== null && remainingUnits <= 0 : remainingPrincipal <= 0
+                  const rowWithdrawals = withdrawalRows.filter(w => w.parent_transaction_id === row.transaction_id)
                   return (
                     <div key={row.transaction_id} className="px-4 py-3 space-y-2">
                       <div className="flex items-start justify-between gap-2">
@@ -645,6 +653,16 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                         <div><span className="text-gray-500 dark:text-gray-400">{t('colGainLoss')}: </span><span className={`font-medium ${gain >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt(gain)}</span></div>
                         {row.notes && <div className="col-span-2"><span className="text-gray-500 dark:text-gray-400">{t('colNotes')}: </span><span className="text-gray-700 dark:text-gray-300">{row.notes}</span></div>}
                       </div>
+                      {rowWithdrawals.length > 0 && (
+                        <div className="space-y-1 border-t border-red-100 dark:border-red-900/30 pt-2">
+                          {rowWithdrawals.map(w => (
+                            <div key={w.transaction_id} className="flex items-center justify-between gap-2 text-xs text-red-600 dark:text-red-400">
+                              <span className="min-w-0 truncate">↓ {new Date(w.investment_date).toLocaleDateString('vi-VN')}: {t('withdrawnLabel')} {fmt(w.principal_withdrawn ?? 0)}, {t('amountReceived')}: {fmt(w.amount_vnd)}</span>
+                              <button onClick={() => handleWithdrawalDelete(w)} className="p-1 shrink-0 rounded-md hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                       <div className="flex items-center gap-1 pt-0.5">
                         <button onClick={() => openTxEdit(row)} className="p-1.5 rounded-md text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"><Edit className="h-4 w-4" /></button>
                         {(row.asset_type === 'bank' || row.asset_type === 'gold') && !isFullyWithdrawn && (
@@ -681,44 +699,58 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                       const remainingUnits = row.units != null ? row.units - row.total_units_withdrawn : null
                       const gain = currentValue - remainingPrincipal
                       const isFullyWithdrawn = row.asset_type === 'gold' ? remainingUnits !== null && remainingUnits <= 0 : remainingPrincipal <= 0
+                      const rowWithdrawals = withdrawalRows.filter(w => w.parent_transaction_id === row.transaction_id)
                       return (
-                        <tr key={row.transaction_id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                          <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{new Date(row.investment_date).toLocaleDateString('vi-VN')}</td>
-                          <td className="px-4 py-3">
-                            <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${ASSET_COLORS[row.asset_type] ?? 'bg-gray-100 text-gray-700'}`}>
-                              {tt(`asset${row.asset_type.charAt(0).toUpperCase() + row.asset_type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold') ?? row.asset_type}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="font-medium text-gray-900 dark:text-gray-100">{fmt(row.amount_vnd)}</div>
-                            {row.total_principal_withdrawn > 0 && (
-                              <div className="text-xs text-red-500 dark:text-red-400 mt-0.5">↓ {t('withdrawnLabel')} {fmt(row.total_principal_withdrawn)}</div>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{row.interest_rate != null ? `${row.interest_rate}%` : '—'}</td>
-                          <td className="px-4 py-3 text-sm">
-                            {isFullyWithdrawn
-                              ? <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400">Đã rút hết</span>
-                              : row.asset_type === 'gold' && remainingUnits != null
-                                ? <span className="text-gray-700 dark:text-gray-300">{fmtUnits(remainingUnits)} chi · {fmt(currentValue)}</span>
-                                : <span className="text-gray-700 dark:text-gray-300">{fmt(currentValue)}</span>
-                            }
-                          </td>
-                          <td className={`px-4 py-3 font-medium ${gain >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt(gain)}</td>
-                          <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-500 max-w-32 truncate">{row.notes ?? '—'}</td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-1">
-                              <button onClick={() => openTxEdit(row)} className="p-1.5 rounded-md text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"><Edit className="h-4 w-4" /></button>
-                              {(row.asset_type === 'bank' || row.asset_type === 'gold') && !isFullyWithdrawn && (
-                                <button onClick={() => openWithdrawOther(row)} title={row.asset_type === 'gold' ? t('sell') : t('withdraw')} className="p-1.5 rounded-md text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors">
-                                  <TrendingDown className="h-4 w-4" />
-                                </button>
+                        <React.Fragment key={row.transaction_id}>
+                          <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                            <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{new Date(row.investment_date).toLocaleDateString('vi-VN')}</td>
+                            <td className="px-4 py-3">
+                              <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${ASSET_COLORS[row.asset_type] ?? 'bg-gray-100 text-gray-700'}`}>
+                                {tt(`asset${row.asset_type.charAt(0).toUpperCase() + row.asset_type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold') ?? row.asset_type}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="font-medium text-gray-900 dark:text-gray-100">{fmt(row.amount_vnd)}</div>
+                              {row.total_principal_withdrawn > 0 && (
+                                <div className="text-xs text-red-500 dark:text-red-400 mt-0.5">↓ {t('withdrawnLabel')} {fmt(row.total_principal_withdrawn)}</div>
                               )}
-                              <button onClick={() => handleUnassign(row)} className="p-1.5 rounded-md text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"><Unlink className="h-4 w-4" /></button>
-                              <button onClick={() => handleTxDelete(row)} disabled={deletingId === row.transaction_id} className="p-1.5 rounded-md text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50"><Trash2 className="h-4 w-4" /></button>
-                            </div>
-                          </td>
-                        </tr>
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{row.interest_rate != null ? `${row.interest_rate}%` : '—'}</td>
+                            <td className="px-4 py-3 text-sm">
+                              {isFullyWithdrawn
+                                ? <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400">Đã rút hết</span>
+                                : row.asset_type === 'gold' && remainingUnits != null
+                                  ? <span className="text-gray-700 dark:text-gray-300">{fmtUnits(remainingUnits)} chi · {fmt(currentValue)}</span>
+                                  : <span className="text-gray-700 dark:text-gray-300">{fmt(currentValue)}</span>
+                              }
+                            </td>
+                            <td className={`px-4 py-3 font-medium ${gain >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt(gain)}</td>
+                            <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-500 max-w-32 truncate">{row.notes ?? '—'}</td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-1">
+                                <button onClick={() => openTxEdit(row)} className="p-1.5 rounded-md text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"><Edit className="h-4 w-4" /></button>
+                                {(row.asset_type === 'bank' || row.asset_type === 'gold') && !isFullyWithdrawn && (
+                                  <button onClick={() => openWithdrawOther(row)} title={row.asset_type === 'gold' ? t('sell') : t('withdraw')} className="p-1.5 rounded-md text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors">
+                                    <TrendingDown className="h-4 w-4" />
+                                  </button>
+                                )}
+                                <button onClick={() => handleUnassign(row)} className="p-1.5 rounded-md text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"><Unlink className="h-4 w-4" /></button>
+                                <button onClick={() => handleTxDelete(row)} disabled={deletingId === row.transaction_id} className="p-1.5 rounded-md text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50"><Trash2 className="h-4 w-4" /></button>
+                              </div>
+                            </td>
+                          </tr>
+                          {rowWithdrawals.map(w => (
+                            <tr key={w.transaction_id} className="bg-red-50/40 dark:bg-red-900/10">
+                              <td className="pl-8 pr-4 py-2 text-xs text-gray-400 dark:text-gray-500">{new Date(w.investment_date).toLocaleDateString('vi-VN')}</td>
+                              <td colSpan={6} className="px-4 py-2 text-xs text-red-600 dark:text-red-400">
+                                ↓ {t('withdrawnLabel')} {fmt(w.principal_withdrawn ?? 0)} · {t('amountReceived')}: {fmt(w.amount_vnd)}{w.notes ? ` · ${w.notes}` : ''}
+                              </td>
+                              <td className="px-4 py-2">
+                                <button onClick={() => handleWithdrawalDelete(w)} className="p-1 rounded-md text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>
+                              </td>
+                            </tr>
+                          ))}
+                        </React.Fragment>
                       )
                     })}
                   </tbody>
