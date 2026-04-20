@@ -347,7 +347,7 @@ export default function InvestmentTransactionsTab() {
       </div>
 
       {/* Filters */}
-      <div className="bg-white dark:bg-gray-900 rounded-xl border border-black/10 dark:border-gray-700 p-4 overflow-hidden">
+      <div className="bg-white dark:bg-gray-900 rounded-xl border border-black/10 dark:border-gray-700 p-4">
         <div className="grid gap-4 grid-cols-1 md:grid-cols-4">
           <div className="min-w-0">
             <label className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2 block">{t('filterAssetType')}</label>
@@ -380,13 +380,17 @@ export default function InvestmentTransactionsTab() {
           </div>
           <div className="min-w-0">
             <label className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2 block">{t('filterFrom')}</label>
-            <input type="date" value={dateFrom} onChange={(e) => setDateFilter('from_date', e.target.value, setDateFrom)}
-              className="w-full border border-black/10 dark:border-gray-600 rounded-lg px-3 py-2 text-sm font-medium bg-[#f3f3f5] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            <div className="flex">
+              <input type="date" value={dateFrom} onChange={(e) => setDateFilter('from_date', e.target.value, setDateFrom)}
+                className="flex-1 min-w-0 border border-black/10 dark:border-gray-600 rounded-lg px-3 py-2 text-sm font-medium bg-[#f3f3f5] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            </div>
           </div>
           <div className="min-w-0">
             <label className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2 block">{t('filterTo')}</label>
-            <input type="date" value={dateTo} onChange={(e) => setDateFilter('to_date', e.target.value, setDateTo)}
-              className="w-full border border-black/10 dark:border-gray-600 rounded-lg px-3 py-2 text-sm font-medium bg-[#f3f3f5] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            <div className="flex">
+              <input type="date" value={dateTo} onChange={(e) => setDateFilter('to_date', e.target.value, setDateTo)}
+                className="flex-1 min-w-0 border border-black/10 dark:border-gray-600 rounded-lg px-3 py-2 text-sm font-medium bg-[#f3f3f5] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            </div>
           </div>
         </div>
         <div className="flex justify-end mt-4">
