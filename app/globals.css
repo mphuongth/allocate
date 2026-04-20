@@ -145,4 +145,12 @@
   html {
     @apply font-sans;
   }
+  /* Prevent native date/time inputs from overflowing their grid/flex containers
+     on iOS 26+ where the UA stylesheet sets a large intrinsic min-width. */
+  input[type="date"],
+  input[type="datetime-local"],
+  input[type="time"],
+  input[type="month"] {
+    min-width: 0;
+  }
 }
