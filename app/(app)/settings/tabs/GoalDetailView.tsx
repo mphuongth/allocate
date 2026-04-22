@@ -116,6 +116,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
   const [editGoalSaving, setEditGoalSaving] = useState(false)
 
   const [activeDetailTab, setActiveDetailTab] = useState<'fund' | 'other'>('fund')
+  const [monthlySavings, setMonthlySavings] = useState('')
   const [formMode, setFormMode] = useState<'tx-add' | 'tx-edit' | 'fi-add' | 'fi-edit' | 'withdraw' | null>(null)
   const [editTx, setEditTx] = useState<TxRow | null>(null)
   const [txForm, setTxForm] = useState(emptyTxForm)
@@ -491,6 +492,47 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
           <p className={`text-2xl font-bold ${totalGain >= 0 ? 'text-green-900 dark:text-green-200' : 'text-red-900 dark:text-red-200'}`}>{fmt(totalGain)}</p>
         </div>
       </div>
+
+      {/* Savings Calculator */}
+      {currentGoal.target_amount != null && (() => {
+        const remaining = Math.max(0, currentGoal.target_amount - totalCurrentValue)
+        const monthly = Number(monthlySavings.replace(/[^0-9]/g, ''))
+        const totalMonths = monthly > 0 ? Math.ceil(remaining / monthly) : null
+        const yrs = totalMonths !== null ? Math.floor(totalMonths / 12) : null
+        const mos = totalMonths !== null ? totalMonths % 12 : null
+        return (
+          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 mb-6">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-3">{t('calculator')}</p>
+            <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+              <div className="flex-1">
+                <label className="text-sm font-medium text-gray-600 dark:text-gray-400 block mb-1">{t('calculatorMonthlySavingsLabel')}</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={monthlySavings}
+                  onChange={(e) => setMonthlySavings(e.target.value.replace(/[^0-9]/g, ''))}
+                  placeholder={t('calculatorMonthlySavingsPlaceholder')}
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              <div className="sm:pb-[1px] min-w-[180px]">
+                {remaining <= 0 ? (
+                  <p className="text-sm font-semibold text-green-600 dark:text-green-400">{t('goalReached')}</p>
+                ) : totalMonths !== null ? (
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-0.5">{t('calculatorResult')}</p>
+                    <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                      {yrs && yrs > 0 ? `${t('calculatorYears', { n: yrs })} ` : ''}{mos && mos > 0 ? t('calculatorMonths', { n: mos }) : yrs ? '' : t('calculatorMonths', { n: totalMonths })}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-400 dark:text-gray-500">{t('calculatorHint')}</p>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Tab switcher */}
       <div className="inline-flex h-9 items-center bg-[#ececf0] dark:bg-gray-800 rounded-xl p-[3px] mb-4">
