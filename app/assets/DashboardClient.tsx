@@ -86,12 +86,13 @@ export interface DashboardData {
   insurance: InsuranceData[]
 }
 
-const OVERVIEW_CACHE_KEY = 'dashboardOverviewCache'
 const OVERVIEW_CACHE_TTL = 2 * 60 * 1000 // 2 minutes
 
-function getCachedOverview(): DashboardData | null {
+function overviewCacheKey(userId: string) { return `dashboardOverviewCache_${userId}` }
+
+function getCachedOverview(userId: string): DashboardData | null {
   try {
-    const raw = localStorage.getItem(OVERVIEW_CACHE_KEY)
+    const raw = localStorage.getItem(overviewCacheKey(userId))
     if (!raw) return null
     const { data, ts } = JSON.parse(raw)
     if (Date.now() - ts > OVERVIEW_CACHE_TTL) return null
@@ -99,14 +100,14 @@ function getCachedOverview(): DashboardData | null {
   } catch { return null }
 }
 
-function setCachedOverview(data: DashboardData) {
-  try { localStorage.setItem(OVERVIEW_CACHE_KEY, JSON.stringify({ data, ts: Date.now() })) } catch { /* ignore */ }
+function setCachedOverview(userId: string, data: DashboardData) {
+  try { localStorage.setItem(overviewCacheKey(userId), JSON.stringify({ data, ts: Date.now() })) } catch { /* ignore */ }
 }
 
 // Fetch fund detail (purchase history) from investment_transactions
 interface PurchaseHistory { purchase_date: string; units: number; nav_at_purchase: number }
 
-export default function DashboardClient() {
+export default function DashboardClient({ userId }: { userId: string }) {
   const t = useTranslations('dashboard')
   const tc = useTranslations('common')
   const tt = useTranslations('transactions')
@@ -143,7 +144,7 @@ export default function DashboardClient() {
   const [nfError, setNfError] = useState('')
 
   const fetchData = useCallback(async (opts?: { force?: boolean }) => {
-    const cached = !opts?.force && getCachedOverview()
+    const cached = !opts?.force && getCachedOverview(userId)
     if (cached) {
       setData(cached)
       setLoading(false)
@@ -159,7 +160,7 @@ export default function DashboardClient() {
       } else {
         const json = await res.json()
         setData(json)
-        setCachedOverview(json)
+        setCachedOverview(userId, json)
       }
     } catch {
       setError(tc('error'))

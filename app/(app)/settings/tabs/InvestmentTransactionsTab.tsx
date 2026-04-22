@@ -236,6 +236,14 @@ export default function InvestmentTransactionsTab() {
     setFormMode('edit')
   }
 
+  function bustDashboardCache() {
+    try {
+      Object.keys(localStorage)
+        .filter(k => k.startsWith('dashboardOverviewCache'))
+        .forEach(k => localStorage.removeItem(k))
+    } catch {}
+  }
+
   async function handleSave() {
     setFormError('')
     if (!txForm.amount_vnd || Number(txForm.amount_vnd) <= 0) { setFormError(t('amountRequired')); return }
@@ -267,6 +275,7 @@ export default function InvestmentTransactionsTab() {
       const { error } = await res.json()
       setFormError(error ?? tc('error'))
     } else {
+      bustDashboardCache()
       setFormMode(null)
       await fetchTransactions()
     }
@@ -298,6 +307,7 @@ export default function InvestmentTransactionsTab() {
     setImporting(false)
     if (res.ok) {
       const { inserted } = await res.json()
+      bustDashboardCache()
       setShowImport(false)
       setImportRaw('')
       setImportRows([])
@@ -312,6 +322,7 @@ export default function InvestmentTransactionsTab() {
     setDeletingId(tx.transaction_id)
     const res = await fetch(`/api/v1/investment-transactions/${tx.transaction_id}`, { method: 'DELETE' })
     if (res.ok) {
+      bustDashboardCache()
       setConfirmTx(null)
       await fetchTransactions()
     }
