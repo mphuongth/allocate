@@ -170,6 +170,12 @@ export default function DashboardClient({ userId }: { userId: string }) {
 
   useEffect(() => { fetchData() }, [fetchData])
 
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') fetchData({ force: true }) }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [fetchData])
+
   async function handleFundClick(fundId: string) {
     setFundDetailId(fundId)
     // Fetch purchase history for this fund
