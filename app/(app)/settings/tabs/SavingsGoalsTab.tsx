@@ -46,7 +46,11 @@ function setGoalsCache(data: GoalWithStats[]) {
 }
 function bustGoalsCache() {
   try { localStorage.removeItem(GOALS_CACHE_KEY) } catch {}
-  try { localStorage.removeItem('dashboardOverviewCache') } catch {}
+  try {
+    Object.keys(localStorage)
+      .filter(k => k.startsWith('dashboardOverviewCache'))
+      .forEach(k => localStorage.removeItem(k))
+  } catch {}
 }
 
 export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) {
