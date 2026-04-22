@@ -219,7 +219,7 @@ export default function FundInvestmentsSection({ plan, investments, funds, goals
               </div>
               <div className="space-y-2">
                 <Label>{t('amountLabel')} <span className="text-red-500">*</span></Label>
-                <Input type="number" value={form.amount_vnd} onChange={(e) => setForm({ ...form, amount_vnd: e.target.value })} />
+                <Input type="text" inputMode="numeric" value={form.amount_vnd ? Number(form.amount_vnd).toLocaleString('vi-VN') : ''} onChange={(e) => setForm({ ...form, amount_vnd: e.target.value.replace(/\./g, '').replace(/[^0-9]/g, '') })} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">

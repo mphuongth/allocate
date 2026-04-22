@@ -233,7 +233,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
   async function handleSellFundSubmit() {
     if (!sellFund) return
     const units = parseFloat(sellUnits)
-    const amount = parseFloat(sellAmount.replace(/,/g, ''))
+    const amount = Number(sellAmount)
     if (!sellDate) { setSellError('Date is required'); return }
     if (!units || units <= 0) { setSellError('Units must be greater than 0'); return }
     if (units > sellFund.quantity) { setSellError('Units exceed available balance'); return }
@@ -653,7 +653,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
               </div>
               <div className="space-y-2">
                 <Label>{tg('targetLabel')}</Label>
-                <Input type="number" value={goalTarget} onChange={(e) => setGoalTarget(e.target.value)} placeholder={tg('targetPlaceholder')} />
+                <Input type="text" inputMode="numeric" value={goalTarget ? Number(goalTarget).toLocaleString('vi-VN') : ''} onChange={(e) => setGoalTarget(e.target.value.replace(/\./g, '').replace(/[^0-9]/g, ''))} placeholder={tg('targetPlaceholder')} />
               </div>
               <div className="space-y-2">
                 <Label>{tg('descLabel')}</Label>
@@ -683,7 +683,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
             const avgCost = sellFund.purchasePrice
             const costBasis = Math.round(units * avgCost)
             const estimatedAmount = Math.round(units * nav)
-            const parsedAmount = parseFloat(sellAmount.replace(/,/g, '')) || 0
+            const parsedAmount = Number(sellAmount) || 0
             const gain = parsedAmount - costBasis
             const remaining = sellFund.quantity - units
             const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
@@ -729,14 +729,14 @@ export default function DashboardClient({ userId }: { userId: string }) {
                 <div className="space-y-2">
                   <Label>{tg('amountReceivedLabel')}</Label>
                   <Input
-                    type="number"
-                    value={sellAmount}
-                    min={0}
-                    step="1000"
+                    type="text"
+                    inputMode="numeric"
+                    value={sellAmount ? Number(sellAmount).toLocaleString('vi-VN') : ''}
                     placeholder="0"
                     onChange={(e) => {
-                      setSellAmount(e.target.value)
-                      const a = parseFloat(e.target.value) || 0
+                      const raw = e.target.value.replace(/\./g, '').replace(/[^0-9]/g, '')
+                      setSellAmount(raw)
+                      const a = Number(raw) || 0
                       if (a > 0 && nav > 0) setSellUnits(String(Math.round((a / nav) * 100) / 100))
                     }}
                   />
@@ -853,23 +853,21 @@ export default function DashboardClient({ userId }: { userId: string }) {
                     <div className="space-y-2">
                       <Label>{tg('principalWithdrawnLabel')}</Label>
                       <Input
-                        type="number"
-                        value={nfPrincipal}
-                        min={0}
-                        step="1000"
+                        type="text"
+                        inputMode="numeric"
+                        value={nfPrincipal ? Number(nfPrincipal).toLocaleString('vi-VN') : ''}
                         placeholder={tg('principalWithdrawnPlaceholder')}
-                        onChange={(e) => setNfPrincipal(e.target.value)}
+                        onChange={(e) => setNfPrincipal(e.target.value.replace(/\./g, '').replace(/[^0-9]/g, ''))}
                       />
                     </div>
                     <div className="space-y-2">
                       <Label>{tg('amountReceivedLabel')}</Label>
                       <Input
-                        type="number"
-                        value={nfAmount}
-                        min={0}
-                        step="1000"
+                        type="text"
+                        inputMode="numeric"
+                        value={nfAmount ? Number(nfAmount).toLocaleString('vi-VN') : ''}
                         placeholder={tg('amountReceivedPlaceholder')}
-                        onChange={(e) => setNfAmount(e.target.value)}
+                        onChange={(e) => setNfAmount(e.target.value.replace(/\./g, '').replace(/[^0-9]/g, ''))}
                       />
                     </div>
                     {nfPrincipalNum > 0 && nfAmountNum > 0 && (
@@ -908,14 +906,14 @@ export default function DashboardClient({ userId }: { userId: string }) {
                     <div className="space-y-2">
                       <Label>{tg('amountReceivedLabel')}</Label>
                       <Input
-                        type="number"
-                        value={nfAmount}
-                        min={0}
-                        step="1000"
+                        type="text"
+                        inputMode="numeric"
+                        value={nfAmount ? Number(nfAmount).toLocaleString('vi-VN') : ''}
                         placeholder="0"
                         onChange={(e) => {
-                          setNfAmount(e.target.value)
-                          const a = parseFloat(e.target.value) || 0
+                          const raw = e.target.value.replace(/\./g, '').replace(/[^0-9]/g, '')
+                          setNfAmount(raw)
+                          const a = Number(raw) || 0
                           if (a > 0 && currentPricePerUnit > 0) setNfUnits(String(Math.round((a / currentPricePerUnit) * 100) / 100))
                         }}
                       />

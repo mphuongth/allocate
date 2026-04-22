@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslations } from 'next-intl'
 import { Plus, FileSpreadsheet, Edit, Trash2, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
 import ConfirmModal from '@/app/components/ConfirmModal'
+import AmountInput from '@/app/components/ui/AmountInput'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -791,12 +792,12 @@ export default function InvestmentTransactionsTab() {
               {/* Amount */}
               <div className="space-y-2">
                 <Label htmlFor="amount_vnd">{t('colAmount')} <span className="text-red-500">*</span></Label>
-                <Input
+                <AmountInput
                   id="amount_vnd"
-                  type="number"
                   value={txForm.amount_vnd}
-                  onChange={(e) => setTxForm((f) => ({ ...f, amount_vnd: e.target.value }))}
-                  placeholder="e.g., 10000000"
+                  onChange={(raw) => setTxForm((f) => ({ ...f, amount_vnd: raw }))}
+                  placeholder="VD: 10.000.000"
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
                 />
               </div>
 

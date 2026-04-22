@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { useTranslations } from 'next-intl'
 import { ArrowLeft, Edit, Trash2, Plus, Unlink, TrendingDown } from 'lucide-react'
 import ConfirmModal from '@/app/components/ConfirmModal'
+import AmountInput from '@/app/components/ui/AmountInput'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 interface Goal {
@@ -506,11 +507,9 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
             <div className="flex flex-col sm:flex-row sm:items-end gap-3">
               <div className="flex-1">
                 <label className="text-sm font-medium text-gray-600 dark:text-gray-400 block mb-1">{t('calculatorMonthlySavingsLabel')}</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
+                <AmountInput
                   value={monthlySavings}
-                  onChange={(e) => setMonthlySavings(e.target.value.replace(/[^0-9]/g, ''))}
+                  onChange={setMonthlySavings}
                   placeholder={t('calculatorMonthlySavingsPlaceholder')}
                   className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
@@ -816,7 +815,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('targetLabel')}</label>
-                <input type="number" value={editGoalTarget} onChange={(e) => setEditGoalTarget(e.target.value)} placeholder={t('targetOptional')} className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                <AmountInput value={editGoalTarget} onChange={setEditGoalTarget} placeholder={t('targetOptional')} className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('descLabel')}</label>
@@ -851,7 +850,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('amountVndLabel')}</label>
-                <input type="number" value={fiForm.amount_vnd} onChange={(e) => setFiForm({ ...fiForm, amount_vnd: e.target.value })} placeholder="VD: 10000000" className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                <AmountInput value={fiForm.amount_vnd} onChange={(raw) => setFiForm({ ...fiForm, amount_vnd: raw })} placeholder="VD: 10.000.000" className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -893,7 +892,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('amountVndLabel')}</label>
-                <input type="number" value={txForm.amount_vnd} onChange={(e) => setTxForm({ ...txForm, amount_vnd: e.target.value })} placeholder="VD: 10000000" className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                <AmountInput value={txForm.amount_vnd} onChange={(raw) => setTxForm({ ...txForm, amount_vnd: raw })} placeholder="VD: 10.000.000" className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -960,11 +959,11 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
               <>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('principalWithdrawnLabel')}</label>
-                  <input type="number" value={withdrawForm.principal_withdrawn} onChange={(e) => setWithdrawForm({ ...withdrawForm, principal_withdrawn: e.target.value })} placeholder={t('principalWithdrawnPlaceholder')} className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  <AmountInput value={withdrawForm.principal_withdrawn} onChange={(raw) => setWithdrawForm({ ...withdrawForm, principal_withdrawn: raw })} placeholder={t('principalWithdrawnPlaceholder')} className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('amountReceivedLabel')}</label>
-                  <input type="number" value={withdrawForm.amount_vnd} onChange={(e) => setWithdrawForm({ ...withdrawForm, amount_vnd: e.target.value })} placeholder={t('amountReceivedPlaceholder')} className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  <AmountInput value={withdrawForm.amount_vnd} onChange={(raw) => setWithdrawForm({ ...withdrawForm, amount_vnd: raw })} placeholder={t('amountReceivedPlaceholder')} className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
               </>
             )}
@@ -987,14 +986,12 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('amountReceivedLabel')}</label>
-                  <input
-                    type="number"
+                  <AmountInput
                     value={withdrawForm.amount_vnd}
-                    onChange={(e) => {
-                      const a = e.target.value
-                      const aNum = Number(a) || 0
+                    onChange={(raw) => {
+                      const aNum = Number(raw) || 0
                       const price = wType === 'fund' ? (wGroup?.current_nav ?? 0) : (goldPrice ?? 0)
-                      setWithdrawForm({ ...withdrawForm, amount_vnd: a, units_withdrawn: aNum > 0 && price > 0 ? String(+(aNum / price).toFixed(4)) : withdrawForm.units_withdrawn })
+                      setWithdrawForm({ ...withdrawForm, amount_vnd: raw, units_withdrawn: aNum > 0 && price > 0 ? String(+(aNum / price).toFixed(4)) : withdrawForm.units_withdrawn })
                     }}
                     className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
