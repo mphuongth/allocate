@@ -161,7 +161,14 @@
     "perYearShort": "%/yr",
     "remainingValueLabel": "Remaining value",
     "remainingChiLabel": "Remaining chi",
-    "principalLabel": "Principal"
+    "principalLabel": "Principal",
+    "calculator": "Savings Calculator",
+    "calculatorMonthlySavingsLabel": "Monthly savings (VND)",
+    "calculatorMonthlySavingsPlaceholder": "e.g. 5,000,000",
+    "calculatorHint": "Enter an amount to see how long it will take",
+    "calculatorYears": "{n, plural, one {# year} other {# years}}",
+    "calculatorMonths": "{n, plural, one {# month} other {# months}}",
+    "calculatorResult": "Estimated time to goal:"
   },
   "transactions": {
     "title": "Investment Transactions",
