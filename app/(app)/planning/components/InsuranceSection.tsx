@@ -173,7 +173,7 @@ export default function InsuranceSection({ plan, insuranceMembers, onRefresh, on
               <div className="space-y-2">
                 <Label>{t('overrideLabel')}</Label>
                 <div className="flex gap-2">
-                  <Input type="number" value={overrideValue} onChange={(e) => setOverrideValue(e.target.value)} />
+                  <Input type="text" inputMode="numeric" value={overrideValue ? Number(overrideValue).toLocaleString('en-US') : ''} onChange={(e) => setOverrideValue(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))} />
                   {editItem && (
                     <Button
                       type="button"

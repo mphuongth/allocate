@@ -4,6 +4,7 @@ import { useState, useRef } from 'react'
 import { useTranslations } from 'next-intl'
 import { AlertTriangle } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import AmountInput from '@/app/components/ui/AmountInput'
 import { Button } from '@/components/ui/button'
 import type { MonthlyPlan } from '../PlanningClient'
 
@@ -116,10 +117,9 @@ export default function SalaryInput({ plan, month, year, onPlanCreated, onPlanDe
         </div>
         {error && <p className="text-red-600 dark:text-red-400 text-sm mb-2">{error}</p>}
         <div className="flex items-center gap-3">
-          <input
-            type="number"
+          <AmountInput
             value={value}
-            onChange={(e) => setValue(e.target.value)}
+            onChange={setValue}
             onBlur={saveSalary}
             onKeyDown={handleKeyDown}
             disabled={saving}

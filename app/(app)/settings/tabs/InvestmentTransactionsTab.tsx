@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslations } from 'next-intl'
 import { Plus, FileSpreadsheet, Edit, Trash2, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
 import ConfirmModal from '@/app/components/ConfirmModal'
+import AmountInput from '@/app/components/ui/AmountInput'
+import DecimalInput from '@/app/components/ui/DecimalInput'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -791,12 +793,12 @@ export default function InvestmentTransactionsTab() {
               {/* Amount */}
               <div className="space-y-2">
                 <Label htmlFor="amount_vnd">{t('colAmount')} <span className="text-red-500">*</span></Label>
-                <Input
+                <AmountInput
                   id="amount_vnd"
-                  type="number"
                   value={txForm.amount_vnd}
-                  onChange={(e) => setTxForm((f) => ({ ...f, amount_vnd: e.target.value }))}
-                  placeholder="e.g., 10000000"
+                  onChange={(raw) => setTxForm((f) => ({ ...f, amount_vnd: raw }))}
+                  placeholder="e.g. 10,000,000"
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
                 />
               </div>
 
@@ -805,24 +807,22 @@ export default function InvestmentTransactionsTab() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="unit_price">{t('navAtBuy')} <span className="text-red-500">*</span></Label>
-                    <Input
+                    <DecimalInput
                       id="unit_price"
-                      type="number"
-                      step="0.01"
-                      placeholder="e.g., 22215.12"
+                      placeholder="e.g., 22,215.12"
                       value={txForm.unit_price}
-                      onChange={(e) => setTxForm((f) => ({ ...f, unit_price: e.target.value }))}
+                      onChange={(v) => setTxForm((f) => ({ ...f, unit_price: v }))}
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring md:text-sm"
                     />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="units">{t('unitsFund')} <span className="text-red-500">*</span></Label>
-                    <Input
+                    <DecimalInput
                       id="units"
-                      type="number"
-                      step="0.01"
                       placeholder="e.g., 450.25"
                       value={txForm.units}
-                      onChange={(e) => setTxForm((f) => ({ ...f, units: e.target.value }))}
+                      onChange={(v) => setTxForm((f) => ({ ...f, units: v }))}
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring md:text-sm"
                     />
                   </div>
                 </div>
@@ -833,24 +833,22 @@ export default function InvestmentTransactionsTab() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="unit_price">{t('unitPrice')} <span className="text-red-500">*</span></Label>
-                    <Input
+                    <DecimalInput
                       id="unit_price"
-                      type="number"
-                      step="0.01"
                       value={txForm.unit_price}
-                      onChange={(e) => setTxForm((f) => ({ ...f, unit_price: e.target.value }))}
+                      onChange={(v) => setTxForm((f) => ({ ...f, unit_price: v }))}
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring md:text-sm"
                     />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="units">
                       {txForm.asset_type === 'stock' ? t('unitsStock') : txForm.asset_type === 'gold' ? t('unitsGold') : t('unitsDefault')} <span className="text-red-500">*</span>
                     </Label>
-                    <Input
+                    <DecimalInput
                       id="units"
-                      type="number"
-                      step="0.01"
                       value={txForm.units}
-                      onChange={(e) => setTxForm((f) => ({ ...f, units: e.target.value }))}
+                      onChange={(v) => setTxForm((f) => ({ ...f, units: v }))}
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring md:text-sm"
                     />
                   </div>
                 </div>
