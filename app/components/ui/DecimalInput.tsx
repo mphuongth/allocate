@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React from 'react'
 
 interface Props extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'type'> {
   value: string
@@ -21,23 +21,12 @@ function formatDisplay(raw: string): string {
   return formattedInt + decPart
 }
 
-export default function DecimalInput({ value, onChange, onBlur, ...props }: Props) {
-  const [focused, setFocused] = useState(false)
-
-  // While focused: show raw value so cursor stays stable; on blur: show formatted
-  const display = focused ? value : formatDisplay(value)
-
+export default function DecimalInput({ value, onChange, ...props }: Props) {
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const cleaned = e.target.value.replace(/,/g, '').replace(/[^0-9.]/g, '')
-    // prevent multiple dots
     const parts = cleaned.split('.')
     const normalized = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : cleaned
     onChange(normalized)
-  }
-
-  function handleBlur(e: React.FocusEvent<HTMLInputElement>) {
-    setFocused(false)
-    if (onBlur) onBlur(e)
   }
 
   return (
@@ -45,10 +34,8 @@ export default function DecimalInput({ value, onChange, onBlur, ...props }: Prop
       {...props}
       type="text"
       inputMode="decimal"
-      value={display}
+      value={formatDisplay(value)}
       onChange={handleChange}
-      onFocus={() => setFocused(true)}
-      onBlur={handleBlur}
     />
   )
 }
