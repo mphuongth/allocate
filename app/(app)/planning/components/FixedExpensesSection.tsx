@@ -174,7 +174,7 @@ export default function FixedExpensesSection({ plan, fixedExpenses, onRefresh, o
               <div className="space-y-2">
                 <Label>{t('overrideLabel')}</Label>
                 <div className="flex gap-2">
-                  <Input type="text" inputMode="numeric" value={overrideValue ? Number(overrideValue).toLocaleString('vi-VN') : ''} onChange={(e) => setOverrideValue(e.target.value.replace(/\./g, '').replace(/[^0-9]/g, ''))} />
+                  <Input type="text" inputMode="numeric" value={overrideValue ? Number(overrideValue).toLocaleString('en-US') : ''} onChange={(e) => setOverrideValue(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))} />
                   {editItem && (
                     <Button
                       type="button"

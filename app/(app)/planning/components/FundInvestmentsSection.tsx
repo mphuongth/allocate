@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import DecimalInput from '@/app/components/ui/DecimalInput'
 import type { MonthlyPlan, FundInvestment, Fund, Goal } from '../PlanningClient'
 
 interface Props {
@@ -219,16 +220,16 @@ export default function FundInvestmentsSection({ plan, investments, funds, goals
               </div>
               <div className="space-y-2">
                 <Label>{t('amountLabel')} <span className="text-red-500">*</span></Label>
-                <Input type="text" inputMode="numeric" value={form.amount_vnd ? Number(form.amount_vnd).toLocaleString('vi-VN') : ''} onChange={(e) => setForm({ ...form, amount_vnd: e.target.value.replace(/\./g, '').replace(/[^0-9]/g, '') })} />
+                <Input type="text" inputMode="numeric" value={form.amount_vnd ? Number(form.amount_vnd).toLocaleString('en-US') : ''} onChange={(e) => setForm({ ...form, amount_vnd: e.target.value.replace(/,/g, '').replace(/[^0-9]/g, '') })} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>{t('unitsLabel')} <span className="text-red-500">*</span></Label>
-                  <Input type="number" step="0.0001" placeholder="e.g., 450.25" value={form.units} onChange={(e) => setForm({ ...form, units: e.target.value })} />
+                  <DecimalInput placeholder="e.g., 450.25" value={form.units} onChange={(v) => setForm({ ...form, units: v })} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring md:text-sm" />
                 </div>
                 <div className="space-y-2">
                   <Label>{t('navAtPurchaseLabel')} <span className="text-red-500">*</span></Label>
-                  <Input type="number" step="0.0001" placeholder="e.g., 22215.12" value={form.unit_price} onChange={(e) => setForm({ ...form, unit_price: e.target.value })} />
+                  <DecimalInput placeholder="e.g., 22,215.12" value={form.unit_price} onChange={(v) => setForm({ ...form, unit_price: v })} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring md:text-sm" />
                 </div>
               </div>
             </div>

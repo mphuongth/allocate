@@ -653,7 +653,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
               </div>
               <div className="space-y-2">
                 <Label>{tg('targetLabel')}</Label>
-                <Input type="text" inputMode="numeric" value={goalTarget ? Number(goalTarget).toLocaleString('vi-VN') : ''} onChange={(e) => setGoalTarget(e.target.value.replace(/\./g, '').replace(/[^0-9]/g, ''))} placeholder={tg('targetPlaceholder')} />
+                <Input type="text" inputMode="numeric" value={goalTarget ? Number(goalTarget).toLocaleString('en-US') : ''} onChange={(e) => setGoalTarget(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))} placeholder={tg('targetPlaceholder')} />
               </div>
               <div className="space-y-2">
                 <Label>{tg('descLabel')}</Label>
@@ -731,10 +731,10 @@ export default function DashboardClient({ userId }: { userId: string }) {
                   <Input
                     type="text"
                     inputMode="numeric"
-                    value={sellAmount ? Number(sellAmount).toLocaleString('vi-VN') : ''}
+                    value={sellAmount ? Number(sellAmount).toLocaleString('en-US') : ''}
                     placeholder="0"
                     onChange={(e) => {
-                      const raw = e.target.value.replace(/\./g, '').replace(/[^0-9]/g, '')
+                      const raw = e.target.value.replace(/,/g, '').replace(/[^0-9]/g, '')
                       setSellAmount(raw)
                       const a = Number(raw) || 0
                       if (a > 0 && nav > 0) setSellUnits(String(Math.round((a / nav) * 100) / 100))
@@ -855,9 +855,9 @@ export default function DashboardClient({ userId }: { userId: string }) {
                       <Input
                         type="text"
                         inputMode="numeric"
-                        value={nfPrincipal ? Number(nfPrincipal).toLocaleString('vi-VN') : ''}
+                        value={nfPrincipal ? Number(nfPrincipal).toLocaleString('en-US') : ''}
                         placeholder={tg('principalWithdrawnPlaceholder')}
-                        onChange={(e) => setNfPrincipal(e.target.value.replace(/\./g, '').replace(/[^0-9]/g, ''))}
+                        onChange={(e) => setNfPrincipal(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))}
                       />
                     </div>
                     <div className="space-y-2">
@@ -865,9 +865,9 @@ export default function DashboardClient({ userId }: { userId: string }) {
                       <Input
                         type="text"
                         inputMode="numeric"
-                        value={nfAmount ? Number(nfAmount).toLocaleString('vi-VN') : ''}
+                        value={nfAmount ? Number(nfAmount).toLocaleString('en-US') : ''}
                         placeholder={tg('amountReceivedPlaceholder')}
-                        onChange={(e) => setNfAmount(e.target.value.replace(/\./g, '').replace(/[^0-9]/g, ''))}
+                        onChange={(e) => setNfAmount(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))}
                       />
                     </div>
                     {nfPrincipalNum > 0 && nfAmountNum > 0 && (
@@ -908,10 +908,10 @@ export default function DashboardClient({ userId }: { userId: string }) {
                       <Input
                         type="text"
                         inputMode="numeric"
-                        value={nfAmount ? Number(nfAmount).toLocaleString('vi-VN') : ''}
+                        value={nfAmount ? Number(nfAmount).toLocaleString('en-US') : ''}
                         placeholder="0"
                         onChange={(e) => {
-                          const raw = e.target.value.replace(/\./g, '').replace(/[^0-9]/g, '')
+                          const raw = e.target.value.replace(/,/g, '').replace(/[^0-9]/g, '')
                           setNfAmount(raw)
                           const a = Number(raw) || 0
                           if (a > 0 && currentPricePerUnit > 0) setNfUnits(String(Math.round((a / currentPricePerUnit) * 100) / 100))

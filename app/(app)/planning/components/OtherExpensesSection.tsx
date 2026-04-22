@@ -155,9 +155,9 @@ export default function OtherExpensesSection({ plan, otherExpenses, onRefresh, o
                 <Input
                   type="text"
                   inputMode="numeric"
-                  value={form.amount_vnd ? Number(form.amount_vnd).toLocaleString('vi-VN') : ''}
-                  onChange={(e) => setForm({ ...form, amount_vnd: e.target.value.replace(/\./g, '').replace(/[^0-9]/g, '') })}
-                  placeholder="VD: 15.000.000"
+                  value={form.amount_vnd ? Number(form.amount_vnd).toLocaleString('en-US') : ''}
+                  onChange={(e) => setForm({ ...form, amount_vnd: e.target.value.replace(/,/g, '').replace(/[^0-9]/g, '') })}
+                  placeholder="e.g. 15,000,000"
                 />
               </div>
             </div>

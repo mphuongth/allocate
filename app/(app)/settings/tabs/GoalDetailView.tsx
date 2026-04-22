@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl'
 import { ArrowLeft, Edit, Trash2, Plus, Unlink, TrendingDown } from 'lucide-react'
 import ConfirmModal from '@/app/components/ConfirmModal'
 import AmountInput from '@/app/components/ui/AmountInput'
+import DecimalInput from '@/app/components/ui/DecimalInput'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 interface Goal {
@@ -850,16 +851,16 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('amountVndLabel')}</label>
-                <AmountInput value={fiForm.amount_vnd} onChange={(raw) => setFiForm({ ...fiForm, amount_vnd: raw })} placeholder="VD: 10.000.000" className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                <AmountInput value={fiForm.amount_vnd} onChange={(raw) => setFiForm({ ...fiForm, amount_vnd: raw })} placeholder="e.g. 10,000,000" className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('fiUnitsLabel')}</label>
-                  <input type="number" value={fiForm.units} onChange={(e) => setFiForm({ ...fiForm, units: e.target.value })} className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  <DecimalInput value={fiForm.units} onChange={(v) => setFiForm({ ...fiForm, units: v })} className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('navAtBuyLabel')}</label>
-                  <input type="number" value={fiForm.unit_price} onChange={(e) => setFiForm({ ...fiForm, unit_price: e.target.value })} className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  <DecimalInput value={fiForm.unit_price} onChange={(v) => setFiForm({ ...fiForm, unit_price: v })} className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
               </div>
             </div>
@@ -892,16 +893,16 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('amountVndLabel')}</label>
-                <AmountInput value={txForm.amount_vnd} onChange={(raw) => setTxForm({ ...txForm, amount_vnd: raw })} placeholder="VD: 10.000.000" className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                <AmountInput value={txForm.amount_vnd} onChange={(raw) => setTxForm({ ...txForm, amount_vnd: raw })} placeholder="e.g. 10,000,000" className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('unitPriceLabel')}</label>
-                  <input type="number" value={txForm.unit_price} onChange={(e) => setTxForm({ ...txForm, unit_price: e.target.value })} className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  <DecimalInput value={txForm.unit_price} onChange={(v) => setTxForm({ ...txForm, unit_price: v })} className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{txForm.asset_type === 'stock' ? t('unitsStockLabel') : txForm.asset_type === 'gold' ? t('unitsGoldLabel') : t('unitsDefaultLabel')}</label>
-                  <input type="number" value={txForm.units} onChange={(e) => setTxForm({ ...txForm, units: e.target.value })} className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  <DecimalInput value={txForm.units} onChange={(v) => setTxForm({ ...txForm, units: v })} className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
               </div>
               <div>
