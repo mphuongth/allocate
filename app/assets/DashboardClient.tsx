@@ -172,7 +172,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
   useEffect(() => { fetchData() }, [fetchData])
 
   useEffect(() => {
-    const onVisible = () => { if (document.visibilityState === 'visible') fetchData({ force: true }) }
+    const onVisible = () => { if (document.visibilityState === 'visible') fetchData() }
     document.addEventListener('visibilitychange', onVisible)
     return () => document.removeEventListener('visibilitychange', onVisible)
   }, [fetchData])
