@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="200" viewBox="0 0 720 200">
+  <path d="M 110.000 30.000 A 70 70 0 0 1 155.739 152.990 L 138.751 133.308 A 44 44 0 0 0 110.000 56.000 Z" fill="#10B981"/><path d="M 152.903 155.311 A 70 70 0 0 1 57.010 145.739 L 76.692 128.751 A 44 44 0 0 0 136.968 134.767 Z" fill="#34D399"/><path d="M 54.689 142.903 A 70 70 0 0 1 50.508 63.113 L 72.605 76.814 A 44 44 0 0 0 75.233 126.968 Z" fill="#3B5A82"/><path d="M 52.520 60.050 A 70 70 0 0 1 106.336 30.096 L 107.697 56.060 A 44 44 0 0 0 73.869 74.889 Z" fill="#163A61"/>
+  <text x="208" y="128" font-family="Inter, -apple-system, system-ui, sans-serif"
+        font-size="88" font-weight="700" fill="#0F172A" letter-spacing="-3">Allocate</text>
+</svg>

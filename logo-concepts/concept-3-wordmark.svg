@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="160" viewBox="0 0 640 160">
+  <defs>
+    <linearGradient id="bg3" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0F2A4A"/>
+      <stop offset="1" stop-color="#081A30"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="160" fill="white"/>
+  <rect x="16" y="16" width="128" height="128" rx="26" ry="26" fill="url(#bg3)"/>
+  <g transform="translate(80,80) scale(0.21) translate(-256,-256)">
+    <path fill="#143558" stroke="#D4A574" stroke-width="10" stroke-linejoin="round" d="M 128 128 Q 128 112 144 112 L 368 112 Q 384 112 384 128 L 384 272 Q 384 360 256 416 Q 128 360 128 272 Z"/>
+    <rect x="172" y="288" width="40" height="64"  rx="6" fill="#D4A574"/>
+    <rect x="236" y="256" width="40" height="96"  rx="6" fill="#E9C693"/>
+    <rect x="300" y="216" width="40" height="136" rx="6" fill="#F8FAFC"/>
+    <circle cx="320" cy="206" r="10" fill="#10B981"/>
+  </g>
+  <text x="170" y="104" font-family="Inter, -apple-system, system-ui, sans-serif"
+        font-size="72" font-weight="700" fill="#0F172A" letter-spacing="-2">Allocate</text>
+</svg>

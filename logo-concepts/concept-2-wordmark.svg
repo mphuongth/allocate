@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="160" viewBox="0 0 640 160">
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0F2A4A"/>
+      <stop offset="1" stop-color="#081A30"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="160" fill="white"/>
+  <rect x="16" y="16" width="128" height="128" rx="26" ry="26" fill="url(#bg2)"/>
+
+  <!-- Scaled-down A glyph: apex at (80,40), feet at (24,120)&(136,120) -->
+  <g transform="translate(80,80) scale(0.25) translate(-256,-256)">
+    <path fill="#F8FAFC" d="M 256 96 L 424 416 L 356 416 L 320 344 L 192 344 L 156 416 L 88 416 Z M 224 280 L 288 280 L 256 216 Z"/>
+    <path fill="#10B981" d="M 256 140 L 298 218 L 272 218 L 272 260 L 240 260 L 240 218 L 214 218 Z"/>
+  </g>
+
+  <text x="170" y="104" font-family="Inter, -apple-system, system-ui, sans-serif"
+        font-size="72" font-weight="700" fill="#0F172A" letter-spacing="-2">Allocate</text>
+</svg>
