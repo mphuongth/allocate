@@ -83,6 +83,7 @@ export interface DashboardData {
   }
   goals: GoalData[]
   unallocated: { totalValue: number; funds: FundBreakdownItem[]; nonFunds: NonFundUnallocatedItem[] }
+  byType: { bank: number; gold: number; stock: number }
   insurance: InsuranceData[]
 }
 
@@ -425,12 +426,8 @@ export default function DashboardClient({ userId }: { userId: string }) {
       ...data.goals.flatMap((g) => g.funds),
       ...data.unallocated.funds,
     ].reduce((s, f) => s + f.currentValue, 0)
-    const nonFundAll = data.unallocated.nonFunds
-    const bankTotal = nonFundAll.filter((i) => i.type === 'bank').reduce((s, i) => s + i.currentValue, 0)
-    const goldTotal = nonFundAll.filter((i) => i.type === 'gold').reduce((s, i) => s + i.currentValue, 0)
-    const stockTotal = nonFundAll.filter((i) => i.type === 'stock').reduce((s, i) => s + i.currentValue, 0)
-    const investedTotal = fundTotal + bankTotal + goldTotal + stockTotal
-    const cashTotal = Math.max(data.netWorth.totalAssets - investedTotal, 0)
+    const { bank: bankTotal, gold: goldTotal, stock: stockTotal } = data.byType
+    const cashTotal = 0
     return { fundTotal, bankTotal, goldTotal, stockTotal, cashTotal }
   })() : null
 
