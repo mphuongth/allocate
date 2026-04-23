@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
 import { useTranslations } from 'next-intl'
@@ -143,6 +143,11 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const [nfAmount, setNfAmount] = useState('')
   const [nfSaving, setNfSaving] = useState(false)
   const [nfError, setNfError] = useState('')
+  const [pullY, setPullY] = useState(0)
+  const PULL_THRESHOLD = 65
+
+  const fetchDataRef = useRef<(opts?: { force?: boolean }) => Promise<void>>(async () => {})
+  const touchStartY = useRef(-1)
 
   const fetchData = useCallback(async (opts?: { force?: boolean }) => {
     const cached = !opts?.force && getCachedOverview(userId)
@@ -162,6 +167,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
         const json = await res.json()
         setData(json)
         setCachedOverview(userId, json)
+        try { localStorage.setItem('pwa_last_fetch', String(Date.now())) } catch {}
       }
     } catch {
       setError(tc('error'))
@@ -169,13 +175,69 @@ export default function DashboardClient({ userId }: { userId: string }) {
     setLoading(false)
   }, [])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { fetchDataRef.current = fetchData }, [fetchData])
 
+  // Initial load — on PWA, bust cache if last fetch was > 30s ago (handles force quit + reopen)
   useEffect(() => {
-    const onVisible = () => { if (document.visibilityState === 'visible') fetchData({ force: true }) }
-    document.addEventListener('visibilitychange', onVisible)
-    return () => document.removeEventListener('visibilitychange', onVisible)
+    const isPWA = window.matchMedia('(display-mode: standalone)').matches ||
+      (window.navigator as { standalone?: boolean }).standalone === true
+    if (!isPWA) { fetchData(); return }
+    try {
+      const last = localStorage.getItem('pwa_last_fetch')
+      const stale = !last || Date.now() - Number(last) > 30_000
+      fetchData(stale ? { force: true } : undefined)
+    } catch { fetchData() }
   }, [fetchData])
+
+  // PWA only: refresh when foregrounded after > 30s in background
+  useEffect(() => {
+    const isPWA = window.matchMedia('(display-mode: standalone)').matches ||
+      (window.navigator as { standalone?: boolean }).standalone === true
+    if (!isPWA) return
+    let hiddenAt = 0
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        hiddenAt = Date.now()
+      } else if (hiddenAt > 0 && Date.now() - hiddenAt > 30_000) {
+        fetchDataRef.current({ force: true })
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange)
+  }, [])
+
+  // PWA only: pull-to-refresh
+  useEffect(() => {
+    const isPWA = window.matchMedia('(display-mode: standalone)').matches ||
+      (window.navigator as { standalone?: boolean }).standalone === true
+    if (!isPWA) return
+    let pullCurrent = 0
+    const onTouchStart = (e: TouchEvent) => {
+      touchStartY.current = window.scrollY === 0 ? e.touches[0].clientY : -1
+    }
+    const onTouchMove = (e: TouchEvent) => {
+      if (touchStartY.current < 0) return
+      const delta = e.touches[0].clientY - touchStartY.current
+      if (delta > 0) {
+        pullCurrent = Math.min(delta * 0.5, 80)
+        setPullY(pullCurrent)
+      }
+    }
+    const onTouchEnd = () => {
+      if (pullCurrent >= PULL_THRESHOLD) fetchDataRef.current({ force: true })
+      pullCurrent = 0
+      setPullY(0)
+      touchStartY.current = -1
+    }
+    document.addEventListener('touchstart', onTouchStart, { passive: true })
+    document.addEventListener('touchmove', onTouchMove, { passive: true })
+    document.addEventListener('touchend', onTouchEnd)
+    return () => {
+      document.removeEventListener('touchstart', onTouchStart)
+      document.removeEventListener('touchmove', onTouchMove)
+      document.removeEventListener('touchend', onTouchEnd)
+    }
+  }, [])
 
   async function handleFundClick(fundId: string) {
     setFundDetailId(fundId)
@@ -437,6 +499,14 @@ export default function DashboardClient({ userId }: { userId: string }) {
 
   return (
     <div className="space-y-6">
+        {/* Pull-to-refresh indicator (PWA only) */}
+        <div
+          style={{ height: `${pullY}px`, transition: pullY === 0 ? 'height 0.25s ease' : 'none' }}
+          className="overflow-hidden flex items-center justify-center"
+        >
+          <div className={`w-6 h-6 rounded-full border-2 border-emerald-500 border-t-transparent ${pullY >= PULL_THRESHOLD ? 'animate-spin' : ''}`} />
+        </div>
+
         {/* Error state */}
         {error && (
           <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl flex items-center justify-between">
