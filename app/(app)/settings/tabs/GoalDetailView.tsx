@@ -1008,7 +1008,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
 
           {/* Live preview */}
           {(wAmtNum > 0 || wUnitsNum > 0) && (
-            <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg space-y-1 text-xs">
+            <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg space-y-1 text-xs">
               {wPrinNum > 0 && <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">{t('costBasisLabel')}:</span><span className="font-medium text-gray-700 dark:text-gray-300">{fmt(wPrinNum)}</span></div>}
               {wAmtNum > 0 && <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">{t('receivedLabel')}:</span><span className="font-medium text-gray-700 dark:text-gray-300">{fmt(wAmtNum)}</span></div>}
               <div className="flex justify-between border-t border-gray-200 dark:border-gray-700 pt-1 mt-1">
@@ -1024,7 +1024,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
             </div>
           )}
 
-          <div className="flex gap-3">
+          <div className="flex gap-3 mt-4">
             <button onClick={() => { setFormMode(null); setWithdrawSource(null) }} className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">{tc('cancel')}</button>
             <button onClick={handleWithdrawSave} disabled={saving} className="flex-1 py-2 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50">{saving ? tc('saving') : (wType === 'bank' ? t('withdraw') : t('sell'))}</button>
           </div>
