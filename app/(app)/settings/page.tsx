@@ -1,4 +1,11 @@
 import SettingsClient from './SettingsClient'
+import { getTranslations } from 'next-intl/server'
+import type { Metadata } from 'next'
+
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('nav')
+  return { title: t('settings') }
+}
 
 export default async function SettingsPage({
   searchParams,

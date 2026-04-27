@@ -25,7 +25,7 @@ export const viewport: Viewport = {
 }
 
 export const metadata: Metadata = {
-  title: 'Cairn',
+  title: { template: '%s | Cairn', default: 'Cairn' },
   description: 'Personal finance, one stone at a time. Plan, track, and grow toward every goal.',
   manifest: '/manifest.webmanifest',
   appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Cairn' },
