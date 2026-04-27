@@ -1,0 +1,6 @@
+{
+  "crons": [
+    { "path": "/api/cron/refresh-gold", "schedule": "0 2 * * *" },
+    { "path": "/api/cron/refresh-navs", "schedule": "0 11 * * *" }
+  ]
+}
