@@ -38,9 +38,15 @@ export async function GET(request: NextRequest) {
       supabase
         .from('fixed_expense_overrides')
         .select('fixed_expense_id, monthly_amount_override_vnd').eq('plan_id', plan.id),
-      supabase
-        .from('fixed_expenses')
-        .select('expense_id, expense_name, amount_vnd, category').eq('user_id', user.id),
+      (() => {
+        const planDate = `${plan.year}-${String(plan.month).padStart(2, '0')}-01`
+        return supabase
+          .from('fixed_expenses')
+          .select('expense_id, expense_name, amount_vnd, category, effective_from, effective_to')
+          .eq('user_id', user.id)
+          .or(`effective_from.is.null,effective_from.lte.${planDate}`)
+          .or(`effective_to.is.null,effective_to.gte.${planDate}`)
+      })(),
       supabase
         .from('insurance_members')
         .select('member_id, member_name, relationship, coverage_type, annual_payment_vnd, payment_date, last_payment_date')

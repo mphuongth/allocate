@@ -253,6 +253,9 @@
     "amountLabel": "Amount (VND)",
     "amountPlaceholder": "e.g., 5000000",
     "amountRequired": "Amount must be greater than 0.",
+    "effectiveFromLabel": "Active from (optional)",
+    "effectiveToLabel": "Active until (optional)",
+    "effectiveToPlaceholder": "No end date",
     "infoTitle": "About Fixed Expenses",
     "infoDesc": "Fixed expenses are automatically added to your Monthly Plan each month. You can override the amount for any specific month when planning."
   },

@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 
+function toDateCol(ym: string | undefined | null): string | null {
+  if (!ym) return null
+  return `${ym}-01`
+}
+
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createSupabaseServerClient()
@@ -8,7 +13,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { expense_name, amount_vnd, category } = body
+  const { expense_name, amount_vnd, category, effective_from, effective_to } = body
 
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
   if (expense_name !== undefined) {
@@ -29,6 +34,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'Amount must be greater than 0.' }, { status: 400 })
     }
     updates.amount_vnd = amountNum
+  }
+  if ('effective_from' in body) updates.effective_from = toDateCol(effective_from)
+  if ('effective_to' in body) updates.effective_to = toDateCol(effective_to)
+
+  const fromDate = (updates.effective_from ?? null) as string | null
+  const toDate = (updates.effective_to ?? null) as string | null
+  if (fromDate && toDate && fromDate > toDate) {
+    return NextResponse.json({ error: '"Active from" must be before "Active until".' }, { status: 400 })
   }
 
   const { data: expense, error } = await supabase
