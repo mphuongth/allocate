@@ -87,7 +87,8 @@ function calcProjectedInterest(amount: number, rate: number | null, investmentDa
 }
 
 const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
-const fmtUnits = (n: number) => (n % 1 === 0 ? n.toString() : n.toFixed(4))
+const fmtNav = (n: number) => '₫ ' + n.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const fmtUnits = (n: number) => n.toLocaleString('vi-VN', { maximumFractionDigits: 2 })
 
 const emptyTxForm = { asset_type: 'bank', investment_date: '', amount_vnd: '', unit_price: '', units: '', interest_rate: '', expiry_date: '', notes: '', fund_id: '' }
 const emptyFiForm = { fund_id: '', investment_date: '', amount_vnd: '', units: '', unit_price: '' }
@@ -579,8 +580,8 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                     <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
                       <div><span className="text-gray-500 dark:text-gray-400">{t('colRemaining')}: </span><span className="font-medium text-gray-900 dark:text-gray-100">{fmtUnits(g.remaining_units)} {t('unitsShort')}</span></div>
                       <div><span className="text-gray-500 dark:text-gray-400">{t('colValue')}: </span><span className="font-medium text-gray-900 dark:text-gray-100">{fmt(g.current_value)}</span></div>
-                      <div><span className="text-gray-500 dark:text-gray-400">{t('colAvgNav')}: </span><span className="text-gray-700 dark:text-gray-300">{fmt(g.avg_cost_per_unit)}</span></div>
-                      <div><span className="text-gray-500 dark:text-gray-400">{t('colCurrentNav')}: </span><span className="text-gray-700 dark:text-gray-300">{fmt(g.current_nav)}</span></div>
+                      <div><span className="text-gray-500 dark:text-gray-400">{t('colAvgNav')}: </span><span className="text-gray-700 dark:text-gray-300">{fmtNav(g.avg_cost_per_unit)}</span></div>
+                      <div><span className="text-gray-500 dark:text-gray-400">{t('colCurrentNav')}: </span><span className="text-gray-700 dark:text-gray-300">{fmtNav(g.current_nav)}</span></div>
                       <div className="col-span-2"><span className="text-gray-500 dark:text-gray-400">{t('colGainLoss')}: </span><span className={`font-medium ${g.total_pl >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt(g.total_pl)}</span></div>
                     </div>
                     {g.remaining_units > 0 && (
@@ -618,8 +619,8 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                             : <span className="font-medium text-gray-900 dark:text-gray-100">{fmtUnits(g.remaining_units)}</span>
                           }
                         </td>
-                        <td className="px-4 py-3 text-right text-sm text-gray-600 dark:text-gray-400">{fmt(g.avg_cost_per_unit)}</td>
-                        <td className="px-4 py-3 text-right text-sm text-gray-600 dark:text-gray-400">{fmt(g.current_nav)}</td>
+                        <td className="px-4 py-3 text-right text-sm text-gray-600 dark:text-gray-400">{fmtNav(g.avg_cost_per_unit)}</td>
+                        <td className="px-4 py-3 text-right text-sm text-gray-600 dark:text-gray-400">{fmtNav(g.current_nav)}</td>
                         <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-gray-100">{fmt(g.current_value)}</td>
                         <td className={`px-4 py-3 text-right font-medium ${g.total_pl >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt(g.total_pl)}</td>
                         <td className="px-4 py-3">
@@ -938,7 +939,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
           {/* Context info */}
           <div className="text-sm text-gray-500 dark:text-gray-400 -mt-2">
             {wType === 'fund' && wGroup && (
-              <span>{wGroup.fund_code} · {t('colCurrentNav')}: <strong className="text-gray-800 dark:text-gray-200">{fmt(wGroup.current_nav)}</strong> · {t('colRemaining')}: <strong className="text-gray-800 dark:text-gray-200">{fmtUnits(wGroup.remaining_units)} {t('unitsShort')}</strong></span>
+              <span>{wGroup.fund_code} · {t('colCurrentNav')}: <strong className="text-gray-800 dark:text-gray-200">{fmtNav(wGroup.current_nav)}</strong> · {t('colRemaining')}: <strong className="text-gray-800 dark:text-gray-200">{fmtUnits(wGroup.remaining_units)} {t('unitsShort')}</strong></span>
             )}
             {wType === 'gold' && wRow && goldPrice && (
               <span>{t('assetGold')} · {t('currentPriceLabel')}: <strong className="text-gray-800 dark:text-gray-200">{fmt(goldPrice)}/chi</strong> · {t('colRemaining')}: <strong className="text-gray-800 dark:text-gray-200">{fmtUnits((wRow.units ?? 0) - wRow.total_units_withdrawn)} chi</strong></span>
