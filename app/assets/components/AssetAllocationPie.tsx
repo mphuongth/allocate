@@ -7,8 +7,8 @@ const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
 
 const PALETTE = [
   { key: 'equity',   color: '#8b5cf6', ns: 'funds',        labelKey: 'typeEquity' },
-  { key: 'balanced', color: '#f97316', ns: 'funds',        labelKey: 'typeBalanced' },
-  { key: 'bond',     color: '#0ea5e9', ns: 'funds',        labelKey: 'typeDebt' },
+  { key: 'balanced', color: '#f43f5e', ns: 'funds',        labelKey: 'typeBalanced' },
+  { key: 'bond',     color: '#64748b', ns: 'funds',        labelKey: 'typeDebt' },
   { key: 'bank',     color: '#06b6d4', ns: 'transactions', labelKey: 'assetBank' },
   { key: 'gold',     color: '#f59e0b', ns: 'transactions', labelKey: 'assetGold' },
   { key: 'stock',    color: '#10b981', ns: 'transactions', labelKey: 'assetStock' },
