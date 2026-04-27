@@ -6,14 +6,18 @@ import { useTranslations } from 'next-intl'
 const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
 
 const PALETTE = [
-  { key: 'fund',  color: '#8b5cf6', labelKey: 'assetFund' },
-  { key: 'bank',  color: '#06b6d4', labelKey: 'assetBank' },
-  { key: 'gold',  color: '#f59e0b', labelKey: 'assetGold' },
-  { key: 'stock', color: '#10b981', labelKey: 'assetStock' },
+  { key: 'equity',   color: '#8b5cf6', ns: 'funds',        labelKey: 'typeEquity' },
+  { key: 'balanced', color: '#a78bfa', ns: 'funds',        labelKey: 'typeBalanced' },
+  { key: 'bond',     color: '#c4b5fd', ns: 'funds',        labelKey: 'typeDebt' },
+  { key: 'bank',     color: '#06b6d4', ns: 'transactions', labelKey: 'assetBank' },
+  { key: 'gold',     color: '#f59e0b', ns: 'transactions', labelKey: 'assetGold' },
+  { key: 'stock',    color: '#10b981', ns: 'transactions', labelKey: 'assetStock' },
 ] as const
 
 interface Props {
-  fundTotal: number
+  equityTotal: number
+  bondTotal: number
+  balancedTotal: number
   bankTotal: number
   goldTotal: number
   stockTotal: number
@@ -21,24 +25,29 @@ interface Props {
   totalAssets: number
 }
 
-export default function AssetAllocationPie({ fundTotal, bankTotal, goldTotal, stockTotal, cashTotal, totalAssets }: Props) {
+export default function AssetAllocationPie({ equityTotal, bondTotal, balancedTotal, bankTotal, goldTotal, stockTotal, totalAssets }: Props) {
+  const tf = useTranslations('funds')
   const tt = useTranslations('transactions')
 
-  const data = [
-    { key: 'fund',  value: fundTotal },
-    { key: 'bank',  value: bankTotal },
-    { key: 'gold',  value: goldTotal },
-    { key: 'stock', value: stockTotal },
-  ].filter((d) => d.value > 0)
-
   const labelMap: Record<string, string> = {
-    fund:  tt('assetFund'),
-    bank:  tt('assetBank'),
-    gold:  tt('assetGold'),
-    stock: tt('assetStock'),
+    equity:   tf('typeEquity'),
+    balanced: tf('typeBalanced'),
+    bond:     tf('typeDebt'),
+    bank:     tt('assetBank'),
+    gold:     tt('assetGold'),
+    stock:    tt('assetStock'),
   }
 
   const colorMap = Object.fromEntries(PALETTE.map((p) => [p.key, p.color]))
+
+  const data = [
+    { key: 'equity',   value: equityTotal },
+    { key: 'balanced', value: balancedTotal },
+    { key: 'bond',     value: bondTotal },
+    { key: 'bank',     value: bankTotal },
+    { key: 'gold',     value: goldTotal },
+    { key: 'stock',    value: stockTotal },
+  ].filter((d) => d.value > 0)
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 flex flex-col">
@@ -55,13 +64,14 @@ export default function AssetAllocationPie({ fundTotal, bankTotal, goldTotal, st
               outerRadius={78}
               paddingAngle={2}
               dataKey="value"
+              nameKey="key"
             >
               {data.map((entry) => (
                 <Cell key={entry.key} fill={colorMap[entry.key] ?? '#e5e7eb'} />
               ))}
             </Pie>
             <Tooltip
-              formatter={(value) => fmt(Number(value))}
+              formatter={(value, name) => [fmt(Number(value)), labelMap[name as string] ?? name]}
               contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '12px' }}
             />
           </PieChart>

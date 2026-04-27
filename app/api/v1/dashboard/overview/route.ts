@@ -42,7 +42,7 @@ export async function GET() {
       .eq('user_id', user.id),
     supabase
       .from('investment_transactions')
-      .select('transaction_id, goal_id, amount_vnd, interest_rate, investment_date, asset_type, transaction_type, units, unit_price, units_withdrawn, principal_withdrawn, fund_id, parent_transaction_id, expiry_date, notes, funds(id, name, nav, updated_at)')
+      .select('transaction_id, goal_id, amount_vnd, interest_rate, investment_date, asset_type, transaction_type, units, unit_price, units_withdrawn, principal_withdrawn, fund_id, parent_transaction_id, expiry_date, notes, funds(id, name, nav, updated_at, fund_type)')
       .eq('user_id', user.id),
     supabase
       .from('insurance_members')
@@ -132,6 +132,7 @@ export async function GET() {
     funds: Array<{
       fundId: string
       fundName: string
+      fundType: string
       quantity: number
       currentNAV: number
       currentValue: number
@@ -157,6 +158,7 @@ export async function GET() {
   type FundAccum = {
     fundId: string
     fundName: string
+    fundType: string
     totalUnits: number
     totalInvested: number
     totalNavCost: number   // Σ(units × unit_price) — excludes fees, used for Avg Entry Price
@@ -179,8 +181,8 @@ export async function GET() {
   for (const tx of investments) {
     if (tx.asset_type === 'fund' && tx.units) {
       const fund = Array.isArray(tx.funds)
-        ? tx.funds[0] as { id: string; name: string; nav: number; updated_at: string } | undefined
-        : tx.funds as { id: string; name: string; nav: number; updated_at: string } | null
+        ? tx.funds[0] as { id: string; name: string; nav: number; updated_at: string; fund_type: string } | undefined
+        : tx.funds as { id: string; name: string; nav: number; updated_at: string; fund_type: string } | null
       if (!fund) continue
 
       if (isNavStale(fund.updated_at)) navStale = true
@@ -195,6 +197,7 @@ export async function GET() {
         fundAccumMap.set(key, {
           fundId: fund.id,
           fundName: fund.name,
+          fundType: fund.fund_type,
           totalUnits: tx.units,
           totalInvested: tx.amount_vnd,
           totalNavCost: tx.units * (tx.unit_price ?? 0),
@@ -262,7 +265,7 @@ export async function GET() {
 
   // Convert fund accumulators to breakdown items
   const unallocatedFunds: Array<{
-    fundId: string; fundName: string; quantity: number; currentNAV: number
+    fundId: string; fundName: string; fundType: string; quantity: number; currentNAV: number
     currentValue: number; purchasePrice: number; profitLoss: number; profitLossPercentage: number; goalId: null
   }> = []
   let unallocatedFundValue = 0
@@ -280,6 +283,7 @@ export async function GET() {
     const fundItem = {
       fundId: acc.fundId,
       fundName: acc.fundName,
+      fundType: acc.fundType,
       quantity: acc.totalUnits,
       currentNAV: acc.currentNAV,
       currentValue,
