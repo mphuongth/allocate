@@ -24,6 +24,7 @@ const GoldPriceWidget = dynamic(() => import('./components/GoldPriceWidget'))
 export interface FundBreakdownItem {
   fundId: string
   fundName: string
+  fundType: string
   quantity: number
   currentNAV: number
   currentValue: number
@@ -484,13 +485,13 @@ export default function DashboardClient({ userId }: { userId: string }) {
 
   // Compute asset allocation totals for pie chart
   const allocationTotals = data ? (() => {
-    const fundTotal = [
-      ...data.goals.flatMap((g) => g.funds),
-      ...data.unallocated.funds,
-    ].reduce((s, f) => s + f.currentValue, 0)
+    const allFundItems = [...data.goals.flatMap((g) => g.funds), ...data.unallocated.funds]
+    const equityTotal = allFundItems.filter((f) => f.fundType === 'equity').reduce((s, f) => s + f.currentValue, 0)
+    const bondTotal = allFundItems.filter((f) => f.fundType === 'debt').reduce((s, f) => s + f.currentValue, 0)
+    const balancedTotal = allFundItems.filter((f) => f.fundType === 'balanced').reduce((s, f) => s + f.currentValue, 0)
     const { bank: bankTotal, gold: goldTotal, stock: stockTotal } = data.byType
     const cashTotal = 0
-    return { fundTotal, bankTotal, goldTotal, stockTotal, cashTotal }
+    return { equityTotal, bondTotal, balancedTotal, bankTotal, goldTotal, stockTotal, cashTotal }
   })() : null
 
   // Find fund item for detail modal
