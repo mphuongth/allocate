@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import AmountInput from '@/app/components/ui/AmountInput'
 
 const EXPENSE_CATEGORIES = ['Housing', 'Utilities', 'Transportation', 'Insurance', 'Parents', 'Education', 'Subscriptions', 'Other']
 
@@ -321,12 +322,12 @@ export default function FixedExpensesTab() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="amount_vnd">{t('amountLabel')} <span className="text-red-500">*</span></Label>
-                <Input
+                <AmountInput
                   id="amount_vnd"
-                  type="number"
                   value={form.amount_vnd}
-                  onChange={(e) => setForm({ ...form, amount_vnd: e.target.value })}
+                  onChange={(v) => setForm({ ...form, amount_vnd: v })}
                   placeholder={t('amountPlaceholder')}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
