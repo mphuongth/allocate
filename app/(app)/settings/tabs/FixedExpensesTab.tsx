@@ -18,11 +18,26 @@ interface Expense {
   amount_vnd: number
   category: string
   created_at: string
+  effective_from: string | null
+  effective_to: string | null
 }
 
 const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
 
-const emptyForm = { expense_name: '', amount_vnd: '', category: '' }
+// "2026-04-01" → "2026-04" for <input type="month">
+function toMonthInput(date: string | null): string {
+  if (!date) return ''
+  return date.slice(0, 7)
+}
+
+// "Apr 2026" display label
+function fmtMonth(date: string | null): string {
+  if (!date) return ''
+  const d = new Date(date + 'T00:00:00')
+  return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+}
+
+const emptyForm = { expense_name: '', amount_vnd: '', category: '', effective_from: '', effective_to: '' }
 
 const FIXED_CACHE_PREFIX = 'fixedExpensesCache'
 const CACHE_TTL = 2 * 60 * 1000
@@ -89,7 +104,13 @@ export default function FixedExpensesTab() {
 
   function openEdit(expense: Expense) {
     setEditExpense(expense)
-    setForm({ expense_name: expense.expense_name, amount_vnd: String(expense.amount_vnd), category: expense.category })
+    setForm({
+      expense_name: expense.expense_name,
+      amount_vnd: String(expense.amount_vnd),
+      category: expense.category,
+      effective_from: toMonthInput(expense.effective_from),
+      effective_to: toMonthInput(expense.effective_to),
+    })
     setFormError('')
     setShowForm(true)
   }
@@ -105,7 +126,13 @@ export default function FixedExpensesTab() {
     const res = await fetch(url, {
       method: editExpense ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ expense_name: form.expense_name, amount_vnd: Number(form.amount_vnd), category: form.category }),
+      body: JSON.stringify({
+        expense_name: form.expense_name,
+        amount_vnd: Number(form.amount_vnd),
+        category: form.category,
+        effective_from: form.effective_from || null,
+        effective_to: form.effective_to || null,
+      }),
     })
     if (!res.ok) {
       const { error } = await res.json()
@@ -187,7 +214,11 @@ export default function FixedExpensesTab() {
                   </div>
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-semibold text-gray-900 dark:text-gray-100">{fmt(expense.amount_vnd)}</span>
-                    <span className="text-gray-500 dark:text-gray-400">{new Date(expense.created_at).toLocaleDateString('vi-VN')}</span>
+                    {(expense.effective_from || expense.effective_to) && (
+                      <span className="text-gray-400 dark:text-gray-500">
+                        {fmtMonth(expense.effective_from) || '…'} → {fmtMonth(expense.effective_to) || '∞'}
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-1 pt-0.5">
                     <button onClick={() => openEdit(expense)} className="h-8 w-8 p-0 flex items-center justify-center border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
@@ -208,7 +239,7 @@ export default function FixedExpensesTab() {
                     <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colName')}</th>
                     <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colCategory')}</th>
                     <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colAmount')}</th>
-                    <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colCreated')}</th>
+                    <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Period</th>
                     <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-center">{tCommon('actions')}</th>
                   </tr>
                 </thead>
@@ -220,7 +251,12 @@ export default function FixedExpensesTab() {
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">{expense.category}</span>
                       </td>
                       <td className="px-4 py-4 text-right font-semibold text-gray-900 dark:text-gray-100">{fmt(expense.amount_vnd)}</td>
-                      <td className="px-4 py-4 text-sm text-gray-600 dark:text-gray-400">{new Date(expense.created_at).toLocaleDateString('vi-VN')}</td>
+                      <td className="px-4 py-4 text-sm text-gray-500 dark:text-gray-400">
+                        {expense.effective_from || expense.effective_to
+                          ? <>{fmtMonth(expense.effective_from) || '…'} → {fmtMonth(expense.effective_to) || '∞'}</>
+                          : <span className="text-gray-300 dark:text-gray-600">Always</span>
+                        }
+                      </td>
                       <td className="px-4 py-4 text-center">
                         <div className="flex items-center justify-center gap-1">
                           <button onClick={() => openEdit(expense)} className="h-8 w-8 p-0 flex items-center justify-center border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
@@ -292,6 +328,27 @@ export default function FixedExpensesTab() {
                   onChange={(e) => setForm({ ...form, amount_vnd: e.target.value })}
                   placeholder={t('amountPlaceholder')}
                 />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="effective_from">{t('effectiveFromLabel')}</Label>
+                  <Input
+                    id="effective_from"
+                    type="month"
+                    value={form.effective_from}
+                    onChange={(e) => setForm({ ...form, effective_from: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="effective_to">{t('effectiveToLabel')}</Label>
+                  <Input
+                    id="effective_to"
+                    type="month"
+                    value={form.effective_to}
+                    placeholder={t('effectiveToPlaceholder')}
+                    onChange={(e) => setForm({ ...form, effective_to: e.target.value })}
+                  />
+                </div>
               </div>
             </div>
             <div className="flex gap-3">
