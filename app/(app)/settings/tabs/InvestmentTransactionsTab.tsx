@@ -71,6 +71,7 @@ function calcCurrentValue(tx: Transaction): number {
 
 const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
 const fmtNav = (n: number) => '₫ ' + n.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const fmtUnits = (n: number) => n.toLocaleString('vi-VN', { maximumFractionDigits: 2 })
 
 interface ParsedRow {
   investment_date: string
@@ -471,7 +472,7 @@ export default function InvestmentTransactionsTab() {
                         <>
                           <div>
                             <span className="text-gray-500 dark:text-gray-400">{t('colTransaction')}: </span>
-                            <span className="text-gray-700 dark:text-gray-300">{tx.units ?? '—'}</span>
+                            <span className="text-gray-700 dark:text-gray-300">{tx.units != null ? fmtUnits(tx.units) : '—'}</span>
                           </div>
                           <div>
                             <span className="text-gray-500 dark:text-gray-400">{rateOrNavLabel}: </span>
@@ -551,7 +552,9 @@ export default function InvestmentTransactionsTab() {
                         </td>
                         <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-gray-100">{fmt(tx.amount_vnd)}</td>
                         <td className="px-4 py-3 text-right text-sm text-gray-600 dark:text-gray-400">
-                          {isWithdrawal ? (tx.units_withdrawn ?? '—') : (tx.units ?? '—')}
+                          {isWithdrawal
+                            ? (tx.units_withdrawn != null ? fmtUnits(tx.units_withdrawn) : '—')
+                            : (tx.units != null ? fmtUnits(tx.units) : '—')}
                         </td>
                         <td className="px-4 py-3 text-right text-sm text-gray-600 dark:text-gray-400">{isWithdrawal ? '—' : rateOrNav}</td>
                         <td className="px-4 py-3 text-right font-medium">
@@ -679,8 +682,8 @@ export default function InvestmentTransactionsTab() {
                         <tr key={i} className={row.error ? 'bg-red-50 dark:bg-red-900/10' : ''}>
                           <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{row.investment_date || '—'}</td>
                           <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{isNaN(row.amount_vnd) ? '—' : Math.round(row.amount_vnd).toLocaleString('vi-VN')}</td>
-                          <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{isNaN(row.unit_price) ? '—' : row.unit_price.toLocaleString('vi-VN')}</td>
-                          <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{isNaN(row.units) ? '—' : row.units}</td>
+                          <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{isNaN(row.unit_price) ? '—' : fmtNav(row.unit_price)}</td>
+                          <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{isNaN(row.units) ? '—' : fmtUnits(row.units)}</td>
                           <td className="px-3 py-2">
                             {row.error
                               ? <span className="text-red-500 dark:text-red-400">{row.error}</span>

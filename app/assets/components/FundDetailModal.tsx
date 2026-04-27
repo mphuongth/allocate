@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 
 const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
 const fmtNav = (n: number) => '₫ ' + n.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const fmtUnits = (n: number) => n.toLocaleString('vi-VN', { maximumFractionDigits: 2 })
 const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`
 
 interface PurchaseHistory {
@@ -52,7 +53,7 @@ export default function FundDetailModal({
             </div>
             <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
               <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">{t('unitsHeld')}</p>
-              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{quantity.toLocaleString('vi-VN')}</p>
+              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{fmtUnits(quantity)}</p>
             </div>
             <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
               <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">{t('currentValue')}</p>
@@ -91,7 +92,7 @@ export default function FundDetailModal({
                   {purchaseHistory.map((row, i) => (
                     <tr key={i}>
                       <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{new Date(row.purchase_date).toLocaleDateString()}</td>
-                      <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{row.units}</td>
+                      <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{fmtUnits(row.units)}</td>
                       <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{fmtNav(row.nav_at_purchase)}</td>
                     </tr>
                   ))}
