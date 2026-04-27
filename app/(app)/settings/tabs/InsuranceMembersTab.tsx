@@ -162,61 +162,87 @@ export default function InsuranceMembersTab() {
         <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-300 rounded-lg text-sm">{successMsg}</div>
       )}
 
-      {/* Table */}
+      {/* Mobile card list / Desktop table */}
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-black/10 dark:border-gray-700 overflow-hidden">
         {loading ? (
           <div className="text-center py-10 text-gray-400 dark:text-gray-500 text-sm">{tCommon('loading')}</div>
         ) : members.length === 0 ? (
           <div className="text-center py-10 text-gray-400 dark:text-gray-500 text-sm">{t('empty')}</div>
         ) : (
-          <div className="overflow-x-auto p-6">
-            <table className="w-full table-fixed">
-              <thead>
-                <tr className="border-b border-black/10 dark:border-gray-700 text-left">
-                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colName')}</th>
-                  <th className="hidden sm:table-cell px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colRelationship')}</th>
-                  <th className="hidden sm:table-cell px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colAnnual')}</th>
-                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colMonthly')}</th>
-                  <th className="hidden sm:table-cell px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colPaymentDate')}</th>
-                  <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-center">{tCommon('actions')}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-black/5 dark:divide-gray-700">
-                {members.map((member) => (
-                  <tr key={member.member_id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                    <td className="px-4 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-600 text-white font-semibold shrink-0">
-                          {member.member_name.charAt(0)}
-                        </div>
-                        <span className="font-medium text-gray-900 dark:text-gray-100">{member.member_name}</span>
-                      </div>
-                    </td>
-                    <td className="hidden sm:table-cell px-4 py-4">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${RELATIONSHIP_COLORS[member.relationship] ?? 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'}`}>
-                        {member.relationship}
-                      </span>
-                    </td>
-                    <td className="hidden sm:table-cell px-4 py-4 text-right font-medium text-gray-900 dark:text-gray-100">{fmt(member.annual_payment_vnd)}</td>
-                    <td className="px-4 py-4 text-right font-semibold text-emerald-600 dark:text-emerald-400">{fmt(member.monthly_premium_vnd)}</td>
-                    <td className="hidden sm:table-cell px-4 py-4 text-sm text-gray-600 dark:text-gray-400">
-                      {member.payment_date ? new Date(member.payment_date).toLocaleDateString('vi-VN') : '—'}
-                    </td>
-                    <td className="px-4 py-4">
-                      <div className="flex items-center justify-center gap-1">
-                        <button onClick={() => openEdit(member)} className="h-8 w-8 p-0 flex items-center justify-center border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                          <Edit className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                        </button>
-                        <button onClick={() => setConfirmMember(member)} className="h-8 w-8 p-0 flex items-center justify-center border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                          <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
-                        </button>
-                      </div>
-                    </td>
+          <>
+            {/* Mobile: card list */}
+            <ul className="sm:hidden divide-y divide-black/5 dark:divide-gray-700">
+              {members.map((member) => (
+                <li key={member.member_id} className="flex items-center gap-3 px-4 py-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-600 text-white font-semibold shrink-0">
+                    {member.member_name.charAt(0)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-gray-900 dark:text-gray-100 truncate">{member.member_name}</p>
+                    <p className="text-sm text-emerald-600 dark:text-emerald-400 font-semibold">{fmt(member.monthly_premium_vnd)}<span className="text-gray-400 dark:text-gray-500 font-normal"> / {t('perMonth')}</span></p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button onClick={() => openEdit(member)} className="h-8 w-8 flex items-center justify-center border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                      <Edit className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                    </button>
+                    <button onClick={() => setConfirmMember(member)} className="h-8 w-8 flex items-center justify-center border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                      <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            {/* Desktop: table */}
+            <div className="hidden sm:block overflow-x-auto p-6">
+              <table className="w-full table-auto">
+                <thead>
+                  <tr className="border-b border-black/10 dark:border-gray-700 text-left">
+                    <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colName')}</th>
+                    <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colRelationship')}</th>
+                    <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colAnnual')}</th>
+                    <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colMonthly')}</th>
+                    <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colPaymentDate')}</th>
+                    <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-center">{tCommon('actions')}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-black/5 dark:divide-gray-700">
+                  {members.map((member) => (
+                    <tr key={member.member_id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                      <td className="px-4 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-600 text-white font-semibold shrink-0">
+                            {member.member_name.charAt(0)}
+                          </div>
+                          <span className="font-medium text-gray-900 dark:text-gray-100">{member.member_name}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${RELATIONSHIP_COLORS[member.relationship] ?? 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'}`}>
+                          {member.relationship}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4 text-right font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap">{fmt(member.annual_payment_vnd)}</td>
+                      <td className="px-4 py-4 text-right font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">{fmt(member.monthly_premium_vnd)}</td>
+                      <td className="px-4 py-4 text-sm text-gray-600 dark:text-gray-400">
+                        {member.payment_date ? new Date(member.payment_date).toLocaleDateString('vi-VN') : '—'}
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex items-center justify-center gap-1">
+                          <button onClick={() => openEdit(member)} className="h-8 w-8 p-0 flex items-center justify-center border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                            <Edit className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                          </button>
+                          <button onClick={() => setConfirmMember(member)} className="h-8 w-8 p-0 flex items-center justify-center border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                            <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
 
