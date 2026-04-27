@@ -22,7 +22,7 @@ interface InsuranceMember {
   created_at: string
 }
 
-const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
+const fmt = (n: number) => '₫\u00a0' + Math.round(n).toLocaleString('vi-VN')
 
 const emptyForm = { member_name: '', relationship: '', annual_payment_vnd: '', payment_date: '' }
 
@@ -170,7 +170,7 @@ export default function InsuranceMembersTab() {
           <div className="text-center py-10 text-gray-400 dark:text-gray-500 text-sm">{t('empty')}</div>
         ) : (
           <div className="overflow-x-auto p-6">
-            <table className="w-full table-fixed">
+            <table className="w-full table-auto">
               <thead>
                 <tr className="border-b border-black/10 dark:border-gray-700 text-left">
                   <th className="px-4 pb-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colName')}</th>
@@ -197,8 +197,8 @@ export default function InsuranceMembersTab() {
                         {member.relationship}
                       </span>
                     </td>
-                    <td className="hidden sm:table-cell px-4 py-4 text-right font-medium text-gray-900 dark:text-gray-100">{fmt(member.annual_payment_vnd)}</td>
-                    <td className="px-4 py-4 text-right font-semibold text-emerald-600 dark:text-emerald-400">{fmt(member.monthly_premium_vnd)}</td>
+                    <td className="hidden sm:table-cell px-4 py-4 text-right font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap">{fmt(member.annual_payment_vnd)}</td>
+                    <td className="px-4 py-4 text-right font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">{fmt(member.monthly_premium_vnd)}</td>
                     <td className="hidden sm:table-cell px-4 py-4 text-sm text-gray-600 dark:text-gray-400">
                       {member.payment_date ? new Date(member.payment_date).toLocaleDateString('vi-VN') : '—'}
                     </td>
