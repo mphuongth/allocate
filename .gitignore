@@ -45,3 +45,7 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
+.auth/
+.env.e2e
+playwright-report/
+test-results/

@@ -202,6 +202,7 @@ export default function PlanningClient() {
       {/* Month navigation */}
       <div className="flex items-center gap-3">
         <button
+          data-testid="prev-month"
           onClick={() => navigate('prev')}
           className="p-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 transition-colors"
         >
@@ -211,6 +212,7 @@ export default function PlanningClient() {
           {MONTHS[month - 1]} {year}
         </span>
         <button
+          data-testid="next-month"
           onClick={() => navigate('next')}
           className="p-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 transition-colors"
         >
