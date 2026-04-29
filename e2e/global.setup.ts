@@ -25,7 +25,7 @@ async function globalSetup() {
   await page.goto('/auth/login')
   await page.locator('#email').fill(email)
   await page.locator('#password').fill(password)
-  await page.getByRole('button', { name: /sign in|log in/i }).click()
+  await page.locator('button[type="submit"]').click()
 
   await page.waitForURL('**/dashboard', { timeout: 15_000 })
   await expect(page).toHaveURL(/dashboard/)
