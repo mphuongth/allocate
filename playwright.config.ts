@@ -17,18 +17,19 @@ export default defineConfig({
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
-    storageState: 'e2e/.auth/session.json',
   },
 
   projects: [
     {
       name: 'setup',
       testMatch: /global\.setup\.ts/,
-      use: { storageState: undefined },
     },
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: 'e2e/.auth/session.json',
+      },
       dependencies: ['setup'],
     },
   ],
