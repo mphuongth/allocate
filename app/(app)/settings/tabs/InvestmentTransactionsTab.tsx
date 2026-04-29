@@ -465,7 +465,9 @@ export default function InvestmentTransactionsTab() {
                       ) : (
                         <div>
                           <span className="text-gray-500 dark:text-gray-400">{t('colExpiry')}: </span>
-                          <span className="font-medium text-gray-900 dark:text-gray-100">{fmt(currentValue)}</span>
+                          <span className="font-medium text-gray-900 dark:text-gray-100">
+                            {tx.expiry_date ? new Date(tx.expiry_date).toLocaleDateString('vi-VN') : '—'}
+                          </span>
                         </div>
                       )}
                       {!isWithdrawal && (
@@ -557,15 +559,17 @@ export default function InvestmentTransactionsTab() {
                             : (tx.units != null ? fmtUnits(tx.units) : '—')}
                         </td>
                         <td className="px-4 py-3 text-right text-sm text-gray-600 dark:text-gray-400">{isWithdrawal ? '—' : rateOrNav}</td>
-                        <td className="px-4 py-3 text-right font-medium">
+                        <td className="px-4 py-3 text-right text-sm">
                           {isWithdrawal ? (
                             gain != null ? (
-                              <span className={gain >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                              <span className={`font-medium ${gain >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                                 {gain >= 0 ? '+' : ''}{fmt(gain)}
                               </span>
                             ) : <span className="text-gray-400">—</span>
                           ) : (
-                            <span className="text-gray-900 dark:text-gray-100">{fmt(currentValue)}</span>
+                            <span className="text-gray-600 dark:text-gray-400">
+                              {tx.expiry_date ? new Date(tx.expiry_date).toLocaleDateString('vi-VN') : '—'}
+                            </span>
                           )}
                         </td>
                         <td className="px-4 py-3">
