@@ -118,6 +118,36 @@ export async function deleteMonthlyPlan(planId: string) {
   await supabase.from('monthly_plans').delete().eq('id', planId)
 }
 
+export async function findGoalByName(name: string) {
+  const userId = await getTestUserId()
+  const { data } = await supabase.from('savings_goals').select('goal_id').eq('user_id', userId).eq('goal_name', name).single()
+  return data
+}
+
+export async function findTransactionLast(assetType: string) {
+  const userId = await getTestUserId()
+  const { data } = await supabase.from('investment_transactions').select('transaction_id').eq('user_id', userId).eq('asset_type', assetType).order('created_at', { ascending: false }).limit(1).single()
+  return data
+}
+
+export async function findInsuranceMemberByName(name: string) {
+  const userId = await getTestUserId()
+  const { data } = await supabase.from('insurance_members').select('member_id').eq('user_id', userId).eq('member_name', name).single()
+  return data
+}
+
+export async function findFixedExpenseByName(name: string) {
+  const userId = await getTestUserId()
+  const { data } = await supabase.from('fixed_expenses').select('expense_id').eq('user_id', userId).eq('expense_name', name).single()
+  return data
+}
+
+export async function findMonthlyPlan(month: number, year: number) {
+  const userId = await getTestUserId()
+  const { data } = await supabase.from('monthly_plans').select('id').eq('user_id', userId).eq('month', month).eq('year', year).single()
+  return data
+}
+
 export async function getFirstFund() {
   const { data, error } = await supabase
     .from('funds')

@@ -36,14 +36,8 @@ test('can add an insurance member', async ({ page }) => {
   // Monthly fee: 12,000,000 / 12 = 1,000,000
   await expect(page.locator('text=/1.000.000|1,000,000/').first()).toBeVisible({ timeout: 5_000 })
 
-  // Cleanup
-  const { data } = await (await import('@supabase/supabase-js'))
-    .createClient(process.env.E2E_SUPABASE_URL!, process.env.E2E_SUPABASE_SERVICE_ROLE_KEY!)
-    .from('insurance_members')
-    .select('member_id')
-    .eq('member_name', 'E2E Insurance Member')
-    .single()
-  if (data) cleanup.add(() => api.deleteInsuranceMember(data.member_id))
+  const found = await api.findInsuranceMemberByName('E2E Insurance Member')
+  if (found) cleanup.add(() => api.deleteInsuranceMember(found.member_id))
 })
 
 test('can edit insurance member annual premium', async ({ page }) => {

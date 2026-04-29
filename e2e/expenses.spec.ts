@@ -30,13 +30,8 @@ test('can create a fixed expense', async ({ page }) => {
   await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 5_000 })
   await expect(page.locator('text=E2E Rent').first()).toBeVisible({ timeout: 8_000 })
 
-  const { data } = await (await import('@supabase/supabase-js'))
-    .createClient(process.env.E2E_SUPABASE_URL!, process.env.E2E_SUPABASE_SERVICE_ROLE_KEY!)
-    .from('fixed_expenses')
-    .select('expense_id')
-    .eq('expense_name', 'E2E Rent')
-    .single()
-  if (data) cleanup.add(() => api.deleteFixedExpense(data.expense_id))
+  const found = await api.findFixedExpenseByName('E2E Rent')
+  if (found) cleanup.add(() => api.deleteFixedExpense(found.expense_id))
 })
 
 test('can edit a fixed expense', async ({ page }) => {

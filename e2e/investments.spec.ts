@@ -34,17 +34,8 @@ test('can add a bank transaction', async ({ page }) => {
   // Transaction appears in list
   await expect(page.locator('text=/bank|ngân hàng/i').first()).toBeVisible({ timeout: 8_000 })
 
-  // Cleanup: find the newly created transaction
-  const { data } = await (await import('@supabase/supabase-js'))
-    .createClient(process.env.E2E_SUPABASE_URL!, process.env.E2E_SUPABASE_SERVICE_ROLE_KEY!)
-    .from('investment_transactions')
-    .select('transaction_id')
-    .eq('asset_type', 'bank')
-    .eq('amount_vnd', 10_000_000)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single()
-  if (data) cleanup.add(() => api.deleteTransaction(data.transaction_id))
+  const found = await api.findTransactionLast('bank')
+  if (found) cleanup.add(() => api.deleteTransaction(found.transaction_id))
 })
 
 test('can add a gold transaction', async ({ page }) => {
@@ -66,15 +57,8 @@ test('can add a gold transaction', async ({ page }) => {
 
   await expect(page.locator('text=/gold|vàng/i').first()).toBeVisible({ timeout: 8_000 })
 
-  const { data } = await (await import('@supabase/supabase-js'))
-    .createClient(process.env.E2E_SUPABASE_URL!, process.env.E2E_SUPABASE_SERVICE_ROLE_KEY!)
-    .from('investment_transactions')
-    .select('transaction_id')
-    .eq('asset_type', 'gold')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single()
-  if (data) cleanup.add(() => api.deleteTransaction(data.transaction_id))
+  const found = await api.findTransactionLast('gold')
+  if (found) cleanup.add(() => api.deleteTransaction(found.transaction_id))
 })
 
 test('can add a fund transaction', async ({ page }) => {
@@ -103,16 +87,8 @@ test('can add a fund transaction', async ({ page }) => {
 
   await expect(page.locator(`text=${fund.code}`).first()).toBeVisible({ timeout: 8_000 })
 
-  const { data } = await (await import('@supabase/supabase-js'))
-    .createClient(process.env.E2E_SUPABASE_URL!, process.env.E2E_SUPABASE_SERVICE_ROLE_KEY!)
-    .from('investment_transactions')
-    .select('transaction_id')
-    .eq('asset_type', 'fund')
-    .eq('fund_id', fund.id)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single()
-  if (data) cleanup.add(() => api.deleteTransaction(data.transaction_id))
+  const found = await api.findTransactionLast('fund')
+  if (found) cleanup.add(() => api.deleteTransaction(found.transaction_id))
 })
 
 test('filter by asset type shows only matching rows', async ({ page }) => {

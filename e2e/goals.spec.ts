@@ -22,14 +22,8 @@ test('can create a new savings goal', async ({ page }) => {
   await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 5_000 })
   await expect(page.locator('text=E2E Test Goal').first()).toBeVisible({ timeout: 8_000 })
 
-  // Register cleanup
-  const { data } = await (await import('@supabase/supabase-js'))
-    .createClient(process.env.E2E_SUPABASE_URL!, process.env.E2E_SUPABASE_SERVICE_ROLE_KEY!)
-    .from('savings_goals')
-    .select('goal_id')
-    .eq('goal_name', 'E2E Test Goal')
-    .single()
-  if (data) cleanup.add(() => api.deleteGoal(data.goal_id))
+  const found = await api.findGoalByName('E2E Test Goal')
+  if (found) cleanup.add(() => api.deleteGoal(found.goal_id))
 })
 
 test('can edit an existing savings goal', async ({ page }) => {

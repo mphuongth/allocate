@@ -31,15 +31,8 @@ test('create monthly plan by entering salary', async ({ page }) => {
     // Fund Investments or Fixed Expenses sections appear after plan is created
     await expect(page.locator('text=/Fund|Expenses|Chi phí|Đầu tư/i').first()).toBeVisible({ timeout: 8_000 })
 
-    // Register cleanup — delete the plan we created
-    const { data } = await (await import('@supabase/supabase-js'))
-      .createClient(process.env.E2E_SUPABASE_URL!, process.env.E2E_SUPABASE_SERVICE_ROLE_KEY!)
-      .from('monthly_plans')
-      .select('id')
-      .eq('month', MONTH)
-      .eq('year', YEAR)
-      .single()
-    if (data) cleanup.add(() => api.deleteMonthlyPlan(data.id))
+    const found = await api.findMonthlyPlan(MONTH, YEAR)
+    if (found) cleanup.add(() => api.deleteMonthlyPlan(found.id))
   }
 })
 
