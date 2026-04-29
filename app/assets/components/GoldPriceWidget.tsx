@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { TrendingUp, ArrowUpRight, ArrowDownRight, Minus, RefreshCw } from 'lucide-react'
 import { useTranslations } from 'next-intl'
+import { fmt } from '@/lib/formatters'
 
 interface GoldPriceData {
   price_per_chi: number
@@ -13,8 +14,6 @@ interface GoldPriceData {
 interface Props {
   onRefresh: () => void
 }
-
-const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
 
 export default function GoldPriceWidget({ onRefresh }: Props) {
   const t = useTranslations('dashboard')

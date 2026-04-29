@@ -12,6 +12,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { fmt, fmtNav, fmtUnits } from '@/lib/formatters'
+import { parseExcelPaste, type ParsedRow } from '@/lib/parseExcelPaste'
 
 interface Transaction {
   transaction_id: string
@@ -69,50 +71,6 @@ function calcCurrentValue(tx: Transaction): number {
   return tx.amount_vnd * Math.pow(1 + tx.interest_rate / 100, days / 365)
 }
 
-const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
-const fmtNav = (n: number) => '₫ ' + n.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-const fmtUnits = (n: number) => n.toLocaleString('vi-VN', { maximumFractionDigits: 2 })
-
-interface ParsedRow {
-  investment_date: string
-  amount_vnd: number
-  unit_price: number
-  units: number
-  error?: string
-}
-
-function parseExcelPaste(raw: string): ParsedRow[] {
-  return raw.trim().split('\n')
-    .map(line => line.split('\t'))
-    .filter(cols => cols.length >= 5)
-    .map(cols => {
-      const raw0 = cols[0].trim()
-      let investment_date = ''
-      if (/^\d{4}-\d{2}-\d{2}$/.test(raw0)) {
-        // ISO date: 2023-07-15 → keep as-is
-        investment_date = raw0
-      } else {
-        const parts = raw0.split('/')
-        if (parts.length === 3) {
-          // D/M/YYYY full date: 15/7/2023 → 2023-07-15
-          const [d, m, y] = parts
-          investment_date = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
-        } else if (parts.length === 2) {
-          // M/YYYY month only: 7/2023 → 2023-07-01
-          const [m, y] = parts
-          investment_date = `${y}-${m.padStart(2, '0')}-01`
-        }
-      }
-      const parseNum = (s: string) => parseFloat(s.replace(/,/g, '').trim())
-      const amount_vnd = parseNum(cols[1])
-      // cols[2] = Tiền mua — skip
-      const unit_price = parseNum(cols[3])
-      const units = parseNum(cols[4])
-      const error = (!investment_date || isNaN(amount_vnd) || isNaN(unit_price) || isNaN(units))
-        ? 'Cannot parse row' : undefined
-      return { investment_date, amount_vnd, unit_price, units, error }
-    })
-}
 
 interface AppliedFilters { asset_type: string; goal_id: string; from_date: string; to_date: string }
 const EMPTY_FILTERS: AppliedFilters = { asset_type: '', goal_id: '', from_date: '', to_date: '' }

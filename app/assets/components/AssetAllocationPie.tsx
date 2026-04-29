@@ -2,8 +2,7 @@
 
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { useTranslations } from 'next-intl'
-
-const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
+import { fmt } from '@/lib/formatters'
 
 const PALETTE = [
   { key: 'equity',   color: '#8b5cf6', ns: 'funds',        labelKey: 'typeEquity' },

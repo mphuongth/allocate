@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import DecimalInput from '@/app/components/ui/DecimalInput'
 import type { MonthlyPlan, FundInvestment, Fund, Goal } from '../PlanningClient'
+import { fmt } from '@/lib/formatters'
 
 interface Props {
   plan: MonthlyPlan
@@ -19,8 +20,6 @@ interface Props {
   onRefresh: () => void
   onToast: (msg: string) => void
 }
-
-const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
 
 const emptyForm = { fund_id: '', goal_id: '', amount_vnd: '', units: '', unit_price: '', investment_date: '' }
 

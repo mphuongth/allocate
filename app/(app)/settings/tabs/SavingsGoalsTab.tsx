@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { fmt } from '@/lib/formatters'
 
 interface SavingsGoal {
   goal_id: string
@@ -149,8 +150,6 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
     }
     setDeletingGoal(false)
   }
-
-  const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
 
   if (selectedGoal) {
     return (

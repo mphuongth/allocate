@@ -3,8 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Wallet, Trash2, TriangleAlert } from 'lucide-react'
 import { useTranslations } from 'next-intl'
-
-const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
+import { fmt } from '@/lib/formatters'
 
 const fmtDate = (dateStr: string): string => {
   try {

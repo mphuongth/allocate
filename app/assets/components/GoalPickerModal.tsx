@@ -5,8 +5,7 @@ import { useTranslations } from 'next-intl'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
-
-const fmt = (n: number | null) => n != null ? '₫ ' + Math.round(n).toLocaleString('vi-VN') : '—'
+import { fmt } from '@/lib/formatters'
 
 interface GoalOption {
   id: string
@@ -62,7 +61,7 @@ export default function GoalPickerModal({ open, onOpenChange, fundName, goals, o
                 <div className="mb-3">
                   <p className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">{goal.name}</p>
                   <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
-                    <span>{t('goalTarget', { amount: fmt(goal.targetAmount) })}</span>
+                    <span>{t('goalTarget', { amount: goal.targetAmount != null ? fmt(goal.targetAmount) : '—' })}</span>
                     {goal.progressPercent != null && (
                       <span className="font-medium text-emerald-600 dark:text-emerald-400">{t('goalProgress', { pct: Math.round(goal.progressPercent) })}</span>
                     )}

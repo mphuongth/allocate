@@ -2,6 +2,7 @@
 
 import { useTranslations } from 'next-intl'
 import type { MonthlyPlan, FundInvestment, DirectSaving, FixedExpense, InsuranceMember, OtherExpense } from '../PlanningClient'
+import { fmt } from '@/lib/formatters'
 
 interface Props {
   plan: MonthlyPlan | null
@@ -11,8 +12,6 @@ interface Props {
   insuranceMembers: InsuranceMember[]
   otherExpenses: OtherExpense[]
 }
-
-const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
 
 interface GoalRow {
   label: string

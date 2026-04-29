@@ -3,14 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useTranslations } from 'next-intl'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
-
-const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
-const fmtShort = (n: number) => {
-  if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1) + 'B'
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(0) + 'M'
-  return n.toLocaleString('vi-VN')
-}
-const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`
+import { fmt, fmtShort, fmtPct } from '@/lib/formatters'
 
 const TIME_RANGES = ['6m', '1y', '3y', 'All'] as const
 type TimeRange = typeof TIME_RANGES[number]
