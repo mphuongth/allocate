@@ -1,26 +1,18 @@
-import { chromium, expect } from '@playwright/test'
-import fs from 'fs'
+import { test as setup, expect } from '@playwright/test'
 import path from 'path'
 
 const AUTH_FILE = path.join(__dirname, '.auth', 'session.json')
 
-async function globalSetup() {
+setup('authenticate', async ({ page, baseURL }) => {
   const email = process.env.E2E_TEST_EMAIL
   const password = process.env.E2E_TEST_PASSWORD
 
   if (!email || !password) {
     throw new Error(
-      'E2E_TEST_EMAIL and E2E_TEST_PASSWORD must be set.\n' +
-      'Create a .env.e2e file or set them as environment variables.\n' +
+      'E2E_TEST_EMAIL and E2E_TEST_PASSWORD must be set. ' +
       'See the E2E test plan for setup instructions.'
     )
   }
-
-  fs.mkdirSync(path.dirname(AUTH_FILE), { recursive: true })
-
-  const browser = await chromium.launch()
-  const context = await browser.newContext()
-  const page = await context.newPage()
 
   await page.goto('/auth/login')
   await page.locator('#email').fill(email)
@@ -30,8 +22,7 @@ async function globalSetup() {
   await page.waitForURL('**/dashboard', { timeout: 15_000 })
   await expect(page).toHaveURL(/dashboard/)
 
-  await context.storageState({ path: AUTH_FILE })
-  await browser.close()
-}
+  await page.context().storageState({ path: AUTH_FILE })
 
-export default globalSetup
+  void baseURL
+})
