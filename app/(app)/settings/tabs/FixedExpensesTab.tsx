@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import AmountInput from '@/app/components/ui/AmountInput'
+import { fmt } from '@/lib/formatters'
 
 const EXPENSE_CATEGORIES = ['Housing', 'Utilities', 'Transportation', 'Insurance', 'Parents', 'Education', 'Subscriptions', 'Other']
 
@@ -22,8 +23,6 @@ interface Expense {
   effective_from: string | null
   effective_to: string | null
 }
-
-const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
 
 // "2026-04-01" → "2026-04" for <input type="month">
 function toMonthInput(date: string | null): string {

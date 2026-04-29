@@ -4,9 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import type { GoalData } from '@/app/assets/DashboardClient'
-
-const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
-const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`
+import { fmt, fmtPct } from '@/lib/formatters'
 
 interface Transaction {
   transaction_id: string

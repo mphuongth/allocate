@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import type { MonthlyPlan, OtherExpense } from '../PlanningClient'
+import { fmt } from '@/lib/formatters'
 
 interface Props {
   plan: MonthlyPlan
@@ -15,8 +16,6 @@ interface Props {
   onRefresh: () => void
   onToast: (msg: string) => void
 }
-
-const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
 
 export default function OtherExpensesSection({ plan, otherExpenses, onRefresh, onToast }: Props) {
   const t = useTranslations('planning')

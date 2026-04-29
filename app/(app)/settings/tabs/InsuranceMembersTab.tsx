@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { fmt } from '@/lib/formatters'
 
 const RELATIONSHIPS = ['Self', 'Spouse', 'Husband', 'Wife', 'Child', 'Parent', 'Other']
 
@@ -21,8 +22,6 @@ interface InsuranceMember {
   payment_date: string | null
   created_at: string
 }
-
-const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
 
 const emptyForm = { member_name: '', relationship: '', annual_payment_vnd: '', payment_date: '' }
 

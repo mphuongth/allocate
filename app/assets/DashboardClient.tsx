@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
+import { fmt } from '@/lib/formatters'
 import { Plus } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import dynamic from 'next/dynamic'
@@ -754,7 +755,6 @@ export default function DashboardClient({ userId }: { userId: string }) {
             const parsedAmount = Number(sellAmount) || 0
             const gain = parsedAmount - costBasis
             const remaining = sellFund.quantity - units
-            const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
             return (
               <div className="space-y-4 py-2">
                 <div className="grid grid-cols-2 gap-3 text-sm bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3">
@@ -860,7 +860,6 @@ export default function DashboardClient({ userId }: { userId: string }) {
             </DialogTitle>
           </DialogHeader>
           {sellNonFund && (() => {
-            const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
             const isBank = sellNonFund.type === 'bank'
             const originalPricePerUnit = sellNonFund.units && sellNonFund.units > 0
               ? sellNonFund.amount / sellNonFund.units : 0

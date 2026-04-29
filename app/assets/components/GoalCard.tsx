@@ -2,9 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
-
-const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
-const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`
+import { fmt, fmtPct } from '@/lib/formatters'
 
 const GOAL_COLORS = [
   '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444',

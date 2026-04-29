@@ -2,11 +2,7 @@
 
 import { useTranslations } from 'next-intl'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-
-const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
-const fmtNav = (n: number) => '₫ ' + n.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-const fmtUnits = (n: number) => n.toLocaleString('vi-VN', { maximumFractionDigits: 2 })
-const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`
+import { fmt, fmtNav, fmtUnits, fmtPct } from '@/lib/formatters'
 
 interface PurchaseHistory {
   purchase_date: string

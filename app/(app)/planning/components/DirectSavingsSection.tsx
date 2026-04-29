@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { MonthlyPlan, DirectSaving, Goal } from '../PlanningClient'
+import { fmt } from '@/lib/formatters'
 
 interface Props {
   plan: MonthlyPlan
@@ -18,7 +19,6 @@ interface Props {
   onToast: (msg: string) => void
 }
 
-const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
 const emptyForm = { goal_id: '', amount_vnd: '', interest_rate: '', expiry_date: '', investment_date: '' }
 
 

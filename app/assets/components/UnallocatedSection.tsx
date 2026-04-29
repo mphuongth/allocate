@@ -3,10 +3,7 @@
 import { RefreshCw, TrendingDown, Target } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import type { FundBreakdownItem, NonFundUnallocatedItem } from '../DashboardClient'
-
-const fmt = (n: number) => '₫ ' + Math.round(n).toLocaleString('vi-VN')
-const fmtNav = (n: number) => '₫ ' + n.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`
+import { fmt, fmtNav, fmtPct } from '@/lib/formatters'
 
 const TYPE_BADGE: Record<string, string> = {
   // Unified with the `fund:` entry in the ASSET_COLORS maps in
