@@ -6,14 +6,13 @@ const cleanup = makeCleanupStack()
 test.afterEach(() => cleanup.run())
 
 async function openExpensesTab(page: import('@playwright/test').Page) {
-  await page.goto('/settings')
-  await page.getByRole('button', { name: /fixed expenses|chi phí/i }).click()
+  await page.goto('/settings?tab=expenses')
   await page.waitForLoadState('networkidle')
 }
 
 test('fixed expenses tab renders', async ({ page }) => {
   await openExpensesTab(page)
-  const content = page.locator('table, [role="table"], text=/no expenses|empty|chưa có/i').first()
+  const content = page.locator('table').or(page.getByText(/no expenses yet/i)).first()
   await expect(content).toBeVisible({ timeout: 8_000 })
 })
 

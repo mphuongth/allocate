@@ -6,14 +6,13 @@ const cleanup = makeCleanupStack()
 test.afterEach(() => cleanup.run())
 
 async function openInsuranceTab(page: import('@playwright/test').Page) {
-  await page.goto('/settings')
-  await page.getByRole('button', { name: /insurance members|bảo hiểm/i }).click()
+  await page.goto('/settings?tab=insurance')
   await page.waitForLoadState('networkidle')
 }
 
 test('insurance tab renders table or empty state', async ({ page }) => {
   await openInsuranceTab(page)
-  const content = page.locator('table, [role="table"], text=/no members|empty|chưa có/i').first()
+  const content = page.locator('table').or(page.getByText(/no insurance members yet/i)).first()
   await expect(content).toBeVisible({ timeout: 8_000 })
 })
 

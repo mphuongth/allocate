@@ -1,9 +1,10 @@
 import { test as setup, expect } from '@playwright/test'
 import path from 'path'
+import * as api from './helpers/api'
 
 const AUTH_FILE = path.join(__dirname, '.auth', 'session.json')
 
-setup('authenticate', async ({ page, baseURL }) => {
+setup('authenticate', async ({ page }) => {
   const email = process.env.E2E_TEST_EMAIL
   const password = process.env.E2E_TEST_PASSWORD
 
@@ -24,5 +25,20 @@ setup('authenticate', async ({ page, baseURL }) => {
 
   await page.context().storageState({ path: AUTH_FILE })
 
-  void baseURL
+  // Seed one bank transaction so the dashboard shows real data (not empty state)
+  // Only seed if none exist already (idempotent across retries)
+  try {
+    const userId = await api.getTestUserId()
+    const { createClient } = await import('@supabase/supabase-js')
+    const sb = createClient(process.env.E2E_SUPABASE_URL!, process.env.E2E_SUPABASE_SERVICE_ROLE_KEY!)
+    const { count } = await sb.from('investment_transactions').select('*', { count: 'exact', head: true }).eq('user_id', userId)
+    if (!count || count === 0) {
+      await api.createTransaction({
+        asset_type: 'bank',
+        amount_vnd: 10_000_000,
+        investment_date: '2026-01-01',
+        interest_rate: 6,
+      })
+    }
+  } catch { /* non-fatal — dashboard will show empty state for affected tests */ }
 })

@@ -68,7 +68,7 @@ test('clicking a goal card navigates to goal detail', async ({ page }) => {
 
   await expect(page).toHaveURL(/settings.*goal/)
   // GoalDetailView has a back button
-  await expect(page.getByRole('button', { name: /back|goals/i }).first()).toBeVisible({ timeout: 8_000 })
+  await expect(page.getByTestId("goal-back-btn").first()).toBeVisible({ timeout: 8_000 })
 })
 
 test('clicking unallocated fund opens FundDetailModal', async ({ page }) => {

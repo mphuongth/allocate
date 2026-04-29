@@ -6,16 +6,14 @@ const cleanup = makeCleanupStack()
 test.afterEach(() => cleanup.run())
 
 async function openTransactionsTab(page: import('@playwright/test').Page) {
-  await page.goto('/settings')
-  await page.getByRole('button', { name: /investment transactions|giao dịch/i }).click()
+  await page.goto('/settings?tab=transactions')
   await page.waitForLoadState('networkidle')
 }
 
 test('transactions tab renders table or empty state', async ({ page }) => {
   await openTransactionsTab(page)
-  const table = page.locator('table, [role="table"]').first()
-  const emptyState = page.locator('text=/no transactions|empty|chưa có/i').first()
-  await expect(table.or(emptyState)).toBeVisible({ timeout: 8_000 })
+  const content = page.locator('table').or(page.getByText(/no investment transactions yet/i)).first()
+  await expect(content).toBeVisible({ timeout: 8_000 })
 })
 
 test('can add a bank transaction', async ({ page }) => {
