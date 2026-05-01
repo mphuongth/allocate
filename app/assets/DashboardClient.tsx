@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { fmt } from '@/lib/formatters'
-import { Plus } from 'lucide-react'
+import { Plus, FileDown } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import dynamic from 'next/dynamic'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -145,6 +145,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const [nfAmount, setNfAmount] = useState('')
   const [nfSaving, setNfSaving] = useState(false)
   const [nfError, setNfError] = useState('')
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false)
   const [pullY, setPullY] = useState(0)
   const PULL_THRESHOLD = 65
 
@@ -285,6 +286,17 @@ export default function DashboardClient({ userId }: { userId: string }) {
       setGoalError('Could not save goal')
     }
     setGoalSaving(false)
+  }
+
+  async function handleGenerateReport() {
+    if (!data || isGeneratingReport) return
+    setIsGeneratingReport(true)
+    try {
+      const { downloadPortfolioPDF } = await import('@/lib/generateReport')
+      await downloadPortfolioPDF(data)
+    } finally {
+      setIsGeneratingReport(false)
+    }
   }
 
   function openSellFund(fund: FundBreakdownItem) {
@@ -595,6 +607,23 @@ export default function DashboardClient({ userId }: { userId: string }) {
         {/* Dashboard content */}
         {!loading && data && !isEmpty && (
           <div className="space-y-8">
+            {/* Dashboard header with report button */}
+            <div className="flex items-center justify-end">
+              <button
+                data-testid="generate-report-btn"
+                onClick={handleGenerateReport}
+                disabled={isGeneratingReport}
+                className="flex items-center gap-2 h-9 px-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {isGeneratingReport ? (
+                  <span className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <FileDown className="h-4 w-4" />
+                )}
+                {isGeneratingReport ? 'Đang tạo...' : 'Tải báo cáo PDF'}
+              </button>
+            </div>
+
             {/* Net Worth + Asset Allocation */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2">
