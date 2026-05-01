@@ -26,15 +26,15 @@ test('can add a bank transaction', async ({ page }) => {
 
   await expect(page.getByRole('dialog')).toBeVisible()
 
-  // Asset type should already be bank (default)
+  // Bank is the default asset type — no selection needed
   await page.getByLabel(/date|ngày/i).first().fill('2026-01-15')
   await page.getByLabel(/amount|số tiền/i).first().fill('10000000')
 
   await page.getByRole('button', { name: /save|create|lưu/i }).click()
   await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 5_000 })
 
-  // Transaction appears in list
-  await expect(page.locator('text=/bank|ngân hàng/i').first()).toBeVisible({ timeout: 15_000 })
+  // Scope to table row to avoid matching hidden sm:hidden mobile cards or <option> elements
+  await expect(page.locator('tr').filter({ hasText: /bank|ngân hàng/i }).first()).toBeVisible({ timeout: 15_000 })
 
   const found = await api.findTransactionLast('bank')
   if (found) cleanup.add(() => api.deleteTransaction(found.transaction_id))
@@ -45,19 +45,19 @@ test('can add a gold transaction', async ({ page }) => {
   await page.getByTestId('create-btn').click()
   await expect(page.getByRole('dialog')).toBeVisible()
 
-  // Select Gold asset type
-  const assetSelect = page.getByRole('combobox').first()
-  await assetSelect.selectOption('gold')
+  // #asset_type is a shadcn Select (button role=combobox), not a native <select>
+  await page.locator('#asset_type').click()
+  await page.getByRole('option', { name: 'Gold' }).click()
 
   await page.getByLabel(/date|ngày/i).first().fill('2026-01-15')
   await page.getByLabel(/amount|số tiền/i).first().fill('8500000')
-  await page.getByLabel(/units|chi/i).first().fill('1')
-  await page.getByLabel(/price|giá/i).first().fill('8500000')
+  await page.getByLabel(/chi/i).first().fill('1')
+  await page.getByLabel(/unit price|giá/i).first().fill('8500000')
 
   await page.getByRole('button', { name: /save|create|lưu/i }).click()
   await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 5_000 })
 
-  await expect(page.locator('text=/gold|vàng/i').first()).toBeVisible({ timeout: 15_000 })
+  await expect(page.locator('tr').filter({ hasText: /gold|vàng/i }).first()).toBeVisible({ timeout: 15_000 })
 
   const found = await api.findTransactionLast('gold')
   if (found) cleanup.add(() => api.deleteTransaction(found.transaction_id))
@@ -71,23 +71,23 @@ test('can add a fund transaction', async ({ page }) => {
   await page.getByTestId('create-btn').click()
   await expect(page.getByRole('dialog')).toBeVisible()
 
-  // Select Fund asset type
-  const assetSelect = page.getByRole('combobox').first()
-  await assetSelect.selectOption('fund')
+  // #asset_type is a shadcn Select
+  await page.locator('#asset_type').click()
+  await page.getByRole('option', { name: 'Fund' }).click()
 
-  // Select fund from dropdown
-  const fundSelect = page.getByRole('combobox').nth(1)
-  await fundSelect.selectOption(fund.id)
+  // Select fund from #fund_id shadcn Select
+  await page.locator('#fund_id').click()
+  await page.getByRole('option').first().click()
 
   await page.getByLabel(/date|ngày/i).first().fill('2026-01-15')
   await page.getByLabel(/amount|số tiền/i).first().fill('5000000')
   await page.getByLabel(/units|ccq/i).first().fill('200')
-  await page.getByLabel(/nav|price/i).first().fill(String(fund.nav))
+  await page.getByLabel(/nav|purchase/i).first().fill(String(fund!.nav))
 
   await page.getByRole('button', { name: /save|create|lưu/i }).click()
   await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 5_000 })
 
-  await expect(page.locator(`text=${fund.code}`).first()).toBeVisible({ timeout: 15_000 })
+  await expect(page.locator('tr').filter({ hasText: fund!.code }).first()).toBeVisible({ timeout: 15_000 })
 
   const found = await api.findTransactionLast('fund')
   if (found) cleanup.add(() => api.deleteTransaction(found.transaction_id))
@@ -107,7 +107,7 @@ test('filter by asset type shows only matching rows', async ({ page }) => {
     await filterSelect.selectOption('bank')
     await page.waitForTimeout(500)
     // Gold rows should not be visible
-    await expect(page.locator('text=/gold|vàng/i').first()).not.toBeVisible()
+    await expect(page.locator('tr').filter({ hasText: /gold|vàng/i }).first()).not.toBeVisible()
   }
 })
 
@@ -115,24 +115,27 @@ test('can delete a transaction', async ({ page }) => {
   const tx = await api.createTransaction({ asset_type: 'bank', amount_vnd: 9_999_000, investment_date: '2026-01-01', notes: 'E2E Delete TX' })
 
   await openTransactionsTab(page)
-  const txRow = page.locator('text=E2E Delete TX').first()
+  const txRow = page.locator('tr').filter({ hasText: 'E2E Delete TX' }).first()
   await expect(txRow).toBeVisible({ timeout: 15_000 })
 
-  const deleteBtn = txRow.locator('..').locator('..').getByRole('button', { name: /delete|xóa/i }).first()
+  // Delete button is last icon button in the row
+  const deleteBtn = txRow.locator('button').last()
   await deleteBtn.click()
   await expect(page.getByRole('dialog')).toBeVisible()
   await page.getByRole('button', { name: /confirm|delete|xóa/i }).last().click()
 
-  await expect(page.locator('text=E2E Delete TX')).not.toBeVisible({ timeout: 15_000 })
+  await expect(page.locator('tr').filter({ hasText: 'E2E Delete TX' })).not.toBeVisible({ timeout: 15_000 })
   void tx
 })
 
 test('fund library page shows funds list', async ({ page }) => {
   await page.goto('/funds')
-  await page.waitForLoadState('networkidle')
-  // Either the funds table is visible or an empty state
-  const content = page.locator('table').or(page.getByText(/no funds yet/i)).first()
-  await expect(content).toBeVisible({ timeout: 10_000 })
+  // Wait for content — don't use networkidle which resolves before React useEffect fires the API call
+  const content = page.locator('table')
+    .or(page.getByText(/no funds yet/i))
+    .or(page.getByText(/failed to load/i))
+    .first()
+  await expect(content).toBeVisible({ timeout: 20_000 })
 })
 
 test('DCA calculator in Fund Library shows projection', async ({ page }) => {

@@ -25,17 +25,20 @@ test('can add an insurance member', async ({ page }) => {
   await expect(page.getByRole('dialog')).toBeVisible()
   await page.locator('#member_name').fill('E2E Insurance Member')
 
-  const relationshipSelect = page.locator('#relationship')
-  await relationshipSelect.selectOption({ index: 1 })
+  // #relationship is a shadcn Select (button role=combobox), not a native <select>
+  await page.locator('#relationship').click()
+  await page.getByRole('option').first().click()
 
   await page.locator('#annual_payment_vnd').fill('12000000')
 
   await page.getByRole('button', { name: /save|add|lưu/i }).click()
   await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 5_000 })
 
-  await expect(page.locator('text=E2E Insurance Member').first()).toBeVisible({ timeout: 15_000 })
+  // Scope to table row (avoids hidden sm:hidden mobile cards)
+  const memberRow = page.locator('tr').filter({ hasText: 'E2E Insurance Member' }).first()
+  await expect(memberRow).toBeVisible({ timeout: 15_000 })
   // Monthly fee: 12,000,000 / 12 = 1,000,000
-  await expect(page.locator('text=/1.000.000|1,000,000/').first()).toBeVisible({ timeout: 5_000 })
+  await expect(memberRow.locator('text=/1.000.000|1,000,000/').first()).toBeVisible({ timeout: 5_000 })
 
   const found = await api.findInsuranceMemberByName('E2E Insurance Member')
   if (found) cleanup.add(() => api.deleteInsuranceMember(found.member_id))
@@ -50,10 +53,11 @@ test('can edit insurance member annual premium', async ({ page }) => {
   cleanup.add(() => api.deleteInsuranceMember(member.member_id))
 
   await openInsuranceTab(page)
-  const memberRow = page.locator('text=E2E Edit Insurance').first()
+  const memberRow = page.locator('tr').filter({ hasText: 'E2E Edit Insurance' }).first()
   await expect(memberRow).toBeVisible({ timeout: 15_000 })
 
-  const editBtn = memberRow.locator('..').locator('..').getByRole('button', { name: /edit|sửa/i }).first()
+  // Edit button is first icon button in the row
+  const editBtn = memberRow.locator('button').nth(0)
   await editBtn.click()
   await expect(page.getByRole('dialog')).toBeVisible()
 
@@ -65,7 +69,8 @@ test('can edit insurance member annual premium', async ({ page }) => {
   await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 5_000 })
 
   // Monthly should now be 24,000,000 / 12 = 2,000,000
-  await expect(page.locator('text=/2.000.000|2,000,000/').first()).toBeVisible({ timeout: 5_000 })
+  const updatedRow = page.locator('tr').filter({ hasText: 'E2E Edit Insurance' }).first()
+  await expect(updatedRow.locator('text=/2.000.000|2,000,000/').first()).toBeVisible({ timeout: 5_000 })
 })
 
 test('can delete an insurance member', async ({ page }) => {
@@ -76,14 +81,15 @@ test('can delete an insurance member', async ({ page }) => {
   })
 
   await openInsuranceTab(page)
-  const memberRow = page.locator('text=E2E Delete Insurance').first()
+  const memberRow = page.locator('tr').filter({ hasText: 'E2E Delete Insurance' }).first()
   await expect(memberRow).toBeVisible({ timeout: 15_000 })
 
-  const deleteBtn = memberRow.locator('..').locator('..').getByRole('button', { name: /delete|xóa/i }).first()
+  // Delete button is second icon button in the row
+  const deleteBtn = memberRow.locator('button').nth(1)
   await deleteBtn.click()
   await expect(page.getByRole('dialog')).toBeVisible()
   await page.getByRole('button', { name: /confirm|delete|xóa/i }).last().click()
 
-  await expect(page.locator('text=E2E Delete Insurance')).not.toBeVisible({ timeout: 15_000 })
+  await expect(page.locator('tr').filter({ hasText: 'E2E Delete Insurance' })).not.toBeVisible({ timeout: 15_000 })
   void member
 })

@@ -26,7 +26,8 @@ test('create monthly plan by entering salary', async ({ page }) => {
   const salaryInput = page.getByTestId('salary-input')
   if (await salaryInput.isVisible({ timeout: 3_000 })) {
     await salaryInput.fill('25000000')
-    await page.getByRole('button', { name: /save|lưu/i }).first().click()
+    // SalaryInput saves on Enter (onKeyDown) or blur — there is no save button
+    await salaryInput.press('Enter')
     await page.waitForTimeout(1_500)
     // Fund Investments or Fixed Expenses sections appear after plan is created
     await expect(page.locator('text=/Fund|Expenses|Chi phí|Đầu tư/i').first()).toBeVisible({ timeout: 8_000 })

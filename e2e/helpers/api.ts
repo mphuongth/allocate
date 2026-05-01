@@ -153,7 +153,7 @@ export async function getFirstFund() {
     .from('funds')
     .select('id, name, code, nav, fund_type')
     .limit(1)
-    .single()
-  if (error) throw error
+    .maybeSingle()
+  if (error) return null
   return data
 }

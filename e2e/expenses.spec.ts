@@ -26,12 +26,18 @@ test('can create a fixed expense', async ({ page }) => {
 
   await expect(page.getByRole('dialog')).toBeVisible()
   await page.locator('#expense_name').fill('E2E Rent')
-  await page.locator('#category').selectOption({ index: 1 })
+
+  // #category is a shadcn Select (button role=combobox), not a native <select>
+  await page.locator('#category').click()
+  await page.getByRole('option').first().click()
+
   await page.locator('#amount_vnd').fill('5000000')
 
   await page.getByRole('button', { name: /save|create|lưu/i }).click()
   await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 5_000 })
-  await expect(page.locator('text=E2E Rent').first()).toBeVisible({ timeout: 15_000 })
+
+  // Scope to table row (avoids hidden sm:hidden mobile cards)
+  await expect(page.locator('tr').filter({ hasText: 'E2E Rent' }).first()).toBeVisible({ timeout: 15_000 })
 
   const found = await api.findFixedExpenseByName('E2E Rent')
   if (found) cleanup.add(() => api.deleteFixedExpense(found.expense_id))
@@ -46,10 +52,11 @@ test('can edit a fixed expense', async ({ page }) => {
   cleanup.add(() => api.deleteFixedExpense(expense.expense_id))
 
   await openExpensesTab(page)
-  const row = page.locator('text=E2E Edit Expense').first()
+  const row = page.locator('tr').filter({ hasText: 'E2E Edit Expense' }).first()
   await expect(row).toBeVisible({ timeout: 15_000 })
 
-  const editBtn = row.locator('..').locator('..').getByRole('button', { name: /edit|sửa/i }).first()
+  // Edit button is first icon button in the row
+  const editBtn = row.locator('button').nth(0)
   await editBtn.click()
   await expect(page.getByRole('dialog')).toBeVisible()
 
@@ -58,7 +65,7 @@ test('can edit a fixed expense', async ({ page }) => {
   await nameInput.fill('E2E Edit Expense Updated')
 
   await page.getByRole('button', { name: /save|lưu/i }).click()
-  await expect(page.locator('text=E2E Edit Expense Updated').first()).toBeVisible({ timeout: 15_000 })
+  await expect(page.locator('tr').filter({ hasText: 'E2E Edit Expense Updated' }).first()).toBeVisible({ timeout: 15_000 })
 })
 
 test('can delete a fixed expense', async ({ page }) => {
@@ -69,15 +76,16 @@ test('can delete a fixed expense', async ({ page }) => {
   })
 
   await openExpensesTab(page)
-  const row = page.locator('text=E2E Delete Expense').first()
+  const row = page.locator('tr').filter({ hasText: 'E2E Delete Expense' }).first()
   await expect(row).toBeVisible({ timeout: 15_000 })
 
-  const deleteBtn = row.locator('..').locator('..').getByRole('button', { name: /delete|xóa/i }).first()
+  // Delete button is second icon button in the row
+  const deleteBtn = row.locator('button').nth(1)
   await deleteBtn.click()
   await expect(page.getByRole('dialog')).toBeVisible()
   await page.getByRole('button', { name: /confirm|delete|xóa/i }).last().click()
 
-  await expect(page.locator('text=E2E Delete Expense')).not.toBeVisible({ timeout: 15_000 })
+  await expect(page.locator('tr').filter({ hasText: 'E2E Delete Expense' })).not.toBeVisible({ timeout: 15_000 })
   void expense
 })
 
@@ -99,7 +107,7 @@ test('effective period hides expense outside date range on planning page', async
 
   // Verify it appears in settings
   await openExpensesTab(page)
-  await expect(page.locator('text=E2E Period Expense').first()).toBeVisible({ timeout: 15_000 })
+  await expect(page.locator('tr').filter({ hasText: 'E2E Period Expense' }).first()).toBeVisible({ timeout: 15_000 })
 
   // Navigate to planning for current month — expense should appear
   const plan = await api.createMonthlyPlan({ month, year, salary_vnd: 10_000_000 })
