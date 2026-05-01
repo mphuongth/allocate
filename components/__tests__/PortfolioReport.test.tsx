@@ -8,6 +8,7 @@ vi.mock('@react-pdf/renderer', () => ({
   View: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
   Text: ({ children }: { children: React.ReactNode }) => React.createElement('span', null, children),
   StyleSheet: { create: (s: unknown) => s },
+  Font: { register: vi.fn() },
   pdf: vi.fn(() => ({
     toBlob: vi.fn().mockResolvedValue(new Blob(['%PDF-1.4'], { type: 'application/pdf' })),
   })),

@@ -1,21 +1,30 @@
-import { Document, Page, View, Text, StyleSheet } from '@react-pdf/renderer'
+import { Document, Page, View, Text, StyleSheet, Font } from '@react-pdf/renderer'
+import path from 'path'
 import type { DashboardData } from '@/app/assets/DashboardClient'
 import { fmt, fmtPct } from '@/lib/formatters'
 
+Font.register({
+  family: 'Roboto',
+  fonts: [
+    { src: path.join(process.cwd(), 'public/fonts/Roboto-Regular.ttf'), fontWeight: 'normal' },
+    { src: path.join(process.cwd(), 'public/fonts/Roboto-Bold.ttf'), fontWeight: 'bold' },
+  ],
+})
+
 const styles = StyleSheet.create({
-  page: { fontFamily: 'Helvetica', fontSize: 10, padding: 40, color: '#1a1a1a' },
+  page: { fontFamily: 'Roboto', fontWeight: 'normal', fontSize: 10, padding: 40, color: '#1a1a1a' },
   header: { marginBottom: 24 },
-  title: { fontSize: 18, fontFamily: 'Helvetica-Bold', marginBottom: 4 },
+  title: { fontSize: 18, fontWeight: 'bold', marginBottom: 4 },
   subtitle: { fontSize: 10, color: '#6b7280' },
   section: { marginBottom: 20 },
-  sectionTitle: { fontSize: 12, fontFamily: 'Helvetica-Bold', marginBottom: 8, paddingBottom: 4, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
+  sectionTitle: { fontSize: 12, fontWeight: 'bold', marginBottom: 8, paddingBottom: 4, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
   row: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 },
   label: { color: '#6b7280' },
-  value: { fontFamily: 'Helvetica-Bold' },
+  value: { fontWeight: 'bold' },
   positive: { color: '#16a34a' },
   negative: { color: '#dc2626' },
   goalCard: { padding: 10, marginBottom: 8, backgroundColor: '#f9fafb', borderRadius: 4 },
-  goalName: { fontSize: 11, fontFamily: 'Helvetica-Bold', marginBottom: 6 },
+  goalName: { fontSize: 11, fontWeight: 'bold', marginBottom: 6 },
   indent: { paddingLeft: 8 },
   footer: { position: 'absolute', bottom: 30, left: 40, right: 40, textAlign: 'center', color: '#9ca3af', fontSize: 8 },
 })
