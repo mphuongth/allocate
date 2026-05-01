@@ -132,12 +132,11 @@ test('assign unallocated fund to a goal via GoalPickerModal', async ({ page }) =
   await expect(page.getByRole('dialog').locator('text=E2E Assign Goal')).toBeVisible({ timeout: 5_000 })
   await page.getByRole('dialog').locator('text=E2E Assign Goal').click()
 
-  // Confirm assignment
-  const confirmBtn = page.getByRole('button', { name: /confirm|assign|ok/i }).first()
-  if (await confirmBtn.isVisible()) await confirmBtn.click()
+  // Click confirm — button says "Gán" in Vietnamese
+  await page.getByRole('button', { name: /gán|confirm|assign/i }).last().click()
 
-  // Dialog closes
-  await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 5_000 })
+  // Dialog closes after assignment
+  await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 8_000 })
 })
 
 test('sell unallocated fund from Asset Overview', async ({ page }) => {
@@ -162,10 +161,10 @@ test('sell unallocated fund from Asset Overview', async ({ page }) => {
   await expect(fundRow).toBeVisible({ timeout: 10_000 })
   await fundRow.getByTitle(/bán|sell/i).click()
 
-  // Sell dialog opens
+  // Sell dialog opens — units Label has no htmlFor, use input[type="number"] scoped to dialog
   await expect(page.getByRole('dialog')).toBeVisible()
-  await page.getByLabel(/units|ccq/i).first().fill('50')
-  await page.getByRole('button', { name: /confirm|sell|bán/i }).first().click()
+  await page.getByRole('dialog').locator('input[type="number"]').fill('50')
+  await page.getByRole('button', { name: /bán|sell|confirm/i }).last().click()
 
   // Dialog should close after successful sell
   await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 8_000 })
