@@ -6,8 +6,8 @@ import { fmt, fmtPct } from '@/lib/formatters'
 Font.register({
   family: 'Roboto',
   fonts: [
-    { src: path.join(process.cwd(), 'node_modules/roboto-fontface/fonts/roboto/Roboto-Regular.woff'), fontWeight: 'normal' },
-    { src: path.join(process.cwd(), 'node_modules/roboto-fontface/fonts/roboto/Roboto-Bold.woff'), fontWeight: 'bold' },
+    { src: path.join(process.cwd(), 'public/fonts/Roboto-Regular.woff'), fontWeight: 'normal' },
+    { src: path.join(process.cwd(), 'public/fonts/Roboto-Bold.woff'), fontWeight: 'bold' },
   ],
 })
 
