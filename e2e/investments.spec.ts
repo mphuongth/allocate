@@ -51,7 +51,7 @@ test('can add a gold transaction', async ({ page }) => {
 
   await page.getByLabel(/date|ngày/i).first().fill('2026-01-15')
   await page.getByLabel(/amount|số tiền/i).first().fill('8500000')
-  await page.getByLabel(/chi/i).first().fill('1')
+  await page.getByLabel(/chi|chỉ/i).first().fill('1')
   await page.getByLabel(/unit price|giá/i).first().fill('8500000')
 
   await page.getByRole('button', { name: /save|create|lưu/i }).click()
