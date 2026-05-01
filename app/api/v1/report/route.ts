@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { renderToStream } from '@react-pdf/renderer'
+import { renderToBuffer } from '@react-pdf/renderer'
 import type { DocumentProps } from '@react-pdf/renderer'
 import { createElement } from 'react'
 import type { ReactElement } from 'react'
@@ -16,13 +16,7 @@ export async function POST(req: NextRequest) {
     const { data, locale }: { data: DashboardData; locale: string } = await req.json()
     const element = createElement(PortfolioReport, { data, locale }) as ReactElement<DocumentProps>
 
-    const stream = await renderToStream(element)
-
-    const chunks: Buffer[] = []
-    for await (const chunk of stream) {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
-    }
-    const buffer = Buffer.concat(chunks)
+    const buffer = await renderToBuffer(element)
 
     const filename = `allocate-report-${new Date().toISOString().slice(0, 10)}.pdf`
 
