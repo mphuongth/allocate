@@ -45,9 +45,9 @@ test('can add a gold transaction', async ({ page }) => {
   await page.getByTestId('create-btn').click()
   await expect(page.getByRole('dialog')).toBeVisible()
 
-  // #asset_type is a shadcn Select — use role=option with text filter (works for both EN and VI)
+  // #asset_type is a @base-ui/react Select — popup animates in, use force:true to skip stability wait
   await page.locator('#asset_type').click()
-  await page.getByRole('option').filter({ hasText: /^(Gold|Vàng)$/ }).click()
+  await page.getByRole('option').filter({ hasText: /gold|vàng/i }).click({ force: true })
 
   await page.getByLabel(/date|ngày/i).first().fill('2026-01-15')
   await page.getByLabel(/amount|số tiền/i).first().fill('8500000')
@@ -71,13 +71,13 @@ test('can add a fund transaction', async ({ page }) => {
   await page.getByTestId('create-btn').click()
   await expect(page.getByRole('dialog')).toBeVisible()
 
-  // #asset_type is a shadcn Select — use role=option with text filter (works for both EN and VI)
+  // #asset_type is a @base-ui/react Select — popup animates in, use force:true to skip stability wait
   await page.locator('#asset_type').click()
-  await page.getByRole('option').filter({ hasText: /^(Fund|Quỹ)$/ }).click()
+  await page.getByRole('option').filter({ hasText: /^(fund|quỹ)$/i }).click({ force: true })
 
   // Select fund from #fund_id shadcn Select
   await page.locator('#fund_id').click()
-  await page.getByRole('option').first().click()
+  await page.getByRole('option').first().click({ force: true })
 
   await page.getByLabel(/date|ngày/i).first().fill('2026-01-15')
   await page.getByLabel(/amount|số tiền/i).first().fill('5000000')
