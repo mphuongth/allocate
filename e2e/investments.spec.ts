@@ -16,7 +16,7 @@ async function openTransactionsTab(page: import('@playwright/test').Page) {
 
 test('transactions tab renders table or empty state', async ({ page }) => {
   await openTransactionsTab(page)
-  const content = page.locator('table').or(page.getByText(/no investment transactions yet/i)).first()
+  const content = page.locator('table').or(page.getByText(/no investment transactions yet|chưa có giao dịch/i)).first()
   await expect(content).toBeVisible({ timeout: 15_000 })
 })
 
@@ -45,9 +45,9 @@ test('can add a gold transaction', async ({ page }) => {
   await page.getByTestId('create-btn').click()
   await expect(page.getByRole('dialog')).toBeVisible()
 
-  // #asset_type is a @base-ui/react Select — popup animates in, use force:true to skip stability wait
+  // #asset_type is a @base-ui/react Select — exclude native <option> elements (filter select), force:true for animation
   await page.locator('#asset_type').click()
-  await page.getByRole('option').filter({ hasText: /gold|vàng/i }).click({ force: true })
+  await page.locator('[role="option"]:not(option)').filter({ hasText: /gold|vàng/i }).click({ force: true })
 
   await page.getByLabel(/date|ngày/i).first().fill('2026-01-15')
   await page.getByLabel(/amount|số tiền/i).first().fill('8500000')
@@ -71,13 +71,13 @@ test('can add a fund transaction', async ({ page }) => {
   await page.getByTestId('create-btn').click()
   await expect(page.getByRole('dialog')).toBeVisible()
 
-  // #asset_type is a @base-ui/react Select — popup animates in, use force:true to skip stability wait
+  // #asset_type is a @base-ui/react Select — exclude native <option> elements (filter select), force:true for animation
   await page.locator('#asset_type').click()
-  await page.getByRole('option').filter({ hasText: /^(fund|quỹ)$/i }).click({ force: true })
+  await page.locator('[role="option"]:not(option)').filter({ hasText: /^(fund|quỹ)$/i }).click({ force: true })
 
   // Select fund from #fund_id shadcn Select
   await page.locator('#fund_id').click()
-  await page.getByRole('option').first().click({ force: true })
+  await page.locator('[role="option"]:not(option)').first().click({ force: true })
 
   await page.getByLabel(/date|ngày/i).first().fill('2026-01-15')
   await page.getByLabel(/amount|số tiền/i).first().fill('5000000')

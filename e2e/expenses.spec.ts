@@ -16,7 +16,7 @@ async function openExpensesTab(page: import('@playwright/test').Page) {
 
 test('fixed expenses tab renders', async ({ page }) => {
   await openExpensesTab(page)
-  const content = page.locator('table').or(page.getByText(/no expenses yet/i)).first()
+  const content = page.locator('table').or(page.getByText(/no expenses yet|chưa có chi phí/i)).first()
   await expect(content).toBeVisible({ timeout: 15_000 })
 })
 
@@ -27,9 +27,9 @@ test('can create a fixed expense', async ({ page }) => {
   await expect(page.getByRole('dialog')).toBeVisible()
   await page.locator('#expense_name').fill('E2E Rent')
 
-  // #category is a shadcn Select (button role=combobox), not a native <select>
+  // #category is a @base-ui/react Select — exclude native <option> elements, force:true for animation
   await page.locator('#category').click()
-  await page.getByRole('option').first().click()
+  await page.locator('[role="option"]:not(option)').first().click({ force: true })
 
   await page.locator('#amount_vnd').fill('5000000')
 

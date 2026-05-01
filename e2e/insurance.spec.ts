@@ -14,7 +14,7 @@ async function openInsuranceTab(page: import('@playwright/test').Page) {
 
 test('insurance tab renders table or empty state', async ({ page }) => {
   await openInsuranceTab(page)
-  const content = page.locator('table').or(page.getByText(/no insurance members yet/i)).first()
+  const content = page.locator('table').or(page.getByText(/no insurance members yet|chưa có thành viên/i)).first()
   await expect(content).toBeVisible({ timeout: 15_000 })
 })
 
@@ -25,9 +25,9 @@ test('can add an insurance member', async ({ page }) => {
   await expect(page.getByRole('dialog')).toBeVisible()
   await page.locator('#member_name').fill('E2E Insurance Member')
 
-  // #relationship is a shadcn Select (button role=combobox), not a native <select>
+  // #relationship is a @base-ui/react Select — exclude native <option> elements, force:true for animation
   await page.locator('#relationship').click()
-  await page.getByRole('option').first().click()
+  await page.locator('[role="option"]:not(option)').first().click({ force: true })
 
   await page.locator('#annual_payment_vnd').fill('12000000')
 
