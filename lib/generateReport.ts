@@ -1,10 +1,10 @@
 import type { DashboardData } from '@/app/assets/DashboardClient'
 
-export async function downloadPortfolioPDF(data: DashboardData): Promise<void> {
+export async function downloadPortfolioPDF(data: DashboardData, locale: string): Promise<void> {
   const res = await fetch('/api/v1/report', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
+    body: JSON.stringify({ data, locale }),
   })
 
   if (!res.ok) throw new Error('Failed to generate report')

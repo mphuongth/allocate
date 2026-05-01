@@ -13,8 +13,8 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const data: DashboardData = await req.json()
-    const element = createElement(PortfolioReport, { data }) as ReactElement<DocumentProps>
+    const { data, locale }: { data: DashboardData; locale: string } = await req.json()
+    const element = createElement(PortfolioReport, { data, locale }) as ReactElement<DocumentProps>
 
     const stream = await renderToStream(element)
 

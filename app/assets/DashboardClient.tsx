@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { fmt } from '@/lib/formatters'
 import { Plus, FileDown } from 'lucide-react'
-import { useTranslations } from 'next-intl'
+import { useTranslations, useLocale } from 'next-intl'
 import dynamic from 'next/dynamic'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -115,6 +115,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const tc = useTranslations('common')
   const tt = useTranslations('transactions')
   const tg = useTranslations('goals')
+  const locale = useLocale()
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -293,7 +294,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
     setIsGeneratingReport(true)
     try {
       const { downloadPortfolioPDF } = await import('@/lib/generateReport')
-      await downloadPortfolioPDF(data)
+      await downloadPortfolioPDF(data, locale)
     } finally {
       setIsGeneratingReport(false)
     }
