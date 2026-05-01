@@ -83,7 +83,7 @@ test('can delete a fixed expense', async ({ page }) => {
   const deleteBtn = row.locator('button').nth(1)
   await deleteBtn.click()
   await expect(page.getByRole('dialog')).toBeVisible()
-  await page.getByRole('button', { name: /confirm|delete|xóa/i }).last().click()
+  await page.getByRole('button', { name: /xác nhận|confirm|delete|xóa/i }).last().click()
 
   await expect(page.locator('tr').filter({ hasText: 'E2E Delete Expense' })).not.toBeVisible({ timeout: 15_000 })
   void expense

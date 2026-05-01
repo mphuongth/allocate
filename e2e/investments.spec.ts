@@ -47,7 +47,7 @@ test('can add a gold transaction', async ({ page }) => {
 
   // #asset_type is a shadcn Select (button role=combobox), not a native <select>
   await page.locator('#asset_type').click()
-  await page.getByRole('option', { name: 'Gold' }).click()
+  await page.locator('[data-value="gold"]').click()
 
   await page.getByLabel(/date|ngày/i).first().fill('2026-01-15')
   await page.getByLabel(/amount|số tiền/i).first().fill('8500000')
@@ -73,7 +73,7 @@ test('can add a fund transaction', async ({ page }) => {
 
   // #asset_type is a shadcn Select
   await page.locator('#asset_type').click()
-  await page.getByRole('option', { name: 'Fund' }).click()
+  await page.locator('[data-value="fund"]').click()
 
   // Select fund from #fund_id shadcn Select
   await page.locator('#fund_id').click()
@@ -122,7 +122,7 @@ test('can delete a transaction', async ({ page }) => {
   const deleteBtn = txRow.locator('button').last()
   await deleteBtn.click()
   await expect(page.getByRole('dialog')).toBeVisible()
-  await page.getByRole('button', { name: /confirm|delete|xóa/i }).last().click()
+  await page.getByRole('button', { name: /xác nhận|confirm|delete|xóa/i }).last().click()
 
   await expect(page.locator('tr').filter({ hasText: 'E2E Delete TX' })).not.toBeVisible({ timeout: 15_000 })
   void tx
@@ -131,8 +131,9 @@ test('can delete a transaction', async ({ page }) => {
 test('fund library page shows funds list', async ({ page }) => {
   await page.goto('/funds')
   // Wait for content — don't use networkidle which resolves before React useEffect fires the API call
+  // Empty state text is Vietnamese: "Chưa có quỹ nào"
   const content = page.locator('table')
-    .or(page.getByText(/no funds yet/i))
+    .or(page.getByText(/no funds yet|chưa có quỹ/i))
     .or(page.getByText(/failed to load/i))
     .first()
   await expect(content).toBeVisible({ timeout: 20_000 })

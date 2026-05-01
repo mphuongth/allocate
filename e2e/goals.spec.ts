@@ -26,7 +26,7 @@ test('can create a new savings goal', async ({ page }) => {
   // Goal form has no htmlFor/id association on Label+Input, so use type selectors
   await page.locator('[role="dialog"] input[type="text"]').first().fill('E2E Test Goal')
   await page.locator('[role="dialog"] input[type="number"]').first().fill('10000000')
-  await page.getByRole('button', { name: /save|create|tạo/i }).click()
+  await page.getByRole('dialog').getByRole('button', { name: /save|create|tạo|lưu/i }).click()
 
   await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 5_000 })
   // Goal name renders in an h3 in the card grid (no sm:hidden issue)
@@ -58,7 +58,11 @@ test('can edit an existing savings goal', async ({ page }) => {
 })
 
 test('can delete a savings goal', async ({ page }) => {
+  const stale = await api.findGoalByName('E2E Delete Goal')
+  if (stale) await api.deleteGoal(stale.goal_id)
+
   const goal = await api.createGoal({ goal_name: 'E2E Delete Goal' })
+  cleanup.add(() => api.deleteGoal(goal.goal_id))
 
   await openGoalsTab(page)
   const goalCard = page.locator('h3').filter({ hasText: 'E2E Delete Goal' }).first()
@@ -69,10 +73,9 @@ test('can delete a savings goal', async ({ page }) => {
   await deleteBtn.click()
 
   await expect(page.getByRole('dialog')).toBeVisible()
-  await page.getByRole('button', { name: /confirm|delete|xóa/i }).last().click()
+  await page.getByRole('button', { name: /xác nhận|confirm|delete|xóa/i }).last().click()
 
   await expect(page.locator('h3').filter({ hasText: 'E2E Delete Goal' })).not.toBeVisible({ timeout: 15_000 })
-  void goal
 })
 
 test('view goal detail and back button returns to list', async ({ page }) => {
