@@ -7,7 +7,9 @@ test.afterEach(() => cleanup.run())
 
 async function openExpensesTab(page: import('@playwright/test').Page) {
   await page.goto('/settings?tab=expenses')
-  await page.evaluate(() => localStorage.clear())
+  await page.evaluate(() => {
+    Object.keys(localStorage).filter(k => k.startsWith('fixedExpensesCache')).forEach(k => localStorage.removeItem(k))
+  })
   await page.reload()
   await page.waitForLoadState('networkidle')
 }

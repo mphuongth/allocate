@@ -7,7 +7,9 @@ test.afterEach(() => cleanup.run())
 
 async function openTransactionsTab(page: import('@playwright/test').Page) {
   await page.goto('/settings?tab=transactions')
-  await page.evaluate(() => localStorage.clear())
+  await page.evaluate(() => {
+    Object.keys(localStorage).filter(k => k.includes('transaction') || k.includes('Transaction')).forEach(k => localStorage.removeItem(k))
+  })
   await page.reload()
   await page.waitForLoadState('networkidle')
 }

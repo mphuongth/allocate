@@ -7,7 +7,7 @@ test.afterEach(() => cleanup.run())
 
 async function openGoalsTab(page: import('@playwright/test').Page) {
   await page.goto('/settings?tab=goals')
-  await page.evaluate(() => localStorage.clear())
+  await page.evaluate(() => localStorage.removeItem('savingsGoalsCache'))
   await page.reload()
   await page.waitForLoadState('networkidle')
 }
