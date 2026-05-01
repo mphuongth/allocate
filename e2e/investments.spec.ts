@@ -45,9 +45,9 @@ test('can add a gold transaction', async ({ page }) => {
   await page.getByTestId('create-btn').click()
   await expect(page.getByRole('dialog')).toBeVisible()
 
-  // #asset_type is a shadcn Select (button role=combobox), not a native <select>
+  // #asset_type is a shadcn Select — use role=option with text filter (works for both EN and VI)
   await page.locator('#asset_type').click()
-  await page.locator('[data-value="gold"]').click()
+  await page.getByRole('option').filter({ hasText: /^(Gold|Vàng)$/ }).click()
 
   await page.getByLabel(/date|ngày/i).first().fill('2026-01-15')
   await page.getByLabel(/amount|số tiền/i).first().fill('8500000')
@@ -71,9 +71,9 @@ test('can add a fund transaction', async ({ page }) => {
   await page.getByTestId('create-btn').click()
   await expect(page.getByRole('dialog')).toBeVisible()
 
-  // #asset_type is a shadcn Select
+  // #asset_type is a shadcn Select — use role=option with text filter (works for both EN and VI)
   await page.locator('#asset_type').click()
-  await page.locator('[data-value="fund"]').click()
+  await page.getByRole('option').filter({ hasText: /^(Fund|Quỹ)$/ }).click()
 
   // Select fund from #fund_id shadcn Select
   await page.locator('#fund_id').click()
@@ -112,7 +112,10 @@ test('filter by asset type shows only matching rows', async ({ page }) => {
 })
 
 test('can delete a transaction', async ({ page }) => {
+  await api.deleteAllTransactionsByNotes('E2E Delete TX')
+
   const tx = await api.createTransaction({ asset_type: 'bank', amount_vnd: 9_999_000, investment_date: '2026-01-01', notes: 'E2E Delete TX' })
+  cleanup.add(() => api.deleteTransaction(tx.transaction_id))
 
   await openTransactionsTab(page)
   const txRow = page.locator('tr').filter({ hasText: 'E2E Delete TX' }).first()
@@ -124,8 +127,7 @@ test('can delete a transaction', async ({ page }) => {
   await expect(page.getByRole('dialog')).toBeVisible()
   await page.getByRole('button', { name: /xác nhận|confirm|delete|xóa/i }).last().click()
 
-  await expect(page.locator('tr').filter({ hasText: 'E2E Delete TX' })).not.toBeVisible({ timeout: 15_000 })
-  void tx
+  await expect(page.locator('tr').filter({ hasText: 'E2E Delete TX' })).toHaveCount(0, { timeout: 15_000 })
 })
 
 test('fund library page shows funds list', async ({ page }) => {

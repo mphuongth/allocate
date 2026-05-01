@@ -148,6 +148,21 @@ export async function findMonthlyPlan(month: number, year: number) {
   return data
 }
 
+export async function deleteAllFixedExpensesByName(name: string) {
+  const userId = await getTestUserId()
+  await supabase.from('fixed_expenses').delete().eq('user_id', userId).eq('expense_name', name)
+}
+
+export async function deleteAllInsuranceMembersByName(name: string) {
+  const userId = await getTestUserId()
+  await supabase.from('insurance_members').delete().eq('user_id', userId).eq('member_name', name)
+}
+
+export async function deleteAllTransactionsByNotes(notes: string) {
+  const userId = await getTestUserId()
+  await supabase.from('investment_transactions').delete().eq('user_id', userId).eq('notes', notes)
+}
+
 export async function getFirstFund() {
   const { data, error } = await supabase
     .from('funds')

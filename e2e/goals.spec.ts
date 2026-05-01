@@ -75,7 +75,7 @@ test('can delete a savings goal', async ({ page }) => {
   await expect(page.getByRole('dialog')).toBeVisible()
   await page.getByRole('button', { name: /xác nhận|confirm|delete|xóa/i }).last().click()
 
-  await expect(page.locator('h3').filter({ hasText: 'E2E Delete Goal' })).not.toBeVisible({ timeout: 15_000 })
+  await expect(page.locator('h3').filter({ hasText: 'E2E Delete Goal' })).toHaveCount(0, { timeout: 15_000 })
 })
 
 test('view goal detail and back button returns to list', async ({ page }) => {

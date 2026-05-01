@@ -69,11 +69,14 @@ test('can edit a fixed expense', async ({ page }) => {
 })
 
 test('can delete a fixed expense', async ({ page }) => {
+  await api.deleteAllFixedExpensesByName('E2E Delete Expense')
+
   const expense = await api.createFixedExpense({
     expense_name: 'E2E Delete Expense',
     amount_vnd: 2_000_000,
     category: 'Housing',
   })
+  cleanup.add(() => api.deleteFixedExpense(expense.expense_id))
 
   await openExpensesTab(page)
   const row = page.locator('tr').filter({ hasText: 'E2E Delete Expense' }).first()
@@ -85,8 +88,7 @@ test('can delete a fixed expense', async ({ page }) => {
   await expect(page.getByRole('dialog')).toBeVisible()
   await page.getByRole('button', { name: /xác nhận|confirm|delete|xóa/i }).last().click()
 
-  await expect(page.locator('tr').filter({ hasText: 'E2E Delete Expense' })).not.toBeVisible({ timeout: 15_000 })
-  void expense
+  await expect(page.locator('tr').filter({ hasText: 'E2E Delete Expense' })).toHaveCount(0, { timeout: 15_000 })
 })
 
 test('effective period hides expense outside date range on planning page', async ({ page }) => {

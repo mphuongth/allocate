@@ -74,11 +74,14 @@ test('can edit insurance member annual premium', async ({ page }) => {
 })
 
 test('can delete an insurance member', async ({ page }) => {
+  await api.deleteAllInsuranceMembersByName('E2E Delete Insurance')
+
   const member = await api.createInsuranceMember({
     member_name: 'E2E Delete Insurance',
     relationship: 'Self',
     annual_payment_vnd: 6_000_000,
   })
+  cleanup.add(() => api.deleteInsuranceMember(member.member_id))
 
   await openInsuranceTab(page)
   const memberRow = page.locator('tr').filter({ hasText: 'E2E Delete Insurance' }).first()
@@ -90,6 +93,5 @@ test('can delete an insurance member', async ({ page }) => {
   await expect(page.getByRole('dialog')).toBeVisible()
   await page.getByRole('button', { name: /xác nhận|confirm|delete|xóa/i }).last().click()
 
-  await expect(page.locator('tr').filter({ hasText: 'E2E Delete Insurance' })).not.toBeVisible({ timeout: 15_000 })
-  void member
+  await expect(page.locator('tr').filter({ hasText: 'E2E Delete Insurance' })).toHaveCount(0, { timeout: 15_000 })
 })
