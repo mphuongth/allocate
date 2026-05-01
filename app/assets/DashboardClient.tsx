@@ -620,7 +620,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                 ) : (
                   <FileDown className="h-4 w-4" />
                 )}
-                {isGeneratingReport ? 'Đang tạo...' : 'Tải báo cáo PDF'}
+                {isGeneratingReport ? t('downloadingReport') : t('downloadReport')}
               </button>
             </div>
 

@@ -311,6 +311,8 @@
     "sectionUnallocated": "Đầu tư Chưa phân bổ",
     "sectionInsurance": "Bảo hiểm",
     "manageInsurance": "Quản lý",
+    "downloadReport": "Tải báo cáo PDF",
+    "downloadingReport": "Đang tạo...",
     "invested": "Đã đầu tư",
     "assignToGoal": "Gán vào Mục tiêu",
     "unassigned": "Chưa gán",
