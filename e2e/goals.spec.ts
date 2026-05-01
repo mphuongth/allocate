@@ -140,7 +140,7 @@ test('un-assign investment from goal in Goal Detail', async ({ page }) => {
   await expect(page.getByTestId("goal-back-btn").first()).toBeVisible({ timeout: 15_000 })
 
   // Switch to "Other Investments" tab where the unassign button lives
-  await page.getByRole('button', { name: /other investments|tiết kiệm/i }).click()
+  await page.getByRole('button', { name: /other investments|tiết kiệm/i }).first().click()
 
   const unlinkBtn = page.getByTestId("unassign-btn").first()
   await expect(unlinkBtn).toBeVisible({ timeout: 5_000 })

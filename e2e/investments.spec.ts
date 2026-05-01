@@ -47,7 +47,7 @@ test('can add a gold transaction', async ({ page }) => {
 
   // #asset_type is a @base-ui/react Select — exclude native <option> elements (filter select), force:true for animation
   await page.locator('#asset_type').click()
-  await page.locator('[role="option"]:not(option)').filter({ hasText: /gold|vàng/i }).click({ force: true })
+  await page.locator('[data-open] [role="option"]:not(option)').filter({ hasText: /gold|vàng/i }).click({ force: true })
 
   await page.getByLabel(/date|ngày/i).first().fill('2026-01-15')
   await page.getByLabel(/amount|số tiền/i).first().fill('8500000')
@@ -73,12 +73,14 @@ test('can add a fund transaction', async ({ page }) => {
 
   // #asset_type is a @base-ui/react Select — exclude native <option> elements (filter select), force:true for animation
   await page.locator('#asset_type').click()
-  await page.locator('[role="option"]:not(option)').filter({ hasText: /^(fund|quỹ)$/i }).click({ force: true })
+  await page.locator('[data-open] [role="option"]:not(option)').filter({ hasText: /^(fund|quỹ)$/i }).click({ force: true })
 
   // Select fund from #fund_id shadcn Select
   await page.locator('#fund_id').click()
-  // :not([data-selected]) excludes the hidden selected-value placeholder base-ui keeps in the trigger DOM
-  await page.locator('[role="option"]:not(option):not([data-selected])').first().click({ force: true })
+  // [data-open] scopes to the open popup only — base-ui keeps all option elements in DOM when closed
+  const openFundOption = page.locator('[data-open] [role="option"]:not(option)').first()
+  await openFundOption.waitFor({ state: 'visible', timeout: 5_000 })
+  await openFundOption.click({ force: true })
 
   await page.getByLabel(/date|ngày/i).first().fill('2026-01-15')
   await page.getByLabel(/amount|số tiền/i).first().fill('5000000')

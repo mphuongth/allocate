@@ -27,7 +27,7 @@ test('can add an insurance member', async ({ page }) => {
 
   // #relationship is a @base-ui/react Select — exclude native <option> elements, force:true for animation
   await page.locator('#relationship').click()
-  await page.locator('[role="option"]:not(option)').first().click({ force: true })
+  await page.locator('[data-open] [role="option"]:not(option)').first().click({ force: true })
 
   await page.locator('#annual_payment_vnd').fill('12000000')
 

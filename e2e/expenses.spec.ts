@@ -29,7 +29,7 @@ test('can create a fixed expense', async ({ page }) => {
 
   // #category is a @base-ui/react Select — exclude native <option> elements, force:true for animation
   await page.locator('#category').click()
-  await page.locator('[role="option"]:not(option)').first().click({ force: true })
+  await page.locator('[data-open] [role="option"]:not(option)').first().click({ force: true })
 
   await page.locator('#amount_vnd').fill('5000000')
 
