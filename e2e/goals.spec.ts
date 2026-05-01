@@ -143,7 +143,8 @@ test('un-assign investment from goal in Goal Detail', async ({ page }) => {
   // Switch to "Other Investments" tab — use "& Khác" to distinguish from the settings nav "Mục tiêu Tiết kiệm"
   await page.getByRole('button', { name: /tiết kiệm & khác|other investments/i }).first().click()
 
-  const unlinkBtn = page.getByTestId("unassign-btn").first()
+  // .last() targets the desktop-table button (hidden sm:block); .first() hits the sm:hidden mobile card
+  const unlinkBtn = page.getByTestId("unassign-btn").last()
   await expect(unlinkBtn).toBeVisible({ timeout: 10_000 })
   await unlinkBtn.click()
 
