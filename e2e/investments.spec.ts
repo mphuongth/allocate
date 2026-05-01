@@ -77,7 +77,8 @@ test('can add a fund transaction', async ({ page }) => {
 
   // Select fund from #fund_id shadcn Select
   await page.locator('#fund_id').click()
-  await page.locator('[role="option"]:not(option)').first().click({ force: true })
+  // :not([data-selected]) excludes the hidden selected-value placeholder base-ui keeps in the trigger DOM
+  await page.locator('[role="option"]:not(option):not([data-selected])').first().click({ force: true })
 
   await page.getByLabel(/date|ngày/i).first().fill('2026-01-15')
   await page.getByLabel(/amount|số tiền/i).first().fill('5000000')

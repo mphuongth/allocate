@@ -128,8 +128,8 @@ test('assign unallocated fund to a goal via GoalPickerModal', async ({ page }) =
   await fundItem.click()
   await expect(page.getByRole('dialog')).toBeVisible()
 
-  // Click "Assign to Goal"
-  await page.getByRole('button', { name: /assign|goal|mục tiêu/i }).first().click()
+  // Click "Assign to Goal" — inside animated dialog, force:true to bypass stability wait
+  await page.getByRole('button', { name: /assign|goal|mục tiêu/i }).first().click({ force: true })
 
   // GoalPickerModal opens — pick our test goal
   await expect(page.getByRole('dialog').locator('text=E2E Assign Goal')).toBeVisible({ timeout: 5_000 })
@@ -168,7 +168,7 @@ test('sell unallocated fund from Asset Overview', async ({ page }) => {
   // Click sell button
   const sellBtn = page.getByRole('button', { name: /sell|bán/i }).first()
   await expect(sellBtn).toBeVisible()
-  await sellBtn.click()
+  await sellBtn.click({ force: true })
 
   // Sell form appears — enter units to sell
   await page.getByLabel(/units|ccq/i).first().fill('50')

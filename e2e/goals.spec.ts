@@ -123,20 +123,15 @@ test('sell / withdraw fund investment from Goal Detail', async ({ page }) => {
   await page.waitForTimeout(2_000)
 })
 
-test('un-assign fund investment from goal in Goal Detail', async ({ page }) => {
-  const fund = await api.getFirstFund()
-  if (!fund) test.skip()
-
+test('un-assign investment from goal in Goal Detail', async ({ page }) => {
+  // unassign-btn lives in the "Other" tab (bank/gold/stock), not the fund tab
   const goal = await api.createGoal({ goal_name: 'E2E Unlink Goal', target_amount: 50_000_000 })
   cleanup.add(() => api.deleteGoal(goal.goal_id))
 
   const tx = await api.createTransaction({
-    asset_type: 'fund',
+    asset_type: 'bank',
     amount_vnd: 5_000_000,
     investment_date: '2026-01-01',
-    units: 200,
-    unit_price: fund!.nav,
-    fund_id: fund!.id,
     goal_id: goal.goal_id,
   })
   cleanup.add(() => api.deleteTransaction(tx.transaction_id))
@@ -144,14 +139,17 @@ test('un-assign fund investment from goal in Goal Detail', async ({ page }) => {
   await page.goto(`/settings?tab=goals&goal=${goal.goal_id}`)
   await expect(page.getByTestId("goal-back-btn").first()).toBeVisible({ timeout: 15_000 })
 
+  // Switch to "Other Investments" tab where the unassign button lives
+  await page.getByRole('button', { name: /other investments|tiết kiệm/i }).click()
+
   const unlinkBtn = page.getByTestId("unassign-btn").first()
   await expect(unlinkBtn).toBeVisible({ timeout: 5_000 })
   await unlinkBtn.click()
 
-  const confirmBtn = page.getByRole('button', { name: /confirm|yes|ok/i }).last()
+  const confirmBtn = page.getByRole('button', { name: /xác nhận|confirm|yes|ok/i }).last()
   if (await confirmBtn.isVisible({ timeout: 2_000 })) {
     await confirmBtn.click()
   }
 
-  await expect(page.locator(`text=${fund!.code}`)).not.toBeVisible({ timeout: 15_000 })
+  await expect(page.getByTestId('unassign-btn')).toHaveCount(0, { timeout: 10_000 })
 })
