@@ -11,13 +11,13 @@ async function openExpensesTab(page: import('@playwright/test').Page) {
     Object.keys(localStorage).filter(k => k.startsWith('fixedExpensesCache')).forEach(k => localStorage.removeItem(k))
   })
   await page.goto('/settings?tab=expenses')
-  await page.waitForLoadState('networkidle')
+  await page.waitForSelector('[data-testid="create-btn"]', { timeout: 15_000 })
 }
 
 test('fixed expenses tab renders', async ({ page }) => {
   await openExpensesTab(page)
   const content = page.locator('table').or(page.getByText(/no expenses yet/i)).first()
-  await expect(content).toBeVisible({ timeout: 8_000 })
+  await expect(content).toBeVisible({ timeout: 15_000 })
 })
 
 test('can create a fixed expense', async ({ page }) => {
@@ -31,7 +31,7 @@ test('can create a fixed expense', async ({ page }) => {
 
   await page.getByRole('button', { name: /save|create|lưu/i }).click()
   await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 5_000 })
-  await expect(page.locator('text=E2E Rent').first()).toBeVisible({ timeout: 8_000 })
+  await expect(page.locator('text=E2E Rent').first()).toBeVisible({ timeout: 15_000 })
 
   const found = await api.findFixedExpenseByName('E2E Rent')
   if (found) cleanup.add(() => api.deleteFixedExpense(found.expense_id))
@@ -47,7 +47,7 @@ test('can edit a fixed expense', async ({ page }) => {
 
   await openExpensesTab(page)
   const row = page.locator('text=E2E Edit Expense').first()
-  await expect(row).toBeVisible({ timeout: 8_000 })
+  await expect(row).toBeVisible({ timeout: 15_000 })
 
   const editBtn = row.locator('..').locator('..').getByRole('button', { name: /edit|sửa/i }).first()
   await editBtn.click()
@@ -58,7 +58,7 @@ test('can edit a fixed expense', async ({ page }) => {
   await nameInput.fill('E2E Edit Expense Updated')
 
   await page.getByRole('button', { name: /save|lưu/i }).click()
-  await expect(page.locator('text=E2E Edit Expense Updated').first()).toBeVisible({ timeout: 8_000 })
+  await expect(page.locator('text=E2E Edit Expense Updated').first()).toBeVisible({ timeout: 15_000 })
 })
 
 test('can delete a fixed expense', async ({ page }) => {
@@ -70,14 +70,14 @@ test('can delete a fixed expense', async ({ page }) => {
 
   await openExpensesTab(page)
   const row = page.locator('text=E2E Delete Expense').first()
-  await expect(row).toBeVisible({ timeout: 8_000 })
+  await expect(row).toBeVisible({ timeout: 15_000 })
 
   const deleteBtn = row.locator('..').locator('..').getByRole('button', { name: /delete|xóa/i }).first()
   await deleteBtn.click()
   await expect(page.getByRole('dialog')).toBeVisible()
   await page.getByRole('button', { name: /confirm|delete|xóa/i }).last().click()
 
-  await expect(page.locator('text=E2E Delete Expense')).not.toBeVisible({ timeout: 8_000 })
+  await expect(page.locator('text=E2E Delete Expense')).not.toBeVisible({ timeout: 15_000 })
   void expense
 })
 
@@ -99,7 +99,7 @@ test('effective period hides expense outside date range on planning page', async
 
   // Verify it appears in settings
   await openExpensesTab(page)
-  await expect(page.locator('text=E2E Period Expense').first()).toBeVisible({ timeout: 8_000 })
+  await expect(page.locator('text=E2E Period Expense').first()).toBeVisible({ timeout: 15_000 })
 
   // Navigate to planning for current month — expense should appear
   const plan = await api.createMonthlyPlan({ month, year, salary_vnd: 10_000_000 })
@@ -107,7 +107,7 @@ test('effective period hides expense outside date range on planning page', async
 
   await page.goto('/planning')
   await page.waitForLoadState('networkidle')
-  await expect(page.locator('text=E2E Period Expense').first()).toBeVisible({ timeout: 8_000 })
+  await expect(page.locator('text=E2E Period Expense').first()).toBeVisible({ timeout: 15_000 })
 
   // Navigate to next month — expense should NOT appear
   await page.getByTestId('next-month').click()

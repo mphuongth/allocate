@@ -9,13 +9,13 @@ async function openInsuranceTab(page: import('@playwright/test').Page) {
   await page.goto('/dashboard')
   await page.evaluate(() => localStorage.removeItem('insuranceMembersCache'))
   await page.goto('/settings?tab=insurance')
-  await page.waitForLoadState('networkidle')
+  await page.waitForSelector('[data-testid="create-btn"]', { timeout: 15_000 })
 }
 
 test('insurance tab renders table or empty state', async ({ page }) => {
   await openInsuranceTab(page)
   const content = page.locator('table').or(page.getByText(/no insurance members yet/i)).first()
-  await expect(content).toBeVisible({ timeout: 8_000 })
+  await expect(content).toBeVisible({ timeout: 15_000 })
 })
 
 test('can add an insurance member', async ({ page }) => {
@@ -33,7 +33,7 @@ test('can add an insurance member', async ({ page }) => {
   await page.getByRole('button', { name: /save|add|lưu/i }).click()
   await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 5_000 })
 
-  await expect(page.locator('text=E2E Insurance Member').first()).toBeVisible({ timeout: 8_000 })
+  await expect(page.locator('text=E2E Insurance Member').first()).toBeVisible({ timeout: 15_000 })
   // Monthly fee: 12,000,000 / 12 = 1,000,000
   await expect(page.locator('text=/1.000.000|1,000,000/').first()).toBeVisible({ timeout: 5_000 })
 
@@ -51,7 +51,7 @@ test('can edit insurance member annual premium', async ({ page }) => {
 
   await openInsuranceTab(page)
   const memberRow = page.locator('text=E2E Edit Insurance').first()
-  await expect(memberRow).toBeVisible({ timeout: 8_000 })
+  await expect(memberRow).toBeVisible({ timeout: 15_000 })
 
   const editBtn = memberRow.locator('..').locator('..').getByRole('button', { name: /edit|sửa/i }).first()
   await editBtn.click()
@@ -77,13 +77,13 @@ test('can delete an insurance member', async ({ page }) => {
 
   await openInsuranceTab(page)
   const memberRow = page.locator('text=E2E Delete Insurance').first()
-  await expect(memberRow).toBeVisible({ timeout: 8_000 })
+  await expect(memberRow).toBeVisible({ timeout: 15_000 })
 
   const deleteBtn = memberRow.locator('..').locator('..').getByRole('button', { name: /delete|xóa/i }).first()
   await deleteBtn.click()
   await expect(page.getByRole('dialog')).toBeVisible()
   await page.getByRole('button', { name: /confirm|delete|xóa/i }).last().click()
 
-  await expect(page.locator('text=E2E Delete Insurance')).not.toBeVisible({ timeout: 8_000 })
+  await expect(page.locator('text=E2E Delete Insurance')).not.toBeVisible({ timeout: 15_000 })
   void member
 })

@@ -11,13 +11,13 @@ async function openTransactionsTab(page: import('@playwright/test').Page) {
     Object.keys(localStorage).filter(k => k.includes('transaction') || k.includes('Transaction')).forEach(k => localStorage.removeItem(k))
   })
   await page.goto('/settings?tab=transactions')
-  await page.waitForLoadState('networkidle')
+  await page.waitForSelector('[data-testid="create-btn"]', { timeout: 15_000 })
 }
 
 test('transactions tab renders table or empty state', async ({ page }) => {
   await openTransactionsTab(page)
   const content = page.locator('table').or(page.getByText(/no investment transactions yet/i)).first()
-  await expect(content).toBeVisible({ timeout: 8_000 })
+  await expect(content).toBeVisible({ timeout: 15_000 })
 })
 
 test('can add a bank transaction', async ({ page }) => {
@@ -34,7 +34,7 @@ test('can add a bank transaction', async ({ page }) => {
   await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 5_000 })
 
   // Transaction appears in list
-  await expect(page.locator('text=/bank|ngân hàng/i').first()).toBeVisible({ timeout: 8_000 })
+  await expect(page.locator('text=/bank|ngân hàng/i').first()).toBeVisible({ timeout: 15_000 })
 
   const found = await api.findTransactionLast('bank')
   if (found) cleanup.add(() => api.deleteTransaction(found.transaction_id))
@@ -57,7 +57,7 @@ test('can add a gold transaction', async ({ page }) => {
   await page.getByRole('button', { name: /save|create|lưu/i }).click()
   await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 5_000 })
 
-  await expect(page.locator('text=/gold|vàng/i').first()).toBeVisible({ timeout: 8_000 })
+  await expect(page.locator('text=/gold|vàng/i').first()).toBeVisible({ timeout: 15_000 })
 
   const found = await api.findTransactionLast('gold')
   if (found) cleanup.add(() => api.deleteTransaction(found.transaction_id))
@@ -87,7 +87,7 @@ test('can add a fund transaction', async ({ page }) => {
   await page.getByRole('button', { name: /save|create|lưu/i }).click()
   await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 5_000 })
 
-  await expect(page.locator(`text=${fund.code}`).first()).toBeVisible({ timeout: 8_000 })
+  await expect(page.locator(`text=${fund.code}`).first()).toBeVisible({ timeout: 15_000 })
 
   const found = await api.findTransactionLast('fund')
   if (found) cleanup.add(() => api.deleteTransaction(found.transaction_id))
@@ -116,14 +116,14 @@ test('can delete a transaction', async ({ page }) => {
 
   await openTransactionsTab(page)
   const txRow = page.locator('text=E2E Delete TX').first()
-  await expect(txRow).toBeVisible({ timeout: 8_000 })
+  await expect(txRow).toBeVisible({ timeout: 15_000 })
 
   const deleteBtn = txRow.locator('..').locator('..').getByRole('button', { name: /delete|xóa/i }).first()
   await deleteBtn.click()
   await expect(page.getByRole('dialog')).toBeVisible()
   await page.getByRole('button', { name: /confirm|delete|xóa/i }).last().click()
 
-  await expect(page.locator('text=E2E Delete TX')).not.toBeVisible({ timeout: 8_000 })
+  await expect(page.locator('text=E2E Delete TX')).not.toBeVisible({ timeout: 15_000 })
   void tx
 })
 

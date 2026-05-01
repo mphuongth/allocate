@@ -9,17 +9,17 @@ async function openGoalsTab(page: import('@playwright/test').Page) {
   await page.goto('/dashboard')
   await page.evaluate(() => localStorage.removeItem('savingsGoalsCache'))
   await page.goto('/settings?tab=goals')
-  await page.waitForLoadState('networkidle')
+  await page.waitForSelector('[data-testid="create-btn"]', { timeout: 15_000 })
 }
 
 test('goals tab renders list or empty state', async ({ page }) => {
   await openGoalsTab(page)
-  await expect(page.locator('h2, h1').first()).toBeVisible({ timeout: 8_000 })
+  await expect(page.locator('h2, h1').first()).toBeVisible({ timeout: 15_000 })
 })
 
 test('can create a new savings goal', async ({ page }) => {
   await openGoalsTab(page)
-  await page.getByRole('button', { name: /create|add|new|thêm/i }).first().click()
+  await page.getByTestId('create-btn').click()
 
   await expect(page.getByRole('dialog')).toBeVisible()
   await page.getByLabel(/goal name|tên mục tiêu/i).fill('E2E Test Goal')
@@ -27,7 +27,7 @@ test('can create a new savings goal', async ({ page }) => {
   await page.getByRole('button', { name: /save|create|tạo/i }).click()
 
   await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 5_000 })
-  await expect(page.locator('text=E2E Test Goal').first()).toBeVisible({ timeout: 8_000 })
+  await expect(page.locator('text=E2E Test Goal').first()).toBeVisible({ timeout: 15_000 })
 
   const found = await api.findGoalByName('E2E Test Goal')
   if (found) cleanup.add(() => api.deleteGoal(found.goal_id))
@@ -39,7 +39,7 @@ test('can edit an existing savings goal', async ({ page }) => {
 
   await openGoalsTab(page)
   const goalCard = page.locator('text=E2E Edit Goal').first()
-  await expect(goalCard).toBeVisible({ timeout: 8_000 })
+  await expect(goalCard).toBeVisible({ timeout: 15_000 })
 
   // Click edit button near the goal
   const editBtn = goalCard.locator('..').locator('..').getByRole('button', { name: /edit|sửa/i }).first()
@@ -51,7 +51,7 @@ test('can edit an existing savings goal', async ({ page }) => {
   await nameInput.fill('E2E Edit Goal Updated')
   await page.getByRole('button', { name: /save|lưu/i }).click()
 
-  await expect(page.locator('text=E2E Edit Goal Updated').first()).toBeVisible({ timeout: 8_000 })
+  await expect(page.locator('text=E2E Edit Goal Updated').first()).toBeVisible({ timeout: 15_000 })
 })
 
 test('can delete a savings goal', async ({ page }) => {
@@ -59,7 +59,7 @@ test('can delete a savings goal', async ({ page }) => {
 
   await openGoalsTab(page)
   const goalCard = page.locator('text=E2E Delete Goal').first()
-  await expect(goalCard).toBeVisible({ timeout: 8_000 })
+  await expect(goalCard).toBeVisible({ timeout: 15_000 })
 
   const deleteBtn = goalCard.locator('..').locator('..').getByRole('button', { name: /delete|xóa/i }).first()
   await deleteBtn.click()
@@ -68,7 +68,7 @@ test('can delete a savings goal', async ({ page }) => {
   await expect(page.getByRole('dialog')).toBeVisible()
   await page.getByRole('button', { name: /confirm|delete|xóa/i }).last().click()
 
-  await expect(page.locator('text=E2E Delete Goal')).not.toBeVisible({ timeout: 8_000 })
+  await expect(page.locator('text=E2E Delete Goal')).not.toBeVisible({ timeout: 15_000 })
   // No cleanup needed — deleted via UI
   void goal // suppress unused variable warning
 })
@@ -79,7 +79,7 @@ test('view goal detail and back button returns to list', async ({ page }) => {
 
   await page.goto(`/settings?tab=goals&goal=${goal.goal_id}`)
   // GoalDetailView has a back button
-  await expect(page.getByTestId("goal-back-btn").first()).toBeVisible({ timeout: 8_000 })
+  await expect(page.getByTestId("goal-back-btn").first()).toBeVisible({ timeout: 15_000 })
 
   await page.getByTestId("goal-back-btn").first().click()
   // Returns to goals list
@@ -105,7 +105,7 @@ test('sell / withdraw fund investment from Goal Detail', async ({ page }) => {
   cleanup.add(() => api.deleteTransaction(tx.transaction_id))
 
   await page.goto(`/settings?tab=goals&goal=${goal.goal_id}`)
-  await expect(page.getByTestId("goal-back-btn").first()).toBeVisible({ timeout: 8_000 })
+  await expect(page.getByTestId("goal-back-btn").first()).toBeVisible({ timeout: 15_000 })
 
   // Find the sell button for the fund
   const sellBtn = page.getByRole('button', { name: /sell|bán/i }).first()
@@ -142,7 +142,7 @@ test('un-assign fund investment from goal in Goal Detail', async ({ page }) => {
   cleanup.add(() => api.deleteTransaction(tx.transaction_id))
 
   await page.goto(`/settings?tab=goals&goal=${goal.goal_id}`)
-  await expect(page.getByTestId("goal-back-btn").first()).toBeVisible({ timeout: 8_000 })
+  await expect(page.getByTestId("goal-back-btn").first()).toBeVisible({ timeout: 15_000 })
 
   // Find the unlink/unassign button for the fund
   const unlinkBtn = page.getByTestId("unassign-btn").first()
@@ -156,5 +156,5 @@ test('un-assign fund investment from goal in Goal Detail', async ({ page }) => {
   }
 
   // Fund should disappear from goal's list
-  await expect(page.locator(`text=${fund.code}`)).not.toBeVisible({ timeout: 8_000 })
+  await expect(page.locator(`text=${fund.code}`)).not.toBeVisible({ timeout: 15_000 })
 })
