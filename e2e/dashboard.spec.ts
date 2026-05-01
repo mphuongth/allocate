@@ -122,15 +122,11 @@ test('assign unallocated fund to a goal via GoalPickerModal', async ({ page }) =
   await page.goto('/dashboard')
   await page.waitForLoadState('networkidle')
 
-  // Open fund detail modal
-  const fundItem = page.locator(`text=${fund.code}`).first()
-  await expect(fundItem).toBeVisible({ timeout: 10_000 })
-  await fundItem.click()
-  await expect(page.getByRole('dialog')).toBeVisible()
-  // Wait for FundDetailModal data fetches to complete before clicking buttons inside
-  const assignBtn = page.getByRole('button', { name: /assign|goal|mục tiêu/i }).first()
-  await expect(assignBtn).toBeVisible({ timeout: 10_000 })
-  await assignBtn.click()
+  // Click "Assign to Goal" button directly in the unallocated fund row — no FundDetailModal needed
+  // (opening the modal would put its backdrop over the row buttons)
+  const fundRow = page.locator('tr').filter({ hasText: fund.code }).first()
+  await expect(fundRow).toBeVisible({ timeout: 10_000 })
+  await fundRow.getByTitle(/gán|assign/i).click()
 
   // GoalPickerModal opens — pick our test goal
   await expect(page.getByRole('dialog').locator('text=E2E Assign Goal')).toBeVisible({ timeout: 5_000 })
@@ -161,17 +157,13 @@ test('sell unallocated fund from Asset Overview', async ({ page }) => {
   await page.goto('/dashboard')
   await page.waitForLoadState('networkidle')
 
-  const fundItem = page.locator(`text=${fund.code}`).first()
-  await expect(fundItem).toBeVisible({ timeout: 10_000 })
-  await fundItem.click()
+  // Click sell button directly in the unallocated fund row — no FundDetailModal needed
+  const fundRow = page.locator('tr').filter({ hasText: fund.code }).first()
+  await expect(fundRow).toBeVisible({ timeout: 10_000 })
+  await fundRow.getByTitle(/bán|sell/i).click()
+
+  // Sell dialog opens
   await expect(page.getByRole('dialog')).toBeVisible()
-
-  // Wait for FundDetailModal data fetches to complete before clicking buttons inside
-  const sellBtn = page.getByRole('button', { name: /sell|bán/i }).first()
-  await expect(sellBtn).toBeVisible({ timeout: 10_000 })
-  await sellBtn.click()
-
-  // Sell form appears — enter units to sell
   await page.getByLabel(/units|ccq/i).first().fill('50')
   await page.getByRole('button', { name: /confirm|sell|bán/i }).first().click()
 

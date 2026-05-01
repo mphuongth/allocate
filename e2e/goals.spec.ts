@@ -137,11 +137,11 @@ test('un-assign investment from goal in Goal Detail', async ({ page }) => {
   cleanup.add(() => api.deleteTransaction(tx.transaction_id))
 
   await page.goto(`/settings?tab=goals&goal=${goal.goal_id}`)
+  await page.waitForLoadState('networkidle')
   await expect(page.getByTestId("goal-back-btn").first()).toBeVisible({ timeout: 15_000 })
 
   // Switch to "Other Investments" tab where the unassign button lives
   await page.getByRole('button', { name: /other investments|tiết kiệm/i }).first().click()
-  await page.waitForTimeout(500)
 
   const unlinkBtn = page.getByTestId("unassign-btn").first()
   await expect(unlinkBtn).toBeVisible({ timeout: 10_000 })
