@@ -166,7 +166,7 @@ export default function FixedExpensesTab() {
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('title')}</h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t('total')}: {fmt(totalMonthly)} {t('perMonth')}</p>
         </div>
-        <button onClick={openCreate} className="flex items-center gap-2 h-9 px-3 sm:px-4 bg-gray-950 hover:bg-gray-800 text-white text-sm font-bold rounded-md transition-colors shrink-0 self-start sm:self-auto">
+        <button data-testid="create-btn" onClick={openCreate} className="flex items-center gap-2 h-9 px-3 sm:px-4 bg-gray-950 hover:bg-gray-800 text-white text-sm font-bold rounded-md transition-colors shrink-0 self-start sm:self-auto">
           <Plus className="h-4 w-4 shrink-0" />
           <span className="hidden sm:inline">{t('create')}</span>
         </button>

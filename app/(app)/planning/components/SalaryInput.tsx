@@ -118,6 +118,7 @@ export default function SalaryInput({ plan, month, year, onPlanCreated, onPlanDe
         {error && <p className="text-red-600 dark:text-red-400 text-sm mb-2">{error}</p>}
         <div className="flex items-center gap-3">
           <AmountInput
+            data-testid="salary-input"
             value={value}
             onChange={setValue}
             onBlur={saveSalary}

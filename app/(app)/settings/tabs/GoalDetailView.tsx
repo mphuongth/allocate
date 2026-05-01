@@ -420,7 +420,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
     <div>
       {/* Header */}
       <div className="flex items-center gap-4 mb-6">
-        <button onClick={onBack} className="p-1.5 rounded-md text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+        <button data-testid="goal-back-btn" onClick={onBack} className="p-1.5 rounded-md text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
           <ArrowLeft className="h-5 w-5" />
         </button>
         <div className="flex-1">
@@ -705,7 +705,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                             <TrendingDown className="h-4 w-4" />
                           </button>
                         )}
-                        <button onClick={() => handleUnassign(row)} className="p-1.5 rounded-md text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"><Unlink className="h-4 w-4" /></button>
+                        <button data-testid="unassign-btn" onClick={() => handleUnassign(row)} className="p-1.5 rounded-md text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"><Unlink className="h-4 w-4" /></button>
                         <button onClick={() => handleTxDelete(row)} disabled={deletingId === row.transaction_id} className="p-1.5 rounded-md text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50"><Trash2 className="h-4 w-4" /></button>
                       </div>
                     </div>
@@ -769,7 +769,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                                     <TrendingDown className="h-4 w-4" />
                                   </button>
                                 )}
-                                <button onClick={() => handleUnassign(row)} className="p-1.5 rounded-md text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"><Unlink className="h-4 w-4" /></button>
+                                <button data-testid="unassign-btn" onClick={() => handleUnassign(row)} className="p-1.5 rounded-md text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"><Unlink className="h-4 w-4" /></button>
                                 <button onClick={() => handleTxDelete(row)} disabled={deletingId === row.transaction_id} className="p-1.5 rounded-md text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50"><Trash2 className="h-4 w-4" /></button>
                               </div>
                             </td>
