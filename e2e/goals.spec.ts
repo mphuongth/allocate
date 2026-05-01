@@ -5,16 +5,20 @@ import { makeCleanupStack } from './helpers/cleanup'
 const cleanup = makeCleanupStack()
 test.afterEach(() => cleanup.run())
 
-test('goals tab renders list or empty state', async ({ page }) => {
+async function openGoalsTab(page: import('@playwright/test').Page) {
   await page.goto('/settings?tab=goals')
+  await page.evaluate(() => localStorage.clear())
+  await page.reload()
   await page.waitForLoadState('networkidle')
-  const content = page.locator('text=/no savings goals yet/i').or(page.locator('[class*="card"], [class*="goal"]').first())
+}
+
+test('goals tab renders list or empty state', async ({ page }) => {
+  await openGoalsTab(page)
   await expect(page.locator('h2, h1').first()).toBeVisible({ timeout: 8_000 })
 })
 
 test('can create a new savings goal', async ({ page }) => {
-  await page.goto('/settings?tab=goals')
-  await page.waitForLoadState('networkidle')
+  await openGoalsTab(page)
   await page.getByRole('button', { name: /create|add|new|thêm/i }).first().click()
 
   await expect(page.getByRole('dialog')).toBeVisible()
@@ -33,7 +37,7 @@ test('can edit an existing savings goal', async ({ page }) => {
   const goal = await api.createGoal({ goal_name: 'E2E Edit Goal', target_amount: 20_000_000 })
   cleanup.add(() => api.deleteGoal(goal.goal_id))
 
-  await page.goto('/settings?tab=goals')
+  await openGoalsTab(page)
   const goalCard = page.locator('text=E2E Edit Goal').first()
   await expect(goalCard).toBeVisible({ timeout: 8_000 })
 
@@ -53,7 +57,7 @@ test('can edit an existing savings goal', async ({ page }) => {
 test('can delete a savings goal', async ({ page }) => {
   const goal = await api.createGoal({ goal_name: 'E2E Delete Goal' })
 
-  await page.goto('/settings?tab=goals')
+  await openGoalsTab(page)
   const goalCard = page.locator('text=E2E Delete Goal').first()
   await expect(goalCard).toBeVisible({ timeout: 8_000 })
 

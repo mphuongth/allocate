@@ -7,6 +7,8 @@ test.afterEach(() => cleanup.run())
 
 async function openInsuranceTab(page: import('@playwright/test').Page) {
   await page.goto('/settings?tab=insurance')
+  await page.evaluate(() => localStorage.clear())
+  await page.reload()
   await page.waitForLoadState('networkidle')
 }
 
