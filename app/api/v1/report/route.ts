@@ -33,6 +33,7 @@ export async function POST(req: NextRequest) {
       },
     })
   } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ECONNRESET') return new Response(null, { status: 499 })
     console.error('[report] PDF generation failed:', err)
     return NextResponse.json({ error: 'Failed to generate report' }, { status: 500 })
   }
