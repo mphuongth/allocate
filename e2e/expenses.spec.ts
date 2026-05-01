@@ -6,11 +6,11 @@ const cleanup = makeCleanupStack()
 test.afterEach(() => cleanup.run())
 
 async function openExpensesTab(page: import('@playwright/test').Page) {
-  await page.goto('/settings?tab=expenses')
+  await page.goto('/dashboard')
   await page.evaluate(() => {
     Object.keys(localStorage).filter(k => k.startsWith('fixedExpensesCache')).forEach(k => localStorage.removeItem(k))
   })
-  await page.reload()
+  await page.goto('/settings?tab=expenses')
   await page.waitForLoadState('networkidle')
 }
 
@@ -22,7 +22,7 @@ test('fixed expenses tab renders', async ({ page }) => {
 
 test('can create a fixed expense', async ({ page }) => {
   await openExpensesTab(page)
-  await page.getByRole('button', { name: /add|create|thêm/i }).first().click()
+  await page.getByTestId('create-btn').click()
 
   await expect(page.getByRole('dialog')).toBeVisible()
   await page.locator('#expense_name').fill('E2E Rent')

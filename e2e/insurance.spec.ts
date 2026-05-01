@@ -6,9 +6,9 @@ const cleanup = makeCleanupStack()
 test.afterEach(() => cleanup.run())
 
 async function openInsuranceTab(page: import('@playwright/test').Page) {
-  await page.goto('/settings?tab=insurance')
+  await page.goto('/dashboard')
   await page.evaluate(() => localStorage.removeItem('insuranceMembersCache'))
-  await page.reload()
+  await page.goto('/settings?tab=insurance')
   await page.waitForLoadState('networkidle')
 }
 
@@ -20,7 +20,7 @@ test('insurance tab renders table or empty state', async ({ page }) => {
 
 test('can add an insurance member', async ({ page }) => {
   await openInsuranceTab(page)
-  await page.getByRole('button', { name: /add|create|thêm/i }).first().click()
+  await page.getByTestId('create-btn').click()
 
   await expect(page.getByRole('dialog')).toBeVisible()
   await page.locator('#member_name').fill('E2E Insurance Member')

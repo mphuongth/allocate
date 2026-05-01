@@ -6,9 +6,9 @@ const cleanup = makeCleanupStack()
 test.afterEach(() => cleanup.run())
 
 async function openGoalsTab(page: import('@playwright/test').Page) {
-  await page.goto('/settings?tab=goals')
+  await page.goto('/dashboard')
   await page.evaluate(() => localStorage.removeItem('savingsGoalsCache'))
-  await page.reload()
+  await page.goto('/settings?tab=goals')
   await page.waitForLoadState('networkidle')
 }
 

@@ -6,11 +6,11 @@ const cleanup = makeCleanupStack()
 test.afterEach(() => cleanup.run())
 
 async function openTransactionsTab(page: import('@playwright/test').Page) {
-  await page.goto('/settings?tab=transactions')
+  await page.goto('/dashboard')
   await page.evaluate(() => {
     Object.keys(localStorage).filter(k => k.includes('transaction') || k.includes('Transaction')).forEach(k => localStorage.removeItem(k))
   })
-  await page.reload()
+  await page.goto('/settings?tab=transactions')
   await page.waitForLoadState('networkidle')
 }
 
@@ -22,7 +22,7 @@ test('transactions tab renders table or empty state', async ({ page }) => {
 
 test('can add a bank transaction', async ({ page }) => {
   await openTransactionsTab(page)
-  await page.getByRole('button', { name: /add|create|thêm/i }).first().click()
+  await page.getByTestId('create-btn').click()
 
   await expect(page.getByRole('dialog')).toBeVisible()
 
@@ -42,7 +42,7 @@ test('can add a bank transaction', async ({ page }) => {
 
 test('can add a gold transaction', async ({ page }) => {
   await openTransactionsTab(page)
-  await page.getByRole('button', { name: /add|create|thêm/i }).first().click()
+  await page.getByTestId('create-btn').click()
   await expect(page.getByRole('dialog')).toBeVisible()
 
   // Select Gold asset type
@@ -68,7 +68,7 @@ test('can add a fund transaction', async ({ page }) => {
   if (!fund) test.skip()
 
   await openTransactionsTab(page)
-  await page.getByRole('button', { name: /add|create|thêm/i }).first().click()
+  await page.getByTestId('create-btn').click()
   await expect(page.getByRole('dialog')).toBeVisible()
 
   // Select Fund asset type
@@ -131,7 +131,7 @@ test('fund library page shows funds list', async ({ page }) => {
   await page.goto('/funds')
   await page.waitForLoadState('networkidle')
   // Either the funds table is visible or an empty state
-  const content = page.locator('table, [role="table"], text=/no funds|no data|chưa có/i').first()
+  const content = page.locator('table').or(page.getByText(/no funds yet/i)).first()
   await expect(content).toBeVisible({ timeout: 10_000 })
 })
 
