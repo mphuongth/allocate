@@ -85,7 +85,7 @@ test('can add a fund transaction', async ({ page }) => {
   await page.getByLabel(/date|ngày/i).first().fill('2026-01-15')
   await page.getByLabel(/amount|số tiền/i).first().fill('5000000')
   await page.getByLabel(/units|ccq/i).first().fill('200')
-  await page.getByLabel(/nav|purchase/i).first().fill(String(fund!.nav))
+  await page.getByLabel(/\bnav\b|purchase/i).first().fill(String(fund!.nav))
 
   await page.getByRole('button', { name: /save|create|lưu/i }).click()
   await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 5_000 })
