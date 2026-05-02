@@ -98,14 +98,14 @@ test('clicking unallocated fund opens FundDetailModal', async ({ page }) => {
 
   await gotoFreshDashboard(page)
 
-  // Find the fund code in the unallocated section
-  const fundItem = page.locator(`text=${fund.code}`).first()
+  // Find the fund name in the unallocated section (UI renders fundName, not code)
+  const fundItem = page.locator(`text=${fund.name}`).first()
   await expect(fundItem).toBeVisible({ timeout: 10_000 })
   await fundItem.click()
 
   // FundDetailModal should open
   await expect(page.getByRole('dialog')).toBeVisible({ timeout: 5_000 })
-  await expect(page.getByRole('dialog').locator(`text=${fund.code}`)).toBeVisible()
+  await expect(page.getByRole('dialog').locator(`text=${fund.name}`)).toBeVisible()
 
   // Close the modal
   await page.keyboard.press('Escape')
@@ -133,7 +133,7 @@ test('assign unallocated fund to a goal via GoalPickerModal', async ({ page }) =
 
   // Click "Assign to Goal" button directly in the unallocated fund row — no FundDetailModal needed
   // (opening the modal would put its backdrop over the row buttons)
-  const fundRow = page.locator('tr').filter({ hasText: fund.code }).first()
+  const fundRow = page.locator('tr').filter({ hasText: fund.name }).first()
   await expect(fundRow).toBeVisible({ timeout: 10_000 })
   await fundRow.getByTitle(/gán|assign/i).click()
 
@@ -165,7 +165,7 @@ test('sell unallocated fund from Asset Overview', async ({ page }) => {
   await gotoFreshDashboard(page)
 
   // Click sell button directly in the unallocated fund row — no FundDetailModal needed
-  const fundRow = page.locator('tr').filter({ hasText: fund.code }).first()
+  const fundRow = page.locator('tr').filter({ hasText: fund.name }).first()
   await expect(fundRow).toBeVisible({ timeout: 10_000 })
   await fundRow.getByTitle(/bán|sell/i).click()
 
