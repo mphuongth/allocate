@@ -10,8 +10,10 @@ async function gotoFreshDashboard(page: Page) {
   await page.evaluate(() => {
     Object.keys(localStorage).filter(k => k.startsWith('dashboardOverviewCache')).forEach(k => localStorage.removeItem(k))
   })
-  await page.reload()
-  await page.waitForLoadState('networkidle')
+  await Promise.all([
+    page.waitForResponse(r => r.url().includes('/api/v1/dashboard/overview'), { timeout: 15_000 }),
+    page.reload(),
+  ])
 }
 
 test('dashboard page loads with main layout', async ({ page }) => {
