@@ -1,9 +1,18 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
 import * as api from './helpers/api'
 import { makeCleanupStack } from './helpers/cleanup'
 
 const cleanup = makeCleanupStack()
 test.afterEach(() => cleanup.run())
+
+async function gotoFreshDashboard(page: Page) {
+  await page.goto('/dashboard')
+  await page.evaluate(() => {
+    Object.keys(localStorage).filter(k => k.startsWith('dashboardOverviewCache')).forEach(k => localStorage.removeItem(k))
+  })
+  await page.reload()
+  await page.waitForLoadState('networkidle')
+}
 
 test('dashboard page loads with main layout', async ({ page }) => {
   await page.goto('/dashboard')
@@ -85,12 +94,7 @@ test('clicking unallocated fund opens FundDetailModal', async ({ page }) => {
   })
   cleanup.add(() => api.deleteTransaction(tx.transaction_id))
 
-  await page.goto('/dashboard')
-  await page.evaluate(() => {
-    Object.keys(localStorage).filter(k => k.startsWith('dashboardOverviewCache')).forEach(k => localStorage.removeItem(k))
-  })
-  await page.reload()
-  await page.waitForLoadState('networkidle')
+  await gotoFreshDashboard(page)
 
   // Find the fund code in the unallocated section
   const fundItem = page.locator(`text=${fund.code}`).first()
@@ -123,12 +127,7 @@ test('assign unallocated fund to a goal via GoalPickerModal', async ({ page }) =
   })
   cleanup.add(() => api.deleteTransaction(tx.transaction_id))
 
-  await page.goto('/dashboard')
-  await page.evaluate(() => {
-    Object.keys(localStorage).filter(k => k.startsWith('dashboardOverviewCache')).forEach(k => localStorage.removeItem(k))
-  })
-  await page.reload()
-  await page.waitForLoadState('networkidle')
+  await gotoFreshDashboard(page)
 
   // Click "Assign to Goal" button directly in the unallocated fund row — no FundDetailModal needed
   // (opening the modal would put its backdrop over the row buttons)
@@ -161,12 +160,7 @@ test('sell unallocated fund from Asset Overview', async ({ page }) => {
   })
   cleanup.add(() => api.deleteTransaction(tx.transaction_id))
 
-  await page.goto('/dashboard')
-  await page.evaluate(() => {
-    Object.keys(localStorage).filter(k => k.startsWith('dashboardOverviewCache')).forEach(k => localStorage.removeItem(k))
-  })
-  await page.reload()
-  await page.waitForLoadState('networkidle')
+  await gotoFreshDashboard(page)
 
   // Click sell button directly in the unallocated fund row — no FundDetailModal needed
   const fundRow = page.locator('tr').filter({ hasText: fund.code }).first()
