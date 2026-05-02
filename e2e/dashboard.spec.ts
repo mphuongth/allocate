@@ -98,9 +98,11 @@ test('clicking unallocated fund opens FundDetailModal', async ({ page }) => {
 
   await gotoFreshDashboard(page)
 
-  // DEBUG: log visible page text to diagnose missing fund
+  // DEBUG: wait for loading to settle then log what's on the page
+  await page.waitForTimeout(5_000)
+  console.log('URL after gotoFreshDashboard:', page.url())
   console.log('fund.name:', fund.name)
-  console.log('page body text:', (await page.locator('body').innerText()).slice(0, 3000))
+  console.log('page body text:', (await page.locator('body').innerText()).slice(0, 5000))
 
   // Find the fund name in the unallocated section (UI renders fundName, not code)
   const fundItem = page.getByText(fund.name, { exact: false }).first()
