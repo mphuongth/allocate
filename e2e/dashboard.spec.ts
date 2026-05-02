@@ -6,13 +6,16 @@ const cleanup = makeCleanupStack()
 test.afterEach(() => cleanup.run())
 
 async function gotoFreshDashboard(page: Page) {
-  await page.goto('/dashboard')
+  // Navigate to any other page first to fully unmount DashboardClient
+  await page.goto('/settings')
+  // Clear the overview cache so the next dashboard mount fetches fresh data
   await page.evaluate(() => {
     Object.keys(localStorage).filter(k => k.startsWith('dashboardOverviewCache')).forEach(k => localStorage.removeItem(k))
   })
+  // Navigate back — DashboardClient mounts fresh, cache is empty, API call is guaranteed
   await Promise.all([
-    page.waitForResponse(r => r.url().includes('/api/v1/dashboard/overview'), { timeout: 15_000 }),
-    page.reload(),
+    page.waitForResponse(r => r.url().includes('/api/v1/dashboard/overview') && r.status() === 200, { timeout: 20_000 }),
+    page.goto('/dashboard'),
   ])
 }
 
@@ -97,12 +100,6 @@ test('clicking unallocated fund opens FundDetailModal', async ({ page }) => {
   cleanup.add(() => api.deleteTransaction(tx.transaction_id))
 
   await gotoFreshDashboard(page)
-
-  // DEBUG: wait for loading to settle then log what's on the page
-  await page.waitForTimeout(5_000)
-  console.log('URL after gotoFreshDashboard:', page.url())
-  console.log('fund.name:', fund.name)
-  console.log('page body text:', (await page.locator('body').innerText()).slice(0, 5000))
 
   // Find the fund name in the unallocated section (UI renders fundName, not code)
   const fundItem = page.getByText(fund.name, { exact: false }).first()
