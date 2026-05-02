@@ -86,6 +86,10 @@ test('clicking unallocated fund opens FundDetailModal', async ({ page }) => {
   cleanup.add(() => api.deleteTransaction(tx.transaction_id))
 
   await page.goto('/dashboard')
+  await page.evaluate(() => {
+    Object.keys(localStorage).filter(k => k.startsWith('dashboardOverviewCache')).forEach(k => localStorage.removeItem(k))
+  })
+  await page.reload()
   await page.waitForLoadState('networkidle')
 
   // Find the fund code in the unallocated section
@@ -120,6 +124,10 @@ test('assign unallocated fund to a goal via GoalPickerModal', async ({ page }) =
   cleanup.add(() => api.deleteTransaction(tx.transaction_id))
 
   await page.goto('/dashboard')
+  await page.evaluate(() => {
+    Object.keys(localStorage).filter(k => k.startsWith('dashboardOverviewCache')).forEach(k => localStorage.removeItem(k))
+  })
+  await page.reload()
   await page.waitForLoadState('networkidle')
 
   // Click "Assign to Goal" button directly in the unallocated fund row — no FundDetailModal needed
@@ -154,6 +162,10 @@ test('sell unallocated fund from Asset Overview', async ({ page }) => {
   cleanup.add(() => api.deleteTransaction(tx.transaction_id))
 
   await page.goto('/dashboard')
+  await page.evaluate(() => {
+    Object.keys(localStorage).filter(k => k.startsWith('dashboardOverviewCache')).forEach(k => localStorage.removeItem(k))
+  })
+  await page.reload()
   await page.waitForLoadState('networkidle')
 
   // Click sell button directly in the unallocated fund row — no FundDetailModal needed

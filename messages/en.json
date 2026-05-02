@@ -311,6 +311,8 @@
     "sectionUnallocated": "Unallocated Investments",
     "sectionInsurance": "Insurance",
     "manageInsurance": "Manage",
+    "downloadReport": "Download PDF Report",
+    "downloadingReport": "Generating...",
     "invested": "Invested",
     "assignToGoal": "Assign to Goal",
     "unassigned": "Unassigned",
