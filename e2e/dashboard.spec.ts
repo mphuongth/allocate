@@ -1,9 +1,23 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
 import * as api from './helpers/api'
 import { makeCleanupStack } from './helpers/cleanup'
 
 const cleanup = makeCleanupStack()
 test.afterEach(() => cleanup.run())
+
+async function gotoFreshDashboard(page: Page) {
+  // Navigate to any other page first to fully unmount DashboardClient
+  await page.goto('/settings')
+  // Clear the overview cache so the next dashboard mount fetches fresh data
+  await page.evaluate(() => {
+    Object.keys(localStorage).filter(k => k.startsWith('dashboardOverviewCache')).forEach(k => localStorage.removeItem(k))
+  })
+  // Navigate back — DashboardClient mounts fresh, cache is empty, API call is guaranteed
+  await Promise.all([
+    page.waitForResponse(r => r.url().includes('/api/v1/dashboard/overview') && r.status() === 200, { timeout: 20_000 }),
+    page.goto('/dashboard'),
+  ])
+}
 
 test('dashboard page loads with main layout', async ({ page }) => {
   await page.goto('/dashboard')
@@ -72,8 +86,8 @@ test('clicking a goal card navigates to goal detail', async ({ page }) => {
 })
 
 test('clicking unallocated fund opens FundDetailModal', async ({ page }) => {
-  const fund = await api.getFirstFund()
-  if (!fund) test.skip()
+  const fund = await api.createFund({ name: 'E2E Test Fund', code: 'E2ETESTFUND', fund_type: 'equity', nav: 10000 })
+  cleanup.add(() => api.deleteFund(fund.id))
 
   const tx = await api.createTransaction({
     asset_type: 'fund',
@@ -85,21 +99,16 @@ test('clicking unallocated fund opens FundDetailModal', async ({ page }) => {
   })
   cleanup.add(() => api.deleteTransaction(tx.transaction_id))
 
-  await page.goto('/dashboard')
-  await page.evaluate(() => {
-    Object.keys(localStorage).filter(k => k.startsWith('dashboardOverviewCache')).forEach(k => localStorage.removeItem(k))
-  })
-  await page.reload()
-  await page.waitForLoadState('networkidle')
+  await gotoFreshDashboard(page)
 
-  // Find the fund code in the unallocated section
-  const fundItem = page.locator(`text=${fund.code}`).first()
+  // Find the fund name in the unallocated section (UI renders fundName, not code)
+  const fundItem = page.getByText(fund.name, { exact: false }).first()
   await expect(fundItem).toBeVisible({ timeout: 10_000 })
   await fundItem.click()
 
   // FundDetailModal should open
   await expect(page.getByRole('dialog')).toBeVisible({ timeout: 5_000 })
-  await expect(page.getByRole('dialog').locator(`text=${fund.code}`)).toBeVisible()
+  await expect(page.getByRole('dialog').locator(`text=${fund.name}`)).toBeVisible()
 
   // Close the modal
   await page.keyboard.press('Escape')
@@ -107,8 +116,8 @@ test('clicking unallocated fund opens FundDetailModal', async ({ page }) => {
 })
 
 test('assign unallocated fund to a goal via GoalPickerModal', async ({ page }) => {
-  const fund = await api.getFirstFund()
-  if (!fund) test.skip()
+  const fund = await api.createFund({ name: 'E2E Test Fund', code: 'E2ETESTFUND', fund_type: 'equity', nav: 10000 })
+  cleanup.add(() => api.deleteFund(fund.id))
 
   const goal = await api.createGoal({ goal_name: 'E2E Assign Goal', target_amount: 20_000_000 })
   cleanup.add(() => api.deleteGoal(goal.goal_id))
@@ -123,16 +132,11 @@ test('assign unallocated fund to a goal via GoalPickerModal', async ({ page }) =
   })
   cleanup.add(() => api.deleteTransaction(tx.transaction_id))
 
-  await page.goto('/dashboard')
-  await page.evaluate(() => {
-    Object.keys(localStorage).filter(k => k.startsWith('dashboardOverviewCache')).forEach(k => localStorage.removeItem(k))
-  })
-  await page.reload()
-  await page.waitForLoadState('networkidle')
+  await gotoFreshDashboard(page)
 
   // Click "Assign to Goal" button directly in the unallocated fund row — no FundDetailModal needed
   // (opening the modal would put its backdrop over the row buttons)
-  const fundRow = page.locator('tr').filter({ hasText: fund.code }).first()
+  const fundRow = page.getByRole('row').filter({ hasText: fund.name }).first()
   await expect(fundRow).toBeVisible({ timeout: 10_000 })
   await fundRow.getByTitle(/gán|assign/i).click()
 
@@ -148,8 +152,8 @@ test('assign unallocated fund to a goal via GoalPickerModal', async ({ page }) =
 })
 
 test('sell unallocated fund from Asset Overview', async ({ page }) => {
-  const fund = await api.getFirstFund()
-  if (!fund) test.skip()
+  const fund = await api.createFund({ name: 'E2E Test Fund', code: 'E2ETESTFUND', fund_type: 'equity', nav: 10000 })
+  cleanup.add(() => api.deleteFund(fund.id))
 
   const tx = await api.createTransaction({
     asset_type: 'fund',
@@ -161,15 +165,10 @@ test('sell unallocated fund from Asset Overview', async ({ page }) => {
   })
   cleanup.add(() => api.deleteTransaction(tx.transaction_id))
 
-  await page.goto('/dashboard')
-  await page.evaluate(() => {
-    Object.keys(localStorage).filter(k => k.startsWith('dashboardOverviewCache')).forEach(k => localStorage.removeItem(k))
-  })
-  await page.reload()
-  await page.waitForLoadState('networkidle')
+  await gotoFreshDashboard(page)
 
   // Click sell button directly in the unallocated fund row — no FundDetailModal needed
-  const fundRow = page.locator('tr').filter({ hasText: fund.code }).first()
+  const fundRow = page.getByRole('row').filter({ hasText: fund.name }).first()
   await expect(fundRow).toBeVisible({ timeout: 10_000 })
   await fundRow.getByTitle(/bán|sell/i).click()
 

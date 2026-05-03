@@ -163,10 +163,33 @@ export async function deleteAllTransactionsByNotes(notes: string) {
   await supabase.from('investment_transactions').delete().eq('user_id', userId).eq('notes', notes)
 }
 
+export async function createFund(data: {
+  name: string
+  code: string
+  fund_type: string
+  nav: number
+}) {
+  const userId = await getTestUserId()
+  const { data: fund, error } = await supabase
+    .from('funds')
+    .insert({ user_id: userId, ...data })
+    .select()
+    .single()
+  if (error) throw error
+  return fund
+}
+
+export async function deleteFund(fundId: string) {
+  await supabase.from('investment_transactions').delete().eq('fund_id', fundId)
+  await supabase.from('funds').delete().eq('id', fundId)
+}
+
 export async function getFirstFund() {
+  const userId = await getTestUserId()
   const { data, error } = await supabase
     .from('funds')
     .select('id, name, code, nav, fund_type')
+    .eq('user_id', userId)
     .limit(1)
     .maybeSingle()
   if (error) return null
