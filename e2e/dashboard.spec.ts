@@ -86,8 +86,8 @@ test('clicking a goal card navigates to goal detail', async ({ page }) => {
 })
 
 test('clicking unallocated fund opens FundDetailModal', async ({ page }) => {
-  const fund = await api.getFirstFund()
-  if (!fund) test.skip()
+  const fund = await api.createFund({ name: 'E2E Test Fund', code: 'E2ETESTFUND', fund_type: 'equity', nav: 10000 })
+  cleanup.add(() => api.deleteFund(fund.id))
 
   const tx = await api.createTransaction({
     asset_type: 'fund',
@@ -116,8 +116,8 @@ test('clicking unallocated fund opens FundDetailModal', async ({ page }) => {
 })
 
 test('assign unallocated fund to a goal via GoalPickerModal', async ({ page }) => {
-  const fund = await api.getFirstFund()
-  if (!fund) test.skip()
+  const fund = await api.createFund({ name: 'E2E Test Fund', code: 'E2ETESTFUND', fund_type: 'equity', nav: 10000 })
+  cleanup.add(() => api.deleteFund(fund.id))
 
   const goal = await api.createGoal({ goal_name: 'E2E Assign Goal', target_amount: 20_000_000 })
   cleanup.add(() => api.deleteGoal(goal.goal_id))
@@ -152,8 +152,8 @@ test('assign unallocated fund to a goal via GoalPickerModal', async ({ page }) =
 })
 
 test('sell unallocated fund from Asset Overview', async ({ page }) => {
-  const fund = await api.getFirstFund()
-  if (!fund) test.skip()
+  const fund = await api.createFund({ name: 'E2E Test Fund', code: 'E2ETESTFUND', fund_type: 'equity', nav: 10000 })
+  cleanup.add(() => api.deleteFund(fund.id))
 
   const tx = await api.createTransaction({
     asset_type: 'fund',
