@@ -237,3 +237,53 @@ test('withdraw with affects-progress unchecked stores affects_progress=false', a
   expect(withdrawals).toHaveLength(1)
   expect(withdrawals![0].affects_progress).toBe(false)
 })
+
+test('remaining balance reflects actual withdrawal even when affects_progress=false', async ({ page }) => {
+  const goal = await api.createGoal({ goal_name: 'E2E Remaining Balance Goal', target_amount: 200_000_000 })
+  cleanup.add(() => api.deleteGoal(goal.goal_id))
+
+  const tx = await api.createTransaction({
+    asset_type: 'bank',
+    amount_vnd: 100_000_000,
+    investment_date: '2026-01-01',
+    goal_id: goal.goal_id,
+  })
+  cleanup.add(() => api.deleteTransaction(tx.transaction_id))
+
+  await page.goto(`/settings?tab=goals&goal=${goal.goal_id}`)
+  await page.waitForLoadState('networkidle')
+  await expect(page.getByTestId('goal-back-btn').first()).toBeVisible({ timeout: 15_000 })
+
+  // Record progress % before withdrawal
+  const progressBefore = await page.getByTestId('goal-progress-pct').first().textContent()
+
+  // Switch to Other tab and open withdraw modal
+  await page.getByRole('button', { name: /tiết kiệm & khác|other investments/i }).first().click()
+  const withdrawBtn = page.getByRole('button', { name: /rút|withdraw/i }).first()
+  await expect(withdrawBtn).toBeVisible({ timeout: 10_000 })
+  await withdrawBtn.click()
+
+  await expect(page.getByRole('dialog')).toBeVisible()
+
+  // Uncheck affects-progress
+  const checkbox = page.getByTestId('affects-progress-checkbox')
+  await checkbox.uncheck()
+
+  // Pre-filled principal should be 100M — change amount received and submit
+  await page.getByRole('button', { name: /rút|withdraw/i }).last().click()
+
+  // Modal should close and data refresh
+  await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 10_000 })
+
+  // Progress bar % must be unchanged
+  const progressAfter = await page.getByTestId('goal-progress-pct').first().textContent()
+  expect(progressAfter).toBe(progressBefore)
+
+  // Remaining balance shown must be reduced, not 100M
+  // Use :visible to avoid picking the sm:hidden mobile card at desktop viewport
+  const remaining = page.locator('[data-testid="investment-remaining"]:visible').first()
+  await expect(remaining).toBeVisible({ timeout: 10_000 })
+  const remainingText = await remaining.textContent()
+  // Original 100M fully pre-filled and withdrawn — should not show 100M as remaining
+  expect(remainingText).not.toContain('100.000.000')
+})
