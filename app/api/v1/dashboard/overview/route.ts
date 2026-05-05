@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { calcProjectedInterest, isNavStale, insuranceStatus } from '@/lib/finance'
+import { buildWithdrawalMaps } from '@/lib/withdrawalProgress'
 
 export async function GET() {
   const supabase = await createSupabaseServerClient()
@@ -15,7 +16,7 @@ export async function GET() {
       .eq('user_id', user.id),
     supabase
       .from('investment_transactions')
-      .select('transaction_id, goal_id, amount_vnd, interest_rate, investment_date, asset_type, transaction_type, units, unit_price, units_withdrawn, principal_withdrawn, fund_id, parent_transaction_id, expiry_date, notes, funds(id, name, nav, updated_at, fund_type)')
+      .select('transaction_id, goal_id, amount_vnd, interest_rate, investment_date, asset_type, transaction_type, units, unit_price, units_withdrawn, principal_withdrawn, fund_id, parent_transaction_id, expiry_date, notes, affects_progress, funds(id, name, nav, updated_at, fund_type)')
       .eq('user_id', user.id),
     supabase
       .from('insurance_members')
@@ -57,24 +58,7 @@ export async function GET() {
   )
   const withdrawals = allTxsRaw.filter((tx) => tx.transaction_type === 'withdrawal')
 
-  // Build withdrawal lookup: parent_transaction_id → { principal, units } (bank/gold)
-  const parentWdMap = new Map<string, { principal: number; units: number }>()
-  // Build fund withdrawal lookup: "goal_key::fund_id" → { units, cost }
-  const fundWdMap = new Map<string, { units: number; cost: number }>()
-  for (const wd of withdrawals) {
-    if (wd.asset_type === 'fund' && wd.fund_id) {
-      const key = `${wd.goal_id ?? 'unallocated'}::${wd.fund_id}`
-      const e = fundWdMap.get(key) ?? { units: 0, cost: 0 }
-      e.units += wd.units_withdrawn ?? 0
-      e.cost += wd.principal_withdrawn ?? 0
-      fundWdMap.set(key, e)
-    } else if (wd.parent_transaction_id) {
-      const e = parentWdMap.get(wd.parent_transaction_id) ?? { principal: 0, units: 0 }
-      e.principal += wd.principal_withdrawn ?? 0
-      e.units += wd.units_withdrawn ?? 0
-      parentWdMap.set(wd.parent_transaction_id, e)
-    }
-  }
+  const { parentWdMap, fundWdMap } = buildWithdrawalMaps(withdrawals)
 
   const insuranceMembers = insuranceRes.data ?? []
   const goldPricePerChi: number | null = goldPriceRes.data?.price_per_chi ?? null

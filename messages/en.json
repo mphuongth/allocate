@@ -154,6 +154,7 @@
     "amountReceivedPlaceholder": "Total amount received from bank",
     "unitsToSellGold": "Chi to sell",
     "unitsToSellFund": "Units to sell",
+    "affectsProgressLabel": "Count toward goal progress",
     "costBasisLabel": "Cost basis",
     "receivedLabel": "Received",
     "currentPriceLabel": "Current price",

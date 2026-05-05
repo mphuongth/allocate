@@ -51,6 +51,7 @@ interface WithdrawalRow {
   parent_transaction_id: string | null
   fund_id: string | null
   notes: string | null
+  affects_progress: boolean | null
 }
 
 interface FundGroup {
@@ -84,7 +85,7 @@ const ASSET_COLORS: Record<string, string> = {
 
 const emptyTxForm = { asset_type: 'bank', investment_date: '', amount_vnd: '', unit_price: '', units: '', interest_rate: '', expiry_date: '', notes: '', fund_id: '' }
 const emptyFiForm = { fund_id: '', investment_date: '', amount_vnd: '', units: '', unit_price: '' }
-const emptyWithdrawForm = { investment_date: '', amount_vnd: '', principal_withdrawn: '', units_withdrawn: '', notes: '' }
+const emptyWithdrawForm = { investment_date: '', amount_vnd: '', principal_withdrawn: '', units_withdrawn: '', notes: '', affects_progress: true }
 
 export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: () => void }) {
   const t = useTranslations('goals')
@@ -140,7 +141,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
 
     const withdrawals: WithdrawalRow[] = all
       .filter((tx: { transaction_type: string }) => tx.transaction_type === 'withdrawal')
-      .map((tx: { transaction_id: string; investment_date: string; amount_vnd: number; principal_withdrawn: number | null; units_withdrawn: number | null; parent_transaction_id: string | null; fund_id: string | null; notes: string | null }) => ({
+      .map((tx: { transaction_id: string; investment_date: string; amount_vnd: number; principal_withdrawn: number | null; units_withdrawn: number | null; parent_transaction_id: string | null; fund_id: string | null; notes: string | null; affects_progress: boolean | null }) => ({
         transaction_id: tx.transaction_id,
         investment_date: tx.investment_date,
         amount_vnd: tx.amount_vnd,
@@ -149,6 +150,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
         parent_transaction_id: tx.parent_transaction_id,
         fund_id: tx.fund_id,
         notes: tx.notes,
+        affects_progress: tx.affects_progress,
       }))
 
     // Build withdrawal lookup by parent transaction
@@ -176,8 +178,8 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
           notes: tx.notes,
           fund_id: tx.fund_id,
           fund_code: tx.fund_id && fundMap[tx.fund_id] ? fundMap[tx.fund_id].code : null,
-          total_principal_withdrawn: ws.reduce((s: number, w: WithdrawalRow) => s + (w.principal_withdrawn ?? 0), 0),
-          total_units_withdrawn: ws.reduce((s: number, w: WithdrawalRow) => s + (w.units_withdrawn ?? 0), 0),
+          total_principal_withdrawn: ws.filter((w: WithdrawalRow) => w.affects_progress !== false).reduce((s: number, w: WithdrawalRow) => s + (w.principal_withdrawn ?? 0), 0),
+          total_units_withdrawn: ws.filter((w: WithdrawalRow) => w.affects_progress !== false).reduce((s: number, w: WithdrawalRow) => s + (w.units_withdrawn ?? 0), 0),
           total_received: ws.reduce((s: number, w: WithdrawalRow) => s + w.amount_vnd, 0),
         }
       })
@@ -216,7 +218,9 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
   // Add fund sell withdrawals (no parent_transaction_id = fund-level sell)
   for (const w of withdrawalRows) {
     if (w.fund_id && !w.parent_transaction_id && fundGroupMap[w.fund_id]) {
-      fundGroupMap[w.fund_id].units_sold += w.units_withdrawn ?? 0
+      if (w.affects_progress !== false) {
+        fundGroupMap[w.fund_id].units_sold += w.units_withdrawn ?? 0
+      }
       fundGroupMap[w.fund_id].total_received_from_sells += w.amount_vnd
     }
   }
@@ -366,12 +370,17 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
       // For fund: store fund_id and asset_type for grouping
       asset_type: type === 'fund' ? 'fund' : null,
       fund_id: type === 'fund' ? withdrawSource.fund_group?.fund_id : null,
+      affects_progress: withdrawForm.affects_progress,
     }
 
     setSaving(true)
     const res = await fetch('/api/v1/investment-transactions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
     if (!res.ok) { const { error } = await res.json(); setFormError(error ?? tc('error')) }
-    else { setFormMode(null); setWithdrawSource(null); await fetchData() }
+    else {
+      // Bust dashboard cache so progress bar reflects the new withdrawal immediately
+      Object.keys(localStorage).filter(k => k.startsWith('dashboardOverviewCache')).forEach(k => localStorage.removeItem(k))
+      setFormMode(null); setWithdrawSource(null); await fetchData()
+    }
     setSaving(false)
   }
 
@@ -997,6 +1006,17 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{tc('notes')}</label>
               <input type="text" value={withdrawForm.notes} onChange={(e) => setWithdrawForm({ ...withdrawForm, notes: e.target.value })} className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
             </div>
+
+            <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                data-testid="affects-progress-checkbox"
+                checked={withdrawForm.affects_progress}
+                onChange={(e) => setWithdrawForm({ ...withdrawForm, affects_progress: e.target.checked })}
+                className="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
+              />
+              {t('affectsProgressLabel')}
+            </label>
           </div>
 
           {/* Live preview */}
