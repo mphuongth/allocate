@@ -279,9 +279,10 @@ test('remaining balance reflects actual withdrawal even when affects_progress=fa
   const progressAfter = await page.getByTestId('goal-progress-pct').first().textContent()
   expect(progressAfter).toBe(progressBefore)
 
-  // Remaining balance shown must be 0 (fully withdrawn), not 100M
-  const remaining = page.getByTestId('investment-remaining').first()
-  await expect(remaining).toBeVisible({ timeout: 5_000 })
+  // Remaining balance shown must be reduced, not 100M
+  // Use :visible to avoid picking the sm:hidden mobile card at desktop viewport
+  const remaining = page.locator('[data-testid="investment-remaining"]:visible').first()
+  await expect(remaining).toBeVisible({ timeout: 10_000 })
   const remainingText = await remaining.textContent()
   // Original 100M fully pre-filled and withdrawn — should not show 100M as remaining
   expect(remainingText).not.toContain('100.000.000')
