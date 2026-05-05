@@ -36,9 +36,12 @@ interface TxRow {
   notes: string | null
   fund_id: string | null
   fund_code: string | null
-  // Aggregated withdrawal data for this transaction
+  // Progress-only aggregation (affects_progress=false withdrawals excluded)
   total_principal_withdrawn: number
   total_units_withdrawn: number
+  // Actual aggregation (all withdrawals — for display)
+  total_principal_withdrawn_actual: number
+  total_units_withdrawn_actual: number
   total_received: number
 }
 
@@ -62,8 +65,10 @@ interface FundGroup {
   total_units_bought: number
   total_cost: number
   avg_cost_per_unit: number
-  units_sold: number
+  units_sold: number           // progress-only
+  units_sold_actual: number    // all sells, for display
   remaining_units: number
+  remaining_units_actual: number
   current_value: number
   total_received_from_sells: number
   total_pl: number
@@ -180,6 +185,8 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
           fund_code: tx.fund_id && fundMap[tx.fund_id] ? fundMap[tx.fund_id].code : null,
           total_principal_withdrawn: ws.filter((w: WithdrawalRow) => w.affects_progress !== false).reduce((s: number, w: WithdrawalRow) => s + (w.principal_withdrawn ?? 0), 0),
           total_units_withdrawn: ws.filter((w: WithdrawalRow) => w.affects_progress !== false).reduce((s: number, w: WithdrawalRow) => s + (w.units_withdrawn ?? 0), 0),
+          total_principal_withdrawn_actual: ws.reduce((s: number, w: WithdrawalRow) => s + (w.principal_withdrawn ?? 0), 0),
+          total_units_withdrawn_actual: ws.reduce((s: number, w: WithdrawalRow) => s + (w.units_withdrawn ?? 0), 0),
           total_received: ws.reduce((s: number, w: WithdrawalRow) => s + w.amount_vnd, 0),
         }
       })
@@ -207,7 +214,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
         fund_name: fund?.name ?? row.fund_id,
         current_nav: fund?.nav ?? 0,
         total_units_bought: 0, total_cost: 0, avg_cost_per_unit: 0,
-        units_sold: 0, remaining_units: 0, current_value: 0,
+        units_sold: 0, units_sold_actual: 0, remaining_units: 0, remaining_units_actual: 0, current_value: 0,
         total_received_from_sells: 0, total_pl: 0,
       }
     }
@@ -221,12 +228,14 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
       if (w.affects_progress !== false) {
         fundGroupMap[w.fund_id].units_sold += w.units_withdrawn ?? 0
       }
+      fundGroupMap[w.fund_id].units_sold_actual += w.units_withdrawn ?? 0
       fundGroupMap[w.fund_id].total_received_from_sells += w.amount_vnd
     }
   }
   const fundGroups: FundGroup[] = Object.values(fundGroupMap).map(g => {
     g.avg_cost_per_unit = g.total_units_bought > 0 ? g.total_cost / g.total_units_bought : 0
     g.remaining_units = Math.max(0, g.total_units_bought - g.units_sold)
+    g.remaining_units_actual = Math.max(0, g.total_units_bought - g.units_sold_actual)
     g.current_value = g.remaining_units * g.current_nav
     const realized = g.total_received_from_sells - g.units_sold * g.avg_cost_per_unit
     const unrealized = g.current_value - g.remaining_units * g.avg_cost_per_unit
@@ -318,7 +327,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
     setWithdrawSource({ type, row })
     const base = { ...emptyWithdrawForm, investment_date: new Date().toISOString().slice(0, 10) }
     if (type === 'bank') {
-      const remainingPrincipal = Math.max(0, row.amount_vnd - row.total_principal_withdrawn)
+      const remainingPrincipal = Math.max(0, row.amount_vnd - row.total_principal_withdrawn_actual)
       const interest = calcProjectedInterest(remainingPrincipal, row.interest_rate, row.investment_date, row.expiry_date)
       base.principal_withdrawn = String(Math.round(remainingPrincipal))
       base.amount_vnd = String(Math.round(remainingPrincipal + interest))
@@ -419,8 +428,8 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
   const wAmtNum = Number(withdrawForm.amount_vnd) || 0
   const wPrinNum = wType === 'bank' ? (Number(withdrawForm.principal_withdrawn) || 0) : wType === 'fund' && wGroup ? wUnitsNum * wGroup.avg_cost_per_unit : wType === 'gold' && wRow ? wUnitsNum * (wRow.unit_price ?? 0) : 0
   const wGain = wAmtNum - wPrinNum
-  const wRemainingUnits = wType === 'fund' && wGroup ? wGroup.remaining_units - wUnitsNum : wType === 'gold' && wRow ? ((wRow.units ?? 0) - wRow.total_units_withdrawn - wUnitsNum) : null
-  const wRemainingPrincipal = wType === 'bank' && wRow ? (wRow.amount_vnd - wRow.total_principal_withdrawn - (Number(withdrawForm.principal_withdrawn) || 0)) : null
+  const wRemainingUnits = wType === 'fund' && wGroup ? wGroup.remaining_units_actual - wUnitsNum : wType === 'gold' && wRow ? ((wRow.units ?? 0) - wRow.total_units_withdrawn_actual - wUnitsNum) : null
+  const wRemainingPrincipal = wType === 'bank' && wRow ? (wRow.amount_vnd - wRow.total_principal_withdrawn_actual - (Number(withdrawForm.principal_withdrawn) || 0)) : null
 
   // Withdraw modal title
   const withdrawModalTitle = wType === 'fund' ? t('sellModal') : wType === 'gold' ? t('sellGoldModal') : t('withdrawBankModal')
@@ -466,7 +475,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                   <div className={`h-full rounded-full transition-all ${exceeded ? 'bg-green-500' : 'bg-indigo-500'}`} style={{ width: `${pct}%` }} />
                 </div>
                 <div className="flex items-center justify-between mt-1.5 text-xs text-gray-400 dark:text-gray-500">
-                  <span>{Math.round(pct)}%</span>
+                  <span data-testid="goal-progress-pct">{Math.round(pct)}%</span>
                   {exceeded ? <span className="text-green-600 dark:text-green-400 font-medium">{t('goalReached')}</span> : <span>{t('remaining', { amount: fmt(currentGoal.target_amount! - totalCurrentValue) })}</span>}
                 </div>
               </>
@@ -574,18 +583,18 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                         <span className="font-semibold text-gray-900 dark:text-gray-100 text-sm">{g.fund_code}</span>
                         <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">{g.fund_name}</span>
                       </div>
-                      {g.remaining_units === 0 && (
+                      {g.remaining_units_actual === 0 && (
                         <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400 shrink-0">{t('fullySold')}</span>
                       )}
                     </div>
                     <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                      <div><span className="text-gray-500 dark:text-gray-400">{t('colRemaining')}: </span><span className="font-medium text-gray-900 dark:text-gray-100">{fmtUnits(g.remaining_units)} {t('unitsShort')}</span></div>
+                      <div><span className="text-gray-500 dark:text-gray-400">{t('colRemaining')}: </span><span className="font-medium text-gray-900 dark:text-gray-100">{fmtUnits(g.remaining_units_actual)} {t('unitsShort')}</span></div>
                       <div><span className="text-gray-500 dark:text-gray-400">{t('colValue')}: </span><span className="font-medium text-gray-900 dark:text-gray-100">{fmt(g.current_value)}</span></div>
                       <div><span className="text-gray-500 dark:text-gray-400">{t('colAvgNav')}: </span><span className="text-gray-700 dark:text-gray-300">{fmtNav(g.avg_cost_per_unit)}</span></div>
                       <div><span className="text-gray-500 dark:text-gray-400">{t('colCurrentNav')}: </span><span className="text-gray-700 dark:text-gray-300">{fmtNav(g.current_nav)}</span></div>
                       <div className="col-span-2"><span className="text-gray-500 dark:text-gray-400">{t('colGainLoss')}: </span><span className={`font-medium ${g.total_pl >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt(g.total_pl)}</span></div>
                     </div>
-                    {g.remaining_units > 0 && (
+                    {g.remaining_units_actual > 0 && (
                       <button onClick={() => openWithdrawFund(g)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/30 rounded-md transition-colors">
                         <TrendingDown className="h-3.5 w-3.5" />{t('sell')}
                       </button>
@@ -615,9 +624,9 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                           <div className="text-xs text-gray-500 dark:text-gray-400">{g.fund_name}</div>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          {g.remaining_units === 0
+                          {g.remaining_units_actual === 0
                             ? <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400">{t('fullySold')}</span>
-                            : <span className="font-medium text-gray-900 dark:text-gray-100">{fmtUnits(g.remaining_units)}</span>
+                            : <span className="font-medium text-gray-900 dark:text-gray-100">{fmtUnits(g.remaining_units_actual)}</span>
                           }
                         </td>
                         <td className="px-4 py-3 text-right text-sm text-gray-600 dark:text-gray-400">{fmtNav(g.avg_cost_per_unit)}</td>
@@ -625,7 +634,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                         <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-gray-100">{fmt(g.current_value)}</td>
                         <td className={`px-4 py-3 text-right font-medium ${g.total_pl >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt(g.total_pl)}</td>
                         <td className="px-4 py-3">
-                          {g.remaining_units > 0 && (
+                          {g.remaining_units_actual > 0 && (
                             <button onClick={() => openWithdrawFund(g)} className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/30 rounded-md transition-colors">
                               <TrendingDown className="h-3.5 w-3.5" />{t('sell')}
                             </button>
@@ -664,10 +673,12 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
               {/* Mobile card layout */}
               <div className="sm:hidden divide-y divide-black/5 dark:divide-gray-700">
                 {otherRows.map((row) => {
-                  const currentValue = getOtherCurrentValue(row)
-                  const gain = currentValue - (row.amount_vnd - row.total_principal_withdrawn)
-                  const remainingPrincipal = row.amount_vnd - row.total_principal_withdrawn
-                  const remainingUnits = row.units != null ? row.units - row.total_units_withdrawn : null
+                  const remainingPrincipal = row.amount_vnd - row.total_principal_withdrawn_actual
+                  const remainingUnits = row.units != null ? row.units - row.total_units_withdrawn_actual : null
+                  const displayCurrentValue = row.asset_type === 'gold' && goldPrice && row.units != null
+                    ? Math.max(0, remainingUnits! * goldPrice)
+                    : Math.max(0, remainingPrincipal + calcProjectedInterest(remainingPrincipal, row.interest_rate, row.investment_date, row.expiry_date))
+                  const gain = displayCurrentValue - remainingPrincipal
                   const isFullyWithdrawn = row.asset_type === 'gold' ? remainingUnits !== null && remainingUnits <= 0 : remainingPrincipal <= 0
                   const rowWithdrawals = withdrawalRows.filter(w => w.parent_transaction_id === row.transaction_id)
                   return (
@@ -685,11 +696,11 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                         <div>
                           <span className="text-gray-500 dark:text-gray-400">{t('colAmount')}: </span>
                           <span className="font-medium text-gray-900 dark:text-gray-100">{fmt(row.amount_vnd)}</span>
-                          {row.total_principal_withdrawn > 0 && (
-                            <div className="text-red-500 dark:text-red-400 mt-0.5">↓ {t('withdrawnLabel')} {fmt(row.total_principal_withdrawn)}</div>
+                          {row.total_principal_withdrawn_actual > 0 && (
+                            <div className="text-red-500 dark:text-red-400 mt-0.5">↓ {t('withdrawnLabel')} {fmt(row.total_principal_withdrawn_actual)}</div>
                           )}
                         </div>
-                        <div><span className="text-gray-500 dark:text-gray-400">{t('remainingValueLabel')}: </span><span className="font-medium text-gray-900 dark:text-gray-100">{fmt(currentValue)}</span></div>
+                        <div data-testid="investment-remaining"><span className="text-gray-500 dark:text-gray-400">{t('remainingValueLabel')}: </span><span className="font-medium text-gray-900 dark:text-gray-100">{fmt(displayCurrentValue)}</span></div>
                         {row.asset_type === 'gold' && remainingUnits !== null && (
                           <div><span className="text-gray-500 dark:text-gray-400">{t('remainingChiLabel')}: </span><span className="text-gray-700 dark:text-gray-300">{fmtUnits(remainingUnits)}</span></div>
                         )}
@@ -738,10 +749,12 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                   </thead>
                   <tbody className="divide-y divide-black/5 dark:divide-gray-700">
                     {otherRows.map((row) => {
-                      const currentValue = getOtherCurrentValue(row)
-                      const remainingPrincipal = row.amount_vnd - row.total_principal_withdrawn
-                      const remainingUnits = row.units != null ? row.units - row.total_units_withdrawn : null
-                      const gain = currentValue - remainingPrincipal
+                      const remainingPrincipal = row.amount_vnd - row.total_principal_withdrawn_actual
+                      const remainingUnits = row.units != null ? row.units - row.total_units_withdrawn_actual : null
+                      const displayCurrentValue = row.asset_type === 'gold' && goldPrice && row.units != null
+                        ? Math.max(0, remainingUnits! * goldPrice)
+                        : Math.max(0, remainingPrincipal + calcProjectedInterest(remainingPrincipal, row.interest_rate, row.investment_date, row.expiry_date))
+                      const gain = displayCurrentValue - remainingPrincipal
                       const isFullyWithdrawn = row.asset_type === 'gold' ? remainingUnits !== null && remainingUnits <= 0 : remainingPrincipal <= 0
                       const rowWithdrawals = withdrawalRows.filter(w => w.parent_transaction_id === row.transaction_id)
                       return (
@@ -755,17 +768,17 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
                             </td>
                             <td className="px-4 py-3">
                               <div className="font-medium text-gray-900 dark:text-gray-100">{fmt(row.amount_vnd)}</div>
-                              {row.total_principal_withdrawn > 0 && (
-                                <div className="text-xs text-red-500 dark:text-red-400 mt-0.5">↓ {t('withdrawnLabel')} {fmt(row.total_principal_withdrawn)}</div>
+                              {row.total_principal_withdrawn_actual > 0 && (
+                                <div className="text-xs text-red-500 dark:text-red-400 mt-0.5">↓ {t('withdrawnLabel')} {fmt(row.total_principal_withdrawn_actual)}</div>
                               )}
                             </td>
                             <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{row.interest_rate != null ? `${row.interest_rate}%` : '—'}</td>
-                            <td className="px-4 py-3 text-sm">
+                            <td className="px-4 py-3 text-sm" data-testid="investment-remaining">
                               {isFullyWithdrawn
                                 ? <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400">Đã rút hết</span>
                                 : row.asset_type === 'gold' && remainingUnits != null
-                                  ? <span className="text-gray-700 dark:text-gray-300">{fmtUnits(remainingUnits)} chi · {fmt(currentValue)}</span>
-                                  : <span className="text-gray-700 dark:text-gray-300">{fmt(currentValue)}</span>
+                                  ? <span className="text-gray-700 dark:text-gray-300">{fmtUnits(remainingUnits)} chi · {fmt(displayCurrentValue)}</span>
+                                  : <span className="text-gray-700 dark:text-gray-300">{fmt(displayCurrentValue)}</span>
                               }
                             </td>
                             <td className={`px-4 py-3 font-medium ${gain >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt(gain)}</td>
@@ -940,13 +953,13 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
           {/* Context info */}
           <div className="text-sm text-gray-500 dark:text-gray-400 -mt-2">
             {wType === 'fund' && wGroup && (
-              <span>{wGroup.fund_code} · {t('colCurrentNav')}: <strong className="text-gray-800 dark:text-gray-200">{fmtNav(wGroup.current_nav)}</strong> · {t('colRemaining')}: <strong className="text-gray-800 dark:text-gray-200">{fmtUnits(wGroup.remaining_units)} {t('unitsShort')}</strong></span>
+              <span>{wGroup.fund_code} · {t('colCurrentNav')}: <strong className="text-gray-800 dark:text-gray-200">{fmtNav(wGroup.current_nav)}</strong> · {t('colRemaining')}: <strong className="text-gray-800 dark:text-gray-200">{fmtUnits(wGroup.remaining_units_actual)} {t('unitsShort')}</strong></span>
             )}
             {wType === 'gold' && wRow && goldPrice && (
-              <span>{t('assetGold')} · {t('currentPriceLabel')}: <strong className="text-gray-800 dark:text-gray-200">{fmt(goldPrice)}/chi</strong> · {t('colRemaining')}: <strong className="text-gray-800 dark:text-gray-200">{fmtUnits((wRow.units ?? 0) - wRow.total_units_withdrawn)} chi</strong></span>
+              <span>{t('assetGold')} · {t('currentPriceLabel')}: <strong className="text-gray-800 dark:text-gray-200">{fmt(goldPrice)}/chi</strong> · {t('colRemaining')}: <strong className="text-gray-800 dark:text-gray-200">{fmtUnits((wRow.units ?? 0) - wRow.total_units_withdrawn_actual)} chi</strong></span>
             )}
             {wType === 'bank' && wRow && (
-              <span>{t('assetBank')} · {t('remainingPrincipalLabel')}: <strong className="text-gray-800 dark:text-gray-200">{fmt(wRow.amount_vnd - wRow.total_principal_withdrawn)}</strong>{wRow.interest_rate ? ` · ${wRow.interest_rate}${t('perYearShort')}` : ''}</span>
+              <span>{t('assetBank')} · {t('remainingPrincipalLabel')}: <strong className="text-gray-800 dark:text-gray-200">{fmt(wRow.amount_vnd - wRow.total_principal_withdrawn_actual)}</strong>{wRow.interest_rate ? ` · ${wRow.interest_rate}${t('perYearShort')}` : ''}</span>
             )}
           </div>
 
