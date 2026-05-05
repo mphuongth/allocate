@@ -154,6 +154,7 @@
     "amountReceivedPlaceholder": "Tổng tiền ngân hàng trả",
     "unitsToSellGold": "Chi bán",
     "unitsToSellFund": "Đơn vị bán",
+    "affectsProgressLabel": "Tính vào tiến độ mục tiêu",
     "costBasisLabel": "Giá vốn",
     "receivedLabel": "Nhận được",
     "currentPriceLabel": "Giá hiện tại",

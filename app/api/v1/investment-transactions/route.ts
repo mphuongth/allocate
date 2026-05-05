@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { goal_id, asset_type, transaction_type = 'investment', investment_date, amount_vnd, unit_price, units, interest_rate, notes, fund_id, plan_id, expiry_date, parent_transaction_id, principal_withdrawn, units_withdrawn } = body
+  const { goal_id, asset_type, transaction_type = 'investment', investment_date, amount_vnd, unit_price, units, interest_rate, notes, fund_id, plan_id, expiry_date, parent_transaction_id, principal_withdrawn, units_withdrawn, affects_progress } = body
 
   const isWithdrawal = transaction_type === 'withdrawal'
 
@@ -114,6 +114,7 @@ export async function POST(request: NextRequest) {
       parent_transaction_id: parent_transaction_id || null,
       principal_withdrawn: principal_withdrawn ? Number(principal_withdrawn) : null,
       units_withdrawn: units_withdrawn ? Number(units_withdrawn) : null,
+      affects_progress: isWithdrawal ? (affects_progress !== false) : true,
     })
     .select()
     .single()

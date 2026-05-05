@@ -155,3 +155,85 @@ test('un-assign investment from goal in Goal Detail', async ({ page }) => {
 
   await expect(page.getByTestId('unassign-btn')).toHaveCount(0, { timeout: 10_000 })
 })
+
+test('withdraw modal has affects-progress checkbox checked by default', async ({ page }) => {
+  const goal = await api.createGoal({ goal_name: 'E2E Withdraw Progress Goal', target_amount: 50_000_000 })
+  cleanup.add(() => api.deleteGoal(goal.goal_id))
+
+  const tx = await api.createTransaction({
+    asset_type: 'bank',
+    amount_vnd: 5_000_000,
+    investment_date: '2026-01-01',
+    goal_id: goal.goal_id,
+  })
+  cleanup.add(() => api.deleteTransaction(tx.transaction_id))
+
+  await page.goto(`/settings?tab=goals&goal=${goal.goal_id}`)
+  await page.waitForLoadState('networkidle')
+  await expect(page.getByTestId('goal-back-btn').first()).toBeVisible({ timeout: 15_000 })
+
+  // Switch to "Other" tab to reveal bank investment
+  await page.getByRole('button', { name: /tiết kiệm & khác|other investments/i }).first().click()
+
+  // Open withdraw modal
+  const withdrawBtn = page.getByRole('button', { name: /rút|withdraw/i }).first()
+  await expect(withdrawBtn).toBeVisible({ timeout: 10_000 })
+  await withdrawBtn.click()
+
+  await expect(page.getByRole('dialog')).toBeVisible()
+
+  // Checkbox must be present and checked by default
+  const checkbox = page.getByTestId('affects-progress-checkbox')
+  await expect(checkbox).toBeVisible({ timeout: 5_000 })
+  await expect(checkbox).toBeChecked()
+})
+
+test('withdraw with affects-progress unchecked stores affects_progress=false', async ({ page }) => {
+  const goal = await api.createGoal({ goal_name: 'E2E Withdraw No Progress Goal', target_amount: 50_000_000 })
+  cleanup.add(() => api.deleteGoal(goal.goal_id))
+
+  const tx = await api.createTransaction({
+    asset_type: 'bank',
+    amount_vnd: 10_000_000,
+    investment_date: '2026-01-01',
+    goal_id: goal.goal_id,
+  })
+  cleanup.add(() => api.deleteTransaction(tx.transaction_id))
+
+  await page.goto(`/settings?tab=goals&goal=${goal.goal_id}`)
+  await page.waitForLoadState('networkidle')
+  await expect(page.getByTestId('goal-back-btn').first()).toBeVisible({ timeout: 15_000 })
+
+  await page.getByRole('button', { name: /tiết kiệm & khác|other investments/i }).first().click()
+
+  const withdrawBtn = page.getByRole('button', { name: /rút|withdraw/i }).first()
+  await expect(withdrawBtn).toBeVisible({ timeout: 10_000 })
+  await withdrawBtn.click()
+
+  await expect(page.getByRole('dialog')).toBeVisible()
+
+  // Uncheck the affects-progress checkbox
+  const checkbox = page.getByTestId('affects-progress-checkbox')
+  await expect(checkbox).toBeChecked()
+  await checkbox.uncheck()
+  await expect(checkbox).not.toBeChecked()
+
+  // Fill required fields and submit
+  const principalInput = page.locator('[role="dialog"] input[type="text"], [role="dialog"] input[inputmode="numeric"]').first()
+  await principalInput.fill('5000000')
+  await page.getByRole('button', { name: /rút|withdraw/i }).last().click()
+
+  // Modal should close
+  await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 10_000 })
+
+  // Verify via API that the withdrawal stored affects_progress=false
+  const { createClient } = await import('@supabase/supabase-js')
+  const supabase = createClient(process.env.E2E_SUPABASE_URL!, process.env.E2E_SUPABASE_SERVICE_ROLE_KEY!)
+  const { data: withdrawals } = await supabase
+    .from('investment_transactions')
+    .select('affects_progress')
+    .eq('parent_transaction_id', tx.transaction_id)
+    .eq('transaction_type', 'withdrawal')
+  expect(withdrawals).toHaveLength(1)
+  expect(withdrawals![0].affects_progress).toBe(false)
+})

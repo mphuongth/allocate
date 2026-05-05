@@ -1,3 +1,15 @@
+## Development Methodology
+
+**Always use Test-Driven Development (TDD).** For every feature or bug fix, write tests first — then implement.
+
+Rules:
+1. Write unit tests and/or E2E tests that define the expected behavior **before** writing any implementation code
+2. Run the tests to confirm they fail (red phase)
+3. Implement the minimum code needed to make the tests pass (green phase)
+4. Refactor if needed, keeping tests green
+
+This applies to both new features and bug fixes. Never write implementation code without a failing test first.
+
 ## Git & PR Workflow
 
 **Never push code directly to `main`.** Every change — no matter how small — must go through a branch and PR.

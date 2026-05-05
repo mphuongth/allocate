@@ -84,7 +84,7 @@ const ASSET_COLORS: Record<string, string> = {
 
 const emptyTxForm = { asset_type: 'bank', investment_date: '', amount_vnd: '', unit_price: '', units: '', interest_rate: '', expiry_date: '', notes: '', fund_id: '' }
 const emptyFiForm = { fund_id: '', investment_date: '', amount_vnd: '', units: '', unit_price: '' }
-const emptyWithdrawForm = { investment_date: '', amount_vnd: '', principal_withdrawn: '', units_withdrawn: '', notes: '' }
+const emptyWithdrawForm = { investment_date: '', amount_vnd: '', principal_withdrawn: '', units_withdrawn: '', notes: '', affects_progress: true }
 
 export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: () => void }) {
   const t = useTranslations('goals')
@@ -366,6 +366,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
       // For fund: store fund_id and asset_type for grouping
       asset_type: type === 'fund' ? 'fund' : null,
       fund_id: type === 'fund' ? withdrawSource.fund_group?.fund_id : null,
+      affects_progress: withdrawForm.affects_progress,
     }
 
     setSaving(true)
@@ -997,6 +998,17 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{tc('notes')}</label>
               <input type="text" value={withdrawForm.notes} onChange={(e) => setWithdrawForm({ ...withdrawForm, notes: e.target.value })} className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
             </div>
+
+            <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                data-testid="affects-progress-checkbox"
+                checked={withdrawForm.affects_progress}
+                onChange={(e) => setWithdrawForm({ ...withdrawForm, affects_progress: e.target.checked })}
+                className="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
+              />
+              {t('affectsProgressLabel')}
+            </label>
           </div>
 
           {/* Live preview */}
