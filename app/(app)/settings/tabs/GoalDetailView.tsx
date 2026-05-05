@@ -51,6 +51,7 @@ interface WithdrawalRow {
   parent_transaction_id: string | null
   fund_id: string | null
   notes: string | null
+  affects_progress: boolean | null
 }
 
 interface FundGroup {
@@ -140,7 +141,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
 
     const withdrawals: WithdrawalRow[] = all
       .filter((tx: { transaction_type: string }) => tx.transaction_type === 'withdrawal')
-      .map((tx: { transaction_id: string; investment_date: string; amount_vnd: number; principal_withdrawn: number | null; units_withdrawn: number | null; parent_transaction_id: string | null; fund_id: string | null; notes: string | null }) => ({
+      .map((tx: { transaction_id: string; investment_date: string; amount_vnd: number; principal_withdrawn: number | null; units_withdrawn: number | null; parent_transaction_id: string | null; fund_id: string | null; notes: string | null; affects_progress: boolean | null }) => ({
         transaction_id: tx.transaction_id,
         investment_date: tx.investment_date,
         amount_vnd: tx.amount_vnd,
@@ -149,6 +150,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
         parent_transaction_id: tx.parent_transaction_id,
         fund_id: tx.fund_id,
         notes: tx.notes,
+        affects_progress: tx.affects_progress,
       }))
 
     // Build withdrawal lookup by parent transaction
@@ -176,8 +178,8 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
           notes: tx.notes,
           fund_id: tx.fund_id,
           fund_code: tx.fund_id && fundMap[tx.fund_id] ? fundMap[tx.fund_id].code : null,
-          total_principal_withdrawn: ws.reduce((s: number, w: WithdrawalRow) => s + (w.principal_withdrawn ?? 0), 0),
-          total_units_withdrawn: ws.reduce((s: number, w: WithdrawalRow) => s + (w.units_withdrawn ?? 0), 0),
+          total_principal_withdrawn: ws.filter((w: WithdrawalRow) => w.affects_progress !== false).reduce((s: number, w: WithdrawalRow) => s + (w.principal_withdrawn ?? 0), 0),
+          total_units_withdrawn: ws.filter((w: WithdrawalRow) => w.affects_progress !== false).reduce((s: number, w: WithdrawalRow) => s + (w.units_withdrawn ?? 0), 0),
           total_received: ws.reduce((s: number, w: WithdrawalRow) => s + w.amount_vnd, 0),
         }
       })
@@ -216,7 +218,9 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
   // Add fund sell withdrawals (no parent_transaction_id = fund-level sell)
   for (const w of withdrawalRows) {
     if (w.fund_id && !w.parent_transaction_id && fundGroupMap[w.fund_id]) {
-      fundGroupMap[w.fund_id].units_sold += w.units_withdrawn ?? 0
+      if (w.affects_progress !== false) {
+        fundGroupMap[w.fund_id].units_sold += w.units_withdrawn ?? 0
+      }
       fundGroupMap[w.fund_id].total_received_from_sells += w.amount_vnd
     }
   }
@@ -372,7 +376,11 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
     setSaving(true)
     const res = await fetch('/api/v1/investment-transactions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
     if (!res.ok) { const { error } = await res.json(); setFormError(error ?? tc('error')) }
-    else { setFormMode(null); setWithdrawSource(null); await fetchData() }
+    else {
+      // Bust dashboard cache so progress bar reflects the new withdrawal immediately
+      Object.keys(localStorage).filter(k => k.startsWith('dashboardOverviewCache')).forEach(k => localStorage.removeItem(k))
+      setFormMode(null); setWithdrawSource(null); await fetchData()
+    }
     setSaving(false)
   }
 
