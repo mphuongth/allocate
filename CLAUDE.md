@@ -10,6 +10,8 @@ Rules:
 
 This applies to both new features and bug fixes. Never write implementation code without a failing test first.
 
+**TDD lesson learned:** Tests must assert the *user-visible outcome*, not just the data that enables it. For example, testing that a flag is stored correctly in the DB is necessary but not sufficient — the E2E test must also assert the rendered result (e.g. the progress bar percentage is unchanged). A passing test that only checks storage can miss bugs in a separate code path that computes the same value locally. Always close the loop: UI action → assert the rendered outcome.
+
 ## Git & PR Workflow
 
 **Never push code directly to `main`.** Every change — no matter how small — must go through a branch and PR.
