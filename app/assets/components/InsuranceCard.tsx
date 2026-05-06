@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Shield, Trash2, Plus } from 'lucide-react'
+import { Shield, Trash2, Plus, ChevronDown } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { fmtCompact } from '@/lib/formatters'
 
@@ -9,22 +9,6 @@ const fmtDate = (dateStr: string): string => {
   try {
     return new Date(dateStr).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })
   } catch { return '' }
-}
-
-type DisplayStatus = 'overdue' | 'due' | 'not_due_yet'
-
-function computeDisplayStatus(nextPaymentDate: string | null): DisplayStatus {
-  if (!nextPaymentDate) return 'not_due_yet'
-  try {
-    const payment = new Date(nextPaymentDate)
-    if (isNaN(payment.getTime())) return 'not_due_yet'
-    const now = new Date()
-    const todayMs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
-    const paymentMs = new Date(payment.getFullYear(), payment.getMonth(), payment.getDate()).getTime()
-    if (paymentMs < todayMs) return 'overdue'
-    if (paymentMs === todayMs) return 'due'
-    return 'not_due_yet'
-  } catch { return 'not_due_yet' }
 }
 
 interface SavingsRecord { id: string; amount_saved_vnd: number; created_at: string }
@@ -39,36 +23,39 @@ interface Props {
   status: 'on_track' | 'upcoming' | 'overdue' | 'completed'
   nextPaymentDate: string | null
   lastPaymentDate: string | null
+  isLast?: boolean
   onSavingsChange?: () => void
+}
+
+const STATUS_COLOR: Record<string, string> = {
+  on_track:  'var(--c-pos)',
+  upcoming:  'var(--c-warn)',
+  overdue:   'var(--c-neg)',
+  completed: 'var(--c-muted)',
+}
+const BAR_COLOR: Record<string, string> = {
+  on_track:  'var(--c-pos)',
+  upcoming:  'var(--c-warn)',
+  overdue:   'var(--c-neg)',
+  completed: 'var(--c-muted)',
 }
 
 export default function InsuranceCard({
   insuranceId, insuranceName, coverageType, annualPremium, amountSaved,
-  savingsProgressPercentage, status, nextPaymentDate, lastPaymentDate, onSavingsChange,
+  status, nextPaymentDate, lastPaymentDate, isLast, onSavingsChange,
 }: Props) {
   const t = useTranslations('dashboard')
   const tc = useTranslations('common')
 
   const isCompleted = status === 'completed'
-  const displayStatus: DisplayStatus | 'completed' = isCompleted ? 'completed' : computeDisplayStatus(nextPaymentDate)
+  const dotColor = STATUS_COLOR[status] ?? 'var(--c-muted)'
+  const bar = BAR_COLOR[status] ?? 'var(--c-muted)'
 
-  const statusColor: Record<DisplayStatus | 'completed', string> = {
-    not_due_yet: 'var(--c-pos)',
-    due:         'var(--c-warn)',
-    overdue:     'var(--c-neg)',
-    completed:   'var(--c-muted)',
-  }
-  const statusLabel: Record<DisplayStatus | 'completed', string> = {
-    not_due_yet: t('statusNotDue'),
-    due:         t('statusDue'),
-    overdue:     t('statusOverdue'),
-    completed:   t('statusCompleted'),
-  }
-  const barColor: Record<DisplayStatus | 'completed', string> = {
-    not_due_yet: 'var(--c-pos)',
-    due:         'var(--c-warn)',
-    overdue:     'var(--c-neg)',
-    completed:   'var(--c-muted)',
+  const statusLabel: Record<string, string> = {
+    on_track:  t('statusNotDue'),
+    upcoming:  t('statusDue'),
+    overdue:   t('statusOverdue'),
+    completed: t('statusCompleted'),
   }
 
   const showMarkAsPaid = status === 'upcoming' || status === 'overdue'
@@ -82,6 +69,7 @@ export default function InsuranceCard({
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
   const [showConfirm, setShowConfirm] = useState(false)
   const [markPaidLoading, setMarkPaidLoading] = useState(false)
+  const [expanded, setExpanded] = useState(false)
 
   const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
     setToast({ msg, type })
@@ -162,19 +150,17 @@ export default function InsuranceCard({
     setMarkPaidLoading(false)
   }
 
-  const dotColor = statusColor[displayStatus]
-  const bar = barColor[displayStatus]
-
   return (
-    <div style={{
-      background: 'var(--c-card)',
-      border: '1px solid var(--c-line)',
-      borderRadius: 'var(--r-card)',
-      boxShadow: 'var(--shadow-card)',
-      opacity: isCompleted ? 0.7 : 1,
-    }}>
-      {/* ── Compact header row (InsuranceMini pattern) ── */}
-      <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+    <div style={{ opacity: isCompleted ? 0.7 : 1, borderBottom: isLast ? 'none' : '1px solid var(--c-line)' }}>
+      {/* ── Compact header row (clickable to expand) ── */}
+      <button
+        onClick={() => setExpanded((e) => !e)}
+        style={{
+          width: '100%', background: 'transparent', border: 'none',
+          padding: '12px 14px', display: 'flex', alignItems: 'center',
+          gap: 12, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
+        }}
+      >
         <div style={{
           width: 32, height: 32, borderRadius: 8, flexShrink: 0,
           background: 'var(--c-card-2)',
@@ -200,119 +186,126 @@ export default function InsuranceCard({
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end' }}>
             <span style={{ width: 6, height: 6, borderRadius: 3, background: dotColor, display: 'inline-block' }} />
             <span style={{ fontSize: 10, fontWeight: 500, color: dotColor, letterSpacing: '0.02em' }}>
-              {statusLabel[displayStatus]}
+              {statusLabel[status] ?? status}
             </span>
           </div>
           <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
             {fmtCompact(localAmountSaved)} / {fmtCompact(annualPremium)}
           </div>
         </div>
-      </div>
 
-      {/* ── Divider ── */}
-      <div style={{ height: 1, background: 'var(--c-line)' }} />
+        <ChevronDown
+          size={15}
+          color="var(--c-muted)"
+          style={{ flexShrink: 0, transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 200ms ease' }}
+        />
+      </button>
 
-      {/* ── Details + actions ── */}
-      <div style={{ padding: '12px 14px', display: 'grid', gap: 8 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
-          <span style={{ color: 'var(--c-muted)' }}>{t('annualFeeLabel')}</span>
-          <span style={{ fontWeight: 500, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(annualPremium)}</span>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
-          <span style={{ color: 'var(--c-muted)' }}>{t('monthlyFeeLabel')}</span>
-          <span style={{ fontWeight: 500, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(monthlyFee)}</span>
-        </div>
+      {/* ── Expanded details + actions ── */}
+      {expanded && (
+        <div style={{ padding: '0 14px 12px', borderTop: '1px solid var(--c-line)' }}>
+          <div style={{ paddingTop: 10, display: 'grid', gap: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+              <span style={{ color: 'var(--c-muted)' }}>{t('annualFeeLabel')}</span>
+              <span style={{ fontWeight: 500, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(annualPremium)}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+              <span style={{ color: 'var(--c-muted)' }}>{t('monthlyFeeLabel')}</span>
+              <span style={{ fontWeight: 500, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(monthlyFee)}</span>
+            </div>
 
-        {nextPaymentDate && !isCompleted && (
-          <p style={{ fontSize: 11, color: 'var(--c-muted)', margin: 0 }}>
-            {t('nextPaymentLabel', { date: fmtDate(nextPaymentDate) })}
-          </p>
-        )}
-        {lastPaymentDate && (
-          <p style={{ fontSize: 11, color: 'var(--c-muted-2)', margin: 0 }}>
-            {t('lastPaymentLabel', { date: fmtDate(lastPaymentDate) })}
-          </p>
-        )}
+            {nextPaymentDate && !isCompleted && (
+              <p style={{ fontSize: 11, color: 'var(--c-muted)', margin: 0 }}>
+                {t('nextPaymentLabel', { date: fmtDate(nextPaymentDate) })}
+              </p>
+            )}
+            {lastPaymentDate && (
+              <p style={{ fontSize: 11, color: 'var(--c-muted-2)', margin: 0 }}>
+                {t('lastPaymentLabel', { date: fmtDate(lastPaymentDate) })}
+              </p>
+            )}
 
-        {toast && (
-          <p style={{ fontSize: 12, margin: 0, color: toast.type === 'error' ? 'var(--c-neg)' : 'var(--c-pos)' }}>
-            {toast.msg}
-          </p>
-        )}
+            {toast && (
+              <p style={{ fontSize: 12, margin: 0, color: toast.type === 'error' ? 'var(--c-neg)' : 'var(--c-pos)' }}>
+                {toast.msg}
+              </p>
+            )}
 
-        {/* Quick save input */}
-        <div style={{ display: 'flex', gap: 6 }}>
-          <input
-            type="number"
-            value={inputAmount}
-            onChange={(e) => setInputAmount(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-            placeholder={t('savingsAmountPlaceholder')}
-            style={{
-              flex: 1, minWidth: 0,
-              border: '1px solid var(--c-line)', borderRadius: 8,
-              padding: '6px 10px', fontSize: 12,
-              background: 'var(--c-card-2)', color: 'var(--c-ink)',
-              fontFamily: 'inherit', outline: 'none',
-            }}
-          />
-          <button
-            onClick={handleAdd}
-            disabled={isLoading}
-            style={{
-              width: 32, height: 32, flexShrink: 0,
-              background: 'var(--c-navy)', color: '#fff',
-              border: 'none', borderRadius: 8, cursor: 'pointer',
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              opacity: isLoading ? 0.5 : 1,
-            }}
-            aria-label={t('addBtn')}
-          >
-            <Plus size={14} />
-          </button>
-        </div>
+            {/* Quick save input */}
+            <div style={{ display: 'flex', gap: 6 }}>
+              <input
+                type="number"
+                value={inputAmount}
+                onChange={(e) => setInputAmount(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+                placeholder={t('savingsAmountPlaceholder')}
+                style={{
+                  flex: 1, minWidth: 0,
+                  border: '1px solid var(--c-line)', borderRadius: 8,
+                  padding: '6px 10px', fontSize: 12,
+                  background: 'var(--c-card-2)', color: 'var(--c-ink)',
+                  fontFamily: 'inherit', outline: 'none',
+                }}
+              />
+              <button
+                onClick={handleAdd}
+                disabled={isLoading}
+                style={{
+                  width: 32, height: 32, flexShrink: 0,
+                  background: 'var(--c-navy)', color: '#fff',
+                  border: 'none', borderRadius: 8, cursor: 'pointer',
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  opacity: isLoading ? 0.5 : 1,
+                }}
+                aria-label={t('addBtn')}
+              >
+                <Plus size={14} />
+              </button>
+            </div>
 
-        {/* Savings history */}
-        {savingsList.length > 0 && (
-          <div style={{ borderTop: '1px solid var(--c-line)', paddingTop: 8, display: 'grid', gap: 4 }}>
-            <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--c-muted)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              {t('savingsHistoryLabel')}
-            </p>
-            {savingsList.map((s) => (
-              <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 12, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>
-                  {fmtCompact(s.amount_saved_vnd)}
-                </span>
+            {/* Savings history */}
+            {savingsList.length > 0 && (
+              <div style={{ borderTop: '1px solid var(--c-line)', paddingTop: 8, display: 'grid', gap: 4 }}>
+                <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--c-muted)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  {t('savingsHistoryLabel')}
+                </p>
+                {savingsList.map((s) => (
+                  <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 12, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>
+                      {fmtCompact(s.amount_saved_vnd)}
+                    </span>
+                    <button
+                      onClick={() => handleDelete(s.id, s.amount_saved_vnd)}
+                      disabled={isLoading}
+                      style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--c-muted-2)', opacity: isLoading ? 0.4 : 1 }}
+                      aria-label="Delete"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Mark as Paid */}
+            {showMarkAsPaid && (
+              <div style={{ borderTop: '1px solid var(--c-line)', paddingTop: 8 }}>
                 <button
-                  onClick={() => handleDelete(s.id, s.amount_saved_vnd)}
-                  disabled={isLoading}
-                  style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--c-muted-2)', opacity: isLoading ? 0.4 : 1 }}
-                  aria-label="Delete"
+                  onClick={() => setShowConfirm(true)}
+                  style={{
+                    width: '100%', padding: '8px 0',
+                    background: 'var(--c-navy)', color: '#fff',
+                    border: 'none', borderRadius: 8, cursor: 'pointer',
+                    fontSize: 12, fontWeight: 500, fontFamily: 'inherit',
+                  }}
                 >
-                  <Trash2 size={12} />
+                  {t('markPaidBtn')}
                 </button>
               </div>
-            ))}
+            )}
           </div>
-        )}
-
-        {/* Mark as Paid */}
-        {showMarkAsPaid && (
-          <div style={{ borderTop: '1px solid var(--c-line)', paddingTop: 8 }}>
-            <button
-              onClick={() => setShowConfirm(true)}
-              style={{
-                width: '100%', padding: '8px 0',
-                background: 'var(--c-navy)', color: '#fff',
-                border: 'none', borderRadius: 8, cursor: 'pointer',
-                fontSize: 12, fontWeight: 500, fontFamily: 'inherit',
-              }}
-            >
-              {t('markPaidBtn')}
-            </button>
-          </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* ── Confirm dialog ── */}
       {showConfirm && (

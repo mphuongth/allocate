@@ -64,10 +64,8 @@ export default function UnallocatedSection({
         }}
       >
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600, letterSpacing: '-0.01em' }}>
-              {t('sectionUnallocated')}
-            </h2>
+          <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600, letterSpacing: '-0.01em', display: 'flex', alignItems: 'center', gap: 8 }}>
+            {t('sectionUnallocated')}
             <span style={{
               display: 'inline-flex', alignItems: 'center',
               fontSize: 11, fontWeight: 500, padding: '2px 7px', borderRadius: 999,
@@ -75,7 +73,7 @@ export default function UnallocatedSection({
             }}>
               {totalItems}
             </span>
-          </div>
+          </h2>
           <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--c-muted)' }}>
             {fmtCompact(unallocatedAmount)} {t('availableToAssign')}
           </p>
@@ -94,11 +92,12 @@ export default function UnallocatedSection({
           borderRadius: 'var(--r-card)',
           boxShadow: 'var(--shadow-card)',
           overflow: 'hidden',
+          padding: '4px 14px',
         }}>
           {/* Refresh NAV button row */}
           <div style={{
             display: 'flex', justifyContent: 'flex-end',
-            padding: '10px 14px 0',
+            padding: '6px 0 0',
           }}>
             <button
               onClick={onRefresh}
@@ -122,8 +121,8 @@ export default function UnallocatedSection({
             return (
               <div key={fund.fundId} style={{
                 display: 'flex', alignItems: 'center', gap: 12,
-                padding: '12px 14px',
-                borderTop: '1px solid var(--c-line)',
+                padding: '12px 0',
+                borderBottom: '1px solid var(--c-line)',
               }}>
                 {/* Icon */}
                 <div style={{
@@ -209,8 +208,8 @@ export default function UnallocatedSection({
             return (
               <div key={item.transactionId} style={{
                 display: 'flex', alignItems: 'center', gap: 12,
-                padding: '12px 14px',
-                borderTop: '1px solid var(--c-line)',
+                padding: '12px 0',
+                borderBottom: '1px solid var(--c-line)',
               }}>
                 {/* Icon */}
                 <div style={{
