@@ -2,6 +2,9 @@ import { test, expect } from '@playwright/test'
 import * as api from './helpers/api'
 import { makeCleanupStack } from './helpers/cleanup'
 
+// API rejects future dates — use today so the row sorts to top of page 1
+const TODAY = new Date().toISOString().slice(0, 10)
+
 const cleanup = makeCleanupStack()
 test.afterEach(() => cleanup.run())
 
@@ -31,7 +34,7 @@ test('can add a bank transaction', async ({ page }) => {
   await expect(page.getByRole('dialog')).toBeVisible()
 
   // Bank is the default asset type — no selection needed
-  await page.getByLabel(/date|ngày/i).first().fill('2099-12-31')
+  await page.getByLabel(/date|ngày/i).first().fill(TODAY)
   await page.getByLabel(/amount|số tiền/i).first().fill('10000000')
 
   await Promise.all([
@@ -56,7 +59,7 @@ test('can add a gold transaction', async ({ page }) => {
   await page.locator('#asset_type').click()
   await page.locator('[data-open] [role="option"]:not(option)').filter({ hasText: /gold|vàng/i }).click({ force: true })
 
-  await page.getByLabel(/date|ngày/i).first().fill('2099-12-31')
+  await page.getByLabel(/date|ngày/i).first().fill(TODAY)
   await page.getByLabel(/amount|số tiền/i).first().fill('8500000')
   await page.getByLabel(/chi|chỉ/i).first().fill('1')
   await page.getByLabel(/unit price|giá/i).first().fill('8500000')
@@ -92,12 +95,15 @@ test('can add a fund transaction', async ({ page }) => {
   await openFundOption.waitFor({ state: 'visible', timeout: 5_000 })
   await openFundOption.click({ force: true })
 
-  await page.getByLabel(/date|ngày/i).first().fill('2099-12-31')
+  await page.getByLabel(/date|ngày/i).first().fill(TODAY)
   await page.getByLabel(/amount|số tiền/i).first().fill('5000000')
   await page.getByLabel(/units|ccq/i).first().fill('200')
   await page.getByLabel(/\bnav\b|purchase/i).first().fill(String(fund!.nav))
 
-  await page.getByRole('button', { name: /save|create|lưu/i }).click()
+  await Promise.all([
+    page.waitForResponse(r => r.url().includes('/api/v1/investment-transactions') && r.status() === 200, { timeout: 15_000 }),
+    page.getByRole('button', { name: /save|create|lưu/i }).click(),
+  ])
   await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 5_000 })
 
   await expect(page.locator('tr').filter({ hasText: fund!.code }).first()).toBeVisible({ timeout: 15_000 })
