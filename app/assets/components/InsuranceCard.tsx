@@ -1,18 +1,14 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Wallet, Trash2, TriangleAlert } from 'lucide-react'
+import { Shield, Trash2, Plus } from 'lucide-react'
 import { useTranslations } from 'next-intl'
-import { fmt } from '@/lib/formatters'
+import { fmtCompact } from '@/lib/formatters'
 
 const fmtDate = (dateStr: string): string => {
   try {
-    return new Date(dateStr).toLocaleDateString(undefined, {
-      month: 'long', day: 'numeric', year: 'numeric',
-    })
-  } catch {
-    return ''
-  }
+    return new Date(dateStr).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })
+  } catch { return '' }
 }
 
 type DisplayStatus = 'overdue' | 'due' | 'not_due_yet'
@@ -28,16 +24,10 @@ function computeDisplayStatus(nextPaymentDate: string | null): DisplayStatus {
     if (paymentMs < todayMs) return 'overdue'
     if (paymentMs === todayMs) return 'due'
     return 'not_due_yet'
-  } catch {
-    return 'not_due_yet'
-  }
+  } catch { return 'not_due_yet' }
 }
 
-interface SavingsRecord {
-  id: string
-  amount_saved_vnd: number
-  created_at: string
-}
+interface SavingsRecord { id: string; amount_saved_vnd: number; created_at: string }
 
 interface Props {
   insuranceId: string
@@ -52,13 +42,6 @@ interface Props {
   onSavingsChange?: () => void
 }
 
-const STATUS_BADGE: Record<DisplayStatus | 'completed', { cls: string; icon?: boolean }> = {
-  not_due_yet: { cls: 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300' },
-  due:         { cls: 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300' },
-  overdue:     { cls: 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300', icon: true },
-  completed:   { cls: 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400' },
-}
-
 export default function InsuranceCard({
   insuranceId, insuranceName, coverageType, annualPremium, amountSaved,
   savingsProgressPercentage, status, nextPaymentDate, lastPaymentDate, onSavingsChange,
@@ -68,19 +51,31 @@ export default function InsuranceCard({
 
   const isCompleted = status === 'completed'
   const displayStatus: DisplayStatus | 'completed' = isCompleted ? 'completed' : computeDisplayStatus(nextPaymentDate)
-  const badge = STATUS_BADGE[displayStatus]
+
+  const statusColor: Record<DisplayStatus | 'completed', string> = {
+    not_due_yet: 'var(--c-pos)',
+    due:         'var(--c-warn)',
+    overdue:     'var(--c-neg)',
+    completed:   'var(--c-muted)',
+  }
   const statusLabel: Record<DisplayStatus | 'completed', string> = {
     not_due_yet: t('statusNotDue'),
     due:         t('statusDue'),
     overdue:     t('statusOverdue'),
     completed:   t('statusCompleted'),
   }
+  const barColor: Record<DisplayStatus | 'completed', string> = {
+    not_due_yet: 'var(--c-pos)',
+    due:         'var(--c-warn)',
+    overdue:     'var(--c-neg)',
+    completed:   'var(--c-muted)',
+  }
+
   const showMarkAsPaid = status === 'upcoming' || status === 'overdue'
   const monthlyFee = Math.round(annualPremium / 12)
 
   const [localAmountSaved, setLocalAmountSaved] = useState(amountSaved)
   const localProgress = Math.min(annualPremium > 0 ? (localAmountSaved / annualPremium) * 100 : 0, 100)
-
   const [inputAmount, setInputAmount] = useState('')
   const [savingsList, setSavingsList] = useState<SavingsRecord[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -112,10 +107,7 @@ export default function InsuranceCard({
 
   async function handleAdd() {
     const amount = Number(inputAmount)
-    if (!inputAmount || isNaN(amount) || amount <= 0) {
-      showToast(t('savingsAmountRequired'), 'error')
-      return
-    }
+    if (!inputAmount || isNaN(amount) || amount <= 0) { showToast(t('savingsAmountRequired'), 'error'); return }
     setIsLoading(true)
     const res = await fetch('/api/v1/insurance-savings', {
       method: 'POST',
@@ -170,164 +162,209 @@ export default function InsuranceCard({
     setMarkPaidLoading(false)
   }
 
+  const dotColor = statusColor[displayStatus]
+  const bar = barColor[displayStatus]
+
   return (
-    <div className={`rounded-xl border p-5 transition-opacity ${
-      isCompleted
-        ? 'opacity-60 bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700'
-        : 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-800/30'
-    }`}>
-      {/* Header — name + status badge */}
-      <div className="flex items-start justify-between mb-1">
-        <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 leading-tight">{insuranceName}</h3>
-        <span className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full flex-shrink-0 ml-3 ${badge.cls}`}>
-          {badge.icon && <TriangleAlert size={10} />}
-          {statusLabel[displayStatus]}
-        </span>
+    <div style={{
+      background: 'var(--c-card)',
+      border: '1px solid var(--c-line)',
+      borderRadius: 'var(--r-card)',
+      boxShadow: 'var(--shadow-card)',
+      opacity: isCompleted ? 0.7 : 1,
+    }}>
+      {/* ── Compact header row (InsuranceMini pattern) ── */}
+      <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{
+          width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+          background: 'var(--c-card-2)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: 'var(--c-accent-insurance)',
+        }}>
+          <Shield size={16} />
+        </div>
+
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--c-ink)' }}>{insuranceName}</span>
+            {coverageType && <span style={{ fontSize: 11, color: 'var(--c-muted)' }}>· {coverageType}</span>}
+          </div>
+          <div style={{ marginTop: 5 }}>
+            <div style={{ width: '100%', height: 4, background: 'var(--c-card-2)', borderRadius: 999, overflow: 'hidden' }}>
+              <div style={{ height: '100%', borderRadius: 999, width: `${localProgress}%`, background: bar, transition: 'width 400ms ease' }} />
+            </div>
+          </div>
+        </div>
+
+        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end' }}>
+            <span style={{ width: 6, height: 6, borderRadius: 3, background: dotColor, display: 'inline-block' }} />
+            <span style={{ fontSize: 10, fontWeight: 500, color: dotColor, letterSpacing: '0.02em' }}>
+              {statusLabel[displayStatus]}
+            </span>
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
+            {fmtCompact(localAmountSaved)} / {fmtCompact(annualPremium)}
+          </div>
+        </div>
       </div>
 
-      {/* Coverage type pill */}
-      {coverageType && (
-        <span className="inline-block mb-4 text-xs px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
-          {coverageType}
-        </span>
-      )}
+      {/* ── Divider ── */}
+      <div style={{ height: 1, background: 'var(--c-line)' }} />
 
-      {/* Annual / Monthly */}
-      <div className="space-y-2 text-sm mb-4">
-        <div className="flex items-center justify-between">
-          <span className="text-gray-500 dark:text-gray-400">{t('annualFeeLabel')}:</span>
-          <span className="font-medium text-gray-900 dark:text-gray-100">{fmt(annualPremium)}</span>
+      {/* ── Details + actions ── */}
+      <div style={{ padding: '12px 14px', display: 'grid', gap: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+          <span style={{ color: 'var(--c-muted)' }}>{t('annualFeeLabel')}</span>
+          <span style={{ fontWeight: 500, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(annualPremium)}</span>
         </div>
-        <div className="flex items-center justify-between">
-          <span className="text-gray-500 dark:text-gray-400">{t('monthlyFeeLabel')}:</span>
-          <span className="font-medium text-gray-900 dark:text-gray-100">{fmt(monthlyFee)}</span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+          <span style={{ color: 'var(--c-muted)' }}>{t('monthlyFeeLabel')}</span>
+          <span style={{ fontWeight: 500, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(monthlyFee)}</span>
         </div>
-      </div>
 
-      {/* Savings + progress */}
-      <div className="space-y-2 mb-3">
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-gray-500 dark:text-gray-400">{t('savedLabel')}:</span>
-          <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{fmt(localAmountSaved)}</span>
-        </div>
-        <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-          <div
-            className={`h-full rounded-full transition-all ${isCompleted ? 'bg-gray-400' : 'bg-gray-900 dark:bg-gray-100'}`}
-            style={{ width: `${localProgress}%` }}
+        {nextPaymentDate && !isCompleted && (
+          <p style={{ fontSize: 11, color: 'var(--c-muted)', margin: 0 }}>
+            {t('nextPaymentLabel', { date: fmtDate(nextPaymentDate) })}
+          </p>
+        )}
+        {lastPaymentDate && (
+          <p style={{ fontSize: 11, color: 'var(--c-muted-2)', margin: 0 }}>
+            {t('lastPaymentLabel', { date: fmtDate(lastPaymentDate) })}
+          </p>
+        )}
+
+        {toast && (
+          <p style={{ fontSize: 12, margin: 0, color: toast.type === 'error' ? 'var(--c-neg)' : 'var(--c-pos)' }}>
+            {toast.msg}
+          </p>
+        )}
+
+        {/* Quick save input */}
+        <div style={{ display: 'flex', gap: 6 }}>
+          <input
+            type="number"
+            value={inputAmount}
+            onChange={(e) => setInputAmount(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+            placeholder={t('savingsAmountPlaceholder')}
+            style={{
+              flex: 1, minWidth: 0,
+              border: '1px solid var(--c-line)', borderRadius: 8,
+              padding: '6px 10px', fontSize: 12,
+              background: 'var(--c-card-2)', color: 'var(--c-ink)',
+              fontFamily: 'inherit', outline: 'none',
+            }}
           />
+          <button
+            onClick={handleAdd}
+            disabled={isLoading}
+            style={{
+              width: 32, height: 32, flexShrink: 0,
+              background: 'var(--c-navy)', color: '#fff',
+              border: 'none', borderRadius: 8, cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              opacity: isLoading ? 0.5 : 1,
+            }}
+            aria-label={t('addBtn')}
+          >
+            <Plus size={14} />
+          </button>
         </div>
-        <p className="text-xs text-gray-500 dark:text-gray-400">
-          {Math.round(localProgress)}% {t('ofAnnualFee')}
-        </p>
-      </div>
 
-      {/* Next / last payment date */}
-      {nextPaymentDate && !isCompleted && (
-        <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-          {t('nextPaymentLabel', { date: fmtDate(nextPaymentDate) })}
-        </p>
-      )}
-      {lastPaymentDate && (
-        <p className="text-xs text-gray-400 dark:text-gray-500 mb-3">
-          {t('lastPaymentLabel', { date: fmtDate(lastPaymentDate) })}
-        </p>
-      )}
-
-      {/* Toast */}
-      {toast && (
-        <p className={`text-xs mb-2 ${toast.type === 'error' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
-          {toast.msg}
-        </p>
-      )}
-
-      {/* Quick save input */}
-      <div className="flex gap-2">
-        <input
-          type="number"
-          value={inputAmount}
-          onChange={(e) => setInputAmount(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-          placeholder={t('savingsAmountPlaceholder')}
-          className="flex-1 min-w-0 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-1.5 text-xs bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-        />
-        <button
-          onClick={handleAdd}
-          disabled={isLoading}
-          className="flex items-center justify-center h-8 w-8 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-lg hover:bg-gray-700 dark:hover:bg-gray-200 disabled:opacity-50 flex-shrink-0 transition-colors"
-          title={t('addBtn')}
-        >
-          <Wallet className="h-4 w-4" />
-        </button>
-      </div>
-
-      {/* Savings records */}
-      {savingsList.length > 0 && (
-        <div className="border-t border-gray-200/60 dark:border-gray-700/60 mt-3 pt-3">
-          <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">{t('savingsHistoryLabel')}</p>
-          <ul className="space-y-1">
+        {/* Savings history */}
+        {savingsList.length > 0 && (
+          <div style={{ borderTop: '1px solid var(--c-line)', paddingTop: 8, display: 'grid', gap: 4 }}>
+            <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--c-muted)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              {t('savingsHistoryLabel')}
+            </p>
             {savingsList.map((s) => (
-              <li key={s.id} className="flex items-center justify-between">
-                <span className="text-xs text-gray-700 dark:text-gray-300">{fmt(s.amount_saved_vnd)}</span>
+              <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 12, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>
+                  {fmtCompact(s.amount_saved_vnd)}
+                </span>
                 <button
                   onClick={() => handleDelete(s.id, s.amount_saved_vnd)}
                   disabled={isLoading}
-                  className="text-gray-300 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-400 disabled:opacity-40 transition-colors"
+                  style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--c-muted-2)', opacity: isLoading ? 0.4 : 1 }}
                   aria-label="Delete"
                 >
                   <Trash2 size={12} />
                 </button>
-              </li>
+              </div>
             ))}
-          </ul>
-        </div>
-      )}
+          </div>
+        )}
 
-      {/* Mark as Paid */}
-      {showMarkAsPaid && (
-        <div className="border-t border-gray-200/60 dark:border-gray-700/60 mt-3 pt-3">
-          <button
-            onClick={() => setShowConfirm(true)}
-            className="w-full py-2 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-xs font-medium rounded-lg hover:bg-gray-700 dark:hover:bg-gray-200 transition-colors"
-          >
-            {t('markPaidBtn')}
-          </button>
-        </div>
-      )}
+        {/* Mark as Paid */}
+        {showMarkAsPaid && (
+          <div style={{ borderTop: '1px solid var(--c-line)', paddingTop: 8 }}>
+            <button
+              onClick={() => setShowConfirm(true)}
+              style={{
+                width: '100%', padding: '8px 0',
+                background: 'var(--c-navy)', color: '#fff',
+                border: 'none', borderRadius: 8, cursor: 'pointer',
+                fontSize: 12, fontWeight: 500, fontFamily: 'inherit',
+              }}
+            >
+              {t('markPaidBtn')}
+            </button>
+          </div>
+        )}
+      </div>
 
-      {/* Confirmation dialog */}
+      {/* ── Confirm dialog ── */}
       {showConfirm && (
         <div
           className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
           onClick={(e) => { if (e.target === e.currentTarget) setShowConfirm(false) }}
         >
-          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-sm p-6 border border-gray-100 dark:border-gray-700">
-            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">{t('markPaidTitle')}</h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+          <div style={{
+            background: 'var(--c-card)', border: '1px solid var(--c-line)',
+            borderRadius: 'var(--r-card)', boxShadow: 'var(--shadow-pop)',
+            width: '100%', maxWidth: 360, padding: 24,
+          }}>
+            <h3 style={{ margin: '0 0 6px', fontSize: 15, fontWeight: 600 }}>{t('markPaidTitle')}</h3>
+            <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--c-muted)' }}>
               {t('markPaidMessage', { name: insuranceName })}
             </p>
-            <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-lg p-3 mb-4 border-l-4 border-emerald-500">
-              <p className="text-xs text-gray-700 dark:text-gray-300 font-medium">{insuranceName}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t('annualPayment', { amount: fmt(annualPremium) })}</p>
+            <div style={{ background: 'var(--c-navy-tint)', borderRadius: 10, padding: '10px 12px', marginBottom: 16, borderLeft: '3px solid var(--c-navy)' }}>
+              <p style={{ margin: 0, fontSize: 12, fontWeight: 500 }}>{insuranceName}</p>
+              <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--c-muted)', fontVariantNumeric: 'tabular-nums' }}>
+                {t('annualPayment', { amount: fmtCompact(annualPremium) })}
+              </p>
             </div>
-            <p className="text-xs text-gray-400 dark:text-gray-500 mb-5">{t('markPaidNote')}</p>
-            <div className="flex gap-3">
+            <p style={{ margin: '0 0 20px', fontSize: 11, color: 'var(--c-muted-2)' }}>{t('markPaidNote')}</p>
+            <div style={{ display: 'flex', gap: 8 }}>
               <button
                 onClick={() => setShowConfirm(false)}
                 disabled={markPaidLoading}
-                className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
+                style={{
+                  flex: 1, padding: '8px 0',
+                  background: 'transparent', border: '1px solid var(--c-line)',
+                  borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 500, fontFamily: 'inherit', color: 'var(--c-ink)',
+                }}
               >
                 {tc('cancel')}
               </button>
               <button
                 onClick={handleMarkAsPaid}
                 disabled={markPaidLoading}
-                className="flex-1 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                style={{
+                  flex: 2, padding: '8px 0',
+                  background: 'var(--c-navy)', color: '#fff',
+                  border: 'none', borderRadius: 8, cursor: 'pointer',
+                  fontSize: 13, fontWeight: 500, fontFamily: 'inherit',
+                  opacity: markPaidLoading ? 0.6 : 1,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                }}
               >
                 {markPaidLoading ? (
                   <>
-                    <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                    <svg style={{ width: 14, height: 14 }} viewBox="0 0 24 24" fill="none" className="animate-spin">
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25" />
+                      <path fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" opacity="0.75" />
                     </svg>
                     {t('markPaidProcessing')}
                   </>
