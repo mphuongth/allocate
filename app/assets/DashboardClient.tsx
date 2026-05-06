@@ -684,7 +684,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                     </button>
                   </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div style={{ display: 'grid', gap: 10 }}>
                   {sortedGoals.map((goal) => (
                     <GoalCard
                       key={goal.goalId}
@@ -724,18 +724,30 @@ export default function DashboardClient({ userId }: { userId: string }) {
                     href="/settings?tab=insurance"
                     style={{
                       display: 'inline-flex', alignItems: 'center', gap: 4,
-                      fontSize: 12, fontWeight: 500, padding: '4px 10px',
+                      fontSize: 12, fontWeight: 500, padding: '4px 8px',
                       border: '1px solid var(--c-line)', borderRadius: 8,
                       background: 'var(--c-card)', color: 'var(--c-ink)',
                       textDecoration: 'none',
                     }}
                   >
-                    {t('manageInsurance')}
+                    <Plus size={12} strokeWidth={2.4} />
+                    {t('addInsurance')}
                   </Link>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {data.insurance.map((ins) => (
-                    <InsuranceCard key={ins.insuranceId} {...ins} onSavingsChange={() => fetchData({ force: true })} />
+                <div style={{
+                  background: 'var(--c-card)',
+                  border: '1px solid var(--c-line)',
+                  borderRadius: 'var(--r-card)',
+                  boxShadow: 'var(--shadow-card)',
+                  overflow: 'hidden',
+                }}>
+                  {data.insurance.map((ins, idx) => (
+                    <InsuranceCard
+                      key={ins.insuranceId}
+                      {...ins}
+                      isLast={idx === data.insurance.length - 1}
+                      onSavingsChange={() => fetchData({ force: true })}
+                    />
                   ))}
                 </div>
               </section>
