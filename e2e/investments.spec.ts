@@ -31,7 +31,7 @@ test('can add a bank transaction', async ({ page }) => {
   await expect(page.getByRole('dialog')).toBeVisible()
 
   // Bank is the default asset type — no selection needed
-  await page.getByLabel(/date|ngày/i).first().fill('2026-01-15')
+  await page.getByLabel(/date|ngày/i).first().fill('2099-12-31')
   await page.getByLabel(/amount|số tiền/i).first().fill('10000000')
 
   await Promise.all([
@@ -56,7 +56,7 @@ test('can add a gold transaction', async ({ page }) => {
   await page.locator('#asset_type').click()
   await page.locator('[data-open] [role="option"]:not(option)').filter({ hasText: /gold|vàng/i }).click({ force: true })
 
-  await page.getByLabel(/date|ngày/i).first().fill('2026-01-15')
+  await page.getByLabel(/date|ngày/i).first().fill('2099-12-31')
   await page.getByLabel(/amount|số tiền/i).first().fill('8500000')
   await page.getByLabel(/chi|chỉ/i).first().fill('1')
   await page.getByLabel(/unit price|giá/i).first().fill('8500000')
@@ -92,7 +92,7 @@ test('can add a fund transaction', async ({ page }) => {
   await openFundOption.waitFor({ state: 'visible', timeout: 5_000 })
   await openFundOption.click({ force: true })
 
-  await page.getByLabel(/date|ngày/i).first().fill('2026-01-15')
+  await page.getByLabel(/date|ngày/i).first().fill('2099-12-31')
   await page.getByLabel(/amount|số tiền/i).first().fill('5000000')
   await page.getByLabel(/units|ccq/i).first().fill('200')
   await page.getByLabel(/\bnav\b|purchase/i).first().fill(String(fund!.nav))
