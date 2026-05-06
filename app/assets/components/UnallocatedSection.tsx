@@ -104,7 +104,7 @@ export default function UnallocatedSection({
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 5,
                 fontSize: 12, fontWeight: 500, padding: '5px 10px',
-                border: '1px solid var(--c-line)', borderRadius: 8,
+                border: '1px solid var(--c-line)', borderRadius: 'var(--r-control)',
                 background: 'var(--c-card)', color: 'var(--c-ink)',
                 cursor: 'pointer', fontFamily: 'inherit',
               }}
