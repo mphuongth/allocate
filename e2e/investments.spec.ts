@@ -10,7 +10,11 @@ async function openTransactionsTab(page: import('@playwright/test').Page) {
   await page.evaluate(() => {
     Object.keys(localStorage).filter(k => k.includes('transaction') || k.includes('Transaction')).forEach(k => localStorage.removeItem(k))
   })
-  await page.goto('/settings?tab=transactions')
+  // Wait for the API response to ensure the table is populated before any assertion
+  await Promise.all([
+    page.waitForResponse(r => r.url().includes('/api/v1/investment-transactions') && r.status() === 200, { timeout: 20_000 }),
+    page.goto('/settings?tab=transactions'),
+  ])
   await page.waitForSelector('[data-testid="create-btn"]', { timeout: 15_000 })
 }
 
@@ -30,7 +34,10 @@ test('can add a bank transaction', async ({ page }) => {
   await page.getByLabel(/date|ngày/i).first().fill('2026-01-15')
   await page.getByLabel(/amount|số tiền/i).first().fill('10000000')
 
-  await page.getByRole('button', { name: /save|create|lưu/i }).click()
+  await Promise.all([
+    page.waitForResponse(r => r.url().includes('/api/v1/investment-transactions') && r.status() === 200, { timeout: 15_000 }),
+    page.getByRole('button', { name: /save|create|lưu/i }).click(),
+  ])
   await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 5_000 })
 
   // Scope to table row to avoid matching hidden sm:hidden mobile cards or <option> elements
@@ -54,7 +61,10 @@ test('can add a gold transaction', async ({ page }) => {
   await page.getByLabel(/chi|chỉ/i).first().fill('1')
   await page.getByLabel(/unit price|giá/i).first().fill('8500000')
 
-  await page.getByRole('button', { name: /save|create|lưu/i }).click()
+  await Promise.all([
+    page.waitForResponse(r => r.url().includes('/api/v1/investment-transactions') && r.status() === 200, { timeout: 15_000 }),
+    page.getByRole('button', { name: /save|create|lưu/i }).click(),
+  ])
   await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 5_000 })
 
   await expect(page.locator('tr').filter({ hasText: /gold|vàng/i }).first()).toBeVisible({ timeout: 15_000 })
