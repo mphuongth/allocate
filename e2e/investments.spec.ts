@@ -2,6 +2,9 @@ import { test, expect } from '@playwright/test'
 import * as api from './helpers/api'
 import { makeCleanupStack } from './helpers/cleanup'
 
+// API rejects future dates — use today so the row sorts to top of page 1
+const TODAY = new Date().toISOString().slice(0, 10)
+
 const cleanup = makeCleanupStack()
 test.afterEach(() => cleanup.run())
 
@@ -10,7 +13,11 @@ async function openTransactionsTab(page: import('@playwright/test').Page) {
   await page.evaluate(() => {
     Object.keys(localStorage).filter(k => k.includes('transaction') || k.includes('Transaction')).forEach(k => localStorage.removeItem(k))
   })
-  await page.goto('/settings?tab=transactions')
+  // Wait for the API response to ensure the table is populated before any assertion
+  await Promise.all([
+    page.waitForResponse(r => r.url().includes('/api/v1/investment-transactions') && r.status() === 200, { timeout: 20_000 }),
+    page.goto('/settings?tab=transactions'),
+  ])
   await page.waitForSelector('[data-testid="create-btn"]', { timeout: 15_000 })
 }
 
@@ -27,10 +34,13 @@ test('can add a bank transaction', async ({ page }) => {
   await expect(page.getByRole('dialog')).toBeVisible()
 
   // Bank is the default asset type — no selection needed
-  await page.getByLabel(/date|ngày/i).first().fill('2026-01-15')
+  await page.getByLabel(/date|ngày/i).first().fill(TODAY)
   await page.getByLabel(/amount|số tiền/i).first().fill('10000000')
 
-  await page.getByRole('button', { name: /save|create|lưu/i }).click()
+  await Promise.all([
+    page.waitForResponse(r => r.url().includes('/api/v1/investment-transactions') && r.status() === 200, { timeout: 15_000 }),
+    page.getByRole('button', { name: /save|create|lưu/i }).click(),
+  ])
   await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 5_000 })
 
   // Scope to table row to avoid matching hidden sm:hidden mobile cards or <option> elements
@@ -49,12 +59,15 @@ test('can add a gold transaction', async ({ page }) => {
   await page.locator('#asset_type').click()
   await page.locator('[data-open] [role="option"]:not(option)').filter({ hasText: /gold|vàng/i }).click({ force: true })
 
-  await page.getByLabel(/date|ngày/i).first().fill('2026-01-15')
+  await page.getByLabel(/date|ngày/i).first().fill(TODAY)
   await page.getByLabel(/amount|số tiền/i).first().fill('8500000')
   await page.getByLabel(/chi|chỉ/i).first().fill('1')
   await page.getByLabel(/unit price|giá/i).first().fill('8500000')
 
-  await page.getByRole('button', { name: /save|create|lưu/i }).click()
+  await Promise.all([
+    page.waitForResponse(r => r.url().includes('/api/v1/investment-transactions') && r.status() === 200, { timeout: 15_000 }),
+    page.getByRole('button', { name: /save|create|lưu/i }).click(),
+  ])
   await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 5_000 })
 
   await expect(page.locator('tr').filter({ hasText: /gold|vàng/i }).first()).toBeVisible({ timeout: 15_000 })
@@ -82,12 +95,15 @@ test('can add a fund transaction', async ({ page }) => {
   await openFundOption.waitFor({ state: 'visible', timeout: 5_000 })
   await openFundOption.click({ force: true })
 
-  await page.getByLabel(/date|ngày/i).first().fill('2026-01-15')
+  await page.getByLabel(/date|ngày/i).first().fill(TODAY)
   await page.getByLabel(/amount|số tiền/i).first().fill('5000000')
   await page.getByLabel(/units|ccq/i).first().fill('200')
   await page.getByLabel(/\bnav\b|purchase/i).first().fill(String(fund!.nav))
 
-  await page.getByRole('button', { name: /save|create|lưu/i }).click()
+  await Promise.all([
+    page.waitForResponse(r => r.url().includes('/api/v1/investment-transactions') && r.status() === 200, { timeout: 15_000 }),
+    page.getByRole('button', { name: /save|create|lưu/i }).click(),
+  ])
   await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 5_000 })
 
   await expect(page.locator('tr').filter({ hasText: fund!.code }).first()).toBeVisible({ timeout: 15_000 })
@@ -97,8 +113,8 @@ test('can add a fund transaction', async ({ page }) => {
 })
 
 test('filter by asset type shows only matching rows', async ({ page }) => {
-  const bankTx = await api.createTransaction({ asset_type: 'bank', amount_vnd: 5_000_000, investment_date: '2026-01-01' })
-  const goldTx = await api.createTransaction({ asset_type: 'gold', amount_vnd: 8_500_000, investment_date: '2026-01-01', units: 1, unit_price: 8_500_000 })
+  const bankTx = await api.createTransaction({ asset_type: 'bank', amount_vnd: 5_000_000, investment_date: '2099-12-31' })
+  const goldTx = await api.createTransaction({ asset_type: 'gold', amount_vnd: 8_500_000, investment_date: '2099-12-31', units: 1, unit_price: 8_500_000 })
   cleanup.add(() => api.deleteTransaction(bankTx.transaction_id))
   cleanup.add(() => api.deleteTransaction(goldTx.transaction_id))
 
@@ -117,7 +133,7 @@ test('filter by asset type shows only matching rows', async ({ page }) => {
 test('can delete a transaction', async ({ page }) => {
   await api.deleteAllTransactionsByNotes('E2E Delete TX')
 
-  const tx = await api.createTransaction({ asset_type: 'bank', amount_vnd: 9_999_000, investment_date: '2026-01-01', notes: 'E2E Delete TX' })
+  const tx = await api.createTransaction({ asset_type: 'bank', amount_vnd: 9_999_000, investment_date: '2099-12-31', notes: 'E2E Delete TX' })
   cleanup.add(() => api.deleteTransaction(tx.transaction_id))
 
   await openTransactionsTab(page)
