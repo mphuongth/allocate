@@ -254,9 +254,22 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
   const totalFundCurrentValue = fundGroups.reduce((s, g) => s + g.current_value, 0)
   const totalOtherCurrentValue = otherRows.reduce((s, r) => s + getOtherCurrentValue(r), 0)
   const totalCurrentValue = totalFundCurrentValue + totalOtherCurrentValue
+
+  // Actual current value (all withdrawals counted) — for display cards, not progress bar
+  const totalFundCurrentValueActual = fundGroups.reduce((s, g) => s + g.remaining_units_actual * g.current_nav, 0)
+  function getOtherActualCurrentValue(row: TxRow): number {
+    if (row.asset_type === 'gold' && goldPrice && row.units != null) {
+      return Math.max(0, (row.units - row.total_units_withdrawn_actual) * goldPrice)
+    }
+    const rem = row.amount_vnd - row.total_principal_withdrawn_actual
+    return Math.max(0, rem + calcProjectedInterest(rem, row.interest_rate, row.investment_date, row.expiry_date))
+  }
+  const totalOtherCurrentValueActual = otherRows.reduce((s, r) => s + getOtherActualCurrentValue(r), 0)
+  const totalCurrentValueActual = totalFundCurrentValueActual + totalOtherCurrentValueActual
+
   const totalInvested = investmentRows.reduce((s, r) => s + r.amount_vnd, 0)
   const totalWithdrawn = withdrawalRows.reduce((s, w) => s + w.amount_vnd, 0)
-  const totalGain = totalCurrentValue + totalWithdrawn - totalInvested
+  const totalGain = totalCurrentValueActual + totalWithdrawn - totalInvested
 
   // --- Fund investment handlers ---
   function openFiAdd() {
@@ -488,7 +501,7 @@ export default function GoalDetailView({ goal, onBack }: { goal: Goal; onBack: (
       <div className={`grid gap-4 mb-6 ${totalWithdrawn > 0 ? 'grid-cols-2 md:grid-cols-4' : 'md:grid-cols-3 grid-cols-1'}`}>
         <div className="px-5 py-6 rounded-xl border border-blue-200 dark:border-blue-800 bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20">
           <p className="text-xs uppercase tracking-wide text-blue-700 dark:text-blue-400 mb-1">{t('currentValue')}</p>
-          <p className="text-2xl font-bold text-blue-900 dark:text-blue-200">{fmt(totalCurrentValue)}</p>
+          <p className="text-2xl font-bold text-blue-900 dark:text-blue-200">{fmt(totalCurrentValueActual)}</p>
         </div>
         <div className="px-5 py-6 rounded-xl border border-purple-200 dark:border-purple-800 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20">
           <p className="text-xs uppercase tracking-wide text-purple-700 dark:text-purple-400 mb-1">{t('totalInvested')}</p>
