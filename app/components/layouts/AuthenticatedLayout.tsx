@@ -1,13 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import { toast } from 'sonner'
 import { NavigationProvider } from '../navigation/NavigationContext'
 import Sidebar from '../navigation/Sidebar'
 import Header from '../navigation/Header'
-import MobileDrawer from '../navigation/MobileDrawer'
+import MobileBottomTabs from '../navigation/MobileBottomTabs'
 import { PageTitle } from '../navigation/Breadcrumb'
 import OfflineBanner from '@/app/components/OfflineBanner'
 
@@ -21,37 +21,25 @@ function getInitials(email: string): string {
 }
 
 function AuthenticatedLayoutInner({ children, email, initials }: { children: React.ReactNode; email: string; initials: string }) {
-  const [drawerOpen, setDrawerOpen] = useState(false)
-
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-950 overflow-hidden">
-      {/* Desktop sidebar */}
-      <div className="hidden lg:flex shrink-0">
+    <div className="flex h-screen bg-canvas dark:bg-gray-950 overflow-hidden">
+      {/* Sidebar (tablet + desktop only) */}
+      <div className="hidden md:flex shrink-0">
         <Sidebar email={email} initials={initials} />
       </div>
-
-      {/* Tablet sidebar */}
-      <div className="hidden md:flex lg:hidden shrink-0">
-        <Sidebar email={email} initials={initials} />
-      </div>
-
-      {/* Mobile drawer */}
-      <MobileDrawer
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        email={email}
-        initials={initials}
-      />
 
       {/* Main area */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        <Header onMobileMenuToggle={() => setDrawerOpen(true)} />
+        <Header />
         {/* Mobile page title */}
         <PageTitle />
-        <main className="flex-1 overflow-y-auto px-6 py-4">
+        <main className="flex-1 overflow-y-auto px-4 md:px-6 py-4 pb-20 md:pb-4">
           {children}
         </main>
       </div>
+
+      {/* Mobile bottom tab navigation */}
+      <MobileBottomTabs />
       <OfflineBanner />
     </div>
   )

@@ -14,6 +14,31 @@
   --brand: #0F2A4A;            /* navy — wordmark, primary brand text */
   --brand-light: #ecfdf5;      /* emerald-50 — soft accent bg / hover surface */
   --brand-dark: #10B981;       /* emerald — active state / strong accent */
+
+  /* Cairn design system tokens (mobile redesign) */
+  --c-canvas: #faf8f4;
+  --c-card: #ffffff;
+  --c-card-2: #f5f2ec;
+  --c-line: #e9e5dc;
+  --c-line-strong: #d8d3c5;
+  --c-ink: #18181b;
+  --c-ink-2: #3f3f46;
+  --c-muted: #78716c;
+  --c-muted-2: #a8a29e;
+  --c-navy: #0F2A4A;
+  --c-navy-2: #1e3a63;
+  --c-navy-tint: #eef2f8;
+  --c-pos: #047857;
+  --c-pos-tint: #ecfdf5;
+  --c-neg: #b91c1c;
+  --c-neg-tint: #fef2f2;
+  --c-warn: #b45309;
+  --c-warn-tint: #fef7e6;
+  --c-accent-fund: #2563eb;
+  --c-accent-savings: #047857;
+  --c-accent-fixed: #b45309;
+  --c-accent-insurance: #7c3aed;
+  --c-accent-other: #475569;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -54,7 +79,8 @@
   --color-brand: var(--brand);
   --color-brand-light: var(--brand-light);
   --color-brand-dark: var(--brand-dark);
-  --font-sans: "Geist", "Geist Fallback", ui-sans-serif, system-ui, sans-serif;
+  --color-canvas: var(--c-canvas);
+  --font-sans: "DM Sans", var(--font-dm-sans), "Geist", var(--font-geist), ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, monospace;
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -104,6 +130,22 @@
   --brand: #F8FAFC;            /* cream — wordmark on dark */
   --brand-light: #0F2A4A;      /* navy — brand-tinted surface in dark mode */
   --brand-dark: #34D399;       /* mint — active state / strong accent */
+
+  /* Cairn design system tokens — dark overrides */
+  --c-canvas: #0a0a0a;
+  --c-card: #161616;
+  --c-card-2: #222222;
+  --c-line: #2a2a2a;
+  --c-line-strong: #3a3a3a;
+  --c-ink: #f5f5f5;
+  --c-ink-2: #d4d4d4;
+  --c-muted: #a3a3a3;
+  --c-muted-2: #737373;
+  --c-navy: #f8fafc;
+  --c-navy-tint: #1a2540;
+  --c-pos-tint: rgba(4, 120, 87, 0.15);
+  --c-neg-tint: rgba(185, 28, 28, 0.15);
+  --c-warn-tint: rgba(180, 83, 9, 0.15);
   --card: oklch(0.205 0 0);
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
