@@ -13,3 +13,12 @@ export const fmtShort = (n: number) => {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(0) + 'M'
   return n.toLocaleString('vi-VN')
 }
+
+// Compact money for dense lists: 15.5M ₫, 1.2B ₫
+export const fmtCompact = (n: number) => {
+  const abs = Math.abs(n)
+  const sign = n < 0 ? '-' : ''
+  if (abs >= 1_000_000_000) return sign + (abs / 1_000_000_000).toFixed(1) + 'B ₫'
+  if (abs >= 1_000_000) return sign + (abs / 1_000_000).toFixed(1) + 'M ₫'
+  return fmt(n)
+}
