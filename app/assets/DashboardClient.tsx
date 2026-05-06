@@ -127,6 +127,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const [nonFundPickerTxId, setNonFundPickerTxId] = useState<string | null>(null)
   const [nonFundAssignLoading, setNonFundAssignLoading] = useState(false)
   const [nonFundAssignError, setNonFundAssignError] = useState('')
+  const [goalSort, setGoalSort] = useState<'manual' | 'progressDesc' | 'progressAsc' | 'alpha'>('manual')
   const [showGoalForm, setShowGoalForm] = useState(false)
   const [goalName, setGoalName] = useState('')
   const [goalTarget, setGoalTarget] = useState('')
@@ -495,7 +496,13 @@ export default function DashboardClient({ userId }: { userId: string }) {
 
   const isEmpty = data && data.goals.length === 0 && data.unallocated.funds.length === 0 && data.unallocated.nonFunds.length === 0 && data.insurance.length === 0
 
-  const sortedGoals = data ? data.goals : []
+  const sortedGoals = data ? (() => {
+    const goals = [...data.goals]
+    if (goalSort === 'progressDesc') goals.sort((a, b) => (b.progressPercentage ?? 0) - (a.progressPercentage ?? 0))
+    else if (goalSort === 'progressAsc') goals.sort((a, b) => (a.progressPercentage ?? 0) - (b.progressPercentage ?? 0))
+    else if (goalSort === 'alpha') goals.sort((a, b) => a.goalName.localeCompare(b.goalName))
+    return goals
+  })() : []
 
   // Compute asset allocation totals for pie chart
   const allocationTotals = data ? (() => {
@@ -626,32 +633,58 @@ export default function DashboardClient({ userId }: { userId: string }) {
             </div>
 
             {/* Net Worth + Asset Allocation */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2">
-                <NetWorthCard {...data.netWorth} />
-              </div>
+            <div className="space-y-4">
+              <NetWorthCard {...data.netWorth} />
               {allocationTotals && (
-                <AssetAllocationPie
-                  {...allocationTotals}
-                  totalAssets={data.netWorth.totalAssets}
-                />
+                <div className="hidden md:block">
+                  <AssetAllocationPie
+                    {...allocationTotals}
+                    totalAssets={data.netWorth.totalAssets}
+                  />
+                </div>
               )}
             </div>
 
             {/* Goals */}
             {sortedGoals.length > 0 && (
               <section>
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('sectionGoals')}</h2>
-                  <button
-                    onClick={() => { setGoalName(''); setGoalTarget(''); setGoalDesc(''); setGoalError(''); setShowGoalForm(true) }}
-                    className="flex items-center gap-2 h-9 px-4 bg-gray-950 hover:bg-gray-800 text-white text-sm font-bold rounded-md transition-colors"
-                  >
-                    <Plus className="h-4 w-4" />
-                    {t('addGoalBtn')}
-                  </button>
+                <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+                  <div>
+                    <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600, letterSpacing: '-0.01em' }}>{t('sectionGoals')}</h2>
+                    <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--c-muted)' }}>
+                      {sortedGoals.length} {t('tracked')}
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <select
+                      value={goalSort}
+                      onChange={(e) => setGoalSort(e.target.value as typeof goalSort)}
+                      style={{
+                        fontSize: 12, padding: '5px 8px',
+                        background: 'var(--c-card)', border: '1px solid var(--c-line)',
+                        borderRadius: 8, color: 'var(--c-ink)', fontFamily: 'inherit',
+                      }}
+                    >
+                      <option value="manual">{t('sortManual')}</option>
+                      <option value="progressDesc">{t('sortProgressDesc')}</option>
+                      <option value="progressAsc">{t('sortProgressAsc')}</option>
+                      <option value="alpha">{t('sortAlpha')}</option>
+                    </select>
+                    <button
+                      onClick={() => { setGoalName(''); setGoalTarget(''); setGoalDesc(''); setGoalError(''); setShowGoalForm(true) }}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        width: 30, height: 30, border: '1px solid var(--c-line)',
+                        borderRadius: 8, background: 'var(--c-card)', cursor: 'pointer', fontFamily: 'inherit',
+                        color: 'var(--c-ink)',
+                      }}
+                      aria-label={t('addGoalBtn')}
+                    >
+                      <Plus size={16} />
+                    </button>
+                  </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {sortedGoals.map((goal) => (
                     <GoalCard
                       key={goal.goalId}
@@ -680,21 +713,30 @@ export default function DashboardClient({ userId }: { userId: string }) {
             {/* Insurance */}
             {data.insurance.length > 0 && (
               <section>
-                <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
-                  <div className="flex items-center justify-between mb-5">
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('sectionInsurance')}</h2>
-                    <Link
-                      href="/settings?tab=insurance"
-                      className="text-sm font-medium px-3 py-1.5 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                    >
-                      {t('manageInsurance')}
-                    </Link>
+                <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+                  <div>
+                    <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600, letterSpacing: '-0.01em' }}>{t('sectionInsurance')}</h2>
+                    <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--c-muted)' }}>
+                      {data.insurance.length} {t('members')}
+                    </p>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {data.insurance.map((ins) => (
-                      <InsuranceCard key={ins.insuranceId} {...ins} onSavingsChange={() => fetchData({ force: true })} />
-                    ))}
-                  </div>
+                  <Link
+                    href="/settings?tab=insurance"
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                      fontSize: 12, fontWeight: 500, padding: '4px 10px',
+                      border: '1px solid var(--c-line)', borderRadius: 8,
+                      background: 'var(--c-card)', color: 'var(--c-ink)',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    {t('manageInsurance')}
+                  </Link>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {data.insurance.map((ins) => (
+                    <InsuranceCard key={ins.insuranceId} {...ins} onSavingsChange={() => fetchData({ force: true })} />
+                  ))}
                 </div>
               </section>
             )}
