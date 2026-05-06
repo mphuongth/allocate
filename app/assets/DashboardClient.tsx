@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { fmt } from '@/lib/formatters'
-import { Plus, FileDown } from 'lucide-react'
+import { Plus, Download } from 'lucide-react'
 import { useTranslations, useLocale } from 'next-intl'
 import dynamic from 'next/dynamic'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -631,7 +631,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
               >
                 {isGeneratingReport
                   ? <span className="w-[18px] h-[18px] border-2 border-current border-t-transparent rounded-full animate-spin block" />
-                  : <FileDown size={18} />
+                  : <Download size={18} />
                 }
               </button>
             </div>
