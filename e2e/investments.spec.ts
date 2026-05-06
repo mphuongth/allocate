@@ -107,8 +107,8 @@ test('can add a fund transaction', async ({ page }) => {
 })
 
 test('filter by asset type shows only matching rows', async ({ page }) => {
-  const bankTx = await api.createTransaction({ asset_type: 'bank', amount_vnd: 5_000_000, investment_date: '2026-01-01' })
-  const goldTx = await api.createTransaction({ asset_type: 'gold', amount_vnd: 8_500_000, investment_date: '2026-01-01', units: 1, unit_price: 8_500_000 })
+  const bankTx = await api.createTransaction({ asset_type: 'bank', amount_vnd: 5_000_000, investment_date: '2099-12-31' })
+  const goldTx = await api.createTransaction({ asset_type: 'gold', amount_vnd: 8_500_000, investment_date: '2099-12-31', units: 1, unit_price: 8_500_000 })
   cleanup.add(() => api.deleteTransaction(bankTx.transaction_id))
   cleanup.add(() => api.deleteTransaction(goldTx.transaction_id))
 
@@ -127,7 +127,7 @@ test('filter by asset type shows only matching rows', async ({ page }) => {
 test('can delete a transaction', async ({ page }) => {
   await api.deleteAllTransactionsByNotes('E2E Delete TX')
 
-  const tx = await api.createTransaction({ asset_type: 'bank', amount_vnd: 9_999_000, investment_date: '2026-01-01', notes: 'E2E Delete TX' })
+  const tx = await api.createTransaction({ asset_type: 'bank', amount_vnd: 9_999_000, investment_date: '2099-12-31', notes: 'E2E Delete TX' })
   cleanup.add(() => api.deleteTransaction(tx.transaction_id))
 
   await openTransactionsTab(page)
