@@ -621,14 +621,18 @@ export default function DashboardClient({ userId }: { userId: string }) {
                 data-testid="generate-report-btn"
                 onClick={handleGenerateReport}
                 disabled={isGeneratingReport}
-                className="flex items-center gap-2 h-9 px-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                aria-label={isGeneratingReport ? t('downloadingReport') : t('downloadReport')}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  padding: 8, border: 'none', background: 'transparent',
+                  borderRadius: 'var(--r-control)', cursor: 'pointer', color: 'var(--c-ink)',
+                  opacity: isGeneratingReport ? 0.5 : 1,
+                }}
               >
-                {isGeneratingReport ? (
-                  <span className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <FileDown className="h-4 w-4" />
-                )}
-                {isGeneratingReport ? t('downloadingReport') : t('downloadReport')}
+                {isGeneratingReport
+                  ? <span className="w-[18px] h-[18px] border-2 border-current border-t-transparent rounded-full animate-spin block" />
+                  : <FileDown size={18} />
+                }
               </button>
             </div>
 
@@ -674,8 +678,8 @@ export default function DashboardClient({ userId }: { userId: string }) {
                       onClick={() => { setGoalName(''); setGoalTarget(''); setGoalDesc(''); setGoalError(''); setShowGoalForm(true) }}
                       style={{
                         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                        width: 30, height: 30, border: '1px solid var(--c-line)',
-                        borderRadius: 8, background: 'var(--c-card)', cursor: 'pointer', fontFamily: 'inherit',
+                        padding: 6, border: 'none',
+                        borderRadius: 'var(--r-control)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit',
                         color: 'var(--c-ink)',
                       }}
                       aria-label={t('addGoalBtn')}
@@ -725,8 +729,8 @@ export default function DashboardClient({ userId }: { userId: string }) {
                     style={{
                       display: 'inline-flex', alignItems: 'center', gap: 4,
                       fontSize: 12, fontWeight: 500, padding: '4px 8px',
-                      border: '1px solid var(--c-line)', borderRadius: 8,
-                      background: 'var(--c-card)', color: 'var(--c-ink)',
+                      border: 'none', borderRadius: 'var(--r-control)',
+                      background: 'transparent', color: 'var(--c-ink)',
                       textDecoration: 'none',
                     }}
                   >

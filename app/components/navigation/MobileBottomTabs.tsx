@@ -2,14 +2,14 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Calendar, LineChart, Settings } from 'lucide-react'
+import { Mountain, Calendar, TrendingUp, Settings } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 
 const TABS = [
-  { href: '/dashboard', icon: LayoutDashboard, key: 'dashboard' },
-  { href: '/planning',  icon: Calendar,         key: 'planning'  },
-  { href: '/funds',     icon: LineChart,         key: 'funds'     },
-  { href: '/settings',  icon: Settings,          key: 'settings'  },
+  { href: '/dashboard', icon: Mountain,   key: 'dashboard' },
+  { href: '/planning',  icon: Calendar,   key: 'planning'  },
+  { href: '/funds',     icon: TrendingUp, key: 'funds'     },
+  { href: '/settings',  icon: Settings,   key: 'settings'  },
 ] as const
 
 export default function MobileBottomTabs() {
