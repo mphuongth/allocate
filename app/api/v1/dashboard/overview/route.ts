@@ -86,6 +86,7 @@ export async function GET() {
     targetAmount: number | null
     currentValue: number
     totalInvested: number
+    transactionCount: number
     funds: Array<{
       fundId: string
       fundName: string
@@ -107,6 +108,7 @@ export async function GET() {
       targetAmount: goal.target_amount ?? null,
       currentValue: 0,
       totalInvested: 0,
+      transactionCount: 0,
       funds: [],
     })
   }
@@ -143,6 +145,10 @@ export async function GET() {
       if (!fund) continue
 
       if (isNavStale(fund.updated_at)) navStale = true
+
+      if (tx.goal_id && goalMap.has(tx.goal_id)) {
+        goalMap.get(tx.goal_id)!.transactionCount += 1
+      }
 
       const key = `${tx.goal_id ?? 'unallocated'}::${fund.id}`
       const existing = fundAccumMap.get(key)
@@ -193,6 +199,7 @@ export async function GET() {
         const goalEntry = goalMap.get(tx.goal_id)!
         goalEntry.totalInvested += effectiveAmount
         goalEntry.currentValue += currentValue
+        goalEntry.transactionCount += 1
       } else {
         unallocatedNonFundValue += currentValue
         unallocatedNonFunds.push({
@@ -277,6 +284,7 @@ export async function GET() {
       profitLoss,
       profitLossPercentage,
       progressPercentage,
+      transactionCount: g.transactionCount,
       funds: g.funds,
     }
   })

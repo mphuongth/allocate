@@ -13,11 +13,12 @@ interface Props {
   profitLoss: number
   profitLossPercentage: number
   progressPercentage: number | null
+  transactionCount: number
 }
 
 export default function GoalCard({
   goalId, goalName, targetAmount, currentValue,
-  profitLoss, profitLossPercentage, progressPercentage,
+  profitLoss, profitLossPercentage, progressPercentage, transactionCount,
 }: Props) {
   const t = useTranslations('dashboard')
   const router = useRouter()
@@ -109,7 +110,7 @@ export default function GoalCard({
         }}>
           {profitLoss >= 0 ? '+' : ''}{fmtCompact(profitLoss)} · {fmtPct(profitLossPercentage)}
         </span>
-        <span>{t('overall')}</span>
+        <span>{transactionCount} {t('transactions')}</span>
       </div>
     </button>
   )

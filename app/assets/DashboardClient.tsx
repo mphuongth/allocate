@@ -45,6 +45,7 @@ export interface GoalData {
   profitLoss: number
   profitLossPercentage: number
   progressPercentage: number | null
+  transactionCount: number
   funds: FundBreakdownItem[]
 }
 

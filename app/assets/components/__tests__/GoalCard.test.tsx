@@ -16,6 +16,7 @@ const baseProps = {
   profitLoss: 5_000_000,
   profitLossPercentage: 9.09,
   progressPercentage: 60,
+  transactionCount: 3,
 }
 
 describe('GoalCard', () => {
