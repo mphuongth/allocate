@@ -22,7 +22,6 @@ import AssetAllocationPie from './components/AssetAllocationPie'
 
 const FundDetailModal = dynamic(() => import('./components/FundDetailModal'))
 const GoalPickerModal = dynamic(() => import('./components/GoalPickerModal'))
-const GoldPriceWidget = dynamic(() => import('./components/GoldPriceWidget'))
 
 export interface FundBreakdownItem {
   fundId: string
@@ -635,12 +634,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
           </div>
         )}
 
-        {/* Gold price widget — shown whenever user has any gold investment */}
-        {!loading && data?.netWorth.hasGold && (
-          <div className="mb-6 rounded-xl overflow-hidden border border-amber-200 dark:border-amber-800/30 bg-gradient-to-r from-amber-50 to-amber-100 dark:from-amber-900/10 dark:to-amber-900/5">
-            <GoldPriceWidget onRefresh={() => fetchData({ force: true })} />
-          </div>
-        )}
+
 
         {/* Dashboard content */}
         {!loading && data && !isEmpty && (
