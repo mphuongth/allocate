@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { fmt } from '@/lib/formatters'
 import { Plus, Download, ChevronDown, Check } from 'lucide-react'
 import { useTranslations, useLocale } from 'next-intl'
-import MobileTopBar from '@/app/components/navigation/MobileTopBar'
 import { useNavigation } from '@/app/components/navigation/NavigationContext'
 import dynamic from 'next/dynamic'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -183,7 +182,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const tt = useTranslations('transactions')
   const tg = useTranslations('goals')
   const locale = useLocale()
-  const { userName } = useNavigation()
+  const { userName, setMobileTopBar } = useNavigation()
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -368,6 +367,33 @@ export default function DashboardClient({ userId }: { userId: string }) {
       setIsGeneratingReport(false)
     }
   }
+
+  useEffect(() => {
+    setMobileTopBar({
+      title: `Hi, ${userName}`,
+      subtitle: t('overview'),
+      trailing: (
+        <button
+          data-testid="generate-report-btn"
+          onClick={handleGenerateReport}
+          disabled={isGeneratingReport}
+          aria-label={isGeneratingReport ? t('downloadingReport') : t('downloadReport')}
+          style={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            padding: 8, border: 'none', background: 'transparent',
+            borderRadius: 'var(--r-control)', cursor: 'pointer', color: 'var(--c-ink)',
+            opacity: isGeneratingReport ? 0.5 : 1,
+          }}
+        >
+          {isGeneratingReport
+            ? <span className="w-[18px] h-[18px] border-2 border-current border-t-transparent rounded-full animate-spin block" />
+            : <Download size={18} />
+          }
+        </button>
+      ),
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userName, isGeneratingReport, data])
 
   function openSellFund(fund: FundBreakdownItem) {
     setSellFund(fund)
@@ -589,38 +615,12 @@ export default function DashboardClient({ userId }: { userId: string }) {
 
   return (
     <div className="space-y-4 md:space-y-6">
-        {/* Mobile top bar + pull-to-refresh — always first, edge-to-edge on mobile */}
-        <div className="md:hidden -mx-4 -mt-4">
-          <MobileTopBar
-            subtitle={t('overview')}
-            title={`Hi, ${userName}`}
-            trailing={
-              <button
-                data-testid="generate-report-btn"
-                onClick={handleGenerateReport}
-                disabled={isGeneratingReport}
-                aria-label={isGeneratingReport ? t('downloadingReport') : t('downloadReport')}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  padding: 8, border: 'none', background: 'transparent',
-                  borderRadius: 'var(--r-control)', cursor: 'pointer', color: 'var(--c-ink)',
-                  opacity: isGeneratingReport ? 0.5 : 1,
-                }}
-              >
-                {isGeneratingReport
-                  ? <span className="w-[18px] h-[18px] border-2 border-current border-t-transparent rounded-full animate-spin block" />
-                  : <Download size={18} />
-                }
-              </button>
-            }
-          />
-          {/* Pull-to-refresh indicator (PWA only) */}
-          <div
-            style={{ height: `${pullY}px`, transition: pullY === 0 ? 'height 0.25s ease' : 'none' }}
-            className="overflow-hidden flex items-center justify-center"
-          >
-            <div className={`w-6 h-6 rounded-full border-2 border-emerald-500 border-t-transparent ${pullY >= PULL_THRESHOLD ? 'animate-spin' : ''}`} />
-          </div>
+        {/* Pull-to-refresh indicator (mobile PWA only) */}
+        <div
+          className="md:hidden -mx-4 -mt-4 overflow-hidden flex items-center justify-center"
+          style={{ height: `${pullY}px`, transition: pullY === 0 ? 'height 0.25s ease' : 'none' }}
+        >
+          <div className={`w-6 h-6 rounded-full border-2 border-emerald-500 border-t-transparent ${pullY >= PULL_THRESHOLD ? 'animate-spin' : ''}`} />
         </div>
 
         {/* Error state */}
