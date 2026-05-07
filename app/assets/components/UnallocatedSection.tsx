@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ChevronDown, ChevronUp, ChevronRight, RefreshCw, TrendingDown, Target, Building2, Coins, TrendingUp, BarChart2, Clock } from 'lucide-react'
+import { ChevronDown, ChevronUp, ChevronRight, Target, Building2, Coins, TrendingUp, BarChart2, Clock, Download, ArrowDownRight } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import type { FundBreakdownItem, NonFundUnallocatedItem } from '../DashboardClient'
 import { fmtCompact, fmtNav, fmtPct } from '@/lib/formatters'
@@ -13,10 +13,10 @@ const TYPE_ICON: Record<string, React.ElementType> = {
   stock: BarChart2,
 }
 const TYPE_COLOR: Record<string, string> = {
-  fund:  'var(--c-accent-fund)',
-  bank:  'var(--c-accent-fixed)',
-  gold:  '#a16207',
-  stock: 'var(--c-accent-insurance)',
+  fund:  '#2563eb',
+  bank:  '#047857',
+  gold:  '#d97706',
+  stock: '#7c3aed',
 }
 
 type ActionTarget =
@@ -32,13 +32,12 @@ interface Props {
   onSellFund: (fund: FundBreakdownItem) => void
   onAssignNonFundToGoal: (transactionId: string) => void
   onSellNonFund: (item: NonFundUnallocatedItem) => void
-  onRefresh: () => void
 }
 
 export default function UnallocatedSection({
   unallocatedAmount, funds, nonFunds,
   onFundClick, onAssignToGoal, onSellFund,
-  onAssignNonFundToGoal, onSellNonFund, onRefresh,
+  onAssignNonFundToGoal, onSellNonFund,
 }: Props) {
   const t = useTranslations('dashboard')
   const tt = useTranslations('transactions')
@@ -61,10 +60,32 @@ export default function UnallocatedSection({
     actionTarget?.kind === 'nonFund' && (actionTarget.item.type === 'bank' || actionTarget.item.type === 'gold')
   )
 
+  // Derive display info for the tapped item
+  const actionName = actionTarget?.kind === 'fund'
+    ? actionTarget.fund.fundName
+    : (actionTarget?.item.notes || (actionTarget ? new Date(actionTarget.item.investmentDate).toLocaleDateString('vi-VN') : ''))
+
+  const actionValue = actionTarget?.kind === 'fund'
+    ? actionTarget.fund.currentValue
+    : actionTarget?.item.currentValue ?? 0
+
+  const actionGainPct = actionTarget?.kind === 'fund'
+    ? actionTarget.fund.profitLossPercentage
+    : actionTarget?.kind === 'nonFund'
+      ? actionTarget.item.amount > 0 ? ((actionTarget.item.currentValue - actionTarget.item.amount) / actionTarget.item.amount) * 100 : null
+      : null
+
+  const actionType = actionTarget?.kind === 'fund' ? 'fund' : actionTarget?.kind === 'nonFund' ? actionTarget.item.type : 'fund'
+  const ActionIcon = TYPE_ICON[actionType] ?? TrendingUp
+  const actionColor = TYPE_COLOR[actionType] ?? '#94a3b8'
+
+  const isBank = actionTarget?.kind === 'nonFund' && actionTarget.item.type === 'bank'
+  const SellIcon = isBank ? Download : ArrowDownRight
+
   return (
     <>
       <section>
-        {/* ── Collapsible toggle header ── */}
+        {/* Collapsible toggle header */}
         <button
           onClick={() => setOpen((o) => !o)}
           style={{
@@ -95,7 +116,7 @@ export default function UnallocatedSection({
           }
         </button>
 
-        {/* ── Collapsible body ── */}
+        {/* Collapsible body */}
         {open && (
           <div style={{
             background: 'var(--c-card)',
@@ -105,23 +126,6 @@ export default function UnallocatedSection({
             overflow: 'hidden',
             padding: '4px 14px',
           }}>
-            {/* Refresh NAV button row */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '6px 0 0' }}>
-              <button
-                onClick={onRefresh}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 5,
-                  fontSize: 12, fontWeight: 500, padding: '5px 10px',
-                  border: '1px solid var(--c-line)', borderRadius: 'var(--r-control)',
-                  background: 'var(--c-card)', color: 'var(--c-ink)',
-                  cursor: 'pointer', fontFamily: 'inherit',
-                }}
-              >
-                <RefreshCw size={13} />
-                {t('refreshNav')}
-              </button>
-            </div>
-
             {/* Fund rows */}
             {funds.map((fund) => {
               const plPositive = fund.profitLoss >= 0
@@ -225,7 +229,7 @@ export default function UnallocatedSection({
         )}
       </section>
 
-      {/* ── Action sheet overlay ── */}
+      {/* Action sheet overlay */}
       {actionTarget && (
         <div
           data-testid="action-sheet"
@@ -243,7 +247,7 @@ export default function UnallocatedSection({
               width: '100%',
               background: 'var(--c-card)',
               borderRadius: '20px 20px 0 0',
-              padding: '12px 0 calc(env(safe-area-inset-bottom) + 16px)',
+              padding: '12px 16px calc(env(safe-area-inset-bottom) + 20px)',
             }}
           >
             {/* Handle */}
@@ -252,24 +256,46 @@ export default function UnallocatedSection({
               background: 'var(--c-line)', margin: '0 auto 16px',
             }} />
 
-            {/* Item label */}
-            <div style={{ padding: '0 20px 12px', borderBottom: '1px solid var(--c-line)' }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)' }}>
-                {actionTarget.kind === 'fund'
-                  ? actionTarget.fund.fundName
-                  : (actionTarget.item.notes || new Date(actionTarget.item.investmentDate).toLocaleDateString('vi-VN'))
-                }
+            {/* Item summary card */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 12,
+              padding: '12px 14px',
+              background: 'var(--c-card-2)', borderRadius: 12,
+              marginBottom: 12,
+            }}>
+              <div style={{
+                width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+                background: 'var(--c-card)',
+                border: '1px solid var(--c-line)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: actionColor,
+              }}>
+                <ActionIcon size={18} />
               </div>
-              <div style={{ fontSize: 12, color: 'var(--c-muted)', marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
-                {actionTarget.kind === 'fund'
-                  ? fmtCompact(actionTarget.fund.currentValue)
-                  : fmtCompact(actionTarget.item.currentValue)
-                }
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {actionName}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                    {fmtCompact(actionValue)}
+                  </span>
+                  {actionGainPct != null && (
+                    <span style={{
+                      fontSize: 10, padding: '1px 6px', borderRadius: 999, fontWeight: 500,
+                      background: actionGainPct >= 0 ? 'var(--c-pos-tint)' : 'var(--c-neg-tint)',
+                      color: actionGainPct >= 0 ? 'var(--c-pos)' : 'var(--c-neg)',
+                      fontVariantNumeric: 'tabular-nums',
+                    }}>
+                      {fmtPct(actionGainPct)}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
             {/* Actions */}
-            <div style={{ padding: '8px 0' }}>
+            <div style={{ display: 'grid', gap: 12 }}>
               {/* Assign to Goal */}
               <button
                 data-testid="action-assign"
@@ -279,23 +305,23 @@ export default function UnallocatedSection({
                   else onAssignNonFundToGoal(actionTarget.item.transactionId)
                 }}
                 style={{
-                  width: '100%', display: 'flex', alignItems: 'center', gap: 14,
-                  padding: '14px 20px',
-                  background: 'transparent', border: 'none',
-                  cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
+                  width: '100%', textAlign: 'left', padding: '14px 16px',
+                  background: 'var(--c-card)', border: '1px solid var(--c-line)',
+                  borderRadius: 14, cursor: 'pointer', fontFamily: 'inherit',
+                  display: 'flex', alignItems: 'center', gap: 14,
                 }}
               >
                 <div style={{
-                  width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+                  width: 42, height: 42, borderRadius: 12, flexShrink: 0,
                   background: 'var(--c-navy-tint)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   color: 'var(--c-navy)',
                 }}>
-                  <Target size={18} />
+                  <Target size={20} />
                 </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--c-ink)' }}>{t('assignToGoal')}</div>
-                  <div style={{ fontSize: 12, color: 'var(--c-muted)', marginTop: 1 }}>Link this to a savings goal</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-ink)' }}>{t('assignToGoal')}</div>
+                  <div style={{ fontSize: 12, color: 'var(--c-muted)', marginTop: 2 }}>{t('assignToGoalSub')}</div>
                 </div>
                 <ChevronRight size={16} color="var(--c-muted)" />
               </button>
@@ -310,25 +336,27 @@ export default function UnallocatedSection({
                     else onSellNonFund(actionTarget.item)
                   }}
                   style={{
-                    width: '100%', display: 'flex', alignItems: 'center', gap: 14,
-                    padding: '14px 20px',
-                    background: 'transparent', border: 'none',
-                    cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
+                    width: '100%', textAlign: 'left', padding: '14px 16px',
+                    background: 'var(--c-card)', border: '1px solid var(--c-line)',
+                    borderRadius: 14, cursor: 'pointer', fontFamily: 'inherit',
+                    display: 'flex', alignItems: 'center', gap: 14,
                   }}
                 >
                   <div style={{
-                    width: 36, height: 36, borderRadius: 10, flexShrink: 0,
-                    background: 'var(--c-warn-tint)',
+                    width: 42, height: 42, borderRadius: 12, flexShrink: 0,
+                    background: 'var(--c-neg-tint)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    color: 'var(--c-warn)',
+                    color: 'var(--c-neg)',
                   }}>
-                    <TrendingDown size={18} />
+                    <SellIcon size={20} />
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--c-ink)' }}>
-                      {actionTarget.kind === 'nonFund' && actionTarget.item.type === 'bank' ? tg('withdraw') : tg('sell')}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-ink)' }}>
+                      {isBank ? tg('withdraw') : tg('sell')}
                     </div>
-                    <div style={{ fontSize: 12, color: 'var(--c-muted)', marginTop: 1 }}>Record a sale or withdrawal</div>
+                    <div style={{ fontSize: 12, color: 'var(--c-muted)', marginTop: 2 }}>
+                      {isBank ? t('actionWithdrawSub') : t('actionSellSub')}
+                    </div>
                   </div>
                   <ChevronRight size={16} color="var(--c-muted)" />
                 </button>
@@ -343,23 +371,23 @@ export default function UnallocatedSection({
                     onFundClick(actionTarget.fund.fundId)
                   }}
                   style={{
-                    width: '100%', display: 'flex', alignItems: 'center', gap: 14,
-                    padding: '14px 20px',
-                    background: 'transparent', border: 'none',
-                    cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
+                    width: '100%', textAlign: 'left', padding: '14px 16px',
+                    background: 'var(--c-card)', border: '1px solid var(--c-line)',
+                    borderRadius: 14, cursor: 'pointer', fontFamily: 'inherit',
+                    display: 'flex', alignItems: 'center', gap: 14,
                   }}
                 >
                   <div style={{
-                    width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+                    width: 42, height: 42, borderRadius: 12, flexShrink: 0,
                     background: 'var(--c-card-2)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     color: 'var(--c-muted)',
                   }}>
-                    <Clock size={18} />
+                    <Clock size={20} />
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--c-ink)' }}>Transaction History</div>
-                    <div style={{ fontSize: 12, color: 'var(--c-muted)', marginTop: 1 }}>View all purchases and sales</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-ink)' }}>{t('actionHistory')}</div>
+                    <div style={{ fontSize: 12, color: 'var(--c-muted)', marginTop: 2 }}>{t('actionHistorySub')}</div>
                   </div>
                   <ChevronRight size={16} color="var(--c-muted)" />
                 </button>

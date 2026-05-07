@@ -782,7 +782,6 @@ export default function DashboardClient({ userId }: { userId: string }) {
                 onSellFund={openSellFund}
                 onAssignNonFundToGoal={(txId) => setNonFundPickerTxId(txId)}
                 onSellNonFund={openSellNonFund}
-                onRefresh={() => fetchData({ force: true })}
               />
             )}
 
