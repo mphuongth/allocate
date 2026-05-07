@@ -716,6 +716,29 @@ export default function DashboardClient({ userId }: { userId: string }) {
         {/* Dashboard content */}
         {!loading && data && !isEmpty && (
           <div className="space-y-8">
+            {/* Desktop report button — hidden on mobile (mobile has it in TopBar) */}
+            <div className="hidden md:flex justify-end">
+              <button
+                data-testid="generate-report-btn"
+                onClick={handleGenerateReport}
+                disabled={isGeneratingReport}
+                aria-label={isGeneratingReport ? t('downloadingReport') : t('downloadReport')}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '6px 12px', border: '1px solid var(--c-line)',
+                  borderRadius: 'var(--r-control)', cursor: 'pointer',
+                  background: 'var(--c-card)', color: 'var(--c-ink)', fontSize: 13,
+                  opacity: isGeneratingReport ? 0.5 : 1,
+                }}
+              >
+                {isGeneratingReport
+                  ? <span className="w-[14px] h-[14px] border-2 border-current border-t-transparent rounded-full animate-spin block" />
+                  : <ArrowDownToLine size={14} />
+                }
+                {t('downloadReport')}
+              </button>
+            </div>
+
             {/* Net Worth + Asset Allocation */}
             <div className="space-y-4">
               <NetWorthCard
