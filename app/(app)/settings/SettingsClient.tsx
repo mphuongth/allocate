@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
+import MobileTopBar from '@/app/components/navigation/MobileTopBar'
 import SavingsGoalsTab from './tabs/SavingsGoalsTab'
 import InvestmentTransactionsTab from './tabs/InvestmentTransactionsTab'
 import FixedExpensesTab from './tabs/FixedExpensesTab'
@@ -41,6 +42,7 @@ export default function SettingsClient({ initialTab, initialGoalId }: Props) {
 
   return (
     <div className="space-y-6">
+      <MobileTopBar subtitle={t('pageSubtitle')} title={t('pageTitle')} />
       <div>
         <p className="text-sm text-gray-500 dark:text-gray-400">{t('description')}</p>
       </div>

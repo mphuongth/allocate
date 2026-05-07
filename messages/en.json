@@ -29,6 +29,8 @@
   },
   "settings": {
     "title": "Settings",
+    "pageTitle": "Settings",
+    "pageSubtitle": "Account",
     "description": "Manage savings goals, investments, expenses and insurance.",
     "tabs": {
       "goals": "Savings Goals",
@@ -293,6 +295,7 @@
   },
   "dashboard": {
     "title": "Asset Overview",
+    "overview": "Overview",
     "sortManual": "Sort Manually",
     "sortProgressDesc": "Progress: High → Low",
     "sortProgressAsc": "Progress: Low → High",
@@ -411,6 +414,8 @@
   },
   "funds": {
     "title": "Fund Library",
+    "pageTitle": "Fund Library",
+    "pageSubtitle": "Funds",
     "desc": "Manage investment funds",
     "refreshNav": "Refresh NAV",
     "refreshingNav": "Refreshing…",
@@ -449,6 +454,8 @@
   },
   "planning": {
     "title": "Monthly Plan",
+    "pageTitle": "Monthly Plan",
+    "pageSubtitle": "Planning",
     "loading": "Loading...",
     "enterPlanPrompt": "Enter your salary to start planning.",
     "months": "January,February,March,April,May,June,July,August,September,October,November,December",

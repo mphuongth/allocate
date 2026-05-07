@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useTranslations } from 'next-intl'
+import MobileTopBar from '@/app/components/navigation/MobileTopBar'
 import SalaryInput from './components/SalaryInput'
 import FundInvestmentsSection from './components/FundInvestmentsSection'
 import DirectSavingsSection from './components/DirectSavingsSection'
@@ -199,6 +200,7 @@ export default function PlanningClient() {
 
   return (
     <div className="space-y-6">
+      <MobileTopBar subtitle={t('pageSubtitle')} title={t('pageTitle')} />
       {/* Month navigation */}
       <div className="flex items-center gap-3">
         <button

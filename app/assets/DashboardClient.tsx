@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { fmt } from '@/lib/formatters'
 import { Plus, Download } from 'lucide-react'
 import { useTranslations, useLocale } from 'next-intl'
+import MobileTopBar from '@/app/components/navigation/MobileTopBar'
+import { useNavigation } from '@/app/components/navigation/NavigationContext'
 import dynamic from 'next/dynamic'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -116,6 +118,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const tt = useTranslations('transactions')
   const tg = useTranslations('goals')
   const locale = useLocale()
+  const { userName } = useNavigation()
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -615,26 +618,30 @@ export default function DashboardClient({ userId }: { userId: string }) {
         {/* Dashboard content */}
         {!loading && data && !isEmpty && (
           <div className="space-y-8">
-            {/* Dashboard header with report button */}
-            <div className="flex items-center justify-end">
-              <button
-                data-testid="generate-report-btn"
-                onClick={handleGenerateReport}
-                disabled={isGeneratingReport}
-                aria-label={isGeneratingReport ? t('downloadingReport') : t('downloadReport')}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  padding: 8, border: 'none', background: 'transparent',
-                  borderRadius: 'var(--r-control)', cursor: 'pointer', color: 'var(--c-ink)',
-                  opacity: isGeneratingReport ? 0.5 : 1,
-                }}
-              >
-                {isGeneratingReport
-                  ? <span className="w-[18px] h-[18px] border-2 border-current border-t-transparent rounded-full animate-spin block" />
-                  : <Download size={18} />
-                }
-              </button>
-            </div>
+            {/* Mobile top bar */}
+            <MobileTopBar
+              subtitle={t('overview')}
+              title={`Hi, ${userName}`}
+              trailing={
+                <button
+                  data-testid="generate-report-btn"
+                  onClick={handleGenerateReport}
+                  disabled={isGeneratingReport}
+                  aria-label={isGeneratingReport ? t('downloadingReport') : t('downloadReport')}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    padding: 8, border: 'none', background: 'transparent',
+                    borderRadius: 'var(--r-control)', cursor: 'pointer', color: 'var(--c-ink)',
+                    opacity: isGeneratingReport ? 0.5 : 1,
+                  }}
+                >
+                  {isGeneratingReport
+                    ? <span className="w-[18px] h-[18px] border-2 border-current border-t-transparent rounded-full animate-spin block" />
+                    : <Download size={18} />
+                  }
+                </button>
+              }
+            />
 
             {/* Net Worth + Asset Allocation */}
             <div className="space-y-4">

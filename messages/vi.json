@@ -29,6 +29,8 @@
   },
   "settings": {
     "title": "Cài đặt",
+    "pageTitle": "Cài đặt",
+    "pageSubtitle": "Tài khoản",
     "description": "Quản lý mục tiêu tiết kiệm, đầu tư, chi phí và bảo hiểm.",
     "tabs": {
       "goals": "Mục tiêu Tiết kiệm",
@@ -293,6 +295,7 @@
   },
   "dashboard": {
     "title": "Tổng Quan Tài Sản",
+    "overview": "Tổng quan",
     "sortManual": "Sắp xếp thủ công",
     "sortProgressDesc": "Tiến độ: Cao → Thấp",
     "sortProgressAsc": "Tiến độ: Thấp → Cao",
@@ -411,6 +414,8 @@
   },
   "funds": {
     "title": "Thư viện Quỹ",
+    "pageTitle": "Thư viện Quỹ",
+    "pageSubtitle": "Quỹ",
     "desc": "Quản lý các quỹ đầu tư",
     "refreshNav": "Làm mới NAV",
     "refreshingNav": "Đang làm mới…",
@@ -449,6 +454,8 @@
   },
   "planning": {
     "title": "Kế hoạch Tháng",
+    "pageTitle": "Kế hoạch Tháng",
+    "pageSubtitle": "Kế hoạch",
     "loading": "Đang tải...",
     "enterPlanPrompt": "Nhập lương tháng để bắt đầu lập kế hoạch.",
     "months": "Tháng 1,Tháng 2,Tháng 3,Tháng 4,Tháng 5,Tháng 6,Tháng 7,Tháng 8,Tháng 9,Tháng 10,Tháng 11,Tháng 12",
