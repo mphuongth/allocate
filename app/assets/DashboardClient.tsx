@@ -792,7 +792,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                   <div>
                     <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600, letterSpacing: '-0.01em' }}>{t('sectionInsurance')}</h2>
                     <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--c-muted)' }}>
-                      {data.insurance.length} {t('members')}
+                      {data.insurance.length} {data.insurance.length === 1 ? t('member') : t('members')}
                     </p>
                   </div>
                   <Link

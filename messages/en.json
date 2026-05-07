@@ -375,6 +375,7 @@
     "overall": "overall",
     "transactions": "transactions",
     "tracked": "tracked",
+    "member": "member",
     "members": "members",
     "liabilities": "Liabilities",
     "totalAssets": "Total Assets",
