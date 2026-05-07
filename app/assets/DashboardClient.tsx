@@ -524,6 +524,33 @@ export default function DashboardClient({ userId }: { userId: string }) {
 
   return (
     <div className="space-y-6">
+        {/* Mobile top bar — always first, edge-to-edge on mobile */}
+        <div className="md:hidden -mx-4 -mt-4">
+          <MobileTopBar
+            subtitle={t('overview')}
+            title={`Hi, ${userName}`}
+            trailing={
+              <button
+                data-testid="generate-report-btn"
+                onClick={handleGenerateReport}
+                disabled={isGeneratingReport}
+                aria-label={isGeneratingReport ? t('downloadingReport') : t('downloadReport')}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  padding: 8, border: 'none', background: 'transparent',
+                  borderRadius: 'var(--r-control)', cursor: 'pointer', color: 'var(--c-ink)',
+                  opacity: isGeneratingReport ? 0.5 : 1,
+                }}
+              >
+                {isGeneratingReport
+                  ? <span className="w-[18px] h-[18px] border-2 border-current border-t-transparent rounded-full animate-spin block" />
+                  : <Download size={18} />
+                }
+              </button>
+            }
+          />
+        </div>
+
         {/* Pull-to-refresh indicator (PWA only) */}
         <div
           style={{ height: `${pullY}px`, transition: pullY === 0 ? 'height 0.25s ease' : 'none' }}
@@ -618,31 +645,6 @@ export default function DashboardClient({ userId }: { userId: string }) {
         {/* Dashboard content */}
         {!loading && data && !isEmpty && (
           <div className="space-y-8">
-            {/* Mobile top bar */}
-            <MobileTopBar
-              subtitle={t('overview')}
-              title={`Hi, ${userName}`}
-              trailing={
-                <button
-                  data-testid="generate-report-btn"
-                  onClick={handleGenerateReport}
-                  disabled={isGeneratingReport}
-                  aria-label={isGeneratingReport ? t('downloadingReport') : t('downloadReport')}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                    padding: 8, border: 'none', background: 'transparent',
-                    borderRadius: 'var(--r-control)', cursor: 'pointer', color: 'var(--c-ink)',
-                    opacity: isGeneratingReport ? 0.5 : 1,
-                  }}
-                >
-                  {isGeneratingReport
-                    ? <span className="w-[18px] h-[18px] border-2 border-current border-t-transparent rounded-full animate-spin block" />
-                    : <Download size={18} />
-                  }
-                </button>
-              }
-            />
-
             {/* Net Worth + Asset Allocation */}
             <div className="space-y-4">
               <NetWorthCard
