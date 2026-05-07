@@ -79,6 +79,7 @@ export async function GET() {
   }
 
   let navStale = false
+  let latestNavUpdatedAt: string | null = null
 
   const goalMap = new Map<string, {
     goalId: string
@@ -145,6 +146,7 @@ export async function GET() {
       if (!fund) continue
 
       if (isNavStale(fund.updated_at)) navStale = true
+      if (!latestNavUpdatedAt || fund.updated_at > latestNavUpdatedAt) latestNavUpdatedAt = fund.updated_at
 
       if (tx.goal_id && goalMap.has(tx.goal_id)) {
         goalMap.get(tx.goal_id)!.transactionCount += 1
@@ -345,6 +347,7 @@ export async function GET() {
       overallProfitLossPercentage,
       navStale,
       hasGold,
+      navUpdatedAt: latestNavUpdatedAt,
     },
     goals: goalsOutput,
     unallocated: {

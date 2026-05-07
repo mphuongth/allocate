@@ -12,6 +12,7 @@ const mockData: DashboardData = {
     overallProfitLossPercentage: 25,
     navStale: false,
     hasGold: false,
+    navUpdatedAt: null,
   },
   goals: [
     {

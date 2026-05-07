@@ -24,6 +24,7 @@ const baseNetWorth: DashboardData['netWorth'] = {
   overallProfitLossPercentage: 25,
   navStale: false,
   hasGold: false,
+  navUpdatedAt: null,
 }
 
 const mockGoal: GoalData = {

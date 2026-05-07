@@ -409,6 +409,7 @@
     "statusCompleted": "Paid",
     "statusReady": "Ready to pay",
     "goldPrice": "Doji Gold Price",
+    "navUpdated": "NAV updated",
     "goldPriceNotUpdated": "Not updated",
     "goldPriceRefresh": "Refresh price",
     "goldPriceRefreshing": "Fetching...",

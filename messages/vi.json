@@ -409,6 +409,7 @@
     "statusCompleted": "Đã thanh toán",
     "statusReady": "Đã tích lũy đủ",
     "goldPrice": "Giá vàng Doji",
+    "navUpdated": "NAV cập nhật",
     "goldPriceNotUpdated": "Chưa cập nhật",
     "goldPriceRefresh": "Làm mới giá",
     "goldPriceRefreshing": "Đang lấy...",

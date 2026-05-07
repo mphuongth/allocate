@@ -83,6 +83,7 @@ export interface DashboardData {
     overallProfitLossPercentage: number
     navStale: boolean
     hasGold: boolean
+    navUpdatedAt: string | null
   }
   goals: GoalData[]
   unallocated: { totalValue: number; funds: FundBreakdownItem[]; nonFunds: NonFundUnallocatedItem[] }
@@ -174,6 +175,17 @@ function SortDropdown({ value, onChange, options }: {
       )}
     </div>
   )
+}
+
+function fmtTimeAgo(isoString: string, locale: string): string {
+  const diffMs = Date.now() - new Date(isoString).getTime()
+  const mins = Math.floor(diffMs / 60_000)
+  const hours = Math.floor(mins / 60)
+  const days = Math.floor(hours / 24)
+  const isVi = locale === 'vi'
+  if (days > 0) return isVi ? `${days} ngày trước` : `${days}d ago`
+  if (hours > 0) return isVi ? `${hours} giờ trước` : `${hours}h ago`
+  return isVi ? `${mins} phút trước` : `${mins}m ago`
 }
 
 export default function DashboardClient({ userId }: { userId: string }) {
@@ -825,6 +837,13 @@ export default function DashboardClient({ userId }: { userId: string }) {
                   ))}
                 </div>
               </section>
+            )}
+
+            {/* NAV updated footer */}
+            {data.netWorth.navUpdatedAt && (
+              <p style={{ textAlign: 'center', fontSize: 11, color: 'var(--c-muted)', marginTop: 24 }}>
+                {t('navUpdated')} {fmtTimeAgo(data.netWorth.navUpdatedAt, locale)}
+              </p>
             )}
           </div>
         )}
