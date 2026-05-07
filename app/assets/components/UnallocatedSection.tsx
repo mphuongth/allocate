@@ -1,15 +1,15 @@
 'use client'
 
 import { useState } from 'react'
-import { ChevronDown, ChevronUp, ChevronRight, Target, Building2, Coins, TrendingUp, BarChart2, Clock, Download, ArrowDownRight } from 'lucide-react'
+import { ChevronDown, ChevronUp, ChevronRight, Target, Building, CircleDollarSign, TrendingUp, BarChart2, Clock, ArrowDownToLine, ArrowDownRight } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import type { FundBreakdownItem, NonFundUnallocatedItem } from '../DashboardClient'
 import { fmtCompact, fmtNav, fmtPct } from '@/lib/formatters'
 
 const TYPE_ICON: Record<string, React.ElementType> = {
   fund:  TrendingUp,
-  bank:  Building2,
-  gold:  Coins,
+  bank:  Building,
+  gold:  CircleDollarSign,
   stock: BarChart2,
 }
 const TYPE_COLOR: Record<string, string> = {
@@ -80,7 +80,7 @@ export default function UnallocatedSection({
   const actionColor = TYPE_COLOR[actionType] ?? '#94a3b8'
 
   const isBank = actionTarget?.kind === 'nonFund' && actionTarget.item.type === 'bank'
-  const SellIcon = isBank ? Download : ArrowDownRight
+  const SellIcon = isBank ? ArrowDownToLine : ArrowDownRight
 
   return (
     <>
@@ -178,7 +178,7 @@ export default function UnallocatedSection({
               const pl = item.currentValue - item.amount
               const plPct = item.amount > 0 ? (pl / item.amount) * 100 : 0
               const plPositive = pl >= 0
-              const Icon = TYPE_ICON[item.type] ?? Building2
+              const Icon = TYPE_ICON[item.type] ?? Building
               const color = TYPE_COLOR[item.type] ?? 'var(--c-muted)'
               const typeLabel = typeLabelMap[item.type] ?? item.type
               return (
