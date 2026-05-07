@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { fmt } from '@/lib/formatters'
-import { Plus, Download, ChevronDown } from 'lucide-react'
+import { Plus, Download, ChevronDown, Check } from 'lucide-react'
 import { useTranslations, useLocale } from 'next-intl'
 import MobileTopBar from '@/app/components/navigation/MobileTopBar'
 import { useNavigation } from '@/app/components/navigation/NavigationContext'
@@ -111,6 +111,71 @@ function setCachedOverview(userId: string, data: DashboardData) {
 // Fetch fund detail (purchase history) from investment_transactions
 interface PurchaseHistory { purchase_date: string; units: number; nav_at_purchase: number }
 
+type SortValue = 'manual' | 'progressDesc' | 'progressAsc' | 'alpha'
+
+function SortDropdown({ value, onChange, options }: {
+  value: SortValue
+  onChange: (v: SortValue) => void
+  options: { value: SortValue; label: string }[]
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const current = options.find((o) => o.value === value)
+
+  useEffect(() => {
+    if (!open) return
+    function onDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [open])
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 4,
+          fontSize: 13, padding: '5px 10px', cursor: 'pointer',
+          background: 'var(--c-card)', border: '1px solid var(--c-line)',
+          borderRadius: 8, color: 'var(--c-ink)', fontFamily: 'inherit', fontWeight: 500,
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {current?.label}
+        <ChevronDown size={12} style={{ color: 'var(--c-muted)', flexShrink: 0 }} />
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 4px)', right: 0, zIndex: 50,
+          background: 'var(--c-card)', border: '1px solid var(--c-line)',
+          borderRadius: 10, boxShadow: 'var(--shadow-pop)',
+          minWidth: 160, overflow: 'hidden',
+        }}>
+          {options.map((o) => (
+            <button
+              key={o.value}
+              onClick={() => { onChange(o.value); setOpen(false) }}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                width: '100%', padding: '10px 14px', border: 'none', cursor: 'pointer',
+                background: o.value === value ? 'var(--c-navy-tint)' : 'transparent',
+                color: o.value === value ? 'var(--c-navy)' : 'var(--c-ink)',
+                fontSize: 14, fontFamily: 'inherit', fontWeight: o.value === value ? 600 : 400,
+                textAlign: 'left',
+              }}
+            >
+              {o.label}
+              {o.value === value && <Check size={13} />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function DashboardClient({ userId }: { userId: string }) {
   const t = useTranslations('dashboard')
   const tc = useTranslations('common')
@@ -129,7 +194,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const [nonFundPickerTxId, setNonFundPickerTxId] = useState<string | null>(null)
   const [nonFundAssignLoading, setNonFundAssignLoading] = useState(false)
   const [nonFundAssignError, setNonFundAssignError] = useState('')
-  const [goalSort, setGoalSort] = useState<'manual' | 'progressDesc' | 'progressAsc' | 'alpha'>('manual')
+  const [goalSort, setGoalSort] = useState<SortValue>('manual')
   const [showGoalForm, setShowGoalForm] = useState(false)
   const [goalName, setGoalName] = useState('')
   const [goalTarget, setGoalTarget] = useState('')
@@ -670,25 +735,16 @@ export default function DashboardClient({ userId }: { userId: string }) {
                     </p>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
-                      <select
-                        value={goalSort}
-                        onChange={(e) => setGoalSort(e.target.value as typeof goalSort)}
-                        style={{
-                          fontSize: 12, padding: '5px 24px 5px 8px',
-                          background: 'var(--c-card)', border: '1px solid var(--c-line)',
-                          borderRadius: 8, color: 'var(--c-ink)', fontFamily: 'inherit',
-                          appearance: 'none', WebkitAppearance: 'none', cursor: 'pointer',
-                          maxWidth: 140,
-                        }}
-                      >
-                        <option value="manual">{t('sortManual')}</option>
-                        <option value="progressDesc">{t('sortProgressDesc')}</option>
-                        <option value="progressAsc">{t('sortProgressAsc')}</option>
-                        <option value="alpha">{t('sortAlpha')}</option>
-                      </select>
-                      <ChevronDown size={12} style={{ position: 'absolute', right: 6, pointerEvents: 'none', color: 'var(--c-muted)', flexShrink: 0 }} />
-                    </div>
+                    <SortDropdown
+                      value={goalSort}
+                      onChange={setGoalSort}
+                      options={[
+                        { value: 'manual', label: t('sortManual') },
+                        { value: 'progressDesc', label: t('sortProgressDesc') },
+                        { value: 'progressAsc', label: t('sortProgressAsc') },
+                        { value: 'alpha', label: t('sortAlpha') },
+                      ]}
+                    />
                     <button
                       onClick={() => { setGoalName(''); setGoalTarget(''); setGoalDesc(''); setGoalError(''); setShowGoalForm(true) }}
                       style={{
