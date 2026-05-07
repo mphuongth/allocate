@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { fmt } from '@/lib/formatters'
-import { Plus, Download } from 'lucide-react'
+import { Plus, Download, ChevronDown } from 'lucide-react'
 import { useTranslations, useLocale } from 'next-intl'
 import MobileTopBar from '@/app/components/navigation/MobileTopBar'
 import { useNavigation } from '@/app/components/navigation/NavigationContext'
@@ -670,20 +670,25 @@ export default function DashboardClient({ userId }: { userId: string }) {
                     </p>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <select
-                      value={goalSort}
-                      onChange={(e) => setGoalSort(e.target.value as typeof goalSort)}
-                      style={{
-                        fontSize: 12, padding: '5px 8px',
-                        background: 'var(--c-card)', border: '1px solid var(--c-line)',
-                        borderRadius: 8, color: 'var(--c-ink)', fontFamily: 'inherit',
-                      }}
-                    >
-                      <option value="manual">{t('sortManual')}</option>
-                      <option value="progressDesc">{t('sortProgressDesc')}</option>
-                      <option value="progressAsc">{t('sortProgressAsc')}</option>
-                      <option value="alpha">{t('sortAlpha')}</option>
-                    </select>
+                    <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+                      <select
+                        value={goalSort}
+                        onChange={(e) => setGoalSort(e.target.value as typeof goalSort)}
+                        style={{
+                          fontSize: 12, padding: '5px 24px 5px 8px',
+                          background: 'var(--c-card)', border: '1px solid var(--c-line)',
+                          borderRadius: 8, color: 'var(--c-ink)', fontFamily: 'inherit',
+                          appearance: 'none', WebkitAppearance: 'none', cursor: 'pointer',
+                          maxWidth: 140,
+                        }}
+                      >
+                        <option value="manual">{t('sortManual')}</option>
+                        <option value="progressDesc">{t('sortProgressDesc')}</option>
+                        <option value="progressAsc">{t('sortProgressAsc')}</option>
+                        <option value="alpha">{t('sortAlpha')}</option>
+                      </select>
+                      <ChevronDown size={12} style={{ position: 'absolute', right: 6, pointerEvents: 'none', color: 'var(--c-muted)', flexShrink: 0 }} />
+                    </div>
                     <button
                       onClick={() => { setGoalName(''); setGoalTarget(''); setGoalDesc(''); setGoalError(''); setShowGoalForm(true) }}
                       style={{
