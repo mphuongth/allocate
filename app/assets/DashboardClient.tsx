@@ -821,7 +821,6 @@ export default function DashboardClient({ userId }: { userId: string }) {
                       key={ins.insuranceId}
                       {...ins}
                       isLast={idx === data.insurance.length - 1}
-                      onSavingsChange={() => fetchData({ force: true })}
                     />
                   ))}
                 </div>
