@@ -91,12 +91,12 @@ export default function UnallocatedSection({
           style={{
             width: '100%', textAlign: 'left',
             background: 'transparent', border: 'none', padding: 0,
-            display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             cursor: 'pointer', marginBottom: 8, fontFamily: 'inherit',
           }}
         >
           <div>
-            <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600, letterSpacing: '-0.01em' }}>
+            <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>
               {t('sectionUnallocated')}
               <span style={{
                 display: 'inline-flex', alignItems: 'center',
@@ -107,16 +107,14 @@ export default function UnallocatedSection({
                 {totalItems}
               </span>
             </h2>
-            <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--c-muted)' }}>
+            <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--c-muted)' }}>
               {fmtCompact(unallocatedAmount)} {t('availableToAssign')}
             </p>
           </div>
-          <div style={{ paddingTop: 2, flexShrink: 0 }}>
-            {open
-              ? <ChevronUp size={18} color="var(--c-muted)" />
-              : <ChevronDown size={18} color="var(--c-muted)" />
-            }
-          </div>
+          {open
+            ? <ChevronUp size={18} color="var(--c-muted)" />
+            : <ChevronDown size={18} color="var(--c-muted)" />
+          }
         </button>
 
         {/* Collapsible body */}
