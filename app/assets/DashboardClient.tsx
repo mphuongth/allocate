@@ -806,7 +806,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                     }}
                   >
                     <Plus size={12} strokeWidth={2.4} />
-                    {t('addInsurance')}
+                    {t('add')}
                   </Link>
                 </div>
                 <div style={{
