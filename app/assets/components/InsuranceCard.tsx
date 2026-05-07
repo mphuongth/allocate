@@ -11,7 +11,7 @@ interface Props {
   annualPremium: number
   amountSaved: number
   savingsProgressPercentage: number
-  status: 'on_track' | 'upcoming' | 'overdue' | 'completed'
+  status: 'on_track' | 'upcoming' | 'overdue' | 'completed' | 'ready'
   isLast?: boolean
 }
 
@@ -20,6 +20,7 @@ const STATUS_COLOR: Record<string, string> = {
   upcoming:  'var(--c-muted)',
   overdue:   'var(--c-neg)',
   completed: 'var(--c-pos)',
+  ready:     'var(--c-navy)',
 }
 
 const BAR_COLOR: Record<string, string> = {
@@ -27,6 +28,7 @@ const BAR_COLOR: Record<string, string> = {
   upcoming:  'var(--c-warn)',
   overdue:   'var(--c-neg)',
   completed: 'var(--c-pos)',
+  ready:     'var(--c-warn)',
 }
 
 export default function InsuranceCard({
@@ -44,6 +46,7 @@ export default function InsuranceCard({
     upcoming:  t('statusNotDue'),
     overdue:   t('statusOverdue'),
     completed: t('statusCompleted'),
+    ready:     t('statusReady'),
   }
 
   return (

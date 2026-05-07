@@ -405,6 +405,7 @@
     "statusDue": "Sắp đến hạn",
     "statusOverdue": "Quá hạn",
     "statusCompleted": "Đã thanh toán",
+    "statusReady": "Đã tích lũy đủ",
     "goldPrice": "Giá vàng Doji",
     "goldPriceNotUpdated": "Chưa cập nhật",
     "goldPriceRefresh": "Làm mới giá",

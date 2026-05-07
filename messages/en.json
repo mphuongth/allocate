@@ -405,6 +405,7 @@
     "statusDue": "Due soon",
     "statusOverdue": "Overdue",
     "statusCompleted": "Paid",
+    "statusReady": "Ready to pay",
     "goldPrice": "Doji Gold Price",
     "goldPriceNotUpdated": "Not updated",
     "goldPriceRefresh": "Refresh price",

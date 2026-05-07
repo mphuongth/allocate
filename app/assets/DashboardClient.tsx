@@ -56,7 +56,7 @@ export interface InsuranceData {
   annualPremium: number
   amountSaved: number
   savingsProgressPercentage: number
-  status: 'on_track' | 'upcoming' | 'overdue' | 'completed'
+  status: 'on_track' | 'upcoming' | 'overdue' | 'completed' | 'ready'
   nextPaymentDate: string | null
   lastPaymentDate: string | null
 }
