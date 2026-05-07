@@ -522,8 +522,8 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const detailFund = fundDetailId ? allFunds.find((f) => f.fundId === fundDetailId) : null
 
   return (
-    <div className="space-y-6">
-        {/* Mobile top bar — always first, edge-to-edge on mobile */}
+    <div className="space-y-4 md:space-y-6">
+        {/* Mobile top bar + pull-to-refresh — always first, edge-to-edge on mobile */}
         <div className="md:hidden -mx-4 -mt-4">
           <MobileTopBar
             subtitle={t('overview')}
@@ -548,14 +548,13 @@ export default function DashboardClient({ userId }: { userId: string }) {
               </button>
             }
           />
-        </div>
-
-        {/* Pull-to-refresh indicator (PWA only) */}
-        <div
-          style={{ height: `${pullY}px`, transition: pullY === 0 ? 'height 0.25s ease' : 'none' }}
-          className="overflow-hidden flex items-center justify-center"
-        >
-          <div className={`w-6 h-6 rounded-full border-2 border-emerald-500 border-t-transparent ${pullY >= PULL_THRESHOLD ? 'animate-spin' : ''}`} />
+          {/* Pull-to-refresh indicator (PWA only) */}
+          <div
+            style={{ height: `${pullY}px`, transition: pullY === 0 ? 'height 0.25s ease' : 'none' }}
+            className="overflow-hidden flex items-center justify-center"
+          >
+            <div className={`w-6 h-6 rounded-full border-2 border-emerald-500 border-t-transparent ${pullY >= PULL_THRESHOLD ? 'animate-spin' : ''}`} />
+          </div>
         </div>
 
         {/* Error state */}
