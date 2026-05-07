@@ -41,6 +41,46 @@ function Sparkline({ data, positive }: { data: ChartPoint[]; positive: boolean }
   )
 }
 
+const ALLOC_COLORS = {
+  fund:  '#2563eb',
+  bank:  '#047857',
+  gold:  '#d97706',
+  stock: '#7c3aed',
+} as const
+
+function AllocationBar({ fund, bank, gold, stock }: { fund: number; bank: number; gold: number; stock: number }) {
+  const total = fund + bank + gold + stock
+  if (total <= 0) return null
+  const segments = [
+    { key: 'fund',  value: fund,  color: ALLOC_COLORS.fund,  label: 'Funds' },
+    { key: 'bank',  value: bank,  color: ALLOC_COLORS.bank,  label: 'Bank' },
+    { key: 'gold',  value: gold,  color: ALLOC_COLORS.gold,  label: 'Gold' },
+    { key: 'stock', value: stock, color: ALLOC_COLORS.stock, label: 'Stock' },
+  ].filter((s) => s.value > 0)
+  return (
+    <div style={{ marginTop: 14 }}>
+      {/* Bar */}
+      <div style={{ height: 8, borderRadius: 999, overflow: 'hidden', display: 'flex', gap: 1 }}>
+        {segments.map((s) => (
+          <div key={s.key} style={{ flex: s.value / total, background: s.color, minWidth: 4 }} />
+        ))}
+      </div>
+      {/* Legend */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 12px', marginTop: 8 }}>
+        {segments.map((s) => (
+          <div key={s.key} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ width: 8, height: 8, borderRadius: 2, background: s.color, display: 'inline-block', flexShrink: 0 }} />
+            <span style={{ fontSize: 11, color: 'var(--c-muted)' }}>{s.label}</span>
+            <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>
+              {Math.round((s.value / total) * 100)}%
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 interface Props {
   totalAssets: number
   totalLiabilities: number
@@ -50,11 +90,12 @@ interface Props {
   overallProfitLoss: number
   overallProfitLossPercentage: number
   navStale: boolean
+  allocationBar?: { fund: number; bank: number; gold: number; stock: number }
 }
 
 export default function NetWorthCard({
   totalAssets, totalLiabilities, netWorth, totalInvested, currentValue,
-  overallProfitLoss, overallProfitLossPercentage, navStale,
+  overallProfitLoss, overallProfitLossPercentage, navStale, allocationBar,
 }: Props) {
   const t = useTranslations('dashboard')
   const plPositive = overallProfitLoss >= 0
@@ -174,6 +215,9 @@ export default function NetWorthCard({
           </div>
         ))}
       </div>
+
+      {/* Allocation bar */}
+      {allocationBar && <AllocationBar {...allocationBar} />}
     </div>
   )
 }

@@ -638,7 +638,15 @@ export default function DashboardClient({ userId }: { userId: string }) {
 
             {/* Net Worth + Asset Allocation */}
             <div className="space-y-4">
-              <NetWorthCard {...data.netWorth} />
+              <NetWorthCard
+                {...data.netWorth}
+                allocationBar={allocationTotals ? {
+                  fund: allocationTotals.equityTotal + allocationTotals.bondTotal + allocationTotals.balancedTotal,
+                  bank: allocationTotals.bankTotal,
+                  gold: allocationTotals.goldTotal,
+                  stock: allocationTotals.stockTotal,
+                } : undefined}
+              />
               {allocationTotals && (
                 <div className="hidden md:block">
                   <AssetAllocationPie
