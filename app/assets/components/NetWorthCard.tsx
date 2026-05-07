@@ -58,7 +58,7 @@ function AllocationBar({ fund, bank, gold, stock }: { fund: number; bank: number
     { key: 'stock', value: stock, color: ALLOC_COLORS.stock, label: 'Stock' },
   ].filter((s) => s.value > 0)
   return (
-    <div style={{ marginTop: 14 }}>
+    <div data-testid="allocation-bar" style={{ marginTop: 14 }}>
       {/* Bar */}
       <div style={{ height: 8, borderRadius: 999, overflow: 'hidden', display: 'flex', gap: 1 }}>
         {segments.map((s) => (

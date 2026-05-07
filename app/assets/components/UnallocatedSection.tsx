@@ -128,6 +128,7 @@ export default function UnallocatedSection({
               return (
                 <button
                   key={fund.fundId}
+                  data-testid="unallocated-row"
                   onClick={() => setActionTarget({ kind: 'fund', fund })}
                   style={{
                     width: '100%', textAlign: 'left',
@@ -178,6 +179,7 @@ export default function UnallocatedSection({
               return (
                 <button
                   key={item.transactionId}
+                  data-testid="unallocated-row"
                   onClick={() => setActionTarget({ kind: 'nonFund', item })}
                   style={{
                     width: '100%', textAlign: 'left',
@@ -226,6 +228,7 @@ export default function UnallocatedSection({
       {/* ── Action sheet overlay ── */}
       {actionTarget && (
         <div
+          data-testid="action-sheet"
           onClick={closeAction}
           style={{
             position: 'fixed', inset: 0,
@@ -269,6 +272,7 @@ export default function UnallocatedSection({
             <div style={{ padding: '8px 0' }}>
               {/* Assign to Goal */}
               <button
+                data-testid="action-assign"
                 onClick={() => {
                   closeAction()
                   if (actionTarget.kind === 'fund') onAssignToGoal(actionTarget.fund.fundId)
@@ -299,6 +303,7 @@ export default function UnallocatedSection({
               {/* Sell / Withdraw */}
               {canSell && (
                 <button
+                  data-testid="action-sell"
                   onClick={() => {
                     closeAction()
                     if (actionTarget.kind === 'fund') onSellFund(actionTarget.fund)
@@ -332,6 +337,7 @@ export default function UnallocatedSection({
               {/* Transaction History (fund only) */}
               {actionTarget.kind === 'fund' && (
                 <button
+                  data-testid="action-history"
                   onClick={() => {
                     closeAction()
                     onFundClick(actionTarget.fund.fundId)
