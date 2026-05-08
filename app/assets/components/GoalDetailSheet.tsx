@@ -1,9 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ChevronLeft, MoreHorizontal, X, Check } from 'lucide-react'
+import {
+  ChevronLeft, ChevronRight, MoreHorizontal,
+  TrendingUp, Building2, Coins, BarChart2,
+  Edit2, Trash2, Calendar, Download, ArrowDownRight, ArrowUpRight, Target,
+} from 'lucide-react'
 import { useLocale } from 'next-intl'
-import { fmt, fmtShort, fmtPct } from '@/lib/formatters'
+import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import type { GoalData, FundBreakdownItem } from '../DashboardClient'
 import dynamic from 'next/dynamic'
 
@@ -34,6 +38,20 @@ interface Props {
   onDataChanged: () => void
 }
 
+const GD_COLORS: Record<string, string> = {
+  fund: '#2563eb',
+  bank: '#047857',
+  gold: '#d97706',
+  stock: '#7c3aed',
+}
+
+function TypeIcon({ type, size = 16 }: { type: string; size?: number }) {
+  if (type === 'fund') return <TrendingUp size={size} />
+  if (type === 'bank') return <Building2 size={size} />
+  if (type === 'gold') return <Coins size={size} />
+  return <BarChart2 size={size} />
+}
+
 function GoalActionsSheet({
   open,
   onClose,
@@ -47,12 +65,30 @@ function GoalActionsSheet({
   onDelete: () => void
   isDeleting: boolean
 }) {
+  const isVI = useLocale() === 'vi'
   const [mounted, setMounted] = useState(false)
   useEffect(() => {
     if (open) setMounted(true)
     else { const t = setTimeout(() => setMounted(false), 220); return () => clearTimeout(t) }
   }, [open])
   if (!mounted) return null
+
+  const t = isVI ? {
+    title: 'Tùy chọn mục tiêu',
+    edit: 'Chỉnh sửa mục tiêu',
+    editSub: 'Thay đổi tên, số tiền hoặc ngày mục tiêu',
+    delete: 'Xoá mục tiêu',
+    deleteSub: 'Xoá mục tiêu và huỷ liên kết tất cả khoản đầu tư',
+    cancel: 'Hủy',
+  } : {
+    title: 'Goal options',
+    edit: 'Edit goal',
+    editSub: 'Change name, target amount or date',
+    delete: 'Delete goal',
+    deleteSub: 'Remove goal and unlink all investments',
+    cancel: 'Cancel',
+  }
+
   return (
     <div
       style={{
@@ -73,29 +109,63 @@ function GoalActionsSheet({
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ width: 36, height: 4, background: 'var(--c-line-strong)', borderRadius: 999, margin: '6px auto 14px' }} />
-        <div style={{ padding: '0 16px 16px' }}>
+        <div style={{ padding: '0 16px 20px', display: 'grid', gap: 10 }}>
+          {/* Edit */}
           <button
             onClick={onEdit}
             style={{
-              display: 'flex', alignItems: 'center', gap: 12, width: '100%',
-              padding: '14px 0',
-              background: 'none', border: 'none', borderBottom: '1px solid var(--c-line)',
-              color: 'var(--c-ink)', fontSize: 15, cursor: 'pointer',
+              width: '100%', textAlign: 'left', padding: '14px 16px',
+              background: 'var(--c-card)', border: '1px solid var(--c-line)',
+              borderRadius: 14, cursor: 'pointer', fontFamily: 'inherit',
+              display: 'flex', alignItems: 'center', gap: 14,
             }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--c-card-2)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--c-card)')}
           >
-            Edit goal
+            <div style={{ width: 42, height: 42, borderRadius: 12, background: 'var(--c-navy-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Edit2 size={20} color="var(--c-navy)" />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-ink)' }}>{t.edit}</div>
+              <div style={{ fontSize: 12, color: 'var(--c-muted)', marginTop: 2 }}>{t.editSub}</div>
+            </div>
+            <ChevronRight size={16} color="var(--c-muted)" />
           </button>
+
+          {/* Delete */}
           <button
             onClick={onDelete}
             disabled={isDeleting}
             style={{
-              display: 'flex', alignItems: 'center', gap: 12, width: '100%',
-              padding: '14px 0', background: 'none', border: 'none',
-              color: 'var(--c-neg)', fontSize: 15, cursor: 'pointer',
+              width: '100%', textAlign: 'left', padding: '14px 16px',
+              background: 'var(--c-card)', border: '1px solid var(--c-line)',
+              borderRadius: 14, cursor: isDeleting ? 'default' : 'pointer', fontFamily: 'inherit',
+              display: 'flex', alignItems: 'center', gap: 14,
               opacity: isDeleting ? 0.5 : 1,
             }}
+            onMouseEnter={(e) => { if (!isDeleting) e.currentTarget.style.background = 'var(--c-card-2)' }}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--c-card)')}
           >
-            {isDeleting ? 'Deleting…' : 'Delete goal'}
+            <div style={{ width: 42, height: 42, borderRadius: 12, background: 'var(--c-neg-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Trash2 size={20} color="var(--c-neg)" />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-neg)' }}>{isDeleting ? (isVI ? 'Đang xoá…' : 'Deleting…') : t.delete}</div>
+              <div style={{ fontSize: 12, color: 'var(--c-muted)', marginTop: 2 }}>{t.deleteSub}</div>
+            </div>
+            <ChevronRight size={16} color="var(--c-muted)" />
+          </button>
+
+          <button
+            onClick={onClose}
+            style={{
+              width: '100%', padding: '12px 0', borderRadius: 10,
+              border: '1px solid var(--c-line)', background: 'var(--c-card)',
+              color: 'var(--c-ink)', fontSize: 15, cursor: 'pointer',
+              fontFamily: 'inherit', marginTop: 4,
+            }}
+          >
+            {t.cancel}
           </button>
         </div>
       </div>
@@ -217,6 +287,7 @@ function EditGoalSheet({
               style={{
                 flex: 1, padding: '12px 0', borderRadius: 10, border: '1px solid var(--c-line)',
                 background: 'var(--c-card)', color: 'var(--c-ink)', fontSize: 15, cursor: 'pointer',
+                fontFamily: 'inherit',
               }}
             >
               {isVI ? 'Huỷ' : 'Cancel'}
@@ -228,6 +299,7 @@ function EditGoalSheet({
                 flex: 1, padding: '12px 0', borderRadius: 10, border: 'none',
                 background: 'var(--c-navy)', color: '#fff', fontSize: 15,
                 cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.7 : 1,
+                fontFamily: 'inherit',
               }}
             >
               {saving ? (isVI ? 'Đang lưu…' : 'Saving…') : (isVI ? 'Lưu' : 'Save')}
@@ -239,16 +311,27 @@ function EditGoalSheet({
   )
 }
 
+interface InvRow {
+  id: string
+  name: string
+  type: string
+  value: number
+  gainPct: number | null
+  units: number | null
+  principal: number | null
+  fund: FundBreakdownItem | null
+}
+
 function InvestmentActionSheet({
   open,
   onClose,
-  fund,
+  inv,
   onViewHistory,
   onSell,
 }: {
   open: boolean
   onClose: () => void
-  fund: FundBreakdownItem | null
+  inv: InvRow | null
   onViewHistory: () => void
   onSell: () => void
 }) {
@@ -258,8 +341,26 @@ function InvestmentActionSheet({
     if (open) setMounted(true)
     else { const t = setTimeout(() => setMounted(false), 220); return () => clearTimeout(t) }
   }, [open])
-  if (!mounted || !fund) return null
-  const pl = fund.profitLoss
+  if (!mounted || !inv) return null
+
+  const typeColor = GD_COLORS[inv.type] ?? 'var(--c-muted)'
+  const isBank = inv.type === 'bank'
+  const isPos = (inv.gainPct ?? 0) >= 0
+
+  const t = isVI ? {
+    title: 'Tùy chọn',
+    history: 'Lịch sử giao dịch',
+    historySub: 'Xem các lần mua / bán trước đây',
+    sell: isBank ? 'Rút tiền' : 'Bán',
+    sellSub: isBank ? 'Rút tiền gửi khỏi mục tiêu' : 'Bán khoản đầu tư',
+  } : {
+    title: 'Options',
+    history: 'Transaction history',
+    historySub: 'View past buys & sells',
+    sell: isBank ? 'Withdraw' : 'Sell',
+    sellSub: isBank ? 'Withdraw deposit from goal' : 'Liquidate this investment',
+  }
+
   return (
     <div
       style={{
@@ -280,40 +381,79 @@ function InvestmentActionSheet({
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ width: 36, height: 4, background: 'var(--c-line-strong)', borderRadius: 999, margin: '6px auto 14px' }} />
-        <div style={{ padding: '0 16px 16px' }}>
-          <div style={{ background: 'var(--c-card-2)', borderRadius: 12, padding: 14, marginBottom: 16 }}>
-            <p style={{ fontWeight: 700, fontSize: 15, color: 'var(--c-ink)', marginBottom: 4 }}>{fund.fundName}</p>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-              <span style={{ color: 'var(--c-muted)' }}>{isVI ? 'Giá trị' : 'Value'}</span>
-              <span style={{ color: 'var(--c-ink)', fontWeight: 600 }}>{fmt(fund.currentValue)}</span>
+        <div style={{ padding: '0 16px 20px', display: 'grid', gap: 12 }}>
+          {/* Item summary */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: 'var(--c-card-2)', borderRadius: 12 }}>
+            <div style={{
+              width: 40, height: 40, borderRadius: 10,
+              background: 'var(--c-card)', border: '1px solid var(--c-line)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: typeColor, flexShrink: 0,
+            }}>
+              <TypeIcon type={inv.type} size={18} />
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginTop: 4 }}>
-              <span style={{ color: 'var(--c-muted)' }}>P/L</span>
-              <span style={{ color: pl >= 0 ? 'var(--c-pos)' : 'var(--c-neg)', fontWeight: 600 }}>
-                {pl >= 0 ? '+' : ''}{fmt(pl)} ({fmtPct(fund.profitLossPercentage)})
-              </span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--c-ink)' }}>
+                {inv.name}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(inv.value)}</span>
+                {inv.gainPct != null && (
+                  <span style={{
+                    fontSize: 10, padding: '1px 6px', borderRadius: 999, fontWeight: 600,
+                    background: isPos ? 'var(--c-pos-tint)' : 'var(--c-neg-tint)',
+                    color: isPos ? 'var(--c-pos)' : 'var(--c-neg)',
+                    fontVariantNumeric: 'tabular-nums',
+                  }}>
+                    {fmtPct(inv.gainPct)}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
+
+          {/* View history */}
           <button
             onClick={() => { onClose(); setTimeout(onViewHistory, 60) }}
             style={{
-              display: 'flex', alignItems: 'center', gap: 12, width: '100%',
-              padding: '14px 0', background: 'none', border: 'none',
-              borderBottom: '1px solid var(--c-line)',
-              color: 'var(--c-ink)', fontSize: 15, cursor: 'pointer',
+              width: '100%', textAlign: 'left', padding: '14px 16px',
+              background: 'var(--c-card)', border: '1px solid var(--c-line)',
+              borderRadius: 14, cursor: 'pointer', fontFamily: 'inherit',
+              display: 'flex', alignItems: 'center', gap: 14,
             }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--c-card-2)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--c-card)')}
           >
-            {isVI ? 'Lịch sử giao dịch' : 'Transaction history'}
+            <div style={{ width: 42, height: 42, borderRadius: 12, background: 'var(--c-card-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Calendar size={20} color="var(--c-muted)" />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-ink)' }}>{t.history}</div>
+              <div style={{ fontSize: 12, color: 'var(--c-muted)', marginTop: 2 }}>{t.historySub}</div>
+            </div>
+            <ChevronRight size={16} color="var(--c-muted)" />
           </button>
+
+          {/* Sell / Withdraw */}
           <button
             onClick={() => { onClose(); setTimeout(onSell, 60) }}
             style={{
-              display: 'flex', alignItems: 'center', gap: 12, width: '100%',
-              padding: '14px 0', background: 'none', border: 'none',
-              color: 'var(--c-neg)', fontSize: 15, cursor: 'pointer',
+              width: '100%', textAlign: 'left', padding: '14px 16px',
+              background: 'var(--c-card)', border: '1px solid var(--c-line)',
+              borderRadius: 14, cursor: 'pointer', fontFamily: 'inherit',
+              display: 'flex', alignItems: 'center', gap: 14,
             }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--c-card-2)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--c-card)')}
           >
-            {isVI ? 'Bán / Rút' : 'Sell / Withdraw'}
+            <div style={{ width: 42, height: 42, borderRadius: 12, background: 'var(--c-neg-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              {isBank ? <Download size={20} color="var(--c-neg)" /> : <ArrowDownRight size={20} color="var(--c-neg)" />}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-ink)' }}>{t.sell}</div>
+              <div style={{ fontSize: 12, color: 'var(--c-muted)', marginTop: 2 }}>{t.sellSub}</div>
+            </div>
+            <ChevronRight size={16} color="var(--c-muted)" />
           </button>
         </div>
       </div>
@@ -330,7 +470,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: 
   const [actionsOpen, setActionsOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
-  const [actionFund, setActionFund] = useState<FundBreakdownItem | null>(null)
+  const [actionInv, setActionInv] = useState<InvRow | null>(null)
   const [investActionOpen, setInvestActionOpen] = useState(false)
   const [fundDetailId, setFundDetailId] = useState<string | null>(null)
   const [purchaseHistory, setPurchaseHistory] = useState<{ purchase_date: string; units: number; nav_at_purchase: number }[]>([])
@@ -387,6 +527,8 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: 
 
   const progress = Math.min(goal.progressPercentage ?? 0, 100)
   const exceededTarget = goal.progressPercentage !== null && goal.progressPercentage >= 100
+  const isPositive = goal.profitLoss >= 0
+
   const investmentRows = transactions.filter((tx) => tx.transaction_type !== 'withdrawal')
   const deduped = new Map<string, InvestmentTx>()
   investmentRows.forEach((tx) => {
@@ -396,30 +538,61 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: 
       deduped.set(tx.transaction_id, tx)
     }
   })
-  const investRows = Array.from(deduped.values())
+  const investTxRows = Array.from(deduped.values())
 
   const fundItems = goal.funds
   const fundMap = new Map(fundItems.map((f) => [f.fundId, f]))
 
+  // Build typed investment rows for the Investments tab
+  const invRows: InvRow[] = investTxRows.map((tx) => {
+    const fund = tx.fund_id ? fundMap.get(tx.fund_id) ?? null : null
+    const name = fund?.fundName ?? tx.notes ?? (tx.asset_type === 'bank' ? (isVI ? 'Tiền gửi' : 'Bank deposit') : tx.asset_type === 'gold' ? (isVI ? 'Vàng' : 'Gold') : tx.asset_type)
+
+    let value: number, gainPct: number | null, units: number | null, principal: number | null
+    if (fund) {
+      value = fund.currentValue
+      gainPct = fund.profitLossPercentage
+      units = fund.quantity
+      principal = null
+    } else if (tx.asset_type === 'bank' && tx.interest_rate) {
+      const months = Math.max(0, Math.floor(
+        (Date.now() - new Date(tx.investment_date).getTime()) / (1000 * 60 * 60 * 24 * 30.44)
+      ))
+      value = Math.round(tx.amount_vnd * Math.pow(1 + tx.interest_rate / 100 / 12, months))
+      gainPct = tx.amount_vnd > 0 ? ((value - tx.amount_vnd) / tx.amount_vnd) * 100 : 0
+      units = null
+      principal = tx.amount_vnd
+    } else {
+      value = tx.amount_vnd
+      gainPct = null
+      units = tx.units
+      principal = tx.amount_vnd
+    }
+
+    return { id: tx.transaction_id, name, type: tx.asset_type, value, gainPct, units, principal, fund: fund ?? null }
+  })
+
   const allFundValue = fundItems.reduce((s, f) => s + f.currentValue, 0)
 
-  const monthly = parseFloat(monthlyContrib.replace(/,/g, '')) || 0
-  const annualReturn = 0.12
+  // Calculator
   const remaining = goal.targetAmount ? Math.max(goal.targetAmount - goal.currentValue, 0) : 0
+  const neededPerMonth = remaining > 0 ? Math.ceil(remaining / 12) : 0
+  const monthly = parseFloat(monthlyContrib.replace(/,/g, '')) || 0
   let projectedMonths = 0
   if (monthly > 0 && remaining > 0) {
-    const r = annualReturn / 12
-    if (r === 0) {
-      projectedMonths = Math.ceil(remaining / monthly)
-    } else {
-      projectedMonths = Math.ceil(Math.log(1 + (remaining * r) / monthly) / Math.log(1 + r))
-    }
+    const r = 0.12 / 12
+    projectedMonths = Math.ceil(Math.log(1 + (remaining * r) / monthly) / Math.log(1 + r))
   }
   const projectedDate = projectedMonths > 0
-    ? new Date(Date.now() + projectedMonths * 30 * 24 * 60 * 60 * 1000).toLocaleDateString(isVI ? 'vi-VN' : 'en-US', { month: 'short', year: 'numeric' })
+    ? new Date(Date.now() + projectedMonths * 30 * 24 * 60 * 60 * 1000)
     : null
 
   const detailFund = fundDetailId ? (fundMap.get(fundDetailId) ?? null) : null
+
+  // Composition breakdown by asset type
+  const breakdown: Record<string, number> = {}
+  invRows.forEach((inv) => { breakdown[inv.type] = (breakdown[inv.type] ?? 0) + inv.value })
+  const segs = Object.entries(breakdown).map(([k, v]) => ({ label: k, value: v, color: GD_COLORS[k] ?? 'var(--c-muted)' }))
 
   return (
     <>
@@ -442,7 +615,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: 
           <button
             data-testid="goal-back-btn"
             onClick={onClose}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--c-ink)', display: 'flex', alignItems: 'center' }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, color: 'var(--c-ink)', display: 'flex', alignItems: 'center' }}
           >
             <ChevronLeft size={20} />
           </button>
@@ -454,7 +627,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: 
           </div>
           <button
             onClick={() => setActionsOpen(true)}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--c-ink)', display: 'flex', alignItems: 'center' }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, color: 'var(--c-ink)', display: 'flex', alignItems: 'center' }}
           >
             <MoreHorizontal size={18} />
           </button>
@@ -469,12 +642,12 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: 
             <p style={{ fontSize: 12, color: 'var(--c-muted)', marginBottom: 4 }}>
               {isVI ? 'Giá trị hiện tại' : 'Current value'}
             </p>
-            <p style={{ fontSize: 22, fontWeight: 800, color: 'var(--c-ink)', marginBottom: 2 }}>
+            <p style={{ fontSize: 22, fontWeight: 800, color: 'var(--c-ink)', marginBottom: 2, fontVariantNumeric: 'tabular-nums', lineHeight: 1.2 }}>
               {fmt(goal.currentValue)}
             </p>
             {goal.targetAmount && (
-              <p style={{ fontSize: 12, color: 'var(--c-muted)', marginBottom: 12 }}>
-                {fmt(goal.currentValue)} / {fmt(goal.targetAmount)} {isVI ? 'mục tiêu' : 'target'}
+              <p style={{ fontSize: 12, color: 'var(--c-muted)', marginBottom: 12, fontVariantNumeric: 'tabular-nums' }}>
+                {fmtCompact(goal.currentValue)} / {fmtCompact(goal.targetAmount)} {isVI ? 'mục tiêu' : 'target'}
               </p>
             )}
             {goal.targetAmount && (
@@ -487,53 +660,56 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: 
                     transition: 'width 0.4s ease',
                   }} />
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--c-muted)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--c-muted)', fontVariantNumeric: 'tabular-nums' }}>
                   <span>
                     {exceededTarget
                       ? (isVI ? 'Đã đạt mục tiêu' : 'Target reached')
                       : `${Math.round(progress)}% ${isVI ? 'hoàn thành' : 'complete'}`}
                   </span>
-                  <span>{transactions.length} {isVI ? 'giao dịch' : 'transactions'}</span>
                 </div>
               </>
             )}
 
-            {/* P/L grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--c-line)' }}>
+            {/* P/L strip — grid with separator lines */}
+            <div style={{
+              display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1,
+              marginTop: 16, background: 'var(--c-line)', borderRadius: 8, overflow: 'hidden',
+            }}>
               {[
-                { label: isVI ? 'Đã đầu tư' : 'Invested', value: fmtShort(goal.totalInvested), color: 'var(--c-ink)' },
-                { label: 'P/L', value: (goal.profitLoss >= 0 ? '+' : '') + fmtShort(goal.profitLoss), color: goal.profitLoss >= 0 ? 'var(--c-pos)' : 'var(--c-neg)' },
-                { label: isVI ? 'Lợi nhuận' : 'Return', value: fmtPct(goal.profitLossPercentage), color: goal.profitLossPercentage >= 0 ? 'var(--c-pos)' : 'var(--c-neg)' },
+                { label: isVI ? 'Đã đầu tư' : 'Invested', value: fmtCompact(goal.totalInvested), color: 'var(--c-ink)' },
+                { label: isVI ? 'Lãi/Lỗ' : 'P/L', value: (isPositive ? '+' : '') + fmtCompact(goal.profitLoss), color: isPositive ? 'var(--c-pos)' : 'var(--c-neg)' },
+                { label: isVI ? 'Tỷ suất' : 'Return', value: fmtPct(goal.profitLossPercentage), color: goal.profitLossPercentage >= 0 ? 'var(--c-pos)' : 'var(--c-neg)' },
               ].map(({ label, value, color }) => (
-                <div key={label} style={{ textAlign: 'center' }}>
-                  <p style={{ fontSize: 11, color: 'var(--c-muted)', marginBottom: 2 }}>{label}</p>
-                  <p style={{ fontSize: 14, fontWeight: 700, color }}>{value}</p>
+                <div key={label} style={{ background: 'var(--c-card)', padding: '10px 12px' }}>
+                  <p style={{ fontSize: 10, color: 'var(--c-muted)', marginBottom: 2 }}>{label}</p>
+                  <p style={{ fontSize: 13, fontWeight: 600, color, fontVariantNumeric: 'tabular-nums' }}>{value}</p>
                 </div>
               ))}
             </div>
           </div>
 
           {/* Composition bar */}
-          {fundItems.length > 0 && (
+          {segs.length > 0 && (
             <div style={{ background: 'var(--c-card)', borderRadius: 16, padding: 16, marginBottom: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
               <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)', marginBottom: 10 }}>
                 {isVI ? 'Cơ cấu' : 'Composition'}
               </p>
               <div style={{ display: 'flex', height: 8, borderRadius: 999, overflow: 'hidden', gap: 1 }}>
-                {fundItems.map((f, i) => {
-                  const pct = allFundValue > 0 ? (f.currentValue / allFundValue) * 100 : 0
-                  const colors = ['#2563eb', '#047857', '#d97706', '#7c3aed', '#ef4444', '#0891b2']
-                  return <div key={f.fundId} style={{ width: `${pct}%`, background: colors[i % colors.length], minWidth: pct > 0 ? 2 : 0 }} />
+                {segs.map((s) => {
+                  const total = segs.reduce((a, x) => a + x.value, 0)
+                  const pct = total > 0 ? (s.value / total) * 100 : 0
+                  return <div key={s.label} style={{ width: `${pct}%`, background: s.color, minWidth: pct > 0 ? 2 : 0 }} />
                 })}
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px', marginTop: 10 }}>
-                {fundItems.map((f, i) => {
-                  const colors = ['#2563eb', '#047857', '#d97706', '#7c3aed', '#ef4444', '#0891b2']
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 12 }}>
+                {segs.map((s) => {
+                  const total = segs.reduce((a, x) => a + x.value, 0)
                   return (
-                    <div key={f.fundId} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
-                      <div style={{ width: 8, height: 8, borderRadius: 2, background: colors[i % colors.length], flexShrink: 0 }} />
-                      <span style={{ color: 'var(--c-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {f.fundName}
+                    <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: 2, background: s.color, flexShrink: 0 }} />
+                      <span style={{ fontSize: 12, color: 'var(--c-muted)', textTransform: 'capitalize', flex: 1 }}>{s.label}</span>
+                      <span style={{ fontSize: 12, fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>
+                        {total > 0 ? Math.round((s.value / total) * 100) : 0}%
                       </span>
                     </div>
                   )
@@ -543,7 +719,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: 
           )}
 
           {/* Tab bar */}
-          <div style={{ display: 'flex', borderBottom: '1px solid var(--c-line)', marginBottom: 0 }}>
+          <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--c-line)' }}>
             {(['investments', 'calculator', 'history'] as const).map((tab) => {
               const labels = {
                 investments: isVI ? 'Khoản đầu tư' : 'Investments',
@@ -555,10 +731,12 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: 
                   key={tab}
                   onClick={() => setActiveTab(tab)}
                   style={{
-                    flex: 1, padding: '10px 0', fontSize: 13, fontWeight: activeTab === tab ? 700 : 400,
-                    color: activeTab === tab ? 'var(--c-navy)' : 'var(--c-muted)',
+                    padding: '10px 10px 10px 0', marginRight: 8,
+                    fontSize: 13, fontWeight: 600,
+                    color: activeTab === tab ? 'var(--c-ink)' : 'var(--c-muted)',
                     background: 'none', border: 'none', cursor: 'pointer',
                     borderBottom: activeTab === tab ? '2px solid var(--c-navy)' : '2px solid transparent',
+                    whiteSpace: 'nowrap', fontFamily: 'inherit',
                   }}
                 >
                   {labels[tab]}
@@ -569,76 +747,75 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: 
         </div>
 
         {/* Tab content */}
-        <div style={{ padding: '16px 16px 80px' }}>
+        <div style={{ padding: '12px 16px 80px' }}>
+
           {/* Investments tab */}
           {activeTab === 'investments' && (
-            <div>
+            <div style={{ background: 'var(--c-card)', borderRadius: 16, padding: '0 14px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
               {txLoading && (
                 <p style={{ color: 'var(--c-muted)', fontSize: 14, textAlign: 'center', padding: '24px 0' }}>
                   {isVI ? 'Đang tải…' : 'Loading…'}
                 </p>
               )}
-              {!txLoading && investRows.length === 0 && (
+              {!txLoading && invRows.length === 0 && (
                 <p style={{ color: 'var(--c-muted)', fontSize: 14, textAlign: 'center', padding: '24px 0' }}>
                   {isVI ? 'Chưa có khoản đầu tư nào' : 'No investments yet'}
                 </p>
               )}
-              {!txLoading && investRows.map((tx) => {
-                const fund = tx.fund_id ? fundMap.get(tx.fund_id) ?? null : null
-                const name = fund?.fundName ?? tx.notes ?? (tx.asset_type === 'bank' ? (isVI ? 'Tiền gửi' : 'Bank deposit') : tx.asset_type === 'gold' ? (isVI ? 'Vàng' : 'Gold') : tx.asset_type)
-
-                // For funds use live NAV-based value; for bank/gold compute interest
-                let value: number
-                let pl: number
-                let plPct: number
-                if (fund) {
-                  value = fund.currentValue
-                  pl = fund.profitLoss
-                  plPct = fund.profitLossPercentage
-                } else if (tx.asset_type === 'bank' && tx.interest_rate) {
-                  const months = Math.max(0, Math.floor(
-                    (Date.now() - new Date(tx.investment_date).getTime()) / (1000 * 60 * 60 * 24 * 30.44)
-                  ))
-                  value = Math.round(tx.amount_vnd * Math.pow(1 + tx.interest_rate / 100 / 12, months))
-                  pl = value - tx.amount_vnd
-                  plPct = tx.amount_vnd > 0 ? (pl / tx.amount_vnd) * 100 : 0
-                } else {
-                  value = tx.amount_vnd
-                  pl = 0
-                  plPct = 0
-                }
-
+              {!txLoading && invRows.map((inv, i) => {
+                const typeColor = GD_COLORS[inv.type] ?? 'var(--c-muted)'
                 return (
                   <div
-                    key={tx.transaction_id}
+                    key={inv.id}
                     style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      padding: '12px 0', borderBottom: '1px solid var(--c-line)',
+                      padding: '14px 0',
+                      borderBottom: i === invRows.length - 1 ? 'none' : '1px solid var(--c-line)',
+                      display: 'flex', alignItems: 'center', gap: 12,
                     }}
                   >
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontWeight: 600, fontSize: 14, color: 'var(--c-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {name}
-                      </p>
-                      <p style={{ fontSize: 12, color: 'var(--c-muted)' }}>
-                        {tx.asset_type}
-                        {fund && ` · ${fmtShort(fund.purchasePrice * fund.quantity)} ${isVI ? 'đầu tư' : 'invested'}`}
-                      </p>
+                    {/* Type icon */}
+                    <div style={{
+                      width: 36, height: 36, borderRadius: 8, background: 'var(--c-card-2)',
+                      color: typeColor, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                    }}>
+                      <TypeIcon type={inv.type} size={16} />
                     </div>
-                    <div style={{ textAlign: 'right', marginRight: fund ? 8 : 0 }}>
-                      <p style={{ fontWeight: 600, fontSize: 14, color: 'var(--c-ink)' }}>{fmtShort(value)}</p>
-                      <p style={{ fontSize: 12, color: pl >= 0 ? 'var(--c-pos)' : 'var(--c-neg)' }}>
-                        {fmtPct(plPct)}
-                      </p>
+
+                    {/* Name + meta — tappable */}
+                    <button
+                      onClick={() => { setActionInv(inv); setInvestActionOpen(true) }}
+                      style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit' }}
+                    >
+                      <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--c-ink)' }}>
+                        {inv.name}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
+                        {inv.units != null
+                          ? `${inv.units.toLocaleString('vi-VN')} ${isVI ? 'phần' : 'units'}`
+                          : inv.principal != null
+                            ? `${isVI ? 'Gốc' : 'Principal'} ${fmtCompact(inv.principal)}`
+                            : ''}
+                      </div>
+                    </button>
+
+                    {/* Value + gain */}
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(inv.value)}</div>
+                      {inv.gainPct != null && (
+                        <div style={{ fontSize: 11, color: inv.gainPct >= 0 ? 'var(--c-pos)' : 'var(--c-neg)', marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>
+                          {fmtPct(inv.gainPct)}
+                        </div>
+                      )}
                     </div>
-                    {fund && (
-                      <button
-                        onClick={() => { setActionFund(fund); setInvestActionOpen(true) }}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--c-muted)' }}
-                      >
-                        <MoreHorizontal size={16} />
-                      </button>
-                    )}
+
+                    {/* ⋯ button */}
+                    <button
+                      onClick={() => { setActionInv(inv); setInvestActionOpen(true) }}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, color: 'var(--c-muted)', flexShrink: 0 }}
+                      aria-label="Options"
+                    >
+                      <MoreHorizontal size={16} />
+                    </button>
                   </div>
                 )
               })}
@@ -647,65 +824,129 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: 
 
           {/* Calculator tab */}
           {activeTab === 'calculator' && (
-            <div style={{ background: 'var(--c-card)', borderRadius: 16, padding: 18 }}>
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ fontSize: 13, color: 'var(--c-muted)', display: 'block', marginBottom: 6 }}>
-                  {isVI ? 'Đóng góp hàng tháng (₫)' : 'Monthly contribution (₫)'}
-                </label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={monthlyContrib}
-                  onChange={(e) => setMonthlyContrib(e.target.value.replace(/[^0-9]/g, ''))}
-                  placeholder="0"
-                  style={{
-                    width: '100%', padding: '10px 12px', fontSize: 16,
-                    border: '1px solid var(--c-line)', borderRadius: 10,
-                    background: 'var(--c-card-2)', color: 'var(--c-ink)',
-                    boxSizing: 'border-box',
-                  }}
-                />
-              </div>
-              {goal.targetAmount ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-                    <span style={{ color: 'var(--c-muted)' }}>{isVI ? 'Còn lại' : 'Remaining'}</span>
-                    <span style={{ fontWeight: 600, color: 'var(--c-ink)' }}>{fmt(remaining)}</span>
+            <div style={{ display: 'grid', gap: 12 }}>
+              {/* Amount input */}
+              <div style={{ padding: 16, background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 14 }}>
+                <div style={{ fontSize: 11, color: 'var(--c-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                  {isVI ? 'Nếu tôi đóng góp mỗi tháng' : 'If I contribute per month'}
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
+                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'var(--c-canvas,#faf9f7)', border: '2px solid var(--c-navy)', borderRadius: 10, minWidth: 0 }}>
+                    <span style={{ fontSize: 15, color: 'var(--c-muted)', flexShrink: 0 }}>₫</span>
+                    <input
+                      type="number"
+                      value={monthlyContrib}
+                      onChange={(e) => setMonthlyContrib(e.target.value)}
+                      placeholder="0"
+                      style={{
+                        flex: 1, border: 'none', outline: 'none',
+                        fontSize: 18, fontWeight: 700, fontFamily: 'inherit',
+                        background: 'transparent', color: 'var(--c-ink)',
+                        letterSpacing: '-0.02em', minWidth: 0, width: '100%',
+                      }}
+                    />
                   </div>
-                  {monthly > 0 && (
-                    <>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-                        <span style={{ color: 'var(--c-muted)' }}>{isVI ? 'Cần mỗi tháng' : 'Needed/month'}</span>
-                        <span style={{ fontWeight: 600, color: 'var(--c-ink)' }}>{fmt(monthly)}</span>
-                      </div>
-                      {projectedDate && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-                          <span style={{ color: 'var(--c-muted)' }}>{isVI ? 'Dự kiến đạt' : 'Projected completion'}</span>
-                          <span style={{ fontWeight: 700, color: 'var(--c-pos)' }}>{projectedDate}</span>
-                        </div>
-                      )}
-                    </>
+                  {goal.targetAmount && neededPerMonth > 0 && (
+                    <button
+                      onClick={() => setMonthlyContrib(String(neededPerMonth))}
+                      style={{
+                        flexShrink: 0, padding: '8px 10px',
+                        background: 'var(--c-navy-tint)', color: 'var(--c-navy)',
+                        border: '1px solid var(--c-navy-tint)', borderRadius: 10,
+                        fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                        fontFamily: 'inherit', lineHeight: 1.3,
+                        textAlign: 'center', whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {isVI ? 'Tối thiểu' : 'Min'}
+                    </button>
                   )}
                 </div>
-              ) : (
-                <div style={{ fontSize: 14, color: 'var(--c-muted)' }}>
-                  {isVI
-                    ? 'Đặt mục tiêu để xem dự báo thời gian.'
-                    : 'Set a target amount to see projected completion date.'}
-                  {monthly > 0 && goal.currentValue > 0 && (
-                    <p style={{ marginTop: 12, color: 'var(--c-ink)' }}>
-                      {isVI ? 'Lợi suất hàng năm ước tính: ' : 'Estimated annual return at current pace: '}
-                      <strong>~12%</strong>
-                    </p>
-                  )}
+
+                {/* Quick presets */}
+                {goal.targetAmount && neededPerMonth > 0 && (
+                  <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
+                    {[0.5, 1, 1.5, 2].map((mul) => {
+                      const preset = Math.round(neededPerMonth * mul / 100000) * 100000 || Math.round(neededPerMonth * mul)
+                      const isActive = monthly === preset
+                      return (
+                        <button
+                          key={mul}
+                          onClick={() => setMonthlyContrib(String(preset))}
+                          style={{
+                            padding: '4px 10px', borderRadius: 999, fontSize: 11, fontWeight: 500,
+                            background: isActive ? 'var(--c-navy)' : 'var(--c-card-2)',
+                            color: isActive ? '#fff' : 'var(--c-muted)',
+                            border: '1px solid var(--c-line)', cursor: 'pointer',
+                            fontFamily: 'inherit', transition: 'all 120ms',
+                          }}
+                        >
+                          {fmtCompact(preset)}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Result card */}
+              {monthly > 0 && projectedDate && goal.targetAmount && (
+                <div style={{
+                  padding: 16, borderRadius: 14,
+                  background: 'var(--c-pos-tint)',
+                  border: '1px solid rgba(4,120,87,0.15)',
+                }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--c-pos)', marginBottom: 6 }}>
+                    {isVI ? 'Dự kiến hoàn thành' : 'Projected completion'}
+                  </div>
+                  <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.025em', color: 'var(--c-pos)', lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
+                    {projectedDate.toLocaleDateString(isVI ? 'vi-VN' : 'en-GB', { month: 'long', year: 'numeric' })}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--c-pos)', marginTop: 6, opacity: 0.85 }}>
+                    {isVI ? `Sau ${projectedMonths} tháng` : `In ${projectedMonths} months`}
+                  </div>
                 </div>
+              )}
+
+              {/* Key numbers */}
+              {monthly > 0 && goal.targetAmount && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1, background: 'var(--c-line)', borderRadius: 12, overflow: 'hidden' }}>
+                  {[
+                    { l: isVI ? 'Còn thiếu' : 'Still needed', v: fmtCompact(remaining), c: 'var(--c-ink)' },
+                    { l: isVI ? 'Tháng dự kiến' : 'Projected months', v: projectedMonths > 0 ? String(projectedMonths) : '—', c: 'var(--c-ink)' },
+                    { l: isVI ? 'Cần tối thiểu/tháng' : 'Min needed/month', v: neededPerMonth > 0 ? fmtCompact(neededPerMonth) : '—', c: 'var(--c-muted)' },
+                    { l: isVI ? 'Chênh lệch' : 'vs minimum', v: neededPerMonth > 0 ? fmtCompact(Math.abs(monthly - neededPerMonth)) : '—', c: monthly >= neededPerMonth ? 'var(--c-pos)' : 'var(--c-neg)' },
+                  ].map((k, i) => (
+                    <div key={i} style={{ background: 'var(--c-card)', padding: '10px 12px' }}>
+                      <div style={{ fontSize: 10, color: 'var(--c-muted)' }}>{k.l}</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, marginTop: 2, color: k.c, fontVariantNumeric: 'tabular-nums' }}>{k.v}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Empty state */}
+              {monthly <= 0 && (
+                <div style={{ padding: '28px 0', textAlign: 'center', color: 'var(--c-muted)' }}>
+                  <Target size={32} color="var(--c-line-strong)" />
+                  <p style={{ margin: '10px 0 0', fontSize: 13 }}>
+                    {isVI ? 'Nhập số tiền để xem dự báo' : 'Enter an amount to see your projection'}
+                  </p>
+                </div>
+              )}
+
+              {/* No target set */}
+              {!goal.targetAmount && monthly > 0 && (
+                <p style={{ fontSize: 13, color: 'var(--c-muted)', textAlign: 'center', padding: '8px 0' }}>
+                  {isVI ? 'Đặt mục tiêu để xem dự báo thời gian.' : 'Set a target amount to see projected completion date.'}
+                </p>
               )}
             </div>
           )}
 
           {/* History tab */}
           {activeTab === 'history' && (
-            <div>
+            <div style={{ background: 'var(--c-card)', borderRadius: 16, padding: '0 14px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
               {txLoading && (
                 <p style={{ color: 'var(--c-muted)', fontSize: 14, textAlign: 'center', padding: '24px 0' }}>
                   {isVI ? 'Đang tải…' : 'Loading…'}
@@ -716,39 +957,38 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: 
                   {isVI ? 'Chưa có giao dịch nào' : 'No transactions yet'}
                 </p>
               )}
-              {!txLoading && transactions.map((tx) => {
+              {!txLoading && transactions.map((tx, i) => {
                 const isWithdraw = tx.transaction_type === 'withdrawal'
-                const typeLabel = isWithdraw
-                  ? (tx.asset_type === 'bank' ? (isVI ? 'Rút' : 'Withdraw') : (isVI ? 'Bán' : 'Sell'))
-                  : (tx.asset_type === 'bank' ? (isVI ? 'Nạp' : 'Deposit') : (isVI ? 'Mua' : 'Buy'))
-                const name = tx.fund_name ?? tx.notes ?? tx.asset_type
+                const name = tx.fund_name ?? tx.notes ?? (isVI ? 'Khoản đầu tư' : 'Investment')
                 return (
                   <div
                     key={tx.transaction_id}
                     style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      padding: '12px 0', borderBottom: '1px solid var(--c-line)',
+                      padding: '14px 0',
+                      borderBottom: i === transactions.length - 1 ? 'none' : '1px solid var(--c-line)',
+                      display: 'flex', alignItems: 'center', gap: 12,
                     }}
                   >
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-                        <span style={{
-                          fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 999,
-                          textTransform: 'uppercase',
-                          background: isWithdraw ? 'var(--c-neg-tint)' : 'var(--c-pos-tint)',
-                          color: isWithdraw ? 'var(--c-neg)' : 'var(--c-pos)',
-                        }}>
-                          {typeLabel}
-                        </span>
-                        <p style={{ fontSize: 13, color: 'var(--c-ink)', fontWeight: 500 }}>{name}</p>
-                      </div>
-                      <p style={{ fontSize: 12, color: 'var(--c-muted)' }}>
-                        {new Date(tx.investment_date).toLocaleDateString(isVI ? 'vi-VN' : 'en-US')}
-                      </p>
+                    <div style={{
+                      width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+                      background: isWithdraw ? 'var(--c-neg-tint)' : 'var(--c-pos-tint)',
+                      color: isWithdraw ? 'var(--c-neg)' : 'var(--c-pos)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      {isWithdraw
+                        ? <ArrowDownRight size={14} strokeWidth={2.2} />
+                        : <ArrowUpRight size={14} strokeWidth={2.2} />
+                      }
                     </div>
-                    <p style={{ fontWeight: 600, fontSize: 14, color: isWithdraw ? 'var(--c-neg)' : 'var(--c-ink)' }}>
-                      {isWithdraw ? '-' : '+'}{fmtShort(tx.amount_vnd)}
-                    </p>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--c-ink)' }}>{name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 2 }}>
+                        {new Date(tx.investment_date).toLocaleDateString(isVI ? 'vi-VN' : 'en-US')}
+                      </div>
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: isWithdraw ? 'var(--c-neg)' : 'var(--c-pos)', fontVariantNumeric: 'tabular-nums' }}>
+                      {isWithdraw ? '-' : '+'}{fmtCompact(tx.amount_vnd)}
+                    </span>
                   </div>
                 )
               })}
@@ -778,8 +1018,8 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: 
       <InvestmentActionSheet
         open={investActionOpen}
         onClose={() => setInvestActionOpen(false)}
-        fund={actionFund}
-        onViewHistory={() => actionFund && openFundDetail(actionFund)}
+        inv={actionInv}
+        onViewHistory={() => actionInv?.fund && openFundDetail(actionInv.fund)}
         onSell={() => { /* SellWithdrawSheet integration point */ }}
       />
 
