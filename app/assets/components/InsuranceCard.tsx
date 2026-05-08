@@ -1,43 +1,8 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { Wallet, Trash2, TriangleAlert } from 'lucide-react'
+import { Shield } from 'lucide-react'
 import { useTranslations } from 'next-intl'
-import { fmt } from '@/lib/formatters'
-
-const fmtDate = (dateStr: string): string => {
-  try {
-    return new Date(dateStr).toLocaleDateString(undefined, {
-      month: 'long', day: 'numeric', year: 'numeric',
-    })
-  } catch {
-    return ''
-  }
-}
-
-type DisplayStatus = 'overdue' | 'due' | 'not_due_yet'
-
-function computeDisplayStatus(nextPaymentDate: string | null): DisplayStatus {
-  if (!nextPaymentDate) return 'not_due_yet'
-  try {
-    const payment = new Date(nextPaymentDate)
-    if (isNaN(payment.getTime())) return 'not_due_yet'
-    const now = new Date()
-    const todayMs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
-    const paymentMs = new Date(payment.getFullYear(), payment.getMonth(), payment.getDate()).getTime()
-    if (paymentMs < todayMs) return 'overdue'
-    if (paymentMs === todayMs) return 'due'
-    return 'not_due_yet'
-  } catch {
-    return 'not_due_yet'
-  }
-}
-
-interface SavingsRecord {
-  id: string
-  amount_saved_vnd: number
-  created_at: string
-}
+import { fmtCompact } from '@/lib/formatters'
 
 interface Props {
   insuranceId: string
@@ -46,297 +11,81 @@ interface Props {
   annualPremium: number
   amountSaved: number
   savingsProgressPercentage: number
-  status: 'on_track' | 'upcoming' | 'overdue' | 'completed'
-  nextPaymentDate: string | null
-  lastPaymentDate: string | null
-  onSavingsChange?: () => void
+  status: 'on_track' | 'upcoming' | 'overdue' | 'completed' | 'ready'
+  isLast?: boolean
 }
 
-const STATUS_BADGE: Record<DisplayStatus | 'completed', { cls: string; icon?: boolean }> = {
-  not_due_yet: { cls: 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300' },
-  due:         { cls: 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300' },
-  overdue:     { cls: 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300', icon: true },
-  completed:   { cls: 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400' },
+const STATUS_COLOR: Record<string, string> = {
+  on_track:  'var(--c-warn)',
+  upcoming:  'var(--c-muted)',
+  overdue:   'var(--c-neg)',
+  completed: 'var(--c-pos)',
+  ready:     'var(--c-navy)',
+}
+
+const BAR_COLOR: Record<string, string> = {
+  on_track:  'var(--c-warn)',
+  upcoming:  'var(--c-warn)',
+  overdue:   'var(--c-neg)',
+  completed: 'var(--c-pos)',
+  ready:     'var(--c-warn)',
 }
 
 export default function InsuranceCard({
-  insuranceId, insuranceName, coverageType, annualPremium, amountSaved,
-  savingsProgressPercentage, status, nextPaymentDate, lastPaymentDate, onSavingsChange,
+  insuranceName, coverageType, annualPremium, amountSaved,
+  savingsProgressPercentage, status, isLast,
 }: Props) {
   const t = useTranslations('dashboard')
-  const tc = useTranslations('common')
 
-  const isCompleted = status === 'completed'
-  const displayStatus: DisplayStatus | 'completed' = isCompleted ? 'completed' : computeDisplayStatus(nextPaymentDate)
-  const badge = STATUS_BADGE[displayStatus]
-  const statusLabel: Record<DisplayStatus | 'completed', string> = {
-    not_due_yet: t('statusNotDue'),
-    due:         t('statusDue'),
-    overdue:     t('statusOverdue'),
-    completed:   t('statusCompleted'),
-  }
-  const showMarkAsPaid = status === 'upcoming' || status === 'overdue'
-  const monthlyFee = Math.round(annualPremium / 12)
+  const dotColor = STATUS_COLOR[status] ?? 'var(--c-muted)'
+  const bar = BAR_COLOR[status] ?? 'var(--c-warn)'
+  const progress = Math.min(savingsProgressPercentage, 100)
 
-  const [localAmountSaved, setLocalAmountSaved] = useState(amountSaved)
-  const localProgress = Math.min(annualPremium > 0 ? (localAmountSaved / annualPremium) * 100 : 0, 100)
-
-  const [inputAmount, setInputAmount] = useState('')
-  const [savingsList, setSavingsList] = useState<SavingsRecord[]>([])
-  const [isLoading, setIsLoading] = useState(false)
-  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
-  const [showConfirm, setShowConfirm] = useState(false)
-  const [markPaidLoading, setMarkPaidLoading] = useState(false)
-
-  const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
-    setToast({ msg, type })
-    setTimeout(() => setToast(null), 3000)
-  }
-
-  const fetchSavings = useCallback(async () => {
-    const res = await fetch(`/api/v1/insurance-members/${insuranceId}/savings`)
-    if (res.ok) {
-      const { savings } = await res.json()
-      setSavingsList(savings ?? [])
-    }
-  }, [insuranceId])
-
-  useEffect(() => { fetchSavings() }, [fetchSavings])
-
-  useEffect(() => {
-    if (!showConfirm) return
-    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') setShowConfirm(false) }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [showConfirm])
-
-  async function handleAdd() {
-    const amount = Number(inputAmount)
-    if (!inputAmount || isNaN(amount) || amount <= 0) {
-      showToast(t('savingsAmountRequired'), 'error')
-      return
-    }
-    setIsLoading(true)
-    const res = await fetch('/api/v1/insurance-savings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ insurance_member_id: insuranceId, amount_saved_vnd: amount }),
-    })
-    if (res.ok) {
-      setInputAmount('')
-      setLocalAmountSaved((prev) => prev + amount)
-      await fetchSavings()
-      showToast(t('savingsAdded'))
-    } else {
-      showToast(t('savingsAddFailed'), 'error')
-    }
-    setIsLoading(false)
-  }
-
-  async function handleDelete(id: string, amount: number) {
-    setIsLoading(true)
-    const res = await fetch(`/api/v1/insurance-savings/${id}`, { method: 'DELETE' })
-    if (res.ok) {
-      setLocalAmountSaved((prev) => prev - amount)
-      await fetchSavings()
-      showToast(t('savingsDeleted'))
-    } else {
-      showToast(t('savingsDeleteFailed'), 'error')
-    }
-    setIsLoading(false)
-  }
-
-  async function handleMarkAsPaid() {
-    setMarkPaidLoading(true)
-    try {
-      const res = await fetch(`/api/v1/insurance-members/${insuranceId}/mark-paid`, { method: 'POST' })
-      if (res.ok) {
-        setLocalAmountSaved(0)
-        setShowConfirm(false)
-        showToast(t('markPaidSuccess'))
-        onSavingsChange?.()
-      } else {
-        const body = await res.json().catch(() => ({}))
-        const msg = res.status === 401 ? t('markPaidUnauthorized')
-          : res.status === 422 ? body.error ?? t('markPaidNotDue')
-          : body.error ?? t('markPaidError')
-        showToast(msg, 'error')
-        setShowConfirm(false)
-      }
-    } catch {
-      showToast(t('markPaidConnError'), 'error')
-      setShowConfirm(false)
-    }
-    setMarkPaidLoading(false)
+  const statusLabel: Record<string, string> = {
+    on_track:  t('statusDue'),
+    upcoming:  t('statusNotDue'),
+    overdue:   t('statusOverdue'),
+    completed: t('statusCompleted'),
+    ready:     t('statusReady'),
   }
 
   return (
-    <div className={`rounded-xl border p-5 transition-opacity ${
-      isCompleted
-        ? 'opacity-60 bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700'
-        : 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-800/30'
-    }`}>
-      {/* Header — name + status badge */}
-      <div className="flex items-start justify-between mb-1">
-        <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 leading-tight">{insuranceName}</h3>
-        <span className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full flex-shrink-0 ml-3 ${badge.cls}`}>
-          {badge.icon && <TriangleAlert size={10} />}
-          {statusLabel[displayStatus]}
-        </span>
+    <div style={{
+      padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12,
+      borderBottom: isLast ? 'none' : '1px solid var(--c-line)',
+    }}>
+      <div style={{
+        width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+        background: 'var(--c-card-2)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: 'var(--c-accent-insurance)',
+      }}>
+        <Shield size={16} />
       </div>
 
-      {/* Coverage type pill */}
-      {coverageType && (
-        <span className="inline-block mb-4 text-xs px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
-          {coverageType}
-        </span>
-      )}
-
-      {/* Annual / Monthly */}
-      <div className="space-y-2 text-sm mb-4">
-        <div className="flex items-center justify-between">
-          <span className="text-gray-500 dark:text-gray-400">{t('annualFeeLabel')}:</span>
-          <span className="font-medium text-gray-900 dark:text-gray-100">{fmt(annualPremium)}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--c-ink)' }}>{insuranceName}</span>
+          {coverageType && <span style={{ fontSize: 11, color: 'var(--c-muted)' }}>· {coverageType}</span>}
         </div>
-        <div className="flex items-center justify-between">
-          <span className="text-gray-500 dark:text-gray-400">{t('monthlyFeeLabel')}:</span>
-          <span className="font-medium text-gray-900 dark:text-gray-100">{fmt(monthlyFee)}</span>
-        </div>
-      </div>
-
-      {/* Savings + progress */}
-      <div className="space-y-2 mb-3">
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-gray-500 dark:text-gray-400">{t('savedLabel')}:</span>
-          <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{fmt(localAmountSaved)}</span>
-        </div>
-        <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-          <div
-            className={`h-full rounded-full transition-all ${isCompleted ? 'bg-gray-400' : 'bg-gray-900 dark:bg-gray-100'}`}
-            style={{ width: `${localProgress}%` }}
-          />
-        </div>
-        <p className="text-xs text-gray-500 dark:text-gray-400">
-          {Math.round(localProgress)}% {t('ofAnnualFee')}
-        </p>
-      </div>
-
-      {/* Next / last payment date */}
-      {nextPaymentDate && !isCompleted && (
-        <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-          {t('nextPaymentLabel', { date: fmtDate(nextPaymentDate) })}
-        </p>
-      )}
-      {lastPaymentDate && (
-        <p className="text-xs text-gray-400 dark:text-gray-500 mb-3">
-          {t('lastPaymentLabel', { date: fmtDate(lastPaymentDate) })}
-        </p>
-      )}
-
-      {/* Toast */}
-      {toast && (
-        <p className={`text-xs mb-2 ${toast.type === 'error' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
-          {toast.msg}
-        </p>
-      )}
-
-      {/* Quick save input */}
-      <div className="flex gap-2">
-        <input
-          type="number"
-          value={inputAmount}
-          onChange={(e) => setInputAmount(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-          placeholder={t('savingsAmountPlaceholder')}
-          className="flex-1 min-w-0 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-1.5 text-xs bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-        />
-        <button
-          onClick={handleAdd}
-          disabled={isLoading}
-          className="flex items-center justify-center h-8 w-8 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-lg hover:bg-gray-700 dark:hover:bg-gray-200 disabled:opacity-50 flex-shrink-0 transition-colors"
-          title={t('addBtn')}
-        >
-          <Wallet className="h-4 w-4" />
-        </button>
-      </div>
-
-      {/* Savings records */}
-      {savingsList.length > 0 && (
-        <div className="border-t border-gray-200/60 dark:border-gray-700/60 mt-3 pt-3">
-          <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">{t('savingsHistoryLabel')}</p>
-          <ul className="space-y-1">
-            {savingsList.map((s) => (
-              <li key={s.id} className="flex items-center justify-between">
-                <span className="text-xs text-gray-700 dark:text-gray-300">{fmt(s.amount_saved_vnd)}</span>
-                <button
-                  onClick={() => handleDelete(s.id, s.amount_saved_vnd)}
-                  disabled={isLoading}
-                  className="text-gray-300 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-400 disabled:opacity-40 transition-colors"
-                  aria-label="Delete"
-                >
-                  <Trash2 size={12} />
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Mark as Paid */}
-      {showMarkAsPaid && (
-        <div className="border-t border-gray-200/60 dark:border-gray-700/60 mt-3 pt-3">
-          <button
-            onClick={() => setShowConfirm(true)}
-            className="w-full py-2 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-xs font-medium rounded-lg hover:bg-gray-700 dark:hover:bg-gray-200 transition-colors"
-          >
-            {t('markPaidBtn')}
-          </button>
-        </div>
-      )}
-
-      {/* Confirmation dialog */}
-      {showConfirm && (
-        <div
-          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
-          onClick={(e) => { if (e.target === e.currentTarget) setShowConfirm(false) }}
-        >
-          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-sm p-6 border border-gray-100 dark:border-gray-700">
-            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">{t('markPaidTitle')}</h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-              {t('markPaidMessage', { name: insuranceName })}
-            </p>
-            <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-lg p-3 mb-4 border-l-4 border-emerald-500">
-              <p className="text-xs text-gray-700 dark:text-gray-300 font-medium">{insuranceName}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t('annualPayment', { amount: fmt(annualPremium) })}</p>
-            </div>
-            <p className="text-xs text-gray-400 dark:text-gray-500 mb-5">{t('markPaidNote')}</p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowConfirm(false)}
-                disabled={markPaidLoading}
-                className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
-              >
-                {tc('cancel')}
-              </button>
-              <button
-                onClick={handleMarkAsPaid}
-                disabled={markPaidLoading}
-                className="flex-1 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {markPaidLoading ? (
-                  <>
-                    <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                    </svg>
-                    {t('markPaidProcessing')}
-                  </>
-                ) : tc('confirm')}
-              </button>
-            </div>
+        <div style={{ marginTop: 4 }}>
+          <div style={{ width: '100%', height: 4, background: 'var(--c-card-2)', borderRadius: 999, overflow: 'hidden' }}>
+            <div style={{ height: '100%', borderRadius: 999, width: `${progress}%`, background: bar, transition: 'width 400ms ease' }} />
           </div>
         </div>
-      )}
+      </div>
+
+      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end' }}>
+          <span style={{ width: 6, height: 6, borderRadius: 3, background: dotColor, display: 'inline-block' }} />
+          <span style={{ fontSize: 10, fontWeight: 500, color: dotColor, letterSpacing: '0.02em' }}>
+            {statusLabel[status] ?? status}
+          </span>
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
+          {fmtCompact(amountSaved)} / {fmtCompact(annualPremium)}
+        </div>
+      </div>
     </div>
   )
 }

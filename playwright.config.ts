@@ -1,9 +1,17 @@
 import { defineConfig, devices } from '@playwright/test'
+import { config as dotenvConfig } from 'dotenv'
+import { existsSync } from 'fs'
+
+// Load .env.e2e for local runs (ignored in CI where env vars come from secrets)
+if (!process.env.CI && existsSync('.env.e2e')) {
+  dotenvConfig({ path: '.env.e2e', override: false })
+}
 
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000'
 
 export default defineConfig({
   testDir: './e2e',
+  globalTeardown: './e2e/global.teardown.ts',
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
@@ -35,7 +43,7 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: 'npm start',
+    command: process.env.CI ? 'npm start' : 'npm run dev',
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

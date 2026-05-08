@@ -3,8 +3,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { fmt } from '@/lib/formatters'
-import { Plus, FileDown } from 'lucide-react'
+import { Plus, ArrowDownToLine, ChevronDown, Check } from 'lucide-react'
 import { useTranslations, useLocale } from 'next-intl'
+import { useNavigation } from '@/app/components/navigation/NavigationContext'
 import dynamic from 'next/dynamic'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -20,7 +21,6 @@ import AssetAllocationPie from './components/AssetAllocationPie'
 
 const FundDetailModal = dynamic(() => import('./components/FundDetailModal'))
 const GoalPickerModal = dynamic(() => import('./components/GoalPickerModal'))
-const GoldPriceWidget = dynamic(() => import('./components/GoldPriceWidget'))
 
 export interface FundBreakdownItem {
   fundId: string
@@ -44,6 +44,7 @@ export interface GoalData {
   profitLoss: number
   profitLossPercentage: number
   progressPercentage: number | null
+  transactionCount: number
   funds: FundBreakdownItem[]
 }
 
@@ -54,7 +55,7 @@ export interface InsuranceData {
   annualPremium: number
   amountSaved: number
   savingsProgressPercentage: number
-  status: 'on_track' | 'upcoming' | 'overdue' | 'completed'
+  status: 'on_track' | 'upcoming' | 'overdue' | 'completed' | 'ready'
   nextPaymentDate: string | null
   lastPaymentDate: string | null
 }
@@ -82,6 +83,7 @@ export interface DashboardData {
     overallProfitLossPercentage: number
     navStale: boolean
     hasGold: boolean
+    navUpdatedAt: string | null
   }
   goals: GoalData[]
   unallocated: { totalValue: number; funds: FundBreakdownItem[]; nonFunds: NonFundUnallocatedItem[] }
@@ -110,12 +112,89 @@ function setCachedOverview(userId: string, data: DashboardData) {
 // Fetch fund detail (purchase history) from investment_transactions
 interface PurchaseHistory { purchase_date: string; units: number; nav_at_purchase: number }
 
+type SortValue = 'manual' | 'progressDesc' | 'progressAsc' | 'alpha'
+
+function SortDropdown({ value, onChange, options }: {
+  value: SortValue
+  onChange: (v: SortValue) => void
+  options: { value: SortValue; label: string }[]
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const current = options.find((o) => o.value === value)
+
+  useEffect(() => {
+    if (!open) return
+    function onDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [open])
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 4,
+          fontSize: 13, padding: '5px 10px', cursor: 'pointer',
+          background: 'var(--c-card)', border: '1px solid var(--c-line)',
+          borderRadius: 8, color: 'var(--c-ink)', fontFamily: 'inherit', fontWeight: 500,
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {current?.label}
+        <ChevronDown size={12} style={{ color: 'var(--c-muted)', flexShrink: 0 }} />
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 4px)', right: 0, zIndex: 50,
+          background: 'var(--c-card)', border: '1px solid var(--c-line)',
+          borderRadius: 10, boxShadow: 'var(--shadow-pop)',
+          minWidth: 160, overflow: 'hidden',
+        }}>
+          {options.map((o) => (
+            <button
+              key={o.value}
+              onClick={() => { onChange(o.value); setOpen(false) }}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                width: '100%', padding: '10px 14px', border: 'none', cursor: 'pointer',
+                background: o.value === value ? 'var(--c-navy-tint)' : 'transparent',
+                color: o.value === value ? 'var(--c-navy)' : 'var(--c-ink)',
+                fontSize: 14, fontFamily: 'inherit', fontWeight: o.value === value ? 600 : 400,
+                textAlign: 'left',
+              }}
+            >
+              {o.label}
+              {o.value === value && <Check size={13} />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function fmtTimeAgo(isoString: string, locale: string): string {
+  const diffMs = Date.now() - new Date(isoString).getTime()
+  const mins = Math.floor(diffMs / 60_000)
+  const hours = Math.floor(mins / 60)
+  const days = Math.floor(hours / 24)
+  const isVi = locale === 'vi'
+  if (days > 0) return isVi ? `${days} ngày trước` : `${days}d ago`
+  if (hours > 0) return isVi ? `${hours} giờ trước` : `${hours}h ago`
+  return isVi ? `${mins} phút trước` : `${mins}m ago`
+}
+
 export default function DashboardClient({ userId }: { userId: string }) {
   const t = useTranslations('dashboard')
   const tc = useTranslations('common')
   const tt = useTranslations('transactions')
   const tg = useTranslations('goals')
   const locale = useLocale()
+  const { userName, setMobileTopBar } = useNavigation()
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -127,6 +206,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const [nonFundPickerTxId, setNonFundPickerTxId] = useState<string | null>(null)
   const [nonFundAssignLoading, setNonFundAssignLoading] = useState(false)
   const [nonFundAssignError, setNonFundAssignError] = useState('')
+  const [goalSort, setGoalSort] = useState<SortValue>('manual')
   const [showGoalForm, setShowGoalForm] = useState(false)
   const [goalName, setGoalName] = useState('')
   const [goalTarget, setGoalTarget] = useState('')
@@ -299,6 +379,33 @@ export default function DashboardClient({ userId }: { userId: string }) {
       setIsGeneratingReport(false)
     }
   }
+
+  useEffect(() => {
+    setMobileTopBar({
+      title: `Hi, ${userName}`,
+      subtitle: t('overview'),
+      trailing: (
+        <button
+          data-testid="generate-report-btn"
+          onClick={handleGenerateReport}
+          disabled={isGeneratingReport}
+          aria-label={isGeneratingReport ? t('downloadingReport') : t('downloadReport')}
+          style={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            padding: 8, border: 'none', background: 'transparent',
+            borderRadius: 'var(--r-control)', cursor: 'pointer', color: 'var(--c-ink)',
+            opacity: isGeneratingReport ? 0.5 : 1,
+          }}
+        >
+          {isGeneratingReport
+            ? <span className="w-[18px] h-[18px] border-2 border-current border-t-transparent rounded-full animate-spin block" />
+            : <ArrowDownToLine size={18} />
+          }
+        </button>
+      ),
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userName, isGeneratingReport, data])
 
   function openSellFund(fund: FundBreakdownItem) {
     setSellFund(fund)
@@ -495,7 +602,13 @@ export default function DashboardClient({ userId }: { userId: string }) {
 
   const isEmpty = data && data.goals.length === 0 && data.unallocated.funds.length === 0 && data.unallocated.nonFunds.length === 0 && data.insurance.length === 0
 
-  const sortedGoals = data ? data.goals : []
+  const sortedGoals = data ? (() => {
+    const goals = [...data.goals]
+    if (goalSort === 'progressDesc') goals.sort((a, b) => (b.progressPercentage ?? 0) - (a.progressPercentage ?? 0))
+    else if (goalSort === 'progressAsc') goals.sort((a, b) => (a.progressPercentage ?? 0) - (b.progressPercentage ?? 0))
+    else if (goalSort === 'alpha') goals.sort((a, b) => a.goalName.localeCompare(b.goalName))
+    return goals
+  })() : []
 
   // Compute asset allocation totals for pie chart
   const allocationTotals = data ? (() => {
@@ -513,11 +626,11 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const detailFund = fundDetailId ? allFunds.find((f) => f.fundId === fundDetailId) : null
 
   return (
-    <div className="space-y-6">
-        {/* Pull-to-refresh indicator (PWA only) */}
+    <div className="space-y-4 md:space-y-6">
+        {/* Pull-to-refresh indicator (mobile PWA only) */}
         <div
+          className="md:hidden -mx-4 -mt-4 overflow-hidden flex items-center justify-center"
           style={{ height: `${pullY}px`, transition: pullY === 0 ? 'height 0.25s ease' : 'none' }}
-          className="overflow-hidden flex items-center justify-center"
         >
           <div className={`w-6 h-6 rounded-full border-2 border-emerald-500 border-t-transparent ${pullY >= PULL_THRESHOLD ? 'animate-spin' : ''}`} />
         </div>
@@ -598,60 +711,91 @@ export default function DashboardClient({ userId }: { userId: string }) {
           </div>
         )}
 
-        {/* Gold price widget — shown whenever user has any gold investment */}
-        {!loading && data?.netWorth.hasGold && (
-          <div className="mb-6 rounded-xl overflow-hidden border border-amber-200 dark:border-amber-800/30 bg-gradient-to-r from-amber-50 to-amber-100 dark:from-amber-900/10 dark:to-amber-900/5">
-            <GoldPriceWidget onRefresh={() => fetchData({ force: true })} />
-          </div>
-        )}
+
 
         {/* Dashboard content */}
         {!loading && data && !isEmpty && (
           <div className="space-y-8">
-            {/* Dashboard header with report button */}
-            <div className="flex items-center justify-end">
+            {/* Desktop report button — hidden on mobile (mobile has it in TopBar) */}
+            <div className="hidden md:flex justify-end">
               <button
                 data-testid="generate-report-btn"
                 onClick={handleGenerateReport}
                 disabled={isGeneratingReport}
-                className="flex items-center gap-2 h-9 px-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                aria-label={isGeneratingReport ? t('downloadingReport') : t('downloadReport')}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '6px 12px', border: '1px solid var(--c-line)',
+                  borderRadius: 'var(--r-control)', cursor: 'pointer',
+                  background: 'var(--c-card)', color: 'var(--c-ink)', fontSize: 13,
+                  opacity: isGeneratingReport ? 0.5 : 1,
+                }}
               >
-                {isGeneratingReport ? (
-                  <span className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <FileDown className="h-4 w-4" />
-                )}
-                {isGeneratingReport ? t('downloadingReport') : t('downloadReport')}
+                {isGeneratingReport
+                  ? <span className="w-[14px] h-[14px] border-2 border-current border-t-transparent rounded-full animate-spin block" />
+                  : <ArrowDownToLine size={14} />
+                }
+                {t('downloadReport')}
               </button>
             </div>
 
             {/* Net Worth + Asset Allocation */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2">
-                <NetWorthCard {...data.netWorth} />
-              </div>
+            <div className="space-y-4">
+              <NetWorthCard
+                {...data.netWorth}
+                allocationBar={allocationTotals ? {
+                  fund: allocationTotals.equityTotal + allocationTotals.bondTotal + allocationTotals.balancedTotal,
+                  bank: allocationTotals.bankTotal,
+                  gold: allocationTotals.goldTotal,
+                  stock: allocationTotals.stockTotal,
+                } : undefined}
+              />
               {allocationTotals && (
-                <AssetAllocationPie
-                  {...allocationTotals}
-                  totalAssets={data.netWorth.totalAssets}
-                />
+                <div className="hidden md:block">
+                  <AssetAllocationPie
+                    {...allocationTotals}
+                    totalAssets={data.netWorth.totalAssets}
+                  />
+                </div>
               )}
             </div>
 
             {/* Goals */}
             {sortedGoals.length > 0 && (
               <section>
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('sectionGoals')}</h2>
-                  <button
-                    onClick={() => { setGoalName(''); setGoalTarget(''); setGoalDesc(''); setGoalError(''); setShowGoalForm(true) }}
-                    className="flex items-center gap-2 h-9 px-4 bg-gray-950 hover:bg-gray-800 text-white text-sm font-bold rounded-md transition-colors"
-                  >
-                    <Plus className="h-4 w-4" />
-                    {t('addGoalBtn')}
-                  </button>
+                <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+                  <div>
+                    <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600, letterSpacing: '-0.01em' }}>{t('sectionGoals')}</h2>
+                    <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--c-muted)' }}>
+                      {sortedGoals.length} {t('tracked')}
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <SortDropdown
+                      value={goalSort}
+                      onChange={setGoalSort}
+                      options={[
+                        { value: 'manual', label: t('sortManual') },
+                        { value: 'progressDesc', label: t('sortProgressDesc') },
+                        { value: 'progressAsc', label: t('sortProgressAsc') },
+                        { value: 'alpha', label: t('sortAlpha') },
+                      ]}
+                    />
+                    <button
+                      onClick={() => { setGoalName(''); setGoalTarget(''); setGoalDesc(''); setGoalError(''); setShowGoalForm(true) }}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        padding: 6, border: 'none',
+                        borderRadius: 'var(--r-control)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit',
+                        color: 'var(--c-ink)',
+                      }}
+                      aria-label={t('addGoalBtn')}
+                    >
+                      <Plus size={16} />
+                    </button>
+                  </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div style={{ display: 'grid', gap: 10 }}>
                   {sortedGoals.map((goal) => (
                     <GoalCard
                       key={goal.goalId}
@@ -673,30 +817,56 @@ export default function DashboardClient({ userId }: { userId: string }) {
                 onSellFund={openSellFund}
                 onAssignNonFundToGoal={(txId) => setNonFundPickerTxId(txId)}
                 onSellNonFund={openSellNonFund}
-                onRefresh={() => fetchData({ force: true })}
               />
             )}
 
             {/* Insurance */}
             {data.insurance.length > 0 && (
               <section>
-                <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
-                  <div className="flex items-center justify-between mb-5">
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('sectionInsurance')}</h2>
-                    <Link
-                      href="/settings?tab=insurance"
-                      className="text-sm font-medium px-3 py-1.5 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                    >
-                      {t('manageInsurance')}
-                    </Link>
+                <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+                  <div>
+                    <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600, letterSpacing: '-0.01em' }}>{t('sectionInsurance')}</h2>
+                    <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--c-muted)' }}>
+                      {data.insurance.length} {data.insurance.length === 1 ? t('member') : t('members')}
+                    </p>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {data.insurance.map((ins) => (
-                      <InsuranceCard key={ins.insuranceId} {...ins} onSavingsChange={() => fetchData({ force: true })} />
-                    ))}
-                  </div>
+                  <Link
+                    href="/settings?tab=insurance"
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                      fontSize: 12, fontWeight: 500, padding: '4px 8px',
+                      border: 'none', borderRadius: 'var(--r-control)',
+                      background: 'transparent', color: 'var(--c-ink)',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    <Plus size={12} strokeWidth={2.4} />
+                    {t('add')}
+                  </Link>
+                </div>
+                <div style={{
+                  background: 'var(--c-card)',
+                  border: '1px solid var(--c-line)',
+                  borderRadius: 'var(--r-card)',
+                  boxShadow: 'var(--shadow-card)',
+                  overflow: 'hidden',
+                }}>
+                  {data.insurance.map((ins, idx) => (
+                    <InsuranceCard
+                      key={ins.insuranceId}
+                      {...ins}
+                      isLast={idx === data.insurance.length - 1}
+                    />
+                  ))}
                 </div>
               </section>
+            )}
+
+            {/* NAV updated footer */}
+            {data.netWorth.navUpdatedAt && (
+              <p style={{ textAlign: 'center', fontSize: 11, color: 'var(--c-muted)', marginTop: 24 }}>
+                {t('navUpdated')} {fmtTimeAgo(data.netWorth.navUpdatedAt, locale)}
+              </p>
             )}
           </div>
         )}

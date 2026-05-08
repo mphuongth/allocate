@@ -1,4 +1,11 @@
 import { test, expect } from '@playwright/test'
+import path from 'path'
+import fs from 'fs'
+
+function getTestCredentials() {
+  const file = path.join(__dirname, '.auth', 'user.json')
+  return JSON.parse(fs.readFileSync(file, 'utf-8')) as { email: string; password: string }
+}
 
 test.use({ storageState: { cookies: [], origins: [] } })
 
@@ -10,17 +17,19 @@ test('login page renders email and password fields', async ({ page }) => {
 })
 
 test('valid login redirects to /dashboard', async ({ page }) => {
+  const { email, password } = getTestCredentials()
   await page.goto('/auth/login')
-  await page.locator('#email').fill(process.env.E2E_TEST_EMAIL!)
-  await page.locator('#password').fill(process.env.E2E_TEST_PASSWORD!)
+  await page.locator('#email').fill(email)
+  await page.locator('#password').fill(password)
   await page.locator('button[type="submit"]').click()
   await page.waitForURL('**/dashboard', { timeout: 15_000 })
   await expect(page).toHaveURL(/dashboard/)
 })
 
 test('wrong password shows error and stays on login page', async ({ page }) => {
+  const { email } = getTestCredentials()
   await page.goto('/auth/login')
-  await page.locator('#email').fill(process.env.E2E_TEST_EMAIL!)
+  await page.locator('#email').fill(email)
   await page.locator('#password').fill('wrongpassword999')
   await page.locator('button[type="submit"]').click()
   await expect(page.getByRole('alert').or(page.locator('[class*="error"]').first())).toBeVisible({ timeout: 5_000 })

@@ -16,6 +16,7 @@ const baseProps = {
   profitLoss: 5_000_000,
   profitLossPercentage: 9.09,
   progressPercentage: 60,
+  transactionCount: 3,
 }
 
 describe('GoalCard', () => {
@@ -26,24 +27,29 @@ describe('GoalCard', () => {
 
   it('renders the current value formatted', () => {
     render(<GoalCard {...baseProps} />)
+    // currentValue uses fmt() → full precision e.g. ₫ 60.000.000
     expect(screen.getByText('₫ 60.000.000')).toBeInTheDocument()
   })
 
-  it('shows gain/loss in green when positive', () => {
+  it('shows gain/loss in positive color when positive', () => {
     render(<GoalCard {...baseProps} />)
-    const gainEl = screen.getByText('₫ 5.000.000')
-    expect(gainEl).toHaveClass('text-green-600')
+    // P/L rendered as fmtCompact: "+5.0M ₫ · 9.09%" in one <span>
+    const gainEl = screen.getByText(/\+5\.0M/)
+    expect(gainEl).toHaveStyle({ color: 'var(--c-pos)' })
   })
 
-  it('shows gain/loss in red when negative', () => {
+  it('shows gain/loss in negative color when negative', () => {
     render(<GoalCard {...baseProps} profitLoss={-2_000_000} profitLossPercentage={-3.6} />)
-    const lossEl = screen.getByText('₫ -2.000.000')
-    expect(lossEl).toHaveClass('text-red-600')
+    const lossEl = screen.getByText(/-2\.0M/)
+    expect(lossEl).toHaveStyle({ color: 'var(--c-neg)' })
   })
 
-  it('shows exceeded-target text when progressPercentage >= 100', () => {
+  it('shows 100% progress badge when progressPercentage >= 100', () => {
     render(<GoalCard {...baseProps} progressPercentage={100} currentValue={100_000_000} />)
-    expect(screen.getByText('exceededTarget')).toBeInTheDocument()
+    // Progress chip shows "100%" with green styling when complete
+    const badge = screen.getByText('100%')
+    expect(badge).toBeInTheDocument()
+    expect(badge).toHaveStyle({ color: 'var(--c-pos)' })
   })
 
   it('hides progress bar and target when targetAmount is null', () => {

@@ -1,12 +1,22 @@
 'use client'
 
-import { createContext, useContext, useState } from 'react'
+import { createContext, useContext, useState, useCallback } from 'react'
+
+interface MobileTopBarOpts {
+  title: string
+  subtitle?: string
+  trailing?: React.ReactNode
+  dense?: boolean
+}
 
 interface NavigationContextValue {
   sidebarOpen: boolean
   setSidebarOpen: (open: boolean) => void
   sidebarCollapsed: boolean
   setSidebarCollapsed: (collapsed: boolean) => void
+  userName: string
+  mobileTopBar: MobileTopBarOpts
+  setMobileTopBar: (opts: MobileTopBarOpts) => void
 }
 
 const NavigationContext = createContext<NavigationContextValue>({
@@ -14,14 +24,27 @@ const NavigationContext = createContext<NavigationContextValue>({
   setSidebarOpen: () => {},
   sidebarCollapsed: false,
   setSidebarCollapsed: () => {},
+  userName: '',
+  mobileTopBar: { title: '' },
+  setMobileTopBar: () => {},
 })
 
-export function NavigationProvider({ children }: { children: React.ReactNode }) {
+export function NavigationProvider({ children, userName }: { children: React.ReactNode; userName: string }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [mobileTopBar, setMobileTopBarState] = useState<MobileTopBarOpts>({ title: '' })
+
+  const setMobileTopBar = useCallback((opts: MobileTopBarOpts) => {
+    setMobileTopBarState(opts)
+  }, [])
 
   return (
-    <NavigationContext.Provider value={{ sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarCollapsed }}>
+    <NavigationContext.Provider value={{
+      sidebarOpen, setSidebarOpen,
+      sidebarCollapsed, setSidebarCollapsed,
+      userName,
+      mobileTopBar, setMobileTopBar,
+    }}>
       {children}
     </NavigationContext.Provider>
   )

@@ -4,11 +4,11 @@ import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import { toast } from 'sonner'
-import { NavigationProvider } from '../navigation/NavigationContext'
+import { NavigationProvider, useNavigation } from '../navigation/NavigationContext'
 import Sidebar from '../navigation/Sidebar'
 import Header from '../navigation/Header'
 import MobileBottomTabs from '../navigation/MobileBottomTabs'
-import { PageTitle } from '../navigation/Breadcrumb'
+import MobileTopBar from '../navigation/MobileTopBar'
 import OfflineBanner from '@/app/components/OfflineBanner'
 
 function getInitials(email: string): string {
@@ -20,7 +20,15 @@ function getInitials(email: string): string {
     .slice(0, 2) || email[0]?.toUpperCase() || 'U'
 }
 
+function getDisplayName(email: string): string {
+  const localPart = email.split('@')[0]
+  const firstName = localPart.split(/[._-]/)[0]
+  return firstName.charAt(0).toUpperCase() + firstName.slice(1)
+}
+
 function AuthenticatedLayoutInner({ children, email, initials }: { children: React.ReactNode; email: string; initials: string }) {
+  const { mobileTopBar } = useNavigation()
+
   return (
     <div className="flex h-screen bg-canvas dark:bg-gray-950 overflow-hidden">
       {/* Sidebar (tablet + desktop only) */}
@@ -30,9 +38,21 @@ function AuthenticatedLayoutInner({ children, email, initials }: { children: Rea
 
       {/* Main area */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        <Header />
-        {/* Mobile page title */}
-        <PageTitle />
+        {/* Desktop header */}
+        <div className="hidden md:block">
+          <Header />
+        </div>
+        {/* Mobile top bar — lives outside <main> so it never scrolls away */}
+        {mobileTopBar.title && (
+          <div className="md:hidden">
+            <MobileTopBar
+              title={mobileTopBar.title}
+              subtitle={mobileTopBar.subtitle}
+              trailing={mobileTopBar.trailing}
+              dense={mobileTopBar.dense}
+            />
+          </div>
+        )}
         <main className="flex-1 overflow-y-auto px-4 md:px-6 py-4 pb-20 md:pb-4">
           {children}
         </main>
@@ -66,9 +86,10 @@ export default function AuthenticatedLayout({ children, email }: { children: Rea
   }, [router])
 
   const initials = getInitials(email)
+  const userName = getDisplayName(email)
 
   return (
-    <NavigationProvider>
+    <NavigationProvider userName={userName}>
       <AuthenticatedLayoutInner email={email} initials={initials}>
         {children}
       </AuthenticatedLayoutInner>

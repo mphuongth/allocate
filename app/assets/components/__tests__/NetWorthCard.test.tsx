@@ -3,14 +3,6 @@ import { render, screen } from '@testing-library/react'
 import NetWorthCard from '../NetWorthCard'
 
 vi.mock('next-intl', () => ({ useTranslations: () => (key: string) => key }))
-vi.mock('recharts', () => ({
-  AreaChart: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  Area: () => null,
-  XAxis: () => null,
-  YAxis: () => null,
-  Tooltip: () => null,
-  ResponsiveContainer: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-}))
 
 global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => [] })
 
@@ -26,24 +18,25 @@ const baseProps = {
 }
 
 describe('NetWorthCard', () => {
-  it('renders totalAssets formatted', () => {
+  it('renders net worth formatted', () => {
     render(<NetWorthCard {...baseProps} />)
-    // totalAssets appears in the heading (text-4xl); use getAllByText and check at least one exists
+    // Hero uses fmt(netWorth) → full precision e.g. ₫ 500.000.000
     const matches = screen.getAllByText('₫ 500.000.000')
     expect(matches.length).toBeGreaterThan(0)
     expect(matches[0]).toBeInTheDocument()
   })
 
-  it('renders overall P&L in green when positive', () => {
+  it('renders overall P&L in positive color when positive', () => {
     render(<NetWorthCard {...baseProps} />)
-    const plEl = screen.getByText(/₫ 100\.000\.000/)
-    expect(plEl.closest('p')).toHaveClass('text-green-600')
+    // P/L uses fmtCompact: "+100.0M ₫" with inline color var(--c-pos)
+    const plEl = screen.getByText(/\+100\.0M/)
+    expect(plEl).toHaveStyle({ color: 'var(--c-pos)' })
   })
 
-  it('renders overall P&L in red when negative', () => {
+  it('renders overall P&L in negative color when negative', () => {
     render(<NetWorthCard {...baseProps} overallProfitLoss={-50_000_000} overallProfitLossPercentage={-10} />)
-    const plEl = screen.getByText(/₫ -50\.000\.000/)
-    expect(plEl.closest('p')).toHaveClass('text-red-600')
+    const plEl = screen.getByText(/-50\.0M/)
+    expect(plEl).toHaveStyle({ color: 'var(--c-neg)' })
   })
 
   it('shows stale NAV warning icon when navStale is true', () => {
