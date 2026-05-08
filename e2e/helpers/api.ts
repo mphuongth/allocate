@@ -1,4 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
+import path from 'path'
+import fs from 'fs'
+
+const USER_FILE = path.join(__dirname, '..', '.auth', 'user.json')
 
 const supabase = createClient(
   process.env.E2E_SUPABASE_URL!,
@@ -9,11 +13,8 @@ let _testUserId: string | null = null
 
 export async function getTestUserId(): Promise<string> {
   if (_testUserId) return _testUserId
-  const { data, error } = await supabase.auth.admin.listUsers()
-  if (error) throw error
-  const user = data.users.find((u) => u.email === process.env.E2E_TEST_EMAIL)
-  if (!user) throw new Error(`Test user not found: ${process.env.E2E_TEST_EMAIL}`)
-  _testUserId = user.id
+  const { userId } = JSON.parse(fs.readFileSync(USER_FILE, 'utf-8'))
+  _testUserId = userId
   return _testUserId
 }
 
