@@ -73,14 +73,5 @@ export async function GET(request: Request) {
       value,
     }))
 
-  // Replace the last point with today's real snapshot (accurate market value) if available
-  const todaySnapshot = (snapshots ?? [])[0]
-  if (todaySnapshot && syntheticPoints.length > 0) {
-    syntheticPoints[syntheticPoints.length - 1] = {
-      label: new Date(todaySnapshot.snapshot_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      value: todaySnapshot.total_assets,
-    }
-  }
-
   return NextResponse.json(syntheticPoints)
 }

@@ -18,8 +18,11 @@ interface ChartPoint { label: string; value: number }
 function Sparkline({ data, positive }: { data: ChartPoint[]; positive: boolean }) {
   if (data.length < 2) return null
   const values = data.map((d) => d.value)
-  const min = Math.min(...values)
-  const max = Math.max(...values)
+  const rawMin = Math.min(...values)
+  const rawMax = Math.max(...values)
+  const pad = (rawMax - rawMin) * 0.15 || rawMax * 0.1 || 1
+  const min = Math.max(0, rawMin - pad)
+  const max = rawMax + pad
   const range = max - min || 1
   const W = 100
   const H = 36
