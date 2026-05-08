@@ -52,17 +52,21 @@ export function SellWithdrawSheet({ item, open, context, onClose, onSuccess }: P
   const [error, setError] = useState('')
   const [confirmed, setConfirmed] = useState(false)
   const [soldAmount, setSoldAmount] = useState(0)
+  const [mounted, setMounted] = useState(open)
 
   useEffect(() => {
-    if (!open) {
+    if (open) {
+      setMounted(true)
+    } else {
       const timer = setTimeout(() => {
+        setMounted(false)
         setAmount('')
         setUnits('')
         setSaving(false)
         setError('')
         setConfirmed(false)
         setSoldAmount(0)
-      }, 300)
+      }, 220) // matches slide-down animation duration
       return () => clearTimeout(timer)
     }
   }, [open, item?.name])
@@ -213,7 +217,7 @@ export function SellWithdrawSheet({ item, open, context, onClose, onSuccess }: P
     ? (isVI ? 'Tiền sẽ chuyển về mục "Chưa phân bổ"' : 'Proceeds move to Unallocated')
     : (isVI ? 'Tiền sẽ về tài khoản ngân hàng liên kết' : 'Proceeds go to your linked bank account')
 
-  if (!open && !item) return null
+  if (!mounted) return null
 
   const Icon = item ? (TYPE_ICON[item.type as keyof typeof TYPE_ICON] ?? TrendingUp) : TrendingUp
   const typeColor = item ? (TYPE_COLOR[item.type as keyof typeof TYPE_COLOR] ?? '#94a3b8') : '#94a3b8'

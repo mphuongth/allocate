@@ -274,7 +274,8 @@ test('"All" button fills the full available amount', async ({ page }) => {
 
   await page.getByTestId('sell-all-btn').click()
   const val = await page.getByTestId('sell-amount-input').inputValue()
-  expect(Number(val)).toBeGreaterThan(0)
+  // Input displays vi-VN formatted numbers (dots as thousand separators), strip before parsing
+  expect(Number(val.replace(/\./g, '').replace(/,/g, ''))).toBeGreaterThan(0)
 })
 
 test('sell bank shows early-withdrawal warning', async ({ page }) => {
