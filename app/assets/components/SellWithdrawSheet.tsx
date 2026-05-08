@@ -224,7 +224,7 @@ export function SellWithdrawSheet({ item, open, context, onClose, onSuccess }: P
       onClick={onClose}
       style={{
         position: 'fixed', inset: 0,
-        background: 'rgba(15, 23, 42, 0.45)',
+        background: 'rgba(15, 23, 42, 0.2)',
         zIndex: 100,
         display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
         animation: open ? 'fade-in 180ms ease' : 'fade-out 180ms ease forwards',

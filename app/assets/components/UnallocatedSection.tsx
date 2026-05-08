@@ -237,9 +237,10 @@ export default function UnallocatedSection({
           onClick={closeAction}
           style={{
             position: 'fixed', inset: 0,
-            background: 'rgba(15, 23, 42, 0.45)',
+            background: 'rgba(15, 23, 42, 0.2)',
             zIndex: 300,
             display: 'flex', alignItems: 'flex-end',
+            animation: 'fade-in 180ms ease',
           }}
         >
           <div
@@ -249,6 +250,8 @@ export default function UnallocatedSection({
               background: 'var(--c-card)',
               borderRadius: '20px 20px 0 0',
               padding: '12px 16px calc(env(safe-area-inset-bottom) + 20px)',
+              animation: 'slide-up 220ms cubic-bezier(0.2, 0.8, 0.2, 1)',
+              boxShadow: '0 -8px 24px rgba(0,0,0,0.08)',
             }}
           >
             {/* Handle */}
