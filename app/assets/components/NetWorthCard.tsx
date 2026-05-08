@@ -89,14 +89,13 @@ interface Props {
   currentValue: number
   overallProfitLoss: number
   overallProfitLossPercentage: number
-  navStale: boolean
   allocationBar?: { fund: number; bank: number; gold: number; stock: number }
   refreshKey?: number
 }
 
 export default function NetWorthCard({
   totalAssets, totalLiabilities, netWorth, totalInvested, currentValue,
-  overallProfitLoss, overallProfitLossPercentage, navStale, allocationBar, refreshKey,
+  overallProfitLoss, overallProfitLossPercentage, allocationBar, refreshKey,
 }: Props) {
   const t = useTranslations('dashboard')
   const plPositive = overallProfitLoss >= 0
@@ -131,7 +130,6 @@ export default function NetWorthCard({
         textTransform: 'uppercase', color: 'var(--c-muted)', marginBottom: 6,
       }}>
         {t('netWorth')}
-        {navStale && <span title={t('navStaleTooltip')} style={{ marginLeft: 6, color: 'var(--c-warn)' }}>⚠</span>}
       </div>
 
       {/* Hero number */}

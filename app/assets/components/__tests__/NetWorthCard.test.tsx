@@ -14,7 +14,6 @@ const baseProps = {
   currentValue: 450_000_000,
   overallProfitLoss: 100_000_000,
   overallProfitLossPercentage: 25,
-  navStale: false,
 }
 
 describe('NetWorthCard', () => {
@@ -37,15 +36,5 @@ describe('NetWorthCard', () => {
     render(<NetWorthCard {...baseProps} overallProfitLoss={-50_000_000} overallProfitLossPercentage={-10} />)
     const plEl = screen.getByText(/-50\.0M/)
     expect(plEl).toHaveStyle({ color: 'var(--c-neg)' })
-  })
-
-  it('shows stale NAV warning icon when navStale is true', () => {
-    render(<NetWorthCard {...baseProps} navStale={true} />)
-    expect(screen.getByText('⚠')).toBeInTheDocument()
-  })
-
-  it('does not show stale NAV warning when navStale is false', () => {
-    render(<NetWorthCard {...baseProps} navStale={false} />)
-    expect(screen.queryByText('⚠')).not.toBeInTheDocument()
   })
 })
