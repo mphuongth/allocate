@@ -91,11 +91,12 @@ interface Props {
   overallProfitLossPercentage: number
   navStale: boolean
   allocationBar?: { fund: number; bank: number; gold: number; stock: number }
+  refreshKey?: number
 }
 
 export default function NetWorthCard({
   totalAssets, totalLiabilities, netWorth, totalInvested, currentValue,
-  overallProfitLoss, overallProfitLossPercentage, navStale, allocationBar,
+  overallProfitLoss, overallProfitLossPercentage, navStale, allocationBar, refreshKey,
 }: Props) {
   const t = useTranslations('dashboard')
   const plPositive = overallProfitLoss >= 0
@@ -107,7 +108,7 @@ export default function NetWorthCard({
       .then((r) => r.ok ? r.json() : [])
       .then((data: ChartPoint[]) => setHistory(data))
       .catch(() => setHistory([]))
-  }, [timeRange])
+  }, [timeRange, refreshKey])
 
   const kpis = [
     { label: t('invested'),     value: totalInvested },

@@ -217,6 +217,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const [sellItem, setSellItem] = useState<SellItem | null>(null)
   const [sellSheetOpen, setSellSheetOpen] = useState(false)
   const [isGeneratingReport, setIsGeneratingReport] = useState(false)
+  const [historyKey, setHistoryKey] = useState(0)
   const [pullY, setPullY] = useState(0)
   const PULL_THRESHOLD = 65
 
@@ -240,6 +241,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
       } else {
         const json = await res.json()
         setData(json)
+        setHistoryKey((k) => k + 1)
         setCachedOverview(userId, json)
         try { localStorage.setItem('pwa_last_fetch', String(Date.now())) } catch {}
       }
@@ -647,6 +649,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
             <div className="space-y-4">
               <NetWorthCard
                 {...data.netWorth}
+                refreshKey={historyKey}
                 allocationBar={allocationTotals ? {
                   fund: allocationTotals.equityTotal + allocationTotals.bondTotal + allocationTotals.balancedTotal,
                   bank: allocationTotals.bankTotal,

@@ -41,7 +41,7 @@ export async function GET(request: Request) {
   // Not enough snapshots yet — synthesize monthly history from investment transactions
   const { data: txData } = await supabase
     .from('investment_transactions')
-    .select('investment_date, amount_vnd')
+    .select('investment_date, amount_vnd, transaction_type')
     .eq('user_id', user.id)
     .order('investment_date', { ascending: true })
 
@@ -55,13 +55,13 @@ export async function GET(request: Request) {
     )
   }
 
-  // Group by month, compute running cumulative invested amount
+  // Group by month, compute running cumulative invested amount (withdrawals reduce the total)
   const monthlyMap = new Map<string, number>()
   let cumulative = 0
   for (const tx of txData) {
     const month = tx.investment_date.slice(0, 7) // YYYY-MM
-    cumulative += tx.amount_vnd
-    monthlyMap.set(month, cumulative)
+    cumulative += tx.transaction_type === 'withdrawal' ? -tx.amount_vnd : tx.amount_vnd
+    monthlyMap.set(month, Math.max(0, cumulative))
   }
 
   // Filter by time range
