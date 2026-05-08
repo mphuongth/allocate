@@ -107,7 +107,7 @@ export default function NetWorthCard({
   const [history, setHistory] = useState<ChartPoint[]>([])
 
   useEffect(() => {
-    fetch(`/api/v1/dashboard/history?range=${RANGE_PARAM[timeRange]}`)
+    fetch(`/api/v1/dashboard/history?range=${RANGE_PARAM[timeRange]}`, { cache: 'no-store' })
       .then((r) => r.ok ? r.json() : [])
       .then((data: ChartPoint[]) => setHistory(data))
       .catch(() => setHistory([]))
