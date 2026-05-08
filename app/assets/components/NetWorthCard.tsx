@@ -18,8 +18,11 @@ interface ChartPoint { label: string; value: number }
 function Sparkline({ data, positive }: { data: ChartPoint[]; positive: boolean }) {
   if (data.length < 2) return null
   const values = data.map((d) => d.value)
-  const min = Math.min(...values)
-  const max = Math.max(...values)
+  const rawMin = Math.min(...values)
+  const rawMax = Math.max(...values)
+  const pad = (rawMax - rawMin) * 0.15 || rawMax * 0.1 || 1
+  const min = Math.max(0, rawMin - pad)
+  const max = rawMax + pad
   const range = max - min || 1
   const W = 100
   const H = 36
@@ -30,13 +33,10 @@ function Sparkline({ data, positive }: { data: ChartPoint[]; positive: boolean }
       return `${x.toFixed(2)},${y.toFixed(2)}`
     })
     .join(' ')
-  const lastX = W
-  const lastY = H - ((values[values.length - 1] - min) / range) * (H - 6) - 3
   const color = positive ? 'var(--c-pos)' : 'var(--c-neg)'
   return (
     <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: '100%', height: H, display: 'block' }}>
       <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
-      <circle cx={lastX} cy={lastY} r="2.5" fill={color} />
     </svg>
   )
 }
@@ -89,13 +89,13 @@ interface Props {
   currentValue: number
   overallProfitLoss: number
   overallProfitLossPercentage: number
-  navStale: boolean
   allocationBar?: { fund: number; bank: number; gold: number; stock: number }
+  refreshKey?: number
 }
 
 export default function NetWorthCard({
   totalAssets, totalLiabilities, netWorth, totalInvested, currentValue,
-  overallProfitLoss, overallProfitLossPercentage, navStale, allocationBar,
+  overallProfitLoss, overallProfitLossPercentage, allocationBar, refreshKey,
 }: Props) {
   const t = useTranslations('dashboard')
   const plPositive = overallProfitLoss >= 0
@@ -103,11 +103,11 @@ export default function NetWorthCard({
   const [history, setHistory] = useState<ChartPoint[]>([])
 
   useEffect(() => {
-    fetch(`/api/v1/dashboard/history?range=${RANGE_PARAM[timeRange]}`)
+    fetch(`/api/v1/dashboard/history?range=${RANGE_PARAM[timeRange]}`, { cache: 'no-store' })
       .then((r) => r.ok ? r.json() : [])
       .then((data: ChartPoint[]) => setHistory(data))
       .catch(() => setHistory([]))
-  }, [timeRange])
+  }, [timeRange, refreshKey])
 
   const kpis = [
     { label: t('invested'),     value: totalInvested },
@@ -130,7 +130,6 @@ export default function NetWorthCard({
         textTransform: 'uppercase', color: 'var(--c-muted)', marginBottom: 6,
       }}>
         {t('netWorth')}
-        {navStale && <span title={t('navStaleTooltip')} style={{ marginLeft: 6, color: 'var(--c-warn)' }}>⚠</span>}
       </div>
 
       {/* Hero number */}

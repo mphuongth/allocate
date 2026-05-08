@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: Request) {
   const supabase = await createSupabaseServerClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -28,21 +30,26 @@ export async function GET(request: Request) {
   const { data: snapshots, error } = await snapshotQuery
   if (error) return NextResponse.json({ error: 'Failed to fetch history' }, { status: 500 })
 
-  // If we have enough real snapshots, return them directly
-  if ((snapshots ?? []).length >= 2) {
+  // If we have enough real snapshots, return them — filtering out any zero-value rows
+  // that can appear when a snapshot was saved during a now-deleted sell transaction.
+  const validSnapshots = (snapshots ?? []).filter((r) => r.total_assets > 0)
+  if (validSnapshots.length >= 2) {
     return NextResponse.json(
-      snapshots!.map((row) => ({
+      validSnapshots.map((row) => ({
         label: new Date(row.snapshot_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
         value: row.total_assets,
       }))
     )
   }
 
-  // Not enough snapshots yet — synthesize monthly history from investment transactions
+  // Not enough snapshots yet — synthesize monthly history from investment transactions only.
+  // Withdrawals are intentionally excluded: they are recorded at market value which can exceed
+  // original cost, driving the cumulative negative and causing a visual cliff.
   const { data: txData } = await supabase
     .from('investment_transactions')
     .select('investment_date, amount_vnd')
     .eq('user_id', user.id)
+    .eq('transaction_type', 'investment')
     .order('investment_date', { ascending: true })
 
   if (!txData || txData.length === 0) {
@@ -72,15 +79,6 @@ export async function GET(request: Request) {
       label: new Date(month + '-01T00:00:00').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
       value,
     }))
-
-  // Replace the last point with today's real snapshot (accurate market value) if available
-  const todaySnapshot = (snapshots ?? [])[0]
-  if (todaySnapshot && syntheticPoints.length > 0) {
-    syntheticPoints[syntheticPoints.length - 1] = {
-      label: new Date(todaySnapshot.snapshot_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      value: todaySnapshot.total_assets,
-    }
-  }
 
   return NextResponse.json(syntheticPoints)
 }
