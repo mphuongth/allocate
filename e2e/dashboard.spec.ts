@@ -61,7 +61,7 @@ test('"Add Goal" button opens Create Goal dialog', async ({ page }) => {
   }
 })
 
-test('clicking a goal card navigates to goal detail', async ({ page }) => {
+test('clicking a goal card opens GoalDetailSheet', async ({ page }) => {
   const goal = await api.createGoal({ goal_name: 'E2E Dashboard Goal', target_amount: 50_000_000 })
   cleanup.add(() => api.deleteGoal(goal.goal_id))
 
@@ -70,18 +70,12 @@ test('clicking a goal card navigates to goal detail', async ({ page }) => {
 
   const goalCard = page.locator('text=E2E Dashboard Goal').first()
   await expect(goalCard).toBeVisible({ timeout: 10_000 })
+  await goalCard.click()
 
-  // Click the goal card or its "View Details" button
-  const viewBtn = page.getByRole('button', { name: /view|details|xem/i }).first()
-  if (await viewBtn.isVisible()) {
-    await viewBtn.click()
-  } else {
-    await goalCard.click()
-  }
-
-  await expect(page).toHaveURL(/settings.*goal/)
-  // GoalDetailView has a back button
+  // GoalDetailSheet opens as a full-screen overlay with a back button
   await expect(page.getByTestId("goal-back-btn").first()).toBeVisible({ timeout: 8_000 })
+  await page.getByTestId("goal-back-btn").first().click()
+  await expect(page.getByTestId("goal-back-btn")).not.toBeVisible({ timeout: 5_000 })
 })
 
 test('tapping unallocated row opens action sheet', async ({ page }) => {

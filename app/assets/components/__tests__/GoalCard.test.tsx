@@ -3,9 +3,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import GoalCard from '../GoalCard'
 
-const mockPush = vi.fn()
 vi.mock('next-intl', () => ({ useTranslations: () => (key: string, params?: Record<string, unknown>) => params ? `${key}:${JSON.stringify(params)}` : key }))
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }))
 
 const baseProps = {
   goalId: 'goal-1',
@@ -16,7 +14,7 @@ const baseProps = {
   profitLoss: 5_000_000,
   profitLossPercentage: 9.09,
   progressPercentage: 60,
-  transactionCount: 3,
+  onClick: vi.fn(),
 }
 
 describe('GoalCard', () => {
@@ -27,29 +25,24 @@ describe('GoalCard', () => {
 
   it('renders the current value formatted', () => {
     render(<GoalCard {...baseProps} />)
-    // currentValue uses fmt() → full precision e.g. ₫ 60.000.000
     expect(screen.getByText('₫ 60.000.000')).toBeInTheDocument()
   })
 
-  it('shows gain/loss in positive color when positive', () => {
+  it('shows gain/loss in green when positive', () => {
     render(<GoalCard {...baseProps} />)
-    // P/L rendered as fmtCompact: "+5.0M ₫ · 9.09%" in one <span>
-    const gainEl = screen.getByText(/\+5\.0M/)
-    expect(gainEl).toHaveStyle({ color: 'var(--c-pos)' })
+    const gainEl = screen.getByText('₫ 5.000.000')
+    expect(gainEl).toHaveClass('text-green-600')
   })
 
-  it('shows gain/loss in negative color when negative', () => {
+  it('shows gain/loss in red when negative', () => {
     render(<GoalCard {...baseProps} profitLoss={-2_000_000} profitLossPercentage={-3.6} />)
-    const lossEl = screen.getByText(/-2\.0M/)
-    expect(lossEl).toHaveStyle({ color: 'var(--c-neg)' })
+    const lossEl = screen.getByText('₫ -2.000.000')
+    expect(lossEl).toHaveClass('text-red-600')
   })
 
-  it('shows 100% progress badge when progressPercentage >= 100', () => {
+  it('shows exceeded-target text when progressPercentage >= 100', () => {
     render(<GoalCard {...baseProps} progressPercentage={100} currentValue={100_000_000} />)
-    // Progress chip shows "100%" with green styling when complete
-    const badge = screen.getByText('100%')
-    expect(badge).toBeInTheDocument()
-    expect(badge).toHaveStyle({ color: 'var(--c-pos)' })
+    expect(screen.getByText('exceededTarget')).toBeInTheDocument()
   })
 
   it('hides progress bar and target when targetAmount is null', () => {
@@ -58,9 +51,10 @@ describe('GoalCard', () => {
     expect(screen.queryByText(/goalProgress/)).not.toBeInTheDocument()
   })
 
-  it('navigates to goal settings on click', async () => {
-    render(<GoalCard {...baseProps} />)
+  it('calls onClick prop when card is clicked', async () => {
+    const onClick = vi.fn()
+    render(<GoalCard {...baseProps} onClick={onClick} />)
     await userEvent.click(screen.getByText('Emergency Fund'))
-    expect(mockPush).toHaveBeenCalledWith('/settings?tab=goals&goal=goal-1')
+    expect(onClick).toHaveBeenCalled()
   })
 })

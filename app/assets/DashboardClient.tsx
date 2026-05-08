@@ -19,9 +19,12 @@ import UnallocatedSection from './components/UnallocatedSection'
 import InsuranceCard from './components/InsuranceCard'
 import AssetAllocationPie from './components/AssetAllocationPie'
 import { SellWithdrawSheet, type SellItem } from './components/SellWithdrawSheet'
+import GoalDetailSheet from './components/GoalDetailSheet'
+import AssignGoalSheet from './components/AssignGoalSheet'
+import DownloadReportSheet from './components/DownloadReportSheet'
 
 const FundDetailModal = dynamic(() => import('./components/FundDetailModal'))
-const GoalPickerModal = dynamic(() => import('./components/GoalPickerModal'))
+const GoldPriceWidget = dynamic(() => import('./components/GoldPriceWidget'))
 
 export interface FundBreakdownItem {
   fundId: string
@@ -192,7 +195,6 @@ function fmtTimeAgo(isoString: string, locale: string): string {
 export default function DashboardClient({ userId }: { userId: string }) {
   const t = useTranslations('dashboard')
   const tc = useTranslations('common')
-  const tt = useTranslations('transactions')
   const tg = useTranslations('goals')
   const locale = useLocale()
   const { userName, setMobileTopBar } = useNavigation()
@@ -219,6 +221,9 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const [isGeneratingReport, setIsGeneratingReport] = useState(false)
   const [historyKey, setHistoryKey] = useState(0)
   const [pullY, setPullY] = useState(0)
+  const [selectedGoal, setSelectedGoal] = useState<GoalData | null>(null)
+  const [goalDetailOpen, setGoalDetailOpen] = useState(false)
+  const [showReportSheet, setShowReportSheet] = useState(false)
   const PULL_THRESHOLD = 65
 
   const fetchDataRef = useRef<(opts?: { force?: boolean }) => Promise<void>>(async () => {})
@@ -630,7 +635,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
             <div className="hidden md:flex justify-end">
               <button
                 data-testid="generate-report-btn"
-                onClick={handleGenerateReport}
+                onClick={() => setShowReportSheet(true)}
                 disabled={isGeneratingReport}
                 aria-label={isGeneratingReport ? t('downloadingReport') : t('downloadReport')}
                 style={{
@@ -711,6 +716,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                     <GoalCard
                       key={goal.goalId}
                       {...goal}
+                      onClick={() => { setSelectedGoal(goal); setGoalDetailOpen(true) }}
                     />
                   ))}
                 </div>
@@ -798,26 +804,45 @@ export default function DashboardClient({ userId }: { userId: string }) {
         onClose={() => { setFundDetailId(null); setPurchaseHistory([]) }}
       />
 
-      {/* Goal Picker Modal — funds */}
-      <GoalPickerModal
-        open={!!(goalPickerFundId && data)}
-        onOpenChange={(o) => { if (!o) { setGoalPickerFundId(null); setAssignError('') } }}
-        fundId={goalPickerFundId ?? ''}
-        fundName={allFunds.find((f) => f.fundId === goalPickerFundId)?.fundName ?? ''}
-        goals={data ? data.goals.map((g) => ({
-          id: g.goalId,
-          name: g.goalName,
-          targetAmount: g.targetAmount,
-          currentValue: g.currentValue,
-          progressPercent: g.progressPercentage,
-        })) : []}
-        onConfirm={(goalId) => goalPickerFundId && handleAssignToGoal(goalPickerFundId, goalId)}
-        onCancel={() => { setGoalPickerFundId(null); setAssignError('') }}
-        isLoading={assignLoading}
-        error={assignError}
+      {/* Assign Goal Sheet — funds */}
+      <AssignGoalSheet
+        open={!!goalPickerFundId}
+        onClose={() => { setGoalPickerFundId(null); fetchData({ force: true }) }}
+        onConfirm={async (goalId) => {
+          if (!goalPickerFundId) return
+          const res = await fetch(`/api/v1/fund-investments?fund_id=${goalPickerFundId}`)
+          if (!res.ok) throw new Error('Failed to fetch fund investments')
+          const investments = await res.json() as Array<{ id: string }>
+          await Promise.all(
+            investments.map((inv) =>
+              fetch(`/api/v1/fund-investments/${inv.id}/goal`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ goal_id: goalId }),
+              }).then((r) => { if (!r.ok) throw new Error('Failed to assign') })
+            )
+          )
+        }}
       />
 
-      {/* Goal Picker Modal — non-funds (gold, bank, stock) */}
+      {/* Assign Goal Sheet — non-funds */}
+      <AssignGoalSheet
+        open={!!nonFundPickerTxId}
+        onClose={() => { setNonFundPickerTxId(null); fetchData({ force: true }) }}
+        onConfirm={async (goalId) => {
+          if (!nonFundPickerTxId) return
+          const res = await fetch(`/api/v1/investment-transactions/${nonFundPickerTxId}/assign`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ goal_id: goalId }),
+          })
+          if (!res.ok) {
+            const { error: e } = await res.json().catch(() => ({ error: 'Failed to assign' }))
+            throw new Error(e ?? 'Failed to assign')
+          }
+        }}
+      />
+
       {/* Add Goal Modal */}
       <Dialog open={showGoalForm} onOpenChange={(o) => { if (!o && !goalSaving) setShowGoalForm(false) }}>
         <DialogContent className="sm:max-w-[480px]">
@@ -860,30 +885,26 @@ export default function DashboardClient({ userId }: { userId: string }) {
         onSuccess={() => fetchData({ force: true })}
       />
 
-      {(() => {
-        const item = data?.unallocated.nonFunds.find((i) => i.transactionId === nonFundPickerTxId)
-        const typeLabel = item ? (item.type === 'gold' ? tt('assetGold') : item.type === 'bank' ? tt('assetBank') : tt('assetStock')) : ''
-        const label = item ? `${typeLabel} · ${new Date(item.investmentDate).toLocaleDateString('vi-VN')}` : ''
-        return (
-          <GoalPickerModal
-            open={!!(nonFundPickerTxId && data)}
-            onOpenChange={(o) => { if (!o) { setNonFundPickerTxId(null); setNonFundAssignError('') } }}
-            fundId={nonFundPickerTxId ?? ''}
-            fundName={label}
-            goals={data ? data.goals.map((g) => ({
-              id: g.goalId,
-              name: g.goalName,
-              targetAmount: g.targetAmount,
-              currentValue: g.currentValue,
-              progressPercent: g.progressPercentage,
-            })) : []}
-            onConfirm={(goalId) => nonFundPickerTxId && handleAssignNonFundToGoal(nonFundPickerTxId, goalId)}
-            onCancel={() => { setNonFundPickerTxId(null); setNonFundAssignError('') }}
-            isLoading={nonFundAssignLoading}
-            error={nonFundAssignError}
-          />
-        )
-      })()}
+      {/* Goal Detail Sheet */}
+      <GoalDetailSheet
+        goal={selectedGoal}
+        open={goalDetailOpen}
+        onClose={() => setGoalDetailOpen(false)}
+        onDataChanged={() => fetchData({ force: true })}
+      />
+
+      {/* Download Report Sheet */}
+      <DownloadReportSheet
+        open={showReportSheet}
+        onClose={() => setShowReportSheet(false)}
+        data={data ? {
+          netWorth: data.netWorth.netWorth,
+          currentValue: data.netWorth.currentValue,
+          totalPL: data.netWorth.overallProfitLoss,
+          goalCount: data.goals.length,
+        } : null}
+        onExport={handleGenerateReport}
+      />
     </div>
   )
 }
