@@ -228,6 +228,7 @@ export function SellWithdrawSheet({ item, open, context, onClose, onSuccess }: P
         zIndex: 100,
         display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
         animation: open ? 'fade-in 180ms ease' : 'fade-out 180ms ease forwards',
+        pointerEvents: open ? 'auto' : 'none',
       }}
     >
       <div
