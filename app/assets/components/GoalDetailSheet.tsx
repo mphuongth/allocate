@@ -350,8 +350,8 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: 
     if (!open || !goal) return
     setTxLoading(true)
     fetch(`/api/v1/investment-transactions?goal_id=${goal.goalId}&limit=200`)
-      .then((r) => r.ok ? r.json() : [])
-      .then((rows) => setTransactions(rows))
+      .then((r) => r.ok ? r.json() : { transactions: [] })
+      .then((res) => setTransactions(res.transactions ?? []))
       .catch(() => setTransactions([]))
       .finally(() => setTxLoading(false))
   }, [open, goal])
