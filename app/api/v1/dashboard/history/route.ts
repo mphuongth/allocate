@@ -28,21 +28,26 @@ export async function GET(request: Request) {
   const { data: snapshots, error } = await snapshotQuery
   if (error) return NextResponse.json({ error: 'Failed to fetch history' }, { status: 500 })
 
-  // If we have enough real snapshots, return them directly
-  if ((snapshots ?? []).length >= 2) {
+  // If we have enough real snapshots, return them — filtering out any zero-value rows
+  // that can appear when a snapshot was saved during a now-deleted sell transaction.
+  const validSnapshots = (snapshots ?? []).filter((r) => r.total_assets > 0)
+  if (validSnapshots.length >= 2) {
     return NextResponse.json(
-      snapshots!.map((row) => ({
+      validSnapshots.map((row) => ({
         label: new Date(row.snapshot_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
         value: row.total_assets,
       }))
     )
   }
 
-  // Not enough snapshots yet — synthesize monthly history from investment transactions
+  // Not enough snapshots yet — synthesize monthly history from investment transactions only.
+  // Withdrawals are intentionally excluded: they are recorded at market value which can exceed
+  // original cost, driving the cumulative negative and causing a visual cliff.
   const { data: txData } = await supabase
     .from('investment_transactions')
-    .select('investment_date, amount_vnd, transaction_type')
+    .select('investment_date, amount_vnd')
     .eq('user_id', user.id)
+    .eq('transaction_type', 'investment')
     .order('investment_date', { ascending: true })
 
   if (!txData || txData.length === 0) {
@@ -55,13 +60,13 @@ export async function GET(request: Request) {
     )
   }
 
-  // Group by month, compute running cumulative invested amount (withdrawals reduce the total)
+  // Group by month, compute running cumulative invested amount
   const monthlyMap = new Map<string, number>()
   let cumulative = 0
   for (const tx of txData) {
     const month = tx.investment_date.slice(0, 7) // YYYY-MM
-    cumulative += tx.transaction_type === 'withdrawal' ? -tx.amount_vnd : tx.amount_vnd
-    monthlyMap.set(month, Math.max(0, cumulative))
+    cumulative += tx.amount_vnd
+    monthlyMap.set(month, cumulative)
   }
 
   // Filter by time range
