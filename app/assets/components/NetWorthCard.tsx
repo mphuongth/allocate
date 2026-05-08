@@ -33,14 +33,23 @@ function Sparkline({ data, positive }: { data: ChartPoint[]; positive: boolean }
       return `${x.toFixed(2)},${y.toFixed(2)}`
     })
     .join(' ')
-  const lastX = W
   const lastY = H - ((values[values.length - 1] - min) / range) * (H - 6) - 3
+  const lastYPct = lastY / H
   const color = positive ? 'var(--c-pos)' : 'var(--c-neg)'
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: '100%', height: H, display: 'block' }}>
-      <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
-      <circle cx={lastX} cy={lastY} r="2.5" fill={color} />
-    </svg>
+    <div style={{ position: 'relative', width: '100%', height: H }}>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: '100%', height: H, display: 'block' }}>
+        <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+      </svg>
+      {/* Dot rendered outside the stretched SVG so it stays a true circle */}
+      <div style={{
+        position: 'absolute', right: 0,
+        top: `${lastYPct * 100}%`,
+        transform: 'translate(50%, -50%)',
+        width: 6, height: 6, borderRadius: '50%',
+        background: color,
+      }} />
+    </div>
   )
 }
 
