@@ -224,12 +224,10 @@ export function SellWithdrawSheet({ item, open, context, onClose, onSuccess }: P
       onClick={onClose}
       style={{
         position: 'fixed', inset: 0,
-        background: open ? 'rgba(15, 23, 42, 0.45)' : 'transparent',
+        background: 'rgba(15, 23, 42, 0.45)',
         zIndex: 100,
         display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
-        opacity: open ? 1 : 0,
-        pointerEvents: open ? 'auto' : 'none',
-        transition: 'opacity 180ms ease',
+        animation: open ? 'fade-in 180ms ease' : 'fade-out 180ms ease forwards',
       }}
     >
       <div
@@ -240,8 +238,7 @@ export function SellWithdrawSheet({ item, open, context, onClose, onSuccess }: P
           borderTopLeftRadius: 20, borderTopRightRadius: 20,
           padding: '8px 16px 32px',
           overflowY: 'auto',
-          transform: open ? 'translateY(0)' : 'translateY(100%)',
-          transition: 'transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1)',
+          animation: open ? 'slide-up 220ms cubic-bezier(0.2, 0.8, 0.2, 1)' : 'slide-down 180ms ease forwards',
           boxShadow: '0 -8px 24px rgba(0,0,0,0.12)',
         }}
       >
