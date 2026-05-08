@@ -89,7 +89,7 @@ export async function createTransaction(data: {
   const userId = await getTestUserId()
   const { data: tx, error } = await supabase
     .from('investment_transactions')
-    .insert({ user_id: userId, transaction_type: 'deposit', ...data })
+    .insert({ user_id: userId, transaction_type: 'investment', ...data })
     .select()
     .single()
   if (error) throw error

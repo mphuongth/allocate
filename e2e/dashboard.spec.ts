@@ -28,25 +28,24 @@ test('dashboard page loads with main layout', async ({ page }) => {
 test('dashboard shows net worth card when data exists', async ({ page }) => {
   await page.goto('/dashboard')
   await page.waitForLoadState('networkidle')
-  // Net worth card shows total assets heading
-  await expect(page.locator('text=/Net Worth|Total Assets|Tổng tài sản/i').first()).toBeVisible({ timeout: 10_000 })
+  // Net worth card shows the net worth or total assets label in EN or VI
+  await expect(page.locator('text=/Net Worth|Total Assets|Tài sản Ròng|Tổng Tài sản|Tổng tài sản/i').first()).toBeVisible({ timeout: 10_000 })
 })
 
 test('dashboard shows empty state when no investments', async ({ page }) => {
-  // This test relies on a fresh test account with no data
-  // If the test account has data this test is skipped
   await page.goto('/dashboard')
   await page.waitForLoadState('networkidle')
   const emptyState = page.locator('text=/no investments|get started|chưa có/i').first()
-  const hasData = page.locator('text=/Net Worth|Tổng tài sản/i').first()
+  const hasData = page.locator('text=/Net Worth|Tài sản Ròng|Tổng Tài sản|Tổng tài sản/i').first()
   // Either empty state OR data is visible
   await expect(emptyState.or(hasData)).toBeVisible({ timeout: 10_000 })
 })
 
-test('dashboard shows asset allocation section', async ({ page }) => {
+test('dashboard shows allocation bar when investments exist', async ({ page }) => {
   await page.goto('/dashboard')
   await page.waitForLoadState('networkidle')
-  await expect(page.locator('text=Asset Allocation').first()).toBeVisible({ timeout: 10_000 })
+  // Allocation bar renders when there is at least one investment (seeded in setup)
+  await expect(page.getByTestId('allocation-bar')).toBeVisible({ timeout: 10_000 })
 })
 
 test('"Add Goal" button opens Create Goal dialog', async ({ page }) => {

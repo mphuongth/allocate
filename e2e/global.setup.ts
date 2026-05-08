@@ -49,6 +49,6 @@ setup('authenticate', async ({ page }) => {
     amount_vnd: 10_000_000,
     investment_date: '2026-01-01',
     interest_rate: 6,
-    transaction_type: 'deposit',
+    transaction_type: 'investment',
   })
 })

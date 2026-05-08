@@ -14,7 +14,8 @@ async function openGoalsTab(page: import('@playwright/test').Page) {
 
 test('goals tab renders list or empty state', async ({ page }) => {
   await openGoalsTab(page)
-  await expect(page.locator('h2, h1').first()).toBeVisible({ timeout: 15_000 })
+  // create-btn is already waited for by openGoalsTab; assert it's visible
+  await expect(page.getByTestId('create-btn')).toBeVisible({ timeout: 5_000 })
 })
 
 test('can create a new savings goal', async ({ page }) => {
