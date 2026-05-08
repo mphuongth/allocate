@@ -222,25 +222,29 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const PULL_THRESHOLD = 65
 
   const fetchDataRef = useRef<(opts?: { force?: boolean }) => Promise<void>>(async () => {})
+  const hasDataRef = useRef(false)
   const touchStartY = useRef(-1)
 
   const fetchData = useCallback(async (opts?: { force?: boolean }) => {
     const cached = !opts?.force && getCachedOverview(userId)
     if (cached) {
       setData(cached)
+      hasDataRef.current = true
       setLoading(false)
       return
     }
-    setLoading(true)
+    // Only show skeleton on initial load — if data is already visible, refresh silently
+    if (!hasDataRef.current) setLoading(true)
     setError('')
     try {
-      const res = await fetch('/api/v1/dashboard/overview')
+      const res = await fetch('/api/v1/dashboard/overview', { cache: 'no-store' })
       if (!res.ok) {
         const { error: e } = await res.json()
         setError(e ?? tc('error'))
       } else {
         const json = await res.json()
         setData(json)
+        hasDataRef.current = true
         setHistoryKey((k) => k + 1)
         setCachedOverview(userId, json)
         try { localStorage.setItem('pwa_last_fetch', String(Date.now())) } catch {}
