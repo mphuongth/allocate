@@ -97,10 +97,11 @@ export function SellWithdrawSheet({ item, open, context, onClose, onSuccess }: P
   const navPerUnit = item?.navPerUnit
 
   function handleAmountChange(val: string) {
-    setAmount(val)
+    const raw = val.replace(/,/g, '').replace(/[^0-9]/g, '')
+    setAmount(raw)
     setError('')
-    if (navPerUnit && val) {
-      const u = Number(val) / navPerUnit
+    if (navPerUnit && raw) {
+      const u = Number(raw) / navPerUnit
       setUnits(u > 0 ? u.toFixed(2) : '')
     } else {
       setUnits('')
@@ -309,8 +310,9 @@ export function SellWithdrawSheet({ item, open, context, onClose, onSuccess }: P
                   <span style={{ fontSize: 14, color: 'var(--c-muted)' }}>₫</span>
                   <input
                     data-testid="sell-amount-input"
-                    type="number"
-                    value={amount}
+                    type="text"
+                    inputMode="numeric"
+                    value={amount ? Number(amount).toLocaleString('vi-VN') : ''}
                     onChange={e => handleAmountChange(e.target.value)}
                     placeholder="0"
                     style={{ flex: 1, border: 'none', outline: 'none', fontSize: 15, fontWeight: 600, background: 'transparent', color: isOverMax ? 'var(--c-neg, #dc2626)' : 'var(--c-ink)' }}
