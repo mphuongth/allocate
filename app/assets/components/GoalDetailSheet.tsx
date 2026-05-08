@@ -586,12 +586,31 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: 
               {!txLoading && investRows.map((tx) => {
                 const fund = tx.fund_id ? fundMap.get(tx.fund_id) ?? null : null
                 const name = fund?.fundName ?? tx.notes ?? (tx.asset_type === 'bank' ? (isVI ? 'Tiền gửi' : 'Bank deposit') : tx.asset_type === 'gold' ? (isVI ? 'Vàng' : 'Gold') : tx.asset_type)
-                const value = fund?.currentValue ?? tx.amount_vnd
-                const pl = fund?.profitLoss ?? 0
-                const plPct = fund?.profitLossPercentage ?? 0
+
+                // For funds use live NAV-based value; for bank/gold compute interest
+                let value: number
+                let pl: number
+                let plPct: number
+                if (fund) {
+                  value = fund.currentValue
+                  pl = fund.profitLoss
+                  plPct = fund.profitLossPercentage
+                } else if (tx.asset_type === 'bank' && tx.interest_rate) {
+                  const months = Math.max(0, Math.floor(
+                    (Date.now() - new Date(tx.investment_date).getTime()) / (1000 * 60 * 60 * 24 * 30.44)
+                  ))
+                  value = Math.round(tx.amount_vnd * Math.pow(1 + tx.interest_rate / 100 / 12, months))
+                  pl = value - tx.amount_vnd
+                  plPct = tx.amount_vnd > 0 ? (pl / tx.amount_vnd) * 100 : 0
+                } else {
+                  value = tx.amount_vnd
+                  pl = 0
+                  plPct = 0
+                }
+
                 return (
                   <div
-                    key={tx.fund_id ?? tx.transaction_id}
+                    key={tx.transaction_id}
                     style={{
                       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                       padding: '12px 0', borderBottom: '1px solid var(--c-line)',
@@ -606,10 +625,10 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: 
                         {fund && ` · ${fmtShort(fund.purchasePrice * fund.quantity)} ${isVI ? 'đầu tư' : 'invested'}`}
                       </p>
                     </div>
-                    <div style={{ textAlign: 'right', marginRight: 8 }}>
+                    <div style={{ textAlign: 'right', marginRight: fund ? 8 : 0 }}>
                       <p style={{ fontWeight: 600, fontSize: 14, color: 'var(--c-ink)' }}>{fmtShort(value)}</p>
                       <p style={{ fontSize: 12, color: pl >= 0 ? 'var(--c-pos)' : 'var(--c-neg)' }}>
-                        {pl >= 0 ? '+' : ''}{fmtPct(plPct)}
+                        {fmtPct(plPct)}
                       </p>
                     </div>
                     {fund && (
