@@ -608,29 +608,34 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: 
       >
         {/* Header */}
         <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '12px 16px', borderBottom: '1px solid var(--c-line)',
-          background: 'var(--c-card)', position: 'sticky', top: 0, zIndex: 10,
+          position: 'sticky', top: 0, zIndex: 10,
+          background: 'var(--c-canvas,#faf9f7)',
+          padding: '14px 16px 10px',
+          borderBottom: '1px solid transparent',
         }}>
-          <button
-            data-testid="goal-back-btn"
-            onClick={onClose}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, color: 'var(--c-ink)', display: 'flex', alignItems: 'center' }}
-          >
-            <ChevronLeft size={20} />
-          </button>
-          <div style={{ textAlign: 'center' }}>
-            <p style={{ fontSize: 11, color: 'var(--c-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              {isVI ? 'Mục tiêu' : 'Goal'}
-            </p>
-            <p style={{ fontSize: 17, fontWeight: 700, color: 'var(--c-ink)', lineHeight: 1.2 }}>{goal.goalName}</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 32 }}>
+            <button
+              data-testid="goal-back-btn"
+              onClick={onClose}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, color: 'var(--c-ink)', display: 'flex', alignItems: 'center', flexShrink: 0 }}
+            >
+              <ChevronLeft size={20} />
+            </button>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 11, color: 'var(--c-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600 }}>
+                {isVI ? 'Mục tiêu' : 'Goal'}
+              </div>
+              <h1 style={{ margin: 0, fontSize: 22, fontWeight: 600, letterSpacing: '-0.015em', color: 'var(--c-ink)' }}>
+                {goal.goalName}
+              </h1>
+            </div>
+            <button
+              onClick={() => setActionsOpen(true)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, color: 'var(--c-ink)', display: 'flex', alignItems: 'center', flexShrink: 0 }}
+            >
+              <MoreHorizontal size={18} />
+            </button>
           </div>
-          <button
-            onClick={() => setActionsOpen(true)}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, color: 'var(--c-ink)', display: 'flex', alignItems: 'center' }}
-          >
-            <MoreHorizontal size={18} />
-          </button>
         </div>
 
         <div style={{ padding: '16px 16px 0' }}>
