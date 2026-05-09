@@ -84,11 +84,11 @@ describe('GoalDetailSheet — transaction history integration', () => {
     const optionsBtn = screen.getByRole('button', { name: /options/i })
     await userEvent.click(optionsBtn)
 
-    // InvestmentActionSheet appears — tap "Transaction history"
-    await waitFor(() => expect(screen.getByText('Transaction history')).toBeInTheDocument())
-    await userEvent.click(screen.getByText('Transaction history'))
+    // InvestmentActionSheet appears — tap "Transaction history" action
+    await waitFor(() => expect(screen.getAllByText('Transaction history').length).toBeGreaterThan(0))
+    await userEvent.click(screen.getAllByText('Transaction history')[0])
 
-    // TransactionHistorySheet should now be visible with the fund name
+    // TransactionHistorySheet should now be visible with the fund name as h1
     await waitFor(() =>
       expect(screen.getByRole('heading', { name: 'VNINDEX ETF' })).toBeInTheDocument()
     )
@@ -99,8 +99,8 @@ describe('GoalDetailSheet — transaction history integration', () => {
 
     await waitFor(() => screen.getByText('VNINDEX ETF'))
     await userEvent.click(screen.getByRole('button', { name: /options/i }))
-    await waitFor(() => screen.getByText('Transaction history'))
-    await userEvent.click(screen.getByText('Transaction history'))
+    await waitFor(() => screen.getAllByText('Transaction history').length > 0)
+    await userEvent.click(screen.getAllByText('Transaction history')[0])
 
     await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
       expect.stringContaining('fund-investments?fund_id=fund-1')
@@ -112,14 +112,14 @@ describe('GoalDetailSheet — transaction history integration', () => {
 
     await waitFor(() => screen.getByText('VNINDEX ETF'))
     await userEvent.click(screen.getByRole('button', { name: /options/i }))
-    await waitFor(() => screen.getByText('Transaction history'))
-    await userEvent.click(screen.getByText('Transaction history'))
+    await waitFor(() => screen.getAllByText('Transaction history').length > 0)
+    await userEvent.click(screen.getAllByText('Transaction history')[0])
     await waitFor(() => screen.getByRole('heading', { name: 'VNINDEX ETF' }))
 
     // Click back in the history sheet
     await userEvent.click(screen.getByRole('button', { name: /back/i }))
 
-    // TransactionHistorySheet should be gone
+    // TransactionHistorySheet should be gone (its h1 = fund name disappears)
     await waitFor(() =>
       expect(screen.queryByRole('heading', { name: 'VNINDEX ETF' })).not.toBeInTheDocument()
     )

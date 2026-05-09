@@ -24,45 +24,52 @@ const baseProps = {
 }
 
 describe('TransactionHistorySheet', () => {
-  it('renders the fund name in the header', () => {
+  it('renders the fund name as the h1 title', () => {
     render(<TransactionHistorySheet {...baseProps} />)
-    expect(screen.getByText('VNINDEX ETF')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'VNINDEX ETF' })).toBeInTheDocument()
   })
 
-  it('renders the current value', () => {
+  it('renders "Holding" as the small subtitle', () => {
     render(<TransactionHistorySheet {...baseProps} />)
-    expect(screen.getByText('₫ 30.000.000')).toBeInTheDocument()
+    expect(screen.getByText('Holding')).toBeInTheDocument()
   })
 
-  it('shows positive P/L with + sign', () => {
+  it('renders the current value in compact format', () => {
     render(<TransactionHistorySheet {...baseProps} />)
-    expect(screen.getByText(/\+.*7\.900\.000/)).toBeInTheDocument()
+    expect(screen.getByText('30.0M ₫')).toBeInTheDocument()
+  })
+
+  it('shows positive P/L with + sign and compact format', () => {
+    render(<TransactionHistorySheet {...baseProps} />)
+    expect(screen.getByText('+7.9M ₫')).toBeInTheDocument()
   })
 
   it('shows negative P/L with − sign', () => {
     render(<TransactionHistorySheet {...baseProps} profitLoss={-1_000_000} profitLossPercentage={-5} />)
-    expect(screen.getByText(/−.*1\.000\.000|₫ -1\.000\.000|-₫/)).toBeInTheDocument()
+    expect(screen.getByText('-1.0M ₫')).toBeInTheDocument()
   })
 
-  it('shows current NAV stat chip', () => {
+  it('shows Invested stat', () => {
     render(<TransactionHistorySheet {...baseProps} />)
-    expect(screen.getByText('Current NAV')).toBeInTheDocument()
+    expect(screen.getByText('Invested')).toBeInTheDocument()
   })
 
-  it('shows units held stat chip', () => {
+  it('shows Units stat', () => {
     render(<TransactionHistorySheet {...baseProps} />)
-    expect(screen.getByText('Units held')).toBeInTheDocument()
+    expect(screen.getByText('Units')).toBeInTheDocument()
   })
 
-  it('shows purchase count matching history length', () => {
+  it('shows NAV stat', () => {
     render(<TransactionHistorySheet {...baseProps} />)
-    expect(screen.getByText('2')).toBeInTheDocument()
+    expect(screen.getByText('NAV')).toBeInTheDocument()
   })
 
-  it('renders each purchase history row with date and units', () => {
+  it('renders each row with Buy label and date · units', () => {
     render(<TransactionHistorySheet {...baseProps} />)
-    expect(screen.getByText(/60.*units.*20\.000|60.*CCQ/i)).toBeInTheDocument()
-    expect(screen.getByText(/40.*units.*24\.000|40.*CCQ/i)).toBeInTheDocument()
+    const buyLabels = screen.getAllByText('Buy')
+    expect(buyLabels).toHaveLength(2)
+    expect(screen.getByText(/Jan.*2024.*60/i)).toBeInTheDocument()
+    expect(screen.getByText(/Jun.*2024.*40/i)).toBeInTheDocument()
   })
 
   it('shows loading state when loading=true', () => {
@@ -78,12 +85,12 @@ describe('TransactionHistorySheet', () => {
   it('calls onClose when back button is clicked', async () => {
     const onClose = vi.fn()
     render(<TransactionHistorySheet {...baseProps} onClose={onClose} />)
-    await userEvent.click(screen.getByRole('button', { name: /back|close/i }))
+    await userEvent.click(screen.getByRole('button', { name: /back/i }))
     expect(onClose).toHaveBeenCalledOnce()
   })
 
   it('does not render when open=false', () => {
     render(<TransactionHistorySheet {...baseProps} open={false} />)
-    expect(screen.queryByText('VNINDEX ETF')).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'VNINDEX ETF' })).not.toBeInTheDocument()
   })
 })

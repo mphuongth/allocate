@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ChevronLeft, ArrowUpRight } from 'lucide-react'
+import { ChevronLeft, ArrowUpRight, ArrowDownRight } from 'lucide-react'
 import { useLocale } from 'next-intl'
-import { fmt, fmtNav, fmtPct, fmtUnits } from '@/lib/formatters'
+import { fmtCompact, fmtNav, fmtPct, fmtUnits } from '@/lib/formatters'
 
 export interface PurchaseHistoryRow {
   purchase_date: string
@@ -44,6 +44,7 @@ export default function TransactionHistorySheet({
   if (!mounted) return null
 
   const isPositive = profitLoss >= 0
+  const totalInvested = quantity * purchasePrice
 
   return (
     <div
@@ -80,7 +81,7 @@ export default function TransactionHistorySheet({
               fontSize: 11, color: 'var(--c-muted)', letterSpacing: '0.06em',
               textTransform: 'uppercase', fontWeight: 600,
             }}>
-              {isVI ? 'Lịch sử giao dịch' : 'Transaction history'}
+              {isVI ? 'Khoản nắm giữ' : 'Holding'}
             </div>
             <h1 style={{
               margin: 0, fontSize: 22, fontWeight: 600,
@@ -94,68 +95,60 @@ export default function TransactionHistorySheet({
       </div>
 
       <div style={{ padding: '16px 16px calc(env(safe-area-inset-bottom,0) + 40px)', display: 'grid', gap: 12 }}>
-        {/* Hero — current value */}
+        {/* Hero — current value + gain */}
         <div style={{ background: 'var(--c-card)', borderRadius: 16, padding: 18, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
           <p style={{ fontSize: 12, color: 'var(--c-muted)', marginBottom: 4 }}>
             {isVI ? 'Giá trị hiện tại' : 'Current value'}
           </p>
           <p style={{
-            fontSize: 26, fontWeight: 800, color: 'var(--c-ink)',
-            fontVariantNumeric: 'tabular-nums', lineHeight: 1.2, marginBottom: 14,
+            fontSize: 30, fontWeight: 700, color: 'var(--c-ink)',
+            fontVariantNumeric: 'tabular-nums', lineHeight: 1.2, letterSpacing: '-0.02em',
           }}>
-            {fmt(currentValue)}
+            {fmtCompact(currentValue)}
           </p>
-          <div style={{
-            display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1,
-            background: 'var(--c-line)', borderRadius: 8, overflow: 'hidden',
-          }}>
-            {[
-              {
-                label: isVI ? 'Đã đầu tư' : 'Invested',
-                value: fmt(quantity * purchasePrice),
-                color: 'var(--c-ink)',
-              },
-              {
-                label: isVI ? 'Lãi/Lỗ' : 'P/L',
-                value: (isPositive ? '+' : '') + fmt(profitLoss),
-                color: isPositive ? 'var(--c-pos)' : 'var(--c-neg)',
-              },
-              {
-                label: isVI ? 'Tỷ suất' : 'Return',
-                value: fmtPct(profitLossPercentage),
-                color: isPositive ? 'var(--c-pos)' : 'var(--c-neg)',
-              },
-            ].map(({ label, value, color }) => (
-              <div key={label} style={{ background: 'var(--c-card)', padding: '10px 12px' }}>
-                <p style={{ fontSize: 10, color: 'var(--c-muted)', marginBottom: 2 }}>{label}</p>
-                <p style={{ fontSize: 12, fontWeight: 600, color, fontVariantNumeric: 'tabular-nums' }}>{value}</p>
-              </div>
-            ))}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 3,
+              padding: '2px 7px', borderRadius: 999, fontSize: 12, fontWeight: 600,
+              background: isPositive ? 'var(--c-pos-tint)' : 'var(--c-neg-tint)',
+              color: isPositive ? 'var(--c-pos)' : 'var(--c-neg)',
+              fontVariantNumeric: 'tabular-nums',
+            }}>
+              {isPositive
+                ? <ArrowUpRight size={12} strokeWidth={2.2} />
+                : <ArrowDownRight size={12} strokeWidth={2.2} />}
+              {fmtPct(profitLossPercentage)}
+            </span>
+            <span style={{
+              fontSize: 13, fontVariantNumeric: 'tabular-nums',
+              color: isPositive ? 'var(--c-pos)' : 'var(--c-neg)',
+            }}>
+              {isPositive ? '+' : ''}{fmtCompact(profitLoss)}
+            </span>
           </div>
         </div>
 
-        {/* Stat chips */}
+        {/* Stats — 3 cols matching design */}
         <div style={{
-          display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1,
+          display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1,
           background: 'var(--c-line)', borderRadius: 12, overflow: 'hidden',
         }}>
           {[
-            { label: isVI ? 'NAV hiện tại' : 'Current NAV', value: fmtNav(currentNAV) },
-            { label: isVI ? 'Số CCQ nắm giữ' : 'Units held', value: fmtUnits(quantity) },
-            { label: isVI ? 'NAV trung bình mua' : 'Avg buy NAV', value: fmtNav(purchasePrice) },
-            { label: isVI ? 'Số lần mua' : 'Purchases', value: String(purchaseHistory.length) },
+            { label: isVI ? 'Đã đầu tư' : 'Invested', value: fmtCompact(totalInvested) },
+            { label: isVI ? 'Số CCQ' : 'Units', value: fmtUnits(quantity) },
+            { label: 'NAV', value: fmtNav(currentNAV) },
           ].map(({ label, value }) => (
-            <div key={label} style={{ background: 'var(--c-card)', padding: '12px 14px' }}>
-              <div style={{ fontSize: 10, color: 'var(--c-muted)', marginBottom: 4 }}>{label}</div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+            <div key={label} style={{ background: 'var(--c-card)', padding: '10px 12px' }}>
+              <div style={{ fontSize: 10, color: 'var(--c-muted)', marginBottom: 2 }}>{label}</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>{value}</div>
             </div>
           ))}
         </div>
 
-        {/* Purchase history */}
+        {/* Transaction history */}
         <div>
           <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)', margin: '4px 0 10px' }}>
-            {isVI ? 'Lịch sử mua' : 'Purchase history'}
+            {isVI ? 'Lịch sử giao dịch' : 'Transaction history'}
           </p>
           <div style={{ background: 'var(--c-card)', borderRadius: 16, padding: '0 14px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
             {loading && (
@@ -174,28 +167,29 @@ export default function TransactionHistorySheet({
                 <div
                   key={i}
                   style={{
-                    padding: '14px 0',
+                    padding: '12px 0',
                     borderBottom: i === purchaseHistory.length - 1 ? 'none' : '1px solid var(--c-line)',
-                    display: 'flex', alignItems: 'center', gap: 12,
+                    display: 'flex', alignItems: 'center', gap: 10,
                   }}
                 >
                   <div style={{
-                    width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+                    width: 30, height: 30, borderRadius: 6, flexShrink: 0,
                     background: 'var(--c-pos-tint)', color: 'var(--c-pos)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}>
                     <ArrowUpRight size={14} strokeWidth={2.2} />
                   </div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>
-                      {fmtUnits(row.units)} {isVI ? 'CCQ' : 'units'} @ {fmtNav(row.nav_at_purchase)}
+                    <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--c-ink)' }}>
+                      {isVI ? 'Mua' : 'Buy'}
                     </div>
-                    <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 2 }}>
+                    <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>
                       {new Date(row.purchase_date).toLocaleDateString(isVI ? 'vi-VN' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      {' · '}{fmtUnits(row.units)} {isVI ? 'CCQ' : 'units'}
                     </div>
                   </div>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>
-                    {fmt(amountPaid)}
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-pos)', fontVariantNumeric: 'tabular-nums' }}>
+                    +{fmtCompact(amountPaid)}
                   </span>
                 </div>
               )
