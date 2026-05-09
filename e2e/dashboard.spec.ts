@@ -109,7 +109,7 @@ test('tapping unallocated row opens action sheet', async ({ page }) => {
   await page.keyboard.press('Escape')
 })
 
-test('tapping unallocated fund history opens FundDetailModal', async ({ page }) => {
+test('tapping unallocated fund history opens TransactionHistorySheet', async ({ page }) => {
   const fund = await api.createFund({ name: 'E2E Test Fund', code: 'E2ETESTFUND', fund_type: 'equity', nav: 10000 })
   cleanup.add(() => api.deleteFund(fund.id))
 
@@ -133,12 +133,12 @@ test('tapping unallocated fund history opens FundDetailModal', async ({ page }) 
   await expect(page.getByTestId('action-history')).toBeVisible({ timeout: 5_000 })
   await page.getByTestId('action-history').click()
 
-  // FundDetailModal should open
-  await expect(page.getByRole('dialog')).toBeVisible({ timeout: 5_000 })
-  await expect(page.getByRole('dialog').locator(`text=${fund.name}`)).toBeVisible()
+  // TransactionHistorySheet should open — fund name is the h1
+  await expect(page.getByRole('heading', { name: fund.name })).toBeVisible({ timeout: 5_000 })
 
-  await page.keyboard.press('Escape')
-  await expect(page.getByRole('dialog')).not.toBeVisible()
+  // Close via Back button
+  await page.getByTestId('history-back-btn').click()
+  await expect(page.getByRole('heading', { name: fund.name })).not.toBeVisible()
 })
 
 test('assign unallocated fund to a goal via action sheet', async ({ page }) => {
