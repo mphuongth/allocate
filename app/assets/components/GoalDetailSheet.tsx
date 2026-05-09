@@ -9,9 +9,7 @@ import {
 import { useLocale } from 'next-intl'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import type { GoalData, FundBreakdownItem } from '../DashboardClient'
-import dynamic from 'next/dynamic'
-
-const FundDetailModal = dynamic(() => import('./FundDetailModal'))
+import TransactionHistorySheet from './TransactionHistorySheet'
 
 interface InvestmentTx {
   transaction_id: string
@@ -474,6 +472,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: 
   const [investActionOpen, setInvestActionOpen] = useState(false)
   const [fundDetailId, setFundDetailId] = useState<string | null>(null)
   const [purchaseHistory, setPurchaseHistory] = useState<{ purchase_date: string; units: number; nav_at_purchase: number }[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
   const [monthlyContrib, setMonthlyContrib] = useState('')
 
   useEffect(() => {
@@ -510,6 +509,8 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: 
 
   async function openFundDetail(fund: FundBreakdownItem) {
     setFundDetailId(fund.fundId)
+    setPurchaseHistory([])
+    setHistoryLoading(true)
     try {
       const res = await fetch(`/api/v1/fund-investments?fund_id=${fund.fundId}`)
       if (res.ok) {
@@ -521,6 +522,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: 
         )
       }
     } catch { /* ignore */ }
+    setHistoryLoading(false)
   }
 
   if (!mounted || !goal) return null
@@ -1028,22 +1030,19 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: 
         onSell={() => { /* SellWithdrawSheet integration point */ }}
       />
 
-      {detailFund && (
-        <FundDetailModal
-          open={!!fundDetailId}
-          onOpenChange={(o) => { if (!o) { setFundDetailId(null); setPurchaseHistory([]) } }}
-          fundId={detailFund.fundId}
-          fundName={detailFund.fundName}
-          currentNAV={detailFund.currentNAV}
-          quantity={detailFund.quantity}
-          currentValue={detailFund.currentValue}
-          purchasePrice={detailFund.purchasePrice}
-          profitLoss={detailFund.profitLoss}
-          profitLossPercentage={detailFund.profitLossPercentage}
-          purchaseHistory={purchaseHistory}
-          onClose={() => { setFundDetailId(null); setPurchaseHistory([]) }}
-        />
-      )}
+      <TransactionHistorySheet
+        open={!!(fundDetailId && detailFund)}
+        onClose={() => { setFundDetailId(null); setPurchaseHistory([]); setHistoryLoading(false) }}
+        fundName={detailFund?.fundName ?? ''}
+        currentNAV={detailFund?.currentNAV ?? 0}
+        quantity={detailFund?.quantity ?? 0}
+        currentValue={detailFund?.currentValue ?? 0}
+        purchasePrice={detailFund?.purchasePrice ?? 0}
+        profitLoss={detailFund?.profitLoss ?? 0}
+        profitLossPercentage={detailFund?.profitLossPercentage ?? 0}
+        purchaseHistory={purchaseHistory}
+        loading={historyLoading}
+      />
     </>
   )
 }

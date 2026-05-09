@@ -19,8 +19,8 @@ import GoalDetailSheet from './components/GoalDetailSheet'
 import AssignGoalSheet from './components/AssignGoalSheet'
 import DownloadReportSheet from './components/DownloadReportSheet'
 
-const FundDetailModal = dynamic(() => import('./components/FundDetailModal'))
 const GoldPriceWidget = dynamic(() => import('./components/GoldPriceWidget'))
+import TransactionHistorySheet from './components/TransactionHistorySheet'
 
 export interface FundBreakdownItem {
   fundId: string
@@ -202,6 +202,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const [assignLoading, setAssignLoading] = useState(false)
   const [assignError, setAssignError] = useState('')
   const [purchaseHistory, setPurchaseHistory] = useState<PurchaseHistory[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
   const [nonFundPickerTxId, setNonFundPickerTxId] = useState<string | null>(null)
   const [nonFundAssignLoading, setNonFundAssignLoading] = useState(false)
   const [nonFundAssignError, setNonFundAssignError] = useState('')
@@ -317,7 +318,8 @@ export default function DashboardClient({ userId }: { userId: string }) {
 
   async function handleFundClick(fundId: string) {
     setFundDetailId(fundId)
-    // Fetch purchase history for this fund
+    setPurchaseHistory([])
+    setHistoryLoading(true)
     try {
       const res = await fetch(`/api/v1/fund-investments?fund_id=${fundId}`)
       if (res.ok) {
@@ -328,7 +330,8 @@ export default function DashboardClient({ userId }: { userId: string }) {
             .sort((a, b) => new Date(b.purchase_date).getTime() - new Date(a.purchase_date).getTime())
         )
       }
-    } catch { /* ignore — show modal without history */ }
+    } catch { /* show sheet without history */ }
+    setHistoryLoading(false)
   }
 
   async function handleGenerateReport() {
@@ -749,11 +752,10 @@ export default function DashboardClient({ userId }: { userId: string }) {
           </div>
         )}
 
-      {/* Fund Detail Modal */}
-      <FundDetailModal
+      {/* Transaction History Sheet */}
+      <TransactionHistorySheet
         open={!!(fundDetailId && detailFund)}
-        onOpenChange={(o) => { if (!o) { setFundDetailId(null); setPurchaseHistory([]) } }}
-        fundId={detailFund?.fundId ?? ''}
+        onClose={() => { setFundDetailId(null); setPurchaseHistory([]); setHistoryLoading(false) }}
         fundName={detailFund?.fundName ?? ''}
         currentNAV={detailFund?.currentNAV ?? 0}
         quantity={detailFund?.quantity ?? 0}
@@ -762,7 +764,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
         profitLoss={detailFund?.profitLoss ?? 0}
         profitLossPercentage={detailFund?.profitLossPercentage ?? 0}
         purchaseHistory={purchaseHistory}
-        onClose={() => { setFundDetailId(null); setPurchaseHistory([]) }}
+        loading={historyLoading}
       />
 
       {/* Assign Goal Sheet — funds */}
