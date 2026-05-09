@@ -21,15 +21,6 @@ vi.mock('@/lib/formatters', () => ({
   },
 }))
 
-vi.mock('@/app/components/navigation/MobileTopBar', () => ({
-  default: ({ title, trailing }: { title: string; trailing?: React.ReactNode }) => (
-    <header>
-      <h1>{title}</h1>
-      {trailing}
-    </header>
-  ),
-}))
-
 const basePlan: MonthlyPlan = {
   id: 'plan-1',
   month: 5,
@@ -96,8 +87,6 @@ const defaultProps = {
   otherExpenses: [] as OtherExpense[],
   funds: [],
   goals: [],
-  onNavigatePrev: vi.fn(),
-  onNavigateNext: vi.fn(),
   onPlanCreated: vi.fn(),
   onPlanDeleted: vi.fn(),
   onRefresh: vi.fn(),
@@ -294,27 +283,6 @@ describe('MobilePlanningView — allocation summary with all categories', () => 
     const smallPlan: MonthlyPlan = { id: 'p2', month: 5, year: 2026, salary_vnd: 1_000_000 }
     render(<MobilePlanningView {...defaultProps} plan={smallPlan} fixedExpenses={bigExpenses} />)
     expect(screen.getByText(/Over budget/i)).toBeInTheDocument()
-  })
-})
-
-describe('MobilePlanningView — month navigation', () => {
-  it('calls onNavigatePrev when prev button is clicked', async () => {
-    const onNavigatePrev = vi.fn()
-    render(<MobilePlanningView {...defaultProps} onNavigatePrev={onNavigatePrev} />)
-    await userEvent.click(screen.getByTestId('mobile-prev-month'))
-    expect(onNavigatePrev).toHaveBeenCalledOnce()
-  })
-
-  it('calls onNavigateNext when next button is clicked', async () => {
-    const onNavigateNext = vi.fn()
-    render(<MobilePlanningView {...defaultProps} onNavigateNext={onNavigateNext} />)
-    await userEvent.click(screen.getByTestId('mobile-next-month'))
-    expect(onNavigateNext).toHaveBeenCalledOnce()
-  })
-
-  it('shows current month in month picker', () => {
-    render(<MobilePlanningView {...defaultProps} />)
-    expect(screen.getByText('May 2026')).toBeInTheDocument()
   })
 })
 

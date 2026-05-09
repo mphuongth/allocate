@@ -4,10 +4,9 @@ import { useState, useMemo, useEffect } from 'react'
 import { useLocale } from 'next-intl'
 import {
   Wallet, Target, Building, Shield, ShoppingCart,
-  ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
+  ChevronDown, ChevronUp,
   MoreHorizontal, Plus, Edit2, Trash2, Check, RefreshCw, X, Calendar,
 } from 'lucide-react'
-import MobileTopBar from '@/app/components/navigation/MobileTopBar'
 import { fmtCompact, fmt } from '@/lib/formatters'
 import type {
   MonthlyPlan, FundInvestment, DirectSaving, FixedExpense,
@@ -27,8 +26,6 @@ interface Props {
   otherExpenses: OtherExpense[]
   funds: Fund[]
   goals: Goal[]
-  onNavigatePrev: () => void
-  onNavigateNext: () => void
   onPlanCreated: (plan: MonthlyPlan) => void
   onPlanDeleted: () => void
   onRefresh: () => void
@@ -892,44 +889,11 @@ function PlanLineItem({
   )
 }
 
-// ─── MonthPicker ──────────────────────────────────────────────────────────────
-
-function MonthPicker({ month, year, onPrev, onNext }: {
-  month: number
-  year: number
-  onPrev: () => void
-  onNext: () => void
-}) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: 3, background: 'var(--c-card-2)', border: '1px solid var(--c-line)', borderRadius: 10 }}>
-      <button
-        onClick={onPrev}
-        data-testid="mobile-prev-month"
-        aria-label="Previous month"
-        style={{ padding: 6, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, display: 'flex', alignItems: 'center' }}
-      >
-        <ChevronLeft size={16} color="var(--c-ink)" />
-      </button>
-      <span style={{ padding: '4px 10px', minWidth: 78, textAlign: 'center', fontSize: 13, fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>
-        {getMonthLabel(month, year, true)}
-      </span>
-      <button
-        onClick={onNext}
-        data-testid="mobile-next-month"
-        aria-label="Next month"
-        style={{ padding: 6, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, display: 'flex', alignItems: 'center' }}
-      >
-        <ChevronRight size={16} color="var(--c-ink)" />
-      </button>
-    </div>
-  )
-}
-
 // ─── Main MobilePlanningView ──────────────────────────────────────────────────
 
 export default function MobilePlanningView({
   month, year, plan, investments, savings, fixedExpenses, insuranceMembers, otherExpenses,
-  funds, goals, onNavigatePrev, onNavigateNext, onPlanCreated, onPlanDeleted, onRefresh, onToast,
+  funds, goals, onPlanCreated, onPlanDeleted, onRefresh, onToast,
 }: Props) {
   const locale = useLocale()
   const isVI = locale === 'vi'
@@ -1032,12 +996,6 @@ export default function MobilePlanningView({
 
   return (
     <div className="md:hidden" style={{ background: 'var(--c-canvas)', minHeight: '100%' }}>
-      <MobileTopBar
-        subtitle={isVI ? 'Kế hoạch tháng' : 'Monthly plan'}
-        title={isVI ? 'Ngân sách' : 'Budget'}
-        trailing={<MonthPicker month={month} year={year} onPrev={onNavigatePrev} onNext={onNavigateNext} />}
-      />
-
       <div style={{ padding: '4px 16px 100px', display: 'grid', gap: 10 }}>
         {!plan ? (
           <NoPlanState monthLabel={monthLabel} isVI={isVI} onSetSalary={() => setSheet({ type: 'salary' })} />

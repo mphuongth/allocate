@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { useTranslations } from 'next-intl'
+import { useTranslations, useLocale } from 'next-intl'
 import { useNavigation } from '@/app/components/navigation/NavigationContext'
 import SalaryInput from './components/SalaryInput'
 import FundInvestmentsSection from './components/FundInvestmentsSection'
@@ -93,8 +93,12 @@ function bustPlanCache(month: number, year: number) {
 function prevMonth(m: number, y: number) { return m === 1 ? { m: 12, y: y - 1 } : { m: m - 1, y } }
 function nextMonth(m: number, y: number) { return m === 12 ? { m: 1, y: y + 1 } : { m: m + 1, y } }
 
+const SHORT_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+
 export default function PlanningClient() {
   const t = useTranslations('planning')
+  const locale = useLocale()
+  const isVI = locale === 'vi'
   const { setMobileTopBar } = useNavigation()
   const MONTHS = t('months').split(',')
   const now = new Date()
@@ -191,7 +195,6 @@ export default function PlanningClient() {
   }, [month, year])
 
   useEffect(() => { fetchPlan() }, [fetchPlan])
-  useEffect(() => { setMobileTopBar({ title: '' }) }, [setMobileTopBar])
 
   function navigate(dir: 'prev' | 'next') {
     const { m, y } = dir === 'prev' ? prevMonth(month, year) : nextMonth(month, year)
@@ -200,6 +203,47 @@ export default function PlanningClient() {
   }
 
   const refetch = useCallback(() => fetchPlan({ force: true }), [fetchPlan])
+
+  const navigatePrev = useCallback(() => {
+    const { m, y } = prevMonth(month, year)
+    setMonth(m); setYear(y)
+  }, [month, year])
+
+  const navigateNext = useCallback(() => {
+    const { m, y } = nextMonth(month, year)
+    setMonth(m); setYear(y)
+  }, [month, year])
+
+  useEffect(() => {
+    const shortLabel = `${SHORT_MONTHS[month - 1]} ${year}`
+    setMobileTopBar({
+      title: isVI ? 'Ngân sách' : 'Budget',
+      subtitle: isVI ? 'Kế hoạch tháng' : 'Monthly plan',
+      trailing: (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: 3, background: 'var(--c-card-2)', border: '1px solid var(--c-line)', borderRadius: 10 }}>
+          <button
+            onClick={navigatePrev}
+            data-testid="mobile-prev-month"
+            aria-label="Previous month"
+            style={{ padding: 6, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, display: 'flex', alignItems: 'center' }}
+          >
+            <ChevronLeft size={16} color="var(--c-ink)" />
+          </button>
+          <span style={{ padding: '4px 10px', minWidth: 78, textAlign: 'center', fontSize: 13, fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>
+            {shortLabel}
+          </span>
+          <button
+            onClick={navigateNext}
+            data-testid="mobile-next-month"
+            aria-label="Next month"
+            style={{ padding: 6, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, display: 'flex', alignItems: 'center' }}
+          >
+            <ChevronRight size={16} color="var(--c-ink)" />
+          </button>
+        </div>
+      ),
+    })
+  }, [month, year, isVI, navigatePrev, navigateNext, setMobileTopBar])
 
   return (
     <>
@@ -215,8 +259,6 @@ export default function PlanningClient() {
         otherExpenses={otherExpenses}
         funds={funds}
         goals={goals}
-        onNavigatePrev={() => navigate('prev')}
-        onNavigateNext={() => navigate('next')}
         onPlanCreated={(p) => { setPlan(p); refetch() }}
         onPlanDeleted={() => {
           bustPlanCache(month, year)
