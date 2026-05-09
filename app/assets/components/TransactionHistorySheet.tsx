@@ -66,6 +66,7 @@ export default function TransactionHistorySheet({
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 32 }}>
           <button
             onClick={onClose}
+            aria-label={isVI ? 'Quay lại' : 'Back'}
             style={{
               background: 'none', border: 'none', cursor: 'pointer',
               padding: 6, color: 'var(--c-ink)',
