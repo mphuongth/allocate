@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import {
   ChevronLeft, ChevronRight, MoreHorizontal,
-  TrendingUp, Building2, Coins, BarChart2,
+  TrendingUp, Building, CircleDollarSign, BarChart2,
   Edit2, Trash2, Calendar, Download, ArrowDownRight, ArrowUpRight, Target,
 } from 'lucide-react'
 import { useLocale } from 'next-intl'
@@ -47,8 +47,8 @@ const GD_COLORS: Record<string, string> = {
 
 function TypeIcon({ type, size = 16 }: { type: string; size?: number }) {
   if (type === 'fund') return <TrendingUp size={size} />
-  if (type === 'bank') return <Building2 size={size} />
-  if (type === 'gold') return <Coins size={size} />
+  if (type === 'bank') return <Building size={size} />
+  if (type === 'gold') return <CircleDollarSign size={size} />
   return <BarChart2 size={size} />
 }
 
