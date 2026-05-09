@@ -85,7 +85,7 @@ describe('TransactionHistorySheet', () => {
   it('calls onClose when back button is clicked', async () => {
     const onClose = vi.fn()
     render(<TransactionHistorySheet {...baseProps} onClose={onClose} />)
-    await userEvent.click(screen.getByRole('button', { name: /back/i }))
+    await userEvent.click(screen.getByTestId('history-back-btn'))
     expect(onClose).toHaveBeenCalledOnce()
   })
 

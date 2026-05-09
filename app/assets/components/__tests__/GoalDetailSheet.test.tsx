@@ -151,7 +151,7 @@ describe('GoalDetailSheet — transaction history integration', () => {
     await waitFor(() => screen.getByRole('heading', { name: 'VNINDEX ETF' }))
 
     // Click back in the history sheet
-    await userEvent.click(screen.getByRole('button', { name: /back/i }))
+    await userEvent.click(screen.getByTestId('history-back-btn'))
 
     // TransactionHistorySheet should be gone (its h1 = fund name disappears)
     await waitFor(() =>

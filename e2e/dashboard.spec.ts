@@ -137,7 +137,7 @@ test('tapping unallocated fund history opens TransactionHistorySheet', async ({ 
   await expect(page.getByRole('heading', { name: fund.name })).toBeVisible({ timeout: 5_000 })
 
   // Close via Back button
-  await page.getByRole('button', { name: /back/i }).click()
+  await page.getByTestId('history-back-btn').click()
   await expect(page.getByRole('heading', { name: fund.name })).not.toBeVisible()
 })
 

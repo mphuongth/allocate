@@ -69,6 +69,7 @@ export default function TransactionHistorySheet({
           <button
             onClick={onClose}
             aria-label={isVI ? 'Quay lại' : 'Back'}
+            data-testid="history-back-btn"
             style={{
               background: 'none', border: 'none', cursor: 'pointer',
               padding: 6, color: 'var(--c-ink)',
