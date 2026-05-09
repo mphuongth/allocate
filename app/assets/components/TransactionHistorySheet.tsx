@@ -60,8 +60,8 @@ export default function TransactionHistorySheet({
       <div style={{
         position: 'sticky', top: 0, zIndex: 10,
         background: 'var(--c-canvas,#faf9f7)',
-        padding: 'calc(env(safe-area-inset-top,0) + 14px) 16px 10px',
-        borderBottom: '1px solid var(--c-line)',
+        padding: '14px 16px 10px',
+        borderBottom: '1px solid transparent',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 32 }}>
           <button
@@ -83,7 +83,7 @@ export default function TransactionHistorySheet({
               {isVI ? 'Lịch sử giao dịch' : 'Transaction history'}
             </div>
             <h1 style={{
-              margin: 0, fontSize: 18, fontWeight: 600,
+              margin: 0, fontSize: 22, fontWeight: 600,
               letterSpacing: '-0.015em', color: 'var(--c-ink)',
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>
