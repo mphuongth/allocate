@@ -18,7 +18,7 @@ export async function getTestUserId(): Promise<string> {
   return _testUserId
 }
 
-export async function createGoal(data: { goal_name: string; target_amount?: number }) {
+export async function createGoal(data: { goal_name: string; target_amount?: number; target_date?: string; icon?: string; priority?: string }) {
   const userId = await getTestUserId()
   const { data: goal, error } = await supabase
     .from('savings_goals')

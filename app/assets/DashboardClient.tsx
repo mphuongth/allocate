@@ -7,11 +7,7 @@ import { Plus, ArrowDownToLine, ChevronDown, Check } from 'lucide-react'
 import { useTranslations, useLocale } from 'next-intl'
 import { useNavigation } from '@/app/components/navigation/NavigationContext'
 import dynamic from 'next/dynamic'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
+import { CreateGoalSheet } from './components/CreateGoalSheet'
 import { NetWorthSkeleton, GoalSkeleton, InsuranceSkeleton } from './components/Skeletons'
 import NetWorthCard from './components/NetWorthCard'
 import GoalCard from './components/GoalCard'
@@ -211,11 +207,6 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const [nonFundAssignError, setNonFundAssignError] = useState('')
   const [goalSort, setGoalSort] = useState<SortValue>('manual')
   const [showGoalForm, setShowGoalForm] = useState(false)
-  const [goalName, setGoalName] = useState('')
-  const [goalTarget, setGoalTarget] = useState('')
-  const [goalDesc, setGoalDesc] = useState('')
-  const [goalSaving, setGoalSaving] = useState(false)
-  const [goalError, setGoalError] = useState('')
   const [sellItem, setSellItem] = useState<SellItem | null>(null)
   const [sellSheetOpen, setSellSheetOpen] = useState(false)
   const [isGeneratingReport, setIsGeneratingReport] = useState(false)
@@ -338,36 +329,6 @@ export default function DashboardClient({ userId }: { userId: string }) {
         )
       }
     } catch { /* ignore — show modal without history */ }
-  }
-
-  async function handleGoalSave() {
-    setGoalError('')
-    if (!goalName.trim()) { setGoalError('Goal name is required'); return }
-    setGoalSaving(true)
-    try {
-      const res = await fetch('/api/v1/savings-goals', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          goal_name: goalName.trim(),
-          target_amount: goalTarget ? Number(goalTarget) : null,
-          description: goalDesc.trim() || null,
-        }),
-      })
-      if (!res.ok) {
-        const { error } = await res.json()
-        setGoalError(error ?? 'Could not save goal')
-      } else {
-        setShowGoalForm(false)
-        setGoalName('')
-        setGoalTarget('')
-        setGoalDesc('')
-        fetchData({ force: true })
-      }
-    } catch {
-      setGoalError('Could not save goal')
-    }
-    setGoalSaving(false)
   }
 
   async function handleGenerateReport() {
@@ -698,7 +659,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                       ]}
                     />
                     <button
-                      onClick={() => { setGoalName(''); setGoalTarget(''); setGoalDesc(''); setGoalError(''); setShowGoalForm(true) }}
+                      onClick={() => setShowGoalForm(true)}
                       style={{
                         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                         padding: 6, border: 'none',
@@ -843,38 +804,12 @@ export default function DashboardClient({ userId }: { userId: string }) {
         }}
       />
 
-      {/* Add Goal Modal */}
-      <Dialog open={showGoalForm} onOpenChange={(o) => { if (!o && !goalSaving) setShowGoalForm(false) }}>
-        <DialogContent className="sm:max-w-[480px]">
-          <DialogHeader>
-            <DialogTitle>{tg('createModal')}</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={(e) => { e.preventDefault(); handleGoalSave() }}>
-            <div className="space-y-5 py-4">
-              {goalError && <p className="text-sm text-red-600 dark:text-red-400">{goalError}</p>}
-              <div className="space-y-2">
-                <Label>{tg('nameLabel')} <span className="text-red-500">*</span></Label>
-                <Input type="text" value={goalName} onChange={(e) => setGoalName(e.target.value)} placeholder={tg('namePlaceholder')} />
-              </div>
-              <div className="space-y-2">
-                <Label>{tg('targetLabel')}</Label>
-                <Input type="text" inputMode="numeric" value={goalTarget ? Number(goalTarget).toLocaleString('en-US') : ''} onChange={(e) => setGoalTarget(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))} placeholder={tg('targetPlaceholder')} />
-              </div>
-              <div className="space-y-2">
-                <Label>{tg('descLabel')}</Label>
-                <Textarea value={goalDesc} onChange={(e) => setGoalDesc(e.target.value)} placeholder={tg('descPlaceholder')} rows={3} />
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <Button type="button" variant="outline" className="flex-1" onClick={() => setShowGoalForm(false)}>{tc('cancel')}</Button>
-              <Button type="submit" className="flex-1 bg-emerald-600 hover:bg-emerald-700" disabled={goalSaving}>
-                {goalSaving && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-                {goalSaving ? tc('saving') : tc('save')}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {/* Add Goal Sheet */}
+      <CreateGoalSheet
+        open={showGoalForm}
+        onClose={() => setShowGoalForm(false)}
+        onSuccess={() => fetchData({ force: true })}
+      />
 
       {/* Sell / Withdraw Sheet */}
       <SellWithdrawSheet

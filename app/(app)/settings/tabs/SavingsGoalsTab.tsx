@@ -2,14 +2,13 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslations } from 'next-intl'
-import { Plus, Edit, Trash2, TrendingUp } from 'lucide-react'
+import { Plus, Edit, Trash2, TrendingUp, Mountain, Home, Shield, ShoppingCart, Target } from 'lucide-react'
 import GoalDetailView from './GoalDetailView'
 import ConfirmModal from '@/app/components/ConfirmModal'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { fmt } from '@/lib/formatters'
 
 interface SavingsGoal {
@@ -17,6 +16,9 @@ interface SavingsGoal {
   goal_name: string
   description: string | null
   target_amount: number | null
+  target_date: string | null
+  icon: string | null
+  priority: string | null
   created_at: string
 }
 
@@ -30,6 +32,20 @@ interface Props {
   initialGoalId?: string
   onGoalChange?: (id: string | null) => void
 }
+
+const GOAL_ICONS = [
+  { v: 'mountains', label: 'Retirement', Icon: Mountain },
+  { v: 'home',      label: 'House',      Icon: Home },
+  { v: 'shield',    label: 'Emergency',  Icon: Shield },
+  { v: 'cart',      label: 'Purchase',   Icon: ShoppingCart },
+  { v: 'target',    label: 'Other',      Icon: Target },
+] as const
+
+const PRIORITIES = [
+  { v: 'low',  label: 'Low' },
+  { v: 'med',  label: 'Medium' },
+  { v: 'high', label: 'High' },
+] as const
 
 const GOALS_CACHE_KEY = 'savingsGoalsCache'
 const CACHE_TTL = 2 * 60 * 1000
@@ -54,6 +70,12 @@ function bustGoalsCache() {
   } catch {}
 }
 
+function monthsUntil(ym: string): number {
+  const [y, m] = ym.split('-').map(Number)
+  const now = new Date()
+  return Math.max(1, (y - now.getFullYear()) * 12 + (m - 1 - now.getMonth()))
+}
+
 export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) {
   const t = useTranslations('goals')
   const tCommon = useTranslations('common')
@@ -63,8 +85,10 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
   const [showForm, setShowForm] = useState(false)
   const [editGoal, setEditGoal] = useState<SavingsGoal | null>(null)
   const [formName, setFormName] = useState('')
-  const [formDesc, setFormDesc] = useState('')
   const [formTargetAmount, setFormTargetAmount] = useState('')
+  const [formTargetDate, setFormTargetDate] = useState('')
+  const [formIcon, setFormIcon] = useState<string>('target')
+  const [formPriority, setFormPriority] = useState<string>('med')
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
@@ -102,8 +126,10 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
   function openCreate() {
     setEditGoal(null)
     setFormName('')
-    setFormDesc('')
-    setFormTargetAmount('')
+    setFormTargetAmount('100000000')
+    setFormTargetDate('')
+    setFormIcon('target')
+    setFormPriority('med')
     setFormError('')
     setShowForm(true)
   }
@@ -111,8 +137,10 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
   function openEdit(goal: SavingsGoal) {
     setEditGoal(goal)
     setFormName(goal.goal_name)
-    setFormDesc(goal.description ?? '')
     setFormTargetAmount(goal.target_amount != null ? String(goal.target_amount) : '')
+    setFormTargetDate(goal.target_date ?? '')
+    setFormIcon(goal.icon ?? 'target')
+    setFormPriority(goal.priority ?? 'med')
     setFormError('')
     setShowForm(true)
   }
@@ -126,7 +154,13 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
     const res = await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ goal_name: formName, description: formDesc, target_amount: formTargetAmount || null }),
+      body: JSON.stringify({
+        goal_name: formName,
+        target_amount: formTargetAmount || null,
+        target_date: formTargetDate || null,
+        icon: formIcon,
+        priority: formPriority,
+      }),
     })
     if (!res.ok) {
       const { error } = await res.json()
@@ -150,6 +184,14 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
     }
     setDeletingGoal(false)
   }
+
+  const perMonth = (() => {
+    const amount = Number(formTargetAmount)
+    if (!amount || !formTargetDate) return null
+    return amount / monthsUntil(formTargetDate)
+  })()
+
+  const monthsLeft = formTargetDate ? monthsUntil(formTargetDate) : null
 
   if (selectedGoal) {
     return (
@@ -280,7 +322,7 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
         </div>
       )}
 
-      {/* Create/Edit Modal */}
+      {/* Create / Edit Modal */}
       <Dialog open={showForm} onOpenChange={(o) => { if (!o && !saving) setShowForm(false) }}>
         <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
@@ -289,6 +331,8 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
           <form onSubmit={(e) => { e.preventDefault(); handleSave() }}>
             <div className="space-y-5 py-4">
               {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
+
+              {/* Name */}
               <div className="space-y-2">
                 <Label>{t('nameLabel')} <span className="text-red-500">*</span></Label>
                 <Input
@@ -298,6 +342,8 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
                   placeholder={t('namePlaceholder')}
                 />
               </div>
+
+              {/* Target amount */}
               <div className="space-y-2">
                 <Label>{t('targetLabel')}</Label>
                 <Input
@@ -307,21 +353,93 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
                   placeholder={t('targetPlaceholder')}
                 />
               </div>
+
+              {/* Target date */}
               <div className="space-y-2">
-                <Label>{t('descLabel')}</Label>
-                <Textarea
-                  value={formDesc}
-                  onChange={(e) => setFormDesc(e.target.value)}
-                  rows={3}
-                  placeholder={t('descPlaceholder')}
+                <Label>{t('targetDateLabel')}</Label>
+                <Input
+                  type="month"
+                  value={formTargetDate}
+                  onChange={(e) => setFormTargetDate(e.target.value)}
                 />
               </div>
+
+              {/* Live save-per-month calculation */}
+              {perMonth !== null && (
+                <div data-testid="save-per-month" className="flex items-center justify-between rounded-xl bg-[#eef2f8] dark:bg-blue-950/30 border border-[#eef2f8] dark:border-blue-900/40 px-4 py-3">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-[#0F2A4A] dark:text-blue-300">{t('savePerMonth')}</p>
+                    <p className="mt-1 text-lg font-semibold tabular-nums text-[#0F2A4A] dark:text-blue-200">{fmt(Math.round(perMonth))} / {t('month')}</p>
+                  </div>
+                  <span className="rounded-full bg-white dark:bg-blue-900/40 px-3 py-1 text-xs font-medium text-[#0F2A4A] dark:text-blue-300">
+                    {monthsLeft} {t('month')}
+                  </span>
+                </div>
+              )}
+
+              {/* Icon picker */}
+              <div className="space-y-2">
+                <Label>{t('iconLabel')}</Label>
+                <div className="flex gap-2">
+                  {GOAL_ICONS.map(({ v, label, Icon: IconComponent }) => (
+                    <button
+                      key={v}
+                      type="button"
+                      data-testid={`goal-icon-btn-${v}`}
+                      onClick={() => setFormIcon(v)}
+                      title={label}
+                      className={`flex h-11 w-11 items-center justify-center rounded-[10px] border transition-colors ${
+                        formIcon === v
+                          ? 'border-[#0F2A4A] bg-[#0F2A4A] text-white'
+                          : 'border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+                      }`}
+                    >
+                      <IconComponent className="h-[18px] w-[18px]" strokeWidth={1.8} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Priority */}
+              <div className="space-y-2">
+                <Label>{t('priorityLabel')}</Label>
+                <div className="inline-flex gap-1 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 p-1">
+                  {PRIORITIES.map(({ v, label }) => (
+                    <button
+                      key={v}
+                      type="button"
+                      data-testid={`priority-btn-${v}`}
+                      onClick={() => setFormPriority(v)}
+                      className={`rounded-[7px] px-3 py-1.5 text-xs font-medium transition-all ${
+                        formPriority === v
+                          ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 shadow-sm'
+                          : 'bg-transparent text-gray-500 dark:text-gray-400'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
+
             <div className="flex gap-3">
-              <Button type="button" variant="outline" className="flex-1" onClick={() => setShowForm(false)} disabled={saving}>{tCommon('cancel')}</Button>
-              <Button type="submit" className="flex-1 bg-emerald-600 hover:bg-emerald-700" disabled={saving}>
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                onClick={() => setShowForm(false)}
+                disabled={saving}
+              >
+                {tCommon('cancel')}
+              </Button>
+              <Button
+                type="submit"
+                className="flex-[2] bg-[#0F2A4A] hover:bg-[#1e3a63] text-white border-0"
+                disabled={saving}
+              >
                 {saving && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-                {saving ? tCommon('saving') : tCommon('save')}
+                {saving ? tCommon('saving') : (editGoal ? tCommon('save') : t('create'))}
               </Button>
             </div>
           </form>
