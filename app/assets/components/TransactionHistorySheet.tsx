@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ChevronLeft, ArrowUpRight, ArrowDownRight } from 'lucide-react'
+import { ChevronLeft, ArrowUpRight, ArrowDownRight, Plus } from 'lucide-react'
 import { useLocale } from 'next-intl'
 import { fmtCompact, fmtNav, fmtPct, fmtUnits } from '@/lib/formatters'
 
@@ -23,12 +23,13 @@ interface Props {
   profitLossPercentage: number
   purchaseHistory: PurchaseHistoryRow[]
   loading?: boolean
+  onAddTransaction?: () => void
 }
 
 export default function TransactionHistorySheet({
   open, onClose,
   fundName, currentNAV, quantity, currentValue, purchasePrice,
-  profitLoss, profitLossPercentage, purchaseHistory, loading,
+  profitLoss, profitLossPercentage, purchaseHistory, loading, onAddTransaction,
 }: Props) {
   const isVI = useLocale() === 'vi'
   const [mounted, setMounted] = useState(false)
@@ -147,9 +148,25 @@ export default function TransactionHistorySheet({
 
         {/* Transaction history */}
         <div>
-          <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)', margin: '4px 0 10px' }}>
-            {isVI ? 'Lịch sử giao dịch' : 'Transaction history'}
-          </p>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '4px 0 10px' }}>
+            <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)', margin: 0 }}>
+              {isVI ? 'Lịch sử giao dịch' : 'Transaction history'}
+            </p>
+            <button
+              onClick={onAddTransaction}
+              aria-label={isVI ? 'Thêm giao dịch' : 'Add transaction'}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                padding: '4px 8px', borderRadius: 8, border: 'none',
+                background: 'transparent', color: 'var(--c-muted)',
+                fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              <Plus size={12} strokeWidth={2.4} />
+              {isVI ? 'Thêm giao dịch' : 'Add transaction'}
+            </button>
+          </div>
           <div style={{ background: 'var(--c-card)', borderRadius: 16, padding: '0 14px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
             {loading && (
               <p style={{ color: 'var(--c-muted)', fontSize: 14, textAlign: 'center', padding: '24px 0' }}>

@@ -93,4 +93,16 @@ describe('TransactionHistorySheet', () => {
     render(<TransactionHistorySheet {...baseProps} open={false} />)
     expect(screen.queryByRole('heading', { name: 'VNINDEX ETF' })).not.toBeInTheDocument()
   })
+
+  it('renders Add transaction button next to section title', () => {
+    render(<TransactionHistorySheet {...baseProps} />)
+    expect(screen.getByRole('button', { name: /add transaction/i })).toBeInTheDocument()
+  })
+
+  it('calls onAddTransaction when Add transaction button is clicked', async () => {
+    const onAddTransaction = vi.fn()
+    render(<TransactionHistorySheet {...baseProps} onAddTransaction={onAddTransaction} />)
+    await userEvent.click(screen.getByRole('button', { name: /add transaction/i }))
+    expect(onAddTransaction).toHaveBeenCalledOnce()
+  })
 })
