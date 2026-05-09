@@ -19,11 +19,8 @@ const GOAL_ICONS = [
   { v: 'target',    Icon: Target,   label: 'Other' },
 ] as const
 
-const PRIORITIES = [
-  { v: 'low',  label: 'Low' },
-  { v: 'med',  label: 'Medium' },
-  { v: 'high', label: 'High' },
-] as const
+const PRIORITY_KEYS = ['low', 'med', 'high'] as const
+type PriorityKey = typeof PRIORITY_KEYS[number]
 
 function monthsUntil(ym: string): number {
   const [y, m] = ym.split('-').map(Number)
@@ -39,7 +36,7 @@ export function CreateGoalSheet({ open, onClose, onSuccess }: Props) {
   const [target, setTarget] = useState('100000000')
   const [targetDate, setTargetDate] = useState('')
   const [icon, setIcon] = useState<typeof GOAL_ICONS[number]['v']>('target')
-  const [priority, setPriority] = useState<typeof PRIORITIES[number]['v']>('med')
+  const [priority, setPriority] = useState<PriorityKey>('med')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [mounted, setMounted] = useState(open)
@@ -129,7 +126,7 @@ export function CreateGoalSheet({ open, onClose, onSuccess }: Props) {
 
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600, color: 'var(--c-ink)' }}>{tg('createModal')}</h3>
+          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600, color: 'var(--c-ink)' }}>{tg('newGoalTitle')}</h3>
           <button
             onClick={onClose}
             style={{ padding: 6, border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', color: 'var(--c-muted)', display: 'flex' }}
@@ -146,13 +143,13 @@ export function CreateGoalSheet({ open, onClose, onSuccess }: Props) {
             {/* Name */}
             <div>
               <label style={{ display: 'block', fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--c-muted)', marginBottom: 6 }}>
-                {tg('nameLabel')}
+                {tg('nameLabelSheet')}
               </label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder={tg('namePlaceholder')}
+                placeholder={tg('namePlaceholderSheet')}
                 autoFocus
                 style={{
                   width: '100%', boxSizing: 'border-box',
@@ -167,7 +164,7 @@ export function CreateGoalSheet({ open, onClose, onSuccess }: Props) {
             {/* Target amount */}
             <div>
               <label style={{ display: 'block', fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--c-muted)', marginBottom: 6 }}>
-                {tg('targetLabel')}
+                {tg('targetLabelSheet')}
               </label>
               <input
                 type="number"
@@ -187,7 +184,7 @@ export function CreateGoalSheet({ open, onClose, onSuccess }: Props) {
             {/* Target date */}
             <div>
               <label style={{ display: 'block', fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--c-muted)', marginBottom: 6 }}>
-                {tg('targetDateLabel')}
+                {tg('targetDateLabelSheet')}
               </label>
               <input
                 type="month"
@@ -270,7 +267,7 @@ export function CreateGoalSheet({ open, onClose, onSuccess }: Props) {
                 background: 'var(--c-card-2)', borderRadius: 10,
                 border: '1px solid var(--c-line)',
               }}>
-                {PRIORITIES.map(({ v, label }) => (
+                {PRIORITY_KEYS.map((v) => (
                   <button
                     key={v}
                     type="button"
@@ -289,7 +286,7 @@ export function CreateGoalSheet({ open, onClose, onSuccess }: Props) {
                       fontFamily: 'inherit',
                     }}
                   >
-                    {label}
+                    {tg(v === 'low' ? 'priorityLow' : v === 'med' ? 'priorityMed' : 'priorityHigh')}
                   </button>
                 ))}
               </div>
@@ -324,7 +321,7 @@ export function CreateGoalSheet({ open, onClose, onSuccess }: Props) {
               }}
             >
               {saving && <span style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.4)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'inline-block' }} />}
-              {saving ? tc('saving') : tg('create')}
+              {saving ? tc('saving') : tg('createBtn')}
             </button>
           </div>
         </form>
