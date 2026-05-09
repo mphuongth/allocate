@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { fmt } from '@/lib/formatters'
-import { Plus, ArrowDownToLine, ChevronDown, Check } from 'lucide-react'
+import { Plus, ArrowDownToLine, ChevronDown, Check, Mountain, Home, Shield, ShoppingCart, Target } from 'lucide-react'
 import { useTranslations, useLocale } from 'next-intl'
 import { useNavigation } from '@/app/components/navigation/NavigationContext'
 import dynamic from 'next/dynamic'
@@ -213,7 +213,9 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const [showGoalForm, setShowGoalForm] = useState(false)
   const [goalName, setGoalName] = useState('')
   const [goalTarget, setGoalTarget] = useState('')
-  const [goalDesc, setGoalDesc] = useState('')
+  const [goalTargetDate, setGoalTargetDate] = useState('')
+  const [goalIcon, setGoalIcon] = useState('target')
+  const [goalPriority, setGoalPriority] = useState('med')
   const [goalSaving, setGoalSaving] = useState(false)
   const [goalError, setGoalError] = useState('')
   const [sellItem, setSellItem] = useState<SellItem | null>(null)
@@ -351,7 +353,9 @@ export default function DashboardClient({ userId }: { userId: string }) {
         body: JSON.stringify({
           goal_name: goalName.trim(),
           target_amount: goalTarget ? Number(goalTarget) : null,
-          description: goalDesc.trim() || null,
+          target_date: goalTargetDate || null,
+          icon: goalIcon,
+          priority: goalPriority,
         }),
       })
       if (!res.ok) {
@@ -361,7 +365,9 @@ export default function DashboardClient({ userId }: { userId: string }) {
         setShowGoalForm(false)
         setGoalName('')
         setGoalTarget('')
-        setGoalDesc('')
+        setGoalTargetDate('')
+        setGoalIcon('target')
+        setGoalPriority('med')
         fetchData({ force: true })
       }
     } catch {
@@ -698,7 +704,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                       ]}
                     />
                     <button
-                      onClick={() => { setGoalName(''); setGoalTarget(''); setGoalDesc(''); setGoalError(''); setShowGoalForm(true) }}
+                      onClick={() => { setGoalName(''); setGoalTarget('100000000'); setGoalTargetDate(''); setGoalIcon('target'); setGoalPriority('med'); setGoalError(''); setShowGoalForm(true) }}
                       style={{
                         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                         padding: 6, border: 'none',
@@ -852,24 +858,109 @@ export default function DashboardClient({ userId }: { userId: string }) {
           <form onSubmit={(e) => { e.preventDefault(); handleGoalSave() }}>
             <div className="space-y-5 py-4">
               {goalError && <p className="text-sm text-red-600 dark:text-red-400">{goalError}</p>}
+
+              {/* Name */}
               <div className="space-y-2">
                 <Label>{tg('nameLabel')} <span className="text-red-500">*</span></Label>
                 <Input type="text" value={goalName} onChange={(e) => setGoalName(e.target.value)} placeholder={tg('namePlaceholder')} />
               </div>
+
+              {/* Target amount */}
               <div className="space-y-2">
                 <Label>{tg('targetLabel')}</Label>
-                <Input type="text" inputMode="numeric" value={goalTarget ? Number(goalTarget).toLocaleString('en-US') : ''} onChange={(e) => setGoalTarget(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))} placeholder={tg('targetPlaceholder')} />
+                <Input type="number" value={goalTarget} onChange={(e) => setGoalTarget(e.target.value)} placeholder={tg('targetPlaceholder')} />
               </div>
+
+              {/* Target date */}
               <div className="space-y-2">
-                <Label>{tg('descLabel')}</Label>
-                <Textarea value={goalDesc} onChange={(e) => setGoalDesc(e.target.value)} placeholder={tg('descPlaceholder')} rows={3} />
+                <Label>{tg('targetDateLabel')}</Label>
+                <Input type="month" value={goalTargetDate} onChange={(e) => setGoalTargetDate(e.target.value)} />
+              </div>
+
+              {/* Live save-per-month */}
+              {(() => {
+                const amount = Number(goalTarget)
+                if (!amount || !goalTargetDate) return null
+                const [y, m] = goalTargetDate.split('-').map(Number)
+                const now = new Date()
+                const months = Math.max(1, (y - now.getFullYear()) * 12 + (m - 1 - now.getMonth()))
+                const perMonth = Math.round(amount / months)
+                return (
+                  <div data-testid="save-per-month" className="flex items-center justify-between rounded-xl bg-[#eef2f8] dark:bg-blue-950/30 border border-[#eef2f8] dark:border-blue-900/40 px-4 py-3">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-widest text-[#0F2A4A] dark:text-blue-300">{tg('savePerMonth')}</p>
+                      <p className="mt-1 text-lg font-semibold tabular-nums text-[#0F2A4A] dark:text-blue-200">{fmt(perMonth)} / {tg('month')}</p>
+                    </div>
+                    <span className="rounded-full bg-white dark:bg-blue-900/40 px-3 py-1 text-xs font-medium text-[#0F2A4A] dark:text-blue-300">
+                      {months} {tg('month')}
+                    </span>
+                  </div>
+                )
+              })()}
+
+              {/* Icon picker */}
+              <div className="space-y-2">
+                <Label>{tg('iconLabel')}</Label>
+                <div className="flex gap-2">
+                  {([
+                    { v: 'mountains', Icon: Mountain, label: 'Retirement' },
+                    { v: 'home',      Icon: Home,     label: 'House' },
+                    { v: 'shield',    Icon: Shield,   label: 'Emergency' },
+                    { v: 'cart',      Icon: ShoppingCart, label: 'Purchase' },
+                    { v: 'target',    Icon: Target,   label: 'Other' },
+                  ] as const).map(({ v, Icon: IconComponent, label }) => (
+                    <button
+                      key={v}
+                      type="button"
+                      data-testid={`goal-icon-btn-${v}`}
+                      onClick={() => setGoalIcon(v)}
+                      title={label}
+                      className={`flex h-11 w-11 items-center justify-center rounded-[10px] border transition-colors ${
+                        goalIcon === v
+                          ? 'border-[#0F2A4A] bg-[#0F2A4A] text-white'
+                          : 'border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+                      }`}
+                    >
+                      <IconComponent className="h-[18px] w-[18px]" strokeWidth={1.8} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Priority */}
+              <div className="space-y-2">
+                <Label>{tg('priorityLabel')}</Label>
+                <div className="inline-flex gap-1 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 p-1">
+                  {([
+                    { v: 'low', label: 'Low' },
+                    { v: 'med', label: 'Medium' },
+                    { v: 'high', label: 'High' },
+                  ] as const).map(({ v, label }) => (
+                    <button
+                      key={v}
+                      type="button"
+                      data-testid={`priority-btn-${v}`}
+                      onClick={() => setGoalPriority(v)}
+                      className={`rounded-[7px] px-3 py-1.5 text-xs font-medium transition-all ${
+                        goalPriority === v
+                          ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 shadow-sm'
+                          : 'bg-transparent text-gray-500 dark:text-gray-400'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
+
             <div className="flex gap-3">
-              <Button type="button" variant="outline" className="flex-1" onClick={() => setShowGoalForm(false)}>{tc('cancel')}</Button>
-              <Button type="submit" className="flex-1 bg-emerald-600 hover:bg-emerald-700" disabled={goalSaving}>
+              <Button type="button" variant="outline" className="flex-1" onClick={() => setShowGoalForm(false)} disabled={goalSaving}>
+                {tc('cancel')}
+              </Button>
+              <Button type="submit" className="flex-[2] bg-[#0F2A4A] hover:bg-[#1e3a63] text-white border-0" disabled={goalSaving}>
                 {goalSaving && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-                {goalSaving ? tc('saving') : tc('save')}
+                {goalSaving ? tc('saving') : tg('create')}
               </Button>
             </div>
           </form>
