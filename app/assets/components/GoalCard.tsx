@@ -1,6 +1,5 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 
@@ -14,21 +13,22 @@ interface Props {
   profitLossPercentage: number
   progressPercentage: number | null
   transactionCount: number
+  onClick: () => void
 }
 
 export default function GoalCard({
-  goalId, goalName, targetAmount, currentValue,
+  goalName, targetAmount, currentValue,
   profitLoss, profitLossPercentage, progressPercentage, transactionCount,
+  onClick,
 }: Props) {
   const t = useTranslations('dashboard')
-  const router = useRouter()
   const plPositive = profitLoss >= 0
   const progress = Math.min(progressPercentage ?? 0, 100)
   const isComplete = progressPercentage !== null && progressPercentage >= 100
 
   return (
     <button
-      onClick={() => router.push(`/settings?tab=goals&goal=${goalId}`)}
+      onClick={onClick}
       style={{
         width: '100%', textAlign: 'left', cursor: 'pointer',
         background: 'var(--c-card)',
