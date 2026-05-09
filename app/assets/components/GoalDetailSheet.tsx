@@ -9,7 +9,7 @@ import {
 import { useLocale } from 'next-intl'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import type { GoalData, FundBreakdownItem } from '../DashboardClient'
-import TransactionHistorySheet from './TransactionHistorySheet'
+import TransactionHistorySheet, { type PurchaseHistoryRow } from './TransactionHistorySheet'
 
 interface InvestmentTx {
   transaction_id: string
@@ -471,7 +471,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: 
   const [actionInv, setActionInv] = useState<InvRow | null>(null)
   const [investActionOpen, setInvestActionOpen] = useState(false)
   const [fundDetailId, setFundDetailId] = useState<string | null>(null)
-  const [purchaseHistory, setPurchaseHistory] = useState<{ purchase_date: string; units: number; nav_at_purchase: number }[]>([])
+  const [purchaseHistory, setPurchaseHistory] = useState<PurchaseHistoryRow[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const [monthlyContrib, setMonthlyContrib] = useState('')
 
