@@ -7,8 +7,8 @@ import { fmtCompact, fmtNav, fmtPct, fmtUnits } from '@/lib/formatters'
 
 export interface PurchaseHistoryRow {
   purchase_date: string
-  units: number
-  nav_at_purchase: number
+  units: number | null
+  nav_at_purchase: number | null
 }
 
 interface Props {
@@ -179,7 +179,9 @@ export default function TransactionHistorySheet({
               </p>
             )}
             {!loading && purchaseHistory.map((row, i) => {
-              const amountPaid = Math.round(row.units * row.nav_at_purchase)
+              const amountPaid = row.units != null && row.nav_at_purchase != null
+                ? Math.round(row.units * row.nav_at_purchase)
+                : null
               return (
                 <div
                   key={i}
@@ -202,11 +204,11 @@ export default function TransactionHistorySheet({
                     </div>
                     <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>
                       {new Date(row.purchase_date).toLocaleDateString(isVI ? 'vi-VN' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
-                      {' · '}{fmtUnits(row.units)} {isVI ? 'CCQ' : 'units'}
+                      {row.units != null && <>{' · '}{fmtUnits(row.units)} {isVI ? 'CCQ' : 'units'}</>}
                     </div>
                   </div>
                   <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-pos)', fontVariantNumeric: 'tabular-nums' }}>
-                    +{fmtCompact(amountPaid)}
+                    {amountPaid != null ? `+${fmtCompact(amountPaid)}` : '—'}
                   </span>
                 </div>
               )

@@ -99,6 +99,15 @@ describe('TransactionHistorySheet', () => {
     expect(screen.getByRole('button', { name: /add transaction/i })).toBeInTheDocument()
   })
 
+  it('does not crash when a row has null units or nav', () => {
+    const historyWithNulls = [
+      { purchase_date: '2024-01-15', units: null as unknown as number, nav_at_purchase: null as unknown as number },
+    ]
+    expect(() =>
+      render(<TransactionHistorySheet {...baseProps} purchaseHistory={historyWithNulls} />)
+    ).not.toThrow()
+  })
+
   it('calls onAddTransaction when Add transaction button is clicked', async () => {
     const onAddTransaction = vi.fn()
     render(<TransactionHistorySheet {...baseProps} onAddTransaction={onAddTransaction} />)
