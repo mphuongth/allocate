@@ -167,10 +167,11 @@ export function CreateGoalSheet({ open, onClose, onSuccess }: Props) {
                 {tg('targetLabelSheet')}
               </label>
               <input
-                type="number"
-                value={target}
-                onChange={(e) => setTarget(e.target.value)}
-                placeholder={tg('targetPlaceholder')}
+                type="text"
+                inputMode="numeric"
+                value={target ? Number(target).toLocaleString('vi-VN') : ''}
+                onChange={(e) => setTarget(e.target.value.replace(/\./g, '').replace(/[^0-9]/g, ''))}
+                placeholder="100.000.000"
                 style={{
                   width: '100%', boxSizing: 'border-box',
                   padding: '10px 12px', fontSize: 14, fontVariantNumeric: 'tabular-nums',
