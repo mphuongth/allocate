@@ -6,6 +6,9 @@ test.describe('PDF Report download', () => {
   const reportBtn = (page: import('@playwright/test').Page) =>
     page.locator('[data-testid="generate-report-btn"]:visible').first()
 
+  const exportBtn = (page: import('@playwright/test').Page) =>
+    page.locator('[data-testid="export-report-btn"]')
+
   test.beforeEach(async ({ page }) => {
     await page.goto('/dashboard')
     await page.waitForSelector('[data-testid="generate-report-btn"]:visible', { timeout: 15_000 })
@@ -15,24 +18,35 @@ test.describe('PDF Report download', () => {
     await expect(reportBtn(page)).toBeVisible()
   })
 
+  test('clicking the button opens the report sheet', async ({ page }) => {
+    await reportBtn(page).click()
+    await expect(exportBtn(page)).toBeVisible({ timeout: 5_000 })
+  })
+
   test('clicking the button downloads a PDF file with the correct filename', async ({ page }) => {
+    await reportBtn(page).click()
+    await expect(exportBtn(page)).toBeVisible({ timeout: 5_000 })
     const [download] = await Promise.all([
       page.waitForEvent('download'),
-      reportBtn(page).click(),
+      exportBtn(page).click(),
     ])
     expect(download.suggestedFilename()).toMatch(/^allocate-report-\d{4}-\d{2}-\d{2}\.pdf$/)
   })
 
-  test('button becomes disabled while the PDF is generating', async ({ page }) => {
+  test('export button becomes disabled while the PDF is generating', async ({ page }) => {
     await reportBtn(page).click()
-    await expect(reportBtn(page)).toBeDisabled()
+    await expect(exportBtn(page)).toBeVisible({ timeout: 5_000 })
+    await exportBtn(page).click()
+    await expect(exportBtn(page)).toBeDisabled()
   })
 
-  test('button returns to enabled state after download completes', async ({ page }) => {
+  test('export button returns to enabled state after download completes', async ({ page }) => {
+    await reportBtn(page).click()
+    await expect(exportBtn(page)).toBeVisible({ timeout: 5_000 })
     await Promise.all([
       page.waitForEvent('download'),
-      reportBtn(page).click(),
+      exportBtn(page).click(),
     ])
-    await expect(reportBtn(page)).toBeEnabled({ timeout: 5_000 })
+    await expect(exportBtn(page)).toBeEnabled({ timeout: 5_000 })
   })
 })

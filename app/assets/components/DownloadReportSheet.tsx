@@ -129,6 +129,7 @@ export default function DownloadReportSheet({ open, onClose, data, onExport }: P
             </div>
           ) : (
             <button
+              data-testid="export-report-btn"
               onClick={handleExport}
               disabled={exporting}
               style={{
