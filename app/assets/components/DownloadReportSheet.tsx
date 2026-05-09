@@ -116,7 +116,7 @@ export default function DownloadReportSheet({ open, onClose, data, onExport }: P
           </div>
 
           {success ? (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '14px 0' }}>
+            <div data-testid="export-success" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '14px 0' }}>
               <div style={{
                 width: 32, height: 32, borderRadius: '50%',
                 background: 'var(--c-pos-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center',

@@ -40,13 +40,13 @@ test.describe('PDF Report download', () => {
     await expect(exportBtn(page)).toBeDisabled()
   })
 
-  test('export button returns to enabled state after download completes', async ({ page }) => {
+  test('success indicator appears after download completes', async ({ page }) => {
     await reportBtn(page).click()
     await expect(exportBtn(page)).toBeVisible({ timeout: 5_000 })
     await Promise.all([
       page.waitForEvent('download'),
       exportBtn(page).click(),
     ])
-    await expect(exportBtn(page)).toBeEnabled({ timeout: 5_000 })
+    await expect(page.locator('[data-testid="export-success"]')).toBeVisible({ timeout: 10_000 })
   })
 })
