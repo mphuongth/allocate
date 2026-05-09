@@ -185,7 +185,8 @@
     "calculatorHint": "Enter an amount to see how long it will take",
     "calculatorYears": "{n, plural, one {# year} other {# years}}",
     "calculatorMonths": "{n, plural, one {# month} other {# months}}",
-    "calculatorResult": "Estimated time to goal:"
+    "calculatorResult": "Estimated time to goal:",
+    "monthsCount": "{n, plural, one {# month} other {# months}}"
   },
   "transactions": {
     "title": "Investment Transactions",

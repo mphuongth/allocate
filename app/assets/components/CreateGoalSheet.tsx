@@ -221,7 +221,7 @@ export function CreateGoalSheet({ open, onClose, onSuccess }: Props) {
                   padding: '3px 10px', fontSize: 12, fontWeight: 500,
                   color: 'var(--c-navy)',
                 }}>
-                  {months} {tg('month')}
+                  {tg('monthsCount', { n: months ?? 0 })}
                 </span>
               </div>
             )}

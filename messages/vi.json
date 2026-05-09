@@ -185,7 +185,8 @@
     "calculatorHint": "Nhập số tiền để tính thời gian cần thiết",
     "calculatorYears": "{n} năm",
     "calculatorMonths": "{n} tháng",
-    "calculatorResult": "Thời gian ước tính:"
+    "calculatorResult": "Thời gian ước tính:",
+    "monthsCount": "{n} tháng"
   },
   "transactions": {
     "title": "Giao dịch Đầu tư",
