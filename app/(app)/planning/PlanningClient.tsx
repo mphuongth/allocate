@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useTranslations } from 'next-intl'
-import MobileTopBar from '@/app/components/navigation/MobileTopBar'
 import SalaryInput from './components/SalaryInput'
 import FundInvestmentsSection from './components/FundInvestmentsSection'
 import DirectSavingsSection from './components/DirectSavingsSection'
@@ -11,6 +10,7 @@ import FixedExpensesSection from './components/FixedExpensesSection'
 import InsuranceSection from './components/InsuranceSection'
 import OtherExpensesSection from './components/OtherExpensesSection'
 import AllocationSummary from './components/AllocationSummary'
+import MobilePlanningView from './components/MobilePlanningView'
 
 export interface MonthlyPlan {
   id: string
@@ -199,8 +199,36 @@ export default function PlanningClient() {
   const refetch = useCallback(() => fetchPlan({ force: true }), [fetchPlan])
 
   return (
-    <div className="space-y-6">
-      <MobileTopBar subtitle={t('pageSubtitle')} title={t('pageTitle')} />
+    <>
+      {/* Mobile view — replaces the desktop layout on small screens */}
+      <MobilePlanningView
+        month={month}
+        year={year}
+        plan={plan}
+        investments={investments}
+        savings={savings}
+        fixedExpenses={fixedExpenses}
+        insuranceMembers={insuranceMembers}
+        otherExpenses={otherExpenses}
+        funds={funds}
+        goals={goals}
+        onNavigatePrev={() => navigate('prev')}
+        onNavigateNext={() => navigate('next')}
+        onPlanCreated={(p) => { setPlan(p); refetch() }}
+        onPlanDeleted={() => {
+          bustPlanCache(month, year)
+          setPlan(null)
+          setInvestments([])
+          setSavings([])
+          setFixedExpenses([])
+          showToast(t('deletedToast', { month: MONTHS[month - 1], year }))
+        }}
+        onRefresh={refetch}
+        onToast={showToast}
+      />
+
+      {/* Desktop view — hidden on mobile */}
+      <div className="hidden md:block space-y-6">
       {/* Month navigation */}
       <div className="flex items-center gap-3">
         <button
@@ -308,6 +336,7 @@ export default function PlanningClient() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   )
 }
