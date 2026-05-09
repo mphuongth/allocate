@@ -1,0 +1,338 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import MobilePlanningView from '../MobilePlanningView'
+import type { MonthlyPlan, FixedExpense, InsuranceMember, OtherExpense, FundInvestment, DirectSaving } from '../../PlanningClient'
+
+vi.mock('next-intl', () => ({
+  useTranslations: () => (key: string, params?: Record<string, unknown>) =>
+    params ? `${key}:${JSON.stringify(params)}` : key,
+  useLocale: () => 'en',
+}))
+
+vi.mock('@/lib/formatters', () => ({
+  fmt: (n: number) => `₫ ${n}`,
+  fmtCompact: (n: number) => {
+    const abs = Math.abs(n)
+    const sign = n < 0 ? '-' : ''
+    if (abs >= 1_000_000_000) return sign + (abs / 1_000_000_000).toFixed(1) + 'B ₫'
+    if (abs >= 1_000_000) return sign + (abs / 1_000_000).toFixed(1) + 'M ₫'
+    return `₫ ${n}`
+  },
+}))
+
+vi.mock('@/app/components/navigation/MobileTopBar', () => ({
+  default: ({ title, trailing }: { title: string; trailing?: React.ReactNode }) => (
+    <header>
+      <h1>{title}</h1>
+      {trailing}
+    </header>
+  ),
+}))
+
+const basePlan: MonthlyPlan = {
+  id: 'plan-1',
+  month: 5,
+  year: 2026,
+  salary_vnd: 45_000_000,
+}
+
+const baseFixedExpenses: FixedExpense[] = [
+  { expense_id: 'fe1', expense_name: 'Rent', amount_vnd: 8_500_000 },
+  { expense_id: 'fe2', expense_name: 'Utilities', amount_vnd: 1_200_000 },
+]
+
+const baseInsuranceMembers: InsuranceMember[] = [
+  {
+    member_id: 'i1',
+    member_name: 'John',
+    relationship: 'Self',
+    annual_payment_vnd: 18_000_000,
+    payment_date: null,
+  },
+]
+
+const baseOtherExpenses: OtherExpense[] = [
+  { id: 'o1', plan_id: 'plan-1', description: 'Family trip', amount_vnd: 6_000_000, created_at: '2026-05-01' },
+]
+
+const baseInvestments: FundInvestment[] = [
+  {
+    transaction_id: 'tx1',
+    plan_id: 'plan-1',
+    fund_id: 'f1',
+    goal_id: 'g1',
+    amount_vnd: 5_000_000,
+    units: null,
+    unit_price: null,
+    investment_date: '2026-05-01',
+    is_dca_seeded: false,
+    funds: { name: 'VFMVF1', nav: 36120 },
+    savings_goals: { goal_name: 'Retirement' },
+  },
+]
+
+const baseSavings: DirectSaving[] = [
+  {
+    transaction_id: 'sv1',
+    plan_id: 'plan-1',
+    goal_id: 'g2',
+    amount_vnd: 3_000_000,
+    interest_rate: null,
+    expiry_date: null,
+    investment_date: '2026-05-01',
+    savings_goals: { goal_name: 'Emergency fund' },
+  },
+]
+
+const defaultProps = {
+  month: 5,
+  year: 2026,
+  plan: null as MonthlyPlan | null,
+  investments: [] as FundInvestment[],
+  savings: [] as DirectSaving[],
+  fixedExpenses: [] as FixedExpense[],
+  insuranceMembers: [] as InsuranceMember[],
+  otherExpenses: [] as OtherExpense[],
+  funds: [],
+  goals: [],
+  onNavigatePrev: vi.fn(),
+  onNavigateNext: vi.fn(),
+  onPlanCreated: vi.fn(),
+  onPlanDeleted: vi.fn(),
+  onRefresh: vi.fn(),
+  onToast: vi.fn(),
+}
+
+describe('MobilePlanningView — no plan', () => {
+  it('shows month label in no-plan state', () => {
+    render(<MobilePlanningView {...defaultProps} />)
+    expect(screen.getAllByText(/May 2026/).length).toBeGreaterThan(0)
+  })
+
+  it('shows "Set income" CTA when plan is null', () => {
+    render(<MobilePlanningView {...defaultProps} />)
+    expect(screen.getByRole('button', { name: /set income/i })).toBeInTheDocument()
+  })
+
+  it('does not show salary card when plan is null', () => {
+    render(<MobilePlanningView {...defaultProps} />)
+    expect(screen.queryByText(/Monthly income/i)).not.toBeInTheDocument()
+  })
+
+  it('opens salary sheet when "Set income" is clicked', async () => {
+    render(<MobilePlanningView {...defaultProps} />)
+    await userEvent.click(screen.getByRole('button', { name: /set income/i }))
+    // Sheet opens with a "Set income" or similar title
+    expect(screen.getByRole('textbox')).toBeInTheDocument()
+  })
+})
+
+describe('MobilePlanningView — with plan', () => {
+  it('shows salary card with "Monthly income" label', () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} />)
+    expect(screen.getByText(/Monthly income/i)).toBeInTheDocument()
+  })
+
+  it('shows formatted salary in salary card', () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} />)
+    // 45_000_000 → "45.0M ₫" from fmtCompact mock (appears in salary card and remaining strip)
+    expect(screen.getAllByText('45.0M ₫').length).toBeGreaterThan(0)
+  })
+
+  it('shows Outflow label in summary strip', () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} />)
+    expect(screen.getByText(/Outflow/i)).toBeInTheDocument()
+  })
+
+  it('shows Remaining label in summary strip', () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} />)
+    expect(screen.getAllByText(/Remaining/i).length).toBeGreaterThan(0)
+  })
+
+  it('shows Saved % label in summary strip', () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} />)
+    expect(screen.getByText(/Saved %/i)).toBeInTheDocument()
+  })
+
+  it("shows allocation summary card with \"This month's allocation\" label", () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} />)
+    expect(screen.getByText(/This month's allocation/i)).toBeInTheDocument()
+  })
+
+  it('shows edit (pencil) and delete (trash) buttons on salary card', () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} />)
+    expect(screen.getByLabelText(/edit/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/delete/i)).toBeInTheDocument()
+  })
+
+  it('opens salary edit sheet when edit button is clicked', async () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} />)
+    await userEvent.click(screen.getByLabelText(/edit/i))
+    expect(screen.getByRole('textbox')).toBeInTheDocument()
+  })
+
+  it('opens delete confirmation when delete button is clicked', async () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} />)
+    await userEvent.click(screen.getByLabelText(/delete/i))
+    expect(screen.getByText(/Delete monthly plan/i)).toBeInTheDocument()
+  })
+})
+
+describe('MobilePlanningView — fixed expenses section', () => {
+  it('shows fixed expenses section when expenses exist', () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} fixedExpenses={baseFixedExpenses} />)
+    expect(screen.getAllByText(/Fixed expenses/i).length).toBeGreaterThan(0)
+  })
+
+  it('shows expense names in fixed expenses section', () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} fixedExpenses={baseFixedExpenses} />)
+    expect(screen.getByText('Rent')).toBeInTheDocument()
+    expect(screen.getByText('Utilities')).toBeInTheDocument()
+  })
+
+  it('shows "Skipped" for a skipped expense (override === 0)', () => {
+    const skippedExpenses: FixedExpense[] = [
+      { expense_id: 'fe1', expense_name: 'Gym', amount_vnd: 600_000, override: 0 },
+    ]
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} fixedExpenses={skippedExpenses} />)
+    expect(screen.getByText(/Skipped/i)).toBeInTheDocument()
+  })
+
+  it('shows "(overridden)" for an overridden expense', () => {
+    const overriddenExpenses: FixedExpense[] = [
+      { expense_id: 'fe1', expense_name: 'Rent', amount_vnd: 8_500_000, override: 5_000_000 },
+    ]
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} fixedExpenses={overriddenExpenses} />)
+    expect(screen.getByText(/overridden/i)).toBeInTheDocument()
+  })
+
+  it('excludes skipped expenses from section total', () => {
+    const expenses: FixedExpense[] = [
+      { expense_id: 'fe1', expense_name: 'Rent', amount_vnd: 8_500_000 },
+      { expense_id: 'fe2', expense_name: 'Gym', amount_vnd: 600_000, override: 0 },
+    ]
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} fixedExpenses={expenses} />)
+    // Section total should be 8.5M only (gym is skipped)
+    const section = screen.getByTestId('section-fixed-expenses').closest('[data-testid="budget-section"]')
+    if (section) {
+      expect(section).toHaveTextContent('8.5M ₫')
+      expect(section).not.toHaveTextContent('9.1M ₫') // 8.5 + 0.6
+    }
+  })
+})
+
+describe('MobilePlanningView — insurance section', () => {
+  it('shows insurance section when members exist', () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} insuranceMembers={baseInsuranceMembers} />)
+    expect(screen.getAllByText('Insurance').length).toBeGreaterThan(0)
+  })
+
+  it('shows member name in insurance section', () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} insuranceMembers={baseInsuranceMembers} />)
+    expect(screen.getByText('John')).toBeInTheDocument()
+  })
+
+  it('shows "Skipped" for an excluded insurance member', () => {
+    const excludedMembers: InsuranceMember[] = [
+      {
+        member_id: 'i1',
+        member_name: 'John',
+        relationship: 'Self',
+        annual_payment_vnd: 18_000_000,
+        payment_date: null,
+        excluded: true,
+      },
+    ]
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} insuranceMembers={excludedMembers} />)
+    expect(screen.getByText(/Skipped/i)).toBeInTheDocument()
+  })
+})
+
+describe('MobilePlanningView — other expenses section', () => {
+  it('shows other expenses section', () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} otherExpenses={baseOtherExpenses} />)
+    expect(screen.getAllByText(/Other/i).length).toBeGreaterThan(0)
+    expect(screen.getByText('Family trip')).toBeInTheDocument()
+  })
+
+  it('shows "Add item" button in other expenses section', () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} />)
+    expect(screen.getByRole('button', { name: /Add item/i })).toBeInTheDocument()
+  })
+})
+
+describe('MobilePlanningView — by goal section', () => {
+  it('shows investments grouped by goal', () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} investments={baseInvestments} savings={baseSavings} />)
+    expect(screen.getByText('Retirement')).toBeInTheDocument()
+    expect(screen.getByText('Emergency fund')).toBeInTheDocument()
+  })
+
+  it('shows "By goal" section header', () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} investments={baseInvestments} />)
+    expect(screen.getByText(/By goal/i)).toBeInTheDocument()
+  })
+})
+
+describe('MobilePlanningView — allocation summary with all categories', () => {
+  it('shows fixed expenses row in allocation summary when expenses exist', () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} fixedExpenses={baseFixedExpenses} />)
+    expect(screen.getAllByText(/Fixed expenses/i).length).toBeGreaterThan(0)
+  })
+
+  it('shows insurance row in allocation summary when members exist', () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} insuranceMembers={baseInsuranceMembers} />)
+    expect(screen.getAllByText(/Insurance/i).length).toBeGreaterThan(0)
+  })
+
+  it('shows over-budget warning when remaining is negative', () => {
+    // salary 1M, fixed expenses 2M → remaining -1M → over budget
+    const bigExpenses: FixedExpense[] = [
+      { expense_id: 'fe1', expense_name: 'Rent', amount_vnd: 2_000_000 },
+    ]
+    const smallPlan: MonthlyPlan = { id: 'p2', month: 5, year: 2026, salary_vnd: 1_000_000 }
+    render(<MobilePlanningView {...defaultProps} plan={smallPlan} fixedExpenses={bigExpenses} />)
+    expect(screen.getByText(/Over budget/i)).toBeInTheDocument()
+  })
+})
+
+describe('MobilePlanningView — month navigation', () => {
+  it('calls onNavigatePrev when prev button is clicked', async () => {
+    const onNavigatePrev = vi.fn()
+    render(<MobilePlanningView {...defaultProps} onNavigatePrev={onNavigatePrev} />)
+    await userEvent.click(screen.getByTestId('mobile-prev-month'))
+    expect(onNavigatePrev).toHaveBeenCalledOnce()
+  })
+
+  it('calls onNavigateNext when next button is clicked', async () => {
+    const onNavigateNext = vi.fn()
+    render(<MobilePlanningView {...defaultProps} onNavigateNext={onNavigateNext} />)
+    await userEvent.click(screen.getByTestId('mobile-next-month'))
+    expect(onNavigateNext).toHaveBeenCalledOnce()
+  })
+
+  it('shows current month in month picker', () => {
+    render(<MobilePlanningView {...defaultProps} />)
+    expect(screen.getByText('May 2026')).toBeInTheDocument()
+  })
+})
+
+describe('MobilePlanningView — collapsible sections', () => {
+  it('fixed expenses section is open by default', () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} fixedExpenses={baseFixedExpenses} />)
+    // When open, the expense items are visible
+    expect(screen.getByText('Rent')).toBeInTheDocument()
+  })
+
+  it('toggles fixed expenses section on header click', async () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} fixedExpenses={baseFixedExpenses} />)
+    // Items are visible initially (section is open)
+    expect(screen.getByText('Rent')).toBeInTheDocument()
+    // Click the header to collapse
+    const sectionBtn = screen.getByTestId('section-fixed-expenses')
+    await userEvent.click(sectionBtn)
+    // Items should be hidden now
+    expect(screen.queryByText('Rent')).not.toBeInTheDocument()
+  })
+})
