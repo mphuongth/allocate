@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useTranslations } from 'next-intl'
+import { useNavigation } from '@/app/components/navigation/NavigationContext'
 import SalaryInput from './components/SalaryInput'
 import FundInvestmentsSection from './components/FundInvestmentsSection'
 import DirectSavingsSection from './components/DirectSavingsSection'
@@ -94,6 +95,7 @@ function nextMonth(m: number, y: number) { return m === 12 ? { m: 1, y: y + 1 } 
 
 export default function PlanningClient() {
   const t = useTranslations('planning')
+  const { setMobileTopBar } = useNavigation()
   const MONTHS = t('months').split(',')
   const now = new Date()
   const initialMonth = now.getMonth() + 1
@@ -189,6 +191,7 @@ export default function PlanningClient() {
   }, [month, year])
 
   useEffect(() => { fetchPlan() }, [fetchPlan])
+  useEffect(() => { setMobileTopBar({ title: '' }) }, [setMobileTopBar])
 
   function navigate(dir: 'prev' | 'next') {
     const { m, y } = dir === 'prev' ? prevMonth(month, year) : nextMonth(month, year)
