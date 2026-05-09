@@ -73,6 +73,40 @@ const baseProps = {
   onDataChanged: vi.fn(),
 }
 
+describe('GoalDetailSheet — DCA pending row filtering', () => {
+  it('excludes DCA-seeded rows with null units from transaction history', async () => {
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('investment-transactions')) {
+        return Promise.resolve({ ok: true, json: async () => ({ transactions: [mockTx] }) })
+      }
+      if (url.includes('fund-investments')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => [
+            // real transaction
+            { nav_at_purchase: 22_000, units_purchased: 100, investment_date: '2024-01-15', created_at: '2024-01-15T00:00:00Z', is_dca_seeded: false },
+            // pending DCA placeholder — should be excluded
+            { nav_at_purchase: null, units_purchased: null, investment_date: '2026-05-01', created_at: '2026-05-01T00:00:00Z', is_dca_seeded: true },
+          ],
+        })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+
+    render(<GoalDetailSheet {...baseProps} />)
+    await waitFor(() => screen.getByText('VNINDEX ETF'))
+    await userEvent.click(screen.getByRole('button', { name: /options/i }))
+    await waitFor(() => screen.getAllByText('Transaction history').length > 0)
+    await userEvent.click(screen.getAllByText('Transaction history')[0])
+    await waitFor(() => screen.getByRole('heading', { name: 'VNINDEX ETF' }))
+
+    // Only 1 real row — the pending DCA row must not appear
+    expect(screen.getAllByText('Buy')).toHaveLength(1)
+    // DCA row date (May 2026) must not be in the document
+    expect(screen.queryByText(/May.*2026/i)).not.toBeInTheDocument()
+  })
+})
+
 describe('GoalDetailSheet — transaction history integration', () => {
   it('opens TransactionHistorySheet when "Transaction history" is tapped on a fund', async () => {
     render(<GoalDetailSheet {...baseProps} />)

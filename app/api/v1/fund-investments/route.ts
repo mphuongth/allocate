@@ -12,9 +12,10 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from('investment_transactions')
-    .select('transaction_id, fund_id, goal_id, amount_vnd, units, unit_price, investment_date, created_at, funds(id, name, nav), savings_goals(goal_name)')
+    .select('transaction_id, fund_id, goal_id, amount_vnd, units, unit_price, investment_date, created_at, is_dca_seeded, funds(id, name, nav), savings_goals(goal_name)')
     .eq('user_id', user.id)
     .eq('asset_type', 'fund')
+    .or('is_dca_seeded.eq.false,units.not.is.null')
     .order('created_at', { ascending: false })
 
   if (fundId) query = query.eq('fund_id', fundId)
@@ -33,6 +34,7 @@ export async function GET(request: NextRequest) {
     nav_at_purchase: row.unit_price,
     investment_date: row.investment_date,
     created_at: row.created_at,
+    is_dca_seeded: row.is_dca_seeded,
     funds: row.funds,
     savings_goals: row.savings_goals,
   }))
