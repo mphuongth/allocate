@@ -25,7 +25,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { goal_name, description, target_amount } = body
+  const { goal_name, description, target_amount, target_date, icon, priority } = body
 
   if (!goal_name || typeof goal_name !== 'string' || goal_name.trim().length === 0) {
     return NextResponse.json({ error: 'Goal name is required.' }, { status: 400 })
@@ -36,9 +36,20 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: 'Goal amount must be a positive number.' }, { status: 400 })
   }
 
+  const VALID_ICONS = ['mountains', 'home', 'shield', 'cart', 'target']
+  const VALID_PRIORITIES = ['low', 'med', 'high']
+
   const { data: goal, error } = await supabase
     .from('savings_goals')
-    .update({ goal_name: goal_name.trim(), description: description?.trim() || null, target_amount: targetAmountVal, updated_at: new Date().toISOString() })
+    .update({
+      goal_name: goal_name.trim(),
+      description: description?.trim() || null,
+      target_amount: targetAmountVal,
+      target_date: target_date || null,
+      icon: VALID_ICONS.includes(icon) ? icon : 'target',
+      priority: VALID_PRIORITIES.includes(priority) ? priority : 'med',
+      updated_at: new Date().toISOString(),
+    })
     .eq('goal_id', id)
     .eq('user_id', user.id)
     .select()
