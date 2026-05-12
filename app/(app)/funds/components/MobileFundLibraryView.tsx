@@ -136,6 +136,64 @@ function SortDropdown({ sortKey, sortAsc, onSort }: { sortKey: SortKey; sortAsc:
   )
 }
 
+// ─── Type dropdown ────────────────────────────────────────────────────────────
+
+const FORM_TYPES = (Object.keys(TYPE_META) as FundType[]).filter((ft) => ft !== 'gold')
+
+function TypeDropdown({ value, onChange }: { value: FundType; onChange: (v: FundType) => void }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [open])
+
+  const m = TYPE_META[value]
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '10px 12px', fontSize: 13, background: 'var(--c-card)', color: 'var(--c-ink)', border: '1px solid var(--c-line)', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit', boxSizing: 'border-box' }}
+      >
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ width: 8, height: 8, borderRadius: 999, background: m.color, flexShrink: 0 }} />
+          {m.label}
+        </span>
+        <ChevronDown size={14} color="var(--c-muted)" />
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 10, boxShadow: 'var(--shadow-pop)', zIndex: 300, overflow: 'hidden' }}>
+          {FORM_TYPES.map((ft) => {
+            const fm = TYPE_META[ft]
+            const active = value === ft
+            return (
+              <button
+                key={ft}
+                type="button"
+                onClick={() => { onChange(ft); setOpen(false) }}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '11px 12px', fontSize: 13, fontWeight: active ? 600 : 400, color: active ? 'var(--c-navy)' : 'var(--c-ink)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', gap: 8 }}
+              >
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 999, background: fm.color, flexShrink: 0 }} />
+                  {fm.label}
+                </span>
+                {active && <Check size={13} color="var(--c-navy)" />}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Sheet ───────────────────────────────────────────────────────────────────
 
 function Sheet({ open, onClose, testId, children }: { open: boolean; onClose: () => void; testId: string; children: React.ReactNode }) {
@@ -220,22 +278,7 @@ function FundForm({ existing, title, onClose, onSave, saving, formError }: {
         </div>
         <div style={{ display: 'grid', gap: 6 }}>
           <label style={labelStyle}>{t('typeLabel')} <span style={{ color: 'var(--c-neg)' }}>*</span></label>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {(Object.keys(TYPE_META) as FundType[]).filter((ft) => ft !== 'gold').map((ft) => {
-              const m = TYPE_META[ft]
-              const active = type === ft
-              return (
-                <button
-                  key={ft}
-                  type="button"
-                  onClick={() => setType(ft)}
-                  style={{ display: 'inline-flex', alignItems: 'center', padding: '5px 12px', fontSize: 12, fontWeight: 600, borderRadius: 999, border: `1px solid ${active ? m.color : 'var(--c-line)'}`, background: active ? m.bg : 'var(--c-card)', color: active ? m.color : 'var(--c-muted)', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 150ms' }}
-                >
-                  {m.label}
-                </button>
-              )
-            })}
-          </div>
+          <TypeDropdown value={type} onChange={setType} />
         </div>
       </div>
       <div style={{ display: 'grid', gap: 6 }}>
