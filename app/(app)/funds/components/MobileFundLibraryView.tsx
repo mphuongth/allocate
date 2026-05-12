@@ -220,11 +220,22 @@ function FundForm({ existing, title, onClose, onSave, saving, formError }: {
         </div>
         <div style={{ display: 'grid', gap: 6 }}>
           <label style={labelStyle}>{t('typeLabel')} <span style={{ color: 'var(--c-neg)' }}>*</span></label>
-          <select value={type} onChange={(e) => setType(e.target.value as FundType)} style={inputStyle}>
-            {(Object.keys(TYPE_META) as FundType[]).map((ft) => (
-              <option key={ft} value={ft}>{TYPE_META[ft].label}</option>
-            ))}
-          </select>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {(Object.keys(TYPE_META) as FundType[]).map((ft) => {
+              const m = TYPE_META[ft]
+              const active = type === ft
+              return (
+                <button
+                  key={ft}
+                  type="button"
+                  onClick={() => setType(ft)}
+                  style={{ display: 'inline-flex', alignItems: 'center', padding: '5px 12px', fontSize: 12, fontWeight: 600, borderRadius: 999, border: `1px solid ${active ? m.color : 'var(--c-line)'}`, background: active ? m.bg : 'var(--c-card)', color: active ? m.color : 'var(--c-muted)', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 150ms' }}
+                >
+                  {m.label}
+                </button>
+              )
+            })}
+          </div>
         </div>
       </div>
       <div style={{ display: 'grid', gap: 6 }}>
