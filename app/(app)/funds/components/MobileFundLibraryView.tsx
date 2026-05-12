@@ -2,7 +2,20 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslations } from 'next-intl'
-import { Plus, RefreshCw, Search, X, Edit2, Trash2 } from 'lucide-react'
+import { Plus, RefreshCw, Search, X } from 'lucide-react'
+
+// Matches the design's exact icon paths (stroke-based, strokeWidth 1.75)
+const IconEdit = ({ size = 14, color = 'currentColor' }: { size?: number; color?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block', flexShrink: 0 }}>
+    <path d="M4 20h4l10-10-4-4L4 16z" />
+  </svg>
+)
+
+const IconTrash = ({ size = 14, color = 'currentColor' }: { size?: number; color?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block', flexShrink: 0 }}>
+    <path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" />
+  </svg>
+)
 import MobileTopBar from '@/app/components/navigation/MobileTopBar'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -230,12 +243,12 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, onEdit, onDelete
           </div>
           <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fund.name}</div>
         </div>
-        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-          <button onClick={onEdit} aria-label="Edit fund" style={{ padding: 6, background: 'transparent', border: '1px solid var(--c-line)', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-            <Edit2 size={14} color="var(--c-muted)" />
+        <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+          <button onClick={onEdit} aria-label="Edit fund" style={{ padding: 6, background: 'transparent', border: 'none', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+            <IconEdit size={14} color="var(--c-muted)" />
           </button>
-          <button onClick={onDelete} aria-label="Delete fund" style={{ padding: 6, background: 'transparent', border: '1px solid var(--c-line)', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-            <Trash2 size={14} color="var(--c-neg)" />
+          <button onClick={onDelete} aria-label="Delete fund" style={{ padding: 6, background: 'transparent', border: 'none', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+            <IconTrash size={14} color="var(--c-neg)" />
           </button>
         </div>
       </div>
@@ -699,7 +712,7 @@ export default function MobileFundLibraryView() {
                 {tc('cancel')}
               </button>
               <button onClick={handleDelete} disabled={deleting} style={{ flex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px 14px', fontSize: 13, fontWeight: 600, border: 'none', borderRadius: 10, background: 'var(--c-neg)', color: '#fff', cursor: deleting ? 'not-allowed' : 'pointer', opacity: deleting ? 0.6 : 1, fontFamily: 'inherit' }}>
-                <Trash2 size={14} />
+                <IconTrash size={14} color="#fff" />
                 {deleting ? tc('deleting') : tc('delete')}
               </button>
             </div>
