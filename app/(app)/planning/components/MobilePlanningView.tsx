@@ -764,7 +764,7 @@ function GoalAllocationRow({ entry, isVI }: { entry: GoalRow; isVI: boolean }) {
             {entry.goalName}
           </div>
           <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 1 }}>
-            {entry.items.length} {isVI ? 'khoản' : 'allocations'}
+            {entry.items.length} {isVI ? 'khoản' : entry.items.length === 1 ? 'allocation' : 'allocations'}
           </div>
         </div>
         <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: 'var(--c-ink)' }}>
