@@ -273,7 +273,7 @@ export default function PlanningClient() {
       />
 
       {/* Desktop view — hidden on mobile */}
-      <div className="hidden md:block space-y-6">
+      <div className="hidden md:block space-y-6" data-testid="desktop-planning">
       {/* Month navigation */}
       <div className="flex items-center gap-3">
         <button
