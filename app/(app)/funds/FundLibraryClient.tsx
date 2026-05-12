@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import MobileTopBar from '@/app/components/navigation/MobileTopBar'
 import { Plus, Edit, Trash2, RefreshCw, ArrowUpDown, Info, AlertTriangle } from 'lucide-react'
+import MobileFundLibraryView from './components/MobileFundLibraryView'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -334,7 +335,13 @@ export default function FundLibraryClient() {
   )
 
   return (
-    <div className="space-y-6">
+    <>
+      {/* Mobile redesign view */}
+      <MobileFundLibraryView />
+
+      {/* Desktop view */}
+      <div className="hidden md:block">
+      <div className="space-y-6">
       <MobileTopBar subtitle={t('pageSubtitle')} title={t('pageTitle')} />
       {/* Toasts */}
       <div className="fixed top-4 right-4 z-50 flex flex-col gap-2">
@@ -540,80 +547,6 @@ export default function FundLibraryClient() {
             )}
           </div>
 
-          {/* Mobile card list */}
-          <div className="md:hidden flex flex-col gap-3">
-            {sortedFunds.map((fund) => (
-              <div key={fund.id} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
-                <div className="flex items-start gap-3 mb-3">
-                  <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 font-semibold">
-                    {fund.code.substring(0, 2)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-900 dark:text-gray-100 text-sm">{fund.name}</p>
-                    <p className="text-xs font-mono text-gray-500 dark:text-gray-400">{fund.code}</p>
-                  </div>
-                  <span className={`text-xs px-2 py-1 rounded font-medium flex-shrink-0 ${FUND_TYPE_COLORS[fund.fund_type]}`}>
-                    {t(FUND_TYPE_KEYS[fund.fund_type])}
-                  </span>
-                </div>
-                <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">
-                  NAV: <span className="font-semibold">{fund.nav.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                  {fund.nav_source_url && fund.updated_at && (
-                    <span className="text-xs text-gray-400 ml-1">· {formatRelativeDate(fund.updated_at)}</span>
-                  )}
-                </p>
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-xs text-gray-500 dark:text-gray-400">DCA</span>
-                  <button
-                    type="button"
-                    onClick={() => handleToggleDca(fund)}
-                    disabled={togglingDcaIds.has(fund.id)}
-                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none disabled:opacity-50 ${fund.is_dca ? 'bg-indigo-600' : 'bg-gray-300 dark:bg-gray-600'}`}
-                  >
-                    <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transform transition-transform ${fund.is_dca ? 'translate-x-4.5' : 'translate-x-0.5'}`} />
-                  </button>
-                  {fund.is_dca && dcaAmountEditId === fund.id ? (
-                    <input
-                      autoFocus
-                      type="number"
-                      min="1"
-                      step="1"
-                      value={dcaAmountEditValue}
-                      onChange={(e) => setDcaAmountEditValue(e.target.value)}
-                      onBlur={() => handleSaveDcaAmount(fund)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleSaveDcaAmount(fund); if (e.key === 'Escape') { setFunds((prev) => prev.map((f) => f.id === fund.id ? { ...f, is_dca: false } : f)); setDcaAmountEditId(null) } }}
-                      placeholder="Amount ₫"
-                      className="w-28 px-2 py-0.5 text-xs border border-indigo-300 dark:border-indigo-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    />
-                  ) : fund.is_dca && fund.dca_monthly_amount_vnd ? (
-                    <button
-                      type="button"
-                      onClick={() => { setDcaAmountEditId(fund.id); setDcaAmountEditValue(String(fund.dca_monthly_amount_vnd)) }}
-                      className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
-                    >
-                      {fund.dca_monthly_amount_vnd.toLocaleString('vi-VN')}₫
-                    </button>
-                  ) : null}
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => openEditModal(fund)}
-                    className="flex-1 flex items-center justify-center gap-1.5 text-xs px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors"
-                  >
-                    <Edit className="h-3.5 w-3.5" />
-                    {tc('edit')}
-                  </button>
-                  <button
-                    onClick={() => setDeleteTarget(fund)}
-                    className="flex-1 flex items-center justify-center gap-1.5 text-xs px-3 py-2 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 transition-colors"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    {tc('delete')}
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
         </>
       )}
 
@@ -742,5 +675,7 @@ export default function FundLibraryClient() {
         </DialogContent>
       </Dialog>
     </div>
+    </div>
+    </>
   )
 }
