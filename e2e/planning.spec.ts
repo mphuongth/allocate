@@ -14,8 +14,8 @@ const NEXT_YEAR = MONTH === 12 ? YEAR + 1 : YEAR
 test('planning page shows current month and year heading', async ({ page }) => {
   await page.goto('/planning')
   await page.waitForLoadState('networkidle')
-  // Month heading should contain the current year
-  await expect(page.locator(`text=${YEAR}`).first()).toBeVisible({ timeout: 10_000 })
+  // Month heading should contain the current year (scoped to desktop view to avoid md:hidden mobile duplicate)
+  await expect(page.getByTestId('desktop-planning').locator(`text=${YEAR}`).first()).toBeVisible({ timeout: 10_000 })
 })
 
 test('create monthly plan by entering salary', async ({ page }) => {
@@ -54,7 +54,8 @@ test('can navigate to previous and next month', async ({ page }) => {
   await page.waitForTimeout(500)
 
   // Should be on next month now
-  await expect(page.locator(`text=${NEXT_YEAR}`).or(page.locator(`text=${YEAR}`)).first()).toBeVisible()
+  const desktop = page.getByTestId('desktop-planning')
+  await expect(desktop.locator(`text=${NEXT_YEAR}`).or(desktop.locator(`text=${YEAR}`)).first()).toBeVisible()
 
   void initialText
 })
@@ -66,8 +67,8 @@ test('allocation summary shows salary when plan exists', async ({ page }) => {
   await page.goto('/planning')
   await page.waitForLoadState('networkidle')
 
-  // AllocationSummary shows salary — look for the formatted value
-  await expect(page.locator('text=/30|lương|salary/i').first()).toBeVisible({ timeout: 10_000 })
+  // AllocationSummary shows salary — look for the formatted value (scoped to desktop view)
+  await expect(page.getByTestId('desktop-planning').locator('text=/30|lương|salary/i').first()).toBeVisible({ timeout: 10_000 })
 })
 
 test('remaining amount updates when fixed expense is added', async ({ page }) => {
@@ -132,8 +133,8 @@ test('override a fixed expense amount on Monthly Plan', async ({ page }) => {
   await page.goto('/planning')
   await page.waitForLoadState('networkidle')
 
-  // Find the expense row and click override
-  const expenseRow = page.locator('text=E2E Override Expense').first()
+  // Find the expense row and click override (scoped to desktop view)
+  const expenseRow = page.getByTestId('desktop-planning').locator('text=E2E Override Expense').first()
   await expect(expenseRow).toBeVisible({ timeout: 10_000 })
 
   const overrideBtn = expenseRow.locator('..').locator('..').getByRole('button', { name: /override|edit|sửa/i }).first()
@@ -147,5 +148,5 @@ test('override a fixed expense amount on Monthly Plan', async ({ page }) => {
     }
   }
   // Just verify the page is still functional after override
-  await expect(page.locator('text=E2E Override Expense').first()).toBeVisible()
+  await expect(page.getByTestId('desktop-planning').locator('text=E2E Override Expense').first()).toBeVisible()
 })
