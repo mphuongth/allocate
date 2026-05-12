@@ -148,5 +148,5 @@ test('override a fixed expense amount on Monthly Plan', async ({ page }) => {
     }
   }
   // Just verify the page is still functional after override
-  await expect(page.locator('text=E2E Override Expense').first()).toBeVisible()
+  await expect(page.getByTestId('desktop-planning').locator('text=E2E Override Expense').first()).toBeVisible()
 })
