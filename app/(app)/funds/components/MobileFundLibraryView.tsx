@@ -221,7 +221,7 @@ function FundForm({ existing, title, onClose, onSave, saving, formError }: {
         <div style={{ display: 'grid', gap: 6 }}>
           <label style={labelStyle}>{t('typeLabel')} <span style={{ color: 'var(--c-neg)' }}>*</span></label>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {(Object.keys(TYPE_META) as FundType[]).map((ft) => {
+            {(Object.keys(TYPE_META) as FundType[]).filter((ft) => ft !== 'gold').map((ft) => {
               const m = TYPE_META[ft]
               const active = type === ft
               return (
