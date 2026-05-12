@@ -139,7 +139,7 @@ function Sheet({ open, onClose, title, children }: { open: boolean; onClose: () 
 // ─── Salary sheet ─────────────────────────────────────────────────────────────
 
 function SalarySheet({
-  open, onClose, plan, month, year, onPlanCreated, onToast,
+  open, onClose, plan, month, year, onPlanCreated, onRefresh, onToast,
 }: {
   open: boolean
   onClose: () => void
@@ -147,6 +147,7 @@ function SalarySheet({
   month: number
   year: number
   onPlanCreated: (p: MonthlyPlan) => void
+  onRefresh: () => void
   onToast: (msg: string) => void
 }) {
   const isVI = useLocale() === 'vi'
@@ -169,6 +170,7 @@ function SalarySheet({
           body: JSON.stringify({ salary_vnd: num }),
         })
         if (!res.ok) { const { error: e } = await res.json(); setError(e ?? 'Error'); setSaving(false); return }
+        onRefresh()
         onToast(isVI ? 'Đã lưu thu nhập' : 'Income saved')
       } else {
         const res = await fetch('/api/v1/monthly-plans', {
@@ -1199,6 +1201,7 @@ export default function MobilePlanningView({
         month={month}
         year={year}
         onPlanCreated={onPlanCreated}
+        onRefresh={onRefresh}
         onToast={onToast}
       />
 
