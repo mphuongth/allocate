@@ -4,6 +4,15 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslations } from 'next-intl'
 import { Plus, RefreshCw, Search, X } from 'lucide-react'
 
+function fmtCompactDca(n: number): string {
+  const abs = Math.abs(n)
+  const sign = n < 0 ? '-' : ''
+  if (abs >= 1_000_000_000) return `${sign}${(abs / 1_000_000_000).toFixed(1)}B ₫`
+  if (abs >= 1_000_000) return `${sign}${(abs / 1_000_000).toFixed(1)}M ₫`
+  if (abs >= 1_000) return `${sign}${(abs / 1_000).toFixed(0)}K ₫`
+  return `${sign}${abs.toLocaleString('vi-VN')} ₫`
+}
+
 // Matches the design's exact icon paths (stroke-based, strokeWidth 1.75)
 const IconEdit = ({ size = 14, color = 'currentColor' }: { size?: number; color?: string }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block', flexShrink: 0 }}>
@@ -300,7 +309,7 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, onEdit, onDelete
                 onClick={() => { setDcaEditId(fund.id); setDcaEditValue(String(fund.dca_monthly_amount_vnd)) }}
                 style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', background: 'var(--c-navy-tint)', color: 'var(--c-navy)', border: '1px solid var(--c-navy-tint)', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit' }}
               >
-                {fund.dca_monthly_amount_vnd.toLocaleString('vi-VN')}₫
+                {fmtCompactDca(fund.dca_monthly_amount_vnd)}
               </button>
             ) : (
               <button
