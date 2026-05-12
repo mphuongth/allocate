@@ -1056,7 +1056,7 @@ export default function MobilePlanningView({
               icon={Target}
               iconColor="var(--c-navy)"
               title={isVI ? 'Theo mục tiêu' : 'By goal'}
-              count={`${byGoal.length} ${isVI ? 'mục tiêu' : 'goals'}`}
+              count={`${byGoal.length} ${isVI ? 'mục tiêu' : byGoal.length === 1 ? 'goal' : 'goals'}`}
               total={totalGoals}
               testId="section-by-goal"
             >
@@ -1075,7 +1075,7 @@ export default function MobilePlanningView({
                 icon={Building}
                 iconColor="var(--c-accent-fixed)"
                 title={isVI ? 'Chi phí cố định' : 'Fixed expenses'}
-                count={`${fixedExpenses.length} ${isVI ? 'khoản' : 'items'}`}
+                count={`${fixedExpenses.length} ${isVI ? 'khoản' : fixedExpenses.length === 1 ? 'item' : 'items'}`}
                 total={totalFixed}
                 testId="section-fixed-expenses"
               >
@@ -1110,7 +1110,7 @@ export default function MobilePlanningView({
                 icon={Shield}
                 iconColor="var(--c-accent-insurance)"
                 title={isVI ? 'Bảo hiểm' : 'Insurance'}
-                count={`${insuranceMembers.length} ${isVI ? 'thành viên' : 'members'}`}
+                count={`${insuranceMembers.length} ${isVI ? 'thành viên' : insuranceMembers.length === 1 ? 'member' : 'members'}`}
                 total={totalInsurance}
                 testId="section-insurance"
               >
@@ -1144,7 +1144,7 @@ export default function MobilePlanningView({
               icon={ShoppingCart}
               iconColor="var(--c-accent-other)"
               title={isVI ? 'Khoản khác' : 'Other'}
-              count={`${otherExpenses.length} ${isVI ? 'khoản' : 'one-offs'}`}
+              count={`${otherExpenses.length} ${isVI ? 'khoản' : otherExpenses.length === 1 ? 'one-off' : 'one-offs'}`}
               total={totalOther}
               testId="section-other"
             >
