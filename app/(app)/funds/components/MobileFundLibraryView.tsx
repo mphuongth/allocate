@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslations } from 'next-intl'
 import { Plus, RefreshCw, Search, X, ChevronDown, Check } from 'lucide-react'
 
@@ -91,6 +91,50 @@ const SORT_OPTIONS: Array<{ v: SortKey; l: string }> = [
 ]
 
 let toastSeq = 0
+
+// ─── Sort dropdown ────────────────────────────────────────────────────────────
+
+function SortDropdown({ sortKey, sortAsc, onSort }: { sortKey: SortKey; sortAsc: boolean; onSort: (key: SortKey) => void }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [open])
+
+  const current = SORT_OPTIONS.find((s) => s.v === sortKey)
+
+  return (
+    <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 8px', fontSize: 11, fontWeight: 500, background: 'var(--c-card)', color: 'var(--c-ink)', border: '1px solid var(--c-line)', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
+      >
+        {current?.l} {sortAsc ? '↑' : '↓'}
+        <ChevronDown size={11} color="var(--c-muted)" />
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', right: 0, minWidth: 110, background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 10, boxShadow: 'var(--shadow-pop)', zIndex: 100, overflow: 'hidden' }}>
+          {SORT_OPTIONS.map((s) => (
+            <button
+              key={s.v}
+              onClick={() => { onSort(s.v); setOpen(false) }}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '9px 12px', fontSize: 13, fontWeight: sortKey === s.v ? 600 : 400, color: sortKey === s.v ? 'var(--c-navy)' : 'var(--c-ink)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left', gap: 8 }}
+            >
+              <span>{s.l}</span>
+              {sortKey === s.v && <Check size={13} color="var(--c-navy)" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 // ─── Sheet ───────────────────────────────────────────────────────────────────
 
@@ -344,7 +388,6 @@ export default function MobileFundLibraryView() {
   const [filter, setFilter] = useState<'all' | FundType>('all')
   const [sortKey, setSortKey] = useState<SortKey>('code')
   const [sortAsc, setSortAsc] = useState(true)
-  const [sortSheetOpen, setSortSheetOpen] = useState(false)
 
   // Sheets
   const [addOpen, setAddOpen] = useState(false)
@@ -414,7 +457,6 @@ export default function MobileFundLibraryView() {
   function handleSort(key: SortKey) {
     if (sortKey === key) setSortAsc((v) => !v)
     else { setSortKey(key); setSortAsc(true) }
-    setSortSheetOpen(false)
   }
 
   async function handleRefreshNav() {
@@ -590,14 +632,7 @@ export default function MobileFundLibraryView() {
               </button>
             ))}
           </div>
-          {/* Sort button */}
-          <button
-            onClick={() => setSortSheetOpen(true)}
-            style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', fontSize: 11, fontWeight: 500, background: 'var(--c-card)', color: 'var(--c-ink)', border: '1px solid var(--c-line)', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0, whiteSpace: 'nowrap' }}
-          >
-            {SORT_OPTIONS.find((s) => s.v === sortKey)?.l} {sortAsc ? '↑' : '↓'}
-            <ChevronDown size={12} color="var(--c-muted)" />
-          </button>
+          <SortDropdown sortKey={sortKey} sortAsc={sortAsc} onSort={handleSort} />
         </div>
 
         {/* Count */}
@@ -730,27 +765,7 @@ export default function MobileFundLibraryView() {
         )}
       </Sheet>
 
-      {/* Sort sheet */}
-      <Sheet open={sortSheetOpen} onClose={() => setSortSheetOpen(false)} testId="sort-sheet">
-        <div style={{ paddingTop: 14, display: 'grid', gap: 4 }}>
-          <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 16, color: 'var(--c-ink)' }}>Sort by</p>
-          {SORT_OPTIONS.map((s) => (
-            <button
-              key={s.v}
-              onClick={() => handleSort(s.v)}
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '12px 14px', fontSize: 14, fontWeight: sortKey === s.v ? 600 : 400, color: sortKey === s.v ? 'var(--c-navy)' : 'var(--c-ink)', background: sortKey === s.v ? 'var(--c-navy-tint)' : 'transparent', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}
-            >
-              <span>{s.l}</span>
-              {sortKey === s.v && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: 12, color: 'var(--c-navy)' }}>{sortAsc ? 'A → Z' : 'Z → A'}</span>
-                  <Check size={14} color="var(--c-navy)" />
-                </div>
-              )}
-            </button>
-          ))}
-        </div>
-      </Sheet>
+
     </div>
   )
 }
