@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslations } from 'next-intl'
-import { Plus, RefreshCw, Search, X } from 'lucide-react'
+import { Plus, RefreshCw, Search, X, ChevronDown, Check } from 'lucide-react'
 
 function fmtCompactDca(n: number): string {
   const abs = Math.abs(n)
@@ -344,6 +344,7 @@ export default function MobileFundLibraryView() {
   const [filter, setFilter] = useState<'all' | FundType>('all')
   const [sortKey, setSortKey] = useState<SortKey>('code')
   const [sortAsc, setSortAsc] = useState(true)
+  const [sortSheetOpen, setSortSheetOpen] = useState(false)
 
   // Sheets
   const [addOpen, setAddOpen] = useState(false)
@@ -413,6 +414,7 @@ export default function MobileFundLibraryView() {
   function handleSort(key: SortKey) {
     if (sortKey === key) setSortAsc((v) => !v)
     else { setSortKey(key); setSortAsc(true) }
+    setSortSheetOpen(false)
   }
 
   async function handleRefreshNav() {
@@ -576,7 +578,7 @@ export default function MobileFundLibraryView() {
         </div>
 
         {/* Filter chips + sort */}
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', gap: 6, flex: 1, flexWrap: 'wrap' }}>
             {TYPE_FILTERS.map((f) => (
               <button
@@ -588,15 +590,14 @@ export default function MobileFundLibraryView() {
               </button>
             ))}
           </div>
-          <select
-            value={sortKey}
-            onChange={(e) => handleSort(e.target.value as SortKey)}
-            style={{ fontSize: 11, padding: '5px 8px', background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 8, color: 'var(--c-ink)', fontFamily: 'inherit', flexShrink: 0, cursor: 'pointer' }}
+          {/* Sort button */}
+          <button
+            onClick={() => setSortSheetOpen(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', fontSize: 11, fontWeight: 500, background: 'var(--c-card)', color: 'var(--c-ink)', border: '1px solid var(--c-line)', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0, whiteSpace: 'nowrap' }}
           >
-            {SORT_OPTIONS.map((s) => (
-              <option key={s.v} value={s.v}>{s.l} {sortKey === s.v ? (sortAsc ? '↑' : '↓') : ''}</option>
-            ))}
-          </select>
+            {SORT_OPTIONS.find((s) => s.v === sortKey)?.l} {sortAsc ? '↑' : '↓'}
+            <ChevronDown size={12} color="var(--c-muted)" />
+          </button>
         </div>
 
         {/* Count */}
@@ -727,6 +728,28 @@ export default function MobileFundLibraryView() {
             </div>
           </div>
         )}
+      </Sheet>
+
+      {/* Sort sheet */}
+      <Sheet open={sortSheetOpen} onClose={() => setSortSheetOpen(false)} testId="sort-sheet">
+        <div style={{ paddingTop: 14, display: 'grid', gap: 4 }}>
+          <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 16, color: 'var(--c-ink)' }}>Sort by</p>
+          {SORT_OPTIONS.map((s) => (
+            <button
+              key={s.v}
+              onClick={() => handleSort(s.v)}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '12px 14px', fontSize: 14, fontWeight: sortKey === s.v ? 600 : 400, color: sortKey === s.v ? 'var(--c-navy)' : 'var(--c-ink)', background: sortKey === s.v ? 'var(--c-navy-tint)' : 'transparent', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}
+            >
+              <span>{s.l}</span>
+              {sortKey === s.v && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 12, color: 'var(--c-navy)' }}>{sortAsc ? 'A → Z' : 'Z → A'}</span>
+                  <Check size={14} color="var(--c-navy)" />
+                </div>
+              )}
+            </button>
+          ))}
+        </div>
       </Sheet>
     </div>
   )
