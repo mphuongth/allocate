@@ -60,7 +60,6 @@ const TYPE_FILTERS: Array<{ v: 'all' | FundType; l: string }> = [
   { v: 'equity',   l: 'Stock' },
   { v: 'debt',     l: 'Bond' },
   { v: 'balanced', l: 'Balanced' },
-  { v: 'gold',     l: 'Gold' },
 ]
 
 const SORT_OPTIONS: Array<{ v: SortKey; l: string }> = [

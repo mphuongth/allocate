@@ -30,7 +30,6 @@ test('mobile funds shows type filter chips', async ({ page }) => {
   await expect(mf.getByRole('button', { name: 'Stock' })).toBeVisible()
   await expect(mf.getByRole('button', { name: 'Bond' })).toBeVisible()
   await expect(mf.getByRole('button', { name: 'Balanced' })).toBeVisible()
-  await expect(mf.getByRole('button', { name: 'Gold' })).toBeVisible()
 })
 
 test('mobile funds shows search input', async ({ page }) => {
