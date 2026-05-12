@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useLocale } from 'next-intl'
 import {
   Wallet, Target, Building, Shield, ShoppingCart,
@@ -814,12 +814,22 @@ function PlanLineItem({
   onOverride?: () => void
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
+  const [menuPos, setMenuPos] = useState({ top: 0, right: 0 })
+  const btnRef = useRef<HTMLButtonElement>(null)
+
+  function openMenu() {
+    if (btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect()
+      setMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right })
+    }
+    setMenuOpen(true)
+  }
 
   return (
     <div style={{
       padding: '10px 14px 10px 60px', display: 'flex', alignItems: 'center', gap: 8,
       borderBottom: last ? 'none' : '1px solid var(--c-line)',
-      opacity: muted ? 0.55 : 1, position: 'relative',
+      opacity: muted ? 0.55 : 1,
     }}>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
@@ -839,9 +849,10 @@ function PlanLineItem({
       }}>
         {fmtCompact(muted ? 0 : amount)}
       </span>
-      {/* Kebab menu */}
+      {/* Kebab menu — dropdown uses position:fixed to escape overflow:hidden on BudgetSection */}
       <button
-        onClick={() => setMenuOpen((o) => !o)}
+        ref={btnRef}
+        onClick={() => menuOpen ? setMenuOpen(false) : openMenu()}
         aria-label="More options"
         style={{ padding: 4, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 4, display: 'flex', alignItems: 'center' }}
       >
@@ -849,9 +860,9 @@ function PlanLineItem({
       </button>
       {menuOpen && (
         <>
-          <div onClick={() => setMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 5 }} />
+          <div onClick={() => setMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 50 }} />
           <div style={{
-            position: 'absolute', top: '100%', right: 8, marginTop: 2, zIndex: 6,
+            position: 'fixed', top: menuPos.top, right: menuPos.right, zIndex: 51,
             background: 'var(--c-card)', border: '1px solid var(--c-line)',
             borderRadius: 8, boxShadow: 'var(--shadow-pop)',
             minWidth: 170, overflow: 'hidden',
