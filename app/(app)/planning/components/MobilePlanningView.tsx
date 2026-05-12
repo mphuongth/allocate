@@ -829,9 +829,8 @@ function PlanLineItem({
     <div style={{
       padding: '10px 14px 10px 60px', display: 'flex', alignItems: 'center', gap: 8,
       borderBottom: last ? 'none' : '1px solid var(--c-line)',
-      opacity: muted ? 0.55 : 1,
     }}>
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ flex: 1, minWidth: 0, opacity: muted ? 0.55 : 1 }}>
         <div style={{
           fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           textDecoration: muted ? 'line-through' : 'none', color: 'var(--c-ink)',
@@ -846,6 +845,7 @@ function PlanLineItem({
         fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums',
         color: muted ? 'var(--c-muted)' : 'var(--c-ink)',
         textDecoration: muted ? 'line-through' : 'none',
+        opacity: muted ? 0.55 : 1,
       }}>
         {fmtCompact(muted ? 0 : amount)}
       </span>
