@@ -17,7 +17,8 @@ function getInitials(email: string): string {
     .slice(0, 2) || email[0]?.toUpperCase() || 'U'
 }
 
-function getDisplayName(email: string): string {
+function getDisplayName(email: string, userMetaName?: string): string {
+  if (userMetaName) return userMetaName
   const localPart = email.split('@')[0]
   const firstName = localPart.split(/[._-]/)[0]
   return firstName.charAt(0).toUpperCase() + firstName.slice(1)
@@ -39,7 +40,7 @@ export default async function SettingsPage({
       initialGoalId={goal}
       email={email}
       initials={getInitials(email)}
-      displayName={getDisplayName(email)}
+      displayName={getDisplayName(email, user?.user_metadata?.display_name)}
     />
   )
 }

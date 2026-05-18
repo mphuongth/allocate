@@ -3,8 +3,9 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import MobileSettingsView from '../MobileSettingsView'
 
-const { signOutMock } = vi.hoisted(() => ({
+const { signOutMock, updateUserMock } = vi.hoisted(() => ({
   signOutMock: vi.fn().mockResolvedValue({ error: null }),
+  updateUserMock: vi.fn().mockResolvedValue({ data: { user: {} }, error: null }),
 }))
 
 vi.mock('next-intl', () => ({
@@ -21,9 +22,13 @@ vi.mock('@/app/components/navigation/NavigationContext', () => ({
   useNavigation: () => ({ setMobileTopBar: vi.fn() }),
 }))
 
+vi.mock('@/app/components/ThemeProvider', () => ({
+  useTheme: () => ({ theme: 'light', toggleTheme: vi.fn(), setTheme: vi.fn() }),
+}))
+
 vi.mock('@supabase/ssr', () => ({
   createBrowserClient: () => ({
-    auth: { signOut: signOutMock },
+    auth: { signOut: signOutMock, updateUser: updateUserMock },
   }),
 }))
 
@@ -93,6 +98,19 @@ describe('MobileSettingsView — profile sheet', () => {
     await userEvent.click(screen.getByRole('button', { name: /cancel/i }))
     await waitFor(() =>
       expect(screen.queryByDisplayValue('phuong.tran@example.com')).not.toBeInTheDocument()
+    )
+  })
+
+  it('persists display name to Supabase when saving', async () => {
+    updateUserMock.mockClear()
+    render(<MobileSettingsView {...defaultProps} />)
+    await userEvent.click(screen.getByRole('button', { name: /profile/i }))
+    const nameInput = screen.getByDisplayValue('Phuong')
+    await userEvent.clear(nameInput)
+    await userEvent.type(nameInput, 'Minh')
+    await userEvent.click(screen.getByRole('button', { name: /save/i }))
+    await waitFor(() =>
+      expect(updateUserMock).toHaveBeenCalledWith({ data: { display_name: 'Minh' } })
     )
   })
 })

@@ -4,6 +4,7 @@ import { useState, useEffect, useTransition } from 'react'
 import { useLocale } from 'next-intl'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
+import { useTheme, type ThemeChoice } from '@/app/components/ThemeProvider'
 import {
   Globe, Sun, Wallet, Download, RefreshCw,
   TrendingUp, CircleDollarSign, LogOut, ChevronRight, Check,
@@ -160,7 +161,7 @@ function ProfileSheet({ open, onClose, onSave, displayName, email }: {
               onClick={handleSave}
               style={{
                 flex: 2, padding: '10px 0', fontSize: 13, fontWeight: 600,
-                background: 'var(--c-navy)', border: 'none',
+                background: 'var(--c-btn-primary)', border: 'none',
                 borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit',
                 color: '#fff',
               }}
@@ -177,18 +178,29 @@ function ProfileSheet({ open, onClose, onSave, displayName, email }: {
 // ─── Appearance sheet ──────────────────────────────────────────────────────────
 
 function AppearanceSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [theme, setTheme] = useState('light')
+  const { theme: currentTheme, setTheme } = useTheme()
 
-  const options = [
-    { v: 'light',  icon: <Sun size={18} />,         label: 'Light'  },
-    { v: 'dark',   icon: <span style={{ fontSize: 16 }}>🌙</span>, label: 'Dark'   },
-    { v: 'system', icon: <span style={{ fontSize: 16 }}>⚙️</span>,  label: 'System' },
+  const storedChoice = (): ThemeChoice => {
+    if (typeof localStorage === 'undefined') return currentTheme
+    const v = localStorage.getItem('theme')
+    return (v === 'light' || v === 'dark') ? v : 'system'
+  }
+
+  const [selected, setSelected] = useState<ThemeChoice>(currentTheme)
+
+  useEffect(() => {
+    if (open) setSelected(storedChoice())
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+
+  const options: { v: ThemeChoice; icon: React.ReactNode; label: string }[] = [
+    { v: 'light',  icon: <Sun size={18} />,                               label: 'Light'  },
+    { v: 'dark',   icon: <span style={{ fontSize: 16 }}>🌙</span>,        label: 'Dark'   },
+    { v: 'system', icon: <span style={{ fontSize: 16 }}>⚙️</span>,         label: 'System' },
   ]
 
   function handleApply() {
-    if (typeof document !== 'undefined') {
-      document.documentElement.classList.toggle('dark', theme === 'dark')
-    }
+    setTheme(selected)
     onClose()
   }
 
@@ -198,21 +210,21 @@ function AppearanceSheet({ open, onClose }: { open: boolean; onClose: () => void
         {options.map(opt => (
           <button
             key={opt.v}
-            onClick={() => setTheme(opt.v)}
+            onClick={() => setSelected(opt.v)}
             style={{
               width: '100%', textAlign: 'left', padding: '14px 16px',
-              background: theme === opt.v ? 'var(--c-navy-tint)' : 'var(--c-card)',
-              border: `1.5px solid ${theme === opt.v ? 'var(--c-navy)' : 'var(--c-line)'}`,
+              background: selected === opt.v ? 'var(--c-navy-tint)' : 'var(--c-card)',
+              border: `1.5px solid ${selected === opt.v ? 'var(--c-navy)' : 'var(--c-line)'}`,
               borderRadius: 12, cursor: 'pointer', fontFamily: 'inherit',
               display: 'flex', alignItems: 'center', gap: 12, transition: 'all 120ms',
             }}
           >
-            <span style={{ color: theme === opt.v ? 'var(--c-navy)' : 'var(--c-muted)' }}>{opt.icon}</span>
-            <span style={{ fontSize: 13, fontWeight: 600, color: theme === opt.v ? 'var(--c-navy)' : 'var(--c-ink)', flex: 1 }}>
+            <span style={{ color: selected === opt.v ? 'var(--c-navy)' : 'var(--c-muted)' }}>{opt.icon}</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: selected === opt.v ? 'var(--c-navy)' : 'var(--c-ink)', flex: 1 }}>
               {opt.label}
             </span>
-            {theme === opt.v && (
-              <div style={{ width: 20, height: 20, borderRadius: 10, background: 'var(--c-navy)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {selected === opt.v && (
+              <div style={{ width: 20, height: 20, borderRadius: 10, background: 'var(--c-btn-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Check size={12} strokeWidth={2.5} color="#fff" />
               </div>
             )}
@@ -224,7 +236,7 @@ function AppearanceSheet({ open, onClose }: { open: boolean; onClose: () => void
         aria-label="apply"
         style={{
           width: '100%', padding: '11px 0', fontSize: 13, fontWeight: 600,
-          background: 'var(--c-navy)', border: 'none',
+          background: 'var(--c-btn-primary)', border: 'none',
           borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit',
           color: '#fff',
         }}
@@ -263,7 +275,7 @@ function CurrencySheet({ open, onClose }: { open: boolean; onClose: () => void }
           >
             <div style={{
               width: 36, height: 36, borderRadius: 8,
-              background: currency === c.v ? 'var(--c-navy)' : 'var(--c-card-2)',
+              background: currency === c.v ? 'var(--c-btn-primary)' : 'var(--c-card-2)',
               display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
             }}>
               <span style={{ fontSize: 14, fontWeight: 700, color: currency === c.v ? '#fff' : 'var(--c-muted)' }}>
@@ -277,7 +289,7 @@ function CurrencySheet({ open, onClose }: { open: boolean; onClose: () => void }
               <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 1 }}>{c.label}</div>
             </div>
             {currency === c.v && (
-              <div style={{ width: 20, height: 20, borderRadius: 10, background: 'var(--c-navy)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ width: 20, height: 20, borderRadius: 10, background: 'var(--c-btn-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Check size={12} strokeWidth={2.5} color="#fff" />
               </div>
             )}
@@ -289,7 +301,7 @@ function CurrencySheet({ open, onClose }: { open: boolean; onClose: () => void }
         aria-label="apply"
         style={{
           width: '100%', padding: '11px 0', fontSize: 13, fontWeight: 600,
-          background: 'var(--c-navy)', border: 'none',
+          background: 'var(--c-btn-primary)', border: 'none',
           borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit',
           color: '#fff',
         }}
@@ -344,6 +356,11 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
   const [, startTransition] = useTransition()
   const { setMobileTopBar } = useNavigation()
 
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+
   const [localDisplayName, setLocalDisplayName] = useState(displayName)
 
   const [showProfile, setShowProfile] = useState(false)
@@ -395,10 +412,6 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
   }
 
   async function handleSignOut() {
-    const supabase = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
     const { error } = await supabase.auth.signOut()
     if (error) {
       toast.error(isVI ? 'Đăng xuất thất bại' : 'Sign out failed')
@@ -526,7 +539,7 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
                 aria-label="sync now"
                 style={{
                   padding: '7px 14px', fontSize: 12, fontWeight: 600,
-                  background: 'var(--c-navy)', border: 'none', borderRadius: 8,
+                  background: 'var(--c-btn-primary)', border: 'none', borderRadius: 8,
                   color: '#fff', cursor: syncing ? 'not-allowed' : 'pointer',
                   fontFamily: 'inherit', opacity: syncing ? 0.6 : 1,
                   transition: 'opacity 150ms',
@@ -597,7 +610,10 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
       <ProfileSheet
         open={showProfile}
         onClose={() => setShowProfile(false)}
-        onSave={name => setLocalDisplayName(name)}
+        onSave={async (name) => {
+          setLocalDisplayName(name)
+          await supabase.auth.updateUser({ data: { display_name: name } })
+        }}
         displayName={localDisplayName}
         email={email}
       />
