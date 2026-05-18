@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Check } from 'lucide-react'
+import { Check, Download } from 'lucide-react'
 import { useLocale } from 'next-intl'
 import { fmt } from '@/lib/formatters'
 
@@ -17,6 +17,7 @@ export default function DownloadReportSheet({ open, onClose, data, onExport }: P
   const [mounted, setMounted] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [format, setFormat] = useState<'pdf' | 'csv'>('pdf')
 
   useEffect(() => {
     if (open) {
@@ -43,11 +44,39 @@ export default function DownloadReportSheet({ open, onClose, data, onExport }: P
 
   if (!mounted) return null
 
-  const today = new Date().toLocaleDateString(isVI ? 'vi-VN' : 'en-US', { day: 'numeric', month: 'long', year: 'numeric' })
+  const today = new Date().toLocaleDateString(isVI ? 'vi-VN' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
 
-  const checklist = isVI
-    ? ['Tổng tài sản ròng', 'Chi tiết từng mục tiêu', 'Phân bổ tài sản', 'Khoản đầu tư chưa phân bổ', 'Lịch sử giao dịch']
-    : ['Net worth overview', 'Per-goal breakdown', 'Asset allocation', 'Unallocated holdings', 'Transaction history']
+  const t = isVI ? {
+    title: 'Báo cáo danh mục',
+    asOf: 'Tính đến',
+    netWorth: 'Tài sản ròng',
+    currentVal: 'Giá trị hiện tại',
+    pl: 'Lãi / Lỗ tổng',
+    goals: 'Mục tiêu đang theo dõi',
+    sections: 'Nội dung báo cáo',
+    includes: ['Tổng quan tài sản ròng', 'Chi tiết từng mục tiêu', 'Phân bổ theo loại tài sản', 'Khoản chưa phân bổ', 'Lịch sử giao dịch'],
+    format: 'Định dạng',
+    export: 'Xuất báo cáo',
+    cancel: 'Hủy',
+    done: 'Đã xuất báo cáo',
+    doneSub: 'Kiểm tra thư mục tải xuống của bạn',
+  } : {
+    title: 'Portfolio report',
+    asOf: 'As of',
+    netWorth: 'Net worth',
+    currentVal: 'Current value',
+    pl: 'Total P/L',
+    goals: 'Goals tracked',
+    sections: 'Report includes',
+    includes: ['Net worth overview', 'Per-goal breakdown', 'Asset type allocation', 'Unallocated holdings', 'Transaction history'],
+    format: 'Format',
+    export: 'Export report',
+    cancel: 'Cancel',
+    done: 'Report exported',
+    doneSub: 'Check your downloads folder',
+  }
+
+  const isPos = !data || data.totalPL >= 0
 
   return (
     <div
@@ -70,84 +99,137 @@ export default function DownloadReportSheet({ open, onClose, data, onExport }: P
       >
         <div style={{ width: 36, height: 4, background: 'var(--c-line-strong)', borderRadius: 999, margin: '6px auto 0' }} />
 
-        <div style={{ padding: '14px 16px 24px' }}>
-          <p style={{ fontWeight: 700, fontSize: 17, color: 'var(--c-ink)', marginBottom: 4 }}>
-            {isVI ? 'Báo cáo danh mục' : 'Portfolio report'}
-          </p>
-          <p style={{ fontSize: 13, color: 'var(--c-muted)', marginBottom: 20 }}>
-            {isVI ? `Tính đến ${today}` : `As of ${today}`}
-          </p>
+        {/* Sheet header */}
+        <div style={{ padding: '14px 16px 0', borderBottom: '1px solid var(--c-line)', marginBottom: 16 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--c-ink)', paddingBottom: 14 }}>{t.title}</div>
+        </div>
 
-          {data && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
-              {[
-                { label: isVI ? 'Tài sản ròng' : 'Net worth', value: fmt(data.netWorth) },
-                { label: isVI ? 'Giá trị hiện tại' : 'Current value', value: fmt(data.currentValue) },
-                {
-                  label: 'Total P/L',
-                  value: (data.totalPL >= 0 ? '+' : '') + fmt(data.totalPL),
-                  color: data.totalPL >= 0 ? 'var(--c-pos)' : 'var(--c-neg)',
-                },
-                { label: isVI ? 'Số mục tiêu' : 'Goals tracked', value: String(data.goalCount) },
-              ].map(({ label, value, color }) => (
-                <div
-                  key={label}
-                  style={{
-                    background: 'var(--c-card-2)', borderRadius: 12, padding: '12px 14px',
-                  }}
-                >
-                  <p style={{ fontSize: 11, color: 'var(--c-muted)', marginBottom: 4 }}>{label}</p>
-                  <p style={{ fontSize: 15, fontWeight: 700, color: color ?? 'var(--c-ink)' }}>{value}</p>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)', marginBottom: 10 }}>
-            {isVI ? 'Báo cáo bao gồm' : 'Report includes'}
-          </p>
-          <div style={{ marginBottom: 20 }}>
-            {checklist.map((item) => (
-              <div key={item} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <Check size={14} color="var(--c-pos)" />
-                <span style={{ fontSize: 13, color: 'var(--c-ink)' }}>{item}</span>
-              </div>
-            ))}
-          </div>
-
+        <div style={{ padding: '0 16px 28px' }}>
           {success ? (
-            <div data-testid="export-success" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '14px 0' }}>
+            <div style={{ padding: '28px 0', textAlign: 'center' }}>
               <div style={{
-                width: 32, height: 32, borderRadius: '50%',
-                background: 'var(--c-pos-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                width: 56, height: 56, borderRadius: 28,
+                background: 'var(--c-pos-tint)', color: 'var(--c-pos)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px',
               }}>
-                <Check size={18} color="var(--c-pos)" />
+                <Check size={28} strokeWidth={2.5} />
               </div>
-              <span style={{ fontWeight: 600, fontSize: 15, color: 'var(--c-pos)' }}>
-                {isVI ? 'Đã xuất báo cáo' : 'Report exported'}
-              </span>
+              <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--c-ink)' }}>{t.done}</div>
+              <div style={{ fontSize: 12, color: 'var(--c-muted)', marginTop: 4 }}>{t.doneSub}</div>
             </div>
           ) : (
-            <button
-              data-testid="export-report-btn"
-              onClick={handleExport}
-              disabled={exporting}
-              style={{
-                width: '100%', padding: '14px 0', borderRadius: 12, border: 'none',
-                background: 'var(--c-navy)', color: '#fff',
-                fontSize: 15, fontWeight: 700,
-                cursor: exporting ? 'default' : 'pointer',
-                opacity: exporting ? 0.7 : 1,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              }}
-            >
-              {exporting && (
-                <span style={{ width: 16, height: 16, border: '2px solid #fff', borderTopColor: 'transparent', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.6s linear infinite' }} />
+            <div style={{ display: 'grid', gap: 14 }}>
+              {/* Date */}
+              <div style={{ fontSize: 12, color: 'var(--c-muted)' }}>
+                {t.asOf}{' '}
+                <span style={{ fontWeight: 600, color: 'var(--c-ink)' }}>{today}</span>
+              </div>
+
+              {/* KPI grid */}
+              {data && (
+                <div style={{
+                  display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)',
+                  gap: 1, background: 'var(--c-line)', borderRadius: 12, overflow: 'hidden',
+                }}>
+                  {[
+                    { label: t.netWorth,   value: fmt(data.netWorth) },
+                    { label: t.currentVal, value: fmt(data.currentValue) },
+                    { label: t.pl,         value: (isPos ? '+' : '') + fmt(data.totalPL), color: isPos ? 'var(--c-pos)' : 'var(--c-neg)' },
+                    { label: t.goals,      value: String(data.goalCount) },
+                  ].map(({ label, value, color }) => (
+                    <div key={label} style={{ background: 'var(--c-card)', padding: '10px 12px' }}>
+                      <div style={{ fontSize: 10, color: 'var(--c-muted)' }}>{label}</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, marginTop: 2, color: color ?? 'var(--c-ink)' }}>{value}</div>
+                    </div>
+                  ))}
+                </div>
               )}
-              {exporting
-                ? (isVI ? 'Đang xuất…' : 'Exporting…')
-                : (isVI ? 'Xuất báo cáo' : 'Export report')}
-            </button>
+
+              {/* What's included */}
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--c-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                  {t.sections}
+                </div>
+                <div style={{ display: 'grid', gap: 6 }}>
+                  {t.includes.map((item) => (
+                    <div key={item} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{
+                        width: 18, height: 18, borderRadius: 9,
+                        background: 'var(--c-pos-tint)', color: 'var(--c-pos)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                      }}>
+                        <Check size={11} strokeWidth={2.5} />
+                      </div>
+                      <span style={{ fontSize: 13, color: 'var(--c-ink)' }}>{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Format picker */}
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--c-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                  {t.format}
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {(['pdf', 'csv'] as const).map(f => (
+                    <button
+                      key={f}
+                      onClick={() => setFormat(f)}
+                      aria-pressed={format === f}
+                      style={{
+                        flex: 1, padding: '10px', borderRadius: 10,
+                        background: format === f ? 'var(--c-btn-primary)' : 'var(--c-card)',
+                        color: format === f ? '#fff' : 'var(--c-muted)',
+                        border: `1px solid ${format === f ? 'var(--c-btn-primary)' : 'var(--c-line)'}`,
+                        fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                        textTransform: 'uppercase', letterSpacing: '0.04em',
+                        transition: 'all 120ms',
+                      }}
+                    >
+                      {f}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                <button
+                  onClick={onClose}
+                  aria-label="cancel"
+                  style={{
+                    flex: 1, padding: '11px 0', fontSize: 13, fontWeight: 500,
+                    background: 'var(--c-card)', border: '1px solid var(--c-line)',
+                    borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit',
+                    color: 'var(--c-ink)',
+                  }}
+                >
+                  {t.cancel}
+                </button>
+                <button
+                  onClick={handleExport}
+                  disabled={exporting}
+                  aria-label={exporting ? 'exporting' : t.export}
+                  style={{
+                    flex: 2, padding: '11px 0', fontSize: 13, fontWeight: 600,
+                    background: 'var(--c-btn-primary)', border: 'none',
+                    borderRadius: 10, color: '#fff',
+                    cursor: exporting ? 'default' : 'pointer',
+                    opacity: exporting ? 0.7 : 1,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    fontFamily: 'inherit', transition: 'opacity 150ms',
+                  }}
+                >
+                  {exporting ? (
+                    <span style={{ width: 14, height: 14, border: '2px solid #fff', borderTopColor: 'transparent', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.6s linear infinite' }} />
+                  ) : (
+                    <Download size={14} strokeWidth={2.2} />
+                  )}
+                  {exporting ? (isVI ? 'Đang xuất…' : 'Exporting…') : t.export}
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </div>
