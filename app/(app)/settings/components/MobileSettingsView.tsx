@@ -12,6 +12,7 @@ import {
 import { toast } from 'sonner'
 import { useNavigation } from '@/app/components/navigation/NavigationContext'
 import DownloadReportSheet from '@/app/assets/components/DownloadReportSheet'
+import type { DashboardData } from '@/app/assets/DashboardClient'
 
 interface Props {
   email: string
@@ -373,6 +374,7 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
   const [showAppearance, setShowAppearance] = useState(false)
   const [showCurrency, setShowCurrency] = useState(false)
   const [showReport, setShowReport] = useState(false)
+  const [overviewCache, setOverviewCache] = useState<DashboardData | null>(null)
 
   const [syncing, setSyncing] = useState(false)
   const [syncDone, setSyncDone] = useState(false)
@@ -409,12 +411,23 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
     setTimeout(() => setSyncDone(false), 3000)
   }
 
+  function handleOpenReport() {
+    setShowReport(true)
+    fetch('/api/v1/dashboard/overview', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null)
+      .then((json: DashboardData | null) => { if (json) setOverviewCache(json) })
+      .catch(() => {})
+  }
+
   async function handleExportReport() {
-    const res = await fetch('/api/v1/dashboard/overview', { cache: 'no-store' })
-    if (!res.ok) throw new Error('Failed to load portfolio data')
-    const data = await res.json()
+    let data = overviewCache
+    if (!data) {
+      const res = await fetch('/api/v1/dashboard/overview', { cache: 'no-store' })
+      if (!res.ok) throw new Error('Failed to load portfolio data')
+      data = await res.json()
+    }
     const { downloadPortfolioPDF } = await import('@/lib/generateReport')
-    await downloadPortfolioPDF(data, locale)
+    await downloadPortfolioPDF(data!, locale)
   }
 
   async function handleSignOut() {
@@ -507,7 +520,7 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
             <SettingsRow
               icon={<Download size={16} />}
               label={isVI ? 'Xuất dữ liệu' : 'Export data'}
-              onClick={() => setShowReport(true)}
+              onClick={handleOpenReport}
               last
             />
           </div>
@@ -634,7 +647,12 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
       <DownloadReportSheet
         open={showReport}
         onClose={() => setShowReport(false)}
-        data={null}
+        data={overviewCache ? {
+          netWorth: overviewCache.netWorth.netWorth,
+          currentValue: overviewCache.netWorth.currentValue,
+          totalPL: overviewCache.netWorth.overallProfitLoss,
+          goalCount: overviewCache.goals.length,
+        } : null}
         onExport={handleExportReport}
       />
     </>

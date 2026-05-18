@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import MobileSettingsView from '../MobileSettingsView'
@@ -201,9 +201,26 @@ describe('MobileSettingsView — currency sheet', () => {
   })
 })
 
+const mockOverviewResponse = {
+  netWorth: { netWorth: 100_000_000, currentValue: 95_000_000, overallProfitLoss: 5_000_000 },
+  goals: [{ id: '1' }, { id: '2' }],
+  unallocated: { totalValue: 0, funds: [], nonFunds: [] },
+  byType: { bank: 0, gold: 0, stock: 0 },
+  insurance: [],
+}
+
 // ─── Data section ──────────────────────────────────────────────────────────────
 
 describe('MobileSettingsView — data section', () => {
+  let fetchSpy: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify(mockOverviewResponse), { status: 200 })
+    )
+  })
+  afterEach(() => fetchSpy.mockRestore())
+
   it('renders Data section heading', () => {
     render(<MobileSettingsView {...defaultProps} />)
     expect(screen.getByText(/^data$/i)).toBeInTheDocument()
@@ -220,11 +237,17 @@ describe('MobileSettingsView — data section', () => {
     expect(screen.getByText(/portfolio report/i)).toBeInTheDocument()
   })
 
+  it('shows KPI data in report sheet after fetch', async () => {
+    render(<MobileSettingsView {...defaultProps} />)
+    await userEvent.click(screen.getByRole('button', { name: /export data/i }))
+    await waitFor(() => expect(screen.getByText('Net worth')).toBeInTheDocument())
+    expect(screen.getByText('Current value')).toBeInTheDocument()
+  })
+
   it('closes download report sheet when backdrop is clicked', async () => {
     render(<MobileSettingsView {...defaultProps} />)
     await userEvent.click(screen.getByRole('button', { name: /export data/i }))
     expect(screen.getByText(/portfolio report/i)).toBeInTheDocument()
-    // Click the backdrop (the fixed overlay div) to close
     const backdrop = document.querySelector('[style*="position: fixed"][style*="inset: 0"]') as HTMLElement
     if (backdrop) fireEvent.click(backdrop)
     await waitFor(() =>
