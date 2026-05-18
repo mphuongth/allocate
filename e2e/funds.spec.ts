@@ -82,6 +82,9 @@ test('mobile funds type filter shows only matching funds', async ({ page }) => {
 })
 
 test('mobile funds no-results state when search yields nothing', async ({ page }) => {
+  const fund = await api.createFund({ name: 'E2E NoMatch Fund', code: 'E2ENM', fund_type: 'equity', nav: 10000 })
+  cleanup.add(() => api.deleteFund(fund.id))
+
   await page.goto('/funds')
   await page.waitForLoadState('networkidle')
 
@@ -111,7 +114,7 @@ test('mobile funds edit button opens edit sheet prefilled with fund data', async
   await mf.getByTestId(`fund-card-${fund.id}`).getByRole('button', { name: /edit/i }).click()
   const sheet = page.getByTestId('fund-sheet')
   await expect(sheet).toBeVisible({ timeout: 5_000 })
-  await expect(sheet.getByDisplayValue('E2E Edit Fund')).toBeVisible()
+  await expect(page.getByDisplayValue('E2E Edit Fund')).toBeVisible()
 })
 
 test('mobile funds delete button opens delete confirmation sheet', async ({ page }) => {
