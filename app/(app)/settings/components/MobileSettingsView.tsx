@@ -454,6 +454,7 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
 
   return (
     <>
+      <div className="md:hidden -mx-4 -mt-4" style={{ background: 'var(--c-canvas)', minHeight: '100%' }}>
       <div style={{ padding: '4px 16px 80px' }}>
 
         {/* Profile card */}
@@ -623,6 +624,7 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
         <p style={{ textAlign: 'center', fontSize: 11, color: 'var(--c-muted)', marginTop: 16 }}>
           Cairn v0.4 · {isVI ? 'Bản nội bộ' : 'Internal preview'}
         </p>
+      </div>
       </div>
 
       {/* Sheets */}
