@@ -114,7 +114,7 @@ test('mobile funds edit button opens edit sheet prefilled with fund data', async
   await mf.getByTestId(`fund-card-${fund.id}`).getByRole('button', { name: /edit/i }).click()
   const sheet = page.getByTestId('fund-sheet')
   await expect(sheet).toBeVisible({ timeout: 5_000 })
-  await expect(page.getByDisplayValue('E2E Edit Fund')).toBeVisible()
+  await expect(sheet.locator('input').first()).toHaveValue('E2E Edit Fund')
 })
 
 test('mobile funds delete button opens delete confirmation sheet', async ({ page }) => {
