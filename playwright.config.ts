@@ -38,6 +38,16 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
         storageState: 'e2e/.auth/session.json',
       },
+      testIgnore: ['**/funds.spec.ts'],
+      dependencies: ['setup'],
+    },
+    {
+      name: 'mobile',
+      use: {
+        viewport: { width: 390, height: 844 },
+        storageState: 'e2e/.auth/session.json',
+      },
+      testMatch: ['**/funds.spec.ts'],
       dependencies: ['setup'],
     },
   ],
