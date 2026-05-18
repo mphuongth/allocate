@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import MobileSettingsView from '../MobileSettingsView'
 
@@ -179,6 +179,24 @@ describe('MobileSettingsView — data section', () => {
   it('renders Export data row', () => {
     render(<MobileSettingsView {...defaultProps} />)
     expect(screen.getByText(/export data/i)).toBeInTheDocument()
+  })
+
+  it('opens download report sheet when Export data is clicked', async () => {
+    render(<MobileSettingsView {...defaultProps} />)
+    await userEvent.click(screen.getByRole('button', { name: /export data/i }))
+    expect(screen.getByText(/portfolio report/i)).toBeInTheDocument()
+  })
+
+  it('closes download report sheet when backdrop is clicked', async () => {
+    render(<MobileSettingsView {...defaultProps} />)
+    await userEvent.click(screen.getByRole('button', { name: /export data/i }))
+    expect(screen.getByText(/portfolio report/i)).toBeInTheDocument()
+    // Click the backdrop (the fixed overlay div) to close
+    const backdrop = document.querySelector('[style*="position: fixed"][style*="inset: 0"]') as HTMLElement
+    if (backdrop) fireEvent.click(backdrop)
+    await waitFor(() =>
+      expect(screen.queryByText(/portfolio report/i)).not.toBeInTheDocument()
+    )
   })
 })
 

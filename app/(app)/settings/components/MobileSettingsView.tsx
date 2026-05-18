@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import MobileTopBar from '@/app/components/navigation/MobileTopBar'
+import DownloadReportSheet from '@/app/assets/components/DownloadReportSheet'
 
 interface Props {
   email: string
@@ -347,6 +348,7 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
   const [showProfile, setShowProfile] = useState(false)
   const [showAppearance, setShowAppearance] = useState(false)
   const [showCurrency, setShowCurrency] = useState(false)
+  const [showReport, setShowReport] = useState(false)
 
   const [syncing, setSyncing] = useState(false)
   const [syncDone, setSyncDone] = useState(false)
@@ -374,6 +376,14 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
     setSyncDone(true)
     setLastSync(isVI ? 'Vừa xong' : 'Just now')
     setTimeout(() => setSyncDone(false), 3000)
+  }
+
+  async function handleExportReport() {
+    const res = await fetch('/api/v1/dashboard/overview', { cache: 'no-store' })
+    if (!res.ok) throw new Error('Failed to load portfolio data')
+    const data = await res.json()
+    const { downloadPortfolioPDF } = await import('@/lib/generateReport')
+    await downloadPortfolioPDF(data, locale)
   }
 
   async function handleSignOut() {
@@ -472,7 +482,7 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
             <SettingsRow
               icon={<Download size={16} />}
               label={isVI ? 'Xuất dữ liệu' : 'Export data'}
-              onClick={() => { /* TODO: open download report sheet */ }}
+              onClick={() => setShowReport(true)}
               last
             />
           </div>
@@ -592,6 +602,12 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
       <CurrencySheet
         open={showCurrency}
         onClose={() => setShowCurrency(false)}
+      />
+      <DownloadReportSheet
+        open={showReport}
+        onClose={() => setShowReport(false)}
+        data={null}
+        onExport={handleExportReport}
       />
     </>
   )
