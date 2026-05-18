@@ -5,12 +5,10 @@ import { makeCleanupStack } from './helpers/cleanup'
 const cleanup = makeCleanupStack()
 test.afterEach(() => cleanup.run())
 
-// Helpers to scope all locators to the mobile redesign container
-const mobileFunds = (page: Parameters<typeof test>[1] extends (args: { page: infer P }) => unknown ? P : never) =>
-  page.getByTestId('mobile-funds')
+// This spec runs in the 'mobile' Playwright project (viewport 390x844) so md:hidden
+// does not apply and the mobile-funds container is always visible.
 
 test('mobile funds shows header with title and action buttons', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/funds')
   await page.waitForLoadState('networkidle')
 
@@ -21,7 +19,6 @@ test('mobile funds shows header with title and action buttons', async ({ page })
 })
 
 test('mobile funds shows type filter chips', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/funds')
   await page.waitForLoadState('networkidle')
 
@@ -33,7 +30,6 @@ test('mobile funds shows type filter chips', async ({ page }) => {
 })
 
 test('mobile funds shows search input', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/funds')
   await page.waitForLoadState('networkidle')
 
@@ -45,7 +41,6 @@ test('mobile funds renders a fund card with code, type, NAV and DCA toggle', asy
   const fund = await api.createFund({ name: 'E2E Test Equity Fund', code: 'E2EEQ', fund_type: 'equity', nav: 45000 })
   cleanup.add(() => api.deleteFund(fund.id))
 
-  await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/funds')
   await page.waitForLoadState('networkidle')
 
@@ -63,7 +58,6 @@ test('mobile funds search filters by code', async ({ page }) => {
   const fund = await api.createFund({ name: 'E2E Bond Search Fund', code: 'E2EBD', fund_type: 'debt', nav: 30000 })
   cleanup.add(() => api.deleteFund(fund.id))
 
-  await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/funds')
   await page.waitForLoadState('networkidle')
 
@@ -78,7 +72,6 @@ test('mobile funds type filter shows only matching funds', async ({ page }) => {
   cleanup.add(() => api.deleteFund(equityFund.id))
   cleanup.add(() => api.deleteFund(bondFund.id))
 
-  await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/funds')
   await page.waitForLoadState('networkidle')
 
@@ -89,7 +82,6 @@ test('mobile funds type filter shows only matching funds', async ({ page }) => {
 })
 
 test('mobile funds no-results state when search yields nothing', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/funds')
   await page.waitForLoadState('networkidle')
 
@@ -99,7 +91,6 @@ test('mobile funds no-results state when search yields nothing', async ({ page }
 })
 
 test('mobile funds add button opens add fund sheet', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/funds')
   await page.waitForLoadState('networkidle')
 
@@ -113,7 +104,6 @@ test('mobile funds edit button opens edit sheet prefilled with fund data', async
   const fund = await api.createFund({ name: 'E2E Edit Fund', code: 'E2EEDIT', fund_type: 'balanced', nav: 25000 })
   cleanup.add(() => api.deleteFund(fund.id))
 
-  await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/funds')
   await page.waitForLoadState('networkidle')
 
@@ -128,7 +118,6 @@ test('mobile funds delete button opens delete confirmation sheet', async ({ page
   const fund = await api.createFund({ name: 'E2E Delete Fund', code: 'E2EDEL', fund_type: 'equity', nav: 10000 })
   cleanup.add(() => api.deleteFund(fund.id))
 
-  await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/funds')
   await page.waitForLoadState('networkidle')
 
@@ -142,7 +131,6 @@ test('mobile funds DCA toggle shows amount input when enabled', async ({ page })
   const fund = await api.createFund({ name: 'E2E DCA Fund', code: 'E2EDCA', fund_type: 'equity', nav: 15000 })
   cleanup.add(() => api.deleteFund(fund.id))
 
-  await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/funds')
   await page.waitForLoadState('networkidle')
 
@@ -153,9 +141,7 @@ test('mobile funds DCA toggle shows amount input when enabled', async ({ page })
 })
 
 test('mobile funds shows empty state when no funds exist', async ({ page }) => {
-  // Delete all existing funds temporarily - not practical in E2E, so instead just test the empty state text exists with a search that returns nothing
   // We test the empty-data scenario by verifying the page loads without crashing, then rely on the no-results test above for the UI state
-  await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/funds')
   await page.waitForLoadState('networkidle')
   // Page must load without error
