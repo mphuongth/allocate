@@ -13,7 +13,7 @@ test('mobile funds shows header with title and action buttons', async ({ page })
   await page.waitForLoadState('networkidle')
 
   const mf = page.getByTestId('mobile-funds')
-  await expect(mf.getByText('Fund library')).toBeVisible({ timeout: 10_000 })
+  await expect(mf.getByText(/thư viện quỹ|fund library/i)).toBeVisible({ timeout: 10_000 })
   await expect(mf.getByRole('button', { name: /add/i })).toBeVisible()
   await expect(mf.getByRole('button', { name: /refresh/i })).toBeVisible()
 })
@@ -34,7 +34,7 @@ test('mobile funds shows search input', async ({ page }) => {
   await page.waitForLoadState('networkidle')
 
   const mf = page.getByTestId('mobile-funds')
-  await expect(mf.getByPlaceholder(/search/i)).toBeVisible({ timeout: 10_000 })
+  await expect(mf.getByPlaceholder(/search|tìm/i)).toBeVisible({ timeout: 10_000 })
 })
 
 test('mobile funds renders a fund card with code, type, NAV and DCA toggle', async ({ page }) => {
@@ -62,7 +62,7 @@ test('mobile funds search filters by code', async ({ page }) => {
   await page.waitForLoadState('networkidle')
 
   const mf = page.getByTestId('mobile-funds')
-  await mf.getByPlaceholder(/search/i).fill('E2EBD')
+  await mf.getByPlaceholder(/search|tìm/i).fill('E2EBD')
   await expect(mf.getByTestId(`fund-card-${fund.id}`)).toBeVisible({ timeout: 8_000 })
 })
 
@@ -86,7 +86,7 @@ test('mobile funds no-results state when search yields nothing', async ({ page }
   await page.waitForLoadState('networkidle')
 
   const mf = page.getByTestId('mobile-funds')
-  await mf.getByPlaceholder(/search/i).fill('XNOMATCHWHATSOEVER999')
+  await mf.getByPlaceholder(/search|tìm/i).fill('XNOMATCHWHATSOEVER999')
   await expect(mf.getByText(/no funds match/i)).toBeVisible({ timeout: 5_000 })
 })
 
@@ -97,7 +97,7 @@ test('mobile funds add button opens add fund sheet', async ({ page }) => {
   const mf = page.getByTestId('mobile-funds')
   await mf.getByRole('button', { name: /add/i }).click()
   await expect(page.getByTestId('fund-sheet')).toBeVisible({ timeout: 5_000 })
-  await expect(page.getByTestId('fund-sheet').getByText(/add fund/i)).toBeVisible()
+  await expect(page.getByTestId('fund-sheet').getByText(/add fund|thêm quỹ/i)).toBeVisible()
 })
 
 test('mobile funds edit button opens edit sheet prefilled with fund data', async ({ page }) => {
