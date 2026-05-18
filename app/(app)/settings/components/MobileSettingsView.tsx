@@ -76,9 +76,10 @@ function BottomSheet({ open, onClose, title, children }: {
 
 // ─── Profile sheet ─────────────────────────────────────────────────────────────
 
-function ProfileSheet({ open, onClose, displayName, email }: {
+function ProfileSheet({ open, onClose, onSave, displayName, email }: {
   open: boolean
   onClose: () => void
+  onSave: (name: string) => void
   displayName: string
   email: string
 }) {
@@ -91,6 +92,7 @@ function ProfileSheet({ open, onClose, displayName, email }: {
 
   function handleSave() {
     setSaved(true)
+    onSave(name)
     setTimeout(() => { setSaved(false); onClose() }, 1200)
   }
 
@@ -340,6 +342,8 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
   const router = useRouter()
   const [, startTransition] = useTransition()
 
+  const [localDisplayName, setLocalDisplayName] = useState(displayName)
+
   const [showProfile, setShowProfile] = useState(false)
   const [showAppearance, setShowAppearance] = useState(false)
   const [showCurrency, setShowCurrency] = useState(false)
@@ -425,7 +429,7 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
             {initials}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--c-ink)' }}>{displayName}</div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--c-ink)' }}>{localDisplayName}</div>
             <div style={{ fontSize: 12, color: 'var(--c-muted)', marginTop: 2 }}>{email}</div>
           </div>
           <ChevronRight size={16} color="var(--c-muted)" />
@@ -577,7 +581,8 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
       <ProfileSheet
         open={showProfile}
         onClose={() => setShowProfile(false)}
-        displayName={displayName}
+        onSave={name => setLocalDisplayName(name)}
+        displayName={localDisplayName}
         email={email}
       />
       <AppearanceSheet

@@ -71,6 +71,18 @@ describe('MobileSettingsView — profile sheet', () => {
     expect(emailInput).toBeInTheDocument()
   })
 
+  it('updates profile card name after saving', async () => {
+    render(<MobileSettingsView {...defaultProps} />)
+    await userEvent.click(screen.getByRole('button', { name: /profile/i }))
+    const nameInput = screen.getByDisplayValue('Phuong')
+    await userEvent.clear(nameInput)
+    await userEvent.type(nameInput, 'Minh')
+    await userEvent.click(screen.getByRole('button', { name: /save/i }))
+    // After the success flash + close, the profile card should show the new name
+    await waitFor(() => expect(screen.getByText('Minh')).toBeInTheDocument(), { timeout: 2000 })
+    expect(screen.queryByText('Phuong')).not.toBeInTheDocument()
+  })
+
   it('closes profile sheet when cancel is clicked', async () => {
     render(<MobileSettingsView {...defaultProps} />)
     await userEvent.click(screen.getByRole('button', { name: /profile/i }))
