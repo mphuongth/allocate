@@ -87,14 +87,32 @@ describe('DownloadReportSheet — format picker', () => {
 // ─── Actions ───────────────────────────────────────────────────────────────────
 
 describe('DownloadReportSheet — actions', () => {
+  it('renders X close button in header', () => {
+    render(<DownloadReportSheet open data={null} onClose={noop} onExport={noop} />)
+    expect(screen.getByRole('button', { name: /close/i })).toBeInTheDocument()
+  })
+
+  it('calls onClose when X close button is clicked', async () => {
+    const onClose = vi.fn()
+    render(<DownloadReportSheet open data={null} onClose={onClose} onExport={noop} />)
+    await userEvent.click(screen.getByRole('button', { name: /close/i }))
+    expect(onClose).toHaveBeenCalled()
+  })
+
   it('renders Cancel button', () => {
     render(<DownloadReportSheet open data={null} onClose={noop} onExport={noop} />)
     expect(screen.getByRole('button', { name: /^cancel$/i })).toBeInTheDocument()
   })
 
-  it('renders Export report button', () => {
+  it('export button shows selected format', () => {
     render(<DownloadReportSheet open data={null} onClose={noop} onExport={noop} />)
-    expect(screen.getByRole('button', { name: /export report/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /export report · pdf/i })).toBeInTheDocument()
+  })
+
+  it('export button updates format label when CSV is selected', async () => {
+    render(<DownloadReportSheet open data={null} onClose={noop} onExport={noop} />)
+    await userEvent.click(screen.getByRole('button', { name: /^csv$/i }))
+    expect(screen.getByRole('button', { name: /export report · csv/i })).toBeInTheDocument()
   })
 
   it('calls onClose when Cancel is clicked', async () => {

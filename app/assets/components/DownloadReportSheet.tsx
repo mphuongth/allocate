@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Check, Download } from 'lucide-react'
+import { Check, Download, X } from 'lucide-react'
 import { useLocale } from 'next-intl'
 import { fmt } from '@/lib/formatters'
 
@@ -97,14 +97,24 @@ export default function DownloadReportSheet({ open, onClose, data, onExport }: P
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div style={{ width: 36, height: 4, background: 'var(--c-line-strong)', borderRadius: 999, margin: '6px auto 0' }} />
+        <div style={{ width: 36, height: 4, background: 'var(--c-line-strong)', borderRadius: 999, margin: '6px auto 14px' }} />
 
-        {/* Sheet header */}
-        <div style={{ padding: '14px 16px 0', borderBottom: '1px solid var(--c-line)', marginBottom: 16 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--c-ink)', paddingBottom: 14 }}>{t.title}</div>
-        </div>
-
-        <div style={{ padding: '0 16px 28px' }}>
+        <div style={{ padding: '0 16px 16px' }}>
+          {/* Sheet header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600, color: 'var(--c-ink)' }}>{t.title}</h3>
+            <button
+              onClick={onClose}
+              aria-label="close"
+              style={{
+                padding: 6, background: 'transparent', border: 'none',
+                cursor: 'pointer', color: 'var(--c-muted)', borderRadius: 8,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              <X size={18} />
+            </button>
+          </div>
           {success ? (
             <div style={{ padding: '28px 0', textAlign: 'center' }}>
               <div style={{
@@ -210,7 +220,7 @@ export default function DownloadReportSheet({ open, onClose, data, onExport }: P
                 <button
                   onClick={handleExport}
                   disabled={exporting}
-                  aria-label={exporting ? 'exporting' : t.export}
+                  aria-label={exporting ? 'exporting' : `${t.export} · ${format.toUpperCase()}`}
                   style={{
                     flex: 2, padding: '11px 0', fontSize: 13, fontWeight: 600,
                     background: 'var(--c-btn-primary)', border: 'none',
@@ -226,7 +236,9 @@ export default function DownloadReportSheet({ open, onClose, data, onExport }: P
                   ) : (
                     <Download size={14} strokeWidth={2.2} />
                   )}
-                  {exporting ? (isVI ? 'Đang xuất…' : 'Exporting…') : t.export}
+                  {exporting
+                    ? (isVI ? 'Đang xuất…' : 'Exporting…')
+                    : `${t.export} · ${format.toUpperCase()}`}
                 </button>
               </div>
             </div>
