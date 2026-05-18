@@ -9,7 +9,7 @@ import {
   TrendingUp, CircleDollarSign, LogOut, ChevronRight, Check,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import MobileTopBar from '@/app/components/navigation/MobileTopBar'
+import { useNavigation } from '@/app/components/navigation/NavigationContext'
 import DownloadReportSheet from '@/app/assets/components/DownloadReportSheet'
 
 interface Props {
@@ -342,6 +342,7 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
   const locale = useLocale()
   const router = useRouter()
   const [, startTransition] = useTransition()
+  const { setMobileTopBar } = useNavigation()
 
   const [localDisplayName, setLocalDisplayName] = useState(displayName)
 
@@ -355,6 +356,13 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
   const [lastSync, setLastSync] = useState('2h')
 
   const isVI = locale === 'vi'
+
+  useEffect(() => {
+    setMobileTopBar({
+      title: isVI ? 'Tùy chọn' : 'Preferences',
+      subtitle: isVI ? 'Cài đặt' : 'Settings',
+    })
+  }, [isVI, setMobileTopBar])
 
   function switchLocale(next: string) {
     document.cookie = `locale=${next};path=/;max-age=31536000;SameSite=Lax`
@@ -414,8 +422,6 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
 
   return (
     <>
-      <MobileTopBar subtitle={isVI ? 'Cài đặt' : 'Settings'} title={isVI ? 'Tùy chọn' : 'Preferences'} />
-
       <div style={{ padding: '4px 16px 80px' }}>
 
         {/* Profile card */}

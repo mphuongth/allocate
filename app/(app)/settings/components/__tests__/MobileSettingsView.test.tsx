@@ -17,6 +17,10 @@ vi.mock('next/navigation', () => ({
   useTransition: () => [false, (fn: () => void) => fn()],
 }))
 
+vi.mock('@/app/components/navigation/NavigationContext', () => ({
+  useNavigation: () => ({ setMobileTopBar: vi.fn() }),
+}))
+
 vi.mock('@supabase/ssr', () => ({
   createBrowserClient: () => ({
     auth: { signOut: signOutMock },
