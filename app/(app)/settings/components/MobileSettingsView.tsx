@@ -363,6 +363,12 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
 
   const [localDisplayName, setLocalDisplayName] = useState(displayName)
 
+  const localInitials = localDisplayName
+    .split(/\s+/)
+    .slice(0, 2)
+    .map(w => w[0]?.toUpperCase() ?? '')
+    .join('') || initials
+
   const [showProfile, setShowProfile] = useState(false)
   const [showAppearance, setShowAppearance] = useState(false)
   const [showCurrency, setShowCurrency] = useState(false)
@@ -451,11 +457,11 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
           {/* Avatar */}
           <div style={{
             width: 48, height: 48, borderRadius: 24,
-            background: 'var(--c-navy)', color: '#fff',
+            background: 'var(--c-btn-primary)', color: '#fff',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 16, fontWeight: 700, flexShrink: 0,
           }}>
-            {initials}
+            {localInitials}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--c-ink)' }}>{localDisplayName}</div>

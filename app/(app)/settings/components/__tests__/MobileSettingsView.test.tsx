@@ -51,9 +51,20 @@ describe('MobileSettingsView — profile card', () => {
     expect(screen.getByText('phuong.tran@example.com')).toBeInTheDocument()
   })
 
-  it('renders user initials in avatar', () => {
+  it('renders user initials derived from display name', () => {
     render(<MobileSettingsView {...defaultProps} />)
-    expect(screen.getByText('PT')).toBeInTheDocument()
+    // 'Phuong' → single word → 'P'
+    expect(screen.getByText('P')).toBeInTheDocument()
+  })
+
+  it('updates avatar initials after saving a new display name', async () => {
+    render(<MobileSettingsView {...defaultProps} />)
+    await userEvent.click(screen.getByRole('button', { name: /profile/i }))
+    const nameInput = screen.getByDisplayValue('Phuong')
+    await userEvent.clear(nameInput)
+    await userEvent.type(nameInput, 'Minh Phuong')
+    await userEvent.click(screen.getByRole('button', { name: /save/i }))
+    await waitFor(() => expect(screen.getByText('MP')).toBeInTheDocument(), { timeout: 2000 })
   })
 
   it('opens profile sheet when profile card is clicked', async () => {
