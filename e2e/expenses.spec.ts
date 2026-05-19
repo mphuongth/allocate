@@ -117,10 +117,11 @@ test('effective period hides expense outside date range on planning page', async
 
   await page.goto('/planning')
   await page.waitForLoadState('networkidle')
-  await expect(page.locator('text=E2E Period Expense').first()).toBeVisible({ timeout: 15_000 })
+  // Scope to desktop view — mobile view (md:hidden) renders same content but is invisible on desktop
+  await expect(page.getByTestId('desktop-planning').locator('text=E2E Period Expense').first()).toBeVisible({ timeout: 15_000 })
 
   // Navigate to next month — expense should NOT appear
   await page.getByTestId('next-month').click()
   await page.waitForLoadState('networkidle')
-  await expect(page.locator('text=E2E Period Expense')).not.toBeVisible({ timeout: 5_000 })
+  await expect(page.getByTestId('desktop-planning').locator('text=E2E Period Expense')).not.toBeVisible({ timeout: 5_000 })
 })

@@ -28,25 +28,24 @@ test('dashboard page loads with main layout', async ({ page }) => {
 test('dashboard shows net worth card when data exists', async ({ page }) => {
   await page.goto('/dashboard')
   await page.waitForLoadState('networkidle')
-  // Net worth card shows total assets heading
-  await expect(page.locator('text=/Net Worth|Total Assets|Tổng tài sản/i').first()).toBeVisible({ timeout: 10_000 })
+  // Net worth card shows the net worth or total assets label in EN or VI
+  await expect(page.locator('text=/Net Worth|Total Assets|Tài sản Ròng|Tổng Tài sản|Tổng tài sản/i').first()).toBeVisible({ timeout: 10_000 })
 })
 
 test('dashboard shows empty state when no investments', async ({ page }) => {
-  // This test relies on a fresh test account with no data
-  // If the test account has data this test is skipped
   await page.goto('/dashboard')
   await page.waitForLoadState('networkidle')
   const emptyState = page.locator('text=/no investments|get started|chưa có/i').first()
-  const hasData = page.locator('text=/Net Worth|Tổng tài sản/i').first()
+  const hasData = page.locator('text=/Net Worth|Tài sản Ròng|Tổng Tài sản|Tổng tài sản/i').first()
   // Either empty state OR data is visible
   await expect(emptyState.or(hasData)).toBeVisible({ timeout: 10_000 })
 })
 
-test('dashboard shows asset allocation section', async ({ page }) => {
+test('dashboard shows allocation bar when investments exist', async ({ page }) => {
   await page.goto('/dashboard')
   await page.waitForLoadState('networkidle')
-  await expect(page.locator('text=Asset Allocation').first()).toBeVisible({ timeout: 10_000 })
+  // Allocation bar renders when there is at least one investment (seeded in setup)
+  await expect(page.getByTestId('allocation-bar')).toBeVisible({ timeout: 10_000 })
 })
 
 test('"Add Goal" button opens Create Goal dialog', async ({ page }) => {
@@ -62,7 +61,7 @@ test('"Add Goal" button opens Create Goal dialog', async ({ page }) => {
   }
 })
 
-test('clicking a goal card navigates to goal detail', async ({ page }) => {
+test('clicking a goal card opens GoalDetailSheet', async ({ page }) => {
   const goal = await api.createGoal({ goal_name: 'E2E Dashboard Goal', target_amount: 50_000_000 })
   cleanup.add(() => api.deleteGoal(goal.goal_id))
 
@@ -71,21 +70,15 @@ test('clicking a goal card navigates to goal detail', async ({ page }) => {
 
   const goalCard = page.locator('text=E2E Dashboard Goal').first()
   await expect(goalCard).toBeVisible({ timeout: 10_000 })
+  await goalCard.click()
 
-  // Click the goal card or its "View Details" button
-  const viewBtn = page.getByRole('button', { name: /view|details|xem/i }).first()
-  if (await viewBtn.isVisible()) {
-    await viewBtn.click()
-  } else {
-    await goalCard.click()
-  }
-
-  await expect(page).toHaveURL(/settings.*goal/)
-  // GoalDetailView has a back button
+  // GoalDetailSheet opens as a full-screen overlay with a back button
   await expect(page.getByTestId("goal-back-btn").first()).toBeVisible({ timeout: 8_000 })
+  await page.getByTestId("goal-back-btn").first().click()
+  await expect(page.getByTestId("goal-back-btn")).not.toBeVisible({ timeout: 5_000 })
 })
 
-test('clicking unallocated fund opens FundDetailModal', async ({ page }) => {
+test('tapping unallocated row opens action sheet', async ({ page }) => {
   const fund = await api.createFund({ name: 'E2E Test Fund', code: 'E2ETESTFUND', fund_type: 'equity', nav: 10000 })
   cleanup.add(() => api.deleteFund(fund.id))
 
@@ -101,21 +94,54 @@ test('clicking unallocated fund opens FundDetailModal', async ({ page }) => {
 
   await gotoFreshDashboard(page)
 
-  // Find the fund name in the unallocated section (UI renders fundName, not code)
-  const fundItem = page.getByText(fund.name, { exact: false }).first()
-  await expect(fundItem).toBeVisible({ timeout: 10_000 })
-  await fundItem.click()
+  // Row is a tappable button — tap it to open action sheet
+  const row = page.getByTestId('unallocated-row').filter({ hasText: fund.name }).first()
+  await expect(row).toBeVisible({ timeout: 10_000 })
+  await row.click()
 
-  // FundDetailModal should open
-  await expect(page.getByRole('dialog')).toBeVisible({ timeout: 5_000 })
-  await expect(page.getByRole('dialog').locator(`text=${fund.name}`)).toBeVisible()
+  // Action sheet should appear with 3 options
+  await expect(page.getByTestId('action-sheet')).toBeVisible({ timeout: 5_000 })
+  await expect(page.getByTestId('action-assign')).toBeVisible()
+  await expect(page.getByTestId('action-sell')).toBeVisible()
+  await expect(page.getByTestId('action-history')).toBeVisible()
 
-  // Close the modal
+  // Close by tapping backdrop (click outside the sheet)
   await page.keyboard.press('Escape')
-  await expect(page.getByRole('dialog')).not.toBeVisible()
 })
 
-test('assign unallocated fund to a goal via GoalPickerModal', async ({ page }) => {
+test('tapping unallocated fund history opens TransactionHistorySheet', async ({ page }) => {
+  const fund = await api.createFund({ name: 'E2E Test Fund', code: 'E2ETESTFUND', fund_type: 'equity', nav: 10000 })
+  cleanup.add(() => api.deleteFund(fund.id))
+
+  const tx = await api.createTransaction({
+    asset_type: 'fund',
+    amount_vnd: 5_000_000,
+    investment_date: '2026-01-01',
+    units: 200,
+    unit_price: fund.nav,
+    fund_id: fund.id,
+  })
+  cleanup.add(() => api.deleteTransaction(tx.transaction_id))
+
+  await gotoFreshDashboard(page)
+
+  const row = page.getByTestId('unallocated-row').filter({ hasText: fund.name }).first()
+  await expect(row).toBeVisible({ timeout: 10_000 })
+  await row.click()
+
+  // Tap "Transaction History" in action sheet
+  await expect(page.getByTestId('action-history')).toBeVisible({ timeout: 5_000 })
+  await page.getByTestId('action-history').click()
+
+  // TransactionHistorySheet should open — fund name is the h1
+  await expect(page.getByRole('heading', { name: fund.name })).toBeVisible({ timeout: 5_000 })
+
+  // Close via Back button
+  await page.getByTestId('history-back-btn').click()
+  await expect(page.getByRole('heading', { name: fund.name })).not.toBeVisible()
+})
+
+test('assign unallocated fund to a goal via action sheet', async ({ page }) => {
   const fund = await api.createFund({ name: 'E2E Test Fund', code: 'E2ETESTFUND', fund_type: 'equity', nav: 10000 })
   cleanup.add(() => api.deleteFund(fund.id))
 
@@ -134,24 +160,24 @@ test('assign unallocated fund to a goal via GoalPickerModal', async ({ page }) =
 
   await gotoFreshDashboard(page)
 
-  // Click "Assign to Goal" button directly in the unallocated fund row — no FundDetailModal needed
-  // (opening the modal would put its backdrop over the row buttons)
-  const fundRow = page.getByRole('row').filter({ hasText: fund.name }).first()
-  await expect(fundRow).toBeVisible({ timeout: 10_000 })
-  await fundRow.getByTitle(/gán|assign/i).click()
+  // Tap row → action sheet → Assign to Goal
+  const row = page.getByTestId('unallocated-row').filter({ hasText: fund.name }).first()
+  await expect(row).toBeVisible({ timeout: 10_000 })
+  await row.click()
+
+  await expect(page.getByTestId('action-assign')).toBeVisible({ timeout: 5_000 })
+  await page.getByTestId('action-assign').click()
 
   // GoalPickerModal opens — pick our test goal
   await expect(page.getByRole('dialog').locator('text=E2E Assign Goal')).toBeVisible({ timeout: 5_000 })
   await page.getByRole('dialog').locator('text=E2E Assign Goal').click()
 
-  // Click confirm — button says "Gán" in Vietnamese
   await page.getByRole('button', { name: /gán|confirm|assign/i }).last().click()
 
-  // Dialog closes after assignment
   await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 8_000 })
 })
 
-test('sell unallocated fund from Asset Overview', async ({ page }) => {
+test('sell unallocated fund via action sheet', async ({ page }) => {
   const fund = await api.createFund({ name: 'E2E Test Fund', code: 'E2ETESTFUND', fund_type: 'equity', nav: 10000 })
   cleanup.add(() => api.deleteFund(fund.id))
 
@@ -167,18 +193,140 @@ test('sell unallocated fund from Asset Overview', async ({ page }) => {
 
   await gotoFreshDashboard(page)
 
-  // Click sell button directly in the unallocated fund row — no FundDetailModal needed
-  const fundRow = page.getByRole('row').filter({ hasText: fund.name }).first()
-  await expect(fundRow).toBeVisible({ timeout: 10_000 })
-  await fundRow.getByTitle(/bán|sell/i).click()
+  // Tap row → action sheet → Sell
+  const row = page.getByTestId('unallocated-row').filter({ hasText: fund.name }).first()
+  await expect(row).toBeVisible({ timeout: 10_000 })
+  await row.click()
 
-  // Sell dialog opens — units Label has no htmlFor, use input[type="number"] scoped to dialog
-  await expect(page.getByRole('dialog')).toBeVisible()
-  await page.getByRole('dialog').locator('input[type="number"]').fill('50')
-  await page.getByRole('button', { name: /bán|sell|confirm/i }).last().click()
+  await expect(page.getByTestId('action-sell')).toBeVisible({ timeout: 5_000 })
+  await page.getByTestId('action-sell').click()
 
-  // Dialog should close after successful sell
-  await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 8_000 })
+  // SellWithdrawSheet opens
+  await expect(page.getByTestId('sell-sheet')).toBeVisible({ timeout: 5_000 })
+  await page.getByTestId('sell-amount-input').fill('50000')
+  await page.getByTestId('sell-confirm-btn').click()
+
+  await expect(page.getByTestId('sell-sheet')).not.toBeVisible({ timeout: 8_000 })
+})
+
+test('sell fund sheet shows remaining amount in summary strip', async ({ page }) => {
+  const fund = await api.createFund({ name: 'E2E Summary Fund', code: 'E2ESUMFUND', fund_type: 'equity', nav: 10000 })
+  cleanup.add(() => api.deleteFund(fund.id))
+  const tx = await api.createTransaction({
+    asset_type: 'fund', amount_vnd: 5_000_000, investment_date: '2026-01-01',
+    units: 500, unit_price: fund.nav, fund_id: fund.id,
+  })
+  cleanup.add(() => api.deleteTransaction(tx.transaction_id))
+
+  await gotoFreshDashboard(page)
+  const row = page.getByTestId('unallocated-row').filter({ hasText: fund.name }).first()
+  await expect(row).toBeVisible({ timeout: 10_000 })
+  await row.click()
+  await page.getByTestId('action-sell').click()
+  await expect(page.getByTestId('sell-sheet')).toBeVisible({ timeout: 5_000 })
+
+  await page.getByTestId('sell-amount-input').fill('1000000')
+  await expect(page.getByTestId('sell-summary-strip')).toBeVisible({ timeout: 3_000 })
+})
+
+test('sell fund shows 0.1% tax estimate in summary strip', async ({ page }) => {
+  const fund = await api.createFund({ name: 'E2E Tax Fund', code: 'E2ETAXFUND', fund_type: 'equity', nav: 10000 })
+  cleanup.add(() => api.deleteFund(fund.id))
+  const tx = await api.createTransaction({
+    asset_type: 'fund', amount_vnd: 5_000_000, investment_date: '2026-01-01',
+    units: 500, unit_price: fund.nav, fund_id: fund.id,
+  })
+  cleanup.add(() => api.deleteTransaction(tx.transaction_id))
+
+  await gotoFreshDashboard(page)
+  const row = page.getByTestId('unallocated-row').filter({ hasText: fund.name }).first()
+  await expect(row).toBeVisible({ timeout: 10_000 })
+  await row.click()
+  await page.getByTestId('action-sell').click()
+  await expect(page.getByTestId('sell-sheet')).toBeVisible({ timeout: 5_000 })
+
+  await page.getByTestId('sell-amount-input').fill('1000000')
+  // Tax row (0.1%) appears in summary strip for fund sells
+  await expect(page.locator('[data-testid="sell-summary-strip"] [data-testid="sell-tax-row"]')).toBeVisible({ timeout: 3_000 })
+})
+
+test('"All" button fills the full available amount', async ({ page }) => {
+  const fund = await api.createFund({ name: 'E2E All Fund', code: 'E2EALLFUND', fund_type: 'equity', nav: 10000 })
+  cleanup.add(() => api.deleteFund(fund.id))
+  const tx = await api.createTransaction({
+    asset_type: 'fund', amount_vnd: 5_000_000, investment_date: '2026-01-01',
+    units: 500, unit_price: fund.nav, fund_id: fund.id,
+  })
+  cleanup.add(() => api.deleteTransaction(tx.transaction_id))
+
+  await gotoFreshDashboard(page)
+  const row = page.getByTestId('unallocated-row').filter({ hasText: fund.name }).first()
+  await expect(row).toBeVisible({ timeout: 10_000 })
+  await row.click()
+  await page.getByTestId('action-sell').click()
+  await expect(page.getByTestId('sell-sheet')).toBeVisible({ timeout: 5_000 })
+
+  await page.getByTestId('sell-all-btn').click()
+  const val = await page.getByTestId('sell-amount-input').inputValue()
+  // Input displays vi-VN formatted numbers (dots as thousand separators), strip before parsing
+  expect(Number(val.replace(/\./g, '').replace(/,/g, ''))).toBeGreaterThan(0)
+})
+
+test('sell bank shows early-withdrawal warning', async ({ page }) => {
+  const tx = await api.createTransaction({
+    asset_type: 'bank', amount_vnd: 10_000_000, investment_date: '2026-01-01', interest_rate: 6,
+  })
+  cleanup.add(() => api.deleteTransaction(tx.transaction_id))
+
+  await gotoFreshDashboard(page)
+  const row = page.getByTestId('unallocated-row').filter({ hasText: /ngân hàng|bank/i }).first()
+  await expect(row).toBeVisible({ timeout: 10_000 })
+  await row.click()
+  await page.getByTestId('action-sell').click()
+  await expect(page.getByTestId('sell-sheet')).toBeVisible({ timeout: 5_000 })
+
+  await expect(page.getByTestId('sell-bank-warning')).toBeVisible({ timeout: 3_000 })
+})
+
+test('sell success state appears after confirm', async ({ page }) => {
+  const fund = await api.createFund({ name: 'E2E Success Fund', code: 'E2ESUCFUND', fund_type: 'equity', nav: 10000 })
+  cleanup.add(() => api.deleteFund(fund.id))
+  const tx = await api.createTransaction({
+    asset_type: 'fund', amount_vnd: 5_000_000, investment_date: '2026-01-01',
+    units: 500, unit_price: fund.nav, fund_id: fund.id,
+  })
+  cleanup.add(() => api.deleteTransaction(tx.transaction_id))
+
+  await gotoFreshDashboard(page)
+  const row = page.getByTestId('unallocated-row').filter({ hasText: fund.name }).first()
+  await expect(row).toBeVisible({ timeout: 10_000 })
+  await row.click()
+  await page.getByTestId('action-sell').click()
+  await expect(page.getByTestId('sell-sheet')).toBeVisible({ timeout: 5_000 })
+
+  await page.getByTestId('sell-amount-input').fill('1000000')
+  await page.getByTestId('sell-confirm-btn').click()
+
+  await expect(page.getByTestId('sell-success')).toBeVisible({ timeout: 5_000 })
+})
+
+test('allocation bar renders when investments exist', async ({ page }) => {
+  const fund = await api.createFund({ name: 'E2E Alloc Fund', code: 'E2EALLOCFUND', fund_type: 'equity', nav: 15000 })
+  cleanup.add(() => api.deleteFund(fund.id))
+
+  const tx = await api.createTransaction({
+    asset_type: 'fund',
+    amount_vnd: 10_000_000,
+    investment_date: '2026-01-01',
+    units: 500,
+    unit_price: fund.nav,
+    fund_id: fund.id,
+  })
+  cleanup.add(() => api.deleteTransaction(tx.transaction_id))
+
+  await gotoFreshDashboard(page)
+
+  await expect(page.getByTestId('allocation-bar')).toBeVisible({ timeout: 10_000 })
 })
 
 test('insurance "Mark as Paid" updates status', async ({ page }) => {

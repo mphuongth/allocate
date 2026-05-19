@@ -3,24 +3,24 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { fmt } from '@/lib/formatters'
-import { Plus, FileDown } from 'lucide-react'
+import { Plus, ArrowDownToLine, ChevronDown, Check } from 'lucide-react'
 import { useTranslations, useLocale } from 'next-intl'
+import { useNavigation } from '@/app/components/navigation/NavigationContext'
 import dynamic from 'next/dynamic'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
+import { CreateGoalSheet } from './components/CreateGoalSheet'
 import { NetWorthSkeleton, GoalSkeleton, InsuranceSkeleton } from './components/Skeletons'
 import NetWorthCard from './components/NetWorthCard'
 import GoalCard from './components/GoalCard'
 import UnallocatedSection from './components/UnallocatedSection'
 import InsuranceCard from './components/InsuranceCard'
 import AssetAllocationPie from './components/AssetAllocationPie'
+import { SellWithdrawSheet, type SellItem } from './components/SellWithdrawSheet'
+import GoalDetailSheet from './components/GoalDetailSheet'
+import AssignGoalSheet from './components/AssignGoalSheet'
+import DownloadReportSheet from './components/DownloadReportSheet'
 
-const FundDetailModal = dynamic(() => import('./components/FundDetailModal'))
-const GoalPickerModal = dynamic(() => import('./components/GoalPickerModal'))
 const GoldPriceWidget = dynamic(() => import('./components/GoldPriceWidget'))
+import TransactionHistorySheet from './components/TransactionHistorySheet'
 
 export interface FundBreakdownItem {
   fundId: string
@@ -44,6 +44,7 @@ export interface GoalData {
   profitLoss: number
   profitLossPercentage: number
   progressPercentage: number | null
+  transactionCount: number
   funds: FundBreakdownItem[]
 }
 
@@ -54,7 +55,7 @@ export interface InsuranceData {
   annualPremium: number
   amountSaved: number
   savingsProgressPercentage: number
-  status: 'on_track' | 'upcoming' | 'overdue' | 'completed'
+  status: 'on_track' | 'upcoming' | 'overdue' | 'completed' | 'ready'
   nextPaymentDate: string | null
   lastPaymentDate: string | null
 }
@@ -82,6 +83,7 @@ export interface DashboardData {
     overallProfitLossPercentage: number
     navStale: boolean
     hasGold: boolean
+    navUpdatedAt: string | null
   }
   goals: GoalData[]
   unallocated: { totalValue: number; funds: FundBreakdownItem[]; nonFunds: NonFundUnallocatedItem[] }
@@ -110,12 +112,88 @@ function setCachedOverview(userId: string, data: DashboardData) {
 // Fetch fund detail (purchase history) from investment_transactions
 interface PurchaseHistory { purchase_date: string; units: number; nav_at_purchase: number }
 
+type SortValue = 'manual' | 'progressDesc' | 'progressAsc' | 'alpha'
+
+function SortDropdown({ value, onChange, options }: {
+  value: SortValue
+  onChange: (v: SortValue) => void
+  options: { value: SortValue; label: string }[]
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const current = options.find((o) => o.value === value)
+
+  useEffect(() => {
+    if (!open) return
+    function onDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [open])
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 4,
+          fontSize: 13, padding: '5px 10px', cursor: 'pointer',
+          background: 'var(--c-card)', border: '1px solid var(--c-line)',
+          borderRadius: 8, color: 'var(--c-ink)', fontFamily: 'inherit', fontWeight: 500,
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {current?.label}
+        <ChevronDown size={12} style={{ color: 'var(--c-muted)', flexShrink: 0 }} />
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 4px)', right: 0, zIndex: 50,
+          background: 'var(--c-card)', border: '1px solid var(--c-line)',
+          borderRadius: 10, boxShadow: 'var(--shadow-pop)',
+          minWidth: 160, overflow: 'hidden',
+        }}>
+          {options.map((o) => (
+            <button
+              key={o.value}
+              onClick={() => { onChange(o.value); setOpen(false) }}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                width: '100%', padding: '10px 14px', border: 'none', cursor: 'pointer',
+                background: o.value === value ? 'var(--c-navy-tint)' : 'transparent',
+                color: o.value === value ? 'var(--c-navy)' : 'var(--c-ink)',
+                fontSize: 14, fontFamily: 'inherit', fontWeight: o.value === value ? 600 : 400,
+                textAlign: 'left',
+              }}
+            >
+              {o.label}
+              {o.value === value && <Check size={13} />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function fmtTimeAgo(isoString: string, locale: string): string {
+  const diffMs = Date.now() - new Date(isoString).getTime()
+  const mins = Math.floor(diffMs / 60_000)
+  const hours = Math.floor(mins / 60)
+  const days = Math.floor(hours / 24)
+  const isVi = locale === 'vi'
+  if (days > 0) return isVi ? `${days} ngày trước` : `${days}d ago`
+  if (hours > 0) return isVi ? `${hours} giờ trước` : `${hours}h ago`
+  return isVi ? `${mins} phút trước` : `${mins}m ago`
+}
+
 export default function DashboardClient({ userId }: { userId: string }) {
   const t = useTranslations('dashboard')
   const tc = useTranslations('common')
-  const tt = useTranslations('transactions')
   const tg = useTranslations('goals')
   const locale = useLocale()
+  const { userName, setMobileTopBar } = useNavigation()
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -124,52 +202,47 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const [assignLoading, setAssignLoading] = useState(false)
   const [assignError, setAssignError] = useState('')
   const [purchaseHistory, setPurchaseHistory] = useState<PurchaseHistory[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
   const [nonFundPickerTxId, setNonFundPickerTxId] = useState<string | null>(null)
   const [nonFundAssignLoading, setNonFundAssignLoading] = useState(false)
   const [nonFundAssignError, setNonFundAssignError] = useState('')
+  const [goalSort, setGoalSort] = useState<SortValue>('manual')
   const [showGoalForm, setShowGoalForm] = useState(false)
-  const [goalName, setGoalName] = useState('')
-  const [goalTarget, setGoalTarget] = useState('')
-  const [goalDesc, setGoalDesc] = useState('')
-  const [goalSaving, setGoalSaving] = useState(false)
-  const [goalError, setGoalError] = useState('')
-  const [sellFund, setSellFund] = useState<FundBreakdownItem | null>(null)
-  const [sellDate, setSellDate] = useState('')
-  const [sellUnits, setSellUnits] = useState('')
-  const [sellAmount, setSellAmount] = useState('')
-  const [sellSaving, setSellSaving] = useState(false)
-  const [sellError, setSellError] = useState('')
-  const [sellNonFund, setSellNonFund] = useState<NonFundUnallocatedItem | null>(null)
-  const [nfDate, setNfDate] = useState('')
-  const [nfPrincipal, setNfPrincipal] = useState('')
-  const [nfUnits, setNfUnits] = useState('')
-  const [nfAmount, setNfAmount] = useState('')
-  const [nfSaving, setNfSaving] = useState(false)
-  const [nfError, setNfError] = useState('')
+  const [sellItem, setSellItem] = useState<SellItem | null>(null)
+  const [sellSheetOpen, setSellSheetOpen] = useState(false)
   const [isGeneratingReport, setIsGeneratingReport] = useState(false)
+  const [historyKey, setHistoryKey] = useState(0)
   const [pullY, setPullY] = useState(0)
+  const [selectedGoal, setSelectedGoal] = useState<GoalData | null>(null)
+  const [goalDetailOpen, setGoalDetailOpen] = useState(false)
+  const [showReportSheet, setShowReportSheet] = useState(false)
   const PULL_THRESHOLD = 65
 
   const fetchDataRef = useRef<(opts?: { force?: boolean }) => Promise<void>>(async () => {})
+  const hasDataRef = useRef(false)
   const touchStartY = useRef(-1)
 
   const fetchData = useCallback(async (opts?: { force?: boolean }) => {
     const cached = !opts?.force && getCachedOverview(userId)
     if (cached) {
       setData(cached)
+      hasDataRef.current = true
       setLoading(false)
       return
     }
-    setLoading(true)
+    // Only show skeleton on initial load — if data is already visible, refresh silently
+    if (!hasDataRef.current) setLoading(true)
     setError('')
     try {
-      const res = await fetch('/api/v1/dashboard/overview')
+      const res = await fetch('/api/v1/dashboard/overview', { cache: 'no-store' })
       if (!res.ok) {
         const { error: e } = await res.json()
         setError(e ?? tc('error'))
       } else {
         const json = await res.json()
         setData(json)
+        hasDataRef.current = true
+        setHistoryKey((k) => k + 1)
         setCachedOverview(userId, json)
         try { localStorage.setItem('pwa_last_fetch', String(Date.now())) } catch {}
       }
@@ -245,7 +318,8 @@ export default function DashboardClient({ userId }: { userId: string }) {
 
   async function handleFundClick(fundId: string) {
     setFundDetailId(fundId)
-    // Fetch purchase history for this fund
+    setPurchaseHistory([])
+    setHistoryLoading(true)
     try {
       const res = await fetch(`/api/v1/fund-investments?fund_id=${fundId}`)
       if (res.ok) {
@@ -256,37 +330,8 @@ export default function DashboardClient({ userId }: { userId: string }) {
             .sort((a, b) => new Date(b.purchase_date).getTime() - new Date(a.purchase_date).getTime())
         )
       }
-    } catch { /* ignore — show modal without history */ }
-  }
-
-  async function handleGoalSave() {
-    setGoalError('')
-    if (!goalName.trim()) { setGoalError('Goal name is required'); return }
-    setGoalSaving(true)
-    try {
-      const res = await fetch('/api/v1/savings-goals', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          goal_name: goalName.trim(),
-          target_amount: goalTarget ? Number(goalTarget) : null,
-          description: goalDesc.trim() || null,
-        }),
-      })
-      if (!res.ok) {
-        const { error } = await res.json()
-        setGoalError(error ?? 'Could not save goal')
-      } else {
-        setShowGoalForm(false)
-        setGoalName('')
-        setGoalTarget('')
-        setGoalDesc('')
-        fetchData({ force: true })
-      }
-    } catch {
-      setGoalError('Could not save goal')
-    }
-    setGoalSaving(false)
+    } catch { /* show sheet without history */ }
+    setHistoryLoading(false)
   }
 
   async function handleGenerateReport() {
@@ -300,119 +345,56 @@ export default function DashboardClient({ userId }: { userId: string }) {
     }
   }
 
+  useEffect(() => {
+    setMobileTopBar({
+      title: t('greeting', { name: userName }),
+      subtitle: t('overview'),
+      trailing: (
+        <button
+          data-testid="generate-report-btn"
+          onClick={() => setShowReportSheet(true)}
+          aria-label={t('downloadReport')}
+          style={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            padding: 8, border: 'none', background: 'transparent',
+            borderRadius: 'var(--r-control)', cursor: 'pointer', color: 'var(--c-ink)',
+          }}
+        >
+          <ArrowDownToLine size={18} />
+        </button>
+      ),
+    })
+    return () => setMobileTopBar({ title: '' })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userName, data])
+
   function openSellFund(fund: FundBreakdownItem) {
-    setSellFund(fund)
-    setSellDate(new Date().toISOString().slice(0, 10))
-    setSellUnits('')
-    setSellAmount('')
-    setSellError('')
-  }
-
-  async function handleSellFundSubmit() {
-    if (!sellFund) return
-    const units = parseFloat(sellUnits)
-    const amount = Number(sellAmount)
-    if (!sellDate) { setSellError('Date is required'); return }
-    if (!units || units <= 0) { setSellError('Units must be greater than 0'); return }
-    if (units > sellFund.quantity) { setSellError('Units exceed available balance'); return }
-    if (!amount || amount <= 0) { setSellError('Amount must be greater than 0'); return }
-
-    setSellSaving(true)
-    setSellError('')
-    try {
-      const principalWithdrawn = Math.round(units * sellFund.purchasePrice)
-      const res = await fetch('/api/v1/investment-transactions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          transaction_type: 'withdrawal',
-          asset_type: 'fund',
-          fund_id: sellFund.fundId,
-          investment_date: sellDate,
-          amount_vnd: Math.round(amount),
-          units_withdrawn: units,
-          principal_withdrawn: principalWithdrawn,
-          goal_id: null,
-        }),
-      })
-      if (!res.ok) {
-        const { error } = await res.json()
-        setSellError(error ?? 'Failed to record sale')
-      } else {
-        setSellFund(null)
-        await fetchData({ force: true })
-      }
-    } catch {
-      setSellError('Unable to save. Please check your connection.')
-    }
-    setSellSaving(false)
+    setSellItem({
+      type: 'fund',
+      name: fund.fundName,
+      currentValue: fund.currentValue,
+      units: fund.quantity,
+      navPerUnit: fund.currentNAV,
+      gainPct: fund.profitLossPercentage,
+      fundId: fund.fundId,
+      purchasePrice: fund.purchasePrice,
+    })
+    setSellSheetOpen(true)
   }
 
   function openSellNonFund(item: NonFundUnallocatedItem) {
-    setSellNonFund(item)
-    setNfDate(new Date().toISOString().slice(0, 10))
-    setNfPrincipal('')
-    setNfUnits('')
-    setNfAmount('')
-    setNfError('')
-  }
-
-  async function handleSellNonFundSubmit() {
-    if (!sellNonFund) return
-    const date = nfDate
-    if (!date) { setNfError('Date is required'); return }
-
-    let principalWithdrawn: number
-    let unitsWithdrawn: number | null = null
-    let amountVnd: number
-
-    if (sellNonFund.type === 'bank') {
-      principalWithdrawn = parseFloat(nfPrincipal)
-      amountVnd = parseFloat(nfAmount)
-      if (!principalWithdrawn || principalWithdrawn <= 0) { setNfError('Principal withdrawn is required'); return }
-      if (!amountVnd || amountVnd <= 0) { setNfError('Amount received is required'); return }
-    } else {
-      // gold
-      const units = parseFloat(nfUnits)
-      amountVnd = parseFloat(nfAmount)
-      if (!units || units <= 0) { setNfError('Chi to sell is required'); return }
-      if (!amountVnd || amountVnd <= 0) { setNfError('Amount received is required'); return }
-      const originalPricePerUnit = sellNonFund.units && sellNonFund.units > 0
-        ? sellNonFund.amount / sellNonFund.units : 0
-      principalWithdrawn = Math.round(units * originalPricePerUnit)
-      unitsWithdrawn = units
-    }
-
-    setNfSaving(true)
-    setNfError('')
-    try {
-      const body: Record<string, unknown> = {
-        transaction_type: 'withdrawal',
-        asset_type: sellNonFund.type,
-        parent_transaction_id: sellNonFund.transactionId,
-        investment_date: date,
-        amount_vnd: Math.round(amountVnd),
-        principal_withdrawn: Math.round(principalWithdrawn),
-        goal_id: null,
-      }
-      if (unitsWithdrawn !== null) body.units_withdrawn = unitsWithdrawn
-
-      const res = await fetch('/api/v1/investment-transactions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      if (!res.ok) {
-        const { error } = await res.json()
-        setNfError(error ?? 'Failed to record transaction')
-      } else {
-        setSellNonFund(null)
-        await fetchData({ force: true })
-      }
-    } catch {
-      setNfError('Unable to save. Please check your connection.')
-    }
-    setNfSaving(false)
+    const navPerUnit = item.units && item.units > 0 ? item.currentValue / item.units : undefined
+    setSellItem({
+      type: item.type as 'bank' | 'gold' | 'stock',
+      name: item.notes ?? (item.type === 'bank' ? 'Bank deposit' : item.type === 'gold' ? 'Gold' : item.type),
+      currentValue: item.currentValue,
+      units: item.units ?? undefined,
+      navPerUnit,
+      interestRate: item.interestRate ?? undefined,
+      transactionId: item.transactionId,
+      purchasePrice: item.amount,
+    })
+    setSellSheetOpen(true)
   }
 
   async function handleAssignToGoal(fundId: string, goalId: string) {
@@ -495,7 +477,13 @@ export default function DashboardClient({ userId }: { userId: string }) {
 
   const isEmpty = data && data.goals.length === 0 && data.unallocated.funds.length === 0 && data.unallocated.nonFunds.length === 0 && data.insurance.length === 0
 
-  const sortedGoals = data ? data.goals : []
+  const sortedGoals = data ? (() => {
+    const goals = [...data.goals]
+    if (goalSort === 'progressDesc') goals.sort((a, b) => (b.progressPercentage ?? 0) - (a.progressPercentage ?? 0))
+    else if (goalSort === 'progressAsc') goals.sort((a, b) => (a.progressPercentage ?? 0) - (b.progressPercentage ?? 0))
+    else if (goalSort === 'alpha') goals.sort((a, b) => a.goalName.localeCompare(b.goalName))
+    return goals
+  })() : []
 
   // Compute asset allocation totals for pie chart
   const allocationTotals = data ? (() => {
@@ -513,11 +501,11 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const detailFund = fundDetailId ? allFunds.find((f) => f.fundId === fundDetailId) : null
 
   return (
-    <div className="space-y-6">
-        {/* Pull-to-refresh indicator (PWA only) */}
+    <div className="space-y-4 md:space-y-6">
+        {/* Pull-to-refresh indicator (mobile PWA only) */}
         <div
+          className="md:hidden -mx-4 -mt-4 overflow-hidden flex items-center justify-center"
           style={{ height: `${pullY}px`, transition: pullY === 0 ? 'height 0.25s ease' : 'none' }}
-          className="overflow-hidden flex items-center justify-center"
         >
           <div className={`w-6 h-6 rounded-full border-2 border-emerald-500 border-t-transparent ${pullY >= PULL_THRESHOLD ? 'animate-spin' : ''}`} />
         </div>
@@ -598,64 +586,97 @@ export default function DashboardClient({ userId }: { userId: string }) {
           </div>
         )}
 
-        {/* Gold price widget — shown whenever user has any gold investment */}
-        {!loading && data?.netWorth.hasGold && (
-          <div className="mb-6 rounded-xl overflow-hidden border border-amber-200 dark:border-amber-800/30 bg-gradient-to-r from-amber-50 to-amber-100 dark:from-amber-900/10 dark:to-amber-900/5">
-            <GoldPriceWidget onRefresh={() => fetchData({ force: true })} />
-          </div>
-        )}
+
 
         {/* Dashboard content */}
         {!loading && data && !isEmpty && (
           <div className="space-y-8">
-            {/* Dashboard header with report button */}
-            <div className="flex items-center justify-end">
+            {/* Desktop report button — hidden on mobile (mobile has it in TopBar) */}
+            <div className="hidden md:flex justify-end">
               <button
                 data-testid="generate-report-btn"
-                onClick={handleGenerateReport}
+                onClick={() => setShowReportSheet(true)}
                 disabled={isGeneratingReport}
-                className="flex items-center gap-2 h-9 px-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                aria-label={isGeneratingReport ? t('downloadingReport') : t('downloadReport')}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '6px 12px', border: '1px solid var(--c-line)',
+                  borderRadius: 'var(--r-control)', cursor: 'pointer',
+                  background: 'var(--c-card)', color: 'var(--c-ink)', fontSize: 13,
+                  opacity: isGeneratingReport ? 0.5 : 1,
+                }}
               >
-                {isGeneratingReport ? (
-                  <span className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <FileDown className="h-4 w-4" />
-                )}
-                {isGeneratingReport ? t('downloadingReport') : t('downloadReport')}
+                {isGeneratingReport
+                  ? <span className="w-[14px] h-[14px] border-2 border-current border-t-transparent rounded-full animate-spin block" />
+                  : <ArrowDownToLine size={14} />
+                }
+                {t('downloadReport')}
               </button>
             </div>
 
             {/* Net Worth + Asset Allocation */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2">
-                <NetWorthCard {...data.netWorth} />
-              </div>
+            <div className="space-y-4">
+              <NetWorthCard
+                {...data.netWorth}
+                refreshKey={historyKey}
+                allocationBar={allocationTotals ? {
+                  fund: allocationTotals.equityTotal + allocationTotals.bondTotal + allocationTotals.balancedTotal,
+                  bank: allocationTotals.bankTotal,
+                  gold: allocationTotals.goldTotal,
+                  stock: allocationTotals.stockTotal,
+                } : undefined}
+              />
               {allocationTotals && (
-                <AssetAllocationPie
-                  {...allocationTotals}
-                  totalAssets={data.netWorth.totalAssets}
-                />
+                <div className="hidden md:block">
+                  <AssetAllocationPie
+                    {...allocationTotals}
+                    totalAssets={data.netWorth.totalAssets}
+                  />
+                </div>
               )}
             </div>
 
             {/* Goals */}
             {sortedGoals.length > 0 && (
               <section>
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('sectionGoals')}</h2>
-                  <button
-                    onClick={() => { setGoalName(''); setGoalTarget(''); setGoalDesc(''); setGoalError(''); setShowGoalForm(true) }}
-                    className="flex items-center gap-2 h-9 px-4 bg-gray-950 hover:bg-gray-800 text-white text-sm font-bold rounded-md transition-colors"
-                  >
-                    <Plus className="h-4 w-4" />
-                    {t('addGoalBtn')}
-                  </button>
+                <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+                  <div>
+                    <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600, letterSpacing: '-0.01em' }}>{t('sectionGoals')}</h2>
+                    <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--c-muted)' }}>
+                      {sortedGoals.length} {t('tracked')}
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <SortDropdown
+                      value={goalSort}
+                      onChange={setGoalSort}
+                      options={[
+                        { value: 'manual', label: t('sortManual') },
+                        { value: 'progressDesc', label: t('sortProgressDesc') },
+                        { value: 'progressAsc', label: t('sortProgressAsc') },
+                        { value: 'alpha', label: t('sortAlpha') },
+                      ]}
+                    />
+                    <button
+                      onClick={() => setShowGoalForm(true)}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        padding: 6, border: 'none',
+                        borderRadius: 'var(--r-control)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit',
+                        color: 'var(--c-ink)',
+                      }}
+                      aria-label={t('addGoalBtn')}
+                    >
+                      <Plus size={16} />
+                    </button>
+                  </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div style={{ display: 'grid', gap: 10 }}>
                   {sortedGoals.map((goal) => (
                     <GoalCard
                       key={goal.goalId}
                       {...goal}
+                      onClick={() => { setSelectedGoal(goal); setGoalDetailOpen(true) }}
                     />
                   ))}
                 </div>
@@ -673,39 +694,64 @@ export default function DashboardClient({ userId }: { userId: string }) {
                 onSellFund={openSellFund}
                 onAssignNonFundToGoal={(txId) => setNonFundPickerTxId(txId)}
                 onSellNonFund={openSellNonFund}
-                onRefresh={() => fetchData({ force: true })}
               />
             )}
 
             {/* Insurance */}
             {data.insurance.length > 0 && (
               <section>
-                <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
-                  <div className="flex items-center justify-between mb-5">
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('sectionInsurance')}</h2>
-                    <Link
-                      href="/settings?tab=insurance"
-                      className="text-sm font-medium px-3 py-1.5 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                    >
-                      {t('manageInsurance')}
-                    </Link>
+                <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+                  <div>
+                    <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600, letterSpacing: '-0.01em' }}>{t('sectionInsurance')}</h2>
+                    <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--c-muted)' }}>
+                      {data.insurance.length} {data.insurance.length === 1 ? t('member') : t('members')}
+                    </p>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {data.insurance.map((ins) => (
-                      <InsuranceCard key={ins.insuranceId} {...ins} onSavingsChange={() => fetchData({ force: true })} />
-                    ))}
-                  </div>
+                  <Link
+                    href="/settings?tab=insurance"
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                      fontSize: 12, fontWeight: 500, padding: '4px 8px',
+                      border: 'none', borderRadius: 'var(--r-control)',
+                      background: 'transparent', color: 'var(--c-ink)',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    <Plus size={12} strokeWidth={2.4} />
+                    {t('add')}
+                  </Link>
+                </div>
+                <div style={{
+                  background: 'var(--c-card)',
+                  border: '1px solid var(--c-line)',
+                  borderRadius: 'var(--r-card)',
+                  boxShadow: 'var(--shadow-card)',
+                  overflow: 'hidden',
+                }}>
+                  {data.insurance.map((ins, idx) => (
+                    <InsuranceCard
+                      key={ins.insuranceId}
+                      {...ins}
+                      isLast={idx === data.insurance.length - 1}
+                    />
+                  ))}
                 </div>
               </section>
+            )}
+
+            {/* NAV updated footer */}
+            {data.netWorth.navUpdatedAt && (
+              <p style={{ textAlign: 'center', fontSize: 11, color: 'var(--c-muted)', marginTop: 24 }}>
+                {t('navUpdated')} {fmtTimeAgo(data.netWorth.navUpdatedAt, locale)}
+              </p>
             )}
           </div>
         )}
 
-      {/* Fund Detail Modal */}
-      <FundDetailModal
+      {/* Transaction History Sheet */}
+      <TransactionHistorySheet
         open={!!(fundDetailId && detailFund)}
-        onOpenChange={(o) => { if (!o) { setFundDetailId(null); setPurchaseHistory([]) } }}
-        fundId={detailFund?.fundId ?? ''}
+        onClose={() => { setFundDetailId(null); setPurchaseHistory([]); setHistoryLoading(false) }}
         fundName={detailFund?.fundName ?? ''}
         currentNAV={detailFund?.currentNAV ?? 0}
         quantity={detailFund?.quantity ?? 0}
@@ -714,371 +760,84 @@ export default function DashboardClient({ userId }: { userId: string }) {
         profitLoss={detailFund?.profitLoss ?? 0}
         profitLossPercentage={detailFund?.profitLossPercentage ?? 0}
         purchaseHistory={purchaseHistory}
-        onClose={() => { setFundDetailId(null); setPurchaseHistory([]) }}
+        loading={historyLoading}
       />
 
-      {/* Goal Picker Modal — funds */}
-      <GoalPickerModal
-        open={!!(goalPickerFundId && data)}
-        onOpenChange={(o) => { if (!o) { setGoalPickerFundId(null); setAssignError('') } }}
-        fundId={goalPickerFundId ?? ''}
-        fundName={allFunds.find((f) => f.fundId === goalPickerFundId)?.fundName ?? ''}
-        goals={data ? data.goals.map((g) => ({
-          id: g.goalId,
-          name: g.goalName,
-          targetAmount: g.targetAmount,
-          currentValue: g.currentValue,
-          progressPercent: g.progressPercentage,
-        })) : []}
-        onConfirm={(goalId) => goalPickerFundId && handleAssignToGoal(goalPickerFundId, goalId)}
-        onCancel={() => { setGoalPickerFundId(null); setAssignError('') }}
-        isLoading={assignLoading}
-        error={assignError}
+      {/* Assign Goal Sheet — funds */}
+      <AssignGoalSheet
+        open={!!goalPickerFundId}
+        onClose={() => { setGoalPickerFundId(null); fetchData({ force: true }) }}
+        onConfirm={async (goalId) => {
+          if (!goalPickerFundId) return
+          const res = await fetch(`/api/v1/fund-investments?fund_id=${goalPickerFundId}`)
+          if (!res.ok) throw new Error('Failed to fetch fund investments')
+          const investments = await res.json() as Array<{ id: string }>
+          await Promise.all(
+            investments.map((inv) =>
+              fetch(`/api/v1/fund-investments/${inv.id}/goal`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ goal_id: goalId }),
+              }).then((r) => { if (!r.ok) throw new Error('Failed to assign') })
+            )
+          )
+        }}
       />
 
-      {/* Goal Picker Modal — non-funds (gold, bank, stock) */}
-      {/* Add Goal Modal */}
-      <Dialog open={showGoalForm} onOpenChange={(o) => { if (!o && !goalSaving) setShowGoalForm(false) }}>
-        <DialogContent className="sm:max-w-[480px]">
-          <DialogHeader>
-            <DialogTitle>{tg('createModal')}</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={(e) => { e.preventDefault(); handleGoalSave() }}>
-            <div className="space-y-5 py-4">
-              {goalError && <p className="text-sm text-red-600 dark:text-red-400">{goalError}</p>}
-              <div className="space-y-2">
-                <Label>{tg('nameLabel')} <span className="text-red-500">*</span></Label>
-                <Input type="text" value={goalName} onChange={(e) => setGoalName(e.target.value)} placeholder={tg('namePlaceholder')} />
-              </div>
-              <div className="space-y-2">
-                <Label>{tg('targetLabel')}</Label>
-                <Input type="text" inputMode="numeric" value={goalTarget ? Number(goalTarget).toLocaleString('en-US') : ''} onChange={(e) => setGoalTarget(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))} placeholder={tg('targetPlaceholder')} />
-              </div>
-              <div className="space-y-2">
-                <Label>{tg('descLabel')}</Label>
-                <Textarea value={goalDesc} onChange={(e) => setGoalDesc(e.target.value)} placeholder={tg('descPlaceholder')} rows={3} />
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <Button type="button" variant="outline" className="flex-1" onClick={() => setShowGoalForm(false)}>{tc('cancel')}</Button>
-              <Button type="submit" className="flex-1 bg-emerald-600 hover:bg-emerald-700" disabled={goalSaving}>
-                {goalSaving && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-                {goalSaving ? tc('saving') : tc('save')}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {/* Assign Goal Sheet — non-funds */}
+      <AssignGoalSheet
+        open={!!nonFundPickerTxId}
+        onClose={() => { setNonFundPickerTxId(null); fetchData({ force: true }) }}
+        onConfirm={async (goalId) => {
+          if (!nonFundPickerTxId) return
+          const res = await fetch(`/api/v1/investment-transactions/${nonFundPickerTxId}/assign`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ goal_id: goalId }),
+          })
+          if (!res.ok) {
+            const { error: e } = await res.json().catch(() => ({ error: 'Failed to assign' }))
+            throw new Error(e ?? 'Failed to assign')
+          }
+        }}
+      />
 
-      {/* Sell Unallocated Fund Modal */}
-      <Dialog open={!!sellFund} onOpenChange={(o) => { if (!o && !sellSaving) setSellFund(null) }}>
-        <DialogContent className="sm:max-w-[440px]">
-          <DialogHeader>
-            <DialogTitle>{tg('sellModal')} — {sellFund?.fundName}</DialogTitle>
-          </DialogHeader>
-          {sellFund && (() => {
-            const units = parseFloat(sellUnits) || 0
-            const nav = sellFund.currentNAV
-            const avgCost = sellFund.purchasePrice
-            const costBasis = Math.round(units * avgCost)
-            const estimatedAmount = Math.round(units * nav)
-            const parsedAmount = Number(sellAmount) || 0
-            const gain = parsedAmount - costBasis
-            const remaining = sellFund.quantity - units
-            return (
-              <div className="space-y-4 py-2">
-                <div className="grid grid-cols-2 gap-3 text-sm bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3">
-                  <div>
-                    <p className="text-gray-500 dark:text-gray-400">{tg('colCurrentNav')}</p>
-                    <p className="font-medium text-gray-900 dark:text-gray-100">{fmt(nav)}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500 dark:text-gray-400">{tg('colAvgNav')}</p>
-                    <p className="font-medium text-gray-900 dark:text-gray-100">{fmt(avgCost)}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500 dark:text-gray-400">{tg('colRemaining')}</p>
-                    <p className="font-medium text-gray-900 dark:text-gray-100">{sellFund.quantity.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {tg('unitsShort')}</p>
-                  </div>
-                </div>
+      {/* Add Goal Sheet */}
+      <CreateGoalSheet
+        open={showGoalForm}
+        onClose={() => setShowGoalForm(false)}
+        onSuccess={() => fetchData({ force: true })}
+      />
 
-                <div className="space-y-2">
-                  <Label>{tg('dateSellLabel')}</Label>
-                  <Input type="date" value={sellDate} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setSellDate(e.target.value)} />
-                </div>
+      {/* Sell / Withdraw Sheet */}
+      <SellWithdrawSheet
+        item={sellItem}
+        open={sellSheetOpen}
+        context="unallocated"
+        onClose={() => setSellSheetOpen(false)}
+        onSuccess={() => fetchData({ force: true })}
+      />
 
-                <div className="space-y-2">
-                  <Label>{tg('unitsToSellFund')}</Label>
-                  <Input
-                    type="number"
-                    value={sellUnits}
-                    min={0}
-                    max={sellFund.quantity}
-                    step="0.01"
-                    placeholder="0.00"
-                    onChange={(e) => {
-                      setSellUnits(e.target.value)
-                      const u = parseFloat(e.target.value) || 0
-                      if (u > 0) setSellAmount(String(Math.round(u * nav)))
-                    }}
-                  />
-                </div>
+      {/* Goal Detail Sheet */}
+      <GoalDetailSheet
+        goal={selectedGoal}
+        open={goalDetailOpen}
+        onClose={() => setGoalDetailOpen(false)}
+        onDataChanged={() => fetchData({ force: true })}
+      />
 
-                <div className="space-y-2">
-                  <Label>{tg('amountReceivedLabel')}</Label>
-                  <Input
-                    type="text"
-                    inputMode="numeric"
-                    value={sellAmount ? Number(sellAmount).toLocaleString('en-US') : ''}
-                    placeholder="0"
-                    onChange={(e) => {
-                      const raw = e.target.value.replace(/,/g, '').replace(/[^0-9]/g, '')
-                      setSellAmount(raw)
-                      const a = Number(raw) || 0
-                      if (a > 0 && nav > 0) setSellUnits(String(Math.round((a / nav) * 100) / 100))
-                    }}
-                  />
-                </div>
-
-                {units > 0 && (
-                  <div className="text-sm bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 space-y-1">
-                    <div className="flex justify-between">
-                      <span className="text-gray-500 dark:text-gray-400">{tg('costBasisLabel')}</span>
-                      <span className="font-medium text-gray-900 dark:text-gray-100">{fmt(costBasis)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-500 dark:text-gray-400">{tg('receivedLabel')}</span>
-                      <span className="font-medium text-gray-900 dark:text-gray-100">{fmt(parsedAmount || estimatedAmount)}</span>
-                    </div>
-                    <div className="flex justify-between border-t border-gray-200 dark:border-gray-700 pt-1 mt-1">
-                      <span className="text-gray-500 dark:text-gray-400">P&amp;L</span>
-                      <span className={`font-semibold ${gain >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {gain >= 0 ? '+' : ''}{fmt(gain)}
-                      </span>
-                    </div>
-                    {remaining >= 0 && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-500 dark:text-gray-400">{tg('colRemaining')}</span>
-                        <span className="font-medium text-gray-900 dark:text-gray-100">{remaining.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {tg('unitsShort')}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {sellError && <p className="text-sm text-red-600 dark:text-red-400">{sellError}</p>}
-
-                <div className="flex gap-3 pt-1">
-                  <Button type="button" variant="outline" className="flex-1" onClick={() => setSellFund(null)} disabled={sellSaving}>{tc('cancel')}</Button>
-                  <Button type="button" className="flex-1 bg-amber-600 hover:bg-amber-700" disabled={sellSaving || !sellUnits || !sellAmount} onClick={handleSellFundSubmit}>
-                    {sellSaving && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-1" />}
-                    {sellSaving ? tc('saving') : tg('sell')}
-                  </Button>
-                </div>
-              </div>
-            )
-          })()}
-        </DialogContent>
-      </Dialog>
-
-      {/* Sell / Withdraw Non-Fund (bank/gold) Modal */}
-      <Dialog open={!!sellNonFund} onOpenChange={(o) => { if (!o && !nfSaving) setSellNonFund(null) }}>
-        <DialogContent className="sm:max-w-[440px]">
-          <DialogHeader>
-            <DialogTitle>
-              {sellNonFund?.type === 'bank' ? tg('withdrawBankModal') : tg('sellGoldModal')}
-              {sellNonFund?.notes ? ` — ${sellNonFund.notes}` : ''}
-            </DialogTitle>
-          </DialogHeader>
-          {sellNonFund && (() => {
-            const isBank = sellNonFund.type === 'bank'
-            const originalPricePerUnit = sellNonFund.units && sellNonFund.units > 0
-              ? sellNonFund.amount / sellNonFund.units : 0
-            const currentPricePerUnit = sellNonFund.units && sellNonFund.units > 0
-              ? sellNonFund.currentValue / sellNonFund.units : 0
-            const nfUnitsNum = parseFloat(nfUnits) || 0
-            const nfAmountNum = parseFloat(nfAmount) || 0
-            const nfPrincipalNum = parseFloat(nfPrincipal) || 0
-
-            // bank: gain = amountReceived - principalWithdrawn
-            const bankGain = nfAmountNum - nfPrincipalNum
-            const bankRemaining = sellNonFund.amount - nfPrincipalNum
-
-            // gold: cost basis = units × original price, gain = amount - cost basis
-            const goldCostBasis = Math.round(nfUnitsNum * originalPricePerUnit)
-            const goldGain = nfAmountNum - goldCostBasis
-            const goldRemaining = (sellNonFund.units ?? 0) - nfUnitsNum
-
-            return (
-              <div className="space-y-4 py-2">
-                <div className="grid grid-cols-2 gap-3 text-sm bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3">
-                  {isBank ? (
-                    <>
-                      <div>
-                        <p className="text-gray-500 dark:text-gray-400">{tg('principalLabel')}</p>
-                        <p className="font-medium text-gray-900 dark:text-gray-100">{fmt(sellNonFund.amount)}</p>
-                      </div>
-                      {sellNonFund.interestRate != null && (
-                        <div>
-                          <p className="text-gray-500 dark:text-gray-400">{tg('perYearShort')}</p>
-                          <p className="font-medium text-gray-900 dark:text-gray-100">{sellNonFund.interestRate}%</p>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <div>
-                        <p className="text-gray-500 dark:text-gray-400">{tg('colRemaining')}</p>
-                        <p className="font-medium text-gray-900 dark:text-gray-100">
-                          {(sellNonFund.units ?? 0).toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} chi
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-gray-500 dark:text-gray-400">{tg('currentPriceLabel')}</p>
-                        <p className="font-medium text-gray-900 dark:text-gray-100">{fmt(currentPricePerUnit)}/chi</p>
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label>{isBank ? tg('dateWithdrawLabel') : tg('dateSellLabel')}</Label>
-                  <Input type="date" value={nfDate} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setNfDate(e.target.value)} />
-                </div>
-
-                {isBank ? (
-                  <>
-                    <div className="space-y-2">
-                      <Label>{tg('principalWithdrawnLabel')}</Label>
-                      <Input
-                        type="text"
-                        inputMode="numeric"
-                        value={nfPrincipal ? Number(nfPrincipal).toLocaleString('en-US') : ''}
-                        placeholder={tg('principalWithdrawnPlaceholder')}
-                        onChange={(e) => setNfPrincipal(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>{tg('amountReceivedLabel')}</Label>
-                      <Input
-                        type="text"
-                        inputMode="numeric"
-                        value={nfAmount ? Number(nfAmount).toLocaleString('en-US') : ''}
-                        placeholder={tg('amountReceivedPlaceholder')}
-                        onChange={(e) => setNfAmount(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))}
-                      />
-                    </div>
-                    {nfPrincipalNum > 0 && nfAmountNum > 0 && (
-                      <div className="text-sm bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 space-y-1">
-                        <div className="flex justify-between border-t border-gray-200 dark:border-gray-700 pt-1">
-                          <span className="text-gray-500 dark:text-gray-400">P&amp;L</span>
-                          <span className={`font-semibold ${bankGain >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            {bankGain >= 0 ? '+' : ''}{fmt(bankGain)}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-500 dark:text-gray-400">{tg('remainingPrincipalLabel')}</span>
-                          <span className="font-medium text-gray-900 dark:text-gray-100">{fmt(Math.max(bankRemaining, 0))}</span>
-                        </div>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <div className="space-y-2">
-                      <Label>{tg('unitsToSellGold')}</Label>
-                      <Input
-                        type="number"
-                        value={nfUnits}
-                        min={0}
-                        max={sellNonFund.units ?? undefined}
-                        step="0.01"
-                        placeholder="0.00"
-                        onChange={(e) => {
-                          setNfUnits(e.target.value)
-                          const u = parseFloat(e.target.value) || 0
-                          if (u > 0) setNfAmount(String(Math.round(u * currentPricePerUnit)))
-                        }}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>{tg('amountReceivedLabel')}</Label>
-                      <Input
-                        type="text"
-                        inputMode="numeric"
-                        value={nfAmount ? Number(nfAmount).toLocaleString('en-US') : ''}
-                        placeholder="0"
-                        onChange={(e) => {
-                          const raw = e.target.value.replace(/,/g, '').replace(/[^0-9]/g, '')
-                          setNfAmount(raw)
-                          const a = Number(raw) || 0
-                          if (a > 0 && currentPricePerUnit > 0) setNfUnits(String(Math.round((a / currentPricePerUnit) * 100) / 100))
-                        }}
-                      />
-                    </div>
-                    {nfUnitsNum > 0 && (
-                      <div className="text-sm bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 space-y-1">
-                        <div className="flex justify-between">
-                          <span className="text-gray-500 dark:text-gray-400">{tg('costBasisLabel')}</span>
-                          <span className="font-medium text-gray-900 dark:text-gray-100">{fmt(goldCostBasis)}</span>
-                        </div>
-                        <div className="flex justify-between border-t border-gray-200 dark:border-gray-700 pt-1 mt-1">
-                          <span className="text-gray-500 dark:text-gray-400">P&amp;L</span>
-                          <span className={`font-semibold ${goldGain >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            {goldGain >= 0 ? '+' : ''}{fmt(goldGain)}
-                          </span>
-                        </div>
-                        {goldRemaining >= 0 && (
-                          <div className="flex justify-between">
-                            <span className="text-gray-500 dark:text-gray-400">{tg('remainingChiLabel')}</span>
-                            <span className="font-medium text-gray-900 dark:text-gray-100">
-                              {goldRemaining.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} chi
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </>
-                )}
-
-                {nfError && <p className="text-sm text-red-600 dark:text-red-400">{nfError}</p>}
-
-                <div className="flex gap-3 pt-1">
-                  <Button type="button" variant="outline" className="flex-1" onClick={() => setSellNonFund(null)} disabled={nfSaving}>{tc('cancel')}</Button>
-                  <Button type="button" className="flex-1 bg-amber-600 hover:bg-amber-700" disabled={nfSaving} onClick={handleSellNonFundSubmit}>
-                    {nfSaving && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-1" />}
-                    {nfSaving ? tc('saving') : (isBank ? tg('withdraw') : tg('sell'))}
-                  </Button>
-                </div>
-              </div>
-            )
-          })()}
-        </DialogContent>
-      </Dialog>
-
-      {(() => {
-        const item = data?.unallocated.nonFunds.find((i) => i.transactionId === nonFundPickerTxId)
-        const typeLabel = item ? (item.type === 'gold' ? tt('assetGold') : item.type === 'bank' ? tt('assetBank') : tt('assetStock')) : ''
-        const label = item ? `${typeLabel} · ${new Date(item.investmentDate).toLocaleDateString('vi-VN')}` : ''
-        return (
-          <GoalPickerModal
-            open={!!(nonFundPickerTxId && data)}
-            onOpenChange={(o) => { if (!o) { setNonFundPickerTxId(null); setNonFundAssignError('') } }}
-            fundId={nonFundPickerTxId ?? ''}
-            fundName={label}
-            goals={data ? data.goals.map((g) => ({
-              id: g.goalId,
-              name: g.goalName,
-              targetAmount: g.targetAmount,
-              currentValue: g.currentValue,
-              progressPercent: g.progressPercentage,
-            })) : []}
-            onConfirm={(goalId) => nonFundPickerTxId && handleAssignNonFundToGoal(nonFundPickerTxId, goalId)}
-            onCancel={() => { setNonFundPickerTxId(null); setNonFundAssignError('') }}
-            isLoading={nonFundAssignLoading}
-            error={nonFundAssignError}
-          />
-        )
-      })()}
+      {/* Download Report Sheet */}
+      <DownloadReportSheet
+        open={showReportSheet}
+        onClose={() => setShowReportSheet(false)}
+        data={data ? {
+          netWorth: data.netWorth.netWorth,
+          currentValue: data.netWorth.currentValue,
+          totalPL: data.netWorth.overallProfitLoss,
+          goalCount: data.goals.length,
+        } : null}
+        onExport={handleGenerateReport}
+      />
     </div>
   )
 }

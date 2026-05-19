@@ -39,6 +39,15 @@
   --c-accent-fixed: #b45309;
   --c-accent-insurance: #7c3aed;
   --c-accent-other: #475569;
+  /* Primary button fill — stays dark navy in both modes so white text is always legible */
+  --c-btn-primary: #0F2A4A;
+  --c-btn-primary-hover: #1e3a63;
+  /* Tab bar frosted-glass background */
+  --c-tab-bg: rgba(255, 255, 255, 0.92);
+  --r-card: 16px;
+  --r-control: 10px;
+  --shadow-card: 0 1px 0 rgba(15, 42, 74, 0.04), 0 1px 2px rgba(15, 42, 74, 0.05);
+  --shadow-pop: 0 8px 24px rgba(15, 42, 74, 0.12);
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -80,7 +89,7 @@
   --color-brand-light: var(--brand-light);
   --color-brand-dark: var(--brand-dark);
   --color-canvas: var(--c-canvas);
-  --font-sans: "DM Sans", var(--font-dm-sans), "Geist", var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Be Vietnam Pro", var(--font-be-vietnam), "Geist", var(--font-geist), ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, monospace;
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -143,6 +152,8 @@
   --c-muted-2: #737373;
   --c-navy: #f8fafc;
   --c-navy-tint: #1a2540;
+  /* Tab bar goes dark in dark mode */
+  --c-tab-bg: rgba(22, 22, 22, 0.92);
   --c-pos-tint: rgba(4, 120, 87, 0.15);
   --c-neg-tint: rgba(185, 28, 28, 0.15);
   --c-warn-tint: rgba(180, 83, 9, 0.15);
@@ -196,4 +207,25 @@
     min-width: 0;
     max-width: 100%;
   }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes fade-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+@keyframes slide-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+@keyframes slide-down {
+  from { transform: translateY(0); }
+  to   { transform: translateY(100%); }
+}
+@keyframes pop-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
 }

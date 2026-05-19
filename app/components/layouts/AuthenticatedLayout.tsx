@@ -1,15 +1,17 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import { toast } from 'sonner'
-import { NavigationProvider } from '../navigation/NavigationContext'
+import { Plus } from 'lucide-react'
+import { NavigationProvider, useNavigation } from '../navigation/NavigationContext'
 import Sidebar from '../navigation/Sidebar'
 import Header from '../navigation/Header'
 import MobileBottomTabs from '../navigation/MobileBottomTabs'
-import { PageTitle } from '../navigation/Breadcrumb'
+import MobileTopBar from '../navigation/MobileTopBar'
 import OfflineBanner from '@/app/components/OfflineBanner'
+import AddTransactionSheet from '@/app/assets/components/AddTransactionSheet'
 
 function getInitials(email: string): string {
   const parts = email.split('@')[0].split(/[._-]/)
@@ -20,7 +22,16 @@ function getInitials(email: string): string {
     .slice(0, 2) || email[0]?.toUpperCase() || 'U'
 }
 
+function getDisplayName(email: string): string {
+  const localPart = email.split('@')[0]
+  const firstName = localPart.split(/[._-]/)[0]
+  return firstName.charAt(0).toUpperCase() + firstName.slice(1)
+}
+
 function AuthenticatedLayoutInner({ children, email, initials }: { children: React.ReactNode; email: string; initials: string }) {
+  const { mobileTopBar } = useNavigation()
+  const [showAddTx, setShowAddTx] = useState(false)
+
   return (
     <div className="flex h-screen bg-canvas dark:bg-gray-950 overflow-hidden">
       {/* Sidebar (tablet + desktop only) */}
@@ -30,22 +41,58 @@ function AuthenticatedLayoutInner({ children, email, initials }: { children: Rea
 
       {/* Main area */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        <Header />
-        {/* Mobile page title */}
-        <PageTitle />
+        {/* Desktop header */}
+        <div className="hidden md:block">
+          <Header />
+        </div>
+        {/* Mobile top bar — lives outside <main> so it never scrolls away */}
+        {mobileTopBar.title && (
+          <div className="md:hidden">
+            <MobileTopBar
+              title={mobileTopBar.title}
+              subtitle={mobileTopBar.subtitle}
+              trailing={mobileTopBar.trailing}
+              dense={mobileTopBar.dense}
+            />
+          </div>
+        )}
         <main className="flex-1 overflow-y-auto px-4 md:px-6 py-4 pb-20 md:pb-4">
           {children}
         </main>
       </div>
 
+      {/* Mobile FAB — add transaction */}
+      <button
+        onClick={() => setShowAddTx(true)}
+        aria-label="Add transaction"
+        className="md:hidden"
+        style={{
+          position: 'fixed', right: 16, bottom: 80,
+          width: 52, height: 52, borderRadius: 26,
+          background: 'var(--c-navy)', color: '#fff',
+          border: 'none',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: '0 6px 16px rgba(15, 42, 74, 0.25), 0 2px 4px rgba(15, 42, 74, 0.1)',
+          cursor: 'pointer', zIndex: 35,
+        }}
+      >
+        <Plus size={22} strokeWidth={2.2} />
+      </button>
+
       {/* Mobile bottom tab navigation */}
       <MobileBottomTabs />
       <OfflineBanner />
+
+      {/* Add transaction sheet */}
+      <AddTransactionSheet
+        open={showAddTx}
+        onClose={() => setShowAddTx(false)}
+      />
     </div>
   )
 }
 
-export default function AuthenticatedLayout({ children, email }: { children: React.ReactNode; email: string }) {
+export default function AuthenticatedLayout({ children, email, displayName }: { children: React.ReactNode; email: string; displayName?: string }) {
   const router = useRouter()
 
   // Watch for session expiry (e.g. token revoked or expired)
@@ -66,9 +113,10 @@ export default function AuthenticatedLayout({ children, email }: { children: Rea
   }, [router])
 
   const initials = getInitials(email)
+  const userName = displayName || getDisplayName(email)
 
   return (
-    <NavigationProvider>
+    <NavigationProvider userName={userName}>
       <AuthenticatedLayoutInner email={email} initials={initials}>
         {children}
       </AuthenticatedLayoutInner>

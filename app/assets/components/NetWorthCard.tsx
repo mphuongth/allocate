@@ -2,17 +2,84 @@
 
 import { useState, useEffect } from 'react'
 import { useTranslations } from 'next-intl'
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
-import { fmt, fmtShort, fmtPct } from '@/lib/formatters'
+import { TrendingUp, TrendingDown } from 'lucide-react'
+import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 
-const TIME_RANGES = ['6m', '1y', '3y', 'All'] as const
+const TIME_RANGES = ['6M', '1Y', '3Y', 'All'] as const
 type TimeRange = typeof TIME_RANGES[number]
 
 const RANGE_PARAM: Record<TimeRange, string> = {
-  '6m': '6m', '1y': '1y', '3y': '3y', 'All': 'all',
+  '6M': '6m', '1Y': '1y', '3Y': '3y', 'All': 'all',
 }
 
 interface ChartPoint { label: string; value: number }
+
+// SVG sparkline — no recharts dependency
+function Sparkline({ data, positive }: { data: ChartPoint[]; positive: boolean }) {
+  if (data.length < 2) return null
+  const values = data.map((d) => d.value)
+  const rawMin = Math.min(...values)
+  const rawMax = Math.max(...values)
+  const pad = (rawMax - rawMin) * 0.15 || rawMax * 0.1 || 1
+  const min = Math.max(0, rawMin - pad)
+  const max = rawMax + pad
+  const range = max - min || 1
+  const W = 100
+  const H = 36
+  const points = values
+    .map((v, i) => {
+      const x = (i / (values.length - 1)) * W
+      const y = H - ((v - min) / range) * (H - 6) - 3
+      return `${x.toFixed(2)},${y.toFixed(2)}`
+    })
+    .join(' ')
+  const color = positive ? 'var(--c-pos)' : 'var(--c-neg)'
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: '100%', height: H, display: 'block' }}>
+      <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+    </svg>
+  )
+}
+
+const ALLOC_COLORS = {
+  fund:  '#2563eb',
+  bank:  '#047857',
+  gold:  '#d97706',
+  stock: '#7c3aed',
+} as const
+
+function AllocationBar({ fund, bank, gold, stock }: { fund: number; bank: number; gold: number; stock: number }) {
+  const total = fund + bank + gold + stock
+  if (total <= 0) return null
+  const segments = [
+    { key: 'fund',  value: fund,  color: ALLOC_COLORS.fund,  label: 'Funds' },
+    { key: 'bank',  value: bank,  color: ALLOC_COLORS.bank,  label: 'Bank' },
+    { key: 'gold',  value: gold,  color: ALLOC_COLORS.gold,  label: 'Gold' },
+    { key: 'stock', value: stock, color: ALLOC_COLORS.stock, label: 'Stock' },
+  ].filter((s) => s.value > 0)
+  return (
+    <div data-testid="allocation-bar" style={{ marginTop: 14 }}>
+      {/* Bar */}
+      <div style={{ height: 8, borderRadius: 999, overflow: 'hidden', display: 'flex', gap: 1 }}>
+        {segments.map((s) => (
+          <div key={s.key} style={{ flex: s.value / total, background: s.color, minWidth: 4 }} />
+        ))}
+      </div>
+      {/* Legend */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 12px', marginTop: 8 }}>
+        {segments.map((s) => (
+          <div key={s.key} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ width: 8, height: 8, borderRadius: 2, background: s.color, display: 'inline-block', flexShrink: 0 }} />
+            <span style={{ fontSize: 11, color: 'var(--c-muted)' }}>{s.label}</span>
+            <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>
+              {Math.round((s.value / total) * 100)}%
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 interface Props {
   totalAssets: number
@@ -22,12 +89,13 @@ interface Props {
   currentValue: number
   overallProfitLoss: number
   overallProfitLossPercentage: number
-  navStale: boolean
+  allocationBar?: { fund: number; bank: number; gold: number; stock: number }
+  refreshKey?: number
 }
 
 export default function NetWorthCard({
   totalAssets, totalLiabilities, netWorth, totalInvested, currentValue,
-  overallProfitLoss, overallProfitLossPercentage, navStale,
+  overallProfitLoss, overallProfitLossPercentage, allocationBar, refreshKey,
 }: Props) {
   const t = useTranslations('dashboard')
   const plPositive = overallProfitLoss >= 0
@@ -35,91 +103,120 @@ export default function NetWorthCard({
   const [history, setHistory] = useState<ChartPoint[]>([])
 
   useEffect(() => {
-    fetch(`/api/v1/dashboard/history?range=${RANGE_PARAM[timeRange]}`)
+    fetch(`/api/v1/dashboard/history?range=${RANGE_PARAM[timeRange]}`, { cache: 'no-store' })
       .then((r) => r.ok ? r.json() : [])
       .then((data: ChartPoint[]) => setHistory(data))
       .catch(() => setHistory([]))
-  }, [timeRange])
+  }, [timeRange, refreshKey])
 
-  const hasChart = history.length > 1
+  const kpis = [
+    { label: t('invested'),     value: totalInvested },
+    { label: t('currentValue'), value: currentValue },
+    { label: t('totalAssets'),  value: totalAssets },
+    { label: t('liabilities'),  value: totalLiabilities },
+  ]
 
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 h-full flex flex-col">
-      {/* Header row */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-6">
-        <div>
-          <p className="text-sm text-gray-500 dark:text-gray-400 uppercase mb-1">
-            {t('totalAssets')}
-          </p>
-          <p className="text-4xl font-bold text-gray-900 dark:text-gray-100 whitespace-nowrap">{fmt(totalAssets)}</p>
-
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mt-3">
-            <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 uppercase">{t('gainLossAll')}</p>
-              <p className={`text-sm font-semibold mt-0.5 ${plPositive ? 'text-green-600' : 'text-red-600'}`}>
-                {fmt(overallProfitLoss)} ({fmtPct(overallProfitLossPercentage)})
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 uppercase">
-                {t('plPercent')}
-                {navStale && <span title={t('navStaleTooltip')} className="ml-1 text-amber-500">⚠</span>}
-              </p>
-              <p className="text-sm font-semibold mt-0.5 text-gray-900 dark:text-gray-100">{fmtPct(overallProfitLossPercentage)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 uppercase">{t('investmentAssets')}</p>
-              <p className="text-sm font-semibold mt-0.5 text-gray-900 dark:text-gray-100">{fmt(currentValue)}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Time range selector */}
-        <div className="flex gap-1.5 flex-shrink-0 sm:ml-4">
-          {TIME_RANGES.map((r) => (
-            <button
-              key={r}
-              onClick={() => setTimeRange(r)}
-              className={`h-8 px-2.5 text-sm font-medium rounded-lg transition-colors ${
-                timeRange === r
-                  ? 'bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-              }`}
-            >
-              {r}
-            </button>
-          ))}
-        </div>
+    <div style={{
+      background: 'var(--c-card)',
+      border: '1px solid var(--c-line)',
+      borderRadius: 'var(--r-card)',
+      boxShadow: 'var(--shadow-card)',
+      padding: '20px 18px 18px',
+    }}>
+      {/* Label */}
+      <div style={{
+        fontSize: 11, fontWeight: 600, letterSpacing: '0.06em',
+        textTransform: 'uppercase', color: 'var(--c-muted)', marginBottom: 6,
+      }}>
+        {t('netWorth')}
       </div>
 
-      {/* Chart */}
-      <div className="flex-1 min-h-[160px]">
-        {hasChart ? (
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={history} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id="netWorthGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.25} />
-                  <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <XAxis dataKey="label" stroke="#9ca3af" fontSize={11} tickLine={false} axisLine={false} />
-              <YAxis stroke="#9ca3af" fontSize={11} tickLine={false} axisLine={false} tickFormatter={fmtShort} width={55} />
-              <Tooltip
-                formatter={(v) => [fmt(Number(v)), t('totalAssets')]}
-                contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '12px' }}
-              />
-              <Area type="monotone" dataKey="value" stroke="#10b981" strokeWidth={2} fill="url(#netWorthGradient)" dot={false} />
-            </AreaChart>
-          </ResponsiveContainer>
-        ) : (
-          <div className="h-full flex flex-col items-center justify-center text-center">
-            <div className="w-full h-px bg-gradient-to-r from-transparent via-emerald-300 dark:via-emerald-700 to-transparent mb-3" />
-            <p className="text-xs text-gray-400 dark:text-gray-500">{t('noHistoryYet')}</p>
-            <p className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5">{fmt(netWorth)}</p>
-          </div>
-        )}
+      {/* Hero number */}
+      <div style={{
+        fontSize: 32, fontWeight: 600, letterSpacing: '-0.025em',
+        fontVariantNumeric: 'tabular-nums', color: 'var(--c-ink)',
+        lineHeight: 1.1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+      }}>
+        {fmt(netWorth)}
       </div>
+
+      {/* P&L row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
+        <span style={{
+          display: 'inline-flex', alignItems: 'center', gap: 4,
+          fontSize: 11, fontWeight: 500, padding: '3px 8px', borderRadius: 999,
+          background: plPositive ? 'var(--c-pos-tint)' : 'var(--c-neg-tint)',
+          color: plPositive ? 'var(--c-pos)' : 'var(--c-neg)',
+        }}>
+          {plPositive
+            ? <TrendingUp size={12} strokeWidth={2.2} />
+            : <TrendingDown size={12} strokeWidth={2.2} />}
+          <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+            {fmtPct(overallProfitLossPercentage)}
+          </span>
+        </span>
+        <span style={{
+          fontSize: 13, fontVariantNumeric: 'tabular-nums',
+          color: plPositive ? 'var(--c-pos)' : 'var(--c-neg)',
+        }}>
+          {overallProfitLoss >= 0 ? '+' : ''}{fmtCompact(overallProfitLoss)}
+        </span>
+        <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{t('overall')}</span>
+      </div>
+
+      {/* Sparkline */}
+      <div style={{ marginTop: 16, paddingBottom: 6 }}>
+        {history.length > 1
+          ? <Sparkline data={history} positive={plPositive} />
+          : <div style={{ height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ fontSize: 11, color: 'var(--c-muted)' }}>{t('noHistoryYet')}</span>
+            </div>
+        }
+      </div>
+
+      {/* Range pills */}
+      <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
+        {TIME_RANGES.map((r) => (
+          <button
+            key={r}
+            onClick={() => setTimeRange(r)}
+            style={{
+              flex: 1, padding: '5px 0',
+              border: 'none', cursor: 'pointer',
+              background: timeRange === r ? 'var(--c-navy-tint)' : 'transparent',
+              color: timeRange === r ? 'var(--c-navy)' : 'var(--c-muted)',
+              fontSize: 11, fontWeight: 600, borderRadius: 6,
+              fontFamily: 'inherit',
+              transition: 'background 120ms, color 120ms',
+            }}
+          >
+            {r}
+          </button>
+        ))}
+      </div>
+
+      {/* KPI 2×2 grid */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)',
+        gap: 1, marginTop: 16,
+        background: 'var(--c-line)', borderRadius: 10, overflow: 'hidden',
+      }}>
+        {kpis.map((k) => (
+          <div key={k.label} style={{ background: 'var(--c-card)', padding: '10px 12px' }}>
+            <div style={{ fontSize: 11, color: 'var(--c-muted)' }}>{k.label}</div>
+            <div style={{
+              fontSize: 14, fontWeight: 600, marginTop: 2,
+              fontVariantNumeric: 'tabular-nums',
+            }}>
+              {fmtCompact(k.value)}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Allocation bar */}
+      {allocationBar && <AllocationBar {...allocationBar} />}
     </div>
   )
 }

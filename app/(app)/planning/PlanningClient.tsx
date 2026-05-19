@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { useTranslations } from 'next-intl'
+import { useTranslations, useLocale } from 'next-intl'
+import { useNavigation } from '@/app/components/navigation/NavigationContext'
 import SalaryInput from './components/SalaryInput'
 import FundInvestmentsSection from './components/FundInvestmentsSection'
 import DirectSavingsSection from './components/DirectSavingsSection'
@@ -10,6 +11,7 @@ import FixedExpensesSection from './components/FixedExpensesSection'
 import InsuranceSection from './components/InsuranceSection'
 import OtherExpensesSection from './components/OtherExpensesSection'
 import AllocationSummary from './components/AllocationSummary'
+import MobilePlanningView from './components/MobilePlanningView'
 
 export interface MonthlyPlan {
   id: string
@@ -91,8 +93,14 @@ function bustPlanCache(month: number, year: number) {
 function prevMonth(m: number, y: number) { return m === 1 ? { m: 12, y: y - 1 } : { m: m - 1, y } }
 function nextMonth(m: number, y: number) { return m === 12 ? { m: 1, y: y + 1 } : { m: m + 1, y } }
 
+const SHORT_MONTHS_EN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+const SHORT_MONTHS_VI = ['Th1','Th2','Th3','Th4','Th5','Th6','Th7','Th8','Th9','Th10','Th11','Th12']
+
 export default function PlanningClient() {
   const t = useTranslations('planning')
+  const locale = useLocale()
+  const isVI = locale === 'vi'
+  const { setMobileTopBar } = useNavigation()
   const MONTHS = t('months').split(',')
   const now = new Date()
   const initialMonth = now.getMonth() + 1
@@ -197,8 +205,78 @@ export default function PlanningClient() {
 
   const refetch = useCallback(() => fetchPlan({ force: true }), [fetchPlan])
 
+  const navigatePrev = useCallback(() => {
+    const { m, y } = prevMonth(month, year)
+    setMonth(m); setYear(y)
+  }, [month, year])
+
+  const navigateNext = useCallback(() => {
+    const { m, y } = nextMonth(month, year)
+    setMonth(m); setYear(y)
+  }, [month, year])
+
+  useEffect(() => {
+    const shortMonths = isVI ? SHORT_MONTHS_VI : SHORT_MONTHS_EN
+    const shortLabel = `${shortMonths[month - 1]} ${year}`
+    setMobileTopBar({
+      title: isVI ? 'Ngân sách' : 'Budget',
+      subtitle: isVI ? 'Kế hoạch tháng' : 'Monthly plan',
+      trailing: (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: 3, background: 'var(--c-card-2)', border: '1px solid var(--c-line)', borderRadius: 10 }}>
+          <button
+            onClick={navigatePrev}
+            data-testid="mobile-prev-month"
+            aria-label="Previous month"
+            style={{ padding: 6, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, display: 'flex', alignItems: 'center' }}
+          >
+            <ChevronLeft size={16} color="var(--c-ink)" />
+          </button>
+          <span style={{ padding: '4px 10px', minWidth: 78, textAlign: 'center', fontSize: 13, fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums', background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 7 }}>
+            {shortLabel}
+          </span>
+          <button
+            onClick={navigateNext}
+            data-testid="mobile-next-month"
+            aria-label="Next month"
+            style={{ padding: 6, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, display: 'flex', alignItems: 'center' }}
+          >
+            <ChevronRight size={16} color="var(--c-ink)" />
+          </button>
+        </div>
+      ),
+    })
+    return () => setMobileTopBar({ title: '' })
+  }, [month, year, isVI, navigatePrev, navigateNext, setMobileTopBar])
+
   return (
-    <div className="space-y-6">
+    <>
+      {/* Mobile view — replaces the desktop layout on small screens */}
+      <MobilePlanningView
+        month={month}
+        year={year}
+        plan={plan}
+        investments={investments}
+        savings={savings}
+        fixedExpenses={fixedExpenses}
+        insuranceMembers={insuranceMembers}
+        otherExpenses={otherExpenses}
+        funds={funds}
+        goals={goals}
+        onPlanCreated={(p) => { setPlan(p); refetch() }}
+        onPlanDeleted={() => {
+          bustPlanCache(month, year)
+          setPlan(null)
+          setInvestments([])
+          setSavings([])
+          setFixedExpenses([])
+          showToast(t('deletedToast', { month: MONTHS[month - 1], year }))
+        }}
+        onRefresh={refetch}
+        onToast={showToast}
+      />
+
+      {/* Desktop view — hidden on mobile */}
+      <div className="hidden md:block space-y-6" data-testid="desktop-planning">
       {/* Month navigation */}
       <div className="flex items-center gap-3">
         <button
@@ -306,6 +384,7 @@ export default function PlanningClient() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   )
 }

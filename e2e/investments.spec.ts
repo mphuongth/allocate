@@ -154,7 +154,7 @@ test('fund library page shows funds list', async ({ page }) => {
   // Wait for content — don't use networkidle which resolves before React useEffect fires the API call
   // Empty state text is Vietnamese: "Chưa có quỹ nào"
   const content = page.locator('table')
-    .or(page.getByText(/no funds yet|chưa có quỹ/i))
+    .or(page.locator('h2').filter({ hasText: /no funds yet|chưa có quỹ/i }))
     .or(page.getByText(/failed to load/i))
     .first()
   await expect(content).toBeVisible({ timeout: 20_000 })

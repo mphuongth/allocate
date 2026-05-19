@@ -3,9 +3,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import GoalCard from '../GoalCard'
 
-const mockPush = vi.fn()
 vi.mock('next-intl', () => ({ useTranslations: () => (key: string, params?: Record<string, unknown>) => params ? `${key}:${JSON.stringify(params)}` : key }))
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }))
 
 const baseProps = {
   goalId: 'goal-1',
@@ -16,6 +14,8 @@ const baseProps = {
   profitLoss: 5_000_000,
   profitLossPercentage: 9.09,
   progressPercentage: 60,
+  transactionCount: 3,
+  onClick: vi.fn(),
 }
 
 describe('GoalCard', () => {
@@ -29,32 +29,35 @@ describe('GoalCard', () => {
     expect(screen.getByText('₫ 60.000.000')).toBeInTheDocument()
   })
 
-  it('shows gain/loss in green when positive', () => {
+  it('shows progress percentage chip', () => {
     render(<GoalCard {...baseProps} />)
-    const gainEl = screen.getByText('₫ 5.000.000')
-    expect(gainEl).toHaveClass('text-green-600')
+    expect(screen.getByText('60%')).toBeInTheDocument()
   })
 
-  it('shows gain/loss in red when negative', () => {
+  it('shows positive P&L in pos color', () => {
+    render(<GoalCard {...baseProps} />)
+    const plSpan = screen.getByText(/\+.*9\.09%/)
+    expect(plSpan).toHaveStyle({ color: 'var(--c-pos)' })
+  })
+
+  it('shows negative P&L in neg color', () => {
     render(<GoalCard {...baseProps} profitLoss={-2_000_000} profitLossPercentage={-3.6} />)
-    const lossEl = screen.getByText('₫ -2.000.000')
-    expect(lossEl).toHaveClass('text-red-600')
-  })
-
-  it('shows exceeded-target text when progressPercentage >= 100', () => {
-    render(<GoalCard {...baseProps} progressPercentage={100} currentValue={100_000_000} />)
-    expect(screen.getByText('exceededTarget')).toBeInTheDocument()
+    // The P&L span contains the fmtCompact + fmtPct combination; just check color
+    const button = screen.getByRole('button')
+    // Find the span with neg color style
+    const negSpan = button.querySelector('span[style*="var(--c-neg)"]')
+    expect(negSpan).not.toBeNull()
   })
 
   it('hides progress bar and target when targetAmount is null', () => {
     render(<GoalCard {...baseProps} targetAmount={null} />)
     expect(screen.queryByText(/goalTarget/)).not.toBeInTheDocument()
-    expect(screen.queryByText(/goalProgress/)).not.toBeInTheDocument()
   })
 
-  it('navigates to goal settings on click', async () => {
-    render(<GoalCard {...baseProps} />)
+  it('calls onClick prop when card is clicked', async () => {
+    const onClick = vi.fn()
+    render(<GoalCard {...baseProps} onClick={onClick} />)
     await userEvent.click(screen.getByText('Emergency Fund'))
-    expect(mockPush).toHaveBeenCalledWith('/settings?tab=goals&goal=goal-1')
+    expect(onClick).toHaveBeenCalled()
   })
 })

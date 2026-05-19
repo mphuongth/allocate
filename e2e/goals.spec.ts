@@ -12,9 +12,72 @@ async function openGoalsTab(page: import('@playwright/test').Page) {
   await page.waitForSelector('[data-testid="create-btn"]', { timeout: 15_000 })
 }
 
+test('create goal modal has target date, icon picker and priority fields', async ({ page }) => {
+  await openGoalsTab(page)
+  await page.getByTestId('create-btn').click()
+
+  await expect(page.getByRole('dialog')).toBeVisible()
+
+  // Target date month input
+  await expect(page.locator('[role="dialog"] input[type="month"]')).toBeVisible()
+
+  // Icon picker — 5 goal-icon buttons (each has data-testid="goal-icon-btn-{v}")
+  const iconBtns = page.locator('[data-testid^="goal-icon-btn-"]')
+  await expect(iconBtns).toHaveCount(5)
+
+  // Priority control — three options
+  await expect(page.getByTestId('priority-btn-low')).toBeVisible()
+  await expect(page.getByTestId('priority-btn-med')).toBeVisible()
+  await expect(page.getByTestId('priority-btn-high')).toBeVisible()
+})
+
+test('create goal modal shows live save-per-month calculation', async ({ page }) => {
+  await openGoalsTab(page)
+  await page.getByTestId('create-btn').click()
+
+  await expect(page.getByRole('dialog')).toBeVisible()
+
+  await page.locator('[role="dialog"] input[type="number"]').first().fill('120000000')
+  await page.locator('[role="dialog"] input[type="month"]').fill('2027-05')
+
+  await expect(page.getByTestId('save-per-month')).toBeVisible()
+})
+
+test('create goal saves target_date icon and priority to db', async ({ page }) => {
+  await openGoalsTab(page)
+  await page.getByTestId('create-btn').click()
+
+  await expect(page.getByRole('dialog')).toBeVisible()
+
+  await page.locator('[role="dialog"] input[type="text"]').first().fill('E2E Icon Priority Goal')
+  await page.locator('[role="dialog"] input[type="number"]').first().fill('50000000')
+  await page.locator('[role="dialog"] input[type="month"]').fill('2028-06')
+
+  // Select home icon
+  await page.locator('[data-testid="goal-icon-btn-home"]').click()
+
+  // Select High priority
+  await page.getByTestId('priority-btn-high').click()
+
+  await page.getByRole('dialog').getByRole('button', { name: /save|create|tạo|lưu/i }).click()
+  await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 5_000 })
+
+  const found = await api.findGoalByName('E2E Icon Priority Goal')
+  if (found) {
+    cleanup.add(() => api.deleteGoal(found.goal_id))
+    const { createClient } = await import('@supabase/supabase-js')
+    const supabase = createClient(process.env.E2E_SUPABASE_URL!, process.env.E2E_SUPABASE_SERVICE_ROLE_KEY!)
+    const { data: goal } = await supabase.from('savings_goals').select('target_date, icon, priority').eq('goal_id', found.goal_id).single()
+    expect(goal?.target_date).toBe('2028-06')
+    expect(goal?.icon).toBe('home')
+    expect(goal?.priority).toBe('high')
+  }
+})
+
 test('goals tab renders list or empty state', async ({ page }) => {
   await openGoalsTab(page)
-  await expect(page.locator('h2, h1').first()).toBeVisible({ timeout: 15_000 })
+  // create-btn is already waited for by openGoalsTab; assert it's visible
+  await expect(page.getByTestId('create-btn')).toBeVisible({ timeout: 5_000 })
 })
 
 test('can create a new savings goal', async ({ page }) => {

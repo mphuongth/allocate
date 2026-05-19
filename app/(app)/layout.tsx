@@ -7,8 +7,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
+  const meta = user.user_metadata ?? {}
+  const displayName = (meta.display_name || meta.full_name) as string | undefined
+
   return (
-    <AuthenticatedLayout email={user.email ?? ''}>
+    <AuthenticatedLayout email={user.email ?? ''} displayName={displayName}>
       {children}
     </AuthenticatedLayout>
   )

@@ -1,0 +1,251 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { Check, Download, X } from 'lucide-react'
+import { useLocale } from 'next-intl'
+import { fmt } from '@/lib/formatters'
+
+interface Props {
+  open: boolean
+  onClose: () => void
+  data: { netWorth: number; currentValue: number; totalPL: number; goalCount: number } | null
+  onExport: () => Promise<void>
+}
+
+export default function DownloadReportSheet({ open, onClose, data, onExport }: Props) {
+  const isVI = useLocale() === 'vi'
+  const [mounted, setMounted] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [success, setSuccess] = useState(false)
+  const [format, setFormat] = useState<'pdf' | 'csv'>('pdf')
+
+  useEffect(() => {
+    if (open) {
+      setMounted(true)
+      setSuccess(false)
+      setExporting(false)
+    } else {
+      const t = setTimeout(() => setMounted(false), 220)
+      return () => clearTimeout(t)
+    }
+  }, [open])
+
+  async function handleExport() {
+    setExporting(true)
+    try {
+      await onExport()
+      setSuccess(true)
+      setTimeout(() => { onClose() }, 2000)
+    } catch {
+      /* ignore */
+    }
+    setExporting(false)
+  }
+
+  if (!mounted) return null
+
+  const today = new Date().toLocaleDateString(isVI ? 'vi-VN' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+
+  const t = isVI ? {
+    title: 'Báo cáo danh mục',
+    asOf: 'Tính đến',
+    netWorth: 'Tài sản ròng',
+    currentVal: 'Giá trị hiện tại',
+    pl: 'Lãi / Lỗ tổng',
+    goals: 'Mục tiêu đang theo dõi',
+    sections: 'Nội dung báo cáo',
+    includes: ['Tổng quan tài sản ròng', 'Chi tiết từng mục tiêu', 'Phân bổ theo loại tài sản', 'Khoản chưa phân bổ', 'Lịch sử giao dịch'],
+    format: 'Định dạng',
+    export: 'Xuất báo cáo',
+    cancel: 'Hủy',
+    done: 'Đã xuất báo cáo',
+    doneSub: 'Kiểm tra thư mục tải xuống của bạn',
+  } : {
+    title: 'Portfolio report',
+    asOf: 'As of',
+    netWorth: 'Net worth',
+    currentVal: 'Current value',
+    pl: 'Total P/L',
+    goals: 'Goals tracked',
+    sections: 'Report includes',
+    includes: ['Net worth overview', 'Per-goal breakdown', 'Asset type allocation', 'Unallocated holdings', 'Transaction history'],
+    format: 'Format',
+    export: 'Export report',
+    cancel: 'Cancel',
+    done: 'Report exported',
+    doneSub: 'Check your downloads folder',
+  }
+
+  const isPos = !data || data.totalPL >= 0
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.2)',
+        zIndex: 100, pointerEvents: open ? 'auto' : 'none',
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0,
+          background: 'var(--c-card)', borderRadius: '16px 16px 0 0',
+          padding: '0 0 env(safe-area-inset-bottom,0)',
+          animation: open
+            ? 'slide-up 220ms cubic-bezier(0.2, 0.8, 0.2, 1)'
+            : 'slide-down 180ms ease forwards',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ width: 36, height: 4, background: 'var(--c-line-strong)', borderRadius: 999, margin: '6px auto 14px' }} />
+
+        <div style={{ padding: '0 16px 16px' }}>
+          {/* Sheet header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600, color: 'var(--c-ink)' }}>{t.title}</h3>
+            <button
+              onClick={onClose}
+              aria-label="close"
+              style={{
+                padding: 6, background: 'transparent', border: 'none',
+                cursor: 'pointer', color: 'var(--c-muted)', borderRadius: 8,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              <X size={18} />
+            </button>
+          </div>
+          {success ? (
+            <div data-testid="export-success" style={{ padding: '28px 0', textAlign: 'center' }}>
+              <div style={{
+                width: 56, height: 56, borderRadius: 28,
+                background: 'var(--c-pos-tint)', color: 'var(--c-pos)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px',
+              }}>
+                <Check size={28} strokeWidth={2.5} />
+              </div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--c-ink)' }}>{t.done}</div>
+              <div style={{ fontSize: 12, color: 'var(--c-muted)', marginTop: 4 }}>{t.doneSub}</div>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gap: 14 }}>
+              {/* Date */}
+              <div style={{ fontSize: 12, color: 'var(--c-muted)' }}>
+                {t.asOf}{' '}
+                <span style={{ fontWeight: 600, color: 'var(--c-ink)' }}>{today}</span>
+              </div>
+
+              {/* KPI grid */}
+              {data && (
+                <div style={{
+                  display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)',
+                  gap: 1, background: 'var(--c-line)', borderRadius: 12, overflow: 'hidden',
+                }}>
+                  {[
+                    { label: t.netWorth,   value: fmt(data.netWorth) },
+                    { label: t.currentVal, value: fmt(data.currentValue) },
+                    { label: t.pl,         value: (isPos ? '+' : '') + fmt(data.totalPL), color: isPos ? 'var(--c-pos)' : 'var(--c-neg)' },
+                    { label: t.goals,      value: String(data.goalCount) },
+                  ].map(({ label, value, color }) => (
+                    <div key={label} style={{ background: 'var(--c-card)', padding: '10px 12px' }}>
+                      <div style={{ fontSize: 10, color: 'var(--c-muted)' }}>{label}</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, marginTop: 2, color: color ?? 'var(--c-ink)' }}>{value}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* What's included */}
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--c-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                  {t.sections}
+                </div>
+                <div style={{ display: 'grid', gap: 6 }}>
+                  {t.includes.map((item) => (
+                    <div key={item} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{
+                        width: 18, height: 18, borderRadius: 9,
+                        background: 'var(--c-pos-tint)', color: 'var(--c-pos)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                      }}>
+                        <Check size={11} strokeWidth={2.5} />
+                      </div>
+                      <span style={{ fontSize: 13, color: 'var(--c-ink)' }}>{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Format picker */}
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--c-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                  {t.format}
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {(['pdf', 'csv'] as const).map(f => (
+                    <button
+                      key={f}
+                      onClick={() => setFormat(f)}
+                      aria-pressed={format === f}
+                      style={{
+                        flex: 1, padding: '10px', borderRadius: 10,
+                        background: format === f ? 'var(--c-btn-primary)' : 'var(--c-card)',
+                        color: format === f ? '#fff' : 'var(--c-muted)',
+                        border: `1px solid ${format === f ? 'var(--c-btn-primary)' : 'var(--c-line)'}`,
+                        fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                        textTransform: 'uppercase', letterSpacing: '0.04em',
+                        transition: 'all 120ms',
+                      }}
+                    >
+                      {f}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                <button
+                  onClick={onClose}
+                  aria-label="cancel"
+                  style={{
+                    flex: 1, padding: '11px 0', fontSize: 13, fontWeight: 500,
+                    background: 'var(--c-card)', border: '1px solid var(--c-line)',
+                    borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit',
+                    color: 'var(--c-ink)',
+                  }}
+                >
+                  {t.cancel}
+                </button>
+                <button
+                  onClick={handleExport}
+                  disabled={exporting}
+                  data-testid="export-report-btn"
+                  aria-label={exporting ? 'exporting' : `${t.export} · ${format.toUpperCase()}`}
+                  style={{
+                    flex: 2, padding: '11px 0', fontSize: 13, fontWeight: 600,
+                    background: 'var(--c-btn-primary)', border: 'none',
+                    borderRadius: 10, color: '#fff',
+                    cursor: exporting ? 'default' : 'pointer',
+                    opacity: exporting ? 0.7 : 1,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    fontFamily: 'inherit', transition: 'opacity 150ms',
+                  }}
+                >
+                  {exporting ? (
+                    <span style={{ width: 14, height: 14, border: '2px solid #fff', borderTopColor: 'transparent', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.6s linear infinite' }} />
+                  ) : (
+                    <Download size={14} strokeWidth={2.2} />
+                  )}
+                  {exporting
+                    ? (isVI ? 'Đang xuất…' : 'Exporting…')
+                    : `${t.export} · ${format.toUpperCase()}`}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}

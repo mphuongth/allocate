@@ -3,6 +3,8 @@ import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { calcProjectedInterest, isNavStale, insuranceStatus } from '@/lib/finance'
 import { buildWithdrawalMaps } from '@/lib/withdrawalProgress'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   const supabase = await createSupabaseServerClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -79,6 +81,7 @@ export async function GET() {
   }
 
   let navStale = false
+  let latestNavUpdatedAt: string | null = null
 
   const goalMap = new Map<string, {
     goalId: string
@@ -86,6 +89,7 @@ export async function GET() {
     targetAmount: number | null
     currentValue: number
     totalInvested: number
+    transactionCount: number
     funds: Array<{
       fundId: string
       fundName: string
@@ -107,6 +111,7 @@ export async function GET() {
       targetAmount: goal.target_amount ?? null,
       currentValue: 0,
       totalInvested: 0,
+      transactionCount: 0,
       funds: [],
     })
   }
@@ -143,6 +148,11 @@ export async function GET() {
       if (!fund) continue
 
       if (isNavStale(fund.updated_at)) navStale = true
+      if (!latestNavUpdatedAt || fund.updated_at > latestNavUpdatedAt) latestNavUpdatedAt = fund.updated_at
+
+      if (tx.goal_id && goalMap.has(tx.goal_id)) {
+        goalMap.get(tx.goal_id)!.transactionCount += 1
+      }
 
       const key = `${tx.goal_id ?? 'unallocated'}::${fund.id}`
       const existing = fundAccumMap.get(key)
@@ -193,6 +203,7 @@ export async function GET() {
         const goalEntry = goalMap.get(tx.goal_id)!
         goalEntry.totalInvested += effectiveAmount
         goalEntry.currentValue += currentValue
+        goalEntry.transactionCount += 1
       } else {
         unallocatedNonFundValue += currentValue
         unallocatedNonFunds.push({
@@ -277,6 +288,7 @@ export async function GET() {
       profitLoss,
       profitLossPercentage,
       progressPercentage,
+      transactionCount: g.transactionCount,
       funds: g.funds,
     }
   })
@@ -291,7 +303,11 @@ export async function GET() {
     }, 0)
     const amountSaved = lumpSumSaved + monthlySavedFromPlanning
     const savingsProgressPercentage = annualPremium > 0 ? (amountSaved / annualPremium) * 100 : 0
-    const status = insuranceStatus(m.payment_date)
+    const baseStatus = insuranceStatus(m.payment_date)
+    const status: 'on_track' | 'upcoming' | 'overdue' | 'completed' | 'ready' =
+      amountSaved >= annualPremium && (baseStatus === 'on_track' || baseStatus === 'upcoming')
+        ? 'ready'
+        : baseStatus
 
     return {
       insuranceId: m.member_id,
@@ -333,6 +349,7 @@ export async function GET() {
       overallProfitLossPercentage,
       navStale,
       hasGold,
+      navUpdatedAt: latestNavUpdatedAt,
     },
     goals: goalsOutput,
     unallocated: {
