@@ -89,7 +89,7 @@
   --color-brand-light: var(--brand-light);
   --color-brand-dark: var(--brand-dark);
   --color-canvas: var(--c-canvas);
-  --font-sans: "DM Sans", var(--font-dm-sans), "Geist", var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Be Vietnam Pro", var(--font-be-vietnam), "Geist", var(--font-geist), ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, monospace;
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);

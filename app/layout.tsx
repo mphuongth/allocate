@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { DM_Sans, Geist } from 'next/font/google'
+import { Be_Vietnam_Pro, Geist } from 'next/font/google'
 import { Toaster } from 'sonner'
 import ThemeProvider from './components/ThemeProvider'
 import ServiceWorkerRegistration from './components/ServiceWorkerRegistration'
@@ -8,9 +8,9 @@ import { getMessages, getLocale } from 'next-intl/server'
 import './globals.css'
 import { cn } from "@/lib/utils";
 
-const dmSans = DM_Sans({
-  subsets: ['latin', 'latin-ext'],
-  variable: '--font-dm-sans',
+const beVietnamPro = Be_Vietnam_Pro({
+  subsets: ['latin', 'latin-ext', 'vietnamese'],
+  variable: '--font-be-vietnam',
   weight: ['400', '500', '600', '700'],
 })
 
@@ -48,11 +48,11 @@ export default async function RootLayout({
   const locale = await getLocale()
 
   return (
-    <html lang={locale} suppressHydrationWarning className={cn("font-sans", dmSans.variable, geist.variable)}>
+    <html lang={locale} suppressHydrationWarning className={cn("font-sans", beVietnamPro.variable, geist.variable)}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: `try{var t=localStorage.getItem('theme');if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.classList.add('dark')}}catch(e){}` }} />
       </head>
-      <body className={`${dmSans.variable} font-sans antialiased bg-canvas dark:bg-gray-950 text-gray-900 dark:text-gray-100`}>
+      <body className={`${beVietnamPro.variable} font-sans antialiased bg-canvas dark:bg-gray-950 text-gray-900 dark:text-gray-100`}>
         <NextIntlClientProvider messages={messages} locale={locale}>
           <ThemeProvider>
             {children}
