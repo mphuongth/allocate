@@ -352,25 +352,20 @@ export default function DashboardClient({ userId }: { userId: string }) {
       trailing: (
         <button
           data-testid="generate-report-btn"
-          onClick={handleGenerateReport}
-          disabled={isGeneratingReport}
-          aria-label={isGeneratingReport ? t('downloadingReport') : t('downloadReport')}
+          onClick={() => setShowReportSheet(true)}
+          aria-label={t('downloadReport')}
           style={{
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             padding: 8, border: 'none', background: 'transparent',
             borderRadius: 'var(--r-control)', cursor: 'pointer', color: 'var(--c-ink)',
-            opacity: isGeneratingReport ? 0.5 : 1,
           }}
         >
-          {isGeneratingReport
-            ? <span className="w-[18px] h-[18px] border-2 border-current border-t-transparent rounded-full animate-spin block" />
-            : <ArrowDownToLine size={18} />
-          }
+          <ArrowDownToLine size={18} />
         </button>
       ),
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userName, isGeneratingReport, data])
+  }, [userName, data])
 
   function openSellFund(fund: FundBreakdownItem) {
     setSellItem({
