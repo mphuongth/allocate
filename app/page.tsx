@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { getTranslations } from 'next-intl/server'
 import { ScrollRevealInit } from './components/ScrollRevealInit'
+import { LandingLangToggle } from './components/LandingLangToggle'
 
 const NAVY = '#0F2A4A'
 const LINE = '#e9e5dc'
@@ -106,6 +107,7 @@ export default async function HomePage() {
               ))}
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <LandingLangToggle />
               <Link href="/auth/login"
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.09)', color: 'rgba(255,255,255,0.82)', fontSize: 13, fontWeight: 500, padding: '7px 16px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.14)', textDecoration: 'none' }}
                 className="hover:!bg-white/[0.15] transition-colors duration-150">
