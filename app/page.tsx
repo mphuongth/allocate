@@ -233,23 +233,6 @@ export default async function HomePage() {
           </div>
         </section>
 
-        {/* ── Stats strip ────────────────────────────────────────────────────── */}
-        <section style={{ background: '#0a2140', borderTop: '1px solid rgba(255,255,255,0.07)' }}>
-          <div style={{ maxWidth: 1120, margin: '0 auto', padding: '30px 48px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)' }}>
-            {[
-              { val: '₫487M', label: t('statNetWorthLabel') },
-              { val: '4', label: t('statGoalsLabel') },
-              { val: '7+', label: t('statFundsLabel') },
-              { val: '+9.8%', label: t('statReturnLabel') },
-            ].map((s, i) => (
-              <div key={i} style={{ padding: '0 32px', borderRight: i < 3 ? '1px solid rgba(255,255,255,0.1)' : 'none', paddingLeft: i === 0 ? 0 : undefined }}>
-                <div style={{ fontSize: 30, fontWeight: 700, color: '#fff', letterSpacing: '-0.04em', lineHeight: 1, marginBottom: 4, fontVariantNumeric: 'tabular-nums' }}>{s.val}</div>
-                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>{s.label}</div>
-              </div>
-            ))}
-          </div>
-        </section>
-
         {/* ── Features ────────────────────────────────────────────────────────── */}
         <section id="features" style={{ padding: '96px 0', background: CANVAS }}>
           <div style={{ maxWidth: 1120, margin: '0 auto', padding: '0 48px' }}>
