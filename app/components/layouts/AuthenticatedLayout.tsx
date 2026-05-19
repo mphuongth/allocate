@@ -1,15 +1,17 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import { toast } from 'sonner'
+import { Plus } from 'lucide-react'
 import { NavigationProvider, useNavigation } from '../navigation/NavigationContext'
 import Sidebar from '../navigation/Sidebar'
 import Header from '../navigation/Header'
 import MobileBottomTabs from '../navigation/MobileBottomTabs'
 import MobileTopBar from '../navigation/MobileTopBar'
 import OfflineBanner from '@/app/components/OfflineBanner'
+import AddTransactionSheet from '@/app/assets/components/AddTransactionSheet'
 
 function getInitials(email: string): string {
   const parts = email.split('@')[0].split(/[._-]/)
@@ -28,6 +30,7 @@ function getDisplayName(email: string): string {
 
 function AuthenticatedLayoutInner({ children, email, initials }: { children: React.ReactNode; email: string; initials: string }) {
   const { mobileTopBar } = useNavigation()
+  const [showAddTx, setShowAddTx] = useState(false)
 
   return (
     <div className="flex h-screen bg-canvas dark:bg-gray-950 overflow-hidden">
@@ -58,9 +61,33 @@ function AuthenticatedLayoutInner({ children, email, initials }: { children: Rea
         </main>
       </div>
 
+      {/* Mobile FAB — add transaction */}
+      <button
+        onClick={() => setShowAddTx(true)}
+        aria-label="Add transaction"
+        className="md:hidden"
+        style={{
+          position: 'fixed', right: 16, bottom: 80,
+          width: 52, height: 52, borderRadius: 26,
+          background: 'var(--c-navy)', color: '#fff',
+          border: 'none',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: '0 6px 16px rgba(15, 42, 74, 0.25), 0 2px 4px rgba(15, 42, 74, 0.1)',
+          cursor: 'pointer', zIndex: 35,
+        }}
+      >
+        <Plus size={22} strokeWidth={2.2} />
+      </button>
+
       {/* Mobile bottom tab navigation */}
       <MobileBottomTabs />
       <OfflineBanner />
+
+      {/* Add transaction sheet */}
+      <AddTransactionSheet
+        open={showAddTx}
+        onClose={() => setShowAddTx(false)}
+      />
     </div>
   )
 }
