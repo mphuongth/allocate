@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { useTranslations } from 'next-intl'
+import { Eye, EyeOff } from 'lucide-react'
 
 const inputStyle: React.CSSProperties = {
   display: 'block',
@@ -40,6 +41,7 @@ export default function SignupPage() {
   const [formError, setFormError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [confirmSent, setConfirmSent] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   function handlePasswordBlur() {
     if (password && password.length < 8) {
@@ -231,18 +233,32 @@ export default function SignupPage() {
 
           <label style={{ display: 'block' }}>
             <span style={labelSpanStyle}>{t('passwordLabel')}</span>
-            <input
-              id="password"
-              type="password"
-              name="password"
-              required
-              minLength={8}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onBlur={handlePasswordBlur}
-              placeholder="••••••••"
-              style={inputStyle}
-            />
+            <div style={{ position: 'relative' }}>
+              <input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                name="password"
+                required
+                minLength={8}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onBlur={handlePasswordBlur}
+                placeholder="••••••••"
+                style={{ ...inputStyle, paddingRight: 40 }}
+              />
+              <button
+                type="button"
+                tabIndex={-1}
+                onClick={() => setShowPassword((v) => !v)}
+                style={{
+                  position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
+                  background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                  color: 'var(--c-muted)', display: 'flex',
+                }}
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
             {passwordError && (
               <p style={{ margin: '4px 0 0', fontSize: 12, color: '#dc2626' }}>{passwordError}</p>
             )}
