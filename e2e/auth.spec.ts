@@ -24,10 +24,9 @@ test('login page renders email and password fields', async ({ page }) => {
   await expect(page.locator('button[type="submit"]')).toBeVisible()
 })
 
-test('login page shows brand mark C', async ({ page }) => {
+test('login page shows brand mark icon', async ({ page }) => {
   await page.goto('/auth/login')
   await expect(page.locator('[data-testid="brand-mark"]')).toBeVisible()
-  await expect(page.locator('[data-testid="brand-mark"]')).toContainText('C')
 })
 
 test('login page shows Cairn wordmark', async ({ page }) => {
@@ -88,10 +87,9 @@ test('signup page does not have a confirm password field', async ({ page }) => {
   await expect(page.locator('#confirmPassword')).toHaveCount(0)
 })
 
-test('signup page shows brand mark C', async ({ page }) => {
+test('signup page shows brand mark icon', async ({ page }) => {
   await page.goto('/auth/signup')
   await expect(page.locator('[data-testid="brand-mark"]')).toBeVisible()
-  await expect(page.locator('[data-testid="brand-mark"]')).toContainText('C')
 })
 
 test('signup page h1 says Create account', async ({ page }) => {

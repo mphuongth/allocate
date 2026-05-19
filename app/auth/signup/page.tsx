@@ -156,26 +156,15 @@ export default function SignupPage() {
       padding: '40px 24px 24px',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 36 }}>
-        <div
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
           data-testid="brand-mark"
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 9,
-            background: 'var(--c-navy)',
-            color: '#fff',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontWeight: 700,
-            fontSize: 18,
-            fontFamily: 'var(--font-sans)',
-            letterSpacing: '-0.02em',
-            flexShrink: 0,
-          }}
-        >
-          C
-        </div>
+          src="/cairn-icon.svg"
+          alt="Cairn"
+          width={36}
+          height={36}
+          style={{ borderRadius: 9, flexShrink: 0 }}
+        />
         <span style={{ fontSize: 17, fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--c-ink)' }}>
           Cairn
         </span>
