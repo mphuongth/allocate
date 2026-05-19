@@ -137,7 +137,7 @@ export default async function HomePage() {
               <p style={{ margin: '0 0 36px', fontSize: 17, color: 'rgba(255,255,255,0.58)', lineHeight: 1.65, maxWidth: 430 }}>
                 {t('heroSub')}
               </p>
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <div className="lp-hero-ctas" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                 <Link href="/auth/signup"
                   style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fff', color: NAVY, fontSize: 13.5, fontWeight: 600, padding: '9px 20px', borderRadius: 10, border: 'none', textDecoration: 'none', whiteSpace: 'nowrap' }}
                   className="hover:opacity-90 transition-opacity duration-150">
