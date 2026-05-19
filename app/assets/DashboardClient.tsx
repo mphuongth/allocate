@@ -364,6 +364,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
         </button>
       ),
     })
+    return () => setMobileTopBar({ title: '' })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userName, data])
 

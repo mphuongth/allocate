@@ -387,6 +387,7 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
       title: isVI ? 'Tùy chọn' : 'Preferences',
       subtitle: isVI ? 'Cài đặt' : 'Settings',
     })
+    return () => setMobileTopBar({ title: '' })
   }, [isVI, setMobileTopBar])
 
   function switchLocale(next: string) {
