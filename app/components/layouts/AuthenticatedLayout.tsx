@@ -92,7 +92,7 @@ function AuthenticatedLayoutInner({ children, email, initials }: { children: Rea
   )
 }
 
-export default function AuthenticatedLayout({ children, email }: { children: React.ReactNode; email: string }) {
+export default function AuthenticatedLayout({ children, email, displayName }: { children: React.ReactNode; email: string; displayName?: string }) {
   const router = useRouter()
 
   // Watch for session expiry (e.g. token revoked or expired)
@@ -113,7 +113,7 @@ export default function AuthenticatedLayout({ children, email }: { children: Rea
   }, [router])
 
   const initials = getInitials(email)
-  const userName = getDisplayName(email)
+  const userName = displayName || getDisplayName(email)
 
   return (
     <NavigationProvider userName={userName}>
