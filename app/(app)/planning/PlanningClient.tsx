@@ -229,7 +229,7 @@ export default function PlanningClient() {
           >
             <ChevronLeft size={16} color="var(--c-ink)" />
           </button>
-          <span style={{ padding: '4px 10px', minWidth: 78, textAlign: 'center', fontSize: 13, fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>
+          <span style={{ padding: '4px 10px', minWidth: 78, textAlign: 'center', fontSize: 13, fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums', background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 7 }}>
             {shortLabel}
           </span>
           <button
