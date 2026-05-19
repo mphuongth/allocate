@@ -5,12 +5,29 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useState, Suspense } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { useTranslations } from 'next-intl'
-import ThemeToggleButton from '@/app/components/ThemeToggleButton'
-import { Card } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Button } from '@/components/ui/button'
-import { Eye, EyeOff } from 'lucide-react'
+
+const inputStyle: React.CSSProperties = {
+  display: 'block',
+  width: '100%',
+  padding: '10px 12px',
+  marginTop: 4,
+  background: 'var(--c-card)',
+  border: '1px solid var(--c-line-strong)',
+  borderRadius: 9,
+  fontSize: 14,
+  color: 'var(--c-ink)',
+  outline: 'none',
+  fontFamily: 'inherit',
+  boxSizing: 'border-box',
+}
+
+const labelSpanStyle: React.CSSProperties = {
+  fontSize: 11,
+  color: 'var(--c-muted)',
+  fontWeight: 500,
+  letterSpacing: '0.02em',
+  textTransform: 'uppercase',
+}
 
 function LoginForm() {
   const t = useTranslations('auth')
@@ -23,7 +40,6 @@ function LoginForm() {
   const [error, setError] = useState<string | null>(expired ? t('sessionExpired') : null)
   const [loading, setLoading] = useState(false)
   const [redirecting, setRedirecting] = useState(false)
-  const [showPassword, setShowPassword] = useState(false)
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -44,7 +60,6 @@ function LoginForm() {
         setRedirecting(true)
         router.push('/dashboard')
         router.refresh()
-        // keep loading=true — page will unmount on redirect
       }
     } catch {
       setError(t('cannotConnect'))
@@ -53,100 +68,156 @@ function LoginForm() {
   }
 
   return (
-    <div className="w-full max-w-md">
-      {/* Logo + heading */}
-      <div className="text-center mb-8">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/cairn-icon.svg"
-          alt="Cairn logo"
-          width={48}
-          height={48}
-          className="inline-block h-12 w-12 rounded-lg mb-4 shadow-lg shadow-slate-200 dark:shadow-slate-900/30"
-        />
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">{t('loginTitle')}</h1>
-        <p className="text-gray-600 dark:text-gray-400">{t('loginSubtitle')}</p>
-      </div>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      <h1 style={{
+        margin: 0,
+        fontSize: 28,
+        fontFamily: 'var(--font-sans)',
+        fontWeight: 600,
+        letterSpacing: '-0.025em',
+        lineHeight: 1.15,
+        color: 'var(--c-ink)',
+      }}>
+        {t('loginTitle')}
+      </h1>
+      <p style={{ marginTop: 8, marginBottom: 28, fontSize: 14, color: 'var(--c-muted)' }}>
+        {t('loginSubtitle')}
+      </p>
 
-      {/* Card */}
-      <Card className="p-8">
-        {error && (
-          <div className="mb-5 px-4 py-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-sm rounded-lg border border-red-100 dark:border-red-900/40">
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleLogin} className="space-y-6">
-          <div className="space-y-2">
-            <Label htmlFor="email">{t('emailLabel')}</Label>
-            <Input
-              id="email"
-              type="email"
-              name="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="password">{t('passwordLabel')}</Label>
-              <span className="text-sm text-gray-400 dark:text-gray-500 cursor-not-allowed select-none">
-                {t('forgotPassword')}
-              </span>
-            </div>
-            <div className="relative">
-              <Input
-                id="password"
-                type={showPassword ? 'text' : 'password'}
-                name="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="pr-10"
-              />
-              <button
-                type="button"
-                tabIndex={-1}
-                onClick={() => setShowPassword((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-              >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </div>
-          </div>
-
-          <Button
-            type="submit"
-            disabled={loading || redirecting}
-            className="w-full bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-700 text-white dark:text-white"
-            size="lg"
-          >
-            {redirecting ? t('redirecting') : loading ? t('loggingIn') : t('loginBtn')}
-          </Button>
-        </form>
-
-        <div className="mt-6 text-center text-sm">
-          <span className="text-gray-600 dark:text-gray-400">{t('noAccount')} </span>
-          <Link href="/auth/signup" className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 font-medium">
-            {t('signupLink')}
-          </Link>
+      {error && (
+        <div role="alert" style={{
+          marginBottom: 16,
+          padding: '10px 12px',
+          background: 'rgba(220,38,38,0.08)',
+          color: '#dc2626',
+          fontSize: 13,
+          borderRadius: 9,
+          border: '1px solid rgba(220,38,38,0.2)',
+        }}>
+          {error}
         </div>
-      </Card>
+      )}
+
+      <form onSubmit={handleLogin} style={{ display: 'grid', gap: 12 }}>
+        <label style={{ display: 'block' }}>
+          <span style={labelSpanStyle}>{t('emailLabel')}</span>
+          <input
+            id="email"
+            type="email"
+            name="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
+            style={inputStyle}
+          />
+        </label>
+
+        <label style={{ display: 'block' }}>
+          <span style={labelSpanStyle}>{t('passwordLabel')}</span>
+          <input
+            id="password"
+            type="password"
+            name="password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="••••••••"
+            style={inputStyle}
+          />
+        </label>
+
+        <button
+          type="button"
+          style={{
+            background: 'transparent',
+            border: 'none',
+            padding: '10px 0',
+            fontSize: 12,
+            color: 'var(--c-navy)',
+            fontWeight: 500,
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+            textAlign: 'left',
+          }}
+        >
+          {t('forgotPassword')}
+        </button>
+
+        <button
+          type="submit"
+          disabled={loading || redirecting}
+          style={{
+            width: '100%',
+            display: 'flex',
+            justifyContent: 'center',
+            padding: '13px 16px',
+            marginTop: 18,
+            background: 'var(--c-btn-primary)',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 10,
+            fontSize: 14,
+            fontWeight: 600,
+            cursor: loading || redirecting ? 'not-allowed' : 'pointer',
+            fontFamily: 'inherit',
+            opacity: loading || redirecting ? 0.7 : 1,
+          }}
+        >
+          {redirecting ? t('redirecting') : loading ? t('loggingIn') : t('loginBtn')}
+        </button>
+      </form>
+
+      <div style={{ textAlign: 'center', fontSize: 13, color: 'var(--c-muted)', marginTop: 'auto', paddingTop: 24 }}>
+        {t('noAccount')}{' '}
+        <Link
+          href="/auth/signup"
+          style={{ color: 'var(--c-navy)', fontWeight: 600, textDecoration: 'none' }}
+        >
+          {t('signupLink')}
+        </Link>
+      </div>
     </div>
   )
 }
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-emerald-50/40 dark:from-slate-950 dark:via-[#081A30] dark:to-slate-950 flex items-center justify-center p-4 relative">
-      <div className="absolute top-4 right-4">
-        <ThemeToggleButton />
+    <div style={{
+      position: 'fixed',
+      inset: 0,
+      background: 'var(--c-canvas)',
+      display: 'flex',
+      flexDirection: 'column',
+      padding: '40px 24px 24px',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 36 }}>
+        <div
+          data-testid="brand-mark"
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 9,
+            background: 'var(--c-navy)',
+            color: '#fff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontWeight: 700,
+            fontSize: 18,
+            fontFamily: 'var(--font-sans)',
+            letterSpacing: '-0.02em',
+            flexShrink: 0,
+          }}
+        >
+          C
+        </div>
+        <span style={{ fontSize: 17, fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--c-ink)' }}>
+          Cairn
+        </span>
       </div>
-      <Suspense fallback={<div className="w-full max-w-md h-96 rounded-2xl bg-white dark:bg-gray-900 animate-pulse" />}>
+
+      <Suspense fallback={null}>
         <LoginForm />
       </Suspense>
     </div>

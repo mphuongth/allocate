@@ -5,41 +5,47 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { useTranslations } from 'next-intl'
-import ThemeToggleButton from '@/app/components/ThemeToggleButton'
-import { Card } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Button } from '@/components/ui/button'
-import { Eye, EyeOff } from 'lucide-react'
+
+const inputStyle: React.CSSProperties = {
+  display: 'block',
+  width: '100%',
+  padding: '10px 12px',
+  marginTop: 4,
+  background: 'var(--c-card)',
+  border: '1px solid var(--c-line-strong)',
+  borderRadius: 9,
+  fontSize: 14,
+  color: 'var(--c-ink)',
+  outline: 'none',
+  fontFamily: 'inherit',
+  boxSizing: 'border-box',
+}
+
+const labelSpanStyle: React.CSSProperties = {
+  fontSize: 11,
+  color: 'var(--c-muted)',
+  fontWeight: 500,
+  letterSpacing: '0.02em',
+  textTransform: 'uppercase',
+}
 
 export default function SignupPage() {
   const t = useTranslations('auth')
   const router = useRouter()
 
+  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
   const [passwordError, setPasswordError] = useState<string | null>(null)
-  const [confirmError, setConfirmError] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [confirmSent, setConfirmSent] = useState(false)
-  const [showPassword, setShowPassword] = useState(false)
-  const [showConfirm, setShowConfirm] = useState(false)
 
   function handlePasswordBlur() {
     if (password && password.length < 8) {
       setPasswordError(t('passwordTooShort'))
     } else {
       setPasswordError(null)
-    }
-  }
-
-  function handleConfirmBlur() {
-    if (confirmPassword && password !== confirmPassword) {
-      setConfirmError(t('passwordMismatch'))
-    } else {
-      setConfirmError(null)
     }
   }
 
@@ -51,10 +57,6 @@ export default function SignupPage() {
       setPasswordError(t('passwordTooShort'))
       return
     }
-    if (password !== confirmPassword) {
-      setConfirmError(t('passwordMismatch'))
-      return
-    }
 
     setLoading(true)
 
@@ -64,7 +66,11 @@ export default function SignupPage() {
     )
 
     try {
-      const { data, error } = await supabase.auth.signUp({ email, password })
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { full_name: name } },
+      })
 
       if (error) {
         if (error.message.toLowerCase().includes('already') || error.status === 422) {
@@ -91,143 +97,201 @@ export default function SignupPage() {
 
   if (confirmSent) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-emerald-50/40 dark:from-slate-950 dark:via-[#081A30] dark:to-slate-950 flex items-center justify-center p-4">
-        <div className="w-full max-w-md text-center">
-          <div className="inline-flex items-center justify-center h-12 w-12 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-2xl mb-4">
-            📧
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-3">{t('checkEmailTitle')}</h1>
-          <p className="text-gray-600 dark:text-gray-400 text-sm mb-8">{t('checkEmailMessage')}</p>
-          <Link
-            href="/auth/login"
-            className="inline-block py-2.5 px-6 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 transition-colors"
-          >
-            {t('goToLogin')}
-          </Link>
+      <div style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'var(--c-canvas)',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '40px 24px 24px',
+        textAlign: 'center',
+      }}>
+        <div style={{
+          width: 48,
+          height: 48,
+          borderRadius: 12,
+          background: 'var(--c-navy-tint)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 24,
+          marginBottom: 16,
+        }}>
+          📧
         </div>
+        <h1 style={{ margin: '0 0 12px', fontSize: 24, fontWeight: 600, color: 'var(--c-ink)', letterSpacing: '-0.02em' }}>
+          {t('checkEmailTitle')}
+        </h1>
+        <p style={{ margin: '0 0 32px', fontSize: 14, color: 'var(--c-muted)', maxWidth: 300 }}>
+          {t('checkEmailMessage')}
+        </p>
+        <Link
+          href="/auth/login"
+          style={{
+            display: 'inline-block',
+            padding: '13px 24px',
+            background: 'var(--c-btn-primary)',
+            color: '#fff',
+            borderRadius: 10,
+            fontSize: 14,
+            fontWeight: 600,
+            textDecoration: 'none',
+          }}
+        >
+          {t('goToLogin')}
+        </Link>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-emerald-50/40 dark:from-slate-950 dark:via-[#081A30] dark:to-slate-950 flex items-center justify-center p-4 relative">
-      <div className="absolute top-4 right-4">
-        <ThemeToggleButton />
+    <div style={{
+      position: 'fixed',
+      inset: 0,
+      background: 'var(--c-canvas)',
+      display: 'flex',
+      flexDirection: 'column',
+      padding: '40px 24px 24px',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 36 }}>
+        <div
+          data-testid="brand-mark"
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 9,
+            background: 'var(--c-navy)',
+            color: '#fff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontWeight: 700,
+            fontSize: 18,
+            fontFamily: 'var(--font-sans)',
+            letterSpacing: '-0.02em',
+            flexShrink: 0,
+          }}
+        >
+          C
+        </div>
+        <span style={{ fontSize: 17, fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--c-ink)' }}>
+          Cairn
+        </span>
       </div>
 
-      <div className="w-full max-w-md">
-        {/* Logo + heading */}
-        <div className="text-center mb-8">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/cairn-icon.svg"
-            alt="Cairn logo"
-            width={48}
-            height={48}
-            className="inline-block h-12 w-12 rounded-lg mb-4 shadow-lg shadow-slate-200 dark:shadow-slate-900/30"
-          />
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">{t('signupTitle')}</h1>
-          <p className="text-gray-600 dark:text-gray-400">{t('signupSubtitle')}</p>
-        </div>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        <h1 style={{
+          margin: 0,
+          fontSize: 28,
+          fontFamily: 'var(--font-sans)',
+          fontWeight: 600,
+          letterSpacing: '-0.025em',
+          lineHeight: 1.15,
+          color: 'var(--c-ink)',
+        }}>
+          {t('signupTitle')}
+        </h1>
+        <p style={{ marginTop: 8, marginBottom: 28, fontSize: 14, color: 'var(--c-muted)' }}>
+          {t('signupSubtitle')}
+        </p>
 
-        {/* Card */}
-        <Card className="p-8">
-          {formError && (
-            <div className="mb-5 px-4 py-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-sm rounded-lg border border-red-100 dark:border-red-900/40">
-              {formError}
-            </div>
-          )}
-
-          <form onSubmit={handleSignup} className="space-y-5">
-            <div className="space-y-2">
-              <Label htmlFor="email">{t('emailLabel')} <span className="text-red-500">*</span></Label>
-              <Input
-                id="email"
-                type="email"
-                name="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="password">{t('passwordLabel')} <span className="text-red-500">*</span></Label>
-              <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  name="password"
-                  required
-                  minLength={8}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  onBlur={handlePasswordBlur}
-                  placeholder="••••••••"
-                  className="pr-10"
-                />
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-              {passwordError
-                ? <p className="text-sm text-red-600 dark:text-red-400">{passwordError}</p>
-                : <p className="text-xs text-gray-500 dark:text-gray-400">{t('passwordTooShort')}</p>
-              }
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword">{t('confirmPasswordLabel')} <span className="text-red-500">*</span></Label>
-              <div className="relative">
-                <Input
-                  id="confirmPassword"
-                  type={showConfirm ? 'text' : 'password'}
-                  name="confirmPassword"
-                  required
-                  minLength={8}
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  onBlur={handleConfirmBlur}
-                  placeholder="••••••••"
-                  className="pr-10"
-                />
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  onClick={() => setShowConfirm((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                >
-                  {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-              {confirmError && (
-                <p className="text-sm text-red-600 dark:text-red-400">{confirmError}</p>
-              )}
-            </div>
-
-            <Button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-700 text-white dark:text-white"
-              size="lg"
-            >
-              {loading ? t('signingUp') : t('signupBtn')}
-            </Button>
-          </form>
-
-          <div className="mt-6 text-center text-sm">
-            <span className="text-gray-600 dark:text-gray-400">{t('hasAccount')} </span>
-            <Link href="/auth/login" className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 font-medium">
-              {t('loginLink')}
-            </Link>
+        {formError && (
+          <div role="alert" style={{
+            marginBottom: 16,
+            padding: '10px 12px',
+            background: 'rgba(220,38,38,0.08)',
+            color: '#dc2626',
+            fontSize: 13,
+            borderRadius: 9,
+            border: '1px solid rgba(220,38,38,0.2)',
+          }}>
+            {formError}
           </div>
-        </Card>
+        )}
+
+        <form onSubmit={handleSignup} style={{ display: 'grid', gap: 12 }}>
+          <label style={{ display: 'block' }}>
+            <span style={labelSpanStyle}>{t('fullNameLabel')}</span>
+            <input
+              id="name"
+              type="text"
+              name="name"
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Minh Nguyen"
+              style={inputStyle}
+            />
+          </label>
+
+          <label style={{ display: 'block' }}>
+            <span style={labelSpanStyle}>{t('emailLabel')}</span>
+            <input
+              id="email"
+              type="email"
+              name="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              style={inputStyle}
+            />
+          </label>
+
+          <label style={{ display: 'block' }}>
+            <span style={labelSpanStyle}>{t('passwordLabel')}</span>
+            <input
+              id="password"
+              type="password"
+              name="password"
+              required
+              minLength={8}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onBlur={handlePasswordBlur}
+              placeholder="••••••••"
+              style={inputStyle}
+            />
+            {passwordError && (
+              <p style={{ margin: '4px 0 0', fontSize: 12, color: '#dc2626' }}>{passwordError}</p>
+            )}
+          </label>
+
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              width: '100%',
+              display: 'flex',
+              justifyContent: 'center',
+              padding: '13px 16px',
+              marginTop: 18,
+              background: 'var(--c-btn-primary)',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 10,
+              fontSize: 14,
+              fontWeight: 600,
+              cursor: loading ? 'not-allowed' : 'pointer',
+              fontFamily: 'inherit',
+              opacity: loading ? 0.7 : 1,
+            }}
+          >
+            {loading ? t('signingUp') : t('signupBtn')}
+          </button>
+        </form>
+
+        <div style={{ textAlign: 'center', fontSize: 13, color: 'var(--c-muted)', marginTop: 'auto', paddingTop: 24 }}>
+          {t('hasAccount')}{' '}
+          <Link
+            href="/auth/login"
+            style={{ color: 'var(--c-navy)', fontWeight: 600, textDecoration: 'none' }}
+          >
+            {t('loginLink')}
+          </Link>
+        </div>
       </div>
     </div>
   )
