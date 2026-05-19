@@ -44,6 +44,9 @@ test('create goal modal shows live save-per-month calculation', async ({ page })
 })
 
 test('create goal saves target_date icon and priority to db', async ({ page }) => {
+  const stale = await api.findGoalByName('E2E Icon Priority Goal')
+  if (stale) await api.deleteGoal(stale.goal_id)
+
   await openGoalsTab(page)
   await page.getByTestId('create-btn').click()
 
@@ -81,6 +84,9 @@ test('goals tab renders list or empty state', async ({ page }) => {
 })
 
 test('can create a new savings goal', async ({ page }) => {
+  const stale = await api.findGoalByName('E2E Test Goal')
+  if (stale) await api.deleteGoal(stale.goal_id)
+
   await openGoalsTab(page)
   await page.getByTestId('create-btn').click()
 

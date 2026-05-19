@@ -1,0 +1,150 @@
+import { test, expect } from '@playwright/test'
+
+test.use({ storageState: { cookies: [], origins: [] } })
+
+test.beforeEach(async ({ page }) => {
+  const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000'
+  const hostname = new URL(baseURL).hostname
+  await page.context().addCookies([{ name: 'locale', value: 'en', domain: hostname, path: '/' }])
+})
+
+// ─── Nav ────────────────────────────────────────────────────────────────────
+
+test('nav shows Cairn wordmark', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.locator('nav').getByText('Cairn')).toBeVisible()
+})
+
+test('nav has Features, How it works, Monthly plan links', async ({ page }) => {
+  await page.goto('/')
+  const nav = page.locator('nav')
+  await expect(nav.getByRole('link', { name: 'Features' })).toBeVisible()
+  await expect(nav.getByRole('link', { name: 'How it works' })).toBeVisible()
+  await expect(nav.getByRole('link', { name: 'Monthly plan' })).toBeVisible()
+})
+
+test('nav Log in button links to /auth/login', async ({ page }) => {
+  await page.goto('/')
+  await page.locator('nav').getByRole('link', { name: /log in/i }).click()
+  await expect(page).toHaveURL(/auth\/login/)
+})
+
+test('nav Get started button links to /auth/signup', async ({ page }) => {
+  await page.goto('/')
+  await page.locator('nav').getByRole('link', { name: /get started/i }).click()
+  await expect(page).toHaveURL(/auth\/signup/)
+})
+
+test('nav shows EN/VI language toggle', async ({ page }) => {
+  await page.goto('/')
+  const nav = page.locator('nav')
+  await expect(nav.getByRole('button', { name: 'EN' })).toBeVisible()
+  await expect(nav.getByRole('button', { name: 'VI' })).toBeVisible()
+})
+
+test('EN is active by default in nav language toggle', async ({ page }) => {
+  await page.goto('/')
+  const enBtn = page.locator('nav').getByRole('button', { name: 'EN' })
+  await expect(enBtn).toHaveCSS('color', 'rgb(255, 255, 255)')
+})
+
+// ─── Hero ────────────────────────────────────────────────────────────────────
+
+test('hero section is visible', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+})
+
+test('hero h1 contains expected copy', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('perfectly tracked')
+})
+
+test('hero Get started free CTA links to /auth/signup', async ({ page }) => {
+  await page.goto('/')
+  await page.locator('.lp-hero-ctas').getByRole('link', { name: /get started/i }).click()
+  await expect(page).toHaveURL(/auth\/signup/)
+})
+
+test('hero shows app mockup with browser chrome', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.locator('text=cairn.app/dashboard')).toBeVisible()
+})
+
+// ─── Features section ────────────────────────────────────────────────────────
+
+test('features section heading is visible', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: /goals/i }).first()).toBeVisible()
+})
+
+test('features section shows 6 feature cards', async ({ page }) => {
+  await page.goto('/')
+  const featSection = page.locator('#features')
+  await expect(featSection.locator('h3')).toHaveCount(6)
+})
+
+test('features section shows Goal-based tracking card', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Goal-based tracking' })).toBeVisible()
+})
+
+// ─── How it works ────────────────────────────────────────────────────────────
+
+test('how it works section shows 3 steps', async ({ page }) => {
+  await page.goto('/')
+  const howSection = page.locator('#how')
+  await expect(howSection.locator('h3')).toHaveCount(3)
+})
+
+test('how it works step numbers are 01, 02, 03', async ({ page }) => {
+  await page.goto('/')
+  const howSection = page.locator('#how')
+  await expect(howSection.getByText('01')).toBeVisible()
+  await expect(howSection.getByText('02')).toBeVisible()
+  await expect(howSection.getByText('03')).toBeVisible()
+})
+
+// ─── Monthly plan spotlight ───────────────────────────────────────────────────
+
+test('monthly plan section is visible', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.locator('#plan')).toBeVisible()
+})
+
+test('monthly plan mockup shows invest amount', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.locator('#plan').getByText('22.8M ₫')).toBeVisible()
+})
+
+// ─── CTA section ─────────────────────────────────────────────────────────────
+
+test('CTA section heading is visible', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: /financial future/i })).toBeVisible()
+})
+
+test('CTA Get started free links to /auth/signup', async ({ page }) => {
+  await page.goto('/')
+  const cta = page.locator('section').filter({ hasText: /financial future/i })
+  await cta.getByRole('link', { name: /get started free/i }).click()
+  await expect(page).toHaveURL(/auth\/signup/)
+})
+
+// ─── Language switching ───────────────────────────────────────────────────────
+
+test('switching to VI updates hero headline', async ({ page }) => {
+  await page.goto('/')
+  await page.locator('nav').getByRole('button', { name: 'VI' }).click()
+  await page.waitForURL('/')
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('mục tiêu')
+})
+
+test('switching back to EN restores English headline', async ({ page }) => {
+  await page.goto('/')
+  await page.locator('nav').getByRole('button', { name: 'VI' }).click()
+  await page.waitForURL('/')
+  await page.locator('nav').getByRole('button', { name: 'EN' }).click()
+  await page.waitForURL('/')
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('perfectly tracked')
+})
