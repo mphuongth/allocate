@@ -25,18 +25,15 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
       >
         {/* Cairn logo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-          <svg
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
             data-testid="brand-mark"
-            width="36"
-            height="36"
-            viewBox="0 0 28 28"
-            fill="none"
-            aria-hidden="true"
-          >
-            <path d="M14 4l7 12H7z" fill="var(--c-navy)" />
-            <path d="M14 12l5 8H9z" fill="var(--c-navy)" fillOpacity={0.5} />
-            <path d="M14 18l3 5H11z" fill="var(--c-navy)" fillOpacity={0.25} />
-          </svg>
+            src="/cairn-icon.svg"
+            alt="Cairn"
+            width={36}
+            height={36}
+            style={{ borderRadius: 9, flexShrink: 0 }}
+          />
           <span
             style={{
               fontSize: 22,
