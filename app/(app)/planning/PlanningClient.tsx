@@ -93,7 +93,8 @@ function bustPlanCache(month: number, year: number) {
 function prevMonth(m: number, y: number) { return m === 1 ? { m: 12, y: y - 1 } : { m: m - 1, y } }
 function nextMonth(m: number, y: number) { return m === 12 ? { m: 1, y: y + 1 } : { m: m + 1, y } }
 
-const SHORT_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+const SHORT_MONTHS_EN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+const SHORT_MONTHS_VI = ['Th1','Th2','Th3','Th4','Th5','Th6','Th7','Th8','Th9','Th10','Th11','Th12']
 
 export default function PlanningClient() {
   const t = useTranslations('planning')
@@ -215,7 +216,8 @@ export default function PlanningClient() {
   }, [month, year])
 
   useEffect(() => {
-    const shortLabel = `${SHORT_MONTHS[month - 1]} ${year}`
+    const shortMonths = isVI ? SHORT_MONTHS_VI : SHORT_MONTHS_EN
+    const shortLabel = `${shortMonths[month - 1]} ${year}`
     setMobileTopBar({
       title: isVI ? 'Ngân sách' : 'Budget',
       subtitle: isVI ? 'Kế hoạch tháng' : 'Monthly plan',
@@ -229,7 +231,7 @@ export default function PlanningClient() {
           >
             <ChevronLeft size={16} color="var(--c-ink)" />
           </button>
-          <span style={{ padding: '4px 10px', minWidth: 78, textAlign: 'center', fontSize: 13, fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>
+          <span style={{ padding: '4px 10px', minWidth: 78, textAlign: 'center', fontSize: 13, fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums', background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 7 }}>
             {shortLabel}
           </span>
           <button
