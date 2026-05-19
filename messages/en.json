@@ -22,9 +22,9 @@
     "collapseMenu": "Collapse menu"
   },
   "nav": {
-    "dashboard": "Asset Overview",
-    "planning": "Monthly Plan",
-    "funds": "Fund Library",
+    "dashboard": "Overview",
+    "planning": "Plan",
+    "funds": "Funds",
     "settings": "Settings"
   },
   "settings": {

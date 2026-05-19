@@ -22,10 +22,10 @@
     "collapseMenu": "Thu gọn menu"
   },
   "nav": {
-    "dashboard": "Tổng Quan Tài Sản",
-    "planning": "Kế Hoạch Tháng",
-    "funds": "Thư Viện Quỹ",
-    "settings": "Cài Đặt"
+    "dashboard": "Tổng quan",
+    "planning": "Kế hoạch",
+    "funds": "Quỹ",
+    "settings": "Cài đặt"
   },
   "settings": {
     "title": "Cài đặt",
