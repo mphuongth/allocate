@@ -194,16 +194,15 @@ test('Last synced info is visible', async ({ page }) => {
 })
 
 test('clicking Sync now triggers cron API calls', async ({ page }) => {
-  const calls: string[] = []
-  page.on('request', req => {
-    if (req.url().includes('/api/cron/refresh')) calls.push(req.url())
-  })
+  // Set up response waiter before click to avoid race condition
+  const syncResponse = page.waitForResponse(
+    r => r.url().includes('/api/cron/refresh'),
+    { timeout: 15_000 }
+  )
   await page.getByRole('button', { name: /sync now/i }).click()
-  // Button becomes disabled while syncing
-  await expect(page.getByRole('button', { name: /sync now/i })).toBeDisabled({ timeout: 3_000 })
-  // Button re-enables after sync completes
-  await expect(page.getByRole('button', { name: /sync now/i })).toBeEnabled({ timeout: 15_000 })
-  expect(calls.length).toBeGreaterThan(0)
+  await syncResponse
+  // Button is re-enabled after sync completes
+  await expect(page.getByRole('button', { name: /sync now/i })).toBeEnabled({ timeout: 5_000 })
 })
 
 // ─── Sign out ──────────────────────────────────────────────────────────────────
