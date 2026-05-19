@@ -342,7 +342,7 @@
   "dashboard": {
     "title": "Tổng Quan Tài Sản",
     "overview": "Tổng quan",
-    "greeting": "Chào, {name}",
+    "greeting": "Xin chào, {name}",
     "sortManual": "Thủ công",
     "sortProgressDesc": "Tiến độ ↓",
     "sortProgressAsc": "Tiến độ ↑",
