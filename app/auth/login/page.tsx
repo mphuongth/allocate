@@ -6,6 +6,7 @@ import { useState, Suspense } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { useTranslations } from 'next-intl'
 import { Eye, EyeOff } from 'lucide-react'
+import { AuthLayout } from '../AuthLayout'
 
 const inputStyle: React.CSSProperties = {
   display: 'block',
@@ -199,32 +200,10 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <div style={{
-      position: 'fixed',
-      inset: 0,
-      background: 'var(--c-canvas)',
-      display: 'flex',
-      flexDirection: 'column',
-      padding: '40px 24px 24px',
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 36 }}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          data-testid="brand-mark"
-          src="/cairn-icon.svg"
-          alt="Cairn"
-          width={36}
-          height={36}
-          style={{ borderRadius: 9, flexShrink: 0 }}
-        />
-        <span style={{ fontSize: 17, fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--c-ink)' }}>
-          Cairn
-        </span>
-      </div>
-
+    <AuthLayout>
       <Suspense fallback={null}>
         <LoginForm />
       </Suspense>
-    </div>
+    </AuthLayout>
   )
 }

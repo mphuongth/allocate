@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { useTranslations } from 'next-intl'
 import { Eye, EyeOff } from 'lucide-react'
+import { AuthLayout } from '../AuthLayout'
 
 const inputStyle: React.CSSProperties = {
   display: 'block',
@@ -99,79 +100,56 @@ export default function SignupPage() {
 
   if (confirmSent) {
     return (
-      <div style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'var(--c-canvas)',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '40px 24px 24px',
-        textAlign: 'center',
-      }}>
+      <AuthLayout>
         <div style={{
-          width: 48,
-          height: 48,
-          borderRadius: 12,
-          background: 'var(--c-navy-tint)',
+          flex: 1,
           display: 'flex',
+          flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          fontSize: 24,
-          marginBottom: 16,
+          textAlign: 'center',
         }}>
-          📧
+          <div style={{
+            width: 48,
+            height: 48,
+            borderRadius: 12,
+            background: 'var(--c-navy-tint)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 24,
+            marginBottom: 16,
+          }}>
+            📧
+          </div>
+          <h1 style={{ margin: '0 0 12px', fontSize: 24, fontWeight: 600, color: 'var(--c-ink)', letterSpacing: '-0.02em' }}>
+            {t('checkEmailTitle')}
+          </h1>
+          <p style={{ margin: '0 0 32px', fontSize: 14, color: 'var(--c-muted)', maxWidth: 300 }}>
+            {t('checkEmailMessage')}
+          </p>
+          <Link
+            href="/auth/login"
+            style={{
+              display: 'inline-block',
+              padding: '13px 24px',
+              background: 'var(--c-btn-primary)',
+              color: '#fff',
+              borderRadius: 10,
+              fontSize: 14,
+              fontWeight: 600,
+              textDecoration: 'none',
+            }}
+          >
+            {t('goToLogin')}
+          </Link>
         </div>
-        <h1 style={{ margin: '0 0 12px', fontSize: 24, fontWeight: 600, color: 'var(--c-ink)', letterSpacing: '-0.02em' }}>
-          {t('checkEmailTitle')}
-        </h1>
-        <p style={{ margin: '0 0 32px', fontSize: 14, color: 'var(--c-muted)', maxWidth: 300 }}>
-          {t('checkEmailMessage')}
-        </p>
-        <Link
-          href="/auth/login"
-          style={{
-            display: 'inline-block',
-            padding: '13px 24px',
-            background: 'var(--c-btn-primary)',
-            color: '#fff',
-            borderRadius: 10,
-            fontSize: 14,
-            fontWeight: 600,
-            textDecoration: 'none',
-          }}
-        >
-          {t('goToLogin')}
-        </Link>
-      </div>
+      </AuthLayout>
     )
   }
 
   return (
-    <div style={{
-      position: 'fixed',
-      inset: 0,
-      background: 'var(--c-canvas)',
-      display: 'flex',
-      flexDirection: 'column',
-      padding: '40px 24px 24px',
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 36 }}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          data-testid="brand-mark"
-          src="/cairn-icon.svg"
-          alt="Cairn"
-          width={36}
-          height={36}
-          style={{ borderRadius: 9, flexShrink: 0 }}
-        />
-        <span style={{ fontSize: 17, fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--c-ink)' }}>
-          Cairn
-        </span>
-      </div>
-
+    <AuthLayout>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         <h1 style={{
           margin: 0,
@@ -298,6 +276,6 @@ export default function SignupPage() {
           </Link>
         </div>
       </div>
-    </div>
+    </AuthLayout>
   )
 }
