@@ -12,6 +12,7 @@ interface MobileTopBarProps {
 export default function MobileTopBar({ title, subtitle, trailing, dense }: MobileTopBarProps) {
   return (
     <header
+      data-testid="mobile-top-bar"
       className="md:hidden"
       style={{
         position: 'sticky',

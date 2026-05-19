@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
-import MobileTopBar from '@/app/components/navigation/MobileTopBar'
 import { Plus, Edit, Trash2, RefreshCw, ArrowUpDown, Info, AlertTriangle } from 'lucide-react'
 import MobileFundLibraryView from './components/MobileFundLibraryView'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -342,7 +341,6 @@ export default function FundLibraryClient() {
       {/* Desktop view */}
       <div className="hidden md:block">
       <div className="space-y-6">
-      <MobileTopBar subtitle={t('pageSubtitle')} title={t('pageTitle')} />
       {/* Toasts */}
       <div className="fixed top-4 right-4 z-50 flex flex-col gap-2">
         {toasts.map((t) => (

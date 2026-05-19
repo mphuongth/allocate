@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslations } from 'next-intl'
 import { Plus, RefreshCw, Search, X, ChevronDown, Check } from 'lucide-react'
+import { useNavigation } from '@/app/components/navigation/NavigationContext'
 
 function fmtCompactDca(n: number): string {
   const abs = Math.abs(n)
@@ -25,8 +26,6 @@ const IconTrash = ({ size = 14, color = 'currentColor' }: { size?: number; color
     <path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" />
   </svg>
 )
-import MobileTopBar from '@/app/components/navigation/MobileTopBar'
-
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type FundType = 'balanced' | 'equity' | 'debt' | 'gold'
@@ -430,6 +429,7 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, onEdit, onDelete
 export default function MobileFundLibraryView() {
   const t = useTranslations('funds')
   const tc = useTranslations('common')
+  const { setMobileTopBar } = useNavigation()
 
   // ── Data ──────────────────────────────────────────────────────────────────
   const [funds, setFunds] = useState<Fund[]>(() => getCache() ?? [])
@@ -487,6 +487,50 @@ export default function MobileFundLibraryView() {
 
   useEffect(() => { loadFunds() }, [loadFunds])
 
+  const handleRefreshNav = useCallback(async () => {
+    setRefreshing(true)
+    try {
+      const res = await fetch('/api/v1/funds/refresh-nav', { method: 'POST' })
+      const { results } = await res.json()
+      const updated = results.filter((r: { nav?: number }) => r.nav !== undefined).length
+      const failed = results.filter((r: { error?: string }) => r.error).length
+      bustCache()
+      await loadFunds({ force: true })
+      addToast(`${updated} updated${failed ? `, ${failed} failed` : ''}`, failed > 0 && updated === 0 ? 'error' : 'success')
+    } catch {
+      addToast('Failed to refresh NAV', 'error')
+    } finally {
+      setRefreshing(false)
+    }
+  }, [loadFunds, addToast])
+
+  useEffect(() => {
+    setMobileTopBar({
+      title: t('pageTitle'),
+      subtitle: t('pageSubtitle'),
+      trailing: (
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button
+            onClick={handleRefreshNav}
+            disabled={refreshing || !funds.some((f) => f.nav_source_url)}
+            aria-label="Refresh NAV"
+            style={{ padding: 8, background: 'transparent', border: '1px solid var(--c-line)', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', opacity: refreshing || !funds.some((f) => f.nav_source_url) ? 0.4 : 1 }}
+          >
+            <RefreshCw size={16} color="var(--c-ink)" style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
+          </button>
+          <button
+            onClick={() => { setFormError(null); setAddOpen(true) }}
+            style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', fontSize: 12, fontWeight: 600, background: 'var(--c-navy)', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}
+          >
+            <Plus size={14} strokeWidth={2.5} />
+            Add
+          </button>
+        </div>
+      ),
+    })
+    return () => setMobileTopBar({ title: '' })
+  }, [t, refreshing, funds, handleRefreshNav, setFormError, setAddOpen, setMobileTopBar])
+
   // ── Sorted/filtered list ──────────────────────────────────────────────────
 
   const sortedFunds = useMemo(() => {
@@ -511,23 +555,6 @@ export default function MobileFundLibraryView() {
   function handleSort(key: SortKey) {
     if (sortKey === key) setSortAsc((v) => !v)
     else { setSortKey(key); setSortAsc(true) }
-  }
-
-  async function handleRefreshNav() {
-    setRefreshing(true)
-    try {
-      const res = await fetch('/api/v1/funds/refresh-nav', { method: 'POST' })
-      const { results } = await res.json()
-      const updated = results.filter((r: { nav?: number }) => r.nav !== undefined).length
-      const failed = results.filter((r: { error?: string }) => r.error).length
-      bustCache()
-      await loadFunds({ force: true })
-      addToast(`${updated} updated${failed ? `, ${failed} failed` : ''}`, failed > 0 && updated === 0 ? 'error' : 'success')
-    } catch {
-      addToast('Failed to refresh NAV', 'error')
-    } finally {
-      setRefreshing(false)
-    }
   }
 
   async function handleSave(data: SavePayload, existingId?: string) {
@@ -632,31 +659,7 @@ export default function MobileFundLibraryView() {
         ))}
       </div>
 
-      <MobileTopBar
-        title={t('pageTitle')}
-        subtitle={t('pageSubtitle')}
-        trailing={
-          <div style={{ display: 'flex', gap: 6 }}>
-            <button
-              onClick={handleRefreshNav}
-              disabled={refreshing || !funds.some((f) => f.nav_source_url)}
-              aria-label="Refresh NAV"
-              style={{ padding: 8, background: 'transparent', border: '1px solid var(--c-line)', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', opacity: refreshing || !funds.some((f) => f.nav_source_url) ? 0.4 : 1 }}
-            >
-              <RefreshCw size={16} color="var(--c-ink)" style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
-            </button>
-            <button
-              onClick={() => { setFormError(null); setAddOpen(true) }}
-              style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', fontSize: 12, fontWeight: 600, background: 'var(--c-navy)', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}
-            >
-              <Plus size={14} strokeWidth={2.5} />
-              Add
-            </button>
-          </div>
-        }
-      />
-
-      <div style={{ padding: '8px 16px 96px', display: 'grid', gap: 10 }}>
+      <div style={{ padding: '0 0 96px', display: 'grid', gap: 10 }}>
         {/* Search */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 10 }}>
           <Search size={16} color="var(--c-muted)" style={{ flexShrink: 0 }} />
