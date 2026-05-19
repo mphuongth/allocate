@@ -116,7 +116,7 @@ export default function DownloadReportSheet({ open, onClose, data, onExport }: P
             </button>
           </div>
           {success ? (
-            <div style={{ padding: '28px 0', textAlign: 'center' }}>
+            <div data-testid="export-success" style={{ padding: '28px 0', textAlign: 'center' }}>
               <div style={{
                 width: 56, height: 56, borderRadius: 28,
                 background: 'var(--c-pos-tint)', color: 'var(--c-pos)',
@@ -220,6 +220,7 @@ export default function DownloadReportSheet({ open, onClose, data, onExport }: P
                 <button
                   onClick={handleExport}
                   disabled={exporting}
+                  data-testid="export-report-btn"
                   aria-label={exporting ? 'exporting' : `${t.export} · ${format.toUpperCase()}`}
                   style={{
                     flex: 2, padding: '11px 0', fontSize: 13, fontWeight: 600,

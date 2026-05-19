@@ -4,6 +4,10 @@ import { test, expect } from '@playwright/test'
 test.use({ viewport: { width: 390, height: 844 } })
 
 test.beforeEach(async ({ page }) => {
+  // Force English locale (app defaults to 'vi' when no cookie is set)
+  const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000'
+  const hostname = new URL(baseURL).hostname
+  await page.context().addCookies([{ name: 'locale', value: 'en', domain: hostname, path: '/' }])
   await page.goto('/settings')
   await page.waitForLoadState('networkidle')
 })
