@@ -12,10 +12,10 @@ test('mobile funds shows header with title and action buttons', async ({ page })
   await page.goto('/funds')
   await page.waitForLoadState('networkidle')
 
-  const mf = page.getByTestId('mobile-funds')
-  await expect(mf.getByText(/thư viện quỹ|fund library/i)).toBeVisible({ timeout: 10_000 })
-  await expect(mf.getByRole('button', { name: /add/i })).toBeVisible()
-  await expect(mf.getByRole('button', { name: /refresh/i })).toBeVisible()
+  const topBar = page.getByTestId('mobile-top-bar')
+  await expect(topBar.getByText(/thư viện quỹ|fund library/i)).toBeVisible({ timeout: 10_000 })
+  await expect(topBar.getByRole('button', { name: /add/i })).toBeVisible()
+  await expect(topBar.getByRole('button', { name: /refresh nav/i })).toBeVisible()
 })
 
 test('mobile funds shows type filter chips', async ({ page }) => {
@@ -97,8 +97,8 @@ test('mobile funds add button opens add fund sheet', async ({ page }) => {
   await page.goto('/funds')
   await page.waitForLoadState('networkidle')
 
-  const mf = page.getByTestId('mobile-funds')
-  await mf.getByRole('button', { name: /add/i }).click()
+  const topBar = page.getByTestId('mobile-top-bar')
+  await topBar.getByRole('button', { name: /add/i }).click()
   await expect(page.getByTestId('fund-sheet')).toBeVisible({ timeout: 5_000 })
   await expect(page.getByTestId('fund-sheet').getByText(/add fund|thêm quỹ/i)).toBeVisible()
 })
