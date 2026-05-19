@@ -243,6 +243,7 @@ export default function PlanningClient() {
         </div>
       ),
     })
+    return () => setMobileTopBar({ title: '' })
   }, [month, year, isVI, navigatePrev, navigateNext, setMobileTopBar])
 
   return (
