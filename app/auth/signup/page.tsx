@@ -8,27 +8,12 @@ import { useTranslations } from 'next-intl'
 import { Eye, EyeOff } from 'lucide-react'
 import { AuthLayout } from '../AuthLayout'
 
-const inputStyle: React.CSSProperties = {
-  display: 'block',
-  width: '100%',
-  padding: '10px 12px',
-  marginTop: 4,
-  background: 'var(--c-card)',
-  border: '1px solid var(--c-line-strong)',
-  borderRadius: 9,
-  fontSize: 14,
-  color: 'var(--c-ink)',
-  outline: 'none',
-  fontFamily: 'inherit',
-  boxSizing: 'border-box',
-}
-
-const labelSpanStyle: React.CSSProperties = {
+const fieldLabelStyle: React.CSSProperties = {
   fontSize: 11,
-  color: 'var(--c-muted)',
-  fontWeight: 500,
-  letterSpacing: '0.02em',
+  fontWeight: 600,
+  letterSpacing: '0.05em',
   textTransform: 'uppercase',
+  color: 'var(--c-muted)',
 }
 
 export default function SignupPage() {
@@ -101,45 +86,25 @@ export default function SignupPage() {
   if (confirmSent) {
     return (
       <AuthLayout>
-        <div style={{
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          textAlign: 'center',
-        }}>
+        <div data-testid="auth-card" className="cn-card" style={{ width: '100%', padding: '28px 24px', textAlign: 'center' }}>
           <div style={{
-            width: 48,
-            height: 48,
-            borderRadius: 12,
+            width: 48, height: 48, borderRadius: 12,
             background: 'var(--c-navy-tint)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 24,
-            marginBottom: 16,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 24, margin: '0 auto 16px',
           }}>
             📧
           </div>
-          <h1 style={{ margin: '0 0 12px', fontSize: 24, fontWeight: 600, color: 'var(--c-ink)', letterSpacing: '-0.02em' }}>
+          <h1 style={{ margin: '0 0 12px', fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--c-ink)' }}>
             {t('checkEmailTitle')}
           </h1>
-          <p style={{ margin: '0 0 32px', fontSize: 14, color: 'var(--c-muted)', maxWidth: 300 }}>
+          <p style={{ margin: '0 0 24px', fontSize: 13, color: 'var(--c-muted)' }}>
             {t('checkEmailMessage')}
           </p>
           <Link
             href="/auth/login"
-            style={{
-              display: 'inline-block',
-              padding: '13px 24px',
-              background: 'var(--c-btn-primary)',
-              color: '#fff',
-              borderRadius: 10,
-              fontSize: 14,
-              fontWeight: 600,
-              textDecoration: 'none',
-            }}
+            className="cn-btn primary"
+            style={{ display: 'inline-flex', padding: '11px 24px', fontSize: 14, fontWeight: 600, textDecoration: 'none' }}
           >
             {t('goToLogin')}
           </Link>
@@ -150,19 +115,11 @@ export default function SignupPage() {
 
   return (
     <AuthLayout>
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <h1 style={{
-          margin: 0,
-          fontSize: 28,
-          fontFamily: 'var(--font-sans)',
-          fontWeight: 600,
-          letterSpacing: '-0.025em',
-          lineHeight: 1.15,
-          color: 'var(--c-ink)',
-        }}>
+      <div data-testid="auth-card" className="cn-card" style={{ width: '100%', padding: '28px 24px' }}>
+        <h1 style={{ margin: '0 0 4px', fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--c-ink)' }}>
           {t('signupTitle')}
         </h1>
-        <p style={{ marginTop: 8, marginBottom: 28, fontSize: 14, color: 'var(--c-muted)' }}>
+        <p style={{ margin: '0 0 22px', fontSize: 13, color: 'var(--c-muted)' }}>
           {t('signupSubtitle')}
         </p>
 
@@ -181,8 +138,8 @@ export default function SignupPage() {
         )}
 
         <form onSubmit={handleSignup} style={{ display: 'grid', gap: 12 }}>
-          <label style={{ display: 'block' }}>
-            <span style={labelSpanStyle}>{t('fullNameLabel')}</span>
+          <div style={{ display: 'grid', gap: 6 }}>
+            <label htmlFor="name" style={fieldLabelStyle}>{t('fullNameLabel')}</label>
             <input
               id="name"
               type="text"
@@ -191,12 +148,12 @@ export default function SignupPage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Minh Nguyen"
-              style={inputStyle}
+              className="cn-input"
             />
-          </label>
+          </div>
 
-          <label style={{ display: 'block' }}>
-            <span style={labelSpanStyle}>{t('emailLabel')}</span>
+          <div style={{ display: 'grid', gap: 6 }}>
+            <label htmlFor="email" style={fieldLabelStyle}>{t('emailLabel')}</label>
             <input
               id="email"
               type="email"
@@ -205,12 +162,12 @@ export default function SignupPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
-              style={inputStyle}
+              className="cn-input"
             />
-          </label>
+          </div>
 
-          <label style={{ display: 'block' }}>
-            <span style={labelSpanStyle}>{t('passwordLabel')}</span>
+          <div style={{ display: 'grid', gap: 6 }}>
+            <label htmlFor="password" style={fieldLabelStyle}>{t('passwordLabel')}</label>
             <div style={{ position: 'relative' }}>
               <input
                 id="password"
@@ -222,7 +179,8 @@ export default function SignupPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 onBlur={handlePasswordBlur}
                 placeholder="••••••••"
-                style={{ ...inputStyle, paddingRight: 40 }}
+                className="cn-input"
+                style={{ paddingRight: 40 }}
               />
               <button
                 type="button"
@@ -240,42 +198,32 @@ export default function SignupPage() {
             {passwordError && (
               <p style={{ margin: '4px 0 0', fontSize: 12, color: '#dc2626' }}>{passwordError}</p>
             )}
-          </label>
+          </div>
 
           <button
             type="submit"
             disabled={loading}
+            className="cn-btn primary"
             style={{
               width: '100%',
-              display: 'flex',
-              justifyContent: 'center',
-              padding: '13px 16px',
-              marginTop: 18,
-              background: 'var(--c-btn-primary)',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 10,
+              padding: '11px',
+              marginTop: 4,
               fontSize: 14,
               fontWeight: 600,
-              cursor: loading ? 'not-allowed' : 'pointer',
-              fontFamily: 'inherit',
               opacity: loading ? 0.7 : 1,
             }}
           >
             {loading ? t('signingUp') : t('signupBtn')}
           </button>
         </form>
-
-        <div style={{ textAlign: 'center', fontSize: 13, color: 'var(--c-muted)', marginTop: 'auto', paddingTop: 24 }}>
-          {t('hasAccount')}{' '}
-          <Link
-            href="/auth/login"
-            style={{ color: 'var(--c-navy)', fontWeight: 600, textDecoration: 'none' }}
-          >
-            {t('loginLink')}
-          </Link>
-        </div>
       </div>
+
+      <p style={{ margin: 0, fontSize: 13, color: 'var(--c-muted)', textAlign: 'center' }}>
+        {t('hasAccount')}{' '}
+        <Link href="/auth/login" style={{ color: 'var(--c-navy)', fontWeight: 600, textDecoration: 'none' }}>
+          {t('loginLink')}
+        </Link>
+      </p>
     </AuthLayout>
   )
 }

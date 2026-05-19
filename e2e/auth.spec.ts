@@ -107,34 +107,14 @@ test('login page has link to signup', async ({ page }) => {
   await expect(page.getByRole('link', { name: /sign up/i })).toBeVisible()
 })
 
-// ─── Desktop two-column layout ──────────────────────────────────────────────
+// ─── Desktop centered card layout ───────────────────────────────────────────
 
-test('login page shows brand panel on desktop', async ({ page }) => {
+test('login form is inside a card', async ({ page }) => {
   await page.goto('/auth/login')
-  await expect(page.locator('[data-testid="auth-brand-panel"]')).toBeVisible()
+  await expect(page.locator('[data-testid="auth-card"]')).toBeVisible()
 })
 
-test('login page shows form panel on desktop', async ({ page }) => {
-  await page.goto('/auth/login')
-  await expect(page.locator('[data-testid="auth-form-panel"]')).toBeVisible()
-})
-
-test('brand panel contains Cairn name', async ({ page }) => {
-  await page.goto('/auth/login')
-  await expect(page.locator('[data-testid="auth-brand-panel"]')).toContainText('Cairn')
-})
-
-test('brand panel contains tagline', async ({ page }) => {
-  await page.goto('/auth/login')
-  await expect(page.locator('[data-testid="auth-brand-panel"]')).toContainText('Track what matters')
-})
-
-test('signup page shows brand panel on desktop', async ({ page }) => {
+test('signup form is inside a card', async ({ page }) => {
   await page.goto('/auth/signup')
-  await expect(page.locator('[data-testid="auth-brand-panel"]')).toBeVisible()
-})
-
-test('signup page shows form panel on desktop', async ({ page }) => {
-  await page.goto('/auth/signup')
-  await expect(page.locator('[data-testid="auth-form-panel"]')).toBeVisible()
+  await expect(page.locator('[data-testid="auth-card"]')).toBeVisible()
 })
