@@ -4,7 +4,7 @@ test('sidebar links navigate to correct routes', async ({ page }) => {
   await page.goto('/dashboard')
   await page.waitForLoadState('networkidle')
 
-  await page.getByRole('link', { name: /planning|monthly|kế hoạch/i }).first().click()
+  await page.getByRole('link', { name: /^plan$|kế hoạch/i }).first().click()
   await expect(page).toHaveURL(/planning/)
 
   await page.getByRole('link', { name: /funds|quỹ/i }).first().click()
@@ -22,7 +22,7 @@ test('active nav item reflects current route', async ({ page }) => {
   await page.waitForLoadState('networkidle')
 
   // The planning link should have aria-current="page" or an active class
-  const planningLink = page.getByRole('link', { name: /planning|monthly|kế hoạch/i }).first()
+  const planningLink = page.getByRole('link', { name: /^plan$|kế hoạch/i }).first()
   await expect(planningLink).toBeVisible()
   const ariaCurrent = await planningLink.getAttribute('aria-current')
   const className = await planningLink.getAttribute('class')
