@@ -239,7 +239,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved }: Props) {
           <button
             onClick={onClose}
             style={{ padding: 6, border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', color: 'var(--c-muted)', display: 'flex' }}
-            aria-label={tc('cancel')}
+            aria-label="Close"
           >
             <X size={18} />
           </button>

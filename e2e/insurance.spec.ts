@@ -31,7 +31,7 @@ test('can add an insurance member', async ({ page }) => {
 
   await page.locator('#annual_payment_vnd').fill('12000000')
 
-  await page.getByRole('button', { name: /save|add|lưu/i }).click()
+  await page.getByRole('dialog').getByRole('button', { name: /save|add|lưu/i }).click()
   await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 5_000 })
 
   // Scope to table row (avoids hidden sm:hidden mobile cards)
