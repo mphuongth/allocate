@@ -342,6 +342,7 @@
   "dashboard": {
     "title": "Asset Overview",
     "overview": "Overview",
+    "greeting": "Hi, {name}",
     "sortManual": "Manual",
     "sortProgressDesc": "Progress ↓",
     "sortProgressAsc": "Progress ↑",

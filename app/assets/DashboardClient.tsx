@@ -347,7 +347,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
 
   useEffect(() => {
     setMobileTopBar({
-      title: `Hi, ${userName}`,
+      title: t('greeting', { name: userName }),
       subtitle: t('overview'),
       trailing: (
         <button
