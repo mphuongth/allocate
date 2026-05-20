@@ -5,11 +5,11 @@ import { useTranslations } from 'next-intl'
 import { TrendingUp, TrendingDown } from 'lucide-react'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 
-const TIME_RANGES = ['6M', '1Y', '3Y', 'All'] as const
+const TIME_RANGES = ['1M', '3M', '6M', '1Y', 'All'] as const
 type TimeRange = typeof TIME_RANGES[number]
 
 const RANGE_PARAM: Record<TimeRange, string> = {
-  '6M': '6m', '1Y': '1y', '3Y': '3y', 'All': 'all',
+  '1M': '1m', '3M': '3m', '6M': '6m', '1Y': '1y', 'All': 'all',
 }
 
 interface ChartPoint { label: string; value: number }
@@ -99,7 +99,7 @@ export default function NetWorthCard({
 }: Props) {
   const t = useTranslations('dashboard')
   const plPositive = overallProfitLoss >= 0
-  const [timeRange, setTimeRange] = useState<TimeRange>('All')
+  const [timeRange, setTimeRange] = useState<TimeRange>('1Y')
   const [history, setHistory] = useState<ChartPoint[]>([])
 
   useEffect(() => {
