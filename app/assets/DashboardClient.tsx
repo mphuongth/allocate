@@ -666,30 +666,16 @@ export default function DashboardClient({ userId }: { userId: string }) {
                           {sortedGoals.length} {t('tracked')}
                         </p>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <SortDropdown
-                          value={goalSort}
-                          onChange={setGoalSort}
-                          options={[
-                            { value: 'manual', label: t('sortManual') },
-                            { value: 'progressDesc', label: t('sortProgressDesc') },
-                            { value: 'progressAsc', label: t('sortProgressAsc') },
-                            { value: 'alpha', label: t('sortAlpha') },
-                          ]}
-                        />
-                        <button
-                          onClick={() => setShowGoalForm(true)}
-                          style={{
-                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                            padding: 6, border: 'none',
-                            borderRadius: 'var(--r-control)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit',
-                            color: 'var(--c-ink)',
-                          }}
-                          aria-label={t('addGoalBtn')}
-                        >
-                          <Plus size={16} />
-                        </button>
-                      </div>
+                      <SortDropdown
+                        value={goalSort}
+                        onChange={setGoalSort}
+                        options={[
+                          { value: 'manual', label: t('sortManual') },
+                          { value: 'progressDesc', label: t('sortProgressDesc') },
+                          { value: 'progressAsc', label: t('sortProgressAsc') },
+                          { value: 'alpha', label: t('sortAlpha') },
+                        ]}
+                      />
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
                       {sortedGoals.map((goal) => (
