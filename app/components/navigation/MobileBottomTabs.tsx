@@ -5,13 +5,13 @@ import { usePathname } from 'next/navigation'
 import { Calendar, TrendingUp, Settings } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 
-function CairnNavIcon({ size = 22 }: { size?: number }) {
+function MountainsIcon({ size = 22, strokeWidth = 1.75 }: { size?: number; strokeWidth?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"
       style={{ display: 'block', flexShrink: 0 }}>
-      <path d="M12 3l6.5 11H5.5z" fill="currentColor" />
-      <path d="M12 10.5l4.5 7H7.5z" fill="currentColor" opacity="0.55" />
-      <path d="M12 16.5l2.5 4H9.5z" fill="currentColor" opacity="0.3" />
+      <path d="M3 19h18l-6-9-3 4-2-3z" />
+      <circle cx="8" cy="7" r="1.5" />
     </svg>
   )
 }
@@ -26,7 +26,7 @@ const TABS: TabDef[] = [
   {
     href: '/dashboard',
     key: 'dashboard',
-    renderIcon: (_active) => <CairnNavIcon size={22} />,
+    renderIcon: (active) => <MountainsIcon size={22} strokeWidth={active ? 2.2 : 1.6} />,
   },
   {
     href: '/planning',
