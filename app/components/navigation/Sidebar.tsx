@@ -7,6 +7,19 @@ import { useNavigation } from './NavigationContext'
 import { useTranslations } from 'next-intl'
 import LanguageSwitcher from '../LanguageSwitcher'
 
+// Real Cairn logo from cairn-icon-transparent.svg (stacked rounded rectangles)
+function CairnMark({ size = 28 }: { size?: number }) {
+  const h = Math.round(size * 0.85)
+  return (
+    <svg width={size} height={h} viewBox="110 180 283 240" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+      <rect x="111.872" y="359.936" width="280.064" height="57.856" rx="24.3" fill="#3B5A82"/>
+      <rect x="152.064" y="293.888" width="220.16" height="50.176" rx="21.07" fill="#163A61"/>
+      <rect x="163.84" y="233.984" width="167.936" height="44.032" rx="18.49" fill="#10B981"/>
+      <rect x="208.128" y="181.76" width="103.936" height="35.84" rx="15.05" fill="#F8FAFC"/>
+    </svg>
+  )
+}
+
 // Cairn stacked-triangles brand icon for the dashboard nav item
 function CairnNavIcon({ size = 20 }: { size?: number }) {
   return (
@@ -19,16 +32,6 @@ function CairnNavIcon({ size = 20 }: { size?: number }) {
   )
 }
 
-// Navy logomark for light sidebar
-function CairnLogomarkNavy({ size = 28 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 28 28" fill="none" style={{ flexShrink: 0 }}>
-      <path d="M14 4l7 12H7z" fill="var(--c-navy)" />
-      <path d="M14 12l5 8H9z" fill="var(--c-navy)" opacity="0.5" />
-      <path d="M14 18l3 5H11z" fill="var(--c-navy)" opacity="0.25" />
-    </svg>
-  )
-}
 
 function ChevronLeftIcon({ size = 14 }: { size?: number }) {
   return (
@@ -57,7 +60,7 @@ interface SidebarProps {
 
 export default function Sidebar({ email, initials, onNavClick, hideLogo = false }: SidebarProps) {
   const pathname = usePathname()
-  const { sidebarCollapsed, setSidebarCollapsed } = useNavigation()
+  const { sidebarCollapsed, setSidebarCollapsed, userName } = useNavigation()
   const t = useTranslations('nav')
 
   const NAV_ITEMS = [
@@ -89,7 +92,7 @@ export default function Sidebar({ email, initials, onNavClick, hideLogo = false 
           justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
           flexShrink: 0,
         }}>
-          <CairnLogomarkNavy size={28} />
+          <CairnMark size={28} />
           {!sidebarCollapsed && (
             <span style={{
               fontFamily: 'inherit', fontSize: 17, fontWeight: 700,
@@ -175,9 +178,15 @@ export default function Sidebar({ email, initials, onNavClick, hideLogo = false 
                 fontSize: 12, fontWeight: 600, color: 'var(--c-ink)',
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>
+                {userName}
+              </div>
+              <div style={{
+                fontSize: 10, color: 'var(--c-muted)', marginTop: 1,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
                 {email}
               </div>
-              <div style={{ marginTop: 2 }}>
+              <div style={{ marginTop: 3 }}>
                 <LanguageSwitcher />
               </div>
             </div>

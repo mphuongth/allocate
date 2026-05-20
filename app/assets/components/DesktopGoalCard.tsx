@@ -1,6 +1,6 @@
 'use client'
 
-import { fmtCompact, fmtPct } from '@/lib/formatters'
+import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import type { GoalData } from '../DashboardClient'
 
 interface Props {
@@ -29,7 +29,7 @@ export default function DesktopGoalCard({ goal, locale, onClick }: Props) {
       onMouseLeave={(e) => { e.currentTarget.style.boxShadow = 'var(--shadow-card)' }}
     >
       {/* Header row */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.005em' }}>
             {goal.goalName}
@@ -53,14 +53,14 @@ export default function DesktopGoalCard({ goal, locale, onClick }: Props) {
         )}
       </div>
 
-      {/* Current value */}
-      <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.025em', lineHeight: 1, marginBottom: 12 }}>
-        {fmtCompact(goal.currentValue)}
+      {/* Current value — full precision like mobile */}
+      <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.025em', lineHeight: 1.1, marginTop: 10, marginBottom: 10, overflowWrap: 'break-word', wordBreak: 'break-word' }}>
+        {fmt(goal.currentValue)}
       </div>
 
       {/* Progress bar */}
       {goal.progressPercentage !== null && (
-        <div style={{ height: 5, borderRadius: 999, background: 'var(--c-line)', overflow: 'hidden', marginBottom: 12 }}>
+        <div style={{ height: 5, borderRadius: 999, background: 'var(--c-line)', overflow: 'hidden', marginTop: 10 }}>
           <div style={{
             height: '100%',
             width: `${Math.min(progress, 100)}%`,
@@ -71,23 +71,13 @@ export default function DesktopGoalCard({ goal, locale, onClick }: Props) {
         </div>
       )}
 
-      {/* P&L row */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span style={{
-          display: 'inline-flex', alignItems: 'center',
-          padding: '2px 6px', borderRadius: 999, fontSize: 11, fontWeight: 600,
-          background: isPos ? 'var(--c-pos-tint)' : 'var(--c-neg-tint)',
-          color: isPos ? 'var(--c-pos)' : 'var(--c-neg)',
-        }}>
-          {fmtPct(goal.profitLossPercentage)}
-        </span>
-        <span style={{ fontSize: 11, color: isPos ? 'var(--c-pos)' : 'var(--c-neg)', fontWeight: 500 }}>
-          {isPos ? '+' : ''}{fmtCompact(goal.profitLoss)}
+      {/* P&L row + transaction count */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, fontSize: 11, color: 'var(--c-muted)' }}>
+        <span style={{ color: isPos ? 'var(--c-pos)' : 'var(--c-neg)', fontWeight: 500 }}>
+          {isPos ? '+' : ''}{fmtCompact(goal.profitLoss)} · {fmtPct(goal.profitLossPercentage)}
         </span>
         {goal.transactionCount > 0 && (
-          <span style={{ fontSize: 11, color: 'var(--c-muted)', marginLeft: 'auto' }}>
-            {goal.transactionCount} {isVi ? 'giao dịch' : 'holdings'}
-          </span>
+          <span>{goal.transactionCount} {isVi ? 'giao dịch' : 'transactions'}</span>
         )}
       </div>
     </button>

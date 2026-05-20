@@ -5,11 +5,11 @@ import { ArrowDownToLine } from 'lucide-react'
 import { fmtCompact, fmtPct } from '@/lib/formatters'
 import type { DashboardData } from '../DashboardClient'
 
-const TIME_RANGES = ['6M', '1Y', '3Y', 'All'] as const
+const TIME_RANGES = ['1M', '3M', '6M', '1Y', 'All'] as const
 type TimeRange = typeof TIME_RANGES[number]
 
 const RANGE_PARAM: Record<TimeRange, string> = {
-  '6M': '6m', '1Y': '1y', '3Y': '3y', 'All': 'all',
+  '1M': '1m', '3M': '3m', '6M': '6m', '1Y': '1y', 'All': 'all',
 }
 
 interface ChartPoint { label: string; value: number }
@@ -69,7 +69,7 @@ export default function DesktopNetWorthPanel({ data, allocationTotals, locale, r
   const { netWorth } = data
   const isPos = netWorth.overallProfitLoss >= 0
   const isVi = locale === 'vi'
-  const [timeRange, setTimeRange] = useState<TimeRange>('All')
+  const [timeRange, setTimeRange] = useState<TimeRange>('1Y')
   const [history, setHistory] = useState<ChartPoint[]>([])
 
   useEffect(() => {
@@ -148,7 +148,7 @@ export default function DesktopNetWorthPanel({ data, allocationTotals, locale, r
         </div>
 
         {/* Range pills */}
-        <div style={{ display: 'flex', gap: 3, marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 3, marginTop: 6 }}>
           {TIME_RANGES.map((r) => (
             <button
               key={r}
@@ -169,7 +169,7 @@ export default function DesktopNetWorthPanel({ data, allocationTotals, locale, r
         </div>
 
         {/* KPI 2×2 grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1, marginTop: 0, background: 'var(--c-line)', borderRadius: 10, overflow: 'hidden' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1, marginTop: 16, background: 'var(--c-line)', borderRadius: 10, overflow: 'hidden' }}>
           {kpis.map((k, i) => (
             <div key={i} style={{ background: 'var(--c-card)', padding: '10px 12px' }}>
               <div style={{ fontSize: 10, color: 'var(--c-muted)' }}>{k.l}</div>
