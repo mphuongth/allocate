@@ -5,7 +5,6 @@ import { usePathname } from 'next/navigation'
 import { Calendar, TrendingUp, Settings } from 'lucide-react'
 import { useNavigation } from './NavigationContext'
 import { useTranslations } from 'next-intl'
-import LanguageSwitcher from '../LanguageSwitcher'
 
 // Real Cairn logo from cairn-icon-transparent.svg (stacked rounded rectangles)
 function CairnMark({ size = 28 }: { size?: number }) {
@@ -189,13 +188,6 @@ export default function Sidebar({ email, initials, onNavClick, hideLogo = false 
             </div>
           )}
         </div>
-
-        {/* Language switcher */}
-        {!sidebarCollapsed && (
-          <div style={{ padding: '2px 10px' }}>
-            <LanguageSwitcher />
-          </div>
-        )}
 
         {/* Collapse toggle */}
         <button
