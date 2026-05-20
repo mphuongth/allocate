@@ -663,7 +663,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                           {t('sectionGoals')}
                         </h2>
                         <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--c-muted)' }}>
-                          {sortedGoals.length} {t('tracked')}
+                          {sortedGoals.length} {locale !== 'vi' && sortedGoals.length === 1 ? 'goal tracked' : t('tracked')}
                         </p>
                       </div>
                       <SortDropdown
@@ -780,7 +780,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                     <div>
                       <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600, letterSpacing: '-0.01em' }}>{t('sectionGoals')}</h2>
                       <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--c-muted)' }}>
-                        {sortedGoals.length} {t('tracked')}
+                        {sortedGoals.length} {locale !== 'vi' && sortedGoals.length === 1 ? 'goal tracked' : t('tracked')}
                       </p>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

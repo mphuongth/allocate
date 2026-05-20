@@ -55,7 +55,7 @@ export default function DesktopInsuranceList({ insurance, locale, onOpen, onAdd 
           <div>
             <div style={{ fontSize: 14, fontWeight: 600 }}>{isVi ? 'Bảo hiểm' : 'Insurance'}</div>
             <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 1 }}>
-              {insurance.length} {isVi ? 'thành viên' : 'members'}
+              {insurance.length} {isVi ? 'thành viên' : insurance.length === 1 ? 'member' : 'members'}
             </div>
           </div>
         </div>

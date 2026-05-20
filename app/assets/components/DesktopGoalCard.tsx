@@ -77,7 +77,7 @@ export default function DesktopGoalCard({ goal, locale, onClick }: Props) {
           {isPos ? '+' : ''}{fmtCompact(goal.profitLoss)} · {fmtPct(goal.profitLossPercentage)}
         </span>
         {goal.transactionCount > 0 && (
-          <span>{goal.transactionCount} {isVi ? 'giao dịch' : 'transactions'}</span>
+          <span>{goal.transactionCount} {isVi ? 'giao dịch' : goal.transactionCount === 1 ? 'transaction' : 'transactions'}</span>
         )}
       </div>
     </button>
