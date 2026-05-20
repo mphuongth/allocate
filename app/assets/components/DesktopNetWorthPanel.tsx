@@ -154,7 +154,7 @@ export default function DesktopNetWorthPanel({ data, allocationTotals, locale, r
           {history.length > 1
             ? <Sparkline data={history} positive={isPos} />
             : <div style={{ height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ fontSize: 11, color: 'var(--c-muted)' }}>{isVi ? 'Chưa có lịch sử' : 'No history yet'}</span>
+                <span style={{ fontSize: 11, color: 'var(--c-muted)' }}>{isVi ? 'Không có dữ liệu' : 'No history yet'}</span>
               </div>
           }
         </div>
