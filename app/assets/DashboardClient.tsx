@@ -17,6 +17,7 @@ import { SellWithdrawSheet, type SellItem } from './components/SellWithdrawSheet
 import GoalDetailSheet from './components/GoalDetailSheet'
 import AssignGoalSheet from './components/AssignGoalSheet'
 import DownloadReportSheet from './components/DownloadReportSheet'
+import AddTransactionSheet from './components/AddTransactionSheet'
 
 const GoldPriceWidget = dynamic(() => import('./components/GoldPriceWidget'))
 import TransactionHistorySheet from './components/TransactionHistorySheet'
@@ -232,6 +233,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const [goalDetailOpen, setGoalDetailOpen] = useState(false)
   const [showReportSheet, setShowReportSheet] = useState(false)
   const [selectedInsurance, setSelectedInsurance] = useState<InsuranceData | null>(null)
+  const [desktopAddTxOpen, setDesktopAddTxOpen] = useState(false)
   const PULL_THRESHOLD = 65
 
   const fetchDataRef = useRef<(opts?: { force?: boolean }) => Promise<void>>(async () => {})
@@ -619,13 +621,33 @@ export default function DashboardClient({ userId }: { userId: string }) {
               style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}
             >
               {/* Page title */}
-              <header style={{ padding: '4px 0 20px', flexShrink: 0 }}>
-                <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--c-muted)', marginBottom: 3 }}>
-                  {t('overview')}
+              <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 0 20px', flexShrink: 0 }}>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--c-muted)', marginBottom: 3 }}>
+                    {t('overview')}
+                  </div>
+                  <h1 data-testid="desktop-page-title" style={{ margin: 0, fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--c-ink)', lineHeight: 1 }}>
+                    {t('greeting', { name: userName })}
+                  </h1>
                 </div>
-                <h1 data-testid="desktop-page-title" style={{ margin: 0, fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--c-ink)', lineHeight: 1 }}>
-                  {t('greeting', { name: userName })}
-                </h1>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    onClick={() => setDesktopAddTxOpen(true)}
+                    className="cn-btn"
+                    style={{ padding: '8px 14px', fontSize: 13, gap: 6 }}
+                  >
+                    <Plus size={14} strokeWidth={2.4} />
+                    {locale === 'vi' ? 'Giao dịch' : 'Transaction'}
+                  </button>
+                  <button
+                    onClick={() => setShowGoalForm(true)}
+                    className="cn-btn primary"
+                    style={{ padding: '8px 14px', fontSize: 13, gap: 6 }}
+                  >
+                    <Plus size={14} strokeWidth={2.4} />
+                    {locale === 'vi' ? 'Mục tiêu mới' : 'New goal'}
+                  </button>
+                </div>
               </header>
 
               {/* Two-column body */}
@@ -954,6 +976,12 @@ export default function DashboardClient({ userId }: { userId: string }) {
         open={goalDetailOpen}
         onClose={() => setGoalDetailOpen(false)}
         onDataChanged={() => fetchData({ force: true })}
+      />
+
+      {/* Desktop: Add Transaction Sheet */}
+      <AddTransactionSheet
+        open={desktopAddTxOpen}
+        onClose={() => setDesktopAddTxOpen(false)}
       />
 
       {/* Download Report Sheet */}
