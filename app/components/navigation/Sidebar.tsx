@@ -186,12 +186,16 @@ export default function Sidebar({ email, initials, onNavClick, hideLogo = false 
               }}>
                 {email}
               </div>
-              <div style={{ marginTop: 3 }}>
-                <LanguageSwitcher />
-              </div>
             </div>
           )}
         </div>
+
+        {/* Language switcher */}
+        {!sidebarCollapsed && (
+          <div style={{ padding: '2px 10px' }}>
+            <LanguageSwitcher />
+          </div>
+        )}
 
         {/* Collapse toggle */}
         <button
