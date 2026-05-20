@@ -362,7 +362,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
     setMobileTopBar({
       title: t('greeting', { name: userName }),
       subtitle: t('overview'),
-      trailing: (
+      trailing: isDesktop ? undefined : (
         <button
           data-testid="generate-report-btn"
           onClick={() => setShowReportSheet(true)}
@@ -379,7 +379,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
     })
     return () => setMobileTopBar({ title: '' })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userName, data])
+  }, [userName, data, isDesktop])
 
   function openSellFund(fund: FundBreakdownItem) {
     setSellItem({
