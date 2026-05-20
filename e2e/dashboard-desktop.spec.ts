@@ -38,4 +38,32 @@ test.describe('Desktop overview layout', () => {
     await page.waitForLoadState('networkidle')
     await expect(page.getByTestId('desktop-overview')).not.toBeVisible()
   })
+
+  test('sidebar has light background (not dark navy)', async ({ page }) => {
+    const sidebar = page.getByTestId('desktop-sidebar')
+    await expect(sidebar).toBeVisible({ timeout: 10_000 })
+    const bg = await sidebar.evaluate((el) => getComputedStyle(el).backgroundColor)
+    // Dark navy = rgb(15, 42, 74) — sidebar must NOT be that color
+    expect(bg).not.toBe('rgb(15, 42, 74)')
+  })
+
+  test('desktop layout shows Overview page title', async ({ page }) => {
+    await expect(page.getByTestId('desktop-page-title')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByTestId('desktop-page-title')).toContainText(/overview|tổng quan/i)
+  })
+
+  test('unallocated section shows wallet icon header inside card', async ({ page }) => {
+    await expect(page.getByTestId('unallocated-card-header')).toBeVisible({ timeout: 10_000 })
+  })
+
+  test('insurance section shows Add button', async ({ page }) => {
+    await expect(page.getByTestId('insurance-add-btn')).toBeVisible({ timeout: 10_000 })
+  })
+
+  test('clicking insurance row shows insurance detail panel', async ({ page }) => {
+    const row = page.getByTestId('insurance-row').first()
+    await expect(row).toBeVisible({ timeout: 10_000 })
+    await row.click()
+    await expect(page.getByTestId('insurance-detail-panel')).toBeVisible({ timeout: 5_000 })
+  })
 })

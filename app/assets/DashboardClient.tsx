@@ -22,6 +22,8 @@ const GoldPriceWidget = dynamic(() => import('./components/GoldPriceWidget'))
 import TransactionHistorySheet from './components/TransactionHistorySheet'
 import DesktopNetWorthPanel from './components/DesktopNetWorthPanel'
 import DesktopGoalCard from './components/DesktopGoalCard'
+import DesktopInsuranceList from './components/DesktopInsuranceList'
+import DesktopInsuranceDetail from './components/DesktopInsuranceDetail'
 
 export interface FundBreakdownItem {
   fundId: string
@@ -229,6 +231,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const [selectedGoal, setSelectedGoal] = useState<GoalData | null>(null)
   const [goalDetailOpen, setGoalDetailOpen] = useState(false)
   const [showReportSheet, setShowReportSheet] = useState(false)
+  const [selectedInsurance, setSelectedInsurance] = useState<InsuranceData | null>(null)
   const PULL_THRESHOLD = 65
 
   const fetchDataRef = useRef<(opts?: { force?: boolean }) => Promise<void>>(async () => {})
@@ -607,8 +610,20 @@ export default function DashboardClient({ userId }: { userId: string }) {
             /* ── Desktop: two-column layout ── */
             <div
               data-testid="desktop-overview"
-              style={{ display: 'flex', gap: 0, minHeight: 0 }}
+              style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}
             >
+              {/* Page title */}
+              <header style={{ padding: '4px 0 20px', flexShrink: 0 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--c-muted)', marginBottom: 3 }}>
+                  Cairn
+                </div>
+                <h1 data-testid="desktop-page-title" style={{ margin: 0, fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--c-ink)', lineHeight: 1 }}>
+                  {locale === 'vi' ? 'Tổng quan' : 'Overview'}
+                </h1>
+              </header>
+
+              {/* Two-column body */}
+              <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
               {/* Left column: goals, unallocated, insurance */}
               <div style={{ flex: 1, minWidth: 0, paddingRight: 20 }}>
                 {/* Goals */}
@@ -673,6 +688,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                       onSellFund={openSellFund}
                       onAssignNonFundToGoal={(txId) => setNonFundPickerTxId(txId)}
                       onSellNonFund={openSellNonFund}
+                      desktopCard
                     />
                   </div>
                 )}
@@ -680,42 +696,12 @@ export default function DashboardClient({ userId }: { userId: string }) {
                 {/* Insurance */}
                 {data.insurance.length > 0 && (
                   <section style={{ marginBottom: 24 }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
-                      <div>
-                        <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em' }}>{t('sectionInsurance')}</h2>
-                        <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--c-muted)' }}>
-                          {data.insurance.length} {data.insurance.length === 1 ? t('member') : t('members')}
-                        </p>
-                      </div>
-                      <Link
-                        href="/settings?tab=insurance"
-                        style={{
-                          display: 'inline-flex', alignItems: 'center', gap: 4,
-                          fontSize: 12, fontWeight: 500, padding: '4px 8px',
-                          border: 'none', borderRadius: 'var(--r-control)',
-                          background: 'transparent', color: 'var(--c-ink)',
-                          textDecoration: 'none',
-                        }}
-                      >
-                        <Plus size={12} strokeWidth={2.4} />
-                        {t('add')}
-                      </Link>
-                    </div>
-                    <div style={{
-                      background: 'var(--c-card)',
-                      border: '1px solid var(--c-line)',
-                      borderRadius: 'var(--r-card)',
-                      boxShadow: 'var(--shadow-card)',
-                      overflow: 'hidden',
-                    }}>
-                      {data.insurance.map((ins, idx) => (
-                        <InsuranceCard
-                          key={ins.insuranceId}
-                          {...ins}
-                          isLast={idx === data.insurance.length - 1}
-                        />
-                      ))}
-                    </div>
+                    <DesktopInsuranceList
+                      insurance={data.insurance}
+                      locale={locale}
+                      onOpen={(ins) => setSelectedInsurance(selectedInsurance?.insuranceId === ins.insuranceId ? null : ins)}
+                      onAdd={() => window.open('/settings?tab=insurance', '_self')}
+                    />
                   </section>
                 )}
 
@@ -738,13 +724,22 @@ export default function DashboardClient({ userId }: { userId: string }) {
                 maxHeight: 'calc(100vh - 56px)',
                 overflowY: 'auto',
               }}>
-                <DesktopNetWorthPanel
-                  data={data}
-                  allocationTotals={allocationTotals}
-                  locale={locale}
-                  onDownloadReport={() => setShowReportSheet(true)}
-                />
+                {selectedInsurance ? (
+                  <DesktopInsuranceDetail
+                    ins={selectedInsurance}
+                    locale={locale}
+                    onClose={() => setSelectedInsurance(null)}
+                  />
+                ) : (
+                  <DesktopNetWorthPanel
+                    data={data}
+                    allocationTotals={allocationTotals}
+                    locale={locale}
+                    onDownloadReport={() => setShowReportSheet(true)}
+                  />
+                )}
               </div>
+              </div>{/* end two-column body */}
             </div>
           ) : (
             /* ── Mobile layout ── */

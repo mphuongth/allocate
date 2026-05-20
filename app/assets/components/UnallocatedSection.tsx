@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ChevronDown, ChevronUp, ChevronRight, Target, Building, CircleDollarSign, TrendingUp, BarChart2, Clock, ArrowDownToLine, ArrowDownRight } from 'lucide-react'
+import { ChevronDown, ChevronUp, ChevronRight, Target, Building, CircleDollarSign, TrendingUp, BarChart2, Clock, ArrowDownToLine, ArrowDownRight, Wallet } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import type { FundBreakdownItem, NonFundUnallocatedItem } from '../DashboardClient'
 import { fmtCompact, fmtNav, fmtPct } from '@/lib/formatters'
@@ -32,12 +32,14 @@ interface Props {
   onSellFund: (fund: FundBreakdownItem) => void
   onAssignNonFundToGoal: (transactionId: string) => void
   onSellNonFund: (item: NonFundUnallocatedItem) => void
+  desktopCard?: boolean
 }
 
 export default function UnallocatedSection({
   unallocatedAmount, funds, nonFunds,
   onFundClick, onAssignToGoal, onSellFund,
   onAssignNonFundToGoal, onSellNonFund,
+  desktopCard = false,
 }: Props) {
   const t = useTranslations('dashboard')
   const tt = useTranslations('transactions')
@@ -60,7 +62,6 @@ export default function UnallocatedSection({
     actionTarget?.kind === 'nonFund' && (actionTarget.item.type === 'bank' || actionTarget.item.type === 'gold')
   )
 
-  // Derive display info for the tapped item
   const actionName = actionTarget?.kind === 'fund'
     ? actionTarget.fund.fundName
     : (actionTarget?.item.notes || (actionTarget ? new Date(actionTarget.item.investmentDate).toLocaleDateString('vi-VN') : ''))
@@ -82,10 +83,315 @@ export default function UnallocatedSection({
   const isBank = actionTarget?.kind === 'nonFund' && actionTarget.item.type === 'bank'
   const SellIcon = isBank ? ArrowDownToLine : ArrowDownRight
 
+  // Shared rows renderer — padding differs between mobile and desktop
+  function renderRows(rowPadding: string) {
+    return (
+      <>
+        {funds.map((fund, i) => {
+          const plPositive = fund.profitLoss >= 0
+          const isLast = i === funds.length - 1 && nonFunds.length === 0
+          return (
+            <button
+              key={fund.fundId}
+              data-testid="unallocated-row"
+              onClick={() => setActionTarget({ kind: 'fund', fund })}
+              onMouseEnter={desktopCard ? (e) => { (e.currentTarget as HTMLElement).style.background = 'var(--c-card-2)' } : undefined}
+              onMouseLeave={desktopCard ? (e) => { (e.currentTarget as HTMLElement).style.background = 'transparent' } : undefined}
+              style={{
+                width: '100%', textAlign: 'left',
+                display: 'flex', alignItems: 'center', gap: 12,
+                padding: rowPadding,
+                background: 'transparent', border: 'none',
+                borderBottom: isLast ? 'none' : '1px solid var(--c-line)',
+                cursor: 'pointer', fontFamily: 'inherit',
+                transition: desktopCard ? 'background 120ms' : undefined,
+              }}
+            >
+              <div style={{
+                width: 30, height: 30, borderRadius: 7, flexShrink: 0,
+                background: 'var(--c-card-2)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: TYPE_COLOR.fund,
+              }}>
+                <TrendingUp size={14} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+                <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--c-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {fund.fundName}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>
+                  {fund.quantity.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {tt('unitsDefault')} · NAV {fmtNav(fund.currentNAV)}
+                </div>
+              </div>
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(fund.currentValue)}</div>
+                <div style={{ fontSize: 11, marginTop: 1, fontVariantNumeric: 'tabular-nums', color: plPositive ? 'var(--c-pos)' : 'var(--c-neg)' }}>
+                  {fmtPct(fund.profitLossPercentage)}
+                </div>
+              </div>
+              <ChevronRight size={14} color="var(--c-muted-2)" style={{ flexShrink: 0 }} />
+            </button>
+          )
+        })}
+
+        {nonFunds.map((item, i) => {
+          const pl = item.currentValue - item.amount
+          const plPct = item.amount > 0 ? (pl / item.amount) * 100 : 0
+          const plPositive = pl >= 0
+          const Icon = TYPE_ICON[item.type] ?? Building
+          const color = TYPE_COLOR[item.type] ?? 'var(--c-muted)'
+          const typeLabel = typeLabelMap[item.type] ?? item.type
+          const isLast = i === nonFunds.length - 1
+          return (
+            <button
+              key={item.transactionId}
+              data-testid="unallocated-row"
+              onClick={() => setActionTarget({ kind: 'nonFund', item })}
+              onMouseEnter={desktopCard ? (e) => { (e.currentTarget as HTMLElement).style.background = 'var(--c-card-2)' } : undefined}
+              onMouseLeave={desktopCard ? (e) => { (e.currentTarget as HTMLElement).style.background = 'transparent' } : undefined}
+              style={{
+                width: '100%', textAlign: 'left',
+                display: 'flex', alignItems: 'center', gap: 12,
+                padding: rowPadding,
+                background: 'transparent', border: 'none',
+                borderBottom: isLast ? 'none' : '1px solid var(--c-line)',
+                cursor: 'pointer', fontFamily: 'inherit',
+                transition: desktopCard ? 'background 120ms' : undefined,
+              }}
+            >
+              <div style={{
+                width: 30, height: 30, borderRadius: 7, flexShrink: 0,
+                background: 'var(--c-card-2)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color,
+              }}>
+                <Icon size={14} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+                <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--c-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {item.notes || new Date(item.investmentDate).toLocaleDateString('vi-VN')}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>
+                  {typeLabel}
+                  {item.interestRate != null && ` · ${item.interestRate}%/yr`}
+                  {item.type === 'gold' && item.units != null && ` · ${item.units.toLocaleString('vi-VN', { maximumFractionDigits: 2 })} chi`}
+                  {item.expiryDate && ` · ${t('expiry')} ${new Date(item.expiryDate).toLocaleDateString('vi-VN')}`}
+                </div>
+              </div>
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(item.currentValue)}</div>
+                <div style={{ fontSize: 11, marginTop: 1, fontVariantNumeric: 'tabular-nums', color: plPositive ? 'var(--c-pos)' : 'var(--c-neg)' }}>
+                  {fmtPct(plPct)}
+                </div>
+              </div>
+              <ChevronRight size={14} color="var(--c-muted-2)" style={{ flexShrink: 0 }} />
+            </button>
+          )
+        })}
+      </>
+    )
+  }
+
+  // Shared action popup content
+  const actionPopupContent = actionTarget && (
+    <>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 12,
+        padding: '12px 14px',
+        background: 'var(--c-card-2)', borderRadius: 12,
+        marginBottom: 12,
+      }}>
+        <div style={{
+          width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+          background: 'var(--c-card)', border: '1px solid var(--c-line)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: actionColor,
+        }}>
+          <ActionIcon size={18} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {actionName}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(actionValue)}</span>
+            {actionGainPct != null && (
+              <span style={{
+                fontSize: 10, padding: '1px 6px', borderRadius: 999, fontWeight: 500,
+                background: actionGainPct >= 0 ? 'var(--c-pos-tint)' : 'var(--c-neg-tint)',
+                color: actionGainPct >= 0 ? 'var(--c-pos)' : 'var(--c-neg)',
+                fontVariantNumeric: 'tabular-nums',
+              }}>
+                {fmtPct(actionGainPct)}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gap: 10 }}>
+        <button
+          data-testid="action-assign"
+          onClick={() => {
+            closeAction()
+            if (actionTarget.kind === 'fund') onAssignToGoal(actionTarget.fund.fundId)
+            else onAssignNonFundToGoal(actionTarget.item.transactionId)
+          }}
+          style={{
+            width: '100%', textAlign: 'left', padding: '14px 16px',
+            background: 'var(--c-card)', border: '1px solid var(--c-line)',
+            borderRadius: 14, cursor: 'pointer', fontFamily: 'inherit',
+            display: 'flex', alignItems: 'center', gap: 14, transition: 'background 120ms',
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--c-card-2)' }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--c-card)' }}
+        >
+          <div style={{ width: 42, height: 42, borderRadius: 12, flexShrink: 0, background: 'var(--c-navy-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--c-navy)' }}>
+            <Target size={20} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-ink)' }}>{t('assignToGoal')}</div>
+            <div style={{ fontSize: 12, color: 'var(--c-muted)', marginTop: 2 }}>{t('assignToGoalSub')}</div>
+          </div>
+          <ChevronRight size={16} color="var(--c-muted)" />
+        </button>
+
+        {canSell && (
+          <button
+            data-testid="action-sell"
+            onClick={() => {
+              closeAction()
+              if (actionTarget.kind === 'fund') onSellFund(actionTarget.fund)
+              else onSellNonFund(actionTarget.item)
+            }}
+            style={{
+              width: '100%', textAlign: 'left', padding: '14px 16px',
+              background: 'var(--c-card)', border: '1px solid var(--c-line)',
+              borderRadius: 14, cursor: 'pointer', fontFamily: 'inherit',
+              display: 'flex', alignItems: 'center', gap: 14, transition: 'background 120ms',
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--c-card-2)' }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--c-card)' }}
+          >
+            <div style={{ width: 42, height: 42, borderRadius: 12, flexShrink: 0, background: 'var(--c-neg-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--c-neg)' }}>
+              <SellIcon size={20} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-ink)' }}>{isBank ? tg('withdraw') : tg('sell')}</div>
+              <div style={{ fontSize: 12, color: 'var(--c-muted)', marginTop: 2 }}>{isBank ? t('actionWithdrawSub') : t('actionSellSub')}</div>
+            </div>
+            <ChevronRight size={16} color="var(--c-muted)" />
+          </button>
+        )}
+
+        {actionTarget.kind === 'fund' && (
+          <button
+            data-testid="action-history"
+            onClick={() => { closeAction(); onFundClick(actionTarget.fund.fundId) }}
+            style={{
+              width: '100%', textAlign: 'left', padding: '14px 16px',
+              background: 'var(--c-card)', border: '1px solid var(--c-line)',
+              borderRadius: 14, cursor: 'pointer', fontFamily: 'inherit',
+              display: 'flex', alignItems: 'center', gap: 14, transition: 'background 120ms',
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--c-card-2)' }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--c-card)' }}
+          >
+            <div style={{ width: 42, height: 42, borderRadius: 12, flexShrink: 0, background: 'var(--c-card-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--c-muted)' }}>
+              <Clock size={20} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-ink)' }}>{t('actionHistory')}</div>
+              <div style={{ fontSize: 12, color: 'var(--c-muted)', marginTop: 2 }}>{t('actionHistorySub')}</div>
+            </div>
+            <ChevronRight size={16} color="var(--c-muted)" />
+          </button>
+        )}
+      </div>
+    </>
+  )
+
+  if (desktopCard) {
+    return (
+      <>
+        <div className="cn-card" style={{ overflow: 'hidden' }}>
+          <button
+            data-testid="unallocated-card-header"
+            onClick={() => setOpen((o) => !o)}
+            style={{
+              width: '100%', textAlign: 'left', background: 'transparent', border: 'none',
+              padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12,
+              cursor: 'pointer', fontFamily: 'inherit',
+            }}
+          >
+            <div style={{
+              width: 32, height: 32, borderRadius: 8,
+              background: 'var(--c-card-2)', color: 'var(--c-muted)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}>
+              <Wallet size={15} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                {t('sectionUnallocated')}
+                <span style={{
+                  fontSize: 10, fontWeight: 500, padding: '2px 7px', borderRadius: 999,
+                  background: 'var(--c-card-2)', color: 'var(--c-muted)',
+                }}>
+                  {totalItems}
+                </span>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>
+                {fmtCompact(unallocatedAmount)} {t('availableToAssign')}
+              </div>
+            </div>
+            {open
+              ? <ChevronUp size={16} color="var(--c-muted)" />
+              : <ChevronDown size={16} color="var(--c-muted)" />
+            }
+          </button>
+
+          {open && (
+            <div style={{ borderTop: '1px solid var(--c-line)' }}>
+              {renderRows('12px 16px')}
+            </div>
+          )}
+        </div>
+
+        {/* Desktop: centered modal overlay */}
+        {actionTarget && (
+          <div
+            data-testid="action-sheet"
+            onClick={closeAction}
+            style={{
+              position: 'fixed', inset: 0,
+              background: 'rgba(15, 23, 42, 0.4)',
+              zIndex: 300,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: 24,
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                width: '100%', maxWidth: 460,
+                background: 'var(--c-card)',
+                borderRadius: 16,
+                padding: '18px 20px',
+                boxShadow: '0 24px 48px rgba(15,23,42,0.18)',
+              }}
+            >
+              {actionPopupContent}
+            </div>
+          </div>
+        )}
+      </>
+    )
+  }
+
   return (
     <>
       <section>
-        {/* Collapsible toggle header */}
         <button
           onClick={() => setOpen((o) => !o)}
           style={{
@@ -117,7 +423,6 @@ export default function UnallocatedSection({
           }
         </button>
 
-        {/* Collapsible body */}
         {open && (
           <div style={{
             background: 'var(--c-card)',
@@ -127,110 +432,12 @@ export default function UnallocatedSection({
             overflow: 'hidden',
             padding: '4px 14px',
           }}>
-            {/* Fund rows */}
-            {funds.map((fund) => {
-              const plPositive = fund.profitLoss >= 0
-              return (
-                <button
-                  key={fund.fundId}
-                  data-testid="unallocated-row"
-                  onClick={() => setActionTarget({ kind: 'fund', fund })}
-                  style={{
-                    width: '100%', textAlign: 'left',
-                    display: 'flex', alignItems: 'center', gap: 12,
-                    padding: '12px 0',
-                    background: 'transparent', border: 'none',
-                    borderBottom: '1px solid var(--c-line)',
-                    cursor: 'pointer', fontFamily: 'inherit',
-                  }}
-                >
-                  <div style={{
-                    width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-                    background: 'var(--c-card-2)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    color: TYPE_COLOR.fund,
-                  }}>
-                    <TrendingUp size={16} />
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
-                    <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--c-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {fund.fundName}
-                    </div>
-                    <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>
-                      {fund.quantity.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {tt('unitsDefault')} · NAV {fmtNav(fund.currentNAV)}
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-                      {fmtCompact(fund.currentValue)}
-                    </div>
-                    <div style={{ fontSize: 11, marginTop: 1, fontVariantNumeric: 'tabular-nums', color: plPositive ? 'var(--c-pos)' : 'var(--c-neg)' }}>
-                      {fmtPct(fund.profitLossPercentage)}
-                    </div>
-                  </div>
-                  <ChevronRight size={16} color="var(--c-muted)" style={{ flexShrink: 0 }} />
-                </button>
-              )
-            })}
-
-            {/* Non-fund rows */}
-            {nonFunds.map((item) => {
-              const pl = item.currentValue - item.amount
-              const plPct = item.amount > 0 ? (pl / item.amount) * 100 : 0
-              const plPositive = pl >= 0
-              const Icon = TYPE_ICON[item.type] ?? Building
-              const color = TYPE_COLOR[item.type] ?? 'var(--c-muted)'
-              const typeLabel = typeLabelMap[item.type] ?? item.type
-              return (
-                <button
-                  key={item.transactionId}
-                  data-testid="unallocated-row"
-                  onClick={() => setActionTarget({ kind: 'nonFund', item })}
-                  style={{
-                    width: '100%', textAlign: 'left',
-                    display: 'flex', alignItems: 'center', gap: 12,
-                    padding: '12px 0',
-                    background: 'transparent', border: 'none',
-                    borderBottom: '1px solid var(--c-line)',
-                    cursor: 'pointer', fontFamily: 'inherit',
-                  }}
-                >
-                  <div style={{
-                    width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-                    background: 'var(--c-card-2)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    color,
-                  }}>
-                    <Icon size={16} />
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
-                    <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--c-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {item.notes || new Date(item.investmentDate).toLocaleDateString('vi-VN')}
-                    </div>
-                    <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>
-                      {typeLabel}
-                      {item.interestRate != null && ` · ${item.interestRate}%/yr`}
-                      {item.type === 'gold' && item.units != null && ` · ${item.units.toLocaleString('vi-VN', { maximumFractionDigits: 2 })} chi`}
-                      {item.expiryDate && ` · ${t('expiry')} ${new Date(item.expiryDate).toLocaleDateString('vi-VN')}`}
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-                      {fmtCompact(item.currentValue)}
-                    </div>
-                    <div style={{ fontSize: 11, marginTop: 1, fontVariantNumeric: 'tabular-nums', color: plPositive ? 'var(--c-pos)' : 'var(--c-neg)' }}>
-                      {fmtPct(plPct)}
-                    </div>
-                  </div>
-                  <ChevronRight size={16} color="var(--c-muted)" style={{ flexShrink: 0 }} />
-                </button>
-              )
-            })}
+            {renderRows('12px 0')}
           </div>
         )}
       </section>
 
-      {/* Action sheet overlay */}
+      {/* Mobile: bottom sheet overlay */}
       {actionTarget && (
         <div
           data-testid="action-sheet"
@@ -254,149 +461,8 @@ export default function UnallocatedSection({
               boxShadow: '0 -8px 24px rgba(0,0,0,0.08)',
             }}
           >
-            {/* Handle */}
-            <div style={{
-              width: 36, height: 4, borderRadius: 2,
-              background: 'var(--c-line)', margin: '0 auto 16px',
-            }} />
-
-            {/* Item summary card */}
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 12,
-              padding: '12px 14px',
-              background: 'var(--c-card-2)', borderRadius: 12,
-              marginBottom: 12,
-            }}>
-              <div style={{
-                width: 40, height: 40, borderRadius: 10, flexShrink: 0,
-                background: 'var(--c-card)',
-                border: '1px solid var(--c-line)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: actionColor,
-              }}>
-                <ActionIcon size={18} />
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {actionName}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-                    {fmtCompact(actionValue)}
-                  </span>
-                  {actionGainPct != null && (
-                    <span style={{
-                      fontSize: 10, padding: '1px 6px', borderRadius: 999, fontWeight: 500,
-                      background: actionGainPct >= 0 ? 'var(--c-pos-tint)' : 'var(--c-neg-tint)',
-                      color: actionGainPct >= 0 ? 'var(--c-pos)' : 'var(--c-neg)',
-                      fontVariantNumeric: 'tabular-nums',
-                    }}>
-                      {fmtPct(actionGainPct)}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div style={{ display: 'grid', gap: 12 }}>
-              {/* Assign to Goal */}
-              <button
-                data-testid="action-assign"
-                onClick={() => {
-                  closeAction()
-                  if (actionTarget.kind === 'fund') onAssignToGoal(actionTarget.fund.fundId)
-                  else onAssignNonFundToGoal(actionTarget.item.transactionId)
-                }}
-                style={{
-                  width: '100%', textAlign: 'left', padding: '14px 16px',
-                  background: 'var(--c-card)', border: '1px solid var(--c-line)',
-                  borderRadius: 14, cursor: 'pointer', fontFamily: 'inherit',
-                  display: 'flex', alignItems: 'center', gap: 14,
-                }}
-              >
-                <div style={{
-                  width: 42, height: 42, borderRadius: 12, flexShrink: 0,
-                  background: 'var(--c-navy-tint)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: 'var(--c-navy)',
-                }}>
-                  <Target size={20} />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-ink)' }}>{t('assignToGoal')}</div>
-                  <div style={{ fontSize: 12, color: 'var(--c-muted)', marginTop: 2 }}>{t('assignToGoalSub')}</div>
-                </div>
-                <ChevronRight size={16} color="var(--c-muted)" />
-              </button>
-
-              {/* Sell / Withdraw */}
-              {canSell && (
-                <button
-                  data-testid="action-sell"
-                  onClick={() => {
-                    closeAction()
-                    if (actionTarget.kind === 'fund') onSellFund(actionTarget.fund)
-                    else onSellNonFund(actionTarget.item)
-                  }}
-                  style={{
-                    width: '100%', textAlign: 'left', padding: '14px 16px',
-                    background: 'var(--c-card)', border: '1px solid var(--c-line)',
-                    borderRadius: 14, cursor: 'pointer', fontFamily: 'inherit',
-                    display: 'flex', alignItems: 'center', gap: 14,
-                  }}
-                >
-                  <div style={{
-                    width: 42, height: 42, borderRadius: 12, flexShrink: 0,
-                    background: 'var(--c-neg-tint)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    color: 'var(--c-neg)',
-                  }}>
-                    <SellIcon size={20} />
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-ink)' }}>
-                      {isBank ? tg('withdraw') : tg('sell')}
-                    </div>
-                    <div style={{ fontSize: 12, color: 'var(--c-muted)', marginTop: 2 }}>
-                      {isBank ? t('actionWithdrawSub') : t('actionSellSub')}
-                    </div>
-                  </div>
-                  <ChevronRight size={16} color="var(--c-muted)" />
-                </button>
-              )}
-
-              {/* Transaction History (fund only) */}
-              {actionTarget.kind === 'fund' && (
-                <button
-                  data-testid="action-history"
-                  onClick={() => {
-                    closeAction()
-                    onFundClick(actionTarget.fund.fundId)
-                  }}
-                  style={{
-                    width: '100%', textAlign: 'left', padding: '14px 16px',
-                    background: 'var(--c-card)', border: '1px solid var(--c-line)',
-                    borderRadius: 14, cursor: 'pointer', fontFamily: 'inherit',
-                    display: 'flex', alignItems: 'center', gap: 14,
-                  }}
-                >
-                  <div style={{
-                    width: 42, height: 42, borderRadius: 12, flexShrink: 0,
-                    background: 'var(--c-card-2)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    color: 'var(--c-muted)',
-                  }}>
-                    <Clock size={20} />
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-ink)' }}>{t('actionHistory')}</div>
-                    <div style={{ fontSize: 12, color: 'var(--c-muted)', marginTop: 2 }}>{t('actionHistorySub')}</div>
-                  </div>
-                  <ChevronRight size={16} color="var(--c-muted)" />
-                </button>
-              )}
-            </div>
+            <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--c-line)', margin: '0 auto 16px' }} />
+            {actionPopupContent}
           </div>
         </div>
       )}

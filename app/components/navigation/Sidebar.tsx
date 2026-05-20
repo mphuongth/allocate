@@ -19,13 +19,13 @@ function MountainsIcon({ size = 20, strokeWidth = 1.75 }: { size?: number; strok
   )
 }
 
-// Cairn stacked-triangles logomark
-function CairnLogomark({ size = 28 }: { size?: number }) {
+// Navy logomark for light sidebar
+function CairnLogomarkNavy({ size = 28 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 28 28" fill="none" style={{ flexShrink: 0 }}>
-      <path d="M14 4l7 12H7z" fill="rgba(255,255,255,0.9)" />
-      <path d="M14 12l5 8H9z" fill="rgba(255,255,255,0.55)" />
-      <path d="M14 18l3 5H11z" fill="rgba(255,255,255,0.3)" />
+      <path d="M14 4l7 12H7z" fill="var(--c-navy)" />
+      <path d="M14 12l5 8H9z" fill="var(--c-navy)" opacity="0.5" />
+      <path d="M14 18l3 5H11z" fill="var(--c-navy)" opacity="0.25" />
     </svg>
   )
 }
@@ -70,9 +70,10 @@ export default function Sidebar({ email, initials, onNavClick, hideLogo = false 
   const w = sidebarCollapsed ? 64 : 220
 
   return (
-    <aside style={{
+    <aside data-testid="desktop-sidebar" style={{
       width: w, flexShrink: 0,
-      background: 'var(--c-navy)',
+      background: 'var(--c-card)',
+      borderRight: '1px solid var(--c-line)',
       display: 'flex', flexDirection: 'column',
       height: '100vh', position: 'sticky', top: 0,
       transition: 'width 200ms cubic-bezier(0.4,0,0.2,1)',
@@ -84,15 +85,15 @@ export default function Sidebar({ email, initials, onNavClick, hideLogo = false 
         <div style={{
           padding: sidebarCollapsed ? '20px 0' : '20px 16px 16px',
           display: 'flex', alignItems: 'center', gap: 10,
-          borderBottom: '1px solid rgba(255,255,255,0.08)',
+          borderBottom: '1px solid var(--c-line)',
           justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
           flexShrink: 0,
         }}>
-          <CairnLogomark size={28} />
+          <CairnLogomarkNavy size={28} />
           {!sidebarCollapsed && (
             <span style={{
               fontFamily: 'inherit', fontSize: 17, fontWeight: 700,
-              color: '#fff', letterSpacing: '-0.02em', whiteSpace: 'nowrap',
+              color: 'var(--c-navy)', letterSpacing: '-0.02em', whiteSpace: 'nowrap',
             }}>
               Cairn
             </span>
@@ -121,8 +122,8 @@ export default function Sidebar({ email, initials, onNavClick, hideLogo = false 
                 padding: sidebarCollapsed ? '11px 0' : '10px 12px',
                 justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
                 borderRadius: sidebarCollapsed ? 0 : 8,
-                background: active ? 'rgba(255,255,255,0.12)' : 'transparent',
-                color: active ? '#fff' : 'rgba(255,255,255,0.6)',
+                background: active ? 'var(--c-navy-tint)' : 'transparent',
+                color: active ? 'var(--c-navy)' : 'var(--c-muted)',
                 textDecoration: 'none',
                 fontSize: 13, fontWeight: active ? 600 : 400,
                 transition: 'background 120ms, color 120ms',
@@ -135,7 +136,7 @@ export default function Sidebar({ email, initials, onNavClick, hideLogo = false 
                   position: 'absolute', left: sidebarCollapsed ? 0 : -8, top: '50%',
                   transform: 'translateY(-50%)',
                   width: 3, height: 20, borderRadius: '0 2px 2px 0',
-                  background: '#fff',
+                  background: 'var(--c-navy)',
                 }} />
               )}
               {renderIcon(active)}
@@ -148,7 +149,7 @@ export default function Sidebar({ email, initials, onNavClick, hideLogo = false 
       {/* User card + collapse toggle */}
       <div style={{
         padding: sidebarCollapsed ? '12px 0' : '12px 8px',
-        borderTop: '1px solid rgba(255,255,255,0.08)',
+        borderTop: '1px solid var(--c-line)',
         display: 'flex', flexDirection: 'column', gap: 4,
       }}>
         {/* User row */}
@@ -160,7 +161,7 @@ export default function Sidebar({ email, initials, onNavClick, hideLogo = false 
         }}>
           <div style={{
             width: 30, height: 30, borderRadius: 15,
-            background: 'rgba(255,255,255,0.15)',
+            background: 'var(--c-navy)',
             color: '#fff',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 11, fontWeight: 700, flexShrink: 0,
@@ -171,7 +172,7 @@ export default function Sidebar({ email, initials, onNavClick, hideLogo = false 
           {!sidebarCollapsed && (
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{
-                fontSize: 12, fontWeight: 600, color: '#fff',
+                fontSize: 12, fontWeight: 600, color: 'var(--c-ink)',
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>
                 {email}
@@ -191,12 +192,12 @@ export default function Sidebar({ email, initials, onNavClick, hideLogo = false 
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             gap: 8, padding: '8px',
             border: 'none', background: 'transparent',
-            color: 'rgba(255,255,255,0.4)', cursor: 'pointer',
+            color: 'var(--c-muted-2)', cursor: 'pointer',
             borderRadius: 6, fontFamily: 'inherit', fontSize: 11,
             transition: 'color 120ms',
           }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.8)' }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.4)' }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--c-ink)' }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--c-muted-2)' }}
         >
           {sidebarCollapsed ? <ChevronRightIcon size={14} /> : <ChevronLeftIcon size={14} />}
           {!sidebarCollapsed && <span>Collapse</span>}
