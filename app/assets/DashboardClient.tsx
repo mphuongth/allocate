@@ -189,12 +189,24 @@ function fmtTimeAgo(isoString: string, locale: string): string {
   return isVi ? `${mins} phút trước` : `${mins}m ago`
 }
 
+function useIsDesktop(): boolean {
+  const [isDesktop, setIsDesktop] = useState(false)
+  useEffect(() => {
+    function check() { setIsDesktop(window.innerWidth >= 768) }
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
+  return isDesktop
+}
+
 export default function DashboardClient({ userId }: { userId: string }) {
   const t = useTranslations('dashboard')
   const tc = useTranslations('common')
   const tg = useTranslations('goals')
   const locale = useLocale()
   const { userName, setMobileTopBar } = useNavigation()
+  const isDesktop = useIsDesktop()
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -589,12 +601,155 @@ export default function DashboardClient({ userId }: { userId: string }) {
 
 
 
-        {/* Dashboard content */}
+        {/* Dashboard content — conditionally renders desktop or mobile layout (no DOM duplication) */}
         {!loading && data && !isEmpty && (
-          <>
-            {/* ── Mobile layout (hidden on desktop) ── */}
-            <div className="md:hidden space-y-8">
-              {/* Net Worth + Asset Allocation */}
+          isDesktop ? (
+            /* ── Desktop: two-column layout ── */
+            <div
+              data-testid="desktop-overview"
+              style={{ display: 'flex', gap: 0, minHeight: 0 }}
+            >
+              {/* Left column: goals, unallocated, insurance */}
+              <div style={{ flex: 1, minWidth: 0, paddingRight: 20 }}>
+                {/* Goals */}
+                {sortedGoals.length > 0 && (
+                  <section style={{ marginBottom: 24 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                      <div>
+                        <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em' }}>
+                          {t('sectionGoals')}
+                        </h2>
+                        <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--c-muted)' }}>
+                          {sortedGoals.length} {t('tracked')}
+                        </p>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <SortDropdown
+                          value={goalSort}
+                          onChange={setGoalSort}
+                          options={[
+                            { value: 'manual', label: t('sortManual') },
+                            { value: 'progressDesc', label: t('sortProgressDesc') },
+                            { value: 'progressAsc', label: t('sortProgressAsc') },
+                            { value: 'alpha', label: t('sortAlpha') },
+                          ]}
+                        />
+                        <button
+                          onClick={() => setShowGoalForm(true)}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            padding: 6, border: 'none',
+                            borderRadius: 'var(--r-control)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit',
+                            color: 'var(--c-ink)',
+                          }}
+                          aria-label={t('addGoalBtn')}
+                        >
+                          <Plus size={16} />
+                        </button>
+                      </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+                      {sortedGoals.map((goal) => (
+                        <DesktopGoalCard
+                          key={goal.goalId}
+                          goal={goal}
+                          locale={locale}
+                          onClick={() => { setSelectedGoal(goal); setGoalDetailOpen(true) }}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {/* Unallocated */}
+                {(data.unallocated.funds.length > 0 || data.unallocated.nonFunds.length > 0) && (
+                  <div style={{ marginBottom: 24 }}>
+                    <UnallocatedSection
+                      unallocatedAmount={data.unallocated.totalValue}
+                      funds={data.unallocated.funds}
+                      nonFunds={data.unallocated.nonFunds}
+                      onFundClick={handleFundClick}
+                      onAssignToGoal={(fundId) => setGoalPickerFundId(fundId)}
+                      onSellFund={openSellFund}
+                      onAssignNonFundToGoal={(txId) => setNonFundPickerTxId(txId)}
+                      onSellNonFund={openSellNonFund}
+                    />
+                  </div>
+                )}
+
+                {/* Insurance */}
+                {data.insurance.length > 0 && (
+                  <section style={{ marginBottom: 24 }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+                      <div>
+                        <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em' }}>{t('sectionInsurance')}</h2>
+                        <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--c-muted)' }}>
+                          {data.insurance.length} {data.insurance.length === 1 ? t('member') : t('members')}
+                        </p>
+                      </div>
+                      <Link
+                        href="/settings?tab=insurance"
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                          fontSize: 12, fontWeight: 500, padding: '4px 8px',
+                          border: 'none', borderRadius: 'var(--r-control)',
+                          background: 'transparent', color: 'var(--c-ink)',
+                          textDecoration: 'none',
+                        }}
+                      >
+                        <Plus size={12} strokeWidth={2.4} />
+                        {t('add')}
+                      </Link>
+                    </div>
+                    <div style={{
+                      background: 'var(--c-card)',
+                      border: '1px solid var(--c-line)',
+                      borderRadius: 'var(--r-card)',
+                      boxShadow: 'var(--shadow-card)',
+                      overflow: 'hidden',
+                    }}>
+                      {data.insurance.map((ins, idx) => (
+                        <InsuranceCard
+                          key={ins.insuranceId}
+                          {...ins}
+                          isLast={idx === data.insurance.length - 1}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {/* NAV updated footer */}
+                {data.netWorth.navUpdatedAt && (
+                  <p style={{ fontSize: 11, color: 'var(--c-muted)' }}>
+                    {t('navUpdated')} {fmtTimeAgo(data.netWorth.navUpdatedAt, locale)}
+                  </p>
+                )}
+              </div>
+
+              {/* Right column: net worth panel (sticky) */}
+              <div style={{
+                width: 300, flexShrink: 0,
+                borderLeft: '1px solid var(--c-line)',
+                paddingLeft: 20,
+                position: 'sticky',
+                top: 0,
+                alignSelf: 'flex-start',
+                maxHeight: 'calc(100vh - 56px)',
+                overflowY: 'auto',
+              }}>
+                <DesktopNetWorthPanel
+                  data={data}
+                  allocationTotals={allocationTotals}
+                  locale={locale}
+                  onDownloadReport={() => setShowReportSheet(true)}
+                />
+              </div>
+            </div>
+          ) : (
+            /* ── Mobile layout ── */
+            <div className="space-y-8">
+              {/* Net Worth */}
               <div className="space-y-4">
                 <NetWorthCard
                   {...data.netWorth}
@@ -718,151 +873,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                 </p>
               )}
             </div>
-
-            {/* ── Desktop layout — two-column (hidden on mobile) ── */}
-            <div
-              data-testid="desktop-overview"
-              className="hidden md:flex"
-              style={{ margin: '-16px -24px', minHeight: 0 }}
-            >
-              {/* Left column: goals, unallocated, insurance */}
-              <div style={{ flex: 1, minWidth: 0, padding: '20px 24px 40px' }}>
-                {/* Goals */}
-                {sortedGoals.length > 0 && (
-                  <section style={{ marginBottom: 24 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                      <div>
-                        <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em' }}>
-                          {t('sectionGoals')}
-                        </h2>
-                        <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--c-muted)' }}>
-                          {sortedGoals.length} {t('tracked')}
-                        </p>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <SortDropdown
-                          value={goalSort}
-                          onChange={setGoalSort}
-                          options={[
-                            { value: 'manual', label: t('sortManual') },
-                            { value: 'progressDesc', label: t('sortProgressDesc') },
-                            { value: 'progressAsc', label: t('sortProgressAsc') },
-                            { value: 'alpha', label: t('sortAlpha') },
-                          ]}
-                        />
-                        <button
-                          onClick={() => setShowGoalForm(true)}
-                          style={{
-                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                            padding: 6, border: 'none',
-                            borderRadius: 'var(--r-control)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit',
-                            color: 'var(--c-ink)',
-                          }}
-                          aria-label={t('addGoalBtn')}
-                        >
-                          <Plus size={16} />
-                        </button>
-                      </div>
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
-                      {sortedGoals.map((goal) => (
-                        <DesktopGoalCard
-                          key={goal.goalId}
-                          goal={goal}
-                          locale={locale}
-                          onClick={() => { setSelectedGoal(goal); setGoalDetailOpen(true) }}
-                        />
-                      ))}
-                    </div>
-                  </section>
-                )}
-
-                {/* Unallocated */}
-                {(data.unallocated.funds.length > 0 || data.unallocated.nonFunds.length > 0) && (
-                  <div style={{ marginBottom: 24 }}>
-                    <UnallocatedSection
-                      unallocatedAmount={data.unallocated.totalValue}
-                      funds={data.unallocated.funds}
-                      nonFunds={data.unallocated.nonFunds}
-                      onFundClick={handleFundClick}
-                      onAssignToGoal={(fundId) => setGoalPickerFundId(fundId)}
-                      onSellFund={openSellFund}
-                      onAssignNonFundToGoal={(txId) => setNonFundPickerTxId(txId)}
-                      onSellNonFund={openSellNonFund}
-                    />
-                  </div>
-                )}
-
-                {/* Insurance */}
-                {data.insurance.length > 0 && (
-                  <section style={{ marginBottom: 24 }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
-                      <div>
-                        <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em' }}>{t('sectionInsurance')}</h2>
-                        <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--c-muted)' }}>
-                          {data.insurance.length} {data.insurance.length === 1 ? t('member') : t('members')}
-                        </p>
-                      </div>
-                      <Link
-                        href="/settings?tab=insurance"
-                        style={{
-                          display: 'inline-flex', alignItems: 'center', gap: 4,
-                          fontSize: 12, fontWeight: 500, padding: '4px 8px',
-                          border: 'none', borderRadius: 'var(--r-control)',
-                          background: 'transparent', color: 'var(--c-ink)',
-                          textDecoration: 'none',
-                        }}
-                      >
-                        <Plus size={12} strokeWidth={2.4} />
-                        {t('add')}
-                      </Link>
-                    </div>
-                    <div style={{
-                      background: 'var(--c-card)',
-                      border: '1px solid var(--c-line)',
-                      borderRadius: 'var(--r-card)',
-                      boxShadow: 'var(--shadow-card)',
-                      overflow: 'hidden',
-                    }}>
-                      {data.insurance.map((ins, idx) => (
-                        <InsuranceCard
-                          key={ins.insuranceId}
-                          {...ins}
-                          isLast={idx === data.insurance.length - 1}
-                        />
-                      ))}
-                    </div>
-                  </section>
-                )}
-
-                {/* NAV updated footer */}
-                {data.netWorth.navUpdatedAt && (
-                  <p style={{ fontSize: 11, color: 'var(--c-muted)' }}>
-                    {t('navUpdated')} {fmtTimeAgo(data.netWorth.navUpdatedAt, locale)}
-                  </p>
-                )}
-              </div>
-
-              {/* Right column: net worth panel (sticky) */}
-              <div style={{
-                width: 300, flexShrink: 0,
-                borderLeft: '1px solid var(--c-line)',
-                padding: '20px 20px 40px 16px',
-                position: 'sticky',
-                top: 0,
-                alignSelf: 'flex-start',
-                maxHeight: 'calc(100vh - 56px)',
-                overflowY: 'auto',
-              }}>
-                <DesktopNetWorthPanel
-                  data={data}
-                  allocationTotals={allocationTotals}
-                  locale={locale}
-                  onDownloadReport={() => setShowReportSheet(true)}
-                />
-              </div>
-            </div>
-          </>
+          )
         )}
 
       {/* Transaction History Sheet */}

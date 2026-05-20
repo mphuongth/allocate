@@ -105,7 +105,7 @@ export default function DesktopNetWorthPanel({ data, allocationTotals, locale, o
         {segments.length > 0 && (
           <div style={{ marginTop: 16 }}>
             <div
-              data-testid="desktop-allocation-bar"
+              data-testid="allocation-bar"
               style={{ display: 'flex', height: 7, borderRadius: 999, overflow: 'hidden', gap: 1.5 }}
             >
               {segments.map((seg, i) => (
@@ -138,7 +138,7 @@ export default function DesktopNetWorthPanel({ data, allocationTotals, locale, o
 
       {/* Download report */}
       <button
-        data-testid="desktop-download-report-btn"
+        data-testid="generate-report-btn"
         onClick={onDownloadReport}
         className="cn-btn"
         style={{ width: '100%', justifyContent: 'center', gap: 7, fontSize: 13, padding: '10px 14px' }}

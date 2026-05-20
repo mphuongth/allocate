@@ -25,11 +25,11 @@ test.describe('Desktop overview layout', () => {
 
   test('net worth panel shows allocation bar when investments exist', async ({ page }) => {
     // Global setup seeds a bank transaction so allocation data is always present
-    await expect(page.getByTestId('desktop-allocation-bar')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByTestId('allocation-bar')).toBeVisible({ timeout: 10_000 })
   })
 
   test('net worth panel shows download report button', async ({ page }) => {
-    await expect(page.getByTestId('desktop-download-report-btn')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByTestId('generate-report-btn')).toBeVisible({ timeout: 10_000 })
   })
 
   test('desktop layout is not visible on mobile viewport', async ({ page }) => {
