@@ -14,6 +14,17 @@ const RANGE_PARAM: Record<TimeRange, string> = {
 
 interface ChartPoint { label: string; value: number }
 
+function fmtTimeAgo(isoString: string, locale: string): string {
+  const diffMs = Date.now() - new Date(isoString).getTime()
+  const mins = Math.floor(diffMs / 60_000)
+  const hours = Math.floor(mins / 60)
+  const days = Math.floor(hours / 24)
+  const isVi = locale === 'vi'
+  if (days > 0) return isVi ? `${days} ngày trước` : `${days}d ago`
+  if (hours > 0) return isVi ? `${hours} giờ trước` : `${hours}h ago`
+  return isVi ? `${mins} phút trước` : `${mins}m ago`
+}
+
 function Sparkline({ data, positive }: { data: ChartPoint[]; positive: boolean }) {
   if (data.length < 2) return null
   const values = data.map((d) => d.value)
@@ -62,10 +73,11 @@ interface Props {
   allocationTotals: AllocationTotals | null
   locale: string
   refreshKey?: number
+  navUpdatedAt?: string | null
   onDownloadReport: () => void
 }
 
-export default function DesktopNetWorthPanel({ data, allocationTotals, locale, refreshKey, onDownloadReport }: Props) {
+export default function DesktopNetWorthPanel({ data, allocationTotals, locale, refreshKey, navUpdatedAt, onDownloadReport }: Props) {
   const { netWorth } = data
   const isPos = netWorth.overallProfitLoss >= 0
   const isVi = locale === 'vi'
@@ -223,6 +235,12 @@ export default function DesktopNetWorthPanel({ data, allocationTotals, locale, r
         <ArrowDownToLine size={15} strokeWidth={2} />
         {isVi ? 'Xuất báo cáo' : 'Download report'}
       </button>
+
+      {navUpdatedAt && (
+        <p style={{ margin: 0, fontSize: 11, color: 'var(--c-muted)', textAlign: 'center' }}>
+          {isVi ? 'NAV cập nhật' : 'NAV updated'} {fmtTimeAgo(navUpdatedAt, locale)}
+        </p>
+      )}
     </div>
   )
 }

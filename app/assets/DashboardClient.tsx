@@ -623,10 +623,10 @@ export default function DashboardClient({ userId }: { userId: string }) {
               {/* Page title */}
               <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 0 20px', flexShrink: 0 }}>
                 <div>
-                  <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--c-muted)', marginBottom: 3 }}>
+                  <div data-testid="desktop-page-title" style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--c-muted)', marginBottom: 3 }}>
                     {t('overview')}
                   </div>
-                  <h1 data-testid="desktop-page-title" style={{ margin: 0, fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--c-ink)', lineHeight: 1 }}>
+                  <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--c-ink)', lineHeight: 1 }}>
                     {t('greeting', { name: userName })}
                   </h1>
                 </div>
@@ -719,12 +719,6 @@ export default function DashboardClient({ userId }: { userId: string }) {
                   </section>
                 )}
 
-                {/* NAV updated footer */}
-                {data.netWorth.navUpdatedAt && (
-                  <p style={{ fontSize: 11, color: 'var(--c-muted)' }}>
-                    {t('navUpdated')} {fmtTimeAgo(data.netWorth.navUpdatedAt, locale)}
-                  </p>
-                )}
               </div>
 
               {/* Right column: net worth panel (sticky) */}
@@ -750,6 +744,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                     allocationTotals={allocationTotals}
                     locale={locale}
                     refreshKey={historyKey}
+                    navUpdatedAt={data.netWorth.navUpdatedAt}
                     onDownloadReport={() => setShowReportSheet(true)}
                   />
                 )}
