@@ -152,7 +152,7 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
 
   return (
     <>
-      <div data-testid="desktop-goal-detail" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div data-testid="desktop-goal-detail" style={{ display: 'flex', flexDirection: 'column', gap: 14, animation: 'slide-right 200ms cubic-bezier(0.2,0.8,0.2,1)' }}>
         {/* Back */}
         <button
           data-testid="desktop-goal-detail-back"
