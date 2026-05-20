@@ -7,14 +7,14 @@ import { useNavigation } from './NavigationContext'
 import { useTranslations } from 'next-intl'
 import LanguageSwitcher from '../LanguageSwitcher'
 
-// Custom mountains icon matching the mobile nav design
-function MountainsIcon({ size = 20, strokeWidth = 1.75 }: { size?: number; strokeWidth?: number }) {
+// Cairn stacked-triangles brand icon for the dashboard nav item
+function CairnNavIcon({ size = 20 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
       style={{ display: 'block', flexShrink: 0 }}>
-      <path d="M3 19h18l-6-9-3 4-2-3z" />
-      <circle cx="8" cy="7" r="1.5" />
+      <path d="M12 3l6.5 11H5.5z" fill="currentColor" />
+      <path d="M12 10.5l4.5 7H7.5z" fill="currentColor" opacity="0.55" />
+      <path d="M12 16.5l2.5 4H9.5z" fill="currentColor" opacity="0.3" />
     </svg>
   )
 }
@@ -61,7 +61,7 @@ export default function Sidebar({ email, initials, onNavClick, hideLogo = false 
   const t = useTranslations('nav')
 
   const NAV_ITEMS = [
-    { label: t('dashboard'), href: '/dashboard', renderIcon: (active: boolean) => <MountainsIcon size={18} strokeWidth={active ? 2 : 1.6} /> },
+    { label: t('dashboard'), href: '/dashboard', renderIcon: (_active: boolean) => <CairnNavIcon size={18} /> },
     { label: t('planning'),  href: '/planning',  renderIcon: (active: boolean) => <Calendar  size={18} strokeWidth={active ? 2 : 1.6} /> },
     { label: t('funds'),     href: '/funds',     renderIcon: (active: boolean) => <TrendingUp size={18} strokeWidth={active ? 2 : 1.6} /> },
     { label: t('settings'),  href: '/settings',  renderIcon: (active: boolean) => <Settings   size={18} strokeWidth={active ? 2 : 1.6} /> },

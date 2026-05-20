@@ -17,6 +17,8 @@ interface NavigationContextValue {
   userName: string
   mobileTopBar: MobileTopBarOpts
   setMobileTopBar: (opts: MobileTopBarOpts) => void
+  hideDesktopHeader: boolean
+  setHideDesktopHeader: (v: boolean) => void
 }
 
 const NavigationContext = createContext<NavigationContextValue>({
@@ -27,12 +29,15 @@ const NavigationContext = createContext<NavigationContextValue>({
   userName: '',
   mobileTopBar: { title: '' },
   setMobileTopBar: () => {},
+  hideDesktopHeader: false,
+  setHideDesktopHeader: () => {},
 })
 
 export function NavigationProvider({ children, userName }: { children: React.ReactNode; userName: string }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileTopBar, setMobileTopBarState] = useState<MobileTopBarOpts>({ title: '' })
+  const [hideDesktopHeader, setHideDesktopHeader] = useState(false)
 
   const setMobileTopBar = useCallback((opts: MobileTopBarOpts) => {
     setMobileTopBarState(opts)
@@ -44,6 +49,7 @@ export function NavigationProvider({ children, userName }: { children: React.Rea
       sidebarCollapsed, setSidebarCollapsed,
       userName,
       mobileTopBar, setMobileTopBar,
+      hideDesktopHeader, setHideDesktopHeader,
     }}>
       {children}
     </NavigationContext.Provider>

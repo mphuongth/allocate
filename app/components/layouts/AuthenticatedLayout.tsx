@@ -29,7 +29,7 @@ function getDisplayName(email: string): string {
 }
 
 function AuthenticatedLayoutInner({ children, email, initials }: { children: React.ReactNode; email: string; initials: string }) {
-  const { mobileTopBar } = useNavigation()
+  const { mobileTopBar, hideDesktopHeader } = useNavigation()
   const [showAddTx, setShowAddTx] = useState(false)
 
   return (
@@ -42,9 +42,11 @@ function AuthenticatedLayoutInner({ children, email, initials }: { children: Rea
       {/* Main area */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         {/* Desktop header */}
-        <div className="hidden md:block">
-          <Header />
-        </div>
+        {!hideDesktopHeader && (
+          <div className="hidden md:block">
+            <Header />
+          </div>
+        )}
         {/* Mobile top bar — lives outside <main> so it never scrolls away */}
         {mobileTopBar.title && (
           <div className="md:hidden">

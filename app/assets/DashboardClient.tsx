@@ -207,7 +207,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const tc = useTranslations('common')
   const tg = useTranslations('goals')
   const locale = useLocale()
-  const { userName, setMobileTopBar } = useNavigation()
+  const { userName, setMobileTopBar, setHideDesktopHeader } = useNavigation()
   const isDesktop = useIsDesktop()
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -360,6 +360,12 @@ export default function DashboardClient({ userId }: { userId: string }) {
       setIsGeneratingReport(false)
     }
   }
+
+  useEffect(() => {
+    setHideDesktopHeader(true)
+    return () => setHideDesktopHeader(false)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     setMobileTopBar({
@@ -615,10 +621,10 @@ export default function DashboardClient({ userId }: { userId: string }) {
               {/* Page title */}
               <header style={{ padding: '4px 0 20px', flexShrink: 0 }}>
                 <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--c-muted)', marginBottom: 3 }}>
-                  Cairn
+                  {t('overview')}
                 </div>
                 <h1 data-testid="desktop-page-title" style={{ margin: 0, fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--c-ink)', lineHeight: 1 }}>
-                  {locale === 'vi' ? 'Tổng quan' : 'Overview'}
+                  {t('greeting', { name: userName })}
                 </h1>
               </header>
 
@@ -735,6 +741,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                     data={data}
                     allocationTotals={allocationTotals}
                     locale={locale}
+                    refreshKey={historyKey}
                     onDownloadReport={() => setShowReportSheet(true)}
                   />
                 )}

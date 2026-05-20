@@ -1,8 +1,44 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { ArrowDownToLine } from 'lucide-react'
 import { fmtCompact, fmtPct } from '@/lib/formatters'
 import type { DashboardData } from '../DashboardClient'
+
+const TIME_RANGES = ['6M', '1Y', '3Y', 'All'] as const
+type TimeRange = typeof TIME_RANGES[number]
+
+const RANGE_PARAM: Record<TimeRange, string> = {
+  '6M': '6m', '1Y': '1y', '3Y': '3y', 'All': 'all',
+}
+
+interface ChartPoint { label: string; value: number }
+
+function Sparkline({ data, positive }: { data: ChartPoint[]; positive: boolean }) {
+  if (data.length < 2) return null
+  const values = data.map((d) => d.value)
+  const rawMin = Math.min(...values)
+  const rawMax = Math.max(...values)
+  const pad = (rawMax - rawMin) * 0.15 || rawMax * 0.1 || 1
+  const min = Math.max(0, rawMin - pad)
+  const max = rawMax + pad
+  const range = max - min || 1
+  const W = 100
+  const H = 40
+  const points = values
+    .map((v, i) => {
+      const x = (i / (values.length - 1)) * W
+      const y = H - ((v - min) / range) * (H - 6) - 3
+      return `${x.toFixed(2)},${y.toFixed(2)}`
+    })
+    .join(' ')
+  const color = positive ? 'var(--c-pos)' : 'var(--c-neg)'
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: '100%', height: H, display: 'block' }}>
+      <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+    </svg>
+  )
+}
 
 const ALLOC_COLORS: Record<string, { color: string; label: string; labelVi: string }> = {
   fund:  { color: '#2563eb', label: 'Funds',   labelVi: 'Quỹ' },
@@ -25,13 +61,23 @@ interface Props {
   data: DashboardData
   allocationTotals: AllocationTotals | null
   locale: string
+  refreshKey?: number
   onDownloadReport: () => void
 }
 
-export default function DesktopNetWorthPanel({ data, allocationTotals, locale, onDownloadReport }: Props) {
+export default function DesktopNetWorthPanel({ data, allocationTotals, locale, refreshKey, onDownloadReport }: Props) {
   const { netWorth } = data
   const isPos = netWorth.overallProfitLoss >= 0
   const isVi = locale === 'vi'
+  const [timeRange, setTimeRange] = useState<TimeRange>('All')
+  const [history, setHistory] = useState<ChartPoint[]>([])
+
+  useEffect(() => {
+    fetch(`/api/v1/dashboard/history?range=${RANGE_PARAM[timeRange]}`, { cache: 'no-store' })
+      .then((r) => r.ok ? r.json() : [])
+      .then((d: ChartPoint[]) => setHistory(d))
+      .catch(() => setHistory([]))
+  }, [timeRange, refreshKey])
 
   const segments = allocationTotals ? (() => {
     const raw: Record<string, number> = {
@@ -91,8 +137,39 @@ export default function DesktopNetWorthPanel({ data, allocationTotals, locale, o
           </span>
         </div>
 
+        {/* Sparkline */}
+        <div style={{ marginTop: 16, paddingBottom: 4 }}>
+          {history.length > 1
+            ? <Sparkline data={history} positive={isPos} />
+            : <div style={{ height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <span style={{ fontSize: 11, color: 'var(--c-muted)' }}>{isVi ? 'Chưa có lịch sử' : 'No history yet'}</span>
+              </div>
+          }
+        </div>
+
+        {/* Range pills */}
+        <div style={{ display: 'flex', gap: 3, marginBottom: 16 }}>
+          {TIME_RANGES.map((r) => (
+            <button
+              key={r}
+              onClick={() => setTimeRange(r)}
+              style={{
+                flex: 1, padding: '4px 0',
+                border: 'none', cursor: 'pointer',
+                background: timeRange === r ? 'var(--c-navy-tint)' : 'transparent',
+                color: timeRange === r ? 'var(--c-navy)' : 'var(--c-muted)',
+                fontSize: 11, fontWeight: 600, borderRadius: 5,
+                fontFamily: 'inherit',
+                transition: 'background 120ms, color 120ms',
+              }}
+            >
+              {r}
+            </button>
+          ))}
+        </div>
+
         {/* KPI 2×2 grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1, marginTop: 16, background: 'var(--c-line)', borderRadius: 10, overflow: 'hidden' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1, marginTop: 0, background: 'var(--c-line)', borderRadius: 10, overflow: 'hidden' }}>
           {kpis.map((k, i) => (
             <div key={i} style={{ background: 'var(--c-card)', padding: '10px 12px' }}>
               <div style={{ fontSize: 10, color: 'var(--c-muted)' }}>{k.l}</div>
