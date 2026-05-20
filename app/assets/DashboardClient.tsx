@@ -25,6 +25,7 @@ import DesktopNetWorthPanel from './components/DesktopNetWorthPanel'
 import DesktopGoalCard from './components/DesktopGoalCard'
 import DesktopInsuranceList from './components/DesktopInsuranceList'
 import DesktopInsuranceDetail from './components/DesktopInsuranceDetail'
+import DesktopGoalDetail from './components/DesktopGoalDetail'
 
 export interface FundBreakdownItem {
   fundId: string
@@ -43,6 +44,7 @@ export interface GoalData {
   goalId: string
   goalName: string
   targetAmount: number | null
+  targetDate: string | null
   currentValue: number
   totalInvested: number
   profitLoss: number
@@ -683,7 +685,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                           key={goal.goalId}
                           goal={goal}
                           locale={locale}
-                          onClick={() => { setSelectedGoal(goal); setGoalDetailOpen(true) }}
+                          onClick={() => { setSelectedGoal(goal); setSelectedInsurance(null) }}
                         />
                       ))}
                     </div>
@@ -732,7 +734,14 @@ export default function DashboardClient({ userId }: { userId: string }) {
                 maxHeight: 'calc(100vh - 56px)',
                 overflowY: 'auto',
               }}>
-                {selectedInsurance ? (
+                {selectedGoal ? (
+                  <DesktopGoalDetail
+                    goal={selectedGoal}
+                    locale={locale}
+                    onClose={() => setSelectedGoal(null)}
+                    onDataChanged={() => { setSelectedGoal(null); fetchData({ force: true }) }}
+                  />
+                ) : selectedInsurance ? (
                   <DesktopInsuranceDetail
                     ins={selectedInsurance}
                     locale={locale}

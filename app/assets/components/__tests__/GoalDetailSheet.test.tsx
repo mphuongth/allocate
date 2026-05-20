@@ -23,6 +23,7 @@ const mockGoal: GoalData = {
   goalId: 'goal-1',
   goalName: 'House Fund',
   targetAmount: 500_000_000,
+  targetDate: null,
   currentValue: 2_500_000,
   totalInvested: 2_200_000,
   profitLoss: 300_000,
