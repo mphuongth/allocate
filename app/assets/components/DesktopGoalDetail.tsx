@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ChevronLeft, TrendingUp, Building, CircleDollarSign, BarChart2, MoreHorizontal, Edit2, Trash2, ChevronRight, Calendar, Download, ArrowDownRight, Target } from 'lucide-react'
+import { ChevronLeft, TrendingUp, Building, CircleDollarSign, BarChart2, MoreHorizontal, Edit2, Trash2, ChevronRight, Calendar, Download, ArrowDownRight, ArrowUpRight, Target } from 'lucide-react'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import type { GoalData, FundBreakdownItem } from '../DashboardClient'
 
@@ -446,7 +446,7 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
                     }}>
                       {isWithdraw
                         ? <ArrowDownRight size={13} strokeWidth={2.2} />
-                        : <ChevronLeft size={13} strokeWidth={2.2} style={{ transform: 'rotate(180deg)' }} />
+                        : <ArrowUpRight size={13} strokeWidth={2.2} />
                       }
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
