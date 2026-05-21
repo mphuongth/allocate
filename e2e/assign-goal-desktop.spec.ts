@@ -22,7 +22,6 @@ test.beforeAll(async () => {
     const existing = await api.findGoalByName(name)
     if (existing) await api.deleteGoal(existing.goal_id)
   }
-  await api.deleteAllTransactionsByNotes('E2E Success State TX')
 })
 
 test.describe('Desktop assign-to-goal two-step modal (PR #199)', () => {
@@ -112,24 +111,12 @@ test.describe('Desktop assign-to-goal two-step modal (PR #199)', () => {
 
   test('confirming shows "Assigned to" success state with the goal name', async ({ page }) => {
     const goal = await api.createGoal({ goal_name: 'E2E Success State Goal', target_amount: 50_000_000 })
+    // Goal cleanup alone is enough: ON DELETE SET NULL on goal_id FK returns the seed tx to unallocated
     cleanup.add(() => api.deleteGoal(goal.goal_id))
 
-    // Create a dedicated unallocated tx so the global-setup bank tx remains unallocated
-    const tx = await api.createTransaction({
-      asset_type: 'bank',
-      amount_vnd: 3_000_000,
-      investment_date: '2026-02-01',
-      interest_rate: 5,
-      notes: 'E2E Success State TX',
-    })
-    cleanup.add(() => api.deleteTransaction(tx.transaction_id))
-
-    await page.reload()
-    await page.waitForLoadState('networkidle')
-
-    const targetRow = page.getByTestId('unallocated-row').filter({ hasText: 'E2E Success State TX' })
-    await expect(targetRow).toBeVisible({ timeout: 10_000 })
-    await targetRow.click()
+    const row = page.getByTestId('unallocated-row').first()
+    await expect(row).toBeVisible({ timeout: 10_000 })
+    await row.click()
 
     const sheet = page.getByTestId('action-sheet')
     await page.getByTestId('action-assign').click()
