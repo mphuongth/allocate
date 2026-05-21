@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Check, X, TrendingUp, Building2, Coins } from 'lucide-react'
+import { Check, X, TrendingUp, Building2, Coins, ArrowRight } from 'lucide-react'
 import { useLocale } from 'next-intl'
 import { fmt, fmtCompact } from '@/lib/formatters'
 
@@ -32,6 +32,12 @@ const TYPE_ICON: Record<string, React.ElementType> = {
   fund:  TrendingUp,
   bank:  Building2,
   gold:  Coins,
+}
+const TYPE_COLOR: Record<string, string> = {
+  fund:  '#2563eb',
+  bank:  '#047857',
+  gold:  '#d97706',
+  stock: '#7c3aed',
 }
 
 export default function AssignGoalSheet({ open, onClose, onConfirm, item, desktop }: Props) {
@@ -94,6 +100,7 @@ export default function AssignGoalSheet({ open, onClose, onConfirm, item, deskto
   const selectedGoal = goals.find((g) => g.id === selected)
 
   const ItemIcon = item ? (TYPE_ICON[item.type] ?? TrendingUp) : null
+  const itemIconColor = item ? (TYPE_COLOR[item.type] ?? 'var(--c-navy)') : 'var(--c-navy)'
 
   const body = success ? (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 0', textAlign: 'center' }}>
@@ -114,14 +121,14 @@ export default function AssignGoalSheet({ open, onClose, onConfirm, item, deskto
       {/* Item chip */}
       {item && ItemIcon && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--c-card-2)', borderRadius: 10 }}>
-          <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--c-card)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--c-navy)', border: '1px solid var(--c-line)', flexShrink: 0 }}>
+          <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--c-card)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: itemIconColor, border: '1px solid var(--c-line)', flexShrink: 0 }}>
             <ItemIcon size={15} strokeWidth={1.8} />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--c-ink)' }}>{item.name}</div>
             <div style={{ fontSize: 11, color: 'var(--c-muted)', fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(item.value)}</div>
           </div>
-          <div style={{ color: 'var(--c-muted)', display: 'flex' }}>→</div>
+          <ArrowRight size={14} color="var(--c-muted)" />
           <div style={{
             fontSize: 12, fontWeight: 600, padding: '4px 10px',
             background: selectedGoal ? 'var(--c-navy-tint)' : 'var(--c-line)',
@@ -194,7 +201,7 @@ export default function AssignGoalSheet({ open, onClose, onConfirm, item, deskto
                   )}
                 </div>
                 {g.progressPercent != null && (
-                  <div style={{ height: 4, background: 'var(--c-line)', borderRadius: 999, overflow: 'hidden', marginTop: 8 }}>
+                  <div style={{ height: 4, background: 'var(--c-card-2)', borderRadius: 999, overflow: 'hidden', marginTop: 8 }}>
                     <div style={{
                       height: '100%', borderRadius: 999,
                       width: `${Math.min(100, Math.max(0, g.progressPercent))}%`,
@@ -212,25 +219,16 @@ export default function AssignGoalSheet({ open, onClose, onConfirm, item, deskto
       <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
         <button
           onClick={onClose}
-          style={{
-            flex: 1, padding: '12px 0', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit',
-            background: 'transparent', border: '1px solid var(--c-line)', color: 'var(--c-ink)',
-            fontSize: 14, fontWeight: 500,
-          }}
+          className="cn-btn"
+          style={{ flex: 1, justifyContent: 'center', border: '1px solid var(--c-line)' }}
         >
           {isVI ? 'Hủy' : 'Cancel'}
         </button>
         <button
           onClick={handleConfirm}
           disabled={!selected || confirming}
-          style={{
-            flex: 2, padding: '12px 0', borderRadius: 10, border: 'none', cursor: selected && !confirming ? 'pointer' : 'default',
-            background: selected ? 'var(--c-navy)' : 'var(--c-line)',
-            color: selected ? '#fff' : 'var(--c-muted)',
-            fontSize: 14, fontWeight: 600, fontFamily: 'inherit',
-            opacity: confirming ? 0.7 : 1, transition: 'background 0.15s',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-          }}
+          className={selected && !confirming ? 'cn-btn primary' : 'cn-btn'}
+          style={{ flex: 2, justifyContent: 'center', opacity: !selected || confirming ? 0.5 : 1 }}
         >
           {confirming ? (isVI ? 'Đang xử lý…' : 'Assigning…') : (
             <>

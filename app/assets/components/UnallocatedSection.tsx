@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ChevronDown, ChevronUp, ChevronRight, Target, Building, CircleDollarSign, TrendingUp, BarChart2, Clock, ArrowDownToLine, ArrowDownRight, Wallet, Check, X } from 'lucide-react'
+import { ChevronDown, ChevronUp, ChevronRight, Target, Building, CircleDollarSign, TrendingUp, BarChart2, Clock, ArrowDownToLine, ArrowDownRight, ArrowRight, Wallet, Check, X } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useLocale } from 'next-intl'
 import type { FundBreakdownItem, NonFundUnallocatedItem } from '../DashboardClient'
@@ -53,7 +53,7 @@ function DesktopAssignPicker({
           <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--c-ink)' }}>{actionName}</div>
           <div style={{ fontSize: 11, color: 'var(--c-muted)', fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(actionValue)}</div>
         </div>
-        <span style={{ color: 'var(--c-muted)', fontSize: 14 }}>→</span>
+        <ArrowRight size={14} color="var(--c-muted)" />
         <div style={{ fontSize: 12, fontWeight: 600, padding: '4px 10px', background: selectedGoal ? 'var(--c-navy-tint)' : 'var(--c-line)', color: selectedGoal ? 'var(--c-navy)' : 'var(--c-muted)', borderRadius: 8, whiteSpace: 'nowrap', maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {selectedGoal ? selectedGoal.name : (isVI ? 'Chọn...' : 'Choose…')}
         </div>
@@ -86,7 +86,7 @@ function DesktopAssignPicker({
                   {isSel && <div style={{ width: 20, height: 20, borderRadius: 10, background: 'var(--c-navy)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Check size={12} strokeWidth={2.5} color="#fff" /></div>}
                 </div>
                 {g.progressPercent != null && (
-                  <div style={{ height: 4, background: 'var(--c-line)', borderRadius: 999, overflow: 'hidden', marginTop: 8 }}>
+                  <div style={{ height: 4, background: 'var(--c-card-2)', borderRadius: 999, overflow: 'hidden', marginTop: 8 }}>
                     <div style={{ height: '100%', borderRadius: 999, width: `${Math.min(100, Math.max(0, g.progressPercent))}%`, background: isComplete ? 'var(--c-pos)' : 'var(--c-navy)' }} />
                   </div>
                 )}
@@ -98,10 +98,10 @@ function DesktopAssignPicker({
 
       {/* Actions */}
       <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-        <button onClick={onBack} style={{ flex: 1, padding: '12px 0', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit', background: 'transparent', border: '1px solid var(--c-line)', color: 'var(--c-ink)', fontSize: 14, fontWeight: 500 }}>
+        <button onClick={onBack} className="cn-btn" style={{ flex: 1, justifyContent: 'center', border: '1px solid var(--c-line)' }}>
           {isVI ? 'Quay lại' : 'Back'}
         </button>
-        <button onClick={onConfirm} disabled={!selected || confirming} style={{ flex: 2, padding: '12px 0', borderRadius: 10, border: 'none', cursor: selected && !confirming ? 'pointer' : 'default', background: selected ? 'var(--c-navy)' : 'var(--c-line)', color: selected ? '#fff' : 'var(--c-muted)', fontSize: 14, fontWeight: 600, fontFamily: 'inherit', opacity: confirming ? 0.7 : 1, transition: 'background 0.15s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+        <button onClick={onConfirm} disabled={!selected || confirming} className={selected && !confirming ? 'cn-btn primary' : 'cn-btn'} style={{ flex: 2, justifyContent: 'center', opacity: !selected || confirming ? 0.5 : 1 }}>
           {confirming ? (isVI ? 'Đang xử lý…' : 'Assigning…') : <><Check size={14} strokeWidth={2.4} />{isVI ? 'Xác nhận gán' : 'Confirm assignment'}</>}
         </button>
       </div>
