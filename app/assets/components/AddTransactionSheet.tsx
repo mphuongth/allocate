@@ -11,6 +11,7 @@ interface Props {
   open: boolean
   onClose: () => void
   onSaved?: () => void
+  desktop?: boolean
 }
 
 const inputStyle: React.CSSProperties = {
@@ -37,7 +38,7 @@ type AssetType = typeof ASSET_TYPES[number]['v']
 
 const GOLD_PROVIDERS = ['PNJ', 'DOJI', 'SJC', 'Bảo Tín']
 
-export default function AddTransactionSheet({ open, onClose, onSaved }: Props) {
+export default function AddTransactionSheet({ open, onClose, onSaved, desktop }: Props) {
   const t = useTranslations('addTx')
   const tc = useTranslations('common')
 
@@ -195,7 +196,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved }: Props) {
     }
   }
 
-  if (!mounted) return null
+  if (desktop ? !open : !mounted) return null
 
   const isVI = false // will be driven by next-intl locale in future
   const dirLabels = {
@@ -204,47 +205,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved }: Props) {
     gold:  { buy: t('buy'),      sell: t('sell')     },
   }
 
-  return (
-    <div
-      onClick={onClose}
-      style={{
-        position: 'fixed', inset: 0,
-        background: 'rgba(15, 23, 42, 0.45)',
-        zIndex: 100,
-        display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
-        animation: open ? 'fade-in 180ms ease' : 'fade-out 180ms ease forwards',
-        pointerEvents: open ? 'auto' : 'none',
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          width: '100%', maxWidth: 480, maxHeight: '90dvh',
-          background: 'var(--c-card)',
-          borderTopLeftRadius: 20, borderTopRightRadius: 20,
-          padding: '8px 16px 32px',
-          overflowY: 'auto',
-          animation: open ? 'slide-up 220ms cubic-bezier(0.2, 0.8, 0.2, 1)' : 'slide-down 180ms ease forwards',
-          boxShadow: '0 -8px 24px rgba(0,0,0,0.12)',
-        }}
-      >
-        {/* Drag handle */}
-        <div style={{ width: 36, height: 4, background: 'var(--c-line-strong)', borderRadius: 999, margin: '6px auto 14px' }} />
-
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600, color: 'var(--c-ink)' }}>
-            {t('title')}
-          </h3>
-          <button
-            onClick={onClose}
-            style={{ padding: 6, border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', color: 'var(--c-muted)', display: 'flex' }}
-            aria-label="Close"
-          >
-            <X size={18} />
-          </button>
-        </div>
-
+  const formBody = (
         <div style={{ display: 'grid', gap: 16 }}>
           {error && <p style={{ margin: 0, fontSize: 13, color: 'var(--c-neg, #dc2626)' }}>{error}</p>}
 
@@ -576,6 +537,82 @@ export default function AddTransactionSheet({ open, onClose, onSaved }: Props) {
             </button>
           </div>
         </div>
+  )
+
+  if (desktop) {
+    return (
+      <div
+        onClick={onClose}
+        style={{
+          position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.4)', zIndex: 200,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+          animation: 'fade-in 150ms ease', backdropFilter: 'blur(2px)',
+        }}
+      >
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            width: '100%', maxWidth: 520, maxHeight: 'calc(100vh - 48px)',
+            background: 'var(--c-card)', borderRadius: 16,
+            boxShadow: '0 24px 48px rgba(15,23,42,0.18), 0 8px 16px rgba(15,23,42,0.08)',
+            display: 'flex', flexDirection: 'column',
+            animation: 'modal-in 200ms cubic-bezier(0.2,0.8,0.2,1)', overflow: 'hidden',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px 14px', borderBottom: '1px solid var(--c-line)', flexShrink: 0 }}>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em' }}>{t('title')}</h3>
+            <button onClick={onClose} style={{ padding: 6, border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', color: 'var(--c-muted)', display: 'flex' }} aria-label="Close"><X size={18} /></button>
+          </div>
+          <div style={{ flex: 1, padding: '18px 20px', overflowY: 'auto' }}>
+            {formBody}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0,
+        background: 'rgba(15, 23, 42, 0.45)',
+        zIndex: 100,
+        display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+        animation: open ? 'fade-in 180ms ease' : 'fade-out 180ms ease forwards',
+        pointerEvents: open ? 'auto' : 'none',
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: '100%', maxWidth: 480, maxHeight: '90dvh',
+          background: 'var(--c-card)',
+          borderTopLeftRadius: 20, borderTopRightRadius: 20,
+          padding: '8px 16px 32px',
+          overflowY: 'auto',
+          animation: open ? 'slide-up 220ms cubic-bezier(0.2, 0.8, 0.2, 1)' : 'slide-down 180ms ease forwards',
+          boxShadow: '0 -8px 24px rgba(0,0,0,0.12)',
+        }}
+      >
+        {/* Drag handle */}
+        <div style={{ width: 36, height: 4, background: 'var(--c-line-strong)', borderRadius: 999, margin: '6px auto 14px' }} />
+
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600, color: 'var(--c-ink)' }}>
+            {t('title')}
+          </h3>
+          <button
+            onClick={onClose}
+            style={{ padding: 6, border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', color: 'var(--c-muted)', display: 'flex' }}
+            aria-label="Close"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {formBody}
       </div>
     </div>
   )

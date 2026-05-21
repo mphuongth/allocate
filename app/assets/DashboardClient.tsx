@@ -634,6 +634,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button
+                    data-testid="desktop-add-tx-btn"
                     onClick={() => setDesktopAddTxOpen(true)}
                     className="cn-btn"
                     style={{ padding: '8px 14px', fontSize: 13, gap: 6 }}
@@ -642,6 +643,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                     {locale === 'vi' ? 'Giao dịch' : 'Transaction'}
                   </button>
                   <button
+                    data-testid="desktop-new-goal-btn"
                     onClick={() => setShowGoalForm(true)}
                     className="cn-btn primary"
                     style={{ padding: '8px 14px', fontSize: 13, gap: 6 }}
@@ -949,6 +951,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
         open={showGoalForm}
         onClose={() => setShowGoalForm(false)}
         onSuccess={() => fetchData({ force: true })}
+        desktop={isDesktop}
       />
 
       {/* Sell / Withdraw Sheet */}
@@ -972,6 +975,8 @@ export default function DashboardClient({ userId }: { userId: string }) {
       <AddTransactionSheet
         open={desktopAddTxOpen}
         onClose={() => setDesktopAddTxOpen(false)}
+        onSaved={() => fetchData({ force: true })}
+        desktop={isDesktop}
       />
 
       {/* Download Report Sheet */}
