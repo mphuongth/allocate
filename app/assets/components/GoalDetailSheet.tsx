@@ -43,6 +43,13 @@ const GD_COLORS: Record<string, string> = {
   stock: '#7c3aed',
 }
 
+function calcDeadlineMonths(targetDate: string | null): number {
+  if (!targetDate) return 12
+  const [ty, tm] = targetDate.split('-').map(Number)
+  const now = new Date()
+  return Math.max(1, (ty - now.getFullYear()) * 12 + (tm - 1 - now.getMonth()))
+}
+
 function TypeIcon({ type, size = 16 }: { type: string; size?: number }) {
   if (type === 'fund') return <TrendingUp size={size} />
   if (type === 'bank') return <Building size={size} />
@@ -579,16 +586,15 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: 
 
   // Calculator
   const remaining = goal.targetAmount ? Math.max(goal.targetAmount - goal.currentValue, 0) : 0
-  const neededPerMonth = remaining > 0 ? Math.ceil(remaining / 12) : 0
-  const monthly = parseFloat(monthlyContrib.replace(/,/g, '')) || 0
-  let projectedMonths = 0
-  if (monthly > 0 && remaining > 0) {
-    const r = 0.12 / 12
-    projectedMonths = Math.ceil(Math.log(1 + (remaining * r) / monthly) / Math.log(1 + r))
-  }
+  const monthsLeft = calcDeadlineMonths(goal.targetDate)
+  const neededPerMonth = remaining > 0 ? remaining / monthsLeft : 0
+  const monthly = Math.max(0, parseFloat(monthlyContrib.replace(/,/g, '')) || 0)
+  const projectedMonths = monthly > 0 && remaining > 0 ? Math.ceil(remaining / monthly) : 0
   const projectedDate = projectedMonths > 0
-    ? new Date(Date.now() + projectedMonths * 30 * 24 * 60 * 60 * 1000)
+    ? (() => { const d = new Date(); d.setMonth(d.getMonth() + projectedMonths); return d })()
     : null
+  const isOnTrack = monthly > 0 && monthly >= neededPerMonth
+  const gap = Math.abs(neededPerMonth - monthly)
 
   const detailFund = fundDetailId ? (fundMap.get(fundDetailId) ?? null) : null
 
@@ -856,7 +862,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: 
                   </div>
                   {goal.targetAmount && neededPerMonth > 0 && (
                     <button
-                      onClick={() => setMonthlyContrib(String(neededPerMonth))}
+                      onClick={() => setMonthlyContrib(String(Math.round(neededPerMonth)))}
                       style={{
                         flexShrink: 0, padding: '8px 10px',
                         background: 'var(--c-navy-tint)', color: 'var(--c-navy)',
@@ -901,17 +907,21 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: 
               {monthly > 0 && projectedDate && goal.targetAmount && (
                 <div style={{
                   padding: 16, borderRadius: 14,
-                  background: 'var(--c-pos-tint)',
-                  border: '1px solid rgba(4,120,87,0.15)',
+                  background: isOnTrack ? 'var(--c-pos-tint)' : 'var(--c-warn-tint)',
+                  border: `1px solid ${isOnTrack ? 'rgba(4,120,87,0.15)' : 'rgba(180,83,9,0.15)'}`,
                 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--c-pos)', marginBottom: 6 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: isOnTrack ? 'var(--c-pos)' : 'var(--c-warn)', marginBottom: 6 }}>
                     {isVI ? 'Dự kiến hoàn thành' : 'Projected completion'}
                   </div>
-                  <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.025em', color: 'var(--c-pos)', lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
+                  <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.025em', color: isOnTrack ? 'var(--c-pos)' : 'var(--c-warn)', lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
                     {projectedDate.toLocaleDateString(isVI ? 'vi-VN' : 'en-GB', { month: 'long', year: 'numeric' })}
                   </div>
-                  <div style={{ fontSize: 12, color: 'var(--c-pos)', marginTop: 6, opacity: 0.85 }}>
+                  <div style={{ fontSize: 12, color: isOnTrack ? 'var(--c-pos)' : 'var(--c-warn)', marginTop: 6, opacity: 0.85 }}>
                     {isVI ? `Sau ${projectedMonths} tháng` : `In ${projectedMonths} months`}
+                    {goal.targetDate && (isOnTrack
+                      ? (isVI ? ` · ${monthsLeft - projectedMonths} tháng sớm hơn` : ` · ${monthsLeft - projectedMonths} months early`)
+                      : (isVI ? ` · ${projectedMonths - monthsLeft} tháng trễ hạn` : ` · ${projectedMonths - monthsLeft} months late`)
+                    )}
                   </div>
                 </div>
               )}
@@ -921,9 +931,9 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1, background: 'var(--c-line)', borderRadius: 12, overflow: 'hidden' }}>
                   {[
                     { l: isVI ? 'Còn thiếu' : 'Still needed', v: fmtCompact(remaining), c: 'var(--c-ink)' },
-                    { l: isVI ? 'Tháng dự kiến' : 'Projected months', v: projectedMonths > 0 ? String(projectedMonths) : '—', c: 'var(--c-ink)' },
-                    { l: isVI ? 'Cần tối thiểu/tháng' : 'Min needed/month', v: neededPerMonth > 0 ? fmtCompact(neededPerMonth) : '—', c: 'var(--c-muted)' },
-                    { l: isVI ? 'Chênh lệch' : 'vs minimum', v: neededPerMonth > 0 ? fmtCompact(Math.abs(monthly - neededPerMonth)) : '—', c: monthly >= neededPerMonth ? 'var(--c-pos)' : 'var(--c-neg)' },
+                    { l: isVI ? 'Tháng còn lại' : 'Months left', v: String(monthsLeft), c: 'var(--c-ink)' },
+                    { l: isVI ? 'Tối thiểu/tháng' : 'Min/month', v: neededPerMonth > 0 ? fmtCompact(neededPerMonth) : '—', c: 'var(--c-muted)' },
+                    { l: isOnTrack ? (isVI ? 'Dư/tháng' : 'Surplus/mo') : (isVI ? 'Thiếu/tháng' : 'Gap/month'), v: neededPerMonth > 0 ? fmtCompact(gap) : '—', c: isOnTrack ? 'var(--c-pos)' : 'var(--c-neg)' },
                   ].map((k, i) => (
                     <div key={i} style={{ background: 'var(--c-card)', padding: '10px 12px' }}>
                       <div style={{ fontSize: 10, color: 'var(--c-muted)' }}>{k.l}</div>

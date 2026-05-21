@@ -61,7 +61,7 @@ test('"Add Goal" button opens Create Goal dialog', async ({ page }) => {
   }
 })
 
-test('clicking a goal card opens GoalDetailSheet', async ({ page }) => {
+test('clicking a goal card opens goal detail panel', async ({ page }) => {
   const goal = await api.createGoal({ goal_name: 'E2E Dashboard Goal', target_amount: 50_000_000 })
   cleanup.add(() => api.deleteGoal(goal.goal_id))
 
@@ -72,10 +72,10 @@ test('clicking a goal card opens GoalDetailSheet', async ({ page }) => {
   await expect(goalCard).toBeVisible({ timeout: 10_000 })
   await goalCard.click()
 
-  // GoalDetailSheet opens as a full-screen overlay with a back button
-  await expect(page.getByTestId("goal-back-btn").first()).toBeVisible({ timeout: 8_000 })
-  await page.getByTestId("goal-back-btn").first().click()
-  await expect(page.getByTestId("goal-back-btn")).not.toBeVisible({ timeout: 5_000 })
+  // On desktop viewport (chromium project), DesktopGoalDetail opens in the right panel
+  await expect(page.getByTestId('desktop-goal-detail')).toBeVisible({ timeout: 8_000 })
+  await page.getByTestId('desktop-goal-detail-back').click()
+  await expect(page.getByTestId('desktop-goal-detail')).not.toBeVisible({ timeout: 5_000 })
 })
 
 test('tapping unallocated row opens action sheet', async ({ page }) => {
