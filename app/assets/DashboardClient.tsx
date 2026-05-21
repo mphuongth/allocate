@@ -911,6 +911,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
       <AssignGoalSheet
         open={!!goalPickerFundId}
         onClose={() => { setGoalPickerFundId(null); fetchData({ force: true }) }}
+        desktop={isDesktop}
         onConfirm={async (goalId) => {
           if (!goalPickerFundId) return
           const res = await fetch(`/api/v1/fund-investments?fund_id=${goalPickerFundId}`)
@@ -932,6 +933,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
       <AssignGoalSheet
         open={!!nonFundPickerTxId}
         onClose={() => { setNonFundPickerTxId(null); fetchData({ force: true }) }}
+        desktop={isDesktop}
         onConfirm={async (goalId) => {
           if (!nonFundPickerTxId) return
           const res = await fetch(`/api/v1/investment-transactions/${nonFundPickerTxId}/assign`, {

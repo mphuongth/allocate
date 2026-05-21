@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Check } from 'lucide-react'
+import { Check, X } from 'lucide-react'
 import { useLocale } from 'next-intl'
 import { fmt } from '@/lib/formatters'
 
@@ -17,9 +17,10 @@ interface Props {
   onClose: () => void
   /** Called with the selected goalId. Should throw on failure. */
   onConfirm: (goalId: string) => Promise<void>
+  desktop?: boolean
 }
 
-export default function AssignGoalSheet({ open, onClose, onConfirm }: Props) {
+export default function AssignGoalSheet({ open, onClose, onConfirm, desktop }: Props) {
   const isVI = useLocale() === 'vi'
   const [mounted, setMounted] = useState(false)
   const [goals, setGoals] = useState<GoalOption[]>([])
@@ -72,39 +73,11 @@ export default function AssignGoalSheet({ open, onClose, onConfirm }: Props) {
     setConfirming(false)
   }
 
-  if (!mounted) return null
+  if (desktop ? !open : !mounted) return null
 
-  return (
-    <div
-      style={{
-        position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.2)',
-        zIndex: 100, pointerEvents: open ? 'auto' : 'none',
-      }}
-      onClick={onClose}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        style={{
-          position: 'absolute', bottom: 0, left: 0, right: 0,
-          background: 'var(--c-card)', borderRadius: '16px 16px 0 0',
-          padding: '0 0 env(safe-area-inset-bottom,0)',
-          maxHeight: '80vh', display: 'flex', flexDirection: 'column',
-          animation: open
-            ? 'slide-up 220ms cubic-bezier(0.2, 0.8, 0.2, 1)'
-            : 'slide-down 180ms ease forwards',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div style={{ width: 36, height: 4, background: 'var(--c-line-strong)', borderRadius: 999, margin: '6px auto 0', flexShrink: 0 }} />
+  const title = isVI ? 'Gán vào mục tiêu' : 'Assign to goal'
 
-        <div style={{ padding: '14px 16px 0', flexShrink: 0 }}>
-          <p style={{ fontWeight: 700, fontSize: 16, color: 'var(--c-ink)' }}>
-            {isVI ? 'Gán vào mục tiêu' : 'Assign to goal'}
-          </p>
-        </div>
-
-        {success ? (
+  const body = success ? (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 16px' }}>
             <div style={{
               width: 56, height: 56, borderRadius: '50%',
@@ -189,7 +162,71 @@ export default function AssignGoalSheet({ open, onClose, onConfirm }: Props) {
               </button>
             </div>
           </>
-        )}
+        )
+
+  if (desktop) {
+    return (
+      <div
+        onClick={onClose}
+        style={{
+          position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.4)', zIndex: 200,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+          animation: 'fade-in 150ms ease', backdropFilter: 'blur(2px)',
+        }}
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            width: '100%', maxWidth: 460, maxHeight: 'calc(100vh - 48px)',
+            background: 'var(--c-card)', borderRadius: 16,
+            boxShadow: '0 24px 48px rgba(15,23,42,0.18), 0 8px 16px rgba(15,23,42,0.08)',
+            display: 'flex', flexDirection: 'column',
+            animation: 'modal-in 200ms cubic-bezier(0.2,0.8,0.2,1)', overflow: 'hidden',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px 14px', borderBottom: '1px solid var(--c-line)', flexShrink: 0 }}>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em' }}>{title}</h3>
+            <button onClick={onClose} aria-label="Close" style={{ padding: 6, border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', color: 'var(--c-muted)', display: 'flex' }}><X size={18} /></button>
+          </div>
+          <div style={{ flex: 1, padding: '18px 20px', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+            {body}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.2)',
+        zIndex: 100, pointerEvents: open ? 'auto' : 'none',
+      }}
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0,
+          background: 'var(--c-card)', borderRadius: '16px 16px 0 0',
+          padding: '0 0 env(safe-area-inset-bottom,0)',
+          maxHeight: '80vh', display: 'flex', flexDirection: 'column',
+          animation: open
+            ? 'slide-up 220ms cubic-bezier(0.2, 0.8, 0.2, 1)'
+            : 'slide-down 180ms ease forwards',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ width: 36, height: 4, background: 'var(--c-line-strong)', borderRadius: 999, margin: '6px auto 0', flexShrink: 0 }} />
+
+        <div style={{ padding: '14px 16px 0', flexShrink: 0 }}>
+          <p style={{ fontWeight: 700, fontSize: 16, color: 'var(--c-ink)' }}>{title}</p>
+        </div>
+
+        {body}
       </div>
     </div>
   )
