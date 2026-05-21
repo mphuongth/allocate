@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ChevronLeft, TrendingUp, Building, CircleDollarSign, BarChart2, MoreHorizontal, Edit2, Trash2, ChevronRight, Calendar, Download, ArrowDownRight, ArrowUpRight, Target } from 'lucide-react'
+import { ChevronLeft, TrendingUp, Building, CircleDollarSign, BarChart2, MoreHorizontal, Edit2, Trash2, ChevronRight, ArrowDownRight, ArrowUpRight, Target } from 'lucide-react'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import type { GoalData, FundBreakdownItem } from '../DashboardClient'
 
@@ -64,6 +64,7 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
   const [txLoading, setTxLoading] = useState(false)
   const [actionsOpen, setActionsOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [calcAmount, setCalcAmount] = useState('')
 
@@ -81,10 +82,9 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
     setIsDeleting(true)
     try {
       const res = await fetch(`/api/v1/savings-goals/${goal.goalId}`, { method: 'DELETE' })
-      if (res.ok) { onDataChanged() }
+      if (res.ok) { setDeleteOpen(false); onDataChanged() }
     } finally {
       setIsDeleting(false)
-      setActionsOpen(false)
     }
   }
 
@@ -466,21 +466,30 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
         </div>
       </div>
 
-      {/* Goal actions sheet */}
+      {/* Goal options modal */}
       {actionsOpen && (
-        <GoalActionsSheet
-          open={actionsOpen}
+        <GoalOptionsModal
           onClose={() => setActionsOpen(false)}
-          onEdit={() => { setActionsOpen(false); setTimeout(() => setEditOpen(true), 60) }}
-          onDelete={handleDelete}
-          isDeleting={isDeleting}
+          onEdit={() => { setActionsOpen(false); setTimeout(() => setEditOpen(true), 80) }}
+          onDelete={() => { setActionsOpen(false); setTimeout(() => setDeleteOpen(true), 80) }}
           isVi={isVi}
         />
       )}
 
-      {/* Edit goal sheet */}
+      {/* Delete confirmation modal */}
+      {deleteOpen && (
+        <DeleteGoalModal
+          goalName={goal.goalName}
+          isDeleting={isDeleting}
+          onCancel={() => setDeleteOpen(false)}
+          onConfirm={handleDelete}
+          isVi={isVi}
+        />
+      )}
+
+      {/* Edit goal modal */}
       {editOpen && (
-        <EditGoalSheet
+        <EditGoalModal
           open={editOpen}
           onClose={() => setEditOpen(false)}
           goal={goal}
@@ -492,69 +501,100 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
   )
 }
 
-function GoalActionsSheet({ open, onClose, onEdit, onDelete, isDeleting, isVi }: {
-  open: boolean; onClose: () => void; onEdit: () => void; onDelete: () => void; isDeleting: boolean; isVi: boolean
+function DModal({ onClose, title, width = 380, children }: {
+  onClose: () => void; title: string; width?: number; children: React.ReactNode
 }) {
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => {
-    if (open) setMounted(true)
-    else { const t = setTimeout(() => setMounted(false), 220); return () => clearTimeout(t) }
-  }, [open])
-  if (!mounted) return null
-
-  const t = isVi ? {
-    edit: 'Chỉnh sửa mục tiêu', editSub: 'Thay đổi tên, số tiền hoặc ngày mục tiêu',
-    delete: 'Xoá mục tiêu', deleteSub: 'Xoá mục tiêu và huỷ liên kết tất cả khoản đầu tư',
-    cancel: 'Hủy',
-  } : {
-    edit: 'Edit goal', editSub: 'Change name, target amount or date',
-    delete: 'Delete goal', deleteSub: 'Remove goal and unlink all investments',
-    cancel: 'Cancel',
-  }
-
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.2)', zIndex: 150, pointerEvents: open ? 'auto' : 'none' }} onClick={onClose}>
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.4)', zIndex: 200,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+        animation: 'fade-in 150ms ease', backdropFilter: 'blur(2px)',
+      }}
+    >
       <div
-        style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'var(--c-card)', borderRadius: '16px 16px 0 0', padding: '0 0 env(safe-area-inset-bottom,0)', animation: open ? 'slide-up 220ms cubic-bezier(0.2,0.8,0.2,1)' : 'slide-down 180ms ease forwards' }}
         onClick={(e) => e.stopPropagation()}
+        style={{
+          width: '100%', maxWidth: width, background: 'var(--c-card)', borderRadius: 16,
+          boxShadow: '0 24px 48px rgba(15,23,42,0.18), 0 8px 16px rgba(15,23,42,0.08)',
+          animation: 'modal-in 200ms cubic-bezier(0.2,0.8,0.2,1)', overflow: 'hidden',
+        }}
       >
-        <div style={{ width: 36, height: 4, background: 'var(--c-line-strong)', borderRadius: 999, margin: '6px auto 14px' }} />
-        <div style={{ padding: '0 16px 20px', display: 'grid', gap: 10 }}>
-          <button onClick={onEdit} style={{ width: '100%', textAlign: 'left', padding: '14px 16px', background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 14, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 14 }} onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--c-card-2)')} onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--c-card)')}>
-            <div style={{ width: 42, height: 42, borderRadius: 12, background: 'var(--c-navy-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Edit2 size={20} color="var(--c-navy)" /></div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-ink)' }}>{t.edit}</div>
-              <div style={{ fontSize: 12, color: 'var(--c-muted)', marginTop: 2 }}>{t.editSub}</div>
-            </div>
-            <ChevronRight size={16} color="var(--c-muted)" />
-          </button>
-          <button onClick={onDelete} disabled={isDeleting} style={{ width: '100%', textAlign: 'left', padding: '14px 16px', background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 14, cursor: isDeleting ? 'default' : 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 14, opacity: isDeleting ? 0.5 : 1 }} onMouseEnter={(e) => { if (!isDeleting) e.currentTarget.style.background = 'var(--c-card-2)' }} onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--c-card)')}>
-            <div style={{ width: 42, height: 42, borderRadius: 12, background: 'var(--c-neg-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Trash2 size={20} color="var(--c-neg)" /></div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-neg)' }}>{isDeleting ? (isVi ? 'Đang xoá…' : 'Deleting…') : t.delete}</div>
-              <div style={{ fontSize: 12, color: 'var(--c-muted)', marginTop: 2 }}>{t.deleteSub}</div>
-            </div>
-            <ChevronRight size={16} color="var(--c-muted)" />
-          </button>
-          <button onClick={onClose} style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: '1px solid var(--c-line)', background: 'var(--c-card)', color: 'var(--c-ink)', fontSize: 15, cursor: 'pointer', fontFamily: 'inherit', marginTop: 4 }}>{t.cancel}</button>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px 14px', borderBottom: '1px solid var(--c-line)' }}>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em' }}>{title}</h3>
+          <button onClick={onClose} className="cn-btn ghost" style={{ padding: 6 }} aria-label="Close"><ChevronLeft size={18} style={{ transform: 'rotate(180deg)' }} /></button>
         </div>
+        <div style={{ padding: '18px 20px' }}>{children}</div>
       </div>
     </div>
   )
 }
 
-function EditGoalSheet({ open, onClose, goal, onSaved, isVi }: {
+function GoalOptionsModal({ onClose, onEdit, onDelete, isVi }: {
+  onClose: () => void; onEdit: () => void; onDelete: () => void; isVi: boolean
+}) {
+  const actions = [
+    { icon: <Edit2 size={18} color="var(--c-navy)" />, bg: 'var(--c-navy-tint)', label: isVi ? 'Chỉnh sửa mục tiêu' : 'Edit goal', sub: isVi ? 'Thay đổi tên, số tiền hoặc ngày' : 'Change name, target or date', labelColor: 'var(--c-ink)', onClick: onEdit },
+    { icon: <Trash2 size={18} color="var(--c-neg)" />, bg: 'var(--c-neg-tint)', label: isVi ? 'Xoá mục tiêu' : 'Delete goal', sub: isVi ? 'Xoá và huỷ liên kết tất cả khoản' : 'Remove and unlink all investments', labelColor: 'var(--c-neg)', onClick: onDelete },
+  ]
+  return (
+    <DModal onClose={onClose} title={isVi ? 'Tùy chọn mục tiêu' : 'Goal options'}>
+      <div style={{ display: 'grid', gap: 10 }}>
+        {actions.map((a, i) => (
+          <button key={i} onClick={a.onClick} style={{ width: '100%', textAlign: 'left', padding: '13px 16px', background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 14, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 14, transition: 'background 120ms' }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--c-card-2)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--c-card)')}
+          >
+            <div style={{ width: 40, height: 40, borderRadius: 10, background: a.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{a.icon}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: a.labelColor }}>{a.label}</div>
+              <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 2 }}>{a.sub}</div>
+            </div>
+            <ChevronRight size={14} color="var(--c-muted)" />
+          </button>
+        ))}
+      </div>
+    </DModal>
+  )
+}
+
+function DeleteGoalModal({ goalName, isDeleting, onCancel, onConfirm, isVi }: {
+  goalName: string; isDeleting: boolean; onCancel: () => void; onConfirm: () => void; isVi: boolean
+}) {
+  return (
+    <DModal onClose={onCancel} title={isVi ? 'Xoá mục tiêu?' : 'Delete goal?'}>
+      <div style={{ display: 'grid', gap: 16 }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '12px 14px', background: 'var(--c-neg-tint)', borderRadius: 10 }}>
+          <Trash2 size={15} color="var(--c-neg)" strokeWidth={2.2} style={{ flexShrink: 0, marginTop: 1 }} />
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--c-neg)', lineHeight: 1.5 }}>
+            {isVi
+              ? `Mục tiêu "${goalName}" và tất cả liên kết đầu tư sẽ bị xoá vĩnh viễn.`
+              : `"${goalName}" and all linked investments will be permanently deleted.`}
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={onCancel} className="cn-btn ghost" style={{ flex: 1, justifyContent: 'center', border: '1px solid var(--c-line)' }}>{isVi ? 'Hủy' : 'Cancel'}</button>
+          <button onClick={onConfirm} disabled={isDeleting} style={{ flex: 2, padding: '10px 14px', background: 'var(--c-neg)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: isDeleting ? 'default' : 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, opacity: isDeleting ? 0.6 : 1 }}>
+            <Trash2 size={14} />
+            {isDeleting ? (isVi ? 'Đang xoá…' : 'Deleting…') : (isVi ? 'Xoá mục tiêu' : 'Delete goal')}
+          </button>
+        </div>
+      </div>
+    </DModal>
+  )
+}
+
+function EditGoalModal({ open, onClose, goal, onSaved, isVi }: {
   open: boolean; onClose: () => void; goal: GoalData; onSaved: () => void; isVi: boolean
 }) {
-  const [mounted, setMounted] = useState(false)
   const [name, setName] = useState(goal.goalName)
   const [target, setTarget] = useState(goal.targetAmount ? String(goal.targetAmount) : '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (open) { setName(goal.goalName); setTarget(goal.targetAmount ? String(goal.targetAmount) : ''); setError(''); setMounted(true) }
-    else { const t = setTimeout(() => setMounted(false), 220); return () => clearTimeout(t) }
+    if (open) { setName(goal.goalName); setTarget(goal.targetAmount ? String(goal.targetAmount) : ''); setError('') }
   }, [open, goal])
 
   async function handleSave() {
@@ -574,30 +614,29 @@ function EditGoalSheet({ open, onClose, goal, onSaved, isVi }: {
     setSaving(false)
   }
 
-  if (!mounted) return null
+  if (!open) return null
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.2)', zIndex: 160, pointerEvents: open ? 'auto' : 'none' }} onClick={onClose}>
-      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'var(--c-card)', borderRadius: '16px 16px 0 0', padding: '0 0 env(safe-area-inset-bottom,0)', animation: open ? 'slide-up 220ms cubic-bezier(0.2,0.8,0.2,1)' : 'slide-down 180ms ease forwards' }} onClick={(e) => e.stopPropagation()}>
-        <div style={{ width: 36, height: 4, background: 'var(--c-line-strong)', borderRadius: 999, margin: '6px auto 14px' }} />
-        <div style={{ padding: '0 16px 24px' }}>
-          <p style={{ fontWeight: 700, fontSize: 16, marginBottom: 16, color: 'var(--c-ink)' }}>{isVi ? 'Chỉnh sửa mục tiêu' : 'Edit goal'}</p>
-          {error && <p style={{ color: 'var(--c-neg)', fontSize: 13, marginBottom: 10 }}>{error}</p>}
-          <div style={{ marginBottom: 12 }}>
-            <label style={{ fontSize: 13, color: 'var(--c-muted)', display: 'block', marginBottom: 4 }}>{isVi ? 'Tên mục tiêu' : 'Goal name'}</label>
-            <input type="text" value={name} onChange={(e) => setName(e.target.value)} style={{ width: '100%', padding: '10px 12px', fontSize: 15, border: '1px solid var(--c-line)', borderRadius: 10, background: 'var(--c-card-2)', color: 'var(--c-ink)', boxSizing: 'border-box' }} />
-          </div>
-          <div style={{ marginBottom: 20 }}>
-            <label style={{ fontSize: 13, color: 'var(--c-muted)', display: 'block', marginBottom: 4 }}>{isVi ? 'Mục tiêu (không bắt buộc)' : 'Target amount (optional)'}</label>
-            <input type="text" inputMode="numeric" value={target ? Number(target).toLocaleString('en-US') : ''} onChange={(e) => setTarget(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))} placeholder="0" style={{ width: '100%', padding: '10px 12px', fontSize: 15, border: '1px solid var(--c-line)', borderRadius: 10, background: 'var(--c-card-2)', color: 'var(--c-ink)', boxSizing: 'border-box' }} />
-          </div>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button onClick={onClose} style={{ flex: 1, padding: '12px 0', borderRadius: 10, border: '1px solid var(--c-line)', background: 'var(--c-card)', color: 'var(--c-ink)', fontSize: 15, cursor: 'pointer', fontFamily: 'inherit' }}>{isVi ? 'Huỷ' : 'Cancel'}</button>
-            <button onClick={handleSave} disabled={saving} style={{ flex: 1, padding: '12px 0', borderRadius: 10, border: 'none', background: 'var(--c-navy)', color: '#fff', fontSize: 15, cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.7 : 1, fontFamily: 'inherit' }}>
-              {saving ? (isVi ? 'Đang lưu…' : 'Saving…') : (isVi ? 'Lưu' : 'Save')}
-            </button>
+    <DModal onClose={onClose} title={isVi ? 'Chỉnh sửa mục tiêu' : 'Edit goal'}>
+      <div style={{ display: 'grid', gap: 14 }}>
+        {error && <p style={{ margin: 0, color: 'var(--c-neg)', fontSize: 13 }}>{error}</p>}
+        <div>
+          <label style={{ fontSize: 13, color: 'var(--c-muted)', display: 'block', marginBottom: 6 }}>{isVi ? 'Tên mục tiêu' : 'Goal name'}</label>
+          <input autoFocus type="text" value={name} onChange={(e) => setName(e.target.value)} style={{ width: '100%', padding: '10px 12px', fontSize: 14, border: '1.5px solid var(--c-navy)', borderRadius: 10, background: 'var(--c-card)', color: 'var(--c-ink)', boxSizing: 'border-box', fontFamily: 'inherit', outline: 'none' }} />
+        </div>
+        <div>
+          <label style={{ fontSize: 13, color: 'var(--c-muted)', display: 'block', marginBottom: 6 }}>{isVi ? 'Số tiền mục tiêu (không bắt buộc)' : 'Target amount (optional)'}</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', border: '1px solid var(--c-line)', borderRadius: 10, background: 'var(--c-card-2)' }}>
+            <span style={{ fontSize: 14, color: 'var(--c-muted)', flexShrink: 0 }}>₫</span>
+            <input type="text" inputMode="numeric" value={target ? Number(target).toLocaleString('en-US') : ''} onChange={(e) => setTarget(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))} placeholder="0" style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', fontSize: 14, fontWeight: 600, fontFamily: 'inherit', background: 'transparent', color: 'var(--c-ink)' }} />
           </div>
         </div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+          <button onClick={onClose} className="cn-btn ghost" style={{ flex: 1, justifyContent: 'center', border: '1px solid var(--c-line)' }}>{isVi ? 'Huỷ' : 'Cancel'}</button>
+          <button onClick={handleSave} disabled={saving} className="cn-btn primary" style={{ flex: 2, justifyContent: 'center', opacity: saving ? 0.7 : 1 }}>
+            {saving ? (isVi ? 'Đang lưu…' : 'Saving…') : (isVi ? 'Lưu thay đổi' : 'Save changes')}
+          </button>
+        </div>
       </div>
-    </div>
+    </DModal>
   )
 }
