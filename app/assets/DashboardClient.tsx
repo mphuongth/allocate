@@ -709,6 +709,31 @@ export default function DashboardClient({ userId }: { userId: string }) {
                       onAssignNonFundToGoal={(txId, name, value, type) => { setNonFundPickerTxId(txId); setNonFundPickerItem({ name, value, type }) }}
                       onSellNonFund={openSellNonFund}
                       desktopCard
+                      onDesktopAssign={async (kind, id, goalId) => {
+                        if (kind === 'fund') {
+                          const res = await fetch(`/api/v1/fund-investments?fund_id=${id}`)
+                          if (!res.ok) throw new Error('Failed to fetch fund investments')
+                          const investments = await res.json() as Array<{ id: string }>
+                          await Promise.all(investments.map((inv) =>
+                            fetch(`/api/v1/fund-investments/${inv.id}/goal`, {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ goal_id: goalId }),
+                            }).then((r) => { if (!r.ok) throw new Error('Failed to assign') })
+                          ))
+                        } else {
+                          const res = await fetch(`/api/v1/investment-transactions/${id}/assign`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ goal_id: goalId }),
+                          })
+                          if (!res.ok) {
+                            const { error: e } = await res.json().catch(() => ({ error: 'Failed to assign' }))
+                            throw new Error(e ?? 'Failed to assign')
+                          }
+                        }
+                        fetchData({ force: true })
+                      }}
                     />
                   </div>
                 )}
