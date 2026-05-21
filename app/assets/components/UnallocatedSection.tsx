@@ -195,7 +195,7 @@ export default function UnallocatedSection({
     setAssignSelected(null)
     setAssignError('')
     setAssignSuccess(false)
-    fetch('/api/v1/savings-goals')
+    fetch('/api/v1/savings-goals?stats=true')
       .then((r) => r.ok ? r.json() : { goals: [] })
       .then((res: { goals?: Array<{ goal_id: string; goal_name: string; current_value?: number; target_amount?: number | null; progress_percentage?: number | null }> }) => {
         const rows = res.goals ?? []
