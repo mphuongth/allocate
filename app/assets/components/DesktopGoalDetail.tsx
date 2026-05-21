@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ChevronLeft, TrendingUp, Building, CircleDollarSign, BarChart2, MoreHorizontal, Edit2, Trash2, ChevronRight, ArrowDownRight, ArrowUpRight, Target } from 'lucide-react'
+import { ChevronLeft, X, TrendingUp, Building, CircleDollarSign, BarChart2, MoreHorizontal, Edit2, Trash2, ChevronRight, ArrowDownRight, ArrowUpRight, Target } from 'lucide-react'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import type { GoalData, FundBreakdownItem } from '../DashboardClient'
 
@@ -516,16 +516,18 @@ function DModal({ onClose, title, width = 380, children }: {
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          width: '100%', maxWidth: width, background: 'var(--c-card)', borderRadius: 16,
+          width: '100%', maxWidth: width, maxHeight: 'calc(100vh - 48px)',
+          background: 'var(--c-card)', borderRadius: 16,
           boxShadow: '0 24px 48px rgba(15,23,42,0.18), 0 8px 16px rgba(15,23,42,0.08)',
+          display: 'flex', flexDirection: 'column',
           animation: 'modal-in 200ms cubic-bezier(0.2,0.8,0.2,1)', overflow: 'hidden',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px 14px', borderBottom: '1px solid var(--c-line)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px 14px', borderBottom: '1px solid var(--c-line)', flexShrink: 0 }}>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em' }}>{title}</h3>
-          <button onClick={onClose} className="cn-btn ghost" style={{ padding: 6 }} aria-label="Close"><ChevronLeft size={18} style={{ transform: 'rotate(180deg)' }} /></button>
+          <button onClick={onClose} className="cn-btn ghost" style={{ padding: 6 }} aria-label="Close"><X size={18} /></button>
         </div>
-        <div style={{ padding: '18px 20px' }}>{children}</div>
+        <div style={{ flex: 1, padding: '18px 20px', overflowY: 'auto' }}>{children}</div>
       </div>
     </div>
   )
@@ -590,12 +592,27 @@ function EditGoalModal({ open, onClose, goal, onSaved, isVi }: {
 }) {
   const [name, setName] = useState(goal.goalName)
   const [target, setTarget] = useState(goal.targetAmount ? String(goal.targetAmount) : '')
+  const [date, setDate] = useState(goal.targetDate ? goal.targetDate.slice(0, 7) : '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (open) { setName(goal.goalName); setTarget(goal.targetAmount ? String(goal.targetAmount) : ''); setError('') }
+    if (open) {
+      setName(goal.goalName)
+      setTarget(goal.targetAmount ? String(goal.targetAmount) : '')
+      setDate(goal.targetDate ? goal.targetDate.slice(0, 7) : '')
+      setError('')
+    }
   }, [open, goal])
+
+  // Live savings calculator
+  const monthsTo = (() => {
+    if (!date) return 1
+    const [y, m] = date.split('-').map(Number)
+    const now = new Date()
+    return Math.max(1, (y - now.getFullYear()) * 12 + (m - 1 - now.getMonth()))
+  })()
+  const perMonth = target ? Number(target) / monthsTo : 0
 
   async function handleSave() {
     if (!name.trim()) { setError(isVi ? 'Tên mục tiêu là bắt buộc' : 'Goal name is required'); return }
@@ -604,7 +621,11 @@ function EditGoalModal({ open, onClose, goal, onSaved, isVi }: {
       const res = await fetch(`/api/v1/savings-goals/${goal.goalId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ goal_name: name.trim(), target_amount: target ? Number(target) : null }),
+        body: JSON.stringify({
+          goal_name: name.trim(),
+          target_amount: target ? Number(target) : null,
+          target_date: date ? `${date}-01` : null,
+        }),
       })
       if (!res.ok) {
         const { error: e } = await res.json()
@@ -616,20 +637,39 @@ function EditGoalModal({ open, onClose, goal, onSaved, isVi }: {
 
   if (!open) return null
   return (
-    <DModal onClose={onClose} title={isVi ? 'Chỉnh sửa mục tiêu' : 'Edit goal'}>
-      <div style={{ display: 'grid', gap: 14 }}>
+    <DModal onClose={onClose} title={isVi ? 'Chỉnh sửa mục tiêu' : 'Edit goal'} width={460}>
+      <div style={{ display: 'grid', gap: 16 }}>
         {error && <p style={{ margin: 0, color: 'var(--c-neg)', fontSize: 13 }}>{error}</p>}
         <div>
           <label style={{ fontSize: 13, color: 'var(--c-muted)', display: 'block', marginBottom: 6 }}>{isVi ? 'Tên mục tiêu' : 'Goal name'}</label>
-          <input autoFocus type="text" value={name} onChange={(e) => setName(e.target.value)} style={{ width: '100%', padding: '10px 12px', fontSize: 14, border: '1.5px solid var(--c-navy)', borderRadius: 10, background: 'var(--c-card)', color: 'var(--c-ink)', boxSizing: 'border-box', fontFamily: 'inherit', outline: 'none' }} />
+          <input autoFocus type="text" value={name} onChange={(e) => setName(e.target.value)}
+            style={{ width: '100%', padding: '10px 12px', fontSize: 14, border: '1.5px solid var(--c-navy)', borderRadius: 10, background: 'var(--c-card)', color: 'var(--c-ink)', boxSizing: 'border-box', fontFamily: 'inherit', outline: 'none' }} />
         </div>
         <div>
-          <label style={{ fontSize: 13, color: 'var(--c-muted)', display: 'block', marginBottom: 6 }}>{isVi ? 'Số tiền mục tiêu (không bắt buộc)' : 'Target amount (optional)'}</label>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', border: '1px solid var(--c-line)', borderRadius: 10, background: 'var(--c-card-2)' }}>
-            <span style={{ fontSize: 14, color: 'var(--c-muted)', flexShrink: 0 }}>₫</span>
-            <input type="text" inputMode="numeric" value={target ? Number(target).toLocaleString('en-US') : ''} onChange={(e) => setTarget(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))} placeholder="0" style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', fontSize: 14, fontWeight: 600, fontFamily: 'inherit', background: 'transparent', color: 'var(--c-ink)' }} />
-          </div>
+          <label style={{ fontSize: 13, color: 'var(--c-muted)', display: 'block', marginBottom: 6 }}>{isVi ? 'Số tiền mục tiêu (₫)' : 'Target amount (₫)'}</label>
+          <input type="number" value={target} onChange={(e) => setTarget(e.target.value)}
+            style={{ width: '100%', padding: '10px 12px', fontSize: 14, border: '1px solid var(--c-line)', borderRadius: 10, background: 'var(--c-card-2)', color: 'var(--c-ink)', boxSizing: 'border-box', fontFamily: 'inherit', outline: 'none' }} />
         </div>
+        <div>
+          <label style={{ fontSize: 13, color: 'var(--c-muted)', display: 'block', marginBottom: 6 }}>{isVi ? 'Hạn hoàn thành' : 'Target date'}</label>
+          <input type="month" value={date} onChange={(e) => setDate(e.target.value)}
+            style={{ width: '100%', padding: '10px 12px', fontSize: 14, border: '1px solid var(--c-line)', borderRadius: 10, background: 'var(--c-card-2)', color: 'var(--c-ink)', boxSizing: 'border-box', fontFamily: 'inherit', outline: 'none' }} />
+        </div>
+        {perMonth > 0 && (
+          <div style={{ background: 'var(--c-navy-tint)', border: '1px solid var(--c-navy-tint)', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--c-navy)', marginBottom: 4 }}>
+                {isVi ? 'Cần tiết kiệm' : 'Save per month'}
+              </div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--c-navy)', letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>
+                {new Intl.NumberFormat(isVi ? 'vi-VN' : 'en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(perMonth)} / {isVi ? 'tháng' : 'month'}
+              </div>
+            </div>
+            <span style={{ background: 'var(--c-card)', color: 'var(--c-navy)', fontWeight: 600, fontSize: 12, padding: '4px 10px', borderRadius: 999, border: '1px solid var(--c-line)' }}>
+              {monthsTo} {isVi ? 'tháng' : 'months'}
+            </span>
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
           <button onClick={onClose} className="cn-btn ghost" style={{ flex: 1, justifyContent: 'center', border: '1px solid var(--c-line)' }}>{isVi ? 'Huỷ' : 'Cancel'}</button>
           <button onClick={handleSave} disabled={saving} className="cn-btn primary" style={{ flex: 2, justifyContent: 'center', opacity: saving ? 0.7 : 1 }}>
