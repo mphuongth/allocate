@@ -35,8 +35,8 @@ function DesktopAssignPicker({
       <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--c-pos-tint)', color: 'var(--c-pos)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
         <Check size={28} strokeWidth={2.5} />
       </div>
-      <p style={{ fontWeight: 700, fontSize: 15, color: 'var(--c-ink)', margin: '0 0 4px' }}>
-        {isVI ? 'Đã gán thành công' : 'Assigned successfully'}
+      <p style={{ fontWeight: 600, fontSize: 15, color: 'var(--c-ink)', margin: '0 0 4px' }}>
+        {isVI ? 'Đã gán vào' : 'Assigned to'}
       </p>
       <p style={{ fontSize: 13, color: 'var(--c-navy)', fontWeight: 600, margin: 0 }}>{successName}</p>
     </div>
