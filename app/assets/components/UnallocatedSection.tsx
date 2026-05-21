@@ -28,9 +28,9 @@ interface Props {
   funds: FundBreakdownItem[]
   nonFunds: NonFundUnallocatedItem[]
   onFundClick: (fundId: string) => void
-  onAssignToGoal: (fundId: string) => void
+  onAssignToGoal: (fundId: string, name: string, value: number, type: string) => void
   onSellFund: (fund: FundBreakdownItem) => void
-  onAssignNonFundToGoal: (transactionId: string) => void
+  onAssignNonFundToGoal: (transactionId: string, name: string, value: number, type: string) => void
   onSellNonFund: (item: NonFundUnallocatedItem) => void
   desktopCard?: boolean
 }
@@ -234,8 +234,14 @@ export default function UnallocatedSection({
           data-testid="action-assign"
           onClick={() => {
             closeAction()
-            if (actionTarget.kind === 'fund') onAssignToGoal(actionTarget.fund.fundId)
-            else onAssignNonFundToGoal(actionTarget.item.transactionId)
+            if (actionTarget.kind === 'fund') {
+              const f = actionTarget.fund
+              onAssignToGoal(f.fundId, f.fundName, f.currentValue, 'fund')
+            } else {
+              const it = actionTarget.item
+              const name = it.notes || typeLabelMap[it.type] || it.type
+              onAssignNonFundToGoal(it.transactionId, name, it.currentValue, it.type)
+            }
           }}
           style={{
             width: '100%', textAlign: 'left', padding: '14px 16px',
