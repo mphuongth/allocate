@@ -990,6 +990,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
           goalCount: data.goals.length,
         } : null}
         onExport={handleGenerateReport}
+        desktop={isDesktop}
       />
     </div>
   )

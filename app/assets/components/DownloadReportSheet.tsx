@@ -10,9 +10,10 @@ interface Props {
   onClose: () => void
   data: { netWorth: number; currentValue: number; totalPL: number; goalCount: number } | null
   onExport: () => Promise<void>
+  desktop?: boolean
 }
 
-export default function DownloadReportSheet({ open, onClose, data, onExport }: Props) {
+export default function DownloadReportSheet({ open, onClose, data, onExport, desktop }: Props) {
   const isVI = useLocale() === 'vi'
   const [mounted, setMounted] = useState(false)
   const [exporting, setExporting] = useState(false)
@@ -42,7 +43,7 @@ export default function DownloadReportSheet({ open, onClose, data, onExport }: P
     setExporting(false)
   }
 
-  if (!mounted) return null
+  if (desktop ? !open : !mounted) return null
 
   const today = new Date().toLocaleDateString(isVI ? 'vi-VN' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
 
@@ -78,44 +79,7 @@ export default function DownloadReportSheet({ open, onClose, data, onExport }: P
 
   const isPos = !data || data.totalPL >= 0
 
-  return (
-    <div
-      style={{
-        position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.2)',
-        zIndex: 100, pointerEvents: open ? 'auto' : 'none',
-      }}
-      onClick={onClose}
-    >
-      <div
-        style={{
-          position: 'absolute', bottom: 0, left: 0, right: 0,
-          background: 'var(--c-card)', borderRadius: '16px 16px 0 0',
-          padding: '0 0 env(safe-area-inset-bottom,0)',
-          animation: open
-            ? 'slide-up 220ms cubic-bezier(0.2, 0.8, 0.2, 1)'
-            : 'slide-down 180ms ease forwards',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div style={{ width: 36, height: 4, background: 'var(--c-line-strong)', borderRadius: 999, margin: '6px auto 14px' }} />
-
-        <div style={{ padding: '0 16px 16px' }}>
-          {/* Sheet header */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-            <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600, color: 'var(--c-ink)' }}>{t.title}</h3>
-            <button
-              onClick={onClose}
-              aria-label="close"
-              style={{
-                padding: 6, background: 'transparent', border: 'none',
-                cursor: 'pointer', color: 'var(--c-muted)', borderRadius: 8,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}
-            >
-              <X size={18} />
-            </button>
-          </div>
-          {success ? (
+  const body = success ? (
             <div data-testid="export-success" style={{ padding: '28px 0', textAlign: 'center' }}>
               <div style={{
                 width: 56, height: 56, borderRadius: 28,
@@ -243,7 +207,77 @@ export default function DownloadReportSheet({ open, onClose, data, onExport }: P
                 </button>
               </div>
             </div>
-          )}
+          )
+
+  if (desktop) {
+    return (
+      <div
+        onClick={onClose}
+        style={{
+          position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.4)', zIndex: 200,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+          animation: 'fade-in 150ms ease', backdropFilter: 'blur(2px)',
+        }}
+      >
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            width: '100%', maxWidth: 460, maxHeight: 'calc(100vh - 48px)',
+            background: 'var(--c-card)', borderRadius: 16,
+            boxShadow: '0 24px 48px rgba(15,23,42,0.18), 0 8px 16px rgba(15,23,42,0.08)',
+            display: 'flex', flexDirection: 'column',
+            animation: 'modal-in 200ms cubic-bezier(0.2,0.8,0.2,1)', overflow: 'hidden',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px 14px', borderBottom: '1px solid var(--c-line)', flexShrink: 0 }}>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em' }}>{t.title}</h3>
+            <button onClick={onClose} aria-label="Close" style={{ padding: 6, border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', color: 'var(--c-muted)', display: 'flex' }}><X size={18} /></button>
+          </div>
+          <div style={{ flex: 1, padding: '18px 20px', overflowY: 'auto' }}>
+            {body}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.2)',
+        zIndex: 100, pointerEvents: open ? 'auto' : 'none',
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0,
+          background: 'var(--c-card)', borderRadius: '16px 16px 0 0',
+          padding: '0 0 env(safe-area-inset-bottom,0)',
+          animation: open
+            ? 'slide-up 220ms cubic-bezier(0.2, 0.8, 0.2, 1)'
+            : 'slide-down 180ms ease forwards',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ width: 36, height: 4, background: 'var(--c-line-strong)', borderRadius: 999, margin: '6px auto 14px' }} />
+
+        <div style={{ padding: '0 16px 16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600, color: 'var(--c-ink)' }}>{t.title}</h3>
+            <button
+              onClick={onClose}
+              aria-label="close"
+              style={{
+                padding: 6, background: 'transparent', border: 'none',
+                cursor: 'pointer', color: 'var(--c-muted)', borderRadius: 8,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              <X size={18} />
+            </button>
+          </div>
+          {body}
         </div>
       </div>
     </div>
