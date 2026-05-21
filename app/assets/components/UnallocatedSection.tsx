@@ -555,6 +555,8 @@ export default function UnallocatedSection({
             }}
           >
             <div
+              role="dialog"
+              aria-modal="true"
               onClick={(e) => e.stopPropagation()}
               style={{
                 width: '100%', maxWidth: 460, maxHeight: 'calc(100vh - 48px)',
