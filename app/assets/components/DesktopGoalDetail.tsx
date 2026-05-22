@@ -144,11 +144,13 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
         purchasePrice: inv.fund.purchasePrice,
       }
     }
+    const navPerUnit = inv.units && inv.units > 0 ? inv.value / inv.units : undefined
     return {
       type: inv.type as 'bank' | 'gold' | 'stock',
       name: inv.name,
       currentValue: inv.value,
       units: inv.units ?? undefined,
+      navPerUnit,
       gainPct: inv.gainPct ?? undefined,
       interestRate: inv.interestRate ?? undefined,
       transactionId: inv.id,
