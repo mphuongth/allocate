@@ -70,7 +70,11 @@ export async function GET(request: NextRequest) {
 
   const goalsWithStats = (goals ?? []).map((g) => {
     const stats = statsMap.get(g.goal_id) ?? { count: 0, invested: 0, interest: 0 }
-    return { ...g, transactionCount: stats.count, totalInvested: stats.invested, projectedInterest: stats.interest }
+    const current_value = stats.invested + stats.interest
+    const progress_percentage = g.target_amount && g.target_amount > 0
+      ? Math.min(100, (current_value / g.target_amount) * 100)
+      : null
+    return { ...g, transactionCount: stats.count, totalInvested: stats.invested, projectedInterest: stats.interest, current_value, progress_percentage }
   })
 
   return NextResponse.json({ goals: goalsWithStats })

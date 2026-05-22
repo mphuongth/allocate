@@ -217,11 +217,13 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const [error, setError] = useState('')
   const [fundDetailId, setFundDetailId] = useState<string | null>(null)
   const [goalPickerFundId, setGoalPickerFundId] = useState<string | null>(null)
+  const [goalPickerFundItem, setGoalPickerFundItem] = useState<{ name: string; value: number; type: string } | null>(null)
   const [assignLoading, setAssignLoading] = useState(false)
   const [assignError, setAssignError] = useState('')
   const [purchaseHistory, setPurchaseHistory] = useState<PurchaseHistory[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const [nonFundPickerTxId, setNonFundPickerTxId] = useState<string | null>(null)
+  const [nonFundPickerItem, setNonFundPickerItem] = useState<{ name: string; value: number; type: string } | null>(null)
   const [nonFundAssignLoading, setNonFundAssignLoading] = useState(false)
   const [nonFundAssignError, setNonFundAssignError] = useState('')
   const [goalSort, setGoalSort] = useState<SortValue>('manual')
@@ -702,11 +704,36 @@ export default function DashboardClient({ userId }: { userId: string }) {
                       funds={data.unallocated.funds}
                       nonFunds={data.unallocated.nonFunds}
                       onFundClick={handleFundClick}
-                      onAssignToGoal={(fundId) => setGoalPickerFundId(fundId)}
+                      onAssignToGoal={(fundId, name, value, type) => { setGoalPickerFundId(fundId); setGoalPickerFundItem({ name, value, type }) }}
                       onSellFund={openSellFund}
-                      onAssignNonFundToGoal={(txId) => setNonFundPickerTxId(txId)}
+                      onAssignNonFundToGoal={(txId, name, value, type) => { setNonFundPickerTxId(txId); setNonFundPickerItem({ name, value, type }) }}
                       onSellNonFund={openSellNonFund}
                       desktopCard
+                      onDesktopAssign={async (kind, id, goalId) => {
+                        if (kind === 'fund') {
+                          const res = await fetch(`/api/v1/fund-investments?fund_id=${id}`)
+                          if (!res.ok) throw new Error('Failed to fetch fund investments')
+                          const investments = await res.json() as Array<{ id: string }>
+                          await Promise.all(investments.map((inv) =>
+                            fetch(`/api/v1/fund-investments/${inv.id}/goal`, {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ goal_id: goalId }),
+                            }).then((r) => { if (!r.ok) throw new Error('Failed to assign') })
+                          ))
+                        } else {
+                          const res = await fetch(`/api/v1/investment-transactions/${id}/assign`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ goal_id: goalId }),
+                          })
+                          if (!res.ok) {
+                            const { error: e } = await res.json().catch(() => ({ error: 'Failed to assign' }))
+                            throw new Error(e ?? 'Failed to assign')
+                          }
+                        }
+                        fetchData({ force: true })
+                      }}
                     />
                   </div>
                 )}
@@ -833,9 +860,9 @@ export default function DashboardClient({ userId }: { userId: string }) {
                   funds={data.unallocated.funds}
                   nonFunds={data.unallocated.nonFunds}
                   onFundClick={handleFundClick}
-                  onAssignToGoal={(fundId) => setGoalPickerFundId(fundId)}
+                  onAssignToGoal={(fundId, name, value, type) => { setGoalPickerFundId(fundId); setGoalPickerFundItem({ name, value, type }) }}
                   onSellFund={openSellFund}
-                  onAssignNonFundToGoal={(txId) => setNonFundPickerTxId(txId)}
+                  onAssignNonFundToGoal={(txId, name, value, type) => { setNonFundPickerTxId(txId); setNonFundPickerItem({ name, value, type }) }}
                   onSellNonFund={openSellNonFund}
                 />
               )}
@@ -910,7 +937,9 @@ export default function DashboardClient({ userId }: { userId: string }) {
       {/* Assign Goal Sheet — funds */}
       <AssignGoalSheet
         open={!!goalPickerFundId}
-        onClose={() => { setGoalPickerFundId(null); fetchData({ force: true }) }}
+        onClose={() => { setGoalPickerFundId(null); setGoalPickerFundItem(null); fetchData({ force: true }) }}
+        item={goalPickerFundItem ?? undefined}
+        desktop={isDesktop}
         onConfirm={async (goalId) => {
           if (!goalPickerFundId) return
           const res = await fetch(`/api/v1/fund-investments?fund_id=${goalPickerFundId}`)
@@ -931,7 +960,9 @@ export default function DashboardClient({ userId }: { userId: string }) {
       {/* Assign Goal Sheet — non-funds */}
       <AssignGoalSheet
         open={!!nonFundPickerTxId}
-        onClose={() => { setNonFundPickerTxId(null); fetchData({ force: true }) }}
+        onClose={() => { setNonFundPickerTxId(null); setNonFundPickerItem(null); fetchData({ force: true }) }}
+        item={nonFundPickerItem ?? undefined}
+        desktop={isDesktop}
         onConfirm={async (goalId) => {
           if (!nonFundPickerTxId) return
           const res = await fetch(`/api/v1/investment-transactions/${nonFundPickerTxId}/assign`, {
