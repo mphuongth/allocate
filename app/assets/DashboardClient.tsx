@@ -210,7 +210,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const tc = useTranslations('common')
   const tg = useTranslations('goals')
   const locale = useLocale()
-  const { userName, setMobileTopBar, setHideDesktopHeader } = useNavigation()
+  const { userName, setMobileTopBar } = useNavigation()
   const isDesktop = useIsDesktop()
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -367,11 +367,6 @@ export default function DashboardClient({ userId }: { userId: string }) {
     }
   }
 
-  useEffect(() => {
-    setHideDesktopHeader(true)
-    return () => setHideDesktopHeader(false)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   useEffect(() => {
     setMobileTopBar({

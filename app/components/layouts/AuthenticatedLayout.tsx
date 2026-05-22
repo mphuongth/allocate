@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import { toast } from 'sonner'
 import { Plus } from 'lucide-react'
@@ -28,9 +28,15 @@ function getDisplayName(email: string): string {
   return firstName.charAt(0).toUpperCase() + firstName.slice(1)
 }
 
+// Pages that provide their own desktop top bar and don't need the shared Header.
+// Checked synchronously via usePathname so there is no flash on hard refresh.
+const PAGES_WITH_OWN_HEADER = new Set(['/dashboard'])
+
 function AuthenticatedLayoutInner({ children, email, initials }: { children: React.ReactNode; email: string; initials: string }) {
-  const { mobileTopBar, hideDesktopHeader } = useNavigation()
+  const { mobileTopBar } = useNavigation()
   const [showAddTx, setShowAddTx] = useState(false)
+  const pathname = usePathname()
+  const hideDesktopHeader = PAGES_WITH_OWN_HEADER.has(pathname)
 
   return (
     <div className="flex h-screen bg-canvas dark:bg-gray-950 overflow-hidden">
@@ -41,7 +47,7 @@ function AuthenticatedLayoutInner({ children, email, initials }: { children: Rea
 
       {/* Main area */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        {/* Desktop header */}
+        {/* Desktop header — hidden for pages that provide their own DTopBar */}
         {!hideDesktopHeader && (
           <div className="hidden md:block">
             <Header />
