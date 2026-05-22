@@ -694,7 +694,7 @@ function UnassignConfirmModal({ inv, unassigning, isVi, onCancel, onConfirm }: {
     <DModal onClose={onCancel} title={isVi ? 'Bỏ gán mục tiêu?' : 'Unassign from goal?'} width={380}>
       <div style={{ display: 'grid', gap: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'var(--c-card-2)', borderRadius: 10 }}>
-          <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--c-warn-tint,#fef3c7)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--c-warn-tint,#fef3c7)', color: 'var(--c-warn,#b45309)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <TypeIcon type={inv.type} size={15} />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
