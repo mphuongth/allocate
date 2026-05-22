@@ -589,7 +589,7 @@ export default function DesktopPlanningView({
                               <Target size={12} />
                             </div>
                             <span style={{ fontSize: 13, fontWeight: 600 }}>{g.goalName}</span>
-                            <span style={{ fontSize: 11, color: 'var(--c-muted)' }}>· {g.items.length} {isVI ? 'khoản' : 'items'}</span>
+                            <span style={{ fontSize: 11, color: 'var(--c-muted)' }}>· {g.items.length} {isVI ? 'khoản' : g.items.length === 1 ? 'item' : 'items'}</span>
                           </div>
                         </td>
                         <td style={{ padding: '10px 12px', textAlign: 'right' }}>
