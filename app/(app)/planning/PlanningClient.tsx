@@ -213,8 +213,8 @@ export default function PlanningClient() {
     const shortMonths = isVI ? SHORT_MONTHS_VI : SHORT_MONTHS_EN
     const shortLabel = `${shortMonths[month - 1]} ${year}`
     setMobileTopBar({
-      title: isVI ? 'Ngân sách' : 'Budget',
-      subtitle: isVI ? 'Kế hoạch tháng' : 'Monthly plan',
+      title: isVI ? 'Kế hoạch Tháng' : 'Monthly Plan',
+      subtitle: isVI ? 'Kế hoạch' : 'Planning',
       trailing: (
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: 3, background: 'var(--c-card-2)', border: '1px solid var(--c-line)', borderRadius: 10 }}>
           <button

@@ -309,6 +309,9 @@ export default function DesktopPlanningView({
   const [overrideVal, setOverrideVal] = useState('')
   const [incomeVal, setIncomeVal] = useState('')
   const [saving, setSaving] = useState(false)
+  const [otherModal, setOtherModal] = useState<OtherExpense | Record<string, never> | null>(null)
+  const [otherDesc, setOtherDesc] = useState('')
+  const [otherAmt, setOtherAmt] = useState('')
 
   // ── Derived values ──
   const byGoal = useMemo(() => buildByGoal(investments, savings), [investments, savings])
@@ -422,6 +425,31 @@ export default function DesktopPlanningView({
       await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       setOverrideModal(null)
       onRefresh(); onToast(isVI ? 'Đã lưu' : 'Saved')
+    } finally { setSaving(false) }
+  }
+
+  function openOtherModal(o?: OtherExpense) {
+    setOtherModal(o ?? {})
+    setOtherDesc(o?.description ?? '')
+    setOtherAmt(o ? String(o.amount_vnd) : '')
+  }
+
+  async function handleOtherSave() {
+    if (!plan || !otherDesc.trim() || !otherAmt || Number(otherAmt) <= 0) return
+    setSaving(true)
+    try {
+      const isEdit = otherModal && 'id' in otherModal && otherModal.id
+      const url = isEdit
+        ? `/api/v1/monthly-plans/${plan.id}/other-expenses/${(otherModal as OtherExpense).id}`
+        : `/api/v1/monthly-plans/${plan.id}/other-expenses`
+      await fetch(url, {
+        method: isEdit ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description: otherDesc.trim(), amount_vnd: Number(otherAmt) }),
+      })
+      setOtherModal(null)
+      onRefresh()
+      onToast(isVI ? 'Đã lưu' : 'Saved')
     } finally { setSaving(false) }
   }
 
@@ -654,7 +682,7 @@ export default function DesktopPlanningView({
                         <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(o.amount_vnd)}</span>
                       </td>
                       <td style={{ padding: '10px 8px 10px 4px', textAlign: 'right', width: 36 }}>
-                        <button aria-label="Edit" style={{ padding: 5, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, color: 'var(--c-muted)', display: 'flex' }}>
+                        <button aria-label="Edit" onClick={() => openOtherModal(o)} style={{ padding: 5, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, color: 'var(--c-muted)', display: 'flex' }}>
                           <Edit2 size={13} />
                         </button>
                       </td>
@@ -662,7 +690,7 @@ export default function DesktopPlanningView({
                   ))}
                   <tr style={{ background: 'var(--c-card)' }}>
                     <td colSpan={3} style={{ padding: '10px 16px' }}>
-                      <button style={{ padding: '4px 0', fontSize: 12, color: 'var(--c-navy)', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 4, fontWeight: 500 }}>
+                      <button onClick={() => openOtherModal()} style={{ padding: '4px 0', fontSize: 12, color: 'var(--c-navy)', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 4, fontWeight: 500 }}>
                         <Plus size={12} strokeWidth={2.4} />
                         {isVI ? 'Thêm khoản' : 'Add item'}
                       </button>
@@ -751,6 +779,31 @@ export default function DesktopPlanningView({
             <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
               <button onClick={() => setOverrideModal(null)} style={{ ...btnBase, flex: 1, padding: '10px 14px', background: 'transparent', color: 'var(--c-ink)', border: '1px solid var(--c-line)' }}>{isVI ? 'Hủy' : 'Cancel'}</button>
               <button onClick={handleSaveOverride} disabled={saving || !overrideVal || Number(overrideVal) <= 0} style={{ ...btnBase, flex: 2, padding: '10px 14px', background: 'var(--c-navy)', color: '#fff', opacity: saving || !overrideVal || Number(overrideVal) <= 0 ? 0.6 : 1 }}>
+                {saving ? (isVI ? 'Đang lưu...' : 'Saving...') : (isVI ? 'Lưu' : 'Save')}
+              </button>
+            </div>
+          </div>
+        </DModal>
+      )}
+
+      {otherModal !== null && (
+        <DModal
+          onClose={() => setOtherModal(null)}
+          title={'id' in otherModal && otherModal.id ? (isVI ? 'Sửa khoản chi' : 'Edit expense') : (isVI ? 'Thêm khoản chi' : 'Add expense')}
+          width={380}
+        >
+          <div style={{ display: 'grid', gap: 14 }}>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={labelStyle}>{isVI ? 'Mô tả' : 'Description'}</span>
+              <input value={otherDesc} onChange={e => setOtherDesc(e.target.value)} autoFocus placeholder={isVI ? 'VD. Mua laptop...' : 'e.g. Buy laptop...'} className="cn-input" />
+            </label>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={labelStyle}>{isVI ? 'Số tiền (₫)' : 'Amount (₫)'}</span>
+              <input type="number" value={otherAmt} onChange={e => setOtherAmt(e.target.value)} placeholder="0" className="cn-input tabular" />
+            </label>
+            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+              <button onClick={() => setOtherModal(null)} style={{ ...btnBase, flex: 1, padding: '10px 14px', background: 'transparent', color: 'var(--c-ink)', border: '1px solid var(--c-line)' }}>{isVI ? 'Hủy' : 'Cancel'}</button>
+              <button onClick={handleOtherSave} disabled={saving || !otherDesc.trim() || !otherAmt || Number(otherAmt) <= 0} style={{ ...btnBase, flex: 2, padding: '10px 14px', background: 'var(--c-navy)', color: '#fff', opacity: saving || !otherDesc.trim() || !otherAmt || Number(otherAmt) <= 0 ? 0.6 : 1 }}>
                 {saving ? (isVI ? 'Đang lưu...' : 'Saving...') : (isVI ? 'Lưu' : 'Save')}
               </button>
             </div>
