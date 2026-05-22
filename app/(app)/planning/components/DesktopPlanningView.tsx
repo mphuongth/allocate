@@ -137,11 +137,11 @@ function THead({ col1, col2 }: { col1: string; col2: string }) {
 
 // ─── DPlanRow — table row with kebab menu ────────────────────────────────────
 
-function MenuBtn({ icon, label, onClick, danger }: {
-  icon: React.ReactNode; label: string; onClick: () => void; danger?: boolean
+function MenuBtn({ icon, label, onClick, danger, noBorder }: {
+  icon: React.ReactNode; label: string; onClick: () => void; danger?: boolean; noBorder?: boolean
 }) {
   return (
-    <button onClick={onClick} style={{ width: '100%', textAlign: 'left', padding: '10px 12px', fontSize: 12, background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', color: danger ? 'var(--c-neg)' : 'var(--c-ink)', display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid var(--c-line)' }}>
+    <button onClick={onClick} style={{ width: '100%', textAlign: 'left', padding: '10px 12px', fontSize: 12, background: 'transparent', border: 'none', borderBottom: noBorder ? 'none' : '1px solid var(--c-line)', cursor: 'pointer', fontFamily: 'inherit', color: danger ? 'var(--c-neg)' : 'var(--c-ink)', display: 'flex', alignItems: 'center', gap: 8 }}>
       <span style={{ color: danger ? 'var(--c-neg)' : 'var(--c-muted)' }}>{icon}</span>
       {label}
     </button>
@@ -173,12 +173,12 @@ function DPlanRow({ primary, secondary, amount, muted, last, isVI, onSkip, onRes
             <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 5 }} />
             <div style={{ position: 'absolute', top: '100%', right: 8, marginTop: 2, zIndex: 6, background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 8, boxShadow: '0 6px 20px rgba(15,23,42,0.12)', minWidth: 170, overflow: 'hidden' }}>
               {muted ? (
-                <MenuBtn icon={<Check size={13} />} label={isVI ? 'Bao gồm tháng này' : 'Include this month'} onClick={() => { onRestore?.(); setOpen(false) }} />
+                <MenuBtn icon={<Check size={13} />} label={isVI ? 'Bao gồm tháng này' : 'Include this month'} onClick={() => { onRestore?.(); setOpen(false) }} noBorder />
               ) : (
                 <>
                   <MenuBtn icon={<Edit2 size={13} />} label={isVI ? 'Ghi đè số tiền' : 'Override amount'} onClick={() => { onOverride?.(); setOpen(false) }} />
                   {onRestore && <MenuBtn icon={<RefreshCw size={13} />} label={isVI ? 'Khôi phục mặc định' : 'Restore default'} onClick={() => { onRestore(); setOpen(false) }} />}
-                  <MenuBtn icon={<X size={13} />} label={isVI ? 'Bỏ qua tháng này' : 'Skip this month'} onClick={() => { onSkip?.(); setOpen(false) }} danger />
+                  <MenuBtn icon={<X size={13} />} label={isVI ? 'Bỏ qua tháng này' : 'Skip this month'} onClick={() => { onSkip?.(); setOpen(false) }} danger noBorder />
                 </>
               )}
             </div>
@@ -295,6 +295,7 @@ interface Props {
   loading: boolean
   onPrev: () => void
   onNext: () => void
+  onToday: () => void
   onPlanCreated: (p: MonthlyPlan) => void
   onPlanDeleted: () => void
   onRefresh: () => void
@@ -305,7 +306,7 @@ interface Props {
 
 export default function DesktopPlanningView({
   month, year, plan, investments, savings, fixedExpenses, insuranceMembers,
-  otherExpenses, loading, onPrev, onNext, onPlanCreated, onPlanDeleted, onRefresh, onToast,
+  otherExpenses, loading, onPrev, onNext, onToday, onPlanCreated, onPlanDeleted, onRefresh, onToast,
 }: Props) {
   const locale = useLocale()
   const isVI = locale === 'vi'
@@ -465,9 +466,13 @@ export default function DesktopPlanningView({
           >
             <ChevronLeft size={15} />
           </button>
-          <span style={{ padding: '5px 14px', minWidth: 90, textAlign: 'center', background: 'var(--c-canvas)', border: '1px solid var(--c-line)', borderRadius: 7, fontSize: 13, fontWeight: 600, color: 'var(--c-ink)' }}>
+          <button
+            onClick={onToday}
+            aria-label="Jump to current month"
+            style={{ padding: '5px 14px', minWidth: 90, textAlign: 'center', background: 'var(--c-canvas)', border: '1px solid var(--c-line)', borderRadius: 7, fontSize: 13, fontWeight: 600, color: 'var(--c-ink)', cursor: 'pointer', fontFamily: 'inherit' }}
+          >
             {shortLabel}
-          </span>
+          </button>
           <button
             data-testid="next-month"
             onClick={onNext}
@@ -492,7 +497,7 @@ export default function DesktopPlanningView({
             /* Empty state */
             <div
               data-testid="planning-empty-state"
-              style={{ padding: '60px 20px', textAlign: 'center', background: 'var(--c-card)', border: '1px dashed var(--c-line)', borderRadius: 16, maxWidth: 480, margin: '0 auto' }}
+              style={{ padding: '60px 20px', textAlign: 'center', background: 'var(--c-card)', border: '1px dashed var(--c-line-strong)', borderRadius: 16, maxWidth: 480, margin: '0 auto' }}
             >
               <div style={{ width: 52, height: 52, borderRadius: 26, background: 'var(--c-card-2)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14, color: 'var(--c-muted)' }}>
                 <Calendar size={24} />
@@ -640,7 +645,7 @@ export default function DesktopPlanningView({
                         last={i === insuranceMembers.length - 1}
                         isVI={isVI}
                         onSkip={() => handleInsSkip(m)}
-                        onRestore={m.excluded ? () => handleInsRestore(m) : undefined}
+                        onRestore={m.excluded || m.monthlyOverride != null ? () => handleInsRestore(m) : undefined}
                         onOverride={() => { const d = Math.round(m.annual_payment_vnd / 12); setOverrideModal({ id: m.member_id, name: m.member_name, defaultAmount: d, type: 'ins' }); setOverrideVal(String(m.monthlyOverride ?? d)) }}
                       />
                     )

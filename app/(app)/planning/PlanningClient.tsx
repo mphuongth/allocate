@@ -203,6 +203,12 @@ export default function PlanningClient() {
     setMonth(m); setYear(y)
   }, [month, year])
 
+  const navigateToday = useCallback(() => {
+    const now = new Date()
+    setMonth(now.getMonth() + 1)
+    setYear(now.getFullYear())
+  }, [])
+
   useEffect(() => {
     const shortMonths = isVI ? SHORT_MONTHS_VI : SHORT_MONTHS_EN
     const shortLabel = `${shortMonths[month - 1]} ${year}`
@@ -278,6 +284,7 @@ export default function PlanningClient() {
         loading={loading}
         onPrev={navigatePrev}
         onNext={navigateNext}
+        onToday={navigateToday}
         onPlanCreated={(p) => { setPlan(p); refetch() }}
         onPlanDeleted={() => {
           bustPlanCache(month, year)
