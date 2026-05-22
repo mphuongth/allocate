@@ -7,7 +7,7 @@ import {
   MoreHorizontal, Edit2, Trash2, Check, RefreshCw, X, Plus, Calendar,
 } from 'lucide-react'
 import { useLocale } from 'next-intl'
-import { fmtCompact, fmt } from '@/lib/formatters'
+import { fmtCompact } from '@/lib/formatters'
 import type {
   MonthlyPlan, FundInvestment, DirectSaving, FixedExpense,
   InsuranceMember, OtherExpense, Fund, Goal,
@@ -732,7 +732,7 @@ export default function DesktopPlanningView({
             </label>
             {incomeVal && Number(incomeVal) > 0 && (
               <div style={{ background: 'var(--c-navy-tint)', borderRadius: 8, padding: '6px 10px', fontSize: 12, color: 'var(--c-navy)', fontVariantNumeric: 'tabular-nums' }}>
-                {fmt(Number(incomeVal))}
+                {Math.round(Number(incomeVal)).toLocaleString('vi-VN')} ₫
               </div>
             )}
             <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
