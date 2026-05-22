@@ -4,7 +4,7 @@ import React, { useState, useMemo } from 'react'
 import {
   ChevronLeft, ChevronRight, ChevronDown, ChevronUp,
   Target, Shield, ShoppingCart,
-  MoreHorizontal, Edit2, Trash2, Check, RefreshCw, X, Plus,
+  MoreHorizontal, Check, RefreshCw, X, Plus,
 } from 'lucide-react'
 import { useLocale } from 'next-intl'
 import { fmtCompact } from '@/lib/formatters'
@@ -135,6 +135,13 @@ function THead({ col1, col2 }: { col1: string; col2: string }) {
   )
 }
 
+function EditIcon({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) {
+  return <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke={color} strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h4l10-10-4-4L4 16z" /></svg>
+}
+function TrashIcon({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) {
+  return <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke={color} strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" /></svg>
+}
+
 // ─── DPlanRow — table row with kebab menu ────────────────────────────────────
 
 function MenuBtn({ icon, label, onClick, danger, noBorder }: {
@@ -176,7 +183,7 @@ function DPlanRow({ primary, secondary, amount, muted, last, isVI, onSkip, onRes
                 <MenuBtn icon={<Check size={13} />} label={isVI ? 'Bao gồm tháng này' : 'Include this month'} onClick={() => { onRestore?.(); setOpen(false) }} noBorder />
               ) : (
                 <>
-                  <MenuBtn icon={<Edit2 size={13} />} label={isVI ? 'Ghi đè số tiền' : 'Override amount'} onClick={() => { onOverride?.(); setOpen(false) }} />
+                  <MenuBtn icon={<EditIcon size={13} />} label={isVI ? 'Ghi đè số tiền' : 'Override amount'} onClick={() => { onOverride?.(); setOpen(false) }} />
                   {onRestore && <MenuBtn icon={<RefreshCw size={13} />} label={isVI ? 'Khôi phục mặc định' : 'Restore default'} onClick={() => { onRestore(); setOpen(false) }} />}
                   <MenuBtn icon={<X size={13} />} label={isVI ? 'Bỏ qua tháng này' : 'Skip this month'} onClick={() => { onSkip?.(); setOpen(false) }} danger noBorder />
                 </>
@@ -554,10 +561,10 @@ export default function DesktopPlanningView({
                     extra: (
                       <div style={{ display: 'flex', gap: 4 }}>
                         <button onClick={() => { setIncomeVal(String(plan.salary_vnd)); setShowIncome(true) }} aria-label="Edit income" style={{ padding: 6, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, color: 'var(--c-muted)', display: 'flex' }}>
-                          <Edit2 size={15} />
+                          <EditIcon size={15} />
                         </button>
                         <button onClick={() => setShowDelete(true)} aria-label="Delete plan" style={{ padding: 6, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, color: 'var(--c-neg)', display: 'flex' }}>
-                          <Trash2 size={15} />
+                          <TrashIcon size={15} />
                         </button>
                       </div>
                     ),
@@ -687,7 +694,7 @@ export default function DesktopPlanningView({
                       </td>
                       <td style={{ padding: '10px 8px 10px 4px', textAlign: 'right', width: 36 }}>
                         <button aria-label="Edit" onClick={() => openOtherModal(o)} style={{ padding: 5, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, color: 'var(--c-muted)', display: 'flex' }}>
-                          <Edit2 size={13} />
+                          <EditIcon size={13} />
                         </button>
                       </td>
                     </tr>
@@ -761,7 +768,7 @@ export default function DesktopPlanningView({
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => setShowDelete(false)} style={{ ...btnBase, flex: 1, padding: '10px 14px', background: 'transparent', color: 'var(--c-ink)', border: '1px solid var(--c-line)' }}>{isVI ? 'Huỷ' : 'Cancel'}</button>
               <button onClick={handleDeletePlan} disabled={saving} style={{ ...btnBase, flex: 2, padding: '10px 14px', background: 'var(--c-neg)', color: '#fff' }}>
-                <Trash2 size={14} />
+                <TrashIcon size={14} />
                 {saving ? (isVI ? 'Đang xoá...' : 'Deleting...') : (isVI ? 'Xoá kế hoạch' : 'Delete plan')}
               </button>
             </div>

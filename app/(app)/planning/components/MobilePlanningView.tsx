@@ -5,7 +5,7 @@ import { useLocale } from 'next-intl'
 import {
   Wallet, Target, Shield, ShoppingCart,
   ChevronDown, ChevronUp,
-  MoreHorizontal, Plus, Edit2, Trash2, Check, RefreshCw, X, Calendar,
+  MoreHorizontal, Plus, Check, RefreshCw, X, Calendar,
 } from 'lucide-react'
 import { fmtCompact, fmt } from '@/lib/formatters'
 import type {
@@ -97,6 +97,13 @@ function buildByGoal(investments: FundInvestment[], savings: DirectSaving[]): Go
   }
 
   return [...map.values()].sort((a, b) => a.goalName.localeCompare(b.goalName))
+}
+
+function EditIcon({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) {
+  return <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke={color} strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h4l10-10-4-4L4 16z" /></svg>
+}
+function TrashIcon({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) {
+  return <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke={color} strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" /></svg>
 }
 
 // ─── Shared sheet overlay wrapper ─────────────────────────────────────────────
@@ -294,7 +301,7 @@ function DeletePlanSheet({
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
             }}
           >
-            <Trash2 size={14} />
+            <TrashIcon size={14} />
             {deleting ? (isVI ? 'Đang xoá...' : 'Deleting...') : (isVI ? 'Xoá kế hoạch' : 'Delete plan')}
           </button>
         </div>
@@ -597,7 +604,7 @@ function SalaryCard({ amount, isVI, onEdit, onDelete }: { amount: number; isVI: 
           onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--c-card-2)')}
           onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
         >
-          <Edit2 size={16} color="var(--c-muted)" />
+          <EditIcon size={16} color="var(--c-muted)" />
         </button>
         <button
           onClick={onDelete}
@@ -606,7 +613,7 @@ function SalaryCard({ amount, isVI, onEdit, onDelete }: { amount: number; isVI: 
           onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--c-card-2)')}
           onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
         >
-          <Trash2 size={16} color="var(--c-neg)" />
+          <TrashIcon size={16} color="var(--c-neg)" />
         </button>
       </div>
     </div>
@@ -892,7 +899,7 @@ function PlanLineItem({
                   onClick={() => { onOverride?.(); setMenuOpen(false) }}
                   style={{ width: '100%', textAlign: 'left', padding: '10px 12px', fontSize: 12, background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--c-ink)', display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid var(--c-line)' }}
                 >
-                  <Edit2 size={14} color="var(--c-muted)" />
+                  <EditIcon size={14} color="var(--c-muted)" />
                   {isVI ? 'Ghi đè số tiền' : 'Override amount'}
                 </button>
                 <button
@@ -1180,7 +1187,7 @@ export default function MobilePlanningView({
                     aria-label="Edit expense"
                     style={{ padding: 4, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 4, display: 'flex', alignItems: 'center' }}
                   >
-                    <Edit2 size={14} color="var(--c-muted)" />
+                    <EditIcon size={14} color="var(--c-muted)" />
                   </button>
                 </div>
               ))}
