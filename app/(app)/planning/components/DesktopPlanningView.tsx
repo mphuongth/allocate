@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from 'react'
 import {
   ChevronLeft, ChevronRight, ChevronDown, ChevronUp,
-  Target, Building, Shield, ShoppingCart,
+  Target, Shield, ShoppingCart,
   MoreHorizontal, Edit2, Trash2, Check, RefreshCw, X, Plus, Calendar,
 } from 'lucide-react'
 import { useLocale } from 'next-intl'
@@ -618,7 +618,7 @@ export default function DesktopPlanningView({
               </PlanTable>
 
               {/* Fixed expenses */}
-              <PlanTable icon={<Building size={15} />} iconColor="var(--c-accent-fixed,#b45309)" title={isVI ? 'Chi phí cố định' : 'Fixed expenses'} total={fixedTotal}>
+              <PlanTable icon={<svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="3" width="16" height="18" rx="1" /><path d="M9 8h2M13 8h2M9 12h2M13 12h2M9 16h2M13 16h2" /></svg>} iconColor="var(--c-accent-fixed,#b45309)" title={isVI ? 'Chi phí cố định' : 'Fixed expenses'} total={fixedTotal}>
                 <THead col1={isVI ? 'Chi phí' : 'Expense'} col2={isVI ? 'Số tiền' : 'Amount'} />
                 <tbody>
                   {fixedExpenses.length === 0 ? (

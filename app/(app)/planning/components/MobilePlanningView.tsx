@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useLocale } from 'next-intl'
 import {
-  Wallet, Target, Building, Shield, ShoppingCart,
+  Wallet, Target, Shield, ShoppingCart,
   ChevronDown, ChevronUp,
   MoreHorizontal, Plus, Edit2, Trash2, Check, RefreshCw, X, Calendar,
 } from 'lucide-react'
@@ -689,6 +689,15 @@ function AllocationSummaryCard({
   )
 }
 
+function FixedExpIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="3" width="16" height="18" rx="1" />
+      <path d="M9 8h2M13 8h2M9 12h2M13 12h2M9 16h2M13 16h2" />
+    </svg>
+  )
+}
+
 // ─── BudgetSection ────────────────────────────────────────────────────────────
 
 function BudgetSection({
@@ -1074,7 +1083,7 @@ export default function MobilePlanningView({
             {/* Fixed expenses section */}
             {fixedExpenses.length > 0 && (
               <BudgetSection
-                icon={Building}
+                icon={FixedExpIcon}
                 iconColor="var(--c-accent-fixed)"
                 title={isVI ? 'Chi phí cố định' : 'Fixed expenses'}
                 count={`${fixedExpenses.length} ${isVI ? 'khoản' : fixedExpenses.length === 1 ? 'item' : 'items'}`}
