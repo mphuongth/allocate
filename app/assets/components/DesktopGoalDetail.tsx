@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ChevronLeft, X, TrendingUp, Building, CircleDollarSign, BarChart2, MoreHorizontal, Edit2, Trash2, ChevronRight, ArrowDownRight, ArrowUpRight, Target } from 'lucide-react'
+import { ChevronLeft, X, TrendingUp, Building, CircleDollarSign, BarChart2, MoreHorizontal, Edit2, Trash2, ChevronRight, ArrowDownRight, ArrowUpRight, Target, CalendarDays, Unlink } from 'lucide-react'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import type { GoalData, FundBreakdownItem } from '../DashboardClient'
+import SellWithdrawSheet, { type SellItem } from './SellWithdrawSheet'
 
 interface InvestmentTx {
   transaction_id: string
@@ -26,6 +27,7 @@ interface InvRow {
   gainPct: number | null
   units: number | null
   principal: number | null
+  interestRate: number | null
   fund: FundBreakdownItem | null
 }
 
@@ -68,9 +70,18 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
   const [isDeleting, setIsDeleting] = useState(false)
   const [calcAmount, setCalcAmount] = useState('')
 
+  // Investment options state
+  const [actionInv, setActionInv] = useState<InvRow | null>(null)
+  const [showInvOptions, setShowInvOptions] = useState(false)
+  const [showSell, setShowSell] = useState(false)
+  const [showUnassignConfirm, setShowUnassignConfirm] = useState(false)
+  const [unassigning, setUnassigning] = useState(false)
+  const [unassignedIds, setUnassignedIds] = useState<string[]>([])
+
   useEffect(() => {
     setTxLoading(true)
     setTab('investments')
+    setUnassignedIds([])
     fetch(`/api/v1/investment-transactions?goal_id=${goal.goalId}&limit=200`)
       .then((r) => r.ok ? r.json() : { transactions: [] })
       .then((res) => setTransactions(res.transactions ?? []))
@@ -88,11 +99,68 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
     }
   }
 
+  async function handleUnassign() {
+    if (!actionInv) return
+    setUnassigning(true)
+    try {
+      if (actionInv.fund) {
+        const res = await fetch(`/api/v1/fund-investments?fund_id=${actionInv.fund.fundId}`)
+        if (!res.ok) throw new Error('fetch failed')
+        const data = await res.json() as { investments?: Array<{ id: string }> }
+        const investments = data.investments ?? []
+        await Promise.all(investments.map((fi) =>
+          fetch(`/api/v1/fund-investments/${fi.id}/goal`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ goal_id: null }),
+          })
+        ))
+      } else {
+        await fetch(`/api/v1/investment-transactions/${actionInv.id}/assign`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ goal_id: null }),
+        })
+      }
+      setUnassignedIds((prev) => [...prev, actionInv.id])
+      setShowUnassignConfirm(false)
+      setActionInv(null)
+      onDataChanged()
+    } finally {
+      setUnassigning(false)
+    }
+  }
+
+  function buildSellItem(inv: InvRow): SellItem {
+    if (inv.fund) {
+      return {
+        type: 'fund',
+        name: inv.name,
+        currentValue: inv.value,
+        units: inv.units ?? undefined,
+        navPerUnit: inv.fund.currentNAV,
+        gainPct: inv.gainPct ?? undefined,
+        fundId: inv.fund.fundId,
+        purchasePrice: inv.fund.purchasePrice,
+      }
+    }
+    return {
+      type: inv.type as 'bank' | 'gold' | 'stock',
+      name: inv.name,
+      currentValue: inv.value,
+      units: inv.units ?? undefined,
+      gainPct: inv.gainPct ?? undefined,
+      interestRate: inv.interestRate ?? undefined,
+      transactionId: inv.id,
+      purchasePrice: inv.principal ?? undefined,
+    }
+  }
+
   const isPos = goal.profitLoss >= 0
   const isComplete = (goal.progressPercentage ?? 0) >= 100
   const progress = Math.min(goal.progressPercentage ?? 0, 100)
 
-  // Build investment rows (same logic as GoalDetailSheet)
+  // Build investment rows
   const investmentRows = transactions.filter((tx) => tx.transaction_type !== 'withdrawal')
   const deduped = new Map<string, InvestmentTx>()
   investmentRows.forEach((tx) => {
@@ -131,7 +199,7 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
       units = tx.units
       principal = tx.amount_vnd
     }
-    return { id: tx.transaction_id, name, type: tx.asset_type, value, gainPct, units, principal, fund: fund ?? null }
+    return { id: tx.transaction_id, name, type: tx.asset_type, value, gainPct, units, principal, interestRate: tx.interest_rate, fund: fund ?? null }
   })
 
   // Composition segments
@@ -149,6 +217,8 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
   const projectedDate = monthsToGoal != null ? (() => { const d = new Date(); d.setMonth(d.getMonth() + monthsToGoal); return d })() : null
   const isOnTrack = calcInput > 0 && calcInput >= neededPerMonth
   const gap = Math.abs(neededPerMonth - calcInput)
+
+  const visibleInvRows = invRows.filter((inv) => !unassignedIds.includes(inv.id))
 
   return (
     <>
@@ -283,16 +353,16 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
                   {isVi ? 'Đang tải…' : 'Loading…'}
                 </p>
               )}
-              {!txLoading && invRows.length === 0 && (
+              {!txLoading && visibleInvRows.length === 0 && (
                 <p style={{ color: 'var(--c-muted)', fontSize: 13, textAlign: 'center', padding: '20px 0' }}>
                   {isVi ? 'Chưa có khoản đầu tư nào' : 'No investments yet'}
                 </p>
               )}
-              {!txLoading && invRows.map((inv, i) => (
+              {!txLoading && visibleInvRows.map((inv, i) => (
                 <div key={inv.id} style={{
                   display: 'flex', alignItems: 'center', gap: 10,
                   padding: '11px 16px',
-                  borderBottom: i < invRows.length - 1 ? '1px solid var(--c-line)' : 'none',
+                  borderBottom: i < visibleInvRows.length - 1 ? '1px solid var(--c-line)' : 'none',
                 }}>
                   <div style={{ width: 28, height: 28, borderRadius: 7, background: 'var(--c-card-2)', color: GD_COLORS[inv.type] ?? 'var(--c-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     <TypeIcon type={inv.type} size={13} />
@@ -317,6 +387,14 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
                       </div>
                     )}
                   </div>
+                  <button
+                    onClick={() => { setActionInv(inv); setShowInvOptions(true) }}
+                    className="cn-btn ghost"
+                    style={{ padding: 5, flexShrink: 0 }}
+                    aria-label="Options"
+                  >
+                    <MoreHorizontal size={14} color="var(--c-muted)" />
+                  </button>
                 </div>
               ))}
             </>
@@ -497,10 +575,170 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
           isVi={isVi}
         />
       )}
+
+      {/* Investment options modal */}
+      {showInvOptions && actionInv && (
+        <InvOptionsModal
+          inv={actionInv}
+          isVi={isVi}
+          onClose={() => { setShowInvOptions(false) }}
+          onHistory={() => { setShowInvOptions(false); setTab('history') }}
+          onSell={() => { setShowInvOptions(false); setTimeout(() => setShowSell(true), 80) }}
+          onUnassign={() => { setShowInvOptions(false); setTimeout(() => setShowUnassignConfirm(true), 80) }}
+        />
+      )}
+
+      {/* Unassign confirmation modal */}
+      {showUnassignConfirm && actionInv && (
+        <UnassignConfirmModal
+          inv={actionInv}
+          unassigning={unassigning}
+          isVi={isVi}
+          onCancel={() => setShowUnassignConfirm(false)}
+          onConfirm={handleUnassign}
+        />
+      )}
+
+      {/* Sell / Withdraw sheet */}
+      <SellWithdrawSheet
+        item={actionInv && showSell ? buildSellItem(actionInv) : null}
+        open={showSell}
+        context="goal"
+        onClose={() => { setShowSell(false) }}
+        onSuccess={() => { setShowSell(false); if (actionInv) setUnassignedIds((prev) => [...prev, actionInv.id]); onDataChanged() }}
+      />
     </>
   )
 }
 
+// ─── Investment options modal ──────────────────────────────────────────────
+function InvOptionsModal({ inv, isVi, onClose, onHistory, onSell, onUnassign }: {
+  inv: InvRow; isVi: boolean
+  onClose: () => void; onHistory: () => void; onSell: () => void; onUnassign: () => void
+}) {
+  const isBank = inv.type === 'bank'
+  const typeColor = GD_COLORS[inv.type] ?? 'var(--c-muted)'
+
+  const actions = [
+    {
+      icon: <CalendarDays size={18} color="var(--c-muted)" />,
+      bg: 'var(--c-card-2)',
+      label: isVi ? 'Lịch sử giao dịch' : 'Transaction history',
+      sub: isVi ? 'Xem các lần mua / bán trước đây' : 'View past buys & sells',
+      onClick: onHistory,
+    },
+    {
+      icon: isBank
+        ? <ArrowDownRight size={18} color="var(--c-neg)" />
+        : <ArrowDownRight size={18} color="var(--c-neg)" />,
+      bg: 'var(--c-neg-tint)',
+      label: isBank ? (isVi ? 'Rút tiền' : 'Withdraw') : (isVi ? 'Bán' : 'Sell'),
+      sub: isBank
+        ? (isVi ? 'Rút tiền gửi khỏi mục tiêu' : 'Withdraw from goal')
+        : (isVi ? 'Bán khoản đầu tư' : 'Liquidate investment'),
+      onClick: onSell,
+    },
+    {
+      icon: <Unlink size={18} color="var(--c-warn,#b45309)" />,
+      bg: 'var(--c-warn-tint,#fef3c7)',
+      label: isVi ? 'Bỏ gán mục tiêu' : 'Unassign from goal',
+      sub: isVi ? 'Chuyển khoản đầu tư sang trạng thái chưa gán' : 'Move this investment to unassigned',
+      onClick: onUnassign,
+    },
+  ]
+
+  return (
+    <DModal onClose={onClose} title={isVi ? 'Tùy chọn' : 'Options'} width={380}>
+      <div style={{ display: 'grid', gap: 10 }}>
+        {/* Item summary */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: 'var(--c-card-2)', borderRadius: 12, marginBottom: 4 }}>
+          <div style={{ width: 36, height: 36, borderRadius: 9, background: 'var(--c-card)', color: typeColor, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: '1px solid var(--c-line)' }}>
+            <TypeIcon type={inv.type} size={16} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{inv.name}</div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(inv.value)}</span>
+              {inv.gainPct != null && (
+                <span style={{
+                  fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 999,
+                  background: inv.gainPct >= 0 ? 'var(--c-pos-tint)' : 'var(--c-neg-tint)',
+                  color: inv.gainPct >= 0 ? 'var(--c-pos)' : 'var(--c-neg)',
+                }}>
+                  {inv.gainPct >= 0 ? '+' : ''}{fmtPct(inv.gainPct)}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {actions.map((a, i) => (
+          <button key={i} onClick={a.onClick} style={{
+            width: '100%', textAlign: 'left', padding: '13px 16px',
+            background: 'var(--c-card)', border: '1px solid var(--c-line)',
+            borderRadius: 14, cursor: 'pointer', fontFamily: 'inherit',
+            display: 'flex', alignItems: 'center', gap: 14, transition: 'background 120ms',
+          }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--c-card-2)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--c-card)')}
+          >
+            <div style={{ width: 40, height: 40, borderRadius: 10, background: a.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              {a.icon}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)' }}>{a.label}</div>
+              <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 2 }}>{a.sub}</div>
+            </div>
+            <ChevronRight size={14} color="var(--c-muted)" />
+          </button>
+        ))}
+      </div>
+    </DModal>
+  )
+}
+
+// ─── Unassign confirm modal ────────────────────────────────────────────────
+function UnassignConfirmModal({ inv, unassigning, isVi, onCancel, onConfirm }: {
+  inv: InvRow; unassigning: boolean; isVi: boolean; onCancel: () => void; onConfirm: () => void
+}) {
+  return (
+    <DModal onClose={onCancel} title={isVi ? 'Bỏ gán mục tiêu?' : 'Unassign from goal?'} width={380}>
+      <div style={{ display: 'grid', gap: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'var(--c-card-2)', borderRadius: 10 }}>
+          <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--c-warn-tint,#fef3c7)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <TypeIcon type={inv.type} size={15} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{inv.name}</div>
+            <div style={{ fontSize: 12, color: 'var(--c-muted)', marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(inv.value)}</div>
+          </div>
+        </div>
+        <p style={{ margin: 0, fontSize: 13, color: 'var(--c-muted)', lineHeight: 1.55 }}>
+          {isVi
+            ? 'Khoản đầu tư này sẽ được chuyển sang "Chưa gán". Bạn có thể gán lại bất kỳ lúc nào từ trang Kế hoạch.'
+            : 'This investment will be moved to "Unassigned". You can re-assign it any time from the Planning page.'}
+        </p>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={onCancel} className="cn-btn ghost" style={{ flex: 1, justifyContent: 'center', border: '1px solid var(--c-line)' }}>
+            {isVi ? 'Hủy' : 'Cancel'}
+          </button>
+          <button onClick={onConfirm} disabled={unassigning} style={{
+            flex: 2, padding: '10px 14px', background: 'var(--c-warn,#b45309)', color: '#fff',
+            border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 600,
+            cursor: unassigning ? 'default' : 'pointer', fontFamily: 'inherit',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            opacity: unassigning ? 0.6 : 1,
+          }}>
+            <Unlink size={14} />
+            {unassigning ? (isVi ? 'Đang xử lý…' : 'Unassigning…') : (isVi ? 'Bỏ gán' : 'Unassign')}
+          </button>
+        </div>
+      </div>
+    </DModal>
+  )
+}
+
+// ─── Shared DModal ─────────────────────────────────────────────────────────
 function DModal({ onClose, title, width = 380, children }: {
   onClose: () => void; title: string; width?: number; children: React.ReactNode
 }) {
@@ -514,6 +752,8 @@ function DModal({ onClose, title, width = 380, children }: {
       }}
     >
       <div
+        role="dialog"
+        aria-modal="true"
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%', maxWidth: width, maxHeight: 'calc(100vh - 48px)',
@@ -605,7 +845,6 @@ function EditGoalModal({ open, onClose, goal, onSaved, isVi }: {
     }
   }, [open, goal])
 
-  // Live savings calculator
   const monthsTo = (() => {
     if (!date) return 1
     const [y, m] = date.split('-').map(Number)
