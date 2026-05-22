@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { ChevronLeft, X, TrendingUp, Building, CircleDollarSign, BarChart2, MoreHorizontal, Edit2, Trash2, ChevronRight, ArrowDownRight, ArrowUpRight, Target, CalendarDays, Unlink } from 'lucide-react'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import type { GoalData, FundBreakdownItem } from '../DashboardClient'
-import SellWithdrawSheet, { type SellItem } from './SellWithdrawSheet'
+import { SellWithdrawSheet, type SellItem } from './SellWithdrawSheet'
 
 interface InvestmentTx {
   transaction_id: string
