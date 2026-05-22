@@ -462,7 +462,7 @@ export default function DesktopPlanningView({
       style={{ flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}
     >
       {/* ── DTopBar ─────────────────────────────────────────────────────────── */}
-      <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 28px 0', flexShrink: 0 }}>
+      <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 28px 16px', flexShrink: 0, borderBottom: '1px solid var(--c-line)', background: 'var(--c-canvas)' }}>
         <div>
           <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--c-muted)', marginBottom: 3 }}>
             {isVI ? 'Kế hoạch' : 'Planning'}
@@ -504,10 +504,10 @@ export default function DesktopPlanningView({
       </header>
 
       {/* ── Two-panel body ───────────────────────────────────────────────────── */}
-      <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden', marginTop: 20 }}>
+      <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
 
         {/* Left — main scrollable content */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '0 24px 40px', minWidth: 0 }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px 40px', minWidth: 0 }}>
           {loading ? (
             <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--c-muted)' }}>
               {isVI ? 'Đang tải...' : 'Loading...'}
@@ -708,7 +708,7 @@ export default function DesktopPlanningView({
 
         {/* Right — allocation sidebar */}
         {plan && (
-          <div style={{ width: 280, flexShrink: 0, overflowY: 'auto', padding: '0 20px 40px 4px', borderLeft: '1px solid var(--c-line)' }}>
+          <div style={{ width: 280, flexShrink: 0, overflowY: 'auto', padding: '20px 20px 40px 4px', borderLeft: '1px solid var(--c-line)' }}>
             <AllocationCard
               salary={plan.salary_vnd}
               totalGoalAmount={totalGoalAmount}
