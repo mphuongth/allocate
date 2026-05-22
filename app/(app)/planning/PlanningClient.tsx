@@ -4,14 +4,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useTranslations, useLocale } from 'next-intl'
 import { useNavigation } from '@/app/components/navigation/NavigationContext'
-import SalaryInput from './components/SalaryInput'
-import FundInvestmentsSection from './components/FundInvestmentsSection'
-import DirectSavingsSection from './components/DirectSavingsSection'
-import FixedExpensesSection from './components/FixedExpensesSection'
-import InsuranceSection from './components/InsuranceSection'
-import OtherExpensesSection from './components/OtherExpensesSection'
-import AllocationSummary from './components/AllocationSummary'
 import MobilePlanningView from './components/MobilePlanningView'
+import DesktopPlanningView from './components/DesktopPlanningView'
 
 export interface MonthlyPlan {
   id: string
@@ -197,12 +191,6 @@ export default function PlanningClient() {
 
   useEffect(() => { fetchPlan() }, [fetchPlan])
 
-  function navigate(dir: 'prev' | 'next') {
-    const { m, y } = dir === 'prev' ? prevMonth(month, year) : nextMonth(month, year)
-    setMonth(m)
-    setYear(y)
-  }
-
   const refetch = useCallback(() => fetchPlan({ force: true }), [fetchPlan])
 
   const navigatePrev = useCallback(() => {
@@ -276,115 +264,32 @@ export default function PlanningClient() {
       />
 
       {/* Desktop view — hidden on mobile */}
-      <div className="hidden md:block space-y-6" data-testid="desktop-planning">
-      {/* Month navigation */}
-      <div className="flex items-center gap-3">
-        <button
-          data-testid="prev-month"
-          onClick={() => navigate('prev')}
-          className="p-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 transition-colors"
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </button>
-        <span className="text-2xl font-semibold text-gray-900 dark:text-gray-100 min-w-[160px] text-center">
-          {MONTHS[month - 1]} {year}
-        </span>
-        <button
-          data-testid="next-month"
-          onClick={() => navigate('next')}
-          className="p-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 transition-colors"
-        >
-          <ChevronRight className="h-4 w-4" />
-        </button>
-      </div>
-
-      {/* Toast */}
-      {toast && (
-        <div className="fixed top-4 right-4 z-50 px-4 py-3 bg-green-600 text-white text-sm font-medium rounded-lg shadow-lg">
-          {toast}
-        </div>
-      )}
-
-      {loading ? (
-        <div className="text-center py-20 text-gray-400 dark:text-gray-500">{t('loading')}</div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left col: salary + sections */}
-          <div className="lg:col-span-2 space-y-6 order-2 lg:order-1">
-            <SalaryInput
-              plan={plan}
-              month={month}
-              year={year}
-              onPlanCreated={(p) => { setPlan(p); refetch() }}
-              onPlanDeleted={() => {
-                const deletedMonth = MONTHS[month - 1]
-                const deletedYear = year
-                bustPlanCache(month, year)
-                setPlan(null)
-                setInvestments([])
-                setSavings([])
-                setFixedExpenses([])
-                showToast(t('deletedToast', { month: deletedMonth, year: deletedYear }))
-              }}
-            />
-
-            {plan ? (
-              <>
-                <FundInvestmentsSection
-                  plan={plan}
-                  investments={investments}
-                  funds={funds}
-                  goals={goals}
-                  onRefresh={refetch}
-                  onToast={showToast}
-                />
-                <DirectSavingsSection
-                  plan={plan}
-                  savings={savings}
-                  goals={goals}
-                  onRefresh={refetch}
-                  onToast={showToast}
-                />
-                <FixedExpensesSection
-                  plan={plan}
-                  fixedExpenses={fixedExpenses}
-                  onRefresh={refetch}
-                  onToast={showToast}
-                />
-                <InsuranceSection
-                  plan={plan}
-                  insuranceMembers={insuranceMembers}
-                  onRefresh={refetch}
-                  onToast={showToast}
-                />
-                <OtherExpensesSection
-                  plan={plan}
-                  otherExpenses={otherExpenses}
-                  onRefresh={refetch}
-                  onToast={showToast}
-                />
-              </>
-            ) : (
-              <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">
-                {t('enterPlanPrompt')}
-              </div>
-            )}
-          </div>
-
-          {/* Right col: allocation summary */}
-          <div className="order-1 lg:order-2">
-            <AllocationSummary
-              plan={plan}
-              investments={investments}
-              savings={savings}
-              fixedExpenses={fixedExpenses}
-              insuranceMembers={insuranceMembers}
-              otherExpenses={otherExpenses}
-            />
-          </div>
-        </div>
-      )}
-      </div>
+      <DesktopPlanningView
+        month={month}
+        year={year}
+        plan={plan}
+        investments={investments}
+        savings={savings}
+        fixedExpenses={fixedExpenses}
+        insuranceMembers={insuranceMembers}
+        otherExpenses={otherExpenses}
+        funds={funds}
+        goals={goals}
+        loading={loading}
+        onPrev={navigatePrev}
+        onNext={navigateNext}
+        onPlanCreated={(p) => { setPlan(p); refetch() }}
+        onPlanDeleted={() => {
+          bustPlanCache(month, year)
+          setPlan(null)
+          setInvestments([])
+          setSavings([])
+          setFixedExpenses([])
+          showToast(t('deletedToast', { month: MONTHS[month - 1], year }))
+        }}
+        onRefresh={refetch}
+        onToast={showToast}
+      />
     </>
   )
 }

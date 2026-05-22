@@ -30,7 +30,7 @@ function getDisplayName(email: string): string {
 
 // Pages that provide their own desktop top bar and don't need the shared Header.
 // Checked synchronously via usePathname so there is no flash on hard refresh.
-const PAGES_WITH_OWN_HEADER = new Set(['/dashboard'])
+const PAGES_WITH_OWN_HEADER = new Set(['/dashboard', '/planning'])
 
 function AuthenticatedLayoutInner({ children, email, initials }: { children: React.ReactNode; email: string; initials: string }) {
   const { mobileTopBar } = useNavigation()
