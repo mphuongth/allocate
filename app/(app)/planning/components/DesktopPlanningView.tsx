@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useRef } from 'react'
 import {
   ChevronLeft, ChevronRight, ChevronDown, ChevronUp,
   Target, Shield, ShoppingCart,
@@ -160,6 +160,17 @@ function DPlanRow({ primary, secondary, amount, muted, last, isVI, onSkip, onRes
   last?: boolean; isVI: boolean; onSkip?: () => void; onRestore?: () => void; onOverride?: () => void
 }) {
   const [open, setOpen] = useState(false)
+  const [menuPos, setMenuPos] = useState({ top: 0, right: 0 })
+  const btnRef = useRef<HTMLButtonElement>(null)
+
+  function openMenu() {
+    if (btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect()
+      setMenuPos({ top: r.bottom + 4, right: window.innerWidth - r.right })
+    }
+    setOpen(true)
+  }
+
   return (
     <tr style={{ borderBottom: last ? 'none' : '1px solid var(--c-line)', background: 'var(--c-card)', opacity: muted ? 0.5 : 1 }}>
       <td style={{ padding: '11px 16px', verticalAlign: 'middle' }}>
@@ -171,14 +182,14 @@ function DPlanRow({ primary, secondary, amount, muted, last, isVI, onSkip, onRes
           {fmtCompact(amount)}
         </span>
       </td>
-      <td style={{ padding: '11px 8px 11px 4px', textAlign: 'right', verticalAlign: 'middle', position: 'relative', width: 36 }}>
-        <button onClick={() => setOpen(o => !o)} aria-label="More options" style={{ padding: 5, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, color: 'var(--c-muted)', display: 'flex' }}>
+      <td style={{ padding: '11px 8px 11px 4px', textAlign: 'right', verticalAlign: 'middle', width: 36 }}>
+        <button ref={btnRef} onClick={() => open ? setOpen(false) : openMenu()} aria-label="More options" style={{ padding: 5, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, color: 'var(--c-muted)', display: 'flex' }}>
           <MoreHorizontal size={14} />
         </button>
         {open && (
           <>
             <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 5 }} />
-            <div style={{ position: 'absolute', top: '100%', right: 8, marginTop: 2, zIndex: 6, background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 8, boxShadow: '0 6px 20px rgba(15,23,42,0.12)', minWidth: 170, overflow: 'hidden' }}>
+            <div style={{ position: 'fixed', top: menuPos.top, right: menuPos.right, zIndex: 6, background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 8, boxShadow: '0 6px 20px rgba(15,23,42,0.12)', minWidth: 170, overflow: 'hidden' }}>
               {muted ? (
                 <MenuBtn icon={<Check size={13} />} label={isVI ? 'Bao gồm tháng này' : 'Include this month'} onClick={() => { onRestore?.(); setOpen(false) }} noBorder />
               ) : (
