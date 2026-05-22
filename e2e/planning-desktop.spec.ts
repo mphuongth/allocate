@@ -106,9 +106,7 @@ test('desktop planning: collapsible sections visible when plan exists', async ({
   await page.waitForLoadState('networkidle')
   const desktop = page.getByTestId('desktop-planning')
 
-  // At least one of the section headers must be visible
-  const byGoal = desktop.getByText(/By goal|Theo mục tiêu/i).first()
-  const fixed  = desktop.getByText(/Fixed expenses|Chi phí cố định/i).first()
-  const ins    = desktop.getByText(/Insurance|Bảo hiểm/i).first()
-  await expect(byGoal.or(fixed).or(ins)).toBeVisible({ timeout: 8_000 })
+  await expect(desktop.getByText(/By goal|Theo mục tiêu/i).first()).toBeVisible({ timeout: 8_000 })
+  await expect(desktop.getByText(/Fixed expenses|Chi phí cố định/i).first()).toBeVisible()
+  await expect(desktop.getByText(/Insurance|Bảo hiểm/i).first()).toBeVisible()
 })
