@@ -30,13 +30,17 @@ function getDisplayName(email: string): string {
 
 // Pages that provide their own desktop top bar and don't need the shared Header.
 // Checked synchronously via usePathname so there is no flash on hard refresh.
-const PAGES_WITH_OWN_HEADER = new Set(['/dashboard'])
+const PAGES_WITH_OWN_HEADER = new Set(['/dashboard', '/planning'])
+
+// Pages that manage their own full-height desktop layout (no <main> padding/scroll on md+).
+const PAGES_WITH_FULL_HEIGHT_DESKTOP = new Set(['/planning'])
 
 function AuthenticatedLayoutInner({ children, email, initials }: { children: React.ReactNode; email: string; initials: string }) {
   const { mobileTopBar } = useNavigation()
   const [showAddTx, setShowAddTx] = useState(false)
   const pathname = usePathname()
   const hideDesktopHeader = PAGES_WITH_OWN_HEADER.has(pathname)
+  const isFullHeightDesktop = PAGES_WITH_FULL_HEIGHT_DESKTOP.has(pathname)
 
   return (
     <div className="flex h-screen bg-canvas dark:bg-gray-950 overflow-hidden">
@@ -64,7 +68,7 @@ function AuthenticatedLayoutInner({ children, email, initials }: { children: Rea
             />
           </div>
         )}
-        <main className="flex-1 overflow-y-auto px-4 md:px-6 py-4 pb-20 md:pb-4">
+        <main className={`flex-1 overflow-y-auto px-4 py-4 pb-20 md:pb-4${isFullHeightDesktop ? ' md:p-0 md:overflow-hidden md:flex md:flex-col' : ' md:px-6'}`}>
           {children}
         </main>
       </div>
