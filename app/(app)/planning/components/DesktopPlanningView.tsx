@@ -465,10 +465,10 @@ export default function DesktopPlanningView({
       <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 28px 0', flexShrink: 0 }}>
         <div>
           <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--c-muted)', marginBottom: 3 }}>
-            {isVI ? 'Kế hoạch tháng' : 'Monthly plan'}
+            {isVI ? 'Kế hoạch' : 'Planning'}
           </div>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--c-ink)', lineHeight: 1 }}>
-            {isVI ? 'Ngân sách' : 'Budget'}
+          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--c-ink)', lineHeight: 1.1 }}>
+            {isVI ? 'Kế hoạch Tháng' : 'Monthly Plan'}
           </h1>
         </div>
 
