@@ -771,8 +771,13 @@ export default function DesktopPlanningView({
             <div style={{ fontSize: 13, color: 'var(--c-muted)', fontWeight: 500 }}>{overrideModal.name}</div>
             <label style={{ display: 'grid', gap: 6 }}>
               <span style={labelStyle}>{isVI ? 'Số tiền tháng này (₫)' : 'Amount this month (₫)'}</span>
-              <input type="number" value={overrideVal} onChange={e => setOverrideVal(e.target.value)} autoFocus className="cn-input tabular" />
+              <input type="text" inputMode="numeric" value={overrideVal ? Number(overrideVal).toLocaleString('en-US') : ''} onChange={e => setOverrideVal(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))} autoFocus className="cn-input tabular" />
             </label>
+            {overrideVal && Number(overrideVal) > 0 && (
+              <div style={{ background: 'var(--c-navy-tint)', borderRadius: 8, padding: '6px 10px', fontSize: 12, color: 'var(--c-navy)', fontVariantNumeric: 'tabular-nums' }}>
+                {Math.round(Number(overrideVal)).toLocaleString('vi-VN')} ₫
+              </div>
+            )}
             <button onClick={() => setOverrideVal(String(overrideModal.defaultAmount))} style={{ alignSelf: 'flex-start', fontSize: 11, padding: '4px 8px', background: 'transparent', border: '1px solid var(--c-line)', borderRadius: 6, color: 'var(--c-navy)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
               {isVI ? 'Mặc định' : 'Default'}: {fmtCompact(overrideModal.defaultAmount)}
             </button>
