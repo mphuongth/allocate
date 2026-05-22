@@ -799,8 +799,13 @@ export default function DesktopPlanningView({
             </label>
             <label style={{ display: 'grid', gap: 6 }}>
               <span style={labelStyle}>{isVI ? 'Số tiền (₫)' : 'Amount (₫)'}</span>
-              <input type="number" value={otherAmt} onChange={e => setOtherAmt(e.target.value)} placeholder="0" className="cn-input tabular" />
+              <input type="text" inputMode="numeric" value={otherAmt ? Number(otherAmt).toLocaleString('en-US') : ''} onChange={e => setOtherAmt(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))} placeholder="0" className="cn-input tabular" />
             </label>
+            {otherAmt && Number(otherAmt) > 0 && (
+              <div style={{ background: 'var(--c-navy-tint)', borderRadius: 8, padding: '6px 10px', fontSize: 12, color: 'var(--c-navy)', fontVariantNumeric: 'tabular-nums' }}>
+                {Math.round(Number(otherAmt)).toLocaleString('vi-VN')} ₫
+              </div>
+            )}
             <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
               <button onClick={() => setOtherModal(null)} style={{ ...btnBase, flex: 1, padding: '10px 14px', background: 'transparent', color: 'var(--c-ink)', border: '1px solid var(--c-line)' }}>{isVI ? 'Hủy' : 'Cancel'}</button>
               <button onClick={handleOtherSave} disabled={saving || !otherDesc.trim() || !otherAmt || Number(otherAmt) <= 0} style={{ ...btnBase, flex: 2, padding: '10px 14px', background: 'var(--c-navy)', color: '#fff', opacity: saving || !otherDesc.trim() || !otherAmt || Number(otherAmt) <= 0 ? 0.6 : 1 }}>
