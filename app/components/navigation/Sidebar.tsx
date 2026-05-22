@@ -14,7 +14,7 @@ function CairnMark({ size = 28 }: { size?: number }) {
       <rect x="111.872" y="359.936" width="280.064" height="57.856" rx="24.3" fill="#3B5A82"/>
       <rect x="152.064" y="293.888" width="220.16" height="50.176" rx="21.07" fill="#163A61"/>
       <rect x="163.84" y="233.984" width="167.936" height="44.032" rx="18.49" fill="#10B981"/>
-      <rect x="208.128" y="181.76" width="103.936" height="35.84" rx="15.05" fill="#F8FAFC"/>
+      <rect x="208.128" y="181.76" width="103.936" height="35.84" rx="15.05" fill="#0F2A4A"/>
     </svg>
   )
 }
