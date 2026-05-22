@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import React, { useState, useMemo } from 'react'
 import {
   ChevronLeft, ChevronRight, ChevronDown, ChevronUp,
   Target, Building, Shield, ShoppingCart,
@@ -72,16 +72,16 @@ function DModal({ onClose, title, width = 400, children }: {
   return (
     <div
       onClick={onClose}
-      style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.4)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, backdropFilter: 'blur(2px)' }}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.4)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, backdropFilter: 'blur(2px)', animation: 'fade-in 150ms ease' }}
     >
       <div
         role="dialog"
         aria-modal="true"
         onClick={e => e.stopPropagation()}
-        style={{ width: '100%', maxWidth: width, maxHeight: 'calc(100vh - 48px)', background: 'var(--c-card)', borderRadius: 16, boxShadow: '0 24px 48px rgba(15,23,42,0.18)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+        style={{ width: '100%', maxWidth: width, maxHeight: 'calc(100vh - 48px)', background: 'var(--c-card)', borderRadius: 16, boxShadow: '0 24px 48px rgba(15,23,42,0.18), 0 8px 16px rgba(15,23,42,0.08)', display: 'flex', flexDirection: 'column', overflow: 'hidden', animation: 'modal-in 200ms cubic-bezier(0.2,0.8,0.2,1)' }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px 14px', borderBottom: '1px solid var(--c-line)', flexShrink: 0 }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{title}</h3>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em' }}>{title}</h3>
           <button onClick={onClose} aria-label="Close" style={{ padding: 6, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, color: 'var(--c-muted)', display: 'flex' }}>
             <X size={18} />
           </button>
@@ -100,7 +100,7 @@ function PlanTable({ icon, iconColor, title, total, defaultOpen = true, children
 }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
-    <div style={{ background: 'var(--c-card)', borderRadius: 12, border: '1px solid var(--c-line)', overflow: 'hidden', marginBottom: 12 }}>
+    <div style={{ background: 'var(--c-card)', borderRadius: 16, border: '1px solid var(--c-line)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', marginBottom: 12 }}>
       <button
         onClick={() => setOpen(o => !o)}
         style={{ width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer', background: 'transparent', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 12, padding: '13px 16px', borderBottom: open ? '1px solid var(--c-line)' : 'none' }}
@@ -213,13 +213,13 @@ function AllocationCard({ salary, totalGoalAmount, fixedTotal, insTotal, otherTo
 
   const rows = [
     { l: isVI ? 'Đầu tư & tiết kiệm' : 'Invest & save', v: totalGoalAmount, c: 'var(--c-accent-fund,#2563eb)' },
-    ...(fixedTotal > 0 ? [{ l: isVI ? 'Chi phí cố định' : 'Fixed expenses', v: fixedTotal, c: 'var(--c-accent-fixed,#f59e0b)' }] : []),
-    ...(insTotal > 0   ? [{ l: isVI ? 'Bảo hiểm' : 'Insurance',      v: insTotal,  c: 'var(--c-accent-insurance,#8b5cf6)' }] : []),
-    ...(otherTotal > 0 ? [{ l: isVI ? 'Khoản khác' : 'Other',         v: otherTotal,c: 'var(--c-accent-other,#ec4899)' }] : []),
+    ...(fixedTotal > 0 ? [{ l: isVI ? 'Chi phí cố định' : 'Fixed expenses', v: fixedTotal, c: 'var(--c-accent-fixed,#b45309)' }] : []),
+    ...(insTotal > 0   ? [{ l: isVI ? 'Bảo hiểm' : 'Insurance',      v: insTotal,  c: 'var(--c-accent-insurance,#7c3aed)' }] : []),
+    ...(otherTotal > 0 ? [{ l: isVI ? 'Khoản khác' : 'Other',         v: otherTotal,c: 'var(--c-accent-other,#475569)' }] : []),
   ]
 
   return (
-    <div data-testid="planning-alloc-card" style={{ padding: '18px 20px', background: 'var(--c-navy)', color: '#fff', borderRadius: 12 }}>
+    <div data-testid="planning-alloc-card" style={{ padding: '18px 20px', background: 'var(--c-navy)', color: '#fff', borderRadius: 16, boxShadow: 'var(--shadow-card)' }}>
       <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.6)', marginBottom: 4 }}>
         {isVI ? 'Phân bổ tháng này' : "This month's allocation"}
       </div>
@@ -261,15 +261,6 @@ function AllocationCard({ salary, totalGoalAmount, fixedTotal, insTotal, otherTo
 const btnBase: React.CSSProperties = {
   border: 'none', cursor: 'pointer', fontFamily: 'inherit', borderRadius: 10,
   fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-}
-
-// ─── Input style ──────────────────────────────────────────────────────────────
-
-const inputStyle: React.CSSProperties = {
-  display: 'block', width: '100%', padding: '9px 12px', fontSize: 13,
-  background: 'var(--c-canvas)', border: '1px solid var(--c-line)', borderRadius: 8,
-  color: 'var(--c-ink)', outline: 'none', boxSizing: 'border-box',
-  fontVariantNumeric: 'tabular-nums', fontFamily: 'inherit',
 }
 
 // ─── Label style ──────────────────────────────────────────────────────────────
@@ -562,8 +553,8 @@ export default function DesktopPlanningView({
                   {byGoal.length === 0 ? (
                     <tr><td colSpan={3} style={{ padding: '16px', textAlign: 'center', color: 'var(--c-muted)', fontSize: 12 }}>{isVI ? 'Chưa có khoản đầu tư nào' : 'No investments yet'}</td></tr>
                   ) : byGoal.map(g => (
-                    <>
-                      <tr key={g.goalId + '-hd'} style={{ background: 'var(--c-card-2)', borderBottom: '1px solid var(--c-line)' }}>
+                    <React.Fragment key={g.goalId}>
+                      <tr style={{ background: 'var(--c-card-2)', borderBottom: '1px solid var(--c-line)' }}>
                         <td style={{ padding: '10px 16px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <div style={{ width: 24, height: 24, borderRadius: 6, background: 'var(--c-navy-tint)', color: 'var(--c-navy)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -593,13 +584,13 @@ export default function DesktopPlanningView({
                           <td />
                         </tr>
                       ))}
-                    </>
+                    </React.Fragment>
                   ))}
                 </tbody>
               </PlanTable>
 
               {/* Fixed expenses */}
-              <PlanTable icon={<Building size={15} />} iconColor="var(--c-accent-fixed,#f59e0b)" title={isVI ? 'Chi phí cố định' : 'Fixed expenses'} total={fixedTotal}>
+              <PlanTable icon={<Building size={15} />} iconColor="var(--c-accent-fixed,#b45309)" title={isVI ? 'Chi phí cố định' : 'Fixed expenses'} total={fixedTotal}>
                 <THead col1={isVI ? 'Chi phí' : 'Expense'} col2={isVI ? 'Số tiền' : 'Amount'} />
                 <tbody>
                   {fixedExpenses.length === 0 ? (
@@ -627,7 +618,7 @@ export default function DesktopPlanningView({
               </PlanTable>
 
               {/* Insurance */}
-              <PlanTable icon={<Shield size={15} />} iconColor="var(--c-accent-insurance,#8b5cf6)" title={isVI ? 'Bảo hiểm' : 'Insurance'} total={insTotal}>
+              <PlanTable icon={<Shield size={15} />} iconColor="var(--c-accent-insurance,#7c3aed)" title={isVI ? 'Bảo hiểm' : 'Insurance'} total={insTotal}>
                 <THead col1={isVI ? 'Thành viên' : 'Member'} col2={isVI ? 'Đóng góp' : 'Contribution'} />
                 <tbody>
                   {insuranceMembers.length === 0 ? (
@@ -654,7 +645,7 @@ export default function DesktopPlanningView({
               </PlanTable>
 
               {/* Other expenses */}
-              <PlanTable icon={<ShoppingCart size={15} />} iconColor="var(--c-accent-other,#ec4899)" title={isVI ? 'Khoản khác' : 'Other'} total={otherTotal} defaultOpen={false}>
+              <PlanTable icon={<ShoppingCart size={15} />} iconColor="var(--c-accent-other,#475569)" title={isVI ? 'Khoản khác' : 'Other'} total={otherTotal} defaultOpen={false}>
                 <tbody>
                   {otherExpenses.map((o, i) => (
                     <tr key={o.id} style={{ borderBottom: i < otherExpenses.length - 1 ? '1px solid var(--c-line)' : 'none', background: 'var(--c-card)' }}>
@@ -709,7 +700,7 @@ export default function DesktopPlanningView({
           <div style={{ display: 'grid', gap: 14 }}>
             <label style={{ display: 'grid', gap: 6 }}>
               <span style={labelStyle}>{isVI ? 'Thu nhập tháng (₫)' : 'Monthly income (₫)'}</span>
-              <input type="number" value={incomeVal} onChange={e => setIncomeVal(e.target.value)} autoFocus placeholder="e.g. 45000000" style={inputStyle} />
+              <input type="number" value={incomeVal} onChange={e => setIncomeVal(e.target.value)} autoFocus placeholder="e.g. 45000000" className="cn-input tabular" />
             </label>
             {incomeVal && Number(incomeVal) > 0 && (
               <div style={{ background: 'var(--c-navy-tint)', borderRadius: 8, padding: '6px 10px', fontSize: 12, color: 'var(--c-navy)', fontVariantNumeric: 'tabular-nums' }}>
@@ -752,7 +743,7 @@ export default function DesktopPlanningView({
             <div style={{ fontSize: 13, color: 'var(--c-muted)', fontWeight: 500 }}>{overrideModal.name}</div>
             <label style={{ display: 'grid', gap: 6 }}>
               <span style={labelStyle}>{isVI ? 'Số tiền tháng này (₫)' : 'Amount this month (₫)'}</span>
-              <input type="number" value={overrideVal} onChange={e => setOverrideVal(e.target.value)} autoFocus style={inputStyle} />
+              <input type="number" value={overrideVal} onChange={e => setOverrideVal(e.target.value)} autoFocus className="cn-input tabular" />
             </label>
             <button onClick={() => setOverrideVal(String(overrideModal.defaultAmount))} style={{ alignSelf: 'flex-start', fontSize: 11, padding: '4px 8px', background: 'transparent', border: '1px solid var(--c-line)', borderRadius: 6, color: 'var(--c-navy)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
               {isVI ? 'Mặc định' : 'Default'}: {fmtCompact(overrideModal.defaultAmount)}
