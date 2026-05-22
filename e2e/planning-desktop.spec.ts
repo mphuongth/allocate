@@ -21,11 +21,11 @@ async function goto(page: Page) {
 
 // ─── Layout ────────────────────────────────────────────────────────────────────
 
-test('desktop planning: DTopBar shows Budget title', async ({ page }) => {
+test('desktop planning: DTopBar shows Monthly Plan title', async ({ page }) => {
   await goto(page)
   const desktop = page.getByTestId('desktop-planning')
   await expect(desktop).toBeVisible()
-  await expect(desktop.getByText(/Budget|Ngân sách/i).first()).toBeVisible({ timeout: 5_000 })
+  await expect(desktop.getByText(/Monthly Plan|Kế hoạch Tháng/i).first()).toBeVisible({ timeout: 5_000 })
 })
 
 test('desktop planning: month picker is visible', async ({ page }) => {
