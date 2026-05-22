@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { ChevronLeft, X, TrendingUp, Building, CircleDollarSign, BarChart2, MoreHorizontal, Edit2, Trash2, ChevronRight, ArrowDownRight, ArrowUpRight, Target, CalendarDays, Unlink, Check, ArrowDownToLine, Wallet, Shield } from 'lucide-react'
+import { ChevronLeft, X, TrendingUp, Building, CircleDollarSign, BarChart2, MoreHorizontal, Edit2, Trash2, ChevronRight, ArrowDownRight, ArrowUpRight, Target, CalendarDays, Link2Off, Check, ArrowDownToLine, Wallet, Shield } from 'lucide-react'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import type { GoalData, FundBreakdownItem } from '../DashboardClient'
 
@@ -618,7 +618,7 @@ function InvOptionsModal({ inv, isVi, onClose, onHistory, onSell, onUnassign }: 
       onClick: onSell,
     },
     {
-      icon: <Unlink size={18} color="var(--c-warn,#b45309)" />,
+      icon: <Link2Off size={18} color="var(--c-warn,#b45309)" />,
       bg: 'var(--c-warn-tint,#fef3c7)',
       label: isVi ? 'Bỏ gán mục tiêu' : 'Unassign from goal',
       sub: isVi ? 'Chuyển khoản đầu tư sang trạng thái chưa gán' : 'Move this investment to unassigned',
@@ -708,7 +708,7 @@ function UnassignConfirmModal({ inv, unassigning, isVi, onCancel, onConfirm }: {
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
             opacity: unassigning ? 0.6 : 1,
           }}>
-            <Unlink size={14} />
+            <Link2Off size={14} />
             {unassigning ? (isVi ? 'Đang xử lý…' : 'Unassigning…') : (isVi ? 'Bỏ gán' : 'Unassign')}
           </button>
         </div>
