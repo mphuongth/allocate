@@ -4,7 +4,7 @@ import React, { useState, useMemo } from 'react'
 import {
   ChevronLeft, ChevronRight, ChevronDown, ChevronUp,
   Target, Shield, ShoppingCart,
-  MoreHorizontal, Edit2, Trash2, Check, RefreshCw, X, Plus, Calendar,
+  MoreHorizontal, Edit2, Trash2, Check, RefreshCw, X, Plus,
 } from 'lucide-react'
 import { useLocale } from 'next-intl'
 import { fmtCompact } from '@/lib/formatters'
@@ -519,7 +519,10 @@ export default function DesktopPlanningView({
               style={{ padding: '60px 20px', textAlign: 'center', background: 'var(--c-card)', border: '1px dashed var(--c-line-strong)', borderRadius: 16, maxWidth: 480, margin: '0 auto' }}
             >
               <div style={{ width: 52, height: 52, borderRadius: 26, background: 'var(--c-card-2)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14, color: 'var(--c-muted)' }}>
-                <Calendar size={24} />
+                <svg viewBox="0 0 24 24" width={24} height={24} fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="5" width="18" height="16" rx="2" />
+                  <path d="M3 9h18M8 3v4M16 3v4" />
+                </svg>
               </div>
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
                 {isVI ? `Chưa có kế hoạch cho ${monthLabel}` : `No plan for ${monthLabel}`}
@@ -529,7 +532,8 @@ export default function DesktopPlanningView({
               </p>
               <button
                 onClick={() => { setIncomeVal(''); setShowIncome(true) }}
-                style={{ ...btnBase, padding: '10px 18px', background: 'var(--c-navy)', color: '#fff' }}
+                className="cn-btn primary"
+                style={{ padding: '10px 18px' }}
               >
                 <Plus size={14} strokeWidth={2.4} />
                 {isVI ? 'Thêm thu nhập' : 'Set income'}
