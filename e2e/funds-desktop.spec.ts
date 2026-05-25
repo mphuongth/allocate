@@ -77,7 +77,7 @@ test('desktop funds add fund button opens add modal', async ({ page }) => {
   await toolbar.getByRole('button', { name: /add fund|thêm quỹ/i }).click()
 
   await expect(page.getByTestId('fund-modal')).toBeVisible({ timeout: 5_000 })
-  await expect(page.getByTestId('fund-modal').getByText(/add fund|thêm quỹ/i)).toBeVisible()
+  await expect(page.getByTestId('fund-modal-title')).toHaveText(/add fund|thêm quỹ/i)
 })
 
 test('desktop funds edit button opens edit modal prefilled', async ({ page }) => {
