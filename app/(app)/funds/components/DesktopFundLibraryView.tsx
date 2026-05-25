@@ -389,7 +389,7 @@ export default function DesktopFundLibraryView() {
 
   // Add/Edit modal open
   function openAddModal() {
-    setFormName(''); setFormCode(''); setFormType(''); setFormNav(''); setFormNavUrl(''); setFormError(null); setEditTarget(null); setModalMode('add')
+    setFormName(''); setFormCode(''); setFormType('equity'); setFormNav(''); setFormNavUrl(''); setFormError(null); setEditTarget(null); setModalMode('add')
   }
   function openEditModal(fund: Fund, e?: { stopPropagation: () => void }) {
     e?.stopPropagation()
@@ -749,7 +749,7 @@ export default function DesktopFundLibraryView() {
                 {formError}
               </div>
             )}
-            <FormField label="Fund name *">
+            <FormField label="Fund name">
               <input
                 value={formName}
                 onChange={e => setFormName(e.target.value)}
@@ -760,30 +760,29 @@ export default function DesktopFundLibraryView() {
               />
             </FormField>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <FormField label="Code *">
+              <FormField label="Code">
                 <input
                   value={formCode}
                   onChange={e => setFormCode(e.target.value.toUpperCase())}
                   className="cn-input"
-                  placeholder="e.g., VFMVF1"
+                  placeholder="VFMVF1"
                   maxLength={50}
                   style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 13 }}
                 />
               </FormField>
-              <FormField label="Type *">
+              <FormField label="Type">
                 <select
                   value={formType}
                   onChange={e => setFormType(e.target.value as FundType)}
                   className="cn-input"
                 >
-                  <option value="">Select type</option>
                   {Object.entries(TYPE_META).map(([v, m]) => (
                     <option key={v} value={v}>{m.label}</option>
                   ))}
                 </select>
               </FormField>
             </div>
-            <FormField label="NAV *">
+            <FormField label="NAV">
               <input
                 type="number"
                 step="0.01"
@@ -805,7 +804,7 @@ export default function DesktopFundLibraryView() {
               />
             </FormField>
             <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-              <button type="button" onClick={closeModal} className="cn-btn" style={{ flex: 1, justifyContent: 'center' }} disabled={saving}>
+              <button type="button" onClick={closeModal} className="cn-btn ghost" style={{ flex: 1, justifyContent: 'center', border: '1px solid var(--c-line)' }} disabled={saving}>
                 Cancel
               </button>
               <button type="submit" className="cn-btn primary" style={{ flex: 2, justifyContent: 'center' }} disabled={saving}>
