@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useTranslations } from 'next-intl'
-import { ChevronLeft, Plus, RefreshCw, Search, X } from 'lucide-react'
+import { Plus, RefreshCw, Search, X } from 'lucide-react'
 import { fmtCompact } from '@/lib/formatters'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -24,7 +24,7 @@ type Fund = {
 }
 
 type SortKey = 'code' | 'nav' | 'name'
-type TypeFilter = 'all' | 'equity' | 'debt' | 'balanced' | 'gold'
+type TypeFilter = 'all' | 'equity' | 'debt' | 'balanced'
 
 // ─── Design constants ─────────────────────────────────────────────────────────
 
@@ -40,7 +40,6 @@ const TYPE_FILTERS: { v: TypeFilter; label: string; labelVi: string }[] = [
   { v: 'equity',   label: 'Stock',    labelVi: 'Cổ phiếu' },
   { v: 'debt',     label: 'Bond',     labelVi: 'Trái phiếu' },
   { v: 'balanced', label: 'Balanced', labelVi: 'Cân bằng' },
-  { v: 'gold',     label: 'Gold',     labelVi: 'Vàng' },
 ]
 
 // ─── Cache ────────────────────────────────────────────────────────────────────
@@ -258,71 +257,6 @@ function DcaToggle({ fund, editId, editValue, onToggle, onEditStart, onEditChang
   )
 }
 
-// ─── Detail panel ─────────────────────────────────────────────────────────────
-
-function FundDetailPanel({ fund, onClose }: { fund: Fund; onClose: () => void }) {
-  const m = TYPE_META[fund.fund_type]
-  return (
-    <div data-testid="desktop-fund-detail-panel" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <button
-        onClick={onClose}
-        className="cn-btn ghost"
-        style={{ alignSelf: 'flex-start', padding: '6px 0', gap: 4, fontSize: 12, color: 'var(--c-muted)', display: 'flex', alignItems: 'center' }}
-      >
-        <ChevronLeft size={14} />
-        Back
-      </button>
-
-      <div className="cn-card" style={{ padding: '18px 16px' }}>
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-          <FundIcon code={fund.code} type={fund.fund_type} size={40} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 14, fontWeight: 700, fontFamily: 'var(--font-mono, monospace)' }}>
-                {fund.code}
-              </span>
-              <TypeChip type={fund.fund_type} />
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {fund.name}
-            </div>
-          </div>
-        </div>
-
-        {/* NAV */}
-        <div style={{ fontSize: 10, color: 'var(--c-muted)', marginBottom: 2 }}>Current NAV</div>
-        <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>
-          {fund.nav.toLocaleString('vi-VN')}
-          <span style={{ fontSize: 12, color: 'var(--c-muted)', fontWeight: 500, marginLeft: 4 }}>VND</span>
-        </div>
-
-        {/* DCA info */}
-        {fund.is_dca && (
-          <div style={{ marginTop: 14, padding: '10px 12px', background: 'var(--c-navy-tint)', borderRadius: 10 }}>
-            <div style={{ fontSize: 10, color: 'var(--c-muted)', marginBottom: 2 }}>Monthly DCA</div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-navy)' }}>
-              {fund.dca_monthly_amount_vnd ? fmtCompact(fund.dca_monthly_amount_vnd) : 'Amount not set'}
-            </div>
-          </div>
-        )}
-
-        {/* NAV source */}
-        {fund.nav_source_url && (
-          <div style={{ marginTop: 14, display: 'grid', gap: 8 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
-              <span style={{ color: 'var(--c-muted)' }}>NAV source</span>
-              <a href={fund.nav_source_url} target="_blank" rel="noreferrer" style={{ fontWeight: 600, color: 'var(--c-navy)', textDecoration: 'none', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {(() => { try { return new URL(fund.nav_source_url!).hostname } catch { return fund.nav_source_url } })()}
-              </a>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
 // ─── Form field helper ────────────────────────────────────────────────────────
 
 function FormField({ label, children }: { label: string; children: ReactNode }) {
@@ -349,7 +283,6 @@ export default function DesktopFundLibraryView() {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
   const [sortKey, setSortKey] = useState<SortKey>('code')
   const [sortAsc, setSortAsc] = useState(true)
-  const [activeFund, setActiveFund] = useState<Fund | null>(null)
 
   // DCA inline edit
   const [dcaEditId, setDcaEditId] = useState<string | null>(null)
@@ -480,7 +413,6 @@ export default function DesktopFundLibraryView() {
   async function handleToggleDca(fund: Fund) {
     const turningOn = !fund.is_dca
     setFunds(p => p.map(f => f.id === fund.id ? { ...f, is_dca: turningOn, dca_monthly_amount_vnd: turningOn ? f.dca_monthly_amount_vnd : null } : f))
-    if (activeFund?.id === fund.id) setActiveFund(f => f ? { ...f, is_dca: turningOn, dca_monthly_amount_vnd: turningOn ? f.dca_monthly_amount_vnd : null } : f)
 
     if (turningOn) {
       setDcaEditId(fund.id)
@@ -534,7 +466,6 @@ export default function DesktopFundLibraryView() {
     try {
       const res = await fetch(`/api/funds/${deleteTarget.id}`, { method: 'DELETE' })
       if (!res.ok && res.status !== 204) throw new Error()
-      if (activeFund?.id === deleteTarget.id) setActiveFund(null)
       setDeleteTarget(null)
       bustCache()
       await loadFunds(true)
@@ -679,28 +610,23 @@ export default function DesktopFundLibraryView() {
                 </tr>
               </thead>
               <tbody>
-                {displayFunds.map((fund, i) => {
-                  const isActive = activeFund?.id === fund.id
-                  return (
+                {displayFunds.map((fund, i) => (
                     <tr
                       key={fund.id}
                       data-testid={`fund-row-${fund.id}`}
-                      onClick={() => setActiveFund(isActive ? null : fund)}
                       style={{
                         borderBottom: i < displayFunds.length - 1 ? '1px solid var(--c-line)' : 'none',
-                        cursor: 'pointer',
-                        background: isActive ? 'var(--c-navy-tint)' : 'transparent',
                         transition: 'background 100ms',
                       }}
-                      onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = 'var(--c-card-2)' }}
-                      onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent' }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--c-card-2)' }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}
                     >
                       {/* Fund cell */}
                       <td style={{ padding: '13px 12px 13px 16px', verticalAlign: 'middle' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                           <FundIcon code={fund.code} type={fund.fund_type} size={32} />
                           <div>
-                            <div style={{ fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-mono, monospace)', color: isActive ? 'var(--c-navy)' : 'var(--c-ink)' }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-mono, monospace)', color: 'var(--c-ink)' }}>
                               {fund.code}
                             </div>
                             <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 1, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -764,8 +690,7 @@ export default function DesktopFundLibraryView() {
                         </div>
                       </td>
                     </tr>
-                  )
-                })}
+                ))}
               </tbody>
             </table>
 
@@ -787,24 +712,7 @@ export default function DesktopFundLibraryView() {
         </div>
       </div>
 
-      {/* ─── Detail panel ────────────────────────────────────────────────────── */}
-      <div
-        className=""
-        style={{
-          width: activeFund ? 300 : 0,
-          flexShrink: 0,
-          padding: activeFund ? '20px 20px 40px 4px' : 0,
-          borderLeft: activeFund ? '1px solid var(--c-line)' : 'none',
-          transition: 'width 220ms cubic-bezier(0.4,0,0.2,1)',
-          overflow: activeFund ? 'auto' : 'hidden',
-        }}
-      >
-        {activeFund && (
-          <FundDetailPanel fund={activeFund} onClose={() => setActiveFund(null)} />
-        )}
-      </div>
-
-      </div>{/* end two-panel area */}
+      </div>{/* end main panel area */}
 
       {/* ─── Add/Edit Modal ──────────────────────────────────────────────────── */}
       <DModal

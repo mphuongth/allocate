@@ -68,36 +68,6 @@ test('desktop funds search filters by fund code', async ({ page }) => {
   await expect(table.getByTestId(`fund-row-${fund.id}`)).toBeVisible({ timeout: 8_000 })
 })
 
-test('desktop funds clicking a row opens the detail panel', async ({ page }) => {
-  const fund = await api.createFund({ name: 'E2E Desktop Detail Fund', code: 'DTDET1', fund_type: 'equity', nav: 33000 })
-  cleanup.add(() => api.deleteFund(fund.id))
-
-  await page.goto('/funds')
-  await page.waitForLoadState('networkidle')
-
-  const table = page.getByTestId('desktop-funds-table')
-  await table.getByTestId(`fund-row-${fund.id}`).click()
-
-  const panel = page.getByTestId('desktop-fund-detail-panel')
-  await expect(panel).toBeVisible({ timeout: 5_000 })
-  await expect(panel.getByText('DTDET1')).toBeVisible()
-})
-
-test('desktop fund detail panel closes when back button is clicked', async ({ page }) => {
-  const fund = await api.createFund({ name: 'E2E Desktop Back Fund', code: 'DTBCK1', fund_type: 'debt', nav: 28000 })
-  cleanup.add(() => api.deleteFund(fund.id))
-
-  await page.goto('/funds')
-  await page.waitForLoadState('networkidle')
-
-  const table = page.getByTestId('desktop-funds-table')
-  await table.getByTestId(`fund-row-${fund.id}`).click()
-
-  const panel = page.getByTestId('desktop-fund-detail-panel')
-  await expect(panel).toBeVisible({ timeout: 5_000 })
-  await panel.getByRole('button', { name: /back|quay lại/i }).click()
-  await expect(panel).not.toBeVisible()
-})
 
 test('desktop funds add fund button opens add modal', async ({ page }) => {
   await page.goto('/funds')
