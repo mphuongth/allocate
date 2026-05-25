@@ -548,7 +548,7 @@ export default function DesktopFundLibraryView() {
   }
 
   return (
-    <div className="hidden md:flex" style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+    <div className="hidden md:flex" style={{ flex: 1, minHeight: 0, overflow: 'hidden', flexDirection: 'column' }}>
       {/* Toast notifications */}
       <div style={{ position: 'fixed', top: 16, right: 16, zIndex: 300, display: 'flex', flexDirection: 'column', gap: 8 }}>
         {toasts.map(t => (
@@ -557,6 +557,21 @@ export default function DesktopFundLibraryView() {
           </div>
         ))}
       </div>
+
+      {/* ─── Page header ────────────────────────────────────────────────────── */}
+      <div style={{ padding: '20px 28px 16px', borderBottom: '1px solid var(--c-line)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--c-canvas)' }}>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--c-muted)', marginBottom: 3 }}>
+            {t('pageSubtitle')}
+          </div>
+          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.1, color: 'var(--c-ink)' }}>
+            {t('pageTitle')}
+          </h1>
+        </div>
+      </div>
+
+      {/* ─── Two-panel area ─────────────────────────────────────────────────── */}
+      <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
 
       {/* ─── Main panel ─────────────────────────────────────────────────────── */}
       <div style={{ flex: 1, padding: '20px 24px 40px', minWidth: 0, overflowY: 'auto' }}>
@@ -788,6 +803,8 @@ export default function DesktopFundLibraryView() {
           <FundDetailPanel fund={activeFund} onClose={() => setActiveFund(null)} />
         )}
       </div>
+
+      </div>{/* end two-panel area */}
 
       {/* ─── Add/Edit Modal ──────────────────────────────────────────────────── */}
       <DModal

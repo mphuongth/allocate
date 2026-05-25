@@ -13,7 +13,7 @@ test('mobile funds shows header with title and action buttons', async ({ page })
   await page.waitForLoadState('networkidle')
 
   const topBar = page.getByTestId('mobile-top-bar')
-  await expect(topBar.getByText(/thư viện quỹ|fund library/i)).toBeVisible({ timeout: 10_000 })
+  await expect(topBar.getByText(/quỹ đầu tư|fund library/i)).toBeVisible({ timeout: 10_000 })
   await expect(topBar.getByRole('button', { name: /add/i })).toBeVisible()
   await expect(topBar.getByRole('button', { name: /refresh nav/i })).toBeVisible()
 })
