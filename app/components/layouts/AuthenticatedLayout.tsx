@@ -33,7 +33,7 @@ function getDisplayName(email: string): string {
 const PAGES_WITH_OWN_HEADER = new Set(['/dashboard', '/planning'])
 
 // Pages that manage their own full-height desktop layout (no <main> padding/scroll on md+).
-const PAGES_WITH_FULL_HEIGHT_DESKTOP = new Set(['/planning'])
+const PAGES_WITH_FULL_HEIGHT_DESKTOP = new Set(['/planning', '/funds'])
 
 function AuthenticatedLayoutInner({ children, email, initials }: { children: React.ReactNode; email: string; initials: string }) {
   const { mobileTopBar } = useNavigation()
