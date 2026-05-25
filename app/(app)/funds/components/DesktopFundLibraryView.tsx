@@ -209,7 +209,7 @@ function DcaToggle({ fund, editId, editValue, onToggle, onEditStart, onEditChang
 }) {
   const isEditing = editId === fund.id
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
       <button
         data-testid="dca-toggle"
         aria-label="DCA"
