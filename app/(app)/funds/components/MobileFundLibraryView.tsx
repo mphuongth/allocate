@@ -91,6 +91,14 @@ const SORT_OPTIONS: Array<{ v: SortKey; l: string }> = [
 
 let toastSeq = 0
 
+// ─── Cross-view sync ──────────────────────────────────────────────────────────
+let _suppressNotify = false
+function notifyFundsUpdated() {
+  _suppressNotify = true
+  window.dispatchEvent(new CustomEvent('cairn:funds-updated'))
+  _suppressNotify = false
+}
+
 // ─── Sort dropdown ────────────────────────────────────────────────────────────
 
 function SortDropdown({ sortKey, sortAsc, onSort }: { sortKey: SortKey; sortAsc: boolean; onSort: (key: SortKey) => void }) {
@@ -487,6 +495,12 @@ export default function MobileFundLibraryView() {
 
   useEffect(() => { loadFunds() }, [loadFunds])
 
+  useEffect(() => {
+    const handler = () => { if (!_suppressNotify) loadFunds({ force: true }) }
+    window.addEventListener('cairn:funds-updated', handler)
+    return () => window.removeEventListener('cairn:funds-updated', handler)
+  }, [loadFunds])
+
   const handleRefreshNav = useCallback(async () => {
     setRefreshing(true)
     try {
@@ -496,6 +510,7 @@ export default function MobileFundLibraryView() {
       const failed = results.filter((r: { error?: string }) => r.error).length
       bustCache()
       await loadFunds({ force: true })
+      notifyFundsUpdated()
       addToast(`${updated} updated${failed ? `, ${failed} failed` : ''}`, failed > 0 && updated === 0 ? 'error' : 'success')
     } catch {
       addToast('Failed to refresh NAV', 'error')
@@ -573,6 +588,7 @@ export default function MobileFundLibraryView() {
       setEditFund(null)
       bustCache()
       await loadFunds({ force: true })
+      notifyFundsUpdated()
       addToast(existingId ? 'Fund updated' : 'Fund added')
     } catch {
       setFormError('Something went wrong. Please try again.')
@@ -590,6 +606,7 @@ export default function MobileFundLibraryView() {
       setDeleteFund(null)
       bustCache()
       await loadFunds({ force: true })
+      notifyFundsUpdated()
       addToast('Fund deleted')
     } catch {
       addToast('Failed to delete fund', 'error')
@@ -615,6 +632,7 @@ export default function MobileFundLibraryView() {
       if (!res.ok) throw new Error()
       bustCache()
       await loadFunds({ force: true })
+      notifyFundsUpdated()
     } catch {
       setFunds((prev) => prev.map((f) => f.id === fund.id ? { ...f, is_dca: true } : f))
       addToast('Failed to update DCA', 'error')
@@ -638,6 +656,7 @@ export default function MobileFundLibraryView() {
       if (!res.ok) throw new Error()
       bustCache()
       await loadFunds({ force: true })
+      notifyFundsUpdated()
     } catch {
       setFunds((prev) => prev.map((f) => f.id === fund.id ? { ...f, is_dca: false, dca_monthly_amount_vnd: null } : f))
       addToast('Failed to update DCA', 'error')

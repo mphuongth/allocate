@@ -44,7 +44,7 @@ const TYPE_FILTERS: { v: TypeFilter; label: string; labelVi: string }[] = [
 
 // ─── Cache ────────────────────────────────────────────────────────────────────
 
-const CACHE_KEY = 'desktopFundLibraryCache'
+const CACHE_KEY = 'fundLibraryCache'
 const CACHE_TTL = 2 * 60 * 1000
 
 function getCache(): Fund[] | null {
@@ -61,6 +61,16 @@ function setCache(data: Fund[]) {
 }
 function bustCache() {
   try { localStorage.removeItem(CACHE_KEY) } catch {}
+}
+
+// ─── Cross-view sync ──────────────────────────────────────────────────────────
+// Both MobileFundLibraryView and DesktopFundLibraryView are always mounted.
+// When one mutates fund data it dispatches this event so the other reloads.
+let _suppressNotify = false
+function notifyFundsUpdated() {
+  _suppressNotify = true
+  window.dispatchEvent(new CustomEvent('cairn:funds-updated'))
+  _suppressNotify = false
 }
 
 // ─── Small components ─────────────────────────────────────────────────────────
@@ -330,6 +340,12 @@ export default function DesktopFundLibraryView() {
 
   useEffect(() => { loadFunds() }, [loadFunds])
 
+  useEffect(() => {
+    const handler = () => { if (!_suppressNotify) loadFunds(true) }
+    window.addEventListener('cairn:funds-updated', handler)
+    return () => window.removeEventListener('cairn:funds-updated', handler)
+  }, [loadFunds])
+
   // Sorting
   const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortAsc(a => !a)
@@ -362,6 +378,7 @@ export default function DesktopFundLibraryView() {
       const failed = results.filter((r: { error?: string }) => r.error).length
       bustCache()
       await loadFunds(true)
+      notifyFundsUpdated()
       addToast(`${updated} updated${failed ? `, ${failed} failed` : ''}`, failed === 0 || updated > 0)
     } catch {
       addToast('Failed to refresh NAV', false)
@@ -401,6 +418,7 @@ export default function DesktopFundLibraryView() {
       closeModal()
       bustCache()
       await loadFunds(true)
+      notifyFundsUpdated()
       addToast(modalMode === 'edit' ? 'Fund updated' : 'Fund added')
     } catch {
       setFormError('Something went wrong. Please try again.')
@@ -429,6 +447,7 @@ export default function DesktopFundLibraryView() {
       if (!res.ok) throw new Error()
       bustCache()
       await loadFunds(true)
+      notifyFundsUpdated()
     } catch {
       setFunds(p => p.map(f => f.id === fund.id ? { ...f, is_dca: true } : f))
       addToast('Failed to update DCA', false)
@@ -453,6 +472,7 @@ export default function DesktopFundLibraryView() {
       if (!res.ok) throw new Error()
       bustCache()
       await loadFunds(true)
+      notifyFundsUpdated()
     } catch {
       setFunds(p => p.map(f => f.id === fund.id ? { ...f, is_dca: false, dca_monthly_amount_vnd: null } : f))
       addToast('Failed to update DCA', false)
@@ -469,6 +489,7 @@ export default function DesktopFundLibraryView() {
       setDeleteTarget(null)
       bustCache()
       await loadFunds(true)
+      notifyFundsUpdated()
       addToast('Fund deleted')
     } catch {
       addToast('Failed to delete fund', false)

@@ -108,6 +108,30 @@ test('desktop funds delete button opens delete confirmation modal', async ({ pag
   await expect(page.getByTestId('delete-fund-modal')).toBeVisible({ timeout: 5_000 })
 })
 
+test('DCA enabled on desktop is reflected when switching to mobile viewport', async ({ page }) => {
+  const fund = await api.createFund({ name: 'E2E Cross View DCA', code: 'DXVDCA', fund_type: 'equity', nav: 20000 })
+  cleanup.add(() => api.deleteFund(fund.id))
+
+  await page.goto('/funds')
+  await page.waitForLoadState('networkidle')
+
+  // Enable DCA on desktop
+  const row = page.getByTestId('desktop-funds-table').getByTestId(`fund-row-${fund.id}`)
+  await row.getByTestId('dca-toggle').click()
+  const amountInput = row.getByPlaceholder(/amount/i)
+  await amountInput.fill('1500000')
+  await amountInput.press('Enter')
+  await page.waitForLoadState('networkidle')
+
+  // Switch to mobile viewport
+  await page.setViewportSize({ width: 390, height: 844 })
+
+  // Mobile card must show DCA as active
+  const card = page.getByTestId('mobile-funds').getByTestId(`fund-card-${fund.id}`)
+  await expect(card).toBeVisible({ timeout: 8_000 })
+  await expect(card.getByRole('button', { name: /disable dca/i })).toBeVisible({ timeout: 5_000 })
+})
+
 test('desktop funds DCA toggle enables inline amount input', async ({ page }) => {
   const fund = await api.createFund({ name: 'E2E Desktop DCA Fund', code: 'DTDCA1', fund_type: 'equity', nav: 15000 })
   cleanup.add(() => api.deleteFund(fund.id))
