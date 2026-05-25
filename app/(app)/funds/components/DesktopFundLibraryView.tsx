@@ -272,7 +272,7 @@ function DcaToggle({ fund, editId, editValue, onToggle, onEditStart, onEditChang
 function FormField({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div style={{ display: 'grid', gap: 5 }}>
-      <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-ink-2)' }}>{label}</label>
+      <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-ink-2)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</label>
       {children}
     </div>
   )
