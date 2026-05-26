@@ -131,6 +131,29 @@ test('desktop: clicking Export data opens download report sheet', async ({ page 
   await expect(page.locator('text=Portfolio report').first()).toBeVisible({ timeout: 8_000 })
 })
 
+// ─── Profile save propagates to sidebar ────────────────────────────────────────
+
+test('desktop: saving a new name updates the sidebar avatar/name without a refresh', async ({ page }) => {
+  const sidebar = page.locator('[data-testid="desktop-sidebar"]')
+  await expect(sidebar).toBeVisible()
+
+  // Capture the sidebar's pre-save name so we can assert it changed afterward.
+  const before = (await sidebar.innerText()).trim()
+
+  await page.getByRole('button', { name: /^edit$/i }).click()
+  await expect(page.getByRole('dialog')).toBeVisible({ timeout: 5_000 })
+  const nameInput = page.getByRole('textbox').first()
+  await nameInput.fill('Sidebar Sync Test')
+  await page.getByRole('button', { name: /^save$/i }).click()
+
+  // No router.refresh, no page reload — the sidebar should reflect the new
+  // name purely through NavigationContext.setUserName.
+  await expect(sidebar).toContainText('Sidebar Sync Test', { timeout: 5_000 })
+  // Avatar initials reflect the new name ("Sidebar Sync Test" → "SS").
+  await expect(sidebar).toContainText('SS')
+  expect(before).not.toContain('Sidebar Sync Test')
+})
+
 // ─── Sign out ──────────────────────────────────────────────────────────────────
 
 test('desktop: Sign out button is visible', async ({ page }) => {
