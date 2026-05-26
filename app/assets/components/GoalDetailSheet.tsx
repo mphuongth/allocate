@@ -11,6 +11,17 @@ import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import type { GoalData, FundBreakdownItem } from '../DashboardClient'
 import TransactionHistorySheet, { type PurchaseHistoryRow } from './TransactionHistorySheet'
 
+// Same SVG as DesktopGoalDetail.UnlinkSvg — matches design's "unlink" glyph
+function UnlinkSvg({ size = 20, color = 'currentColor' }: { size?: number; color?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block', flexShrink: 0 }}>
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+      <path d="M2 2l20 20" />
+    </svg>
+  )
+}
+
 interface InvestmentTx {
   transaction_id: string
   transaction_type: string
@@ -333,12 +344,14 @@ function InvestmentActionSheet({
   inv,
   onViewHistory,
   onSell,
+  onUnassign,
 }: {
   open: boolean
   onClose: () => void
   inv: InvRow | null
   onViewHistory: () => void
   onSell: () => void
+  onUnassign: () => void
 }) {
   const isVI = useLocale() === 'vi'
   const [mounted, setMounted] = useState(false)
@@ -358,12 +371,16 @@ function InvestmentActionSheet({
     historySub: 'Xem các lần mua / bán trước đây',
     sell: isBank ? 'Rút tiền' : 'Bán',
     sellSub: isBank ? 'Rút tiền gửi khỏi mục tiêu' : 'Bán khoản đầu tư',
+    unassign: 'Bỏ gán mục tiêu',
+    unassignSub: 'Chuyển khoản đầu tư này sang trạng thái chưa gán',
   } : {
     title: 'Options',
     history: 'Transaction history',
     historySub: 'View past buys & sells',
     sell: isBank ? 'Withdraw' : 'Sell',
     sellSub: isBank ? 'Withdraw deposit from goal' : 'Liquidate this investment',
+    unassign: 'Unassign from goal',
+    unassignSub: 'Move this investment to unassigned',
   }
 
   return (
@@ -439,6 +456,29 @@ function InvestmentActionSheet({
             <ChevronRight size={16} color="var(--c-muted)" />
           </button>
 
+          {/* Unassign from goal */}
+          <button
+            onClick={() => { onClose(); setTimeout(onUnassign, 60) }}
+            style={{
+              width: '100%', textAlign: 'left', padding: '14px 16px',
+              background: 'var(--c-card)', border: '1px solid var(--c-line)',
+              borderRadius: 14, cursor: 'pointer', fontFamily: 'inherit',
+              display: 'flex', alignItems: 'center', gap: 14,
+              transition: 'background 120ms',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--c-card-2)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--c-card)')}
+          >
+            <div style={{ width: 42, height: 42, borderRadius: 12, background: 'var(--c-warn-tint, #fef3c7)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <UnlinkSvg size={20} color="var(--c-warn, #b45309)" />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-ink)' }}>{t.unassign}</div>
+              <div style={{ fontSize: 12, color: 'var(--c-muted)', marginTop: 2 }}>{t.unassignSub}</div>
+            </div>
+            <ChevronRight size={16} color="var(--c-muted)" />
+          </button>
+
           {/* Sell / Withdraw */}
           <button
             onClick={() => { onClose(); setTimeout(onSell, 60) }}
@@ -466,6 +506,117 @@ function InvestmentActionSheet({
   )
 }
 
+function UnassignConfirmSheet({
+  open,
+  onClose,
+  inv,
+  onConfirm,
+  unassigning,
+}: {
+  open: boolean
+  onClose: () => void
+  inv: InvRow | null
+  onConfirm: () => void
+  unassigning: boolean
+}) {
+  const isVI = useLocale() === 'vi'
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    if (open) setMounted(true)
+    else { const t = setTimeout(() => setMounted(false), 220); return () => clearTimeout(t) }
+  }, [open])
+  if (!mounted || !inv) return null
+
+  const t = isVI ? {
+    title: 'Bỏ gán mục tiêu?',
+    body: 'Khoản đầu tư này sẽ được chuyển sang "Chưa gán". Bạn có thể gán lại bất kỳ lúc nào từ trang Kế hoạch.',
+    confirm: 'Bỏ gán',
+    cancel: 'Hủy',
+    working: 'Đang xử lý…',
+  } : {
+    title: 'Unassign from goal?',
+    body: 'This investment will be moved to "Unassigned". You can re-assign it any time from the Planning page.',
+    confirm: 'Unassign',
+    cancel: 'Cancel',
+    working: 'Working…',
+  }
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.2)',
+        zIndex: 160, pointerEvents: open ? 'auto' : 'none',
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0,
+          background: 'var(--c-card)', borderRadius: '16px 16px 0 0',
+          padding: '0 0 env(safe-area-inset-bottom,0)',
+          animation: open
+            ? 'slide-up 220ms cubic-bezier(0.2, 0.8, 0.2, 1)'
+            : 'slide-down 180ms ease forwards',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ width: 36, height: 4, background: 'var(--c-line-strong)', borderRadius: 999, margin: '6px auto 14px' }} />
+        <div style={{ padding: '0 16px 20px', display: 'grid', gap: 14 }}>
+          <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, letterSpacing: '-0.01em' }}>{t.title}</h2>
+
+          {/* Item summary */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'var(--c-card-2)', borderRadius: 12 }}>
+            <div style={{
+              width: 32, height: 32, borderRadius: 8,
+              background: 'var(--c-warn-tint, #fef3c7)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              color: 'var(--c-warn, #b45309)',
+            }}>
+              <TypeIcon type={inv.type} size={15} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{inv.name}</div>
+              <div style={{ fontSize: 12, color: 'var(--c-muted)', marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(inv.value)}</div>
+            </div>
+          </div>
+
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--c-muted)', lineHeight: 1.55 }}>{t.body}</p>
+
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={onClose}
+              disabled={unassigning}
+              style={{
+                flex: 1, padding: '11px 14px', fontSize: 13, fontWeight: 500,
+                background: 'var(--c-card)', border: '1px solid var(--c-line)',
+                borderRadius: 10, color: 'var(--c-ink)', fontFamily: 'inherit',
+                cursor: unassigning ? 'default' : 'pointer',
+              }}
+            >
+              {t.cancel}
+            </button>
+            <button
+              onClick={onConfirm}
+              disabled={unassigning}
+              style={{
+                flex: 2, padding: '11px 14px', fontSize: 13, fontWeight: 600,
+                background: 'var(--c-warn, #b45309)', color: '#fff',
+                border: 'none', borderRadius: 10, fontFamily: 'inherit',
+                cursor: unassigning ? 'default' : 'pointer',
+                opacity: unassigning ? 0.6 : 1,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              }}
+            >
+              <UnlinkSvg size={14} color="#fff" />
+              {unassigning ? t.working : t.confirm}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: Props) {
   const isVI = useLocale() === 'vi'
   const [mounted, setMounted] = useState(false)
@@ -477,6 +628,9 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: 
   const [isDeleting, setIsDeleting] = useState(false)
   const [actionInv, setActionInv] = useState<InvRow | null>(null)
   const [investActionOpen, setInvestActionOpen] = useState(false)
+  const [unassignConfirmOpen, setUnassignConfirmOpen] = useState(false)
+  const [unassigning, setUnassigning] = useState(false)
+  const [unassignedIds, setUnassignedIds] = useState<string[]>([])
   const [fundDetailId, setFundDetailId] = useState<string | null>(null)
   const [purchaseHistory, setPurchaseHistory] = useState<PurchaseHistoryRow[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
@@ -512,6 +666,41 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: 
       setIsDeleting(false)
     }
     setActionsOpen(false)
+  }
+
+  // Mirror of DesktopGoalDetail.handleUnassign — fund rows aggregate every
+  // fund-investment under the same fund, non-fund rows correspond to a
+  // single investment_transactions row.
+  async function handleUnassignConfirm() {
+    if (!actionInv) return
+    setUnassigning(true)
+    try {
+      if (actionInv.fund) {
+        const res = await fetch(`/api/v1/fund-investments?fund_id=${actionInv.fund.fundId}`)
+        if (!res.ok) throw new Error('fetch failed')
+        const data = await res.json() as { investments?: Array<{ id: string }> }
+        const investments = data.investments ?? []
+        await Promise.all(investments.map((fi) =>
+          fetch(`/api/v1/fund-investments/${fi.id}/goal`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ goal_id: null }),
+          })
+        ))
+      } else {
+        await fetch(`/api/v1/investment-transactions/${actionInv.id}/assign`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ goal_id: null }),
+        })
+      }
+      setUnassignedIds((prev) => [...prev, actionInv.id])
+      setUnassignConfirmOpen(false)
+      setActionInv(null)
+      onDataChanged()
+    } finally {
+      setUnassigning(false)
+    }
   }
 
   async function openFundDetail(fund: FundBreakdownItem) {
@@ -580,7 +769,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: 
     }
 
     return { id: tx.transaction_id, name, type: tx.asset_type, value, gainPct, units, principal, fund: fund ?? null }
-  })
+  }).filter((row) => !unassignedIds.includes(row.id))
 
   const allFundValue = fundItems.reduce((s, f) => s + f.currentValue, 0)
 
@@ -1039,6 +1228,15 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: 
         inv={actionInv}
         onViewHistory={() => actionInv?.fund && openFundDetail(actionInv.fund)}
         onSell={() => { /* SellWithdrawSheet integration point */ }}
+        onUnassign={() => setUnassignConfirmOpen(true)}
+      />
+
+      <UnassignConfirmSheet
+        open={unassignConfirmOpen}
+        onClose={() => !unassigning && setUnassignConfirmOpen(false)}
+        inv={actionInv}
+        onConfirm={handleUnassignConfirm}
+        unassigning={unassigning}
       />
 
       <TransactionHistorySheet

@@ -160,3 +160,93 @@ describe('GoalDetailSheet — transaction history integration', () => {
     )
   })
 })
+
+describe('GoalDetailSheet — unassign from goal', () => {
+  it('InvestmentActionSheet exposes an "Unassign from goal" option', async () => {
+    render(<GoalDetailSheet {...baseProps} />)
+    await waitFor(() => screen.getByText('VNINDEX ETF'))
+    await userEvent.click(screen.getByRole('button', { name: /options/i }))
+    await waitFor(() =>
+      expect(screen.getAllByText(/unassign from goal/i).length).toBeGreaterThan(0)
+    )
+  })
+
+  it('opens the confirmation sheet when Unassign is tapped', async () => {
+    render(<GoalDetailSheet {...baseProps} />)
+    await waitFor(() => screen.getByText('VNINDEX ETF'))
+    await userEvent.click(screen.getByRole('button', { name: /options/i }))
+    await waitFor(() => screen.getAllByText(/unassign from goal/i).length > 0)
+    // Click the action-sheet row labeled "Unassign from goal"
+    await userEvent.click(screen.getAllByText(/unassign from goal/i)[0])
+    // The confirm sheet uses a different title ("Unassign from goal?")
+    await waitFor(() =>
+      expect(screen.getByText(/unassign from goal\?/i)).toBeInTheDocument()
+    )
+  })
+
+  it('fires PATCH on fund-investments/:id/goal with goal_id null when confirmed (fund row)', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (url.includes('/api/v1/investment-transactions') && (!init || init.method === undefined || init.method === 'GET')) {
+        return Promise.resolve({ ok: true, json: async () => ({ transactions: [mockTx] }) })
+      }
+      if (url.includes('/api/v1/fund-investments?fund_id=')) {
+        return Promise.resolve({ ok: true, json: async () => ({ investments: [{ id: 'fi-1' }, { id: 'fi-2' }] }) })
+      }
+      if (url.includes('/api/v1/fund-investments/') && init?.method === 'PATCH') {
+        return Promise.resolve({ ok: true, json: async () => ({}) })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+    global.fetch = fetchMock
+
+    const onDataChanged = vi.fn()
+    render(<GoalDetailSheet {...baseProps} onDataChanged={onDataChanged} />)
+    await waitFor(() => screen.getByText('VNINDEX ETF'))
+    await userEvent.click(screen.getByRole('button', { name: /options/i }))
+    await waitFor(() => screen.getAllByText(/unassign from goal/i).length > 0)
+    await userEvent.click(screen.getAllByText(/unassign from goal/i)[0])
+    await waitFor(() => screen.getByText(/unassign from goal\?/i))
+
+    // The confirm button is labeled "Unassign" (without ?), distinct from the action-row text
+    const confirmBtn = screen.getByRole('button', { name: /^unassign$/i })
+    await userEvent.click(confirmBtn)
+
+    // Each fund-investment under this fund must be PATCHed to goal_id: null
+    await waitFor(() => {
+      const patchCalls = (fetchMock.mock.calls as Array<[string, RequestInit | undefined]>).filter(
+        ([url, init]) => url.includes('/api/v1/fund-investments/') && init?.method === 'PATCH'
+      )
+      expect(patchCalls.length).toBe(2)
+      patchCalls.forEach(([, init]) => {
+        expect(String(init?.body ?? '')).toContain('"goal_id":null')
+      })
+    })
+    await waitFor(() => expect(onDataChanged).toHaveBeenCalled())
+  })
+
+  it('cancelling the confirm sheet does not fire any fetch', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (url.includes('/api/v1/investment-transactions') && (!init || init.method === undefined)) {
+        return Promise.resolve({ ok: true, json: async () => ({ transactions: [mockTx] }) })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+    global.fetch = fetchMock
+
+    render(<GoalDetailSheet {...baseProps} />)
+    await waitFor(() => screen.getByText('VNINDEX ETF'))
+    await userEvent.click(screen.getByRole('button', { name: /options/i }))
+    await waitFor(() => screen.getAllByText(/unassign from goal/i).length > 0)
+    await userEvent.click(screen.getAllByText(/unassign from goal/i)[0])
+    await waitFor(() => screen.getByText(/unassign from goal\?/i))
+
+    fetchMock.mockClear()
+    await userEvent.click(screen.getByRole('button', { name: /^cancel$/i }))
+
+    // No further fetch calls (especially no PATCH or PUT)
+    const writes = (fetchMock.mock.calls as Array<[string, RequestInit | undefined]>).filter(
+      ([, init]) => init?.method === 'PATCH' || init?.method === 'PUT' || init?.method === 'DELETE'
+    )
+    expect(writes.length).toBe(0)
+  })
+})
