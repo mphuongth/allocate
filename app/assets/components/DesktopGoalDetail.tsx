@@ -654,7 +654,7 @@ function InvOptionsModal({ inv, isVi, onClose, onHistory, onSell, onUnassign }: 
                   background: inv.gainPct >= 0 ? 'var(--c-pos-tint)' : 'var(--c-neg-tint)',
                   color: inv.gainPct >= 0 ? 'var(--c-pos)' : 'var(--c-neg)',
                 }}>
-                  {inv.gainPct >= 0 ? '+' : ''}{fmtPct(inv.gainPct)}
+                  {fmtPct(inv.gainPct)}
                 </span>
               )}
             </div>
