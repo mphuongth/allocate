@@ -251,7 +251,7 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
   ]
 
   return (
-    <div className="hidden md:flex" style={{ flex: 1, flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
+    <div data-testid="desktop-settings-view" className="hidden md:flex" style={{ flex: 1, flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
 
       {/* ─── Page header ──────────────────────────────────────────────────── */}
       <div style={{ padding: '20px 28px 16px', borderBottom: '1px solid var(--c-line)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--c-canvas)' }}>

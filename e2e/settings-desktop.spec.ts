@@ -18,7 +18,7 @@ test('desktop settings shows Preferences heading', async ({ page }) => {
 })
 
 test('desktop settings shows Settings subtitle', async ({ page }) => {
-  await expect(page.locator('text=SETTINGS').first()).toBeVisible()
+  await expect(page.locator('[data-testid="desktop-settings-view"]').locator('text=Settings')).toBeVisible()
 })
 
 // ─── Profile card ──────────────────────────────────────────────────────────────
@@ -56,7 +56,7 @@ test('desktop: profile modal closes when Cancel is clicked', async ({ page }) =>
 // ─── Preferences — Language ────────────────────────────────────────────────────
 
 test('desktop: Language label is visible', async ({ page }) => {
-  await expect(page.locator('text=Language').first()).toBeVisible()
+  await expect(page.locator('[data-testid="desktop-settings-view"]').locator('text=Language')).toBeVisible()
 })
 
 test('desktop: English and Tiếng Việt language pills are visible', async ({ page }) => {
@@ -67,7 +67,7 @@ test('desktop: English and Tiếng Việt language pills are visible', async ({ 
 // ─── Preferences — Appearance ──────────────────────────────────────────────────
 
 test('desktop: Appearance label is visible', async ({ page }) => {
-  await expect(page.locator('text=Appearance').first()).toBeVisible()
+  await expect(page.locator('[data-testid="desktop-settings-view"]').locator('text=Appearance')).toBeVisible()
 })
 
 test('desktop: Light, Dark, System appearance pills are visible', async ({ page }) => {
@@ -79,7 +79,7 @@ test('desktop: Light, Dark, System appearance pills are visible', async ({ page 
 // ─── Preferences — Currency ────────────────────────────────────────────────────
 
 test('desktop: Currency label is visible', async ({ page }) => {
-  await expect(page.locator('text=Currency').first()).toBeVisible()
+  await expect(page.locator('[data-testid="desktop-settings-view"]').locator('text=Currency')).toBeVisible()
 })
 
 test('desktop: VND, USD, EUR currency pills are visible', async ({ page }) => {
@@ -91,7 +91,7 @@ test('desktop: VND, USD, EUR currency pills are visible', async ({ page }) => {
 // ─── Price sync ────────────────────────────────────────────────────────────────
 
 test('desktop: Price sync section heading is visible', async ({ page }) => {
-  await expect(page.locator('text=PRICE SYNC').first()).toBeVisible()
+  await expect(page.locator('[data-testid="desktop-settings-view"]').locator('text=Price sync')).toBeVisible()
 })
 
 test('desktop: Sync now button is visible', async ({ page }) => {
@@ -99,11 +99,11 @@ test('desktop: Sync now button is visible', async ({ page }) => {
 })
 
 test('desktop: Fund NAV row is visible', async ({ page }) => {
-  await expect(page.locator('text=Fund NAV').first()).toBeVisible()
+  await expect(page.locator('[data-testid="desktop-settings-view"]').locator('text=Fund NAV')).toBeVisible()
 })
 
 test('desktop: Gold price row is visible', async ({ page }) => {
-  await expect(page.locator('text=/gold price/i').first()).toBeVisible()
+  await expect(page.locator('[data-testid="desktop-settings-view"]').locator('text=/gold price/i')).toBeVisible()
 })
 
 test('desktop: clicking Sync now triggers cron API calls', async ({ page }) => {
@@ -119,7 +119,7 @@ test('desktop: clicking Sync now triggers cron API calls', async ({ page }) => {
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
 test('desktop: Data section heading is visible', async ({ page }) => {
-  await expect(page.locator('text=DATA').first()).toBeVisible()
+  await expect(page.locator('[data-testid="desktop-settings-view"]').locator('text=Data')).toBeVisible()
 })
 
 test('desktop: Export data row is visible', async ({ page }) => {
@@ -140,5 +140,5 @@ test('desktop: Sign out button is visible', async ({ page }) => {
 // ─── Version ──────────────────────────────────────────────────────────────────
 
 test('desktop: version text is visible', async ({ page }) => {
-  await expect(page.locator('text=/v\\d/').first()).toBeVisible()
+  await expect(page.locator('[data-testid="desktop-settings-view"]').locator('text=/v\\d/')).toBeVisible()
 })
