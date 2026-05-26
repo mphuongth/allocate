@@ -778,6 +778,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                     ins={selectedInsurance}
                     locale={locale}
                     onClose={() => setSelectedInsurance(null)}
+                    onChanged={() => fetchData({ force: true })}
                   />
                 ) : (
                   <DesktopNetWorthPanel
