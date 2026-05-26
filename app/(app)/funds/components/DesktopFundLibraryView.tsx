@@ -232,10 +232,11 @@ function DcaToggle({ fund, editId, editValue, onToggle, onEditStart, onEditChang
         isEditing ? (
           <input
             autoFocus
-            type="number"
+            type="text"
+            inputMode="numeric"
             placeholder="Amount"
-            value={editValue}
-            onChange={e => onEditChange(e.target.value)}
+            value={editValue ? Number(editValue).toLocaleString('en-US') : ''}
+            onChange={e => onEditChange(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))}
             onBlur={onEditCommit}
             onKeyDown={e => {
               if (e.key === 'Enter') onEditCommit()

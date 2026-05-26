@@ -172,9 +172,10 @@ export default function AddInsuranceMemberModal({ open, onClose, onCreated, loca
             {/* Premium */}
             <FormField label={t.premium}>
               <input
-                type="number"
-                value={premium}
-                onChange={(e) => setPremium(Number(e.target.value))}
+                type="text"
+                inputMode="numeric"
+                value={premium ? Number(premium).toLocaleString('en-US') : ''}
+                onChange={(e) => setPremium(Number(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, '')))}
                 className="cn-input"
                 style={{ fontVariantNumeric: 'tabular-nums' }}
               />

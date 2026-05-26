@@ -229,7 +229,14 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
             </div>
           </Field>
           <Field label={isVi ? 'Phí bảo hiểm năm (₫)' : 'Annual premium (₫)'}>
-            <input type="number" value={editPremium} onChange={(e) => setEditPremium(Number(e.target.value))} className="cn-input" style={{ fontVariantNumeric: 'tabular-nums' }} />
+            <input
+              type="text"
+              inputMode="numeric"
+              value={editPremium ? Number(editPremium).toLocaleString('en-US') : ''}
+              onChange={(e) => setEditPremium(Number(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, '')))}
+              className="cn-input"
+              style={{ fontVariantNumeric: 'tabular-nums' }}
+            />
             <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 4 }}>
               {fmtCompact(editPremium / 12)} / {isVi ? 'tháng' : 'month'}
             </div>
