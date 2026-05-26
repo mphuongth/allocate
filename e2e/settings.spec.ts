@@ -67,8 +67,10 @@ test('saving a new display name updates the profile card', async ({ page }) => {
   await expect(nameInput).toBeVisible({ timeout: 5_000 })
   await nameInput.fill('E2E Test User')
   await page.getByRole('button', { name: /^save$/i }).click()
-  // After save + auto-close the card should show the new name
-  await expect(page.locator('text=E2E Test User').first()).toBeVisible({ timeout: 5_000 })
+  // Target the visible profile card by role — other parts of the layout
+  // (desktop sidebar hidden via md:hidden, mobile drawer translated off-screen)
+  // also render the name now that it's wired into NavigationContext.
+  await expect(page.getByRole('button', { name: /profile/i })).toContainText('E2E Test User', { timeout: 5_000 })
 })
 
 // ─── Preferences section ───────────────────────────────────────────────────────
