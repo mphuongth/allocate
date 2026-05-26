@@ -62,6 +62,13 @@ export default function Sidebar({ email, initials, onNavClick, hideLogo = false 
   const { sidebarCollapsed, setSidebarCollapsed, userName } = useNavigation()
   const t = useTranslations('nav')
 
+  const displayInitials = userName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? '')
+    .join('') || initials
+
   const NAV_ITEMS = [
     { label: t('dashboard'), href: '/dashboard', renderIcon: (active: boolean) => <MountainsIcon size={18} strokeWidth={active ? 2 : 1.6} /> },
     { label: t('planning'),  href: '/planning',  renderIcon: (active: boolean) => <Calendar  size={18} strokeWidth={active ? 2 : 1.6} /> },
@@ -132,6 +139,18 @@ export default function Sidebar({ email, initials, onNavClick, hideLogo = false 
                 whiteSpace: 'nowrap',
                 position: 'relative',
               }}
+              onMouseEnter={(e) => {
+                if (active) return
+                const el = e.currentTarget as HTMLElement
+                el.style.background = 'var(--c-card-2)'
+                el.style.color = 'var(--c-ink)'
+              }}
+              onMouseLeave={(e) => {
+                if (active) return
+                const el = e.currentTarget as HTMLElement
+                el.style.background = 'transparent'
+                el.style.color = 'var(--c-muted)'
+              }}
             >
               {active && (
                 <span style={{
@@ -163,13 +182,13 @@ export default function Sidebar({ email, initials, onNavClick, hideLogo = false 
         }}>
           <div style={{
             width: 30, height: 30, borderRadius: 15,
-            background: 'var(--c-navy)',
+            background: 'var(--c-btn-primary)',
             color: '#fff',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 11, fontWeight: 700, flexShrink: 0,
             letterSpacing: '0.02em',
           }}>
-            {initials}
+            {displayInitials}
           </div>
           {!sidebarCollapsed && (
             <div style={{ flex: 1, minWidth: 0 }}>
