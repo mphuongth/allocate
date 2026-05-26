@@ -541,6 +541,7 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
       <DownloadReportSheet
         open={showReport}
         onClose={() => setShowReport(false)}
+        desktop
         data={overviewCache ? {
           netWorth: overviewCache.netWorth.netWorth,
           currentValue: overviewCache.netWorth.currentValue,
