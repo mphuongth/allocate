@@ -25,6 +25,7 @@ import DesktopNetWorthPanel from './components/DesktopNetWorthPanel'
 import DesktopGoalCard from './components/DesktopGoalCard'
 import DesktopInsuranceList from './components/DesktopInsuranceList'
 import DesktopInsuranceDetail from './components/DesktopInsuranceDetail'
+import AddInsuranceMemberModal from './components/AddInsuranceMemberModal'
 import DesktopGoalDetail from './components/DesktopGoalDetail'
 
 export interface FundBreakdownItem {
@@ -238,6 +239,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const [showReportSheet, setShowReportSheet] = useState(false)
   const [selectedInsurance, setSelectedInsurance] = useState<InsuranceData | null>(null)
   const [desktopAddTxOpen, setDesktopAddTxOpen] = useState(false)
+  const [showAddInsurance, setShowAddInsurance] = useState(false)
   const PULL_THRESHOLD = 65
 
   const fetchDataRef = useRef<(opts?: { force?: boolean }) => Promise<void>>(async () => {})
@@ -745,7 +747,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                       insurance={data.insurance}
                       locale={locale}
                       onOpen={(ins) => setSelectedInsurance(selectedInsurance?.insuranceId === ins.insuranceId ? null : ins)}
-                      onAdd={() => window.open('/settings?tab=insurance', '_self')}
+                      onAdd={() => setShowAddInsurance(true)}
                     />
                   </section>
                 )}
@@ -776,6 +778,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                     ins={selectedInsurance}
                     locale={locale}
                     onClose={() => setSelectedInsurance(null)}
+                    onChanged={() => fetchData({ force: true })}
                   />
                 ) : (
                   <DesktopNetWorthPanel
@@ -1023,6 +1026,14 @@ export default function DashboardClient({ userId }: { userId: string }) {
         } : null}
         onExport={handleGenerateReport}
         desktop={isDesktop}
+      />
+
+      {/* Add Insurance Member modal (desktop) */}
+      <AddInsuranceMemberModal
+        open={showAddInsurance}
+        onClose={() => setShowAddInsurance(false)}
+        onCreated={() => fetchData({ force: true })}
+        locale={locale}
       />
     </div>
   )

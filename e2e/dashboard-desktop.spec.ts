@@ -84,4 +84,33 @@ test.describe('Desktop overview layout', () => {
     await row.click()
     await expect(page.getByTestId('insurance-detail-panel')).toBeVisible({ timeout: 5_000 })
   })
+
+  test('clicking Add insurance opens inline modal instead of navigating away', async ({ page }) => {
+    // Previously the Add button called window.open('/settings?tab=insurance')
+    // which navigated away. Now it opens an inline modal on the dashboard.
+    const startUrl = page.url()
+    const addBtn = page.getByTestId('insurance-add-btn')
+    await expect(addBtn).toBeVisible({ timeout: 10_000 })
+    await addBtn.click()
+    await expect(page.getByTestId('add-insurance-modal')).toBeVisible({ timeout: 5_000 })
+    expect(page.url()).toBe(startUrl)
+  })
+
+  test('insurance detail panel shows avatar initials, not just shield icon', async ({ page }) => {
+    const row = page.getByTestId('insurance-row').first()
+    await expect(row).toBeVisible({ timeout: 10_000 })
+    await row.click()
+    const avatar = page.getByTestId('insurance-avatar')
+    await expect(avatar).toBeVisible({ timeout: 5_000 })
+    const text = (await avatar.innerText()).trim()
+    // Initials are 1–2 uppercase letters derived from the member name
+    expect(text).toMatch(/^[A-ZÀ-Ỹ]{1,2}$/)
+  })
+
+  test('insurance detail panel exposes Remove member control', async ({ page }) => {
+    const row = page.getByTestId('insurance-row').first()
+    await expect(row).toBeVisible({ timeout: 10_000 })
+    await row.click()
+    await expect(page.getByTestId('insurance-remove-btn')).toBeVisible({ timeout: 5_000 })
+  })
 })
