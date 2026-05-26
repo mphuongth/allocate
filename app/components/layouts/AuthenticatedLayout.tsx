@@ -73,23 +73,26 @@ function AuthenticatedLayoutInner({ children, email, initials }: { children: Rea
         </main>
       </div>
 
-      {/* Mobile FAB — add transaction */}
-      <button
-        onClick={() => setShowAddTx(true)}
-        aria-label="Add transaction"
-        className="md:hidden"
-        style={{
-          position: 'fixed', right: 16, bottom: 80,
-          width: 52, height: 52, borderRadius: 26,
-          background: 'var(--c-navy)', color: '#fff',
-          border: 'none',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          boxShadow: '0 6px 16px rgba(15, 42, 74, 0.25), 0 2px 4px rgba(15, 42, 74, 0.1)',
-          cursor: 'pointer', zIndex: 35,
-        }}
-      >
-        <Plus size={22} strokeWidth={2.2} />
-      </button>
+      {/* Mobile FAB — add transaction.
+          The button's inline `display: flex` would override a `md:hidden` class
+          (inline > class specificity), so the wrapper handles md+ hiding. */}
+      <div className="md:hidden">
+        <button
+          onClick={() => setShowAddTx(true)}
+          aria-label="Add transaction"
+          style={{
+            position: 'fixed', right: 16, bottom: 80,
+            width: 52, height: 52, borderRadius: 26,
+            background: 'var(--c-navy)', color: '#fff',
+            border: 'none',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 6px 16px rgba(15, 42, 74, 0.25), 0 2px 4px rgba(15, 42, 74, 0.1)',
+            cursor: 'pointer', zIndex: 35,
+          }}
+        >
+          <Plus size={22} strokeWidth={2.2} />
+        </button>
+      </div>
 
       {/* Mobile bottom tab navigation */}
       <MobileBottomTabs />

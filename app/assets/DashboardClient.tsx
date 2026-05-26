@@ -619,13 +619,16 @@ export default function DashboardClient({ userId }: { userId: string }) {
               data-testid="desktop-overview"
               style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}
             >
-              {/* Page title */}
-              <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 0 20px', flexShrink: 0 }}>
+              {/* Page title — layout matches Plan / Funds / Settings.
+                  Negative margins escape <main>'s md:px-6 / py-4 so the
+                  border-bottom and background span the full content width,
+                  flush against the sidebar like the other desktop pages. */}
+              <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '-16px -24px 0', padding: '20px 28px 16px', borderBottom: '1px solid var(--c-line)', background: 'var(--c-canvas)', flexShrink: 0 }}>
                 <div>
                   <div data-testid="desktop-page-title" style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--c-muted)', marginBottom: 3 }}>
                     {t('overview')}
                   </div>
-                  <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--c-ink)', lineHeight: 1 }}>
+                  <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--c-ink)', lineHeight: 1.1 }}>
                     {t('greeting', { name: userName })}
                   </h1>
                 </div>
@@ -654,7 +657,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
               {/* Two-column body */}
               <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
               {/* Left column: goals, unallocated, insurance */}
-              <div style={{ flex: 1, minWidth: 0, paddingRight: 20 }}>
+              <div style={{ flex: 1, minWidth: 0, paddingTop: 20, paddingRight: 20 }}>
                 {/* Goals */}
                 {sortedGoals.length > 0 && (
                   <section style={{ marginBottom: 24 }}>
@@ -753,6 +756,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
               <div style={{
                 width: 300, flexShrink: 0,
                 borderLeft: '1px solid var(--c-line)',
+                paddingTop: 20,
                 paddingLeft: 20,
                 position: 'sticky',
                 top: 0,
