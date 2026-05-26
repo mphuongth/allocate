@@ -395,11 +395,10 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, onEdit, onDelete
             isEditing ? (
               <input
                 autoFocus
-                type="number"
-                min="1"
-                step="1"
-                value={dcaEditValue}
-                onChange={(e) => setDcaEditValue(e.target.value)}
+                type="text"
+                inputMode="numeric"
+                value={dcaEditValue ? Number(dcaEditValue).toLocaleString('en-US') : ''}
+                onChange={(e) => setDcaEditValue(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))}
                 onBlur={() => { onSaveDcaAmount(dcaEditValue); setDcaEditId(null) }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') { onSaveDcaAmount(dcaEditValue); setDcaEditId(null) }

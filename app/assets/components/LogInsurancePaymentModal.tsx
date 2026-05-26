@@ -164,10 +164,11 @@ export default function LogInsurancePaymentModal({ open, onClose, onSaved, ins, 
                   }}>
                     <span style={{ fontSize: 14, color: 'var(--c-muted)' }}>₫</span>
                     <input
-                      type="number"
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      placeholder={suggested ? suggested.toLocaleString('vi-VN') : ''}
+                      type="text"
+                      inputMode="numeric"
+                      value={amount ? Number(amount).toLocaleString('en-US') : ''}
+                      onChange={(e) => setAmount(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))}
+                      placeholder={suggested ? suggested.toLocaleString('en-US') : ''}
                       autoFocus
                       style={{
                         flex: 1, minWidth: 0, border: 'none', outline: 'none',

@@ -395,11 +395,12 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'var(--c-canvas,#faf9f7)', border: '2px solid var(--c-navy)', borderRadius: 10, overflow: 'hidden', minWidth: 0 }}>
                     <span style={{ fontSize: 14, color: 'var(--c-muted)', flexShrink: 0 }}>₫</span>
                     <input
-                      type="number"
-                      value={calcAmount}
-                      onChange={(e) => setCalcAmount(e.target.value)}
+                      type="text"
+                      inputMode="numeric"
+                      value={calcAmount ? Number(calcAmount).toLocaleString('en-US') : ''}
+                      onChange={(e) => setCalcAmount(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))}
                       placeholder="0"
-                      style={{ width: '100%', minWidth: 0, border: 'none', outline: 'none', fontSize: 16, fontWeight: 700, fontFamily: 'inherit', background: 'transparent', color: 'var(--c-ink)' }}
+                      style={{ width: '100%', minWidth: 0, border: 'none', outline: 'none', fontSize: 16, fontWeight: 700, fontFamily: 'inherit', background: 'transparent', color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}
                     />
                   </div>
                   {neededPerMonth > 0 && (
@@ -654,7 +655,7 @@ function InvOptionsModal({ inv, isVi, onClose, onHistory, onSell, onUnassign }: 
                   background: inv.gainPct >= 0 ? 'var(--c-pos-tint)' : 'var(--c-neg-tint)',
                   color: inv.gainPct >= 0 ? 'var(--c-pos)' : 'var(--c-neg)',
                 }}>
-                  {inv.gainPct >= 0 ? '+' : ''}{fmtPct(inv.gainPct)}
+                  {fmtPct(inv.gainPct)}
                 </span>
               )}
             </div>
@@ -1127,8 +1128,12 @@ function EditGoalModal({ open, onClose, goal, onSaved, isVi }: {
         </div>
         <div>
           <label style={{ fontSize: 13, color: 'var(--c-muted)', display: 'block', marginBottom: 6 }}>{isVi ? 'Số tiền mục tiêu (₫)' : 'Target amount (₫)'}</label>
-          <input type="number" value={target} onChange={(e) => setTarget(e.target.value)}
-            style={{ width: '100%', padding: '10px 12px', fontSize: 14, border: '1px solid var(--c-line)', borderRadius: 10, background: 'var(--c-card-2)', color: 'var(--c-ink)', boxSizing: 'border-box', fontFamily: 'inherit', outline: 'none' }} />
+          <input
+            type="text"
+            inputMode="numeric"
+            value={target ? Number(target).toLocaleString('en-US') : ''}
+            onChange={(e) => setTarget(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))}
+            style={{ width: '100%', padding: '10px 12px', fontSize: 14, border: '1px solid var(--c-line)', borderRadius: 10, background: 'var(--c-card-2)', color: 'var(--c-ink)', boxSizing: 'border-box', fontFamily: 'inherit', outline: 'none', fontVariantNumeric: 'tabular-nums' }} />
         </div>
         <div>
           <label style={{ fontSize: 13, color: 'var(--c-muted)', display: 'block', marginBottom: 6 }}>{isVi ? 'Hạn hoàn thành' : 'Target date'}</label>

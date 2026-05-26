@@ -321,9 +321,9 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop }:
                   <input
                     type="text"
                     inputMode="numeric"
-                    value={amount}
-                    onChange={(e) => { setAmount(e.target.value.replace(/[^0-9]/g, '')); setUnits('') }}
-                    placeholder="5.000.000"
+                    value={amount ? Number(amount).toLocaleString('en-US') : ''}
+                    onChange={(e) => { setAmount(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, '')); setUnits('') }}
+                    placeholder="5,000,000"
                     style={inputStyle}
                   />
                 </div>
@@ -386,9 +386,9 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop }:
                   <input
                     type="text"
                     inputMode="numeric"
-                    value={bankAmount}
-                    onChange={(e) => setBankAmount(e.target.value.replace(/[^0-9]/g, ''))}
-                    placeholder="10.000.000"
+                    value={bankAmount ? Number(bankAmount).toLocaleString('en-US') : ''}
+                    onChange={(e) => setBankAmount(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))}
+                    placeholder="10,000,000"
                     style={inputStyle}
                   />
                 </div>
@@ -464,9 +464,9 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop }:
                   <input
                     type="text"
                     inputMode="numeric"
-                    value={goldPrice}
-                    onChange={(e) => setGoldPrice(e.target.value.replace(/[^0-9]/g, ''))}
-                    placeholder="9.200.000"
+                    value={goldPrice ? Number(goldPrice).toLocaleString('en-US') : ''}
+                    onChange={(e) => setGoldPrice(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))}
+                    placeholder="9,200,000"
                     style={inputStyle}
                   />
                 </div>
