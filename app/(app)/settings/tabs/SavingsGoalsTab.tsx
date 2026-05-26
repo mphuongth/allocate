@@ -347,9 +347,10 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
               <div className="space-y-2">
                 <Label>{t('targetLabel')}</Label>
                 <Input
-                  type="number"
-                  value={formTargetAmount}
-                  onChange={(e) => setFormTargetAmount(e.target.value)}
+                  type="text"
+                  inputMode="numeric"
+                  value={formTargetAmount ? Number(formTargetAmount).toLocaleString('en-US') : ''}
+                  onChange={(e) => setFormTargetAmount(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))}
                   placeholder={t('targetPlaceholder')}
                 />
               </div>

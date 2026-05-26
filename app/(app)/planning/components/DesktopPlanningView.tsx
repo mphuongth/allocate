@@ -750,7 +750,15 @@ export default function DesktopPlanningView({
           <div style={{ display: 'grid', gap: 14 }}>
             <label style={{ display: 'grid', gap: 6 }}>
               <span style={labelStyle}>{isVI ? 'Thu nhập tháng (₫)' : 'Monthly income (₫)'}</span>
-              <input type="number" value={incomeVal} onChange={e => setIncomeVal(e.target.value)} autoFocus placeholder="e.g. 45000000" className="cn-input tabular" />
+              <input
+                type="text"
+                inputMode="numeric"
+                value={incomeVal ? Number(incomeVal).toLocaleString('en-US') : ''}
+                onChange={e => setIncomeVal(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))}
+                autoFocus
+                placeholder="e.g. 45,000,000"
+                className="cn-input tabular"
+              />
             </label>
             {incomeVal && Number(incomeVal) > 0 && (
               <div style={{ background: 'var(--c-navy-tint)', borderRadius: 8, padding: '6px 10px', fontSize: 12, color: 'var(--c-navy)', fontVariantNumeric: 'tabular-nums' }}>
