@@ -657,7 +657,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
               {/* Two-column body */}
               <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
               {/* Left column: goals, unallocated, insurance */}
-              <div style={{ flex: 1, minWidth: 0, paddingRight: 20 }}>
+              <div style={{ flex: 1, minWidth: 0, paddingTop: 20, paddingRight: 20 }}>
                 {/* Goals */}
                 {sortedGoals.length > 0 && (
                   <section style={{ marginBottom: 24 }}>
@@ -756,6 +756,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
               <div style={{
                 width: 300, flexShrink: 0,
                 borderLeft: '1px solid var(--c-line)',
+                paddingTop: 20,
                 paddingLeft: 20,
                 position: 'sticky',
                 top: 0,
