@@ -96,7 +96,9 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
 
   useEffect(() => {
     setTxLoading(true)
-    fetch(`/api/v1/investment-transactions?goal_id=${goal.goalId}&limit=200`)
+    // cache: 'no-store' — same reason as GoalDetailSheet: prevent the browser
+    // from serving a stale list after an assign-from-Unallocated.
+    fetch(`/api/v1/investment-transactions?goal_id=${goal.goalId}&limit=200`, { cache: 'no-store' })
       .then((r) => r.ok ? r.json() : { transactions: [] })
       .then((res) => setTransactions(res.transactions ?? []))
       .catch(() => setTransactions([]))

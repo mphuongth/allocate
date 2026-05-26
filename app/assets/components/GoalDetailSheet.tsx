@@ -656,7 +656,9 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
   useEffect(() => {
     if (!open || !goal) return
     setTxLoading(true)
-    fetch(`/api/v1/investment-transactions?goal_id=${goal.goalId}&limit=200`)
+    // cache: 'no-store' — without it the browser can serve a stale list when
+    // an investment was just (re)assigned to this goal in the same session.
+    fetch(`/api/v1/investment-transactions?goal_id=${goal.goalId}&limit=200`, { cache: 'no-store' })
       .then((r) => r.ok ? r.json() : { transactions: [] })
       .then((res) => setTransactions(res.transactions ?? []))
       .catch(() => setTransactions([]))
