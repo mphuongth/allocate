@@ -52,6 +52,24 @@ test.describe('Desktop overview layout', () => {
     await expect(page.getByTestId('desktop-page-title')).toContainText(/overview|tổng quan/i)
   })
 
+  test('Overview header has horizontal separator like other desktop pages', async ({ page }) => {
+    // Plan / Funds / Settings all render their page header with a 1px
+    // border-bottom against var(--c-line). Overview's header was missing it.
+    await expect(page.getByTestId('desktop-page-title')).toBeVisible({ timeout: 10_000 })
+    const headerEl = page.getByTestId('desktop-page-title').locator('xpath=ancestor::header[1]')
+    const borderBottomWidth = await headerEl.evaluate((el) => getComputedStyle(el).borderBottomWidth)
+    expect(borderBottomWidth).toBe('1px')
+  })
+
+  test('Add-transaction FAB is hidden at desktop viewport', async ({ page }) => {
+    // The mobile FAB ("Add transaction") was leaking onto desktop because its
+    // inline `display: flex` overrode the `md:hidden` class. Each desktop page
+    // already exposes its own add buttons in the header, so the FAB must not
+    // appear on md+ viewports.
+    const fab = page.getByRole('button', { name: 'Add transaction' })
+    await expect(fab).toBeHidden()
+  })
+
   test('unallocated section shows wallet icon header inside card', async ({ page }) => {
     await expect(page.getByTestId('unallocated-card-header')).toBeVisible({ timeout: 10_000 })
   })
