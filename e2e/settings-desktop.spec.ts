@@ -119,7 +119,7 @@ test('desktop: clicking Sync now triggers cron API calls', async ({ page }) => {
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
 test('desktop: Data section heading is visible', async ({ page }) => {
-  await expect(page.locator('[data-testid="desktop-settings-view"]').locator('text=Data')).toBeVisible()
+  await expect(page.locator('[data-testid="desktop-settings-view"]').getByText('Data', { exact: true })).toBeVisible()
 })
 
 test('desktop: Export data row is visible', async ({ page }) => {
