@@ -656,6 +656,10 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
   useEffect(() => {
     if (!open || !goal) return
     setTxLoading(true)
+    // The new server response is the source of truth — drop any locally
+    // hidden tx IDs from the unassign flow so a re-assigned tx isn't stuck
+    // behind the optimistic filter on subsequent refreshes.
+    setUnassignedIds([])
     // cache: 'no-store' — without it the browser can serve a stale list when
     // an investment was just (re)assigned to this goal in the same session.
     fetch(`/api/v1/investment-transactions?goal_id=${goal.goalId}&limit=200`, { cache: 'no-store' })

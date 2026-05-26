@@ -279,4 +279,53 @@ describe('GoalDetailSheet — refreshKey triggers refetch', () => {
       ).toBeGreaterThanOrEqual(2)
     )
   })
+
+  it('shows a tx again on refetch even if it was previously unassigned in the same session', async () => {
+    // Regression: the unassign flow appends the tx id to a local
+    // unassignedIds[] to hide the row optimistically. If the user then
+    // re-assigns the same tx (from Unallocated → goal A), the API
+    // response includes it but the optimistic filter still hides it.
+    // The refetch must clear unassignedIds so the new server response
+    // is the source of truth.
+    let assigned = true
+    const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (url.includes('/api/v1/investment-transactions') && (!init || init.method === undefined || init.method === 'GET')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ transactions: assigned ? [mockTx] : [] }),
+        })
+      }
+      if (url.includes('/api/v1/fund-investments?fund_id=')) {
+        return Promise.resolve({ ok: true, json: async () => ({ investments: [{ id: 'fi-1' }] }) })
+      }
+      if (url.includes('/api/v1/fund-investments/') && init?.method === 'PATCH') {
+        // Simulate that the unassign succeeded: the next GET will omit the tx
+        assigned = false
+        return Promise.resolve({ ok: true, json: async () => ({}) })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+    global.fetch = fetchMock
+
+    const { rerender } = render(<GoalDetailSheet {...baseProps} refreshKey={0} />)
+    await waitFor(() => screen.getByText('VNINDEX ETF'))
+
+    // 1) Unassign the tx
+    await userEvent.click(screen.getByRole('button', { name: /options/i }))
+    await waitFor(() => screen.getAllByText(/unassign from goal/i).length > 0)
+    await userEvent.click(screen.getAllByText(/unassign from goal/i)[0])
+    await waitFor(() => screen.getByText(/unassign from goal\?/i))
+    await userEvent.click(screen.getByRole('button', { name: /^unassign$/i }))
+
+    // 2) Row vanishes optimistically — unassignedIds contains the tx
+    await waitFor(() => expect(screen.queryByText('VNINDEX ETF')).not.toBeInTheDocument())
+
+    // 3) User re-assigns elsewhere; the server now returns the tx again.
+    // A dashboard refresh (refreshKey bump) must clear unassignedIds so the
+    // re-assigned tx becomes visible without a hard reload.
+    assigned = true
+    rerender(<GoalDetailSheet {...baseProps} refreshKey={1} />)
+
+    await waitFor(() => expect(screen.getByText('VNINDEX ETF')).toBeInTheDocument(), { timeout: 3_000 })
+  })
 })

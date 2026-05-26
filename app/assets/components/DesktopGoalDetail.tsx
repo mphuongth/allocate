@@ -96,6 +96,10 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
 
   useEffect(() => {
     setTxLoading(true)
+    // The new server response is the source of truth — drop any locally
+    // hidden tx IDs from the unassign flow so a re-assigned tx isn't stuck
+    // behind the optimistic filter on subsequent refreshes.
+    setUnassignedIds([])
     // cache: 'no-store' — same reason as GoalDetailSheet: prevent the browser
     // from serving a stale list after an assign-from-Unallocated.
     fetch(`/api/v1/investment-transactions?goal_id=${goal.goalId}&limit=200`, { cache: 'no-store' })
@@ -105,11 +109,9 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
       .finally(() => setTxLoading(false))
   }, [goal.goalId, refreshKey])
 
-  // Reset tab/local hidden state only when the selected goal itself changes,
-  // not when the parent simply refreshes data for the same goal.
+  // Reset tab when the selected goal itself changes.
   useEffect(() => {
     setTab('investments')
-    setUnassignedIds([])
   }, [goal.goalId])
 
   async function handleDelete() {
