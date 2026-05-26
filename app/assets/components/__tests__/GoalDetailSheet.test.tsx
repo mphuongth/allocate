@@ -250,3 +250,33 @@ describe('GoalDetailSheet — unassign from goal', () => {
     expect(writes.length).toBe(0)
   })
 })
+
+describe('GoalDetailSheet — refreshKey triggers refetch', () => {
+  it('refetches /investment-transactions when refreshKey changes', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/api/v1/investment-transactions')) {
+        return Promise.resolve({ ok: true, json: async () => ({ transactions: [mockTx] }) })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+    global.fetch = fetchMock
+
+    const { rerender } = render(<GoalDetailSheet {...baseProps} refreshKey={0} />)
+    await waitFor(() =>
+      expect(
+        (fetchMock.mock.calls as Array<[string]>).filter(
+          ([url]) => url.includes('/api/v1/investment-transactions?goal_id=goal-1')
+        ).length
+      ).toBe(1)
+    )
+
+    rerender(<GoalDetailSheet {...baseProps} refreshKey={1} />)
+    await waitFor(() =>
+      expect(
+        (fetchMock.mock.calls as Array<[string]>).filter(
+          ([url]) => url.includes('/api/v1/investment-transactions?goal_id=goal-1')
+        ).length
+      ).toBeGreaterThanOrEqual(2)
+    )
+  })
+})

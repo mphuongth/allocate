@@ -45,6 +45,13 @@ interface Props {
   open: boolean
   onClose: () => void
   onDataChanged: () => void
+  /**
+   * Monotonically increases each time the parent's dashboard data refreshes
+   * (e.g. after assigning an investment from Unallocated). Including it in
+   * the transactions-fetching useEffect ensures this sheet shows fresh data
+   * without requiring a hard page reload.
+   */
+  refreshKey?: number
 }
 
 const GD_COLORS: Record<string, string> = {
@@ -617,7 +624,7 @@ function UnassignConfirmSheet({
   )
 }
 
-export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: Props) {
+export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, refreshKey }: Props) {
   const isVI = useLocale() === 'vi'
   const [mounted, setMounted] = useState(false)
   const [activeTab, setActiveTab] = useState<'investments' | 'calculator' | 'history'>('investments')
@@ -654,7 +661,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: 
       .then((res) => setTransactions(res.transactions ?? []))
       .catch(() => setTransactions([]))
       .finally(() => setTxLoading(false))
-  }, [open, goal])
+  }, [open, goal, refreshKey])
 
   async function handleDelete() {
     if (!goal) return

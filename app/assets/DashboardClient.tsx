@@ -772,6 +772,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                     locale={locale}
                     onClose={() => setSelectedGoal(null)}
                     onDataChanged={() => { setSelectedGoal(null); fetchData({ force: true }) }}
+                    refreshKey={historyKey}
                   />
                 ) : selectedInsurance ? (
                   <DesktopInsuranceDetail
@@ -1004,6 +1005,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
         open={goalDetailOpen}
         onClose={() => setGoalDetailOpen(false)}
         onDataChanged={() => fetchData({ force: true })}
+        refreshKey={historyKey}
       />
 
       {/* Desktop: Add Transaction Sheet */}
