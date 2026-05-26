@@ -5,6 +5,7 @@ import { useLocale } from 'next-intl'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import { useTheme, type ThemeChoice } from '@/app/components/ThemeProvider'
+import { useNavigation } from '@/app/components/navigation/NavigationContext'
 import {
   Sun, Moon, Settings, RefreshCw, TrendingUp,
   CircleDollarSign, LogOut, Download, X, Check, Edit2,
@@ -121,6 +122,7 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
   const router = useRouter()
   const [, startTransition] = useTransition()
   const { theme: currentTheme, setTheme } = useTheme()
+  const { setUserName } = useNavigation()
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -214,6 +216,7 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
 
   async function handleSaveProfile() {
     setLocalDisplayName(profileName)
+    setUserName(profileName)
     setProfileSaved(true)
     await supabase.auth.updateUser({ data: { display_name: profileName } })
     setTimeout(() => { setProfileSaved(false); setShowProfile(false) }, 1400)

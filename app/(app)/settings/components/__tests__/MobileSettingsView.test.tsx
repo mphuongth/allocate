@@ -3,9 +3,10 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import MobileSettingsView from '../MobileSettingsView'
 
-const { signOutMock, updateUserMock } = vi.hoisted(() => ({
+const { signOutMock, updateUserMock, setUserNameMock } = vi.hoisted(() => ({
   signOutMock: vi.fn().mockResolvedValue({ error: null }),
   updateUserMock: vi.fn().mockResolvedValue({ data: { user: {} }, error: null }),
+  setUserNameMock: vi.fn(),
 }))
 
 vi.mock('next-intl', () => ({
@@ -19,7 +20,7 @@ vi.mock('next/navigation', () => ({
 }))
 
 vi.mock('@/app/components/navigation/NavigationContext', () => ({
-  useNavigation: () => ({ setMobileTopBar: vi.fn() }),
+  useNavigation: () => ({ setMobileTopBar: vi.fn(), setUserName: setUserNameMock }),
 }))
 
 vi.mock('@/app/components/ThemeProvider', () => ({
@@ -123,6 +124,20 @@ describe('MobileSettingsView — profile sheet', () => {
     await waitFor(() =>
       expect(updateUserMock).toHaveBeenCalledWith({ data: { display_name: 'Minh' } })
     )
+  })
+
+  it('pushes the new name to NavigationContext so the sidebar updates immediately', async () => {
+    // Without this, the sidebar avatar/name stays stale until the user
+    // refreshes the page, because the sidebar reads from NavigationContext
+    // rather than from the settings view's local state.
+    setUserNameMock.mockClear()
+    render(<MobileSettingsView {...defaultProps} />)
+    await userEvent.click(screen.getByRole('button', { name: /profile/i }))
+    const nameInput = screen.getByDisplayValue('Phuong')
+    await userEvent.clear(nameInput)
+    await userEvent.type(nameInput, 'Minh Phuong')
+    await userEvent.click(screen.getByRole('button', { name: /save/i }))
+    await waitFor(() => expect(setUserNameMock).toHaveBeenCalledWith('Minh Phuong'))
   })
 })
 

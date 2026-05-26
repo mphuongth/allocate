@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import Sidebar from '../Sidebar'
-import { NavigationProvider } from '../NavigationContext'
+import { NavigationProvider, useNavigation } from '../NavigationContext'
 
 vi.mock('next-intl', () => ({
   useTranslations: () => (key: string) => key,
@@ -94,5 +94,43 @@ describe('Sidebar — nav item hover', () => {
     const initialBg = activeLink.style.background
     fireEvent.mouseEnter(activeLink)
     expect(activeLink.style.background).toBe(initialBg)
+  })
+})
+
+describe('Sidebar — reacts to NavigationContext userName changes', () => {
+  function NameUpdater({ to }: { to: string }) {
+    const { setUserName } = useNavigation()
+    return (
+      <button type="button" data-testid="update-name" onClick={() => setUserName(to)}>
+        update
+      </button>
+    )
+  }
+
+  it('updates avatar initials when setUserName is called (no refresh required)', () => {
+    render(
+      <NavigationProvider userName="Alice Bob">
+        <Sidebar email="a@b.com" initials="AB" />
+        <NameUpdater to="Minh Phuong" />
+      </NavigationProvider>
+    )
+
+    expect(screen.getByText('AB')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('update-name'))
+    expect(screen.getByText('MP')).toBeInTheDocument()
+    expect(screen.queryByText('AB')).not.toBeInTheDocument()
+  })
+
+  it('updates the full-name label when setUserName is called', () => {
+    render(
+      <NavigationProvider userName="Alice Bob">
+        <Sidebar email="a@b.com" initials="AB" />
+        <NameUpdater to="Minh Phuong" />
+      </NavigationProvider>
+    )
+
+    expect(screen.getByText('Alice Bob')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('update-name'))
+    expect(screen.getByText('Minh Phuong')).toBeInTheDocument()
   })
 })

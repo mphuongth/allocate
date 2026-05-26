@@ -355,7 +355,7 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
   const locale = useLocale()
   const router = useRouter()
   const [, startTransition] = useTransition()
-  const { setMobileTopBar } = useNavigation()
+  const { setMobileTopBar, setUserName } = useNavigation()
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -634,6 +634,7 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
         onClose={() => setShowProfile(false)}
         onSave={async (name) => {
           setLocalDisplayName(name)
+          setUserName(name)
           await supabase.auth.updateUser({ data: { display_name: name } })
         }}
         displayName={localDisplayName}
