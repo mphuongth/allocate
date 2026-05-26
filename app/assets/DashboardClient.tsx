@@ -727,7 +727,9 @@ export default function DashboardClient({ userId }: { userId: string }) {
                             throw new Error(e ?? 'Failed to assign')
                           }
                         }
-                        fetchData({ force: true })
+                        // Delay refresh so the 1.5s success state in the modal
+                        // stays visible before UnallocatedSection unmounts
+                        setTimeout(() => fetchData({ force: true }), 2000)
                       }}
                     />
                   </div>

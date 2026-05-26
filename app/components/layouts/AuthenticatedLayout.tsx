@@ -30,10 +30,10 @@ function getDisplayName(email: string): string {
 
 // Pages that provide their own desktop top bar and don't need the shared Header.
 // Checked synchronously via usePathname so there is no flash on hard refresh.
-const PAGES_WITH_OWN_HEADER = new Set(['/dashboard', '/planning', '/funds'])
+const PAGES_WITH_OWN_HEADER = new Set(['/dashboard', '/planning', '/funds', '/settings'])
 
 // Pages that manage their own full-height desktop layout (no <main> padding/scroll on md+).
-const PAGES_WITH_FULL_HEIGHT_DESKTOP = new Set(['/planning', '/funds'])
+const PAGES_WITH_FULL_HEIGHT_DESKTOP = new Set(['/planning', '/funds', '/settings'])
 
 function AuthenticatedLayoutInner({ children, email, initials }: { children: React.ReactNode; email: string; initials: string }) {
   const { mobileTopBar } = useNavigation()

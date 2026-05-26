@@ -229,6 +229,10 @@
   from { opacity: 0; transform: scale(0.96); }
   to   { opacity: 1; transform: scale(1); }
 }
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
 @keyframes slide-right {
   from { opacity: 0; transform: translateX(16px); }
   to   { opacity: 1; transform: translateX(0); }
@@ -279,8 +283,8 @@
 }
 .cn-btn:hover { background: var(--c-card-2); }
 .cn-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.cn-btn.primary { background: var(--c-navy); color: #fff; border-color: var(--c-navy); }
-.cn-btn.primary:hover { background: var(--c-navy-2); border-color: var(--c-navy-2); }
+.cn-btn.primary { background: var(--c-btn-primary); color: #fff; border-color: var(--c-btn-primary); }
+.cn-btn.primary:hover { background: var(--c-btn-primary-hover); border-color: var(--c-btn-primary-hover); }
 .cn-btn.ghost { border: none; background: transparent; }
 .cn-btn.ghost:hover { background: var(--c-card-2); }
 
