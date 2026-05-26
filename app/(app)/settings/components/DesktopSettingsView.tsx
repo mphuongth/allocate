@@ -278,7 +278,7 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
               <div data-testid="desktop-profile-card" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                 <div style={{
                   width: 52, height: 52, borderRadius: 26,
-                  background: 'var(--c-navy)', color: '#fff',
+                  background: 'var(--c-btn-primary)', color: '#fff',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: 16, fontWeight: 700, letterSpacing: '0.02em', flexShrink: 0,
                 }}>
@@ -315,9 +315,9 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
                       onClick={() => switchLocale(o.v)}
                       style={{
                         padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 500,
-                        background: locale === o.v ? 'var(--c-navy)' : 'var(--c-card-2)',
+                        background: locale === o.v ? 'var(--c-btn-primary)' : 'var(--c-card-2)',
                         color: locale === o.v ? '#fff' : 'var(--c-muted)',
-                        border: `1px solid ${locale === o.v ? 'var(--c-navy)' : 'var(--c-line)'}`,
+                        border: `1px solid ${locale === o.v ? 'var(--c-btn-primary)' : 'var(--c-line)'}`,
                         cursor: 'pointer', fontFamily: 'inherit', transition: 'all 120ms',
                       }}
                     >
@@ -366,9 +366,9 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
                       style={{
                         display: 'flex', alignItems: 'center', gap: 6,
                         padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-                        background: currency === o.v ? 'var(--c-navy)' : 'var(--c-card-2)',
+                        background: currency === o.v ? 'var(--c-btn-primary)' : 'var(--c-card-2)',
                         color: currency === o.v ? '#fff' : 'var(--c-muted)',
-                        border: `1px solid ${currency === o.v ? 'var(--c-navy)' : 'var(--c-line)'}`,
+                        border: `1px solid ${currency === o.v ? 'var(--c-btn-primary)' : 'var(--c-line)'}`,
                         cursor: 'pointer', fontFamily: 'inherit', transition: 'all 120ms',
                       }}
                     >
