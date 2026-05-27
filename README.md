@@ -1,130 +1,113 @@
-# Cairn
+<div align="center">
 
-Personal finance, one stone at a time. A plan-and-track app for goals, investments, and monthly budgets — built with Next.js, Supabase, and Tailwind CSS. Supports Vietnamese and English.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="public/cairn-wordmark-dark.svg">
+  <img src="public/cairn-wordmark.svg" alt="Cairn" width="280">
+</picture>
+
+### Personal finance, one stone at a time.
+
+Plan, track, and visualize your financial journey — goals, investments, monthly budgets, insurance — all in one place. Bilingual (Vietnamese + English).
+
+**[Try the live app →](https://allocate-kohl.vercel.app/)**
+
+</div>
+
+---
 
 > A cairn is a stack of stones that marks a trail. Every saving, every fund, every monthly plan is a stone on your financial journey.
 
-Production: https://allocate-kohl.vercel.app/
+## What Cairn does
 
-## Features
+Cairn is a personal-finance webapp that turns the mental gymnastics of "where does my money go?" into a clear, visual trail. You set goals, log investments, and plan each month — Cairn shows you how every choice moves you forward.
 
-- **Asset Overview** — visualize your portfolio with interactive charts (funds, bank deposits, gold, insurance)
-- **Savings Goals** — track financial goals with progress monitoring and transaction assignment
-- **Investment Tracking** — record and monitor fund investments, bank savings, stocks, and gold
-- **Monthly Planning** — allocate monthly income across goals, fixed expenses, insurance, and one-off costs
-- **Auto-Populate** — fixed expenses and insurance fees automatically flow into each month's plan
-- **Insurance Tracking** — manage family insurance policies with annual-to-monthly fee calculations
-- **AI Chat** — ask questions about your portfolio via an AI assistant (multi-provider)
-- **i18n** — full English and Vietnamese support via next-intl
+## What you'll get
 
-## Tech Stack
+- **A single dashboard for your net worth** — see funds, bank deposits, gold, and stocks side by side with allocation breakdown and a sparkline of your portfolio history.
+- **Goals you can actually track** — set targets (house, retirement, emergency), assign transactions to them, and watch progress bars fill as you save.
+- **Monthly planning that doesn't break** — Cairn pulls your fixed expenses and insurance fees into each month's plan automatically. Override anything for a specific month without losing the defaults.
+- **Investment tracking across every asset type** — fund NAV updates, bank deposits with interest projections, gold by chỉ at live prices, stocks. Buy and sell flows for each.
+- **Insurance you don't dread** — family policies with annual-to-monthly fee calculations and per-member payment tracking.
+- **A real desktop + mobile experience** — fully redesigned layouts for both, not just a stretched mobile view. Dark mode included.
+- **Vietnamese & English** — every label, every plural, every currency format.
 
-| Concern | Library |
+## Quick start
+
+```bash
+# 1. Clone and install
+git clone https://github.com/mphuongth/allocate.git
+cd allocate
+npm install
+
+# 2. Configure Supabase
+cp .env.example .env.local
+# edit .env.local with your Supabase project URL + anon key
+
+# 3. Run the dev server
+npm run dev
+```
+
+Open <http://localhost:3000>.
+
+> The first time you sign up, Cairn will create the schema for your account via Supabase migrations. Make sure your Supabase project has run the migrations in `supabase/migrations/`.
+
+## Environment variables
+
+| Variable | Purpose | Required |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL | yes |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anonymous key | yes |
+
+## Scripts
+
+| Command | What it does |
+|---|---|
+| `npm run dev` | Start dev server (Turbopack) on port 3000 |
+| `npm run build` | Production build |
+| `npm run start` | Start production server (after `build`) |
+| `npm run lint` | ESLint |
+| `npm test` | Unit tests (Vitest, watch mode) |
+| `npm test -- --run` | Unit tests once |
+| `npm run test:coverage` | Coverage report |
+| `npm run test:e2e` | End-to-end tests (Playwright) |
+| `npm run test:e2e:ui` | Playwright UI mode |
+
+## Tech stack
+
+| Concern | Choice |
 |---|---|
 | Framework | Next.js 16 (App Router, Turbopack) |
 | Language | TypeScript |
 | Styling | Tailwind CSS 4, shadcn/ui |
-| Database & Auth | Supabase (PostgreSQL + Supabase Auth) |
-| AI | Vercel AI SDK (`ai`, `@ai-sdk/react`) |
+| Database & Auth | Supabase (PostgreSQL + Auth) |
 | Charts | Recharts |
 | i18n | next-intl |
+| Unit tests | Vitest + Testing Library |
+| E2E | Playwright |
 | Deployment | Vercel |
 
-## Getting Started
-
-Copy the environment template and fill in your Supabase credentials:
-
-```bash
-cp .env.example .env.local
-```
-
-Install dependencies and run the dev server:
-
-```bash
-npm install
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000).
-
-## Environment Variables
-
-| Variable | Description |
-|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anonymous key |
-
-AI chat requires additional provider keys (see `lib/chat-providers.ts`).
-
-## Project Structure
+## Project structure
 
 ```
 app/
 ├── page.tsx                  # Landing page (redirects to /dashboard if logged in)
-├── layout.tsx                # Root layout (fonts, theme, i18n, toast)
-├── globals.css               # Tailwind + CSS variables (light/dark tokens)
-│
 ├── (app)/                    # Protected routes (require auth)
-│   ├── layout.tsx            # App shell with sidebar + header
-│   ├── dashboard/            # Asset overview with charts and goal cards
-│   ├── funds/                # Fund library (add/edit/NAV refresh)
+│   ├── dashboard/            # Net-worth overview, goals, unallocated, insurance
+│   ├── funds/                # Fund library with NAV refresh
 │   ├── planning/             # Monthly planning with allocation summary
 │   └── settings/             # Goals, transactions, expenses, insurance tabs
-│
-├── savings-goals/[goalId]/   # Goal detail page with transaction history
-│
-├── auth/
-│   ├── login/
-│   ├── signup/
-│   └── callback/             # Supabase OAuth callback
-│
-├── api/
-│   ├── funds/                # Legacy fund routes
-│   └── v1/                   # REST API (all authenticated)
-│       ├── chat/             # AI chat endpoint
-│       ├── dashboard/        # Overview + history data
-│       ├── savings-goals/
-│       ├── investment-transactions/
-│       ├── fund-investments/
-│       ├── direct-savings/
-│       ├── fixed-expenses/
-│       ├── insurance-members/
-│       ├── insurance-savings/
-│       ├── monthly-plans/    # Plans with overrides, fund investments, other expenses
-│       ├── funds/refresh-nav/
-│       └── gold-price/
-│
-└── components/               # Page-level shared components
-    ├── ThemeProvider.tsx
-    ├── ThemeToggleButton.tsx
-    ├── LanguageSwitcher.tsx
-    ├── layouts/AuthenticatedLayout.tsx
-    └── navigation/           # Sidebar, Header, MobileDrawer, Breadcrumb, UserMenu
+├── savings-goals/[goalId]/   # Goal detail with transaction history
+├── auth/                     # Login / signup / OAuth callback
+├── api/v1/                   # Authenticated REST API
+└── components/               # Layouts, navigation, theme
 
 components/                   # App-wide shared components
-├── AuthProvider.tsx
-├── ChatWidget.tsx
-└── ui/                       # shadcn/ui primitives
-
-lib/
-├── supabase.ts               # Browser Supabase client
-├── supabase-server.ts        # Server Supabase client (RSC/API routes)
-├── chat-providers.ts         # AI provider configuration
-└── utils.ts                  # cn() utility
-
-messages/
-├── en.json                   # English translations
-└── vi.json                   # Vietnamese translations
-
-supabase/
-└── migrations/               # Database schema migrations
+lib/                          # Supabase clients, formatters, finance helpers
+messages/                     # en.json + vi.json (next-intl)
+supabase/migrations/          # Database schema migrations
+e2e/                          # Playwright specs
 ```
 
-## Scripts
+## Contributing
 
-```bash
-npm run dev      # Start dev server (Turbopack)
-npm run build    # Production build
-npm run start    # Start production server
-npm run lint     # ESLint
-```
+Cairn follows a strict branch-and-PR workflow — never push directly to `main`. Every change goes through a feature branch, PR, and Vercel preview review. See `CLAUDE.md` for the full development methodology (TDD + PR isolation).
