@@ -71,13 +71,14 @@ interface AllocationTotals {
 interface Props {
   data: DashboardData
   allocationTotals: AllocationTotals | null
+  goldUnits?: number
   locale: string
   refreshKey?: number
   navUpdatedAt?: string | null
   onDownloadReport: () => void
 }
 
-export default function DesktopNetWorthPanel({ data, allocationTotals, locale, refreshKey, navUpdatedAt, onDownloadReport }: Props) {
+export default function DesktopNetWorthPanel({ data, allocationTotals, goldUnits, locale, refreshKey, navUpdatedAt, onDownloadReport }: Props) {
   const { netWorth } = data
   const isPos = netWorth.overallProfitLoss >= 0
   const isVi = locale === 'vi'
@@ -190,12 +191,12 @@ export default function DesktopNetWorthPanel({ data, allocationTotals, locale, r
           ))}
         </div>
 
-        {/* Allocation bar */}
+        {/* Allocation bar + breakdown */}
         {segments.length > 0 && (
           <div style={{ marginTop: 16 }}>
             <div
               data-testid="allocation-bar"
-              style={{ display: 'flex', height: 7, borderRadius: 999, overflow: 'hidden', gap: 1.5 }}
+              style={{ display: 'flex', height: 7, borderRadius: 999, overflow: 'hidden', gap: 1.5, background: 'var(--c-card-2)' }}
             >
               {segments.map((seg, i) => (
                 <div
@@ -212,12 +213,30 @@ export default function DesktopNetWorthPanel({ data, allocationTotals, locale, r
                 />
               ))}
             </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 14px', marginTop: 10 }}>
-              {segments.map(seg => (
-                <div key={seg.type} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <div style={{ width: 7, height: 7, borderRadius: 2, background: seg.color, flexShrink: 0 }} />
-                  <span style={{ fontSize: 11, color: 'var(--c-muted)' }}>{seg.label}</span>
-                  <span style={{ fontSize: 11, fontWeight: 600 }}>{seg.pct.toFixed(0)}%</span>
+            {/* Breakdown — one row per segment */}
+            <div style={{ display: 'flex', flexDirection: 'column', marginTop: 10 }}>
+              {segments.map((seg, i) => (
+                <div
+                  key={seg.type}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'auto 1fr auto auto',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '7px 0',
+                    borderTop: i === 0 ? 'none' : '1px solid var(--c-line)',
+                  }}
+                >
+                  <div style={{ width: 8, height: 8, borderRadius: 2, background: seg.color, flexShrink: 0 }} />
+                  <span style={{ fontSize: 12, color: 'var(--c-ink)', fontWeight: 500 }}>{seg.label}</span>
+                  <span style={{ fontSize: 11, color: 'var(--c-muted)', fontVariantNumeric: 'tabular-nums', minWidth: 32, textAlign: 'right' }}>
+                    {seg.pct.toFixed(seg.pct < 10 ? 1 : 0)}%
+                  </span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums', minWidth: 64, textAlign: 'right' }}>
+                    {seg.type === 'gold' && goldUnits != null && goldUnits > 0
+                      ? (isVi ? `${goldUnits.toFixed(goldUnits < 10 ? 1 : 0)} chỉ` : `${goldUnits.toFixed(goldUnits < 10 ? 1 : 0)} ${goldUnits === 1 ? 'unit' : 'units'}`)
+                      : fmtCompact(seg.value)}
+                  </span>
                 </div>
               ))}
             </div>

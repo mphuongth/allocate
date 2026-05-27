@@ -137,6 +137,7 @@ export async function GET() {
   let totalAssets = 0
   let totalInvestedGlobal = 0
   const nonFundByType: Record<string, number> = { bank: 0, gold: 0, stock: 0 }
+  let goldUnits = 0  // total gold holdings in chỉ (after withdrawals)
 
   const unallocatedNonFunds: {
     transactionId: string; type: string; amount: number; currentValue: number; interestRate: number | null; expiryDate: string | null; investmentDate: string; notes: string | null; units: number | null
@@ -200,6 +201,9 @@ export async function GET() {
       totalAssets += currentValue
       totalInvestedGlobal += effectiveAmount
       if (tx.asset_type in nonFundByType) nonFundByType[tx.asset_type] += currentValue
+      if (tx.asset_type === 'gold' && effectiveUnits != null && effectiveUnits > 0) {
+        goldUnits += effectiveUnits
+      }
 
       if (tx.goal_id && goalMap.has(tx.goal_id)) {
         const goalEntry = goalMap.get(tx.goal_id)!
@@ -361,6 +365,7 @@ export async function GET() {
       nonFunds: unallocatedNonFunds,
     },
     byType: nonFundByType,
+    goldUnits,
     insurance: insuranceOutput,
   })
 }

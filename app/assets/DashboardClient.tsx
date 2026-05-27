@@ -95,6 +95,7 @@ export interface DashboardData {
   goals: GoalData[]
   unallocated: { totalValue: number; funds: FundBreakdownItem[]; nonFunds: NonFundUnallocatedItem[] }
   byType: { bank: number; gold: number; stock: number }
+  goldUnits?: number
   insurance: InsuranceData[]
 }
 
@@ -789,6 +790,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                   <DesktopNetWorthPanel
                     data={data}
                     allocationTotals={allocationTotals}
+                    goldUnits={data.goldUnits}
                     locale={locale}
                     refreshKey={historyKey}
                     navUpdatedAt={data.netWorth.navUpdatedAt}
@@ -811,6 +813,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                     bank: allocationTotals.bankTotal,
                     gold: allocationTotals.goldTotal,
                     stock: allocationTotals.stockTotal,
+                    goldUnits: data.goldUnits,
                   } : undefined}
                 />
               </div>

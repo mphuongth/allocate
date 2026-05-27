@@ -2,7 +2,10 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import NetWorthCard from '../NetWorthCard'
 
-vi.mock('next-intl', () => ({ useTranslations: () => (key: string) => key }))
+vi.mock('next-intl', () => ({
+  useTranslations: () => (key: string) => key,
+  useLocale: () => 'en',
+}))
 
 global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => [] })
 
@@ -36,5 +39,24 @@ describe('NetWorthCard', () => {
     render(<NetWorthCard {...baseProps} overallProfitLoss={-50_000_000} overallProfitLossPercentage={-10} />)
     const plEl = screen.getByText(/-50\.0M/)
     expect(plEl).toHaveStyle({ color: 'var(--c-neg)' })
+  })
+
+  it('renders allocation breakdown with amount column per segment', () => {
+    render(<NetWorthCard {...baseProps} allocationBar={{ fund: 300_000_000, bank: 110_000_000, gold: 0, stock: 40_000_000 }} />)
+    // Distinct values that don't collide with P/L (100M) so getByText is unambiguous
+    expect(screen.getByText(/300\.0M/)).toBeInTheDocument()
+    expect(screen.getByText(/110\.0M/)).toBeInTheDocument()
+    expect(screen.getByText(/40\.0M/)).toBeInTheDocument()
+  })
+
+  it('renders gold row with units (chỉ) when goldUnits provided', () => {
+    render(<NetWorthCard {...baseProps} allocationBar={{ fund: 100_000_000, bank: 0, gold: 80_000_000, stock: 0, goldUnits: 12 }} />)
+    expect(screen.getByText('12 units')).toBeInTheDocument()
+  })
+
+  it('falls back to monetary value for gold when goldUnits not provided', () => {
+    render(<NetWorthCard {...baseProps} allocationBar={{ fund: 100_000_000, bank: 0, gold: 80_000_000, stock: 0 }} />)
+    // No goldUnits → shows the compact value (80.0M)
+    expect(screen.getByText(/80\.0M/)).toBeInTheDocument()
   })
 })
