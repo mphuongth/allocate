@@ -61,6 +61,37 @@ test.describe('Desktop overview layout', () => {
     expect(borderBottomWidth).toBe('1px')
   })
 
+  test('Overview page header stays sticky when content scrolls', async ({ page }) => {
+    // Shrink viewport vertically so seeded content overflows <main> and we can
+    // actually scroll. Width stays at desktop so the two-column layout renders.
+    await page.setViewportSize({ width: 1280, height: 500 })
+    await page.reload()
+    await page.waitForLoadState('networkidle')
+    await expect(page.getByTestId('desktop-overview')).toBeVisible({ timeout: 10_000 })
+
+    const headerEl = page.getByTestId('desktop-page-title').locator('xpath=ancestor::header[1]')
+    await expect(headerEl).toBeVisible()
+
+    const initialBox = await headerEl.boundingBox()
+    expect(initialBox).not.toBeNull()
+
+    const scrolledTop = await page.evaluate(() => {
+      const main = document.querySelector('main')
+      if (!main) return -1
+      main.scrollTop = 400
+      return main.scrollTop
+    })
+    expect(scrolledTop).toBeGreaterThan(0)
+
+    // Allow layout to settle after scroll
+    await page.waitForTimeout(100)
+
+    const scrolledBox = await headerEl.boundingBox()
+    expect(scrolledBox).not.toBeNull()
+    // Sticky → header stays at same viewport y after scrolling main
+    expect(Math.round(scrolledBox!.y)).toBe(Math.round(initialBox!.y))
+  })
+
   test('Add-transaction FAB is hidden at desktop viewport', async ({ page }) => {
     // The mobile FAB ("Add transaction") was leaking onto desktop because its
     // inline `display: flex` overrode the `md:hidden` class. Each desktop page

@@ -630,8 +630,9 @@ export default function DashboardClient({ userId }: { userId: string }) {
               {/* Page title — layout matches Plan / Funds / Settings.
                   Negative margins escape <main>'s md:px-6 / py-4 so the
                   border-bottom and background span the full content width,
-                  flush against the sidebar like the other desktop pages. */}
-              <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '-16px -24px 0', padding: '20px 28px 16px', borderBottom: '1px solid var(--c-line)', background: 'var(--c-canvas)', flexShrink: 0 }}>
+                  flush against the sidebar like the other desktop pages.
+                  Sticky so it stays visible while the two-column body scrolls. */}
+              <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '-16px -24px 0', padding: '20px 28px 16px', borderBottom: '1px solid var(--c-line)', background: 'var(--c-canvas)', flexShrink: 0, position: 'sticky', top: 0, zIndex: 10 }}>
                 <div>
                   <div data-testid="desktop-page-title" style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--c-muted)', marginBottom: 3 }}>
                     {t('overview')}
@@ -760,16 +761,18 @@ export default function DashboardClient({ userId }: { userId: string }) {
 
               </div>
 
-              {/* Right column: net worth panel (sticky) */}
+              {/* Right column: net worth panel (sticky).
+                  top offset = sticky page-header height (~76px) so this column
+                  parks below the header instead of underneath it. */}
               <div style={{
                 width: 300, flexShrink: 0,
                 borderLeft: '1px solid var(--c-line)',
                 paddingTop: 20,
                 paddingLeft: 20,
                 position: 'sticky',
-                top: 0,
+                top: 76,
                 alignSelf: 'flex-start',
-                maxHeight: 'calc(100vh - 56px)',
+                maxHeight: 'calc(100vh - 56px - 76px)',
                 overflowY: 'auto',
               }}>
                 {selectedGoal ? (
