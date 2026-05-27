@@ -1,15 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { ValidationError, validateAmount, validateText, validateUUID } from '@/lib/validation'
-
-const YM_RE = /^\d{4}-(0[1-9]|1[0-2])$/
-
-function validateYearMonth(val: unknown, field: string): string {
-  if (typeof val !== 'string' || !YM_RE.test(val)) {
-    throw new ValidationError(`${field} must be in YYYY-MM format`)
-  }
-  return val
-}
+import { ValidationError, validateAmount, validateText, validateUUID, validateYearMonth } from '@/lib/validation'
 
 function toDateCol(ym: string | undefined | null): string | null {
   if (!ym) return null

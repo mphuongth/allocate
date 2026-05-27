@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { ValidationError, validateAmount, validateDate, validateEnum, validateText, validateUUID } from '@/lib/validation'
+import { ValidationError, validateAmount, validateEnum, validateText, validateUUID, validateYearMonth } from '@/lib/validation'
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -54,7 +54,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       cleanTargetAmount = amt
     }
     if (target_date) {
-      cleanTargetDate = validateDate(target_date, 'target_date')
+      cleanTargetDate = validateYearMonth(target_date, 'target_date')
     }
     if (icon != null && icon !== '') {
       cleanIcon = validateEnum(icon, ['mountains', 'home', 'shield', 'cart', 'target'] as const, 'icon')

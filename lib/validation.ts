@@ -108,6 +108,19 @@ export function validateDate(val: unknown, field: string): string {
   return val
 }
 
+// For month-precision fields (savings goal target month, fixed-expense
+// effective_from / effective_to), accepts YYYY-MM with a real calendar month.
+export function validateYearMonth(val: unknown, field: string): string {
+  if (typeof val !== 'string' || !/^\d{4}-\d{2}$/.test(val)) {
+    throw new ValidationError(`${field} must be in YYYY-MM format`)
+  }
+  const [, m] = val.split('-').map(Number)
+  if (m < 1 || m > 12) {
+    throw new ValidationError(`${field} has an invalid month`)
+  }
+  return val
+}
+
 export function validateEnum<T extends string>(
   val: unknown,
   allowed: readonly T[],

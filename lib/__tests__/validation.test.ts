@@ -6,6 +6,7 @@ import {
   validateNotes,
   validateUUID,
   validateDate,
+  validateYearMonth,
   validateEnum,
   ValidationError,
 } from '../validation'
@@ -186,6 +187,26 @@ describe('validateDate', () => {
   it('rejects non-string values', () => {
     expect(() => validateDate(20260527, 'investment_date')).toThrow(ValidationError)
     expect(() => validateDate(undefined, 'investment_date')).toThrow(ValidationError)
+  })
+})
+
+describe('validateYearMonth', () => {
+  it('accepts a YYYY-MM value', () => {
+    expect(validateYearMonth('2028-06', 'target_date')).toBe('2028-06')
+  })
+
+  it('rejects a YYYY-MM-DD value (too specific)', () => {
+    expect(() => validateYearMonth('2028-06-15', 'target_date')).toThrow(ValidationError)
+  })
+
+  it('rejects a value with an invalid month', () => {
+    expect(() => validateYearMonth('2028-13', 'target_date')).toThrow(ValidationError)
+    expect(() => validateYearMonth('2028-00', 'target_date')).toThrow(ValidationError)
+  })
+
+  it('rejects non-string values', () => {
+    expect(() => validateYearMonth(202806, 'target_date')).toThrow(ValidationError)
+    expect(() => validateYearMonth(undefined, 'target_date')).toThrow(ValidationError)
   })
 })
 
