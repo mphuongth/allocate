@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useTranslations } from 'next-intl'
+import { useLocale, useTranslations } from 'next-intl'
 import { TrendingUp, TrendingDown } from 'lucide-react'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 
@@ -48,34 +48,69 @@ const ALLOC_COLORS = {
   stock: '#7c3aed',
 } as const
 
-function AllocationBar({ fund, bank, gold, stock }: { fund: number; bank: number; gold: number; stock: number }) {
+function AllocationBar({ fund, bank, gold, stock, goldUnits, locale }: { fund: number; bank: number; gold: number; stock: number; goldUnits?: number; locale: string }) {
+  const isVi = locale === 'vi'
   const total = fund + bank + gold + stock
   if (total <= 0) return null
   const segments = [
-    { key: 'fund',  value: fund,  color: ALLOC_COLORS.fund,  label: 'Funds' },
-    { key: 'bank',  value: bank,  color: ALLOC_COLORS.bank,  label: 'Bank' },
-    { key: 'gold',  value: gold,  color: ALLOC_COLORS.gold,  label: 'Gold' },
-    { key: 'stock', value: stock, color: ALLOC_COLORS.stock, label: 'Stock' },
+    { key: 'fund',  value: fund,  color: ALLOC_COLORS.fund,  label: isVi ? 'Quỹ'       : 'Fund' },
+    { key: 'bank',  value: bank,  color: ALLOC_COLORS.bank,  label: isVi ? 'Tiết kiệm' : 'Bank' },
+    { key: 'gold',  value: gold,  color: ALLOC_COLORS.gold,  label: isVi ? 'Vàng'      : 'Gold' },
+    { key: 'stock', value: stock, color: ALLOC_COLORS.stock, label: isVi ? 'Cổ phiếu'  : 'Stock' },
   ].filter((s) => s.value > 0)
+
+  const formatDetail = (key: string, value: number) => {
+    if (key === 'gold' && goldUnits != null && goldUnits > 0) {
+      const u = goldUnits.toFixed(goldUnits < 10 ? 1 : 0)
+      if (isVi) return `${u} chỉ`
+      return `${u} ${goldUnits === 1 ? 'unit' : 'units'}`
+    }
+    return fmtCompact(value)
+  }
+
   return (
     <div data-testid="allocation-bar" style={{ marginTop: 14 }}>
       {/* Bar */}
-      <div style={{ height: 8, borderRadius: 999, overflow: 'hidden', display: 'flex', gap: 1 }}>
-        {segments.map((s) => (
-          <div key={s.key} style={{ flex: s.value / total, background: s.color, minWidth: 4 }} />
+      <div style={{ height: 8, borderRadius: 999, overflow: 'hidden', display: 'flex', gap: 1, background: 'var(--c-card-2)' }}>
+        {segments.map((s, i) => (
+          <div
+            key={s.key}
+            style={{
+              flex: s.value / total,
+              background: s.color,
+              minWidth: 4,
+              borderRadius: i === 0 ? '999px 0 0 999px' : i === segments.length - 1 ? '0 999px 999px 0' : 0,
+            }}
+          />
         ))}
       </div>
-      {/* Legend */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 12px', marginTop: 8 }}>
-        {segments.map((s) => (
-          <div key={s.key} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <span style={{ width: 8, height: 8, borderRadius: 2, background: s.color, display: 'inline-block', flexShrink: 0 }} />
-            <span style={{ fontSize: 11, color: 'var(--c-muted)' }}>{s.label}</span>
-            <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>
-              {Math.round((s.value / total) * 100)}%
-            </span>
-          </div>
-        ))}
+      {/* Breakdown — one row per segment */}
+      <div style={{ display: 'flex', flexDirection: 'column', marginTop: 10 }}>
+        {segments.map((s, i) => {
+          const pct = (s.value / total) * 100
+          return (
+            <div
+              key={s.key}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'auto 1fr auto auto',
+                alignItems: 'center',
+                gap: 8,
+                padding: '8px 0',
+                borderTop: i === 0 ? 'none' : '1px solid var(--c-line)',
+              }}
+            >
+              <span style={{ width: 8, height: 8, borderRadius: 2, background: s.color, display: 'inline-block', flexShrink: 0 }} />
+              <span style={{ fontSize: 13, color: 'var(--c-ink)', fontWeight: 500 }}>{s.label}</span>
+              <span style={{ fontSize: 12, color: 'var(--c-muted)', fontVariantNumeric: 'tabular-nums', minWidth: 36, textAlign: 'right' }}>
+                {pct.toFixed(pct < 10 ? 1 : 0)}%
+              </span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums', minWidth: 64, textAlign: 'right' }}>
+                {formatDetail(s.key, s.value)}
+              </span>
+            </div>
+          )
+        })}
       </div>
     </div>
   )
@@ -89,7 +124,7 @@ interface Props {
   currentValue: number
   overallProfitLoss: number
   overallProfitLossPercentage: number
-  allocationBar?: { fund: number; bank: number; gold: number; stock: number }
+  allocationBar?: { fund: number; bank: number; gold: number; stock: number; goldUnits?: number }
   refreshKey?: number
 }
 
@@ -97,6 +132,7 @@ export default function NetWorthCard({
   totalAssets, totalLiabilities, netWorth, totalInvested, currentValue,
   overallProfitLoss, overallProfitLossPercentage, allocationBar, refreshKey,
 }: Props) {
+  const locale = useLocale()
   const t = useTranslations('dashboard')
   const plPositive = overallProfitLoss >= 0
   const [timeRange, setTimeRange] = useState<TimeRange>('1Y')
@@ -216,7 +252,7 @@ export default function NetWorthCard({
       </div>
 
       {/* Allocation bar */}
-      {allocationBar && <AllocationBar {...allocationBar} />}
+      {allocationBar && <AllocationBar {...allocationBar} locale={locale} />}
     </div>
   )
 }
