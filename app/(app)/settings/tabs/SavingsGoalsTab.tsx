@@ -373,7 +373,7 @@ export default function SavingsGoalsTab({ initialGoalId, onGoalChange }: Props) 
                     <p className="mt-1 text-lg font-semibold tabular-nums text-[#0F2A4A] dark:text-blue-200">{fmt(Math.round(perMonth))} / {t('month')}</p>
                   </div>
                   <span className="rounded-full bg-white dark:bg-blue-900/40 px-3 py-1 text-xs font-medium text-[#0F2A4A] dark:text-blue-300">
-                    {monthsLeft} {t('month')}
+                    {t('monthsCount', { n: monthsLeft ?? 0 })}
                   </span>
                 </div>
               )}

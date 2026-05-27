@@ -591,7 +591,7 @@ export default function DesktopFundLibraryView() {
 
         {/* Fund count */}
         <div style={{ fontSize: 12, color: 'var(--c-muted)', marginBottom: 10 }}>
-          {displayFunds.length} {displayFunds.length === 1 ? 'fund' : 'funds'}
+          {t('fundsCount', { count: displayFunds.length })}
         </div>
 
         {/* Table or states */}

@@ -110,7 +110,7 @@ export default function GoalCard({
         }}>
           {profitLoss >= 0 ? '+' : ''}{fmtCompact(profitLoss)} · {fmtPct(profitLossPercentage)}
         </span>
-        <span>{transactionCount} {t('transactions')}</span>
+        <span>{t('transactions', { count: transactionCount })}</span>
       </div>
     </button>
   )

@@ -60,4 +60,17 @@ describe('GoalCard', () => {
     await userEvent.click(screen.getByText('Emergency Fund'))
     expect(onClick).toHaveBeenCalled()
   })
+
+  it('passes transactionCount to the transactions label so ICU pluralization can resolve', () => {
+    // Mocked next-intl returns `${key}:${JSON.stringify(params)}` when params are passed.
+    // Asserting on this confirms the call site sends the count to next-intl,
+    // which is what enables "1 transaction" vs "5 transactions" in real en.json.
+    render(<GoalCard {...baseProps} transactionCount={1} />)
+    expect(screen.getByText('transactions:{"count":1}')).toBeInTheDocument()
+  })
+
+  it('passes plural transactionCount to the transactions label', () => {
+    render(<GoalCard {...baseProps} transactionCount={5} />)
+    expect(screen.getByText('transactions:{"count":5}')).toBeInTheDocument()
+  })
 })
