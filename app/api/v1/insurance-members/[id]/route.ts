@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { ValidationError, validateAmount, validateDate, validateText, validateUUID } from '@/lib/validation'
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -11,32 +12,35 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   const { member_name, relationship, annual_payment_vnd, payment_date } = body
 
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
-  if (member_name !== undefined) {
-    if (!member_name || member_name.trim().length === 0) {
-      return NextResponse.json({ error: 'Member name is required.' }, { status: 400 })
+  let memberId: string
+
+  try {
+    memberId = validateUUID(id, 'member_id')
+
+    if (member_name !== undefined) {
+      updates.member_name = validateText(member_name, 'member_name')
     }
-    updates.member_name = member_name.trim()
-  }
-  if (relationship !== undefined) {
-    if (!relationship || relationship.trim().length === 0) {
-      return NextResponse.json({ error: 'Relationship is required.' }, { status: 400 })
+    if (relationship !== undefined) {
+      updates.relationship = validateText(relationship, 'relationship')
     }
-    updates.relationship = relationship.trim()
-  }
-  if (annual_payment_vnd !== undefined) {
-    const annualNum = Number(annual_payment_vnd)
-    if (isNaN(annualNum) || annualNum <= 0) {
-      return NextResponse.json({ error: 'Annual payment must be greater than 0.' }, { status: 400 })
+    if (annual_payment_vnd !== undefined) {
+      const n = validateAmount(annual_payment_vnd, 'annual_payment_vnd')
+      if (n <= 0) throw new ValidationError('Annual payment must be greater than 0.')
+      updates.annual_payment_vnd = n
+      // monthly_premium_vnd is a generated stored column — auto-recalculated by DB
     }
-    updates.annual_payment_vnd = annualNum
-    // monthly_premium_vnd is a generated stored column — auto-recalculated by DB
+    if (payment_date !== undefined) {
+      updates.payment_date = payment_date === null || payment_date === '' ? null : validateDate(payment_date, 'payment_date')
+    }
+  } catch (e) {
+    if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
+    throw e
   }
-  if (payment_date !== undefined) updates.payment_date = payment_date || null
 
   const { data: member, error } = await supabase
     .from('insurance_members')
     .update(updates)
-    .eq('member_id', id)
+    .eq('member_id', memberId)
     .eq('user_id', user.id)
     .select()
     .single()
@@ -47,6 +51,15 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+
+  let memberId: string
+  try {
+    memberId = validateUUID(id, 'member_id')
+  } catch (e) {
+    if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
+    throw e
+  }
+
   const supabase = await createSupabaseServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -54,7 +67,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const { error } = await supabase
     .from('insurance_members')
     .delete()
-    .eq('member_id', id)
+    .eq('member_id', memberId)
     .eq('user_id', user.id)
 
   if (error) return NextResponse.json({ error: 'Member not found' }, { status: 404 })

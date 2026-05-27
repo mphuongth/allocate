@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { ValidationError, validateAmount, validateDate, validateUUID } from '@/lib/validation'
 
 export async function GET(request: NextRequest) {
   const supabase = await createSupabaseServerClient()
@@ -50,24 +51,35 @@ export async function POST(request: NextRequest) {
   const body = await request.json()
   const { plan_id, fund_id, goal_id, amount_vnd, units_purchased, nav_at_purchase, investment_date } = body
 
-  if (!fund_id) return NextResponse.json({ error: 'Fund is required' }, { status: 400 })
+  let cleanFundId: string
+  let cleanAmount: number
+  let cleanUnits: number
+  let cleanNav: number
+  let cleanGoalId: string | null = null
+  let cleanPlanId: string | null = null
+  let cleanInvestmentDate: string
 
-  const amountNum = Number(amount_vnd)
-  const unitsNum = Number(units_purchased)
-  const navNum = Number(nav_at_purchase)
+  try {
+    if (!fund_id) throw new ValidationError('Fund is required')
+    cleanFundId = validateUUID(fund_id, 'fund_id')
+    cleanAmount = validateAmount(amount_vnd, 'amount_vnd')
+    if (cleanAmount <= 0) throw new ValidationError('Amount must be greater than 0')
+    cleanUnits = validateAmount(units_purchased, 'units_purchased')
+    if (cleanUnits <= 0) throw new ValidationError('Units must be greater than 0')
+    cleanNav = validateAmount(nav_at_purchase, 'nav_at_purchase')
+    if (cleanNav <= 0) throw new ValidationError('NAV at purchase must be positive')
+    if (goal_id) cleanGoalId = validateUUID(goal_id, 'goal_id')
+    if (plan_id) cleanPlanId = validateUUID(plan_id, 'plan_id')
+    cleanInvestmentDate = investment_date
+      ? validateDate(investment_date, 'investment_date')
+      : new Date().toISOString().slice(0, 10)
+  } catch (e) {
+    if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
+    throw e
+  }
 
-  if (!amount_vnd || isNaN(amountNum) || amountNum <= 0) {
-    return NextResponse.json({ error: 'Amount must be greater than 0' }, { status: 400 })
-  }
-  if (!units_purchased || isNaN(unitsNum) || unitsNum <= 0) {
-    return NextResponse.json({ error: 'Units must be greater than 0' }, { status: 400 })
-  }
-  if (!nav_at_purchase || isNaN(navNum) || navNum <= 0) {
-    return NextResponse.json({ error: 'NAV at purchase must be positive' }, { status: 400 })
-  }
-
-  if (plan_id) {
-    const { data: plan } = await supabase.from('monthly_plans').select('id').eq('id', plan_id).eq('user_id', user.id).single()
+  if (cleanPlanId) {
+    const { data: plan } = await supabase.from('monthly_plans').select('id').eq('id', cleanPlanId).eq('user_id', user.id).single()
     if (!plan) return NextResponse.json({ error: 'Plan not found' }, { status: 404 })
   }
 
@@ -75,14 +87,14 @@ export async function POST(request: NextRequest) {
     .from('investment_transactions')
     .insert({
       user_id: user.id,
-      plan_id: plan_id || null,
-      fund_id,
-      goal_id: goal_id || null,
+      plan_id: cleanPlanId,
+      fund_id: cleanFundId,
+      goal_id: cleanGoalId,
       asset_type: 'fund',
-      amount_vnd: amountNum,
-      units: unitsNum,
-      unit_price: navNum,
-      investment_date: investment_date || new Date().toISOString().slice(0, 10),
+      amount_vnd: cleanAmount,
+      units: cleanUnits,
+      unit_price: cleanNav,
+      investment_date: cleanInvestmentDate,
     })
     .select('transaction_id, fund_id, goal_id, amount_vnd, units, unit_price, investment_date, created_at, funds(id, name, nav), savings_goals(goal_name)')
     .single()

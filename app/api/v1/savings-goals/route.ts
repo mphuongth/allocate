@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { ValidationError, validateAmount, validateDate, validateEnum, validateText } from '@/lib/validation'
 
 function calcProjectedInterest(amount: number, rate: number | null, investmentDate: string): number {
   if (!rate) return 0
@@ -88,28 +89,47 @@ export async function POST(request: NextRequest) {
   const body = await request.json()
   const { goal_name, description, target_amount, target_date, icon, priority } = body
 
-  if (!goal_name || typeof goal_name !== 'string' || goal_name.trim().length === 0) {
-    return NextResponse.json({ error: 'Goal name is required.' }, { status: 400 })
-  }
+  let cleanGoalName: string
+  let cleanDescription: string | null = null
+  let cleanTargetAmount: number | null = null
+  let cleanTargetDate: string | null = null
+  let cleanIcon: string = 'target'
+  let cleanPriority: string = 'med'
 
-  const targetAmountVal = target_amount != null && target_amount !== '' ? Number(target_amount) : null
-  if (targetAmountVal !== null && (isNaN(targetAmountVal) || targetAmountVal <= 0)) {
-    return NextResponse.json({ error: 'Goal amount must be a positive number.' }, { status: 400 })
+  try {
+    cleanGoalName = validateText(goal_name, 'goal_name')
+    if (description != null && description !== '') {
+      cleanDescription = validateText(description, 'description', { max: 1000 })
+    }
+    if (target_amount != null && target_amount !== '') {
+      const amt = validateAmount(target_amount, 'target_amount')
+      if (amt <= 0) throw new ValidationError('target_amount must be positive')
+      cleanTargetAmount = amt
+    }
+    if (target_date) {
+      cleanTargetDate = validateDate(target_date, 'target_date')
+    }
+    if (icon != null && icon !== '') {
+      cleanIcon = validateEnum(icon, ['mountains', 'home', 'shield', 'cart', 'target'] as const, 'icon')
+    }
+    if (priority != null && priority !== '') {
+      cleanPriority = validateEnum(priority, ['low', 'med', 'high'] as const, 'priority')
+    }
+  } catch (e) {
+    if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
+    throw e
   }
-
-  const VALID_ICONS = ['mountains', 'home', 'shield', 'cart', 'target']
-  const VALID_PRIORITIES = ['low', 'med', 'high']
 
   const { data: goal, error } = await supabase
     .from('savings_goals')
     .insert({
       user_id: user.id,
-      goal_name: goal_name.trim(),
-      description: description?.trim() || null,
-      target_amount: targetAmountVal,
-      target_date: target_date || null,
-      icon: VALID_ICONS.includes(icon) ? icon : 'target',
-      priority: VALID_PRIORITIES.includes(priority) ? priority : 'med',
+      goal_name: cleanGoalName,
+      description: cleanDescription,
+      target_amount: cleanTargetAmount,
+      target_date: cleanTargetDate,
+      icon: cleanIcon,
+      priority: cleanPriority,
     })
     .select()
     .single()

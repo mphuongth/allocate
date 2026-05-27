@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { ValidationError, validateAmount } from '@/lib/validation'
 
 export async function GET(request: NextRequest) {
   const supabase = await createSupabaseServerClient()
@@ -145,23 +146,29 @@ export async function POST(request: NextRequest) {
   const body = await request.json()
   const { month, year, salary_vnd } = body
 
-  const monthNum = parseInt(month)
-  const yearNum = parseInt(year)
-  const salaryNum = Number(salary_vnd)
+  let monthNum: number
+  let yearNum: number
+  let cleanSalary: number
 
-  if (!month || monthNum < 1 || monthNum > 12) {
-    return NextResponse.json({ error: 'Month must be between 1 and 12' }, { status: 400 })
-  }
-  if (!year || yearNum < 2000) {
-    return NextResponse.json({ error: 'Invalid year' }, { status: 400 })
-  }
-  if (!salary_vnd || isNaN(salaryNum) || salaryNum <= 0) {
-    return NextResponse.json({ error: 'Salary must be positive' }, { status: 400 })
+  try {
+    monthNum = parseInt(month)
+    yearNum = parseInt(year)
+    if (!month || !Number.isFinite(monthNum) || monthNum < 1 || monthNum > 12) {
+      throw new ValidationError('Month must be between 1 and 12')
+    }
+    if (!year || !Number.isFinite(yearNum) || yearNum < 2000 || yearNum > 9999) {
+      throw new ValidationError('Invalid year')
+    }
+    cleanSalary = validateAmount(salary_vnd, 'salary_vnd')
+    if (cleanSalary <= 0) throw new ValidationError('Salary must be positive')
+  } catch (e) {
+    if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
+    throw e
   }
 
   const { data: plan, error } = await supabase
     .from('monthly_plans')
-    .insert({ user_id: user.id, month: monthNum, year: yearNum, salary_vnd: salaryNum })
+    .insert({ user_id: user.id, month: monthNum, year: yearNum, salary_vnd: cleanSalary })
     .select()
     .single()
 

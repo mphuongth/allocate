@@ -1,8 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { ValidationError, validateAmount, validateUUID } from '@/lib/validation'
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+
+  let planId: string
+  try {
+    planId = validateUUID(id, 'plan_id')
+  } catch (e) {
+    if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
+    throw e
+  }
+
   const supabase = await createSupabaseServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -10,7 +20,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const { data: plan, error } = await supabase
     .from('monthly_plans')
     .select('*')
-    .eq('id', id)
+    .eq('id', planId)
     .eq('user_id', user.id)
     .single()
 
@@ -20,6 +30,15 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+
+  let planId: string
+  try {
+    planId = validateUUID(id, 'plan_id')
+  } catch (e) {
+    if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
+    throw e
+  }
+
   const supabase = await createSupabaseServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -28,7 +47,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const { data: plan, error: fetchError } = await supabase
     .from('monthly_plans')
     .select('id, month, year, user_id')
-    .eq('id', id)
+    .eq('id', planId)
     .single()
 
   if (fetchError || !plan) return NextResponse.json({ error: 'Salary record not found' }, { status: 404 })
@@ -36,7 +55,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
 
   // Delete child records, then the plan
   // investment_transactions.plan_id has ON DELETE SET NULL — no explicit delete needed
-  const overrideDel = await supabase.from('fixed_expense_overrides').delete().eq('plan_id', id)
+  const overrideDel = await supabase.from('fixed_expense_overrides').delete().eq('plan_id', planId)
 
   if (overrideDel.error) {
     return NextResponse.json({ error: 'Failed to delete salary record. Please try again.' }, { status: 500 })
@@ -45,7 +64,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const { error: planError } = await supabase
     .from('monthly_plans')
     .delete()
-    .eq('id', id)
+    .eq('id', planId)
     .eq('user_id', user.id)
 
   if (planError) {
@@ -53,7 +72,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   }
 
   return NextResponse.json({
-    data: { id, status: 'deleted', month: plan.month, year: plan.year },
+    data: { id: planId, status: 'deleted', month: plan.month, year: plan.year },
     message: 'Salary record deleted successfully',
   })
 }
@@ -65,16 +84,22 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const salaryNum = Number(body.salary_vnd)
 
-  if (!body.salary_vnd || isNaN(salaryNum) || salaryNum <= 0) {
-    return NextResponse.json({ error: 'Salary must be positive' }, { status: 400 })
+  let planId: string
+  let cleanSalary: number
+  try {
+    planId = validateUUID(id, 'plan_id')
+    cleanSalary = validateAmount(body.salary_vnd, 'salary_vnd')
+    if (cleanSalary <= 0) throw new ValidationError('Salary must be positive')
+  } catch (e) {
+    if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
+    throw e
   }
 
   const { data: plan, error } = await supabase
     .from('monthly_plans')
-    .update({ salary_vnd: salaryNum, updated_at: new Date().toISOString() })
-    .eq('id', id)
+    .update({ salary_vnd: cleanSalary, updated_at: new Date().toISOString() })
+    .eq('id', planId)
     .eq('user_id', user.id)
     .select()
     .single()

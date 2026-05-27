@@ -1,5 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { ValidationError, validateAmount, validateText } from '@/lib/validation'
+
+const YM_RE = /^\d{4}-(0[1-9]|1[0-2])$/
+
+function validateYearMonth(val: unknown, field: string): string {
+  if (typeof val !== 'string' || !YM_RE.test(val)) {
+    throw new ValidationError(`${field} must be in YYYY-MM format`)
+  }
+  return val
+}
 
 function toDateCol(ym: string | undefined | null): string | null {
   if (!ym) return null
@@ -44,19 +54,26 @@ export async function POST(request: NextRequest) {
   const body = await request.json()
   const { expense_name, amount_vnd, category, effective_from, effective_to } = body
 
-  if (!expense_name || typeof expense_name !== 'string' || expense_name.trim().length === 0) {
-    return NextResponse.json({ error: 'Expense name is required.' }, { status: 400 })
-  }
-  if (!category || typeof category !== 'string' || category.trim().length === 0) {
-    return NextResponse.json({ error: 'Category is required.' }, { status: 400 })
-  }
-  const amountNum = Number(amount_vnd)
-  if (!amount_vnd || isNaN(amountNum) || amountNum <= 0) {
-    return NextResponse.json({ error: 'Amount must be greater than 0.' }, { status: 400 })
+  let cleanName: string
+  let cleanCategory: string
+  let cleanAmount: number
+  let cleanFromYm: string | null = null
+  let cleanToYm: string | null = null
+
+  try {
+    cleanName = validateText(expense_name, 'expense_name')
+    cleanCategory = validateText(category, 'category')
+    cleanAmount = validateAmount(amount_vnd, 'amount_vnd')
+    if (cleanAmount <= 0) throw new ValidationError('Amount must be greater than 0.')
+    if (effective_from) cleanFromYm = validateYearMonth(effective_from, 'effective_from')
+    if (effective_to) cleanToYm = validateYearMonth(effective_to, 'effective_to')
+  } catch (e) {
+    if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
+    throw e
   }
 
-  const fromDate = toDateCol(effective_from)
-  const toDate = toDateCol(effective_to)
+  const fromDate = toDateCol(cleanFromYm)
+  const toDate = toDateCol(cleanToYm)
   if (fromDate && toDate && fromDate > toDate) {
     return NextResponse.json({ error: '"Active from" must be before "Active until".' }, { status: 400 })
   }
@@ -65,9 +82,9 @@ export async function POST(request: NextRequest) {
     .from('fixed_expenses')
     .insert({
       user_id: user.id,
-      expense_name: expense_name.trim(),
-      amount_vnd: amountNum,
-      category: category.trim(),
+      expense_name: cleanName,
+      amount_vnd: cleanAmount,
+      category: cleanCategory,
       effective_from: fromDate,
       effective_to: toDate,
     })

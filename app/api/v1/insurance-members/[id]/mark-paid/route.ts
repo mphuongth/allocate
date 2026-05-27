@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
-
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+import { ValidationError, validateUUID } from '@/lib/validation'
 
 function err(status: number, code: string, message: string) {
   return NextResponse.json({ error: code, message }, { status })
@@ -11,8 +10,12 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params
 
   // 400 — UUID validation
-  if (!UUID_REGEX.test(id)) {
-    return err(400, 'INVALID_MEMBER_ID', 'Invalid member ID format')
+  let memberId: string
+  try {
+    memberId = validateUUID(id, 'member_id')
+  } catch (e) {
+    if (e instanceof ValidationError) return err(400, 'INVALID_MEMBER_ID', 'Invalid member ID format')
+    throw e
   }
 
   const supabase = await createSupabaseServerClient()
@@ -23,7 +26,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   const { data: member, error: fetchError } = await supabase
     .from('insurance_members')
     .select('member_id, user_id, member_name, annual_payment_vnd, monthly_premium_vnd, payment_date, updated_at')
-    .eq('member_id', id)
+    .eq('member_id', memberId)
     .single()
 
   if (fetchError || !member) return err(404, 'NOT_FOUND', 'Insurance member not found')
@@ -45,7 +48,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   const { count: savingsCount } = await supabase
     .from('insurance_savings')
     .select('*', { count: 'exact', head: true })
-    .eq('insurance_member_id', id)
+    .eq('insurance_member_id', memberId)
     .eq('user_id', user.id)
 
   // Delete all savings records first (reset balance to 0)
@@ -53,11 +56,11 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   const { error: deleteError } = await supabase
     .from('insurance_savings')
     .delete()
-    .eq('insurance_member_id', id)
+    .eq('insurance_member_id', memberId)
     .eq('user_id', user.id)
 
   if (deleteError) {
-    console.error('[mark-paid] Failed to delete savings', { user_id: user.id, member_id: id, error: deleteError.message })
+    console.error('[mark-paid] Failed to delete savings', { user_id: user.id, member_id: memberId, error: deleteError.message })
     return err(500, 'INTERNAL_ERROR', 'An error occurred while processing your request')
   }
 
@@ -69,25 +72,26 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       last_payment_date: todayISO,
       updated_at: now.toISOString(),
     })
-    .eq('member_id', id)
+    .eq('member_id', memberId)
     .eq('user_id', user.id)
     .select('updated_at')
     .single()
 
   if (updateError) {
-    console.error('[mark-paid] Failed to update last_payment_date', { user_id: user.id, member_id: id, error: updateError.message })
+    console.error('[mark-paid] Failed to update last_payment_date', { user_id: user.id, member_id: memberId, error: updateError.message })
     return err(500, 'INTERNAL_ERROR', 'An error occurred while processing your request')
   }
 
   const updatedAt = updated?.updated_at ?? now.toISOString()
   const deletedCount = savingsCount ?? 0
 
-  // Audit log
-  console.log(`[AUDIT] User ${user.id} marked member ${id} as paid. Deleted ${deletedCount} savings records at ${now.toISOString()}`)
+  // Audit log — log the action with deletion count, not raw user/member UUIDs.
+  // The Vercel request ID (in headers) is the trace key if we need to correlate.
+  console.log(`[AUDIT] mark-paid: deleted ${deletedCount} savings records at ${now.toISOString()}`)
 
   return NextResponse.json({
     data: {
-      member_id: id,
+      member_id: memberId,
       name: member.member_name,
       amount_saved: 0,
       payment_date: nextPaymentDate,

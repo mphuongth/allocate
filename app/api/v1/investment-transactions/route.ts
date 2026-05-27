@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { ValidationError, validateAmount, validateDate, validateEnum, validateNotes, validateRate, validateUUID } from '@/lib/validation'
 
 const ASSET_TYPES = ['fund', 'bank', 'stock', 'gold'] as const
 
@@ -52,46 +53,73 @@ export async function POST(request: NextRequest) {
 
   const isWithdrawal = transaction_type === 'withdrawal'
 
-  if (!['investment', 'withdrawal'].includes(transaction_type)) {
-    return NextResponse.json({ error: 'Invalid transaction type.' }, { status: 400 })
-  }
+  let cleanTxType: 'investment' | 'withdrawal'
+  let cleanAssetType: typeof ASSET_TYPES[number] | null = null
+  let cleanInvestmentDate: string
+  let cleanAmount: number
+  let cleanUnitPrice: number | null = null
+  let cleanUnits: number | null = null
+  let cleanInterestRate: number | null = null
+  let cleanNotes: string | null = null
+  let cleanGoalId: string | null = null
+  let cleanFundId: string | null = null
+  let cleanPlanId: string | null = null
+  let cleanExpiryDate: string | null = null
+  let cleanParentTxId: string | null = null
+  let cleanPrincipalWithdrawn: number | null = null
+  let cleanUnitsWithdrawn: number | null = null
 
-  if (!isWithdrawal) {
-    if (!asset_type || !ASSET_TYPES.includes(asset_type)) {
-      return NextResponse.json({ error: 'Invalid asset type.' }, { status: 400 })
+  try {
+    cleanTxType = validateEnum(transaction_type, ['investment', 'withdrawal'] as const, 'transaction_type')
+
+    if (!isWithdrawal) {
+      cleanAssetType = validateEnum(asset_type, ASSET_TYPES, 'asset_type')
+      if (cleanAssetType === 'fund' && !fund_id) {
+        throw new ValidationError('fund_id is required for fund transactions')
+      }
+    } else if (asset_type) {
+      cleanAssetType = validateEnum(asset_type, ASSET_TYPES, 'asset_type')
     }
-    if (asset_type === 'fund' && !fund_id) {
-      return NextResponse.json({ error: 'Fund selection is required for fund transactions.' }, { status: 400 })
-    }
+
+    cleanInvestmentDate = validateDate(investment_date, 'investment_date')
+    cleanAmount = validateAmount(amount_vnd, 'amount_vnd')
+    if (cleanAmount <= 0) throw new ValidationError('amount_vnd must be positive')
+
+    if (unit_price != null && unit_price !== '') cleanUnitPrice = validateAmount(unit_price, 'unit_price')
+    if (units != null && units !== '') cleanUnits = validateAmount(units, 'units')
+    if (interest_rate != null && interest_rate !== '') cleanInterestRate = validateRate(interest_rate, 'interest_rate')
+    cleanNotes = validateNotes(notes)
+    if (goal_id) cleanGoalId = validateUUID(goal_id, 'goal_id')
+    if (fund_id) cleanFundId = validateUUID(fund_id, 'fund_id')
+    if (plan_id) cleanPlanId = validateUUID(plan_id, 'plan_id')
+    if (expiry_date) cleanExpiryDate = validateDate(expiry_date, 'expiry_date')
+    if (parent_transaction_id) cleanParentTxId = validateUUID(parent_transaction_id, 'parent_transaction_id')
+    if (principal_withdrawn != null && principal_withdrawn !== '') cleanPrincipalWithdrawn = validateAmount(principal_withdrawn, 'principal_withdrawn')
+    if (units_withdrawn != null && units_withdrawn !== '') cleanUnitsWithdrawn = validateAmount(units_withdrawn, 'units_withdrawn')
+  } catch (e) {
+    if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
+    throw e
   }
 
-
-  if (!investment_date) {
-    return NextResponse.json({ error: 'Investment date is required.' }, { status: 400 })
-  }
   // Allow future dates within the plan month (plan_id provided); otherwise reject future dates
-  if (!plan_id && new Date(investment_date) > new Date()) {
+  if (!cleanPlanId && new Date(cleanInvestmentDate) > new Date()) {
     return NextResponse.json({ error: 'Investment date cannot be in the future.' }, { status: 400 })
-  }
-  const amountNum = Number(amount_vnd)
-  if (!amount_vnd || isNaN(amountNum) || amountNum <= 0) {
-    return NextResponse.json({ error: 'Amount must be greater than 0.' }, { status: 400 })
   }
 
   // Verify goal ownership if provided
-  if (goal_id) {
+  if (cleanGoalId) {
     const { data: goal } = await supabase
       .from('savings_goals')
       .select('goal_id')
-      .eq('goal_id', goal_id)
+      .eq('goal_id', cleanGoalId)
       .eq('user_id', user.id)
       .single()
     if (!goal) return NextResponse.json({ error: "You don't have permission to access this goal." }, { status: 403 })
   }
 
   // Verify plan ownership if provided
-  if (plan_id) {
-    const { data: plan } = await supabase.from('monthly_plans').select('id').eq('id', plan_id).eq('user_id', user.id).single()
+  if (cleanPlanId) {
+    const { data: plan } = await supabase.from('monthly_plans').select('id').eq('id', cleanPlanId).eq('user_id', user.id).single()
     if (!plan) return NextResponse.json({ error: 'Plan not found' }, { status: 404 })
   }
 
@@ -99,21 +127,21 @@ export async function POST(request: NextRequest) {
     .from('investment_transactions')
     .insert({
       user_id: user.id,
-      goal_id: goal_id || null,
-      transaction_type,
-      asset_type: isWithdrawal ? (asset_type || null) : asset_type,
-      investment_date,
-      amount_vnd: amountNum,
-      unit_price: unit_price ? Number(unit_price) : null,
-      units: units ? Number(units) : null,
-      interest_rate: interest_rate ? Number(interest_rate) : null,
-      notes: notes?.trim() || null,
-      fund_id: asset_type === 'fund' ? (fund_id || null) : null,
-      plan_id: plan_id || null,
-      expiry_date: expiry_date || null,
-      parent_transaction_id: parent_transaction_id || null,
-      principal_withdrawn: principal_withdrawn ? Number(principal_withdrawn) : null,
-      units_withdrawn: units_withdrawn ? Number(units_withdrawn) : null,
+      goal_id: cleanGoalId,
+      transaction_type: cleanTxType,
+      asset_type: cleanAssetType,
+      investment_date: cleanInvestmentDate,
+      amount_vnd: cleanAmount,
+      unit_price: cleanUnitPrice,
+      units: cleanUnits,
+      interest_rate: cleanInterestRate,
+      notes: cleanNotes,
+      fund_id: cleanAssetType === 'fund' ? cleanFundId : null,
+      plan_id: cleanPlanId,
+      expiry_date: cleanExpiryDate,
+      parent_transaction_id: cleanParentTxId,
+      principal_withdrawn: cleanPrincipalWithdrawn,
+      units_withdrawn: cleanUnitsWithdrawn,
       affects_progress: isWithdrawal ? (affects_progress !== false) : true,
     })
     .select()

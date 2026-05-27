@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { ValidationError, validateAmount, validateDate, validateUUID } from '@/lib/validation'
 
 interface BatchTransaction {
   fund_id: string
@@ -24,40 +25,54 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Cannot import more than 500 transactions at once.' }, { status: 400 })
   }
 
-  // Verify all fund_ids belong to the user
-  const fundIds = [...new Set(transactions.map((t) => t.fund_id))]
-  const { data: userFunds } = await supabase
-    .from('funds')
-    .select('id')
-    .eq('user_id', user.id)
-    .in('id', fundIds)
-
-  const validFundIds = new Set((userFunds ?? []).map((f: { id: string }) => f.id))
-  const invalidFunds = fundIds.filter((id) => !validFundIds.has(id))
-  if (invalidFunds.length > 0) {
-    return NextResponse.json({ error: 'One or more fund IDs are invalid or do not belong to you.' }, { status: 403 })
-  }
-
   // Validate each row and collect errors
   const errors: { index: number; message: string }[] = []
-  const validRows: object[] = []
+  const validRows: { user_id: string; asset_type: string; fund_id: string; investment_date: string; amount_vnd: number; unit_price: number; units: number }[] = []
 
   transactions.forEach((tx, i) => {
-    if (!tx.investment_date) { errors.push({ index: i, message: 'investment_date is required' }); return }
-    if (!tx.amount_vnd || tx.amount_vnd <= 0) { errors.push({ index: i, message: 'amount_vnd must be > 0' }); return }
-    if (!tx.unit_price || tx.unit_price <= 0) { errors.push({ index: i, message: 'unit_price must be > 0' }); return }
-    if (!tx.units || tx.units <= 0) { errors.push({ index: i, message: 'units must be > 0' }); return }
+    try {
+      const fundId = validateUUID(tx.fund_id, 'fund_id')
+      const investmentDate = validateDate(tx.investment_date, 'investment_date')
+      const amount = validateAmount(tx.amount_vnd, 'amount_vnd')
+      if (amount <= 0) throw new ValidationError('amount_vnd must be > 0')
+      const unitPrice = validateAmount(tx.unit_price, 'unit_price')
+      if (unitPrice <= 0) throw new ValidationError('unit_price must be > 0')
+      const units = validateAmount(tx.units, 'units')
+      if (units <= 0) throw new ValidationError('units must be > 0')
 
-    validRows.push({
-      user_id: user.id,
-      asset_type: 'fund',
-      fund_id: tx.fund_id,
-      investment_date: tx.investment_date,
-      amount_vnd: tx.amount_vnd,
-      unit_price: tx.unit_price,
-      units: tx.units,
-    })
+      validRows.push({
+        user_id: user.id,
+        asset_type: 'fund',
+        fund_id: fundId,
+        investment_date: investmentDate,
+        amount_vnd: amount,
+        unit_price: unitPrice,
+        units: units,
+      })
+    } catch (e) {
+      if (e instanceof ValidationError) {
+        errors.push({ index: i, message: e.message })
+      } else {
+        throw e
+      }
+    }
   })
+
+  // Verify all fund_ids belong to the user (only ones that passed UUID validation)
+  const fundIds = [...new Set(validRows.map((t) => t.fund_id))]
+  if (fundIds.length > 0) {
+    const { data: userFunds } = await supabase
+      .from('funds')
+      .select('id')
+      .eq('user_id', user.id)
+      .in('id', fundIds)
+
+    const validFundIds = new Set((userFunds ?? []).map((f: { id: string }) => f.id))
+    const invalidFunds = fundIds.filter((id) => !validFundIds.has(id))
+    if (invalidFunds.length > 0) {
+      return NextResponse.json({ error: 'One or more fund IDs are invalid or do not belong to you.' }, { status: 403 })
+    }
+  }
 
   if (validRows.length === 0) {
     return NextResponse.json({ inserted: 0, errors }, { status: 400 })
