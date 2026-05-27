@@ -79,5 +79,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     .eq('user_id', user.id)
 
   if (error) return NextResponse.json({ error: 'Goal not found' }, { status: 404 })
-  return NextResponse.json({ message: `Goal deleted. ${count ?? 0} transactions moved to Unassigned Investments.` })
+  const n = count ?? 0
+  const txWord = n === 1 ? 'transaction' : 'transactions'
+  return NextResponse.json({ message: `Goal deleted. ${n} ${txWord} moved to Unassigned Investments.` })
 }
