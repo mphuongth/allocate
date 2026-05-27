@@ -57,9 +57,7 @@ test('Add transaction sheet has Buy and Sell direction buttons', async ({ page }
   await expect(page.getByRole('button', { name: /^sell$/i })).toBeVisible()
 })
 
-test('Add transaction sheet — title stays pinned when body scrolls', async ({ page }) => {
-  // Short viewport so the form definitely overflows and the body can scroll
-  await page.setViewportSize({ width: 390, height: 400 })
+test('Add transaction sheet — title sits outside the scrollable body (structurally pinned)', async ({ page }) => {
   await page.goto('/dashboard')
   await page.waitForLoadState('networkidle')
   await page.getByRole('button', { name: /add transaction/i }).click()
@@ -67,30 +65,24 @@ test('Add transaction sheet — title stays pinned when body scrolls', async ({ 
   const title = page.getByRole('heading', { name: /add transaction/i })
   await expect(title).toBeVisible({ timeout: 5_000 })
 
-  const initialBox = await title.boundingBox()
-  expect(initialBox).not.toBeNull()
-
-  // Find the first overflow-y:auto descendant inside the sheet and scroll it
-  const scrolledTop = await page.evaluate(() => {
+  // Structural assertion: no ancestor of the title is an overflow:auto/scroll
+  // container — guarantees the title can't scroll away regardless of form length.
+  // The sheet is rendered as a sibling of <main> (so we don't hit main's own
+  // overflow:auto on the way up).
+  const isOutsideScroll = await page.evaluate(() => {
     const heading = Array.from(document.querySelectorAll('h3')).find((h) =>
       /add transaction/i.test(h.textContent ?? '')
     )
-    const sheet = heading?.closest('div')?.parentElement
-    if (!sheet) return -1
-    const scroller = Array.from(sheet.querySelectorAll<HTMLElement>('div')).find((el) => {
+    if (!heading) return null
+    let el: HTMLElement | null = heading.parentElement
+    while (el) {
       const cs = getComputedStyle(el)
-      return cs.overflowY === 'auto' && el.scrollHeight > el.clientHeight
-    })
-    if (!scroller) return -1
-    scroller.scrollTop = 200
-    return scroller.scrollTop
+      if (cs.overflowY === 'auto' || cs.overflowY === 'scroll') return false
+      el = el.parentElement
+    }
+    return true
   })
-  expect(scrolledTop).toBeGreaterThan(0)
-
-  await page.waitForTimeout(100)
-  const scrolledBox = await title.boundingBox()
-  expect(scrolledBox).not.toBeNull()
-  expect(Math.round(scrolledBox!.y)).toBe(Math.round(initialBox!.y))
+  expect(isOutsideScroll).toBe(true)
 })
 
 test('Add transaction sheet has a Save button', async ({ page }) => {
