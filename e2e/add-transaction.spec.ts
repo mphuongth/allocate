@@ -57,6 +57,34 @@ test('Add transaction sheet has Buy and Sell direction buttons', async ({ page }
   await expect(page.getByRole('button', { name: /^sell$/i })).toBeVisible()
 })
 
+test('Add transaction sheet — title sits outside the scrollable body (structurally pinned)', async ({ page }) => {
+  await page.goto('/dashboard')
+  await page.waitForLoadState('networkidle')
+  await page.getByRole('button', { name: /add transaction/i }).click()
+
+  const title = page.getByRole('heading', { name: /add transaction/i })
+  await expect(title).toBeVisible({ timeout: 5_000 })
+
+  // Structural assertion: no ancestor of the title is an overflow:auto/scroll
+  // container — guarantees the title can't scroll away regardless of form length.
+  // The sheet is rendered as a sibling of <main> (so we don't hit main's own
+  // overflow:auto on the way up).
+  const isOutsideScroll = await page.evaluate(() => {
+    const heading = Array.from(document.querySelectorAll('h3')).find((h) =>
+      /add transaction/i.test(h.textContent ?? '')
+    )
+    if (!heading) return null
+    let el: HTMLElement | null = heading.parentElement
+    while (el) {
+      const cs = getComputedStyle(el)
+      if (cs.overflowY === 'auto' || cs.overflowY === 'scroll') return false
+      el = el.parentElement
+    }
+    return true
+  })
+  expect(isOutsideScroll).toBe(true)
+})
+
 test('Add transaction sheet has a Save button', async ({ page }) => {
   await page.goto('/dashboard')
   await page.waitForLoadState('networkidle')

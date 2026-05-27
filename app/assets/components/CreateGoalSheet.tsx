@@ -341,17 +341,16 @@ export function CreateGoalSheet({ open, onClose, onSuccess, desktop }: Props) {
           width: '100%', maxWidth: 480, maxHeight: '90dvh',
           background: 'var(--c-card)',
           borderTopLeftRadius: 20, borderTopRightRadius: 20,
-          padding: '8px 16px 32px',
-          overflowY: 'auto',
+          display: 'flex', flexDirection: 'column',
           animation: open ? 'slide-up 220ms cubic-bezier(0.2, 0.8, 0.2, 1)' : 'slide-down 180ms ease forwards',
           boxShadow: '0 -8px 24px rgba(0,0,0,0.12)',
         }}
       >
         {/* Drag handle */}
-        <div style={{ width: 36, height: 4, background: 'var(--c-line-strong, #cbd5e1)', borderRadius: 999, margin: '6px auto 14px' }} />
+        <div style={{ width: 36, height: 4, background: 'var(--c-line-strong, #cbd5e1)', borderRadius: 999, margin: '6px auto 14px', flexShrink: 0 }} />
 
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+        {/* Header — pinned, sits outside the scrollable body */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px 20px', flexShrink: 0 }}>
           <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600, color: 'var(--c-ink)' }}>{tg('newGoalTitle')}</h3>
           <button
             onClick={onClose}
@@ -362,7 +361,10 @@ export function CreateGoalSheet({ open, onClose, onSuccess, desktop }: Props) {
           </button>
         </div>
 
-        {formContent}
+        {/* Scrollable form body */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '0 16px 32px' }}>
+          {formContent}
+        </div>
       </div>
     </div>
   )

@@ -61,6 +61,30 @@ test.describe('Desktop overview layout', () => {
     expect(borderBottomWidth).toBe('1px')
   })
 
+  test('Overview page header sits outside any scrollable ancestor (structurally pinned)', async ({ page }) => {
+    // Structural assertion — the header is pinned because no ancestor between it
+    // and the desktop-overview wrapper is a scroll container. This is robust
+    // against viewport size / seeded data variability.
+    await expect(page.getByTestId('desktop-overview')).toBeVisible({ timeout: 10_000 })
+
+    const isOutsideScroll = await page.evaluate(() => {
+      const overview = document.querySelector('[data-testid="desktop-overview"]')
+      if (!overview) return null
+      const header = overview.querySelector('header')
+      if (!header) return null
+      // Walk up from header — must NOT encounter an overflow:auto/scroll ancestor
+      // before reaching the desktop-overview wrapper.
+      let el: HTMLElement | null = header.parentElement
+      while (el && el !== overview) {
+        const cs = getComputedStyle(el)
+        if (cs.overflowY === 'auto' || cs.overflowY === 'scroll') return false
+        el = el.parentElement
+      }
+      return true
+    })
+    expect(isOutsideScroll).toBe(true)
+  })
+
   test('Add-transaction FAB is hidden at desktop viewport', async ({ page }) => {
     // The mobile FAB ("Add transaction") was leaking onto desktop because its
     // inline `display: flex` overrode the `md:hidden` class. Each desktop page
