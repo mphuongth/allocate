@@ -51,4 +51,13 @@ setup('authenticate', async ({ page }) => {
     interest_rate: 6,
     transaction_type: 'investment',
   })
+
+  // Seed one insurance member so the insurance section is always visible
+  await admin.from('insurance_members').insert({
+    user_id: userId,
+    member_name: 'E2e Member',
+    relationship: 'Self',
+    annual_payment_vnd: 5_000_000,
+    payment_date: '2026-06-01',
+  })
 })

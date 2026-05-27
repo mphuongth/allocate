@@ -241,23 +241,24 @@ export function SellWithdrawSheet({ item, open, context, onClose, onSuccess }: P
           width: '100%', maxWidth: 480, maxHeight: '90dvh',
           background: 'var(--c-card)',
           borderTopLeftRadius: 20, borderTopRightRadius: 20,
-          padding: '8px 16px 32px',
-          overflowY: 'auto',
+          display: 'flex', flexDirection: 'column',
           animation: open ? 'slide-up 220ms cubic-bezier(0.2, 0.8, 0.2, 1)' : 'slide-down 180ms ease forwards',
           boxShadow: '0 -8px 24px rgba(0,0,0,0.12)',
         }}
       >
         {/* Drag handle */}
-        <div style={{ width: 36, height: 4, background: 'var(--c-line-strong, #cbd5e1)', borderRadius: 999, margin: '6px auto 14px' }} />
+        <div style={{ width: 36, height: 4, background: 'var(--c-line-strong, #cbd5e1)', borderRadius: 999, margin: '6px auto 14px', flexShrink: 0 }} />
 
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        {/* Header — pinned, sits outside the scrollable body */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px 16px', flexShrink: 0 }}>
           <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>{titleText}</h3>
           <button onClick={onClose} style={{ padding: 6, border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', color: 'var(--c-muted)', display: 'flex' }}>
             <X size={18} />
           </button>
         </div>
 
+        {/* Scrollable body — wraps both success and form states */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '0 16px 32px' }}>
         {confirmed ? (
           // ── Success state ────────────────────────────────────────────────
           <div data-testid="sell-success" style={{ padding: '32px 0', textAlign: 'center' }}>
@@ -446,6 +447,7 @@ export function SellWithdrawSheet({ item, open, context, onClose, onSuccess }: P
             </div>
           </div>
         )}
+        </div>
       </div>
     </div>
   )

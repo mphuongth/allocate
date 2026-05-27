@@ -91,6 +91,14 @@ const SORT_OPTIONS: Array<{ v: SortKey; l: string }> = [
 
 let toastSeq = 0
 
+// ─── Cross-view sync ──────────────────────────────────────────────────────────
+let _suppressNotify = false
+function notifyFundsUpdated() {
+  _suppressNotify = true
+  window.dispatchEvent(new CustomEvent('cairn:funds-updated'))
+  _suppressNotify = false
+}
+
 // ─── Sort dropdown ────────────────────────────────────────────────────────────
 
 function SortDropdown({ sortKey, sortAsc, onSort }: { sortKey: SortKey; sortAsc: boolean; onSort: (key: SortKey) => void }) {
@@ -267,21 +275,21 @@ function FundForm({ existing, title, onClose, onSave, saving, formError }: {
         </div>
       )}
       <div style={{ display: 'grid', gap: 6 }}>
-        <label style={labelStyle}>{t('nameLabel')} <span style={{ color: 'var(--c-neg)' }}>*</span></label>
+        <label style={labelStyle}>{t('nameLabel')}</label>
         <input value={name} onChange={(e) => setName(e.target.value)} maxLength={255} placeholder="e.g., Vanguard S&P 500 ETF" style={inputStyle} />
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
         <div style={{ display: 'grid', gap: 6 }}>
-          <label style={labelStyle}>{t('codeLabel')} <span style={{ color: 'var(--c-neg)' }}>*</span></label>
+          <label style={labelStyle}>{t('codeLabel')}</label>
           <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} maxLength={50} placeholder="e.g., VOO" style={{ ...inputStyle, fontFamily: 'var(--font-mono,monospace)' }} />
         </div>
         <div style={{ display: 'grid', gap: 6 }}>
-          <label style={labelStyle}>{t('typeLabel')} <span style={{ color: 'var(--c-neg)' }}>*</span></label>
+          <label style={labelStyle}>{t('typeLabel')}</label>
           <TypeDropdown value={type} onChange={setType} />
         </div>
       </div>
       <div style={{ display: 'grid', gap: 6 }}>
-        <label style={labelStyle}>{t('navLabel')} <span style={{ color: 'var(--c-neg)' }}>*</span></label>
+        <label style={labelStyle}>{t('navLabel')}</label>
         <input type="number" value={nav} onChange={(e) => setNav(e.target.value)} min="0.01" step="0.01" placeholder="e.g., 450.25" style={{ ...inputStyle, fontVariantNumeric: 'tabular-nums' }} />
       </div>
       <div style={{ display: 'grid', gap: 6 }}>
@@ -387,11 +395,10 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, onEdit, onDelete
             isEditing ? (
               <input
                 autoFocus
-                type="number"
-                min="1"
-                step="1"
-                value={dcaEditValue}
-                onChange={(e) => setDcaEditValue(e.target.value)}
+                type="text"
+                inputMode="numeric"
+                value={dcaEditValue ? Number(dcaEditValue).toLocaleString('en-US') : ''}
+                onChange={(e) => setDcaEditValue(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))}
                 onBlur={() => { onSaveDcaAmount(dcaEditValue); setDcaEditId(null) }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') { onSaveDcaAmount(dcaEditValue); setDcaEditId(null) }
@@ -487,6 +494,12 @@ export default function MobileFundLibraryView() {
 
   useEffect(() => { loadFunds() }, [loadFunds])
 
+  useEffect(() => {
+    const handler = () => { if (!_suppressNotify) loadFunds({ force: true }) }
+    window.addEventListener('cairn:funds-updated', handler)
+    return () => window.removeEventListener('cairn:funds-updated', handler)
+  }, [loadFunds])
+
   const handleRefreshNav = useCallback(async () => {
     setRefreshing(true)
     try {
@@ -496,6 +509,7 @@ export default function MobileFundLibraryView() {
       const failed = results.filter((r: { error?: string }) => r.error).length
       bustCache()
       await loadFunds({ force: true })
+      notifyFundsUpdated()
       addToast(`${updated} updated${failed ? `, ${failed} failed` : ''}`, failed > 0 && updated === 0 ? 'error' : 'success')
     } catch {
       addToast('Failed to refresh NAV', 'error')
@@ -573,6 +587,7 @@ export default function MobileFundLibraryView() {
       setEditFund(null)
       bustCache()
       await loadFunds({ force: true })
+      notifyFundsUpdated()
       addToast(existingId ? 'Fund updated' : 'Fund added')
     } catch {
       setFormError('Something went wrong. Please try again.')
@@ -590,6 +605,7 @@ export default function MobileFundLibraryView() {
       setDeleteFund(null)
       bustCache()
       await loadFunds({ force: true })
+      notifyFundsUpdated()
       addToast('Fund deleted')
     } catch {
       addToast('Failed to delete fund', 'error')
@@ -615,6 +631,7 @@ export default function MobileFundLibraryView() {
       if (!res.ok) throw new Error()
       bustCache()
       await loadFunds({ force: true })
+      notifyFundsUpdated()
     } catch {
       setFunds((prev) => prev.map((f) => f.id === fund.id ? { ...f, is_dca: true } : f))
       addToast('Failed to update DCA', 'error')
@@ -638,6 +655,7 @@ export default function MobileFundLibraryView() {
       if (!res.ok) throw new Error()
       bustCache()
       await loadFunds({ force: true })
+      notifyFundsUpdated()
     } catch {
       setFunds((prev) => prev.map((f) => f.id === fund.id ? { ...f, is_dca: false, dca_monthly_amount_vnd: null } : f))
       addToast('Failed to update DCA', 'error')

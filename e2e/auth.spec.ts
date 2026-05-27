@@ -106,3 +106,15 @@ test('login page has link to signup', async ({ page }) => {
   await page.goto('/auth/login')
   await expect(page.getByRole('link', { name: /sign up/i })).toBeVisible()
 })
+
+// ─── Desktop centered card layout ───────────────────────────────────────────
+
+test('login form is inside a card', async ({ page }) => {
+  await page.goto('/auth/login')
+  await expect(page.locator('[data-testid="auth-card"]')).toBeVisible()
+})
+
+test('signup form is inside a card', async ({ page }) => {
+  await page.goto('/auth/signup')
+  await expect(page.locator('[data-testid="auth-card"]')).toBeVisible()
+})

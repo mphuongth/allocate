@@ -37,7 +37,7 @@ test('create goal modal shows live save-per-month calculation', async ({ page })
 
   await expect(page.getByRole('dialog')).toBeVisible()
 
-  await page.locator('[role="dialog"] input[type="number"]').first().fill('120000000')
+  await page.locator('[role="dialog"] input[inputmode="numeric"]').first().fill('120000000')
   await page.locator('[role="dialog"] input[type="month"]').fill('2027-05')
 
   await expect(page.getByTestId('save-per-month')).toBeVisible()
@@ -53,7 +53,7 @@ test('create goal saves target_date icon and priority to db', async ({ page }) =
   await expect(page.getByRole('dialog')).toBeVisible()
 
   await page.locator('[role="dialog"] input[type="text"]').first().fill('E2E Icon Priority Goal')
-  await page.locator('[role="dialog"] input[type="number"]').first().fill('50000000')
+  await page.locator('[role="dialog"] input[inputmode="numeric"]').first().fill('50000000')
   await page.locator('[role="dialog"] input[type="month"]').fill('2028-06')
 
   // Select home icon
@@ -94,7 +94,7 @@ test('can create a new savings goal', async ({ page }) => {
 
   // Goal form has no htmlFor/id association on Label+Input, so use type selectors
   await page.locator('[role="dialog"] input[type="text"]').first().fill('E2E Test Goal')
-  await page.locator('[role="dialog"] input[type="number"]').first().fill('10000000')
+  await page.locator('[role="dialog"] input[inputmode="numeric"]').first().fill('10000000')
   await page.getByRole('dialog').getByRole('button', { name: /save|create|tạo|lưu/i }).click()
 
   await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 5_000 })

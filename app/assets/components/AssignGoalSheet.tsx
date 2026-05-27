@@ -1,15 +1,22 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Check } from 'lucide-react'
+import { Check, X, TrendingUp, Building2, Coins, ArrowRight } from 'lucide-react'
 import { useLocale } from 'next-intl'
-import { fmt } from '@/lib/formatters'
+import { fmt, fmtCompact } from '@/lib/formatters'
 
 interface GoalOption {
   id: string
   name: string
   currentValue: number
+  targetAmount: number | null
   progressPercent: number | null
+}
+
+interface AssignItem {
+  name: string
+  value: number
+  type: string
 }
 
 interface Props {
@@ -17,9 +24,23 @@ interface Props {
   onClose: () => void
   /** Called with the selected goalId. Should throw on failure. */
   onConfirm: (goalId: string) => Promise<void>
+  item?: AssignItem
+  desktop?: boolean
 }
 
-export default function AssignGoalSheet({ open, onClose, onConfirm }: Props) {
+const TYPE_ICON: Record<string, React.ElementType> = {
+  fund:  TrendingUp,
+  bank:  Building2,
+  gold:  Coins,
+}
+const TYPE_COLOR: Record<string, string> = {
+  fund:  '#2563eb',
+  bank:  '#047857',
+  gold:  '#d97706',
+  stock: '#7c3aed',
+}
+
+export default function AssignGoalSheet({ open, onClose, onConfirm, item, desktop }: Props) {
   const isVI = useLocale() === 'vi'
   const [mounted, setMounted] = useState(false)
   const [goals, setGoals] = useState<GoalOption[]>([])
@@ -37,14 +58,15 @@ export default function AssignGoalSheet({ open, onClose, onConfirm }: Props) {
       setError('')
       setSuccess(false)
       setGoalsLoading(true)
-      fetch('/api/v1/savings-goals')
+      fetch('/api/v1/savings-goals?stats=true')
         .then((r) => r.ok ? r.json() : { goals: [] })
-        .then((res: { goals?: Array<{ goal_id: string; goal_name: string; current_value?: number; progress_percentage?: number | null }> }) => {
+        .then((res: { goals?: Array<{ goal_id: string; goal_name: string; current_value?: number; target_amount?: number | null; progress_percentage?: number | null }> }) => {
           const rows = res.goals ?? []
           setGoals(rows.map((g) => ({
             id: g.goal_id,
             name: g.goal_name,
             currentValue: g.current_value ?? 0,
+            targetAmount: g.target_amount ?? null,
             progressPercent: g.progress_percentage ?? null,
           })))
         })
@@ -72,7 +94,186 @@ export default function AssignGoalSheet({ open, onClose, onConfirm }: Props) {
     setConfirming(false)
   }
 
-  if (!mounted) return null
+  if (desktop ? !open : !mounted) return null
+
+  const title = isVI ? 'Gán vào mục tiêu' : 'Assign to goal'
+  const selectedGoal = goals.find((g) => g.id === selected)
+
+  const ItemIcon = item ? (TYPE_ICON[item.type] ?? TrendingUp) : null
+  const itemIconColor = item ? (TYPE_COLOR[item.type] ?? 'var(--c-navy)') : 'var(--c-navy)'
+
+  const body = success ? (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 0', textAlign: 'center' }}>
+      <div style={{
+        width: 56, height: 56, borderRadius: '50%',
+        background: 'var(--c-pos-tint)', color: 'var(--c-pos)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12,
+      }}>
+        <Check size={28} strokeWidth={2.5} />
+      </div>
+      <p style={{ fontWeight: 600, fontSize: 15, color: 'var(--c-ink)', margin: '0 0 4px' }}>
+        {isVI ? 'Đã gán vào' : 'Assigned to'}
+      </p>
+      <p style={{ fontSize: 13, color: 'var(--c-navy)', fontWeight: 600, margin: 0 }}>{successName}</p>
+    </div>
+  ) : (
+    <div style={{ display: 'grid', gap: 14 }}>
+      {/* Item chip */}
+      {item && ItemIcon && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--c-card-2)', borderRadius: 10 }}>
+          <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--c-card)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: itemIconColor, border: '1px solid var(--c-line)', flexShrink: 0 }}>
+            <ItemIcon size={15} strokeWidth={1.8} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--c-ink)' }}>{item.name}</div>
+            <div style={{ fontSize: 11, color: 'var(--c-muted)', fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(item.value)}</div>
+          </div>
+          <ArrowRight size={14} color="var(--c-muted)" />
+          <div style={{
+            fontSize: 12, fontWeight: 600, padding: '4px 10px',
+            background: selectedGoal ? 'var(--c-navy-tint)' : 'var(--c-line)',
+            color: selectedGoal ? 'var(--c-navy)' : 'var(--c-muted)',
+            borderRadius: 8, whiteSpace: 'nowrap', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>
+            {selectedGoal ? selectedGoal.name : (isVI ? 'Chọn...' : 'Choose…')}
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <p style={{ fontSize: 13, color: 'var(--c-neg)', margin: 0 }}>{error}</p>
+      )}
+
+      {/* Goal list */}
+      <div>
+        <div style={{ fontSize: 11, color: 'var(--c-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+          {isVI ? 'Chọn mục tiêu' : 'Choose a goal'}
+        </div>
+        <div style={{ display: 'grid', gap: 8 }}>
+          {goalsLoading && (
+            <p style={{ color: 'var(--c-muted)', fontSize: 14, textAlign: 'center', padding: '24px 0', margin: 0 }}>
+              {isVI ? 'Đang tải…' : 'Loading…'}
+            </p>
+          )}
+          {!goalsLoading && goals.length === 0 && (
+            <p style={{ color: 'var(--c-muted)', fontSize: 14, textAlign: 'center', padding: '24px 0', margin: 0 }}>
+              {isVI ? 'Chưa có mục tiêu nào' : 'No goals yet'}
+            </p>
+          )}
+          {!goalsLoading && goals.map((g) => {
+            const isSel = selected === g.id
+            const isComplete = g.progressPercent != null && g.progressPercent >= 100
+            const remaining = g.targetAmount != null ? Math.max(0, g.targetAmount - g.currentValue) : null
+            return (
+              <button
+                key={g.id}
+                onClick={() => setSelected(g.id)}
+                style={{
+                  width: '100%', textAlign: 'left', padding: '12px 14px',
+                  background: isSel ? 'var(--c-navy-tint)' : 'var(--c-card)',
+                  border: `1.5px solid ${isSel ? 'var(--c-navy)' : 'var(--c-line)'}`,
+                  borderRadius: 12, cursor: 'pointer', fontFamily: 'inherit',
+                  transition: 'border-color 120ms, background 120ms',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: isSel ? 'var(--c-navy)' : 'var(--c-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {g.name}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
+                      {isComplete
+                        ? (isVI ? 'Đã hoàn thành' : 'Completed')
+                        : remaining != null
+                          ? `${fmtCompact(remaining)} ${isVI ? 'còn lại' : 'remaining'}`
+                          : fmt(g.currentValue)}
+                    </div>
+                  </div>
+                  {g.progressPercent != null && (
+                    <div style={{ fontSize: 12, fontWeight: 600, color: isSel ? 'var(--c-navy)' : 'var(--c-ink)', flexShrink: 0 }}>
+                      {Math.round(g.progressPercent)}%
+                    </div>
+                  )}
+                  {isSel && (
+                    <div style={{ width: 20, height: 20, borderRadius: 10, background: 'var(--c-navy)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <Check size={12} strokeWidth={2.5} color="#fff" />
+                    </div>
+                  )}
+                </div>
+                {g.progressPercent != null && (
+                  <div style={{ height: 4, background: 'var(--c-card-2)', borderRadius: 999, overflow: 'hidden', marginTop: 8 }}>
+                    <div style={{
+                      height: '100%', borderRadius: 999,
+                      width: `${Math.min(100, Math.max(0, g.progressPercent))}%`,
+                      background: isComplete ? 'var(--c-pos)' : 'var(--c-navy)',
+                    }} />
+                  </div>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+        <button
+          onClick={onClose}
+          className="cn-btn"
+          style={{ flex: 1, justifyContent: 'center', border: '1px solid var(--c-line)' }}
+        >
+          {isVI ? 'Hủy' : 'Cancel'}
+        </button>
+        <button
+          onClick={handleConfirm}
+          disabled={!selected || confirming}
+          className={selected && !confirming ? 'cn-btn primary' : 'cn-btn'}
+          style={{ flex: 2, justifyContent: 'center', opacity: !selected || confirming ? 0.5 : 1 }}
+        >
+          {confirming ? (isVI ? 'Đang xử lý…' : 'Assigning…') : (
+            <>
+              <Check size={14} strokeWidth={2.4} />
+              {isVI ? 'Xác nhận gán' : 'Confirm assignment'}
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  )
+
+  if (desktop) {
+    return (
+      <div
+        onClick={onClose}
+        style={{
+          position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.4)', zIndex: 200,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+          animation: 'fade-in 150ms ease', backdropFilter: 'blur(2px)',
+        }}
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            width: '100%', maxWidth: 460, maxHeight: 'calc(100vh - 48px)',
+            background: 'var(--c-card)', borderRadius: 16,
+            boxShadow: '0 24px 48px rgba(15,23,42,0.18), 0 8px 16px rgba(15,23,42,0.08)',
+            display: 'flex', flexDirection: 'column',
+            animation: 'modal-in 200ms cubic-bezier(0.2,0.8,0.2,1)', overflow: 'hidden',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px 14px', borderBottom: '1px solid var(--c-line)', flexShrink: 0 }}>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em' }}>{title}</h3>
+            <button onClick={onClose} aria-label="Close" style={{ padding: 6, border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', color: 'var(--c-muted)', display: 'flex' }}><X size={18} /></button>
+          </div>
+          <div style={{ flex: 1, padding: '18px 20px', overflowY: 'auto' }}>
+            {body}
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div
@@ -99,97 +300,12 @@ export default function AssignGoalSheet({ open, onClose, onConfirm }: Props) {
         <div style={{ width: 36, height: 4, background: 'var(--c-line-strong)', borderRadius: 999, margin: '6px auto 0', flexShrink: 0 }} />
 
         <div style={{ padding: '14px 16px 0', flexShrink: 0 }}>
-          <p style={{ fontWeight: 700, fontSize: 16, color: 'var(--c-ink)' }}>
-            {isVI ? 'Gán vào mục tiêu' : 'Assign to goal'}
-          </p>
+          <p style={{ fontWeight: 700, fontSize: 16, color: 'var(--c-ink)', margin: 0 }}>{title}</p>
         </div>
 
-        {success ? (
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 16px' }}>
-            <div style={{
-              width: 56, height: 56, borderRadius: '50%',
-              background: 'var(--c-pos-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12,
-            }}>
-              <Check size={28} color="var(--c-pos)" />
-            </div>
-            <p style={{ fontWeight: 700, fontSize: 15, color: 'var(--c-ink)' }}>
-              {isVI ? `Đã gán vào ${successName}` : `Assigned to ${successName}`}
-            </p>
-          </div>
-        ) : (
-          <>
-            {error && (
-              <p style={{ fontSize: 13, color: 'var(--c-neg)', padding: '8px 16px 0' }}>{error}</p>
-            )}
-
-            <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px 0' }}>
-              {goalsLoading && (
-                <p style={{ color: 'var(--c-muted)', fontSize: 14, textAlign: 'center', padding: '24px 0' }}>
-                  {isVI ? 'Đang tải…' : 'Loading…'}
-                </p>
-              )}
-              {!goalsLoading && goals.length === 0 && (
-                <p style={{ color: 'var(--c-muted)', fontSize: 14, textAlign: 'center', padding: '24px 0' }}>
-                  {isVI ? 'Chưa có mục tiêu nào' : 'No goals yet'}
-                </p>
-              )}
-              {!goalsLoading && goals.map((g) => {
-                const isSelected = selected === g.id
-                return (
-                  <button
-                    key={g.id}
-                    onClick={() => setSelected(g.id)}
-                    style={{
-                      display: 'block', width: '100%', textAlign: 'left',
-                      padding: '12px 14px', marginBottom: 8, borderRadius: 12, cursor: 'pointer',
-                      border: `2px solid ${isSelected ? 'var(--c-navy)' : 'var(--c-line)'}`,
-                      background: isSelected ? 'var(--c-navy-tint)' : 'var(--c-card)',
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <p style={{ fontWeight: 600, fontSize: 14, color: 'var(--c-ink)' }}>{g.name}</p>
-                      {g.progressPercent != null && (
-                        <p style={{ fontSize: 12, color: 'var(--c-muted)' }}>
-                          {Math.round(g.progressPercent)}%
-                        </p>
-                      )}
-                    </div>
-                    <p style={{ fontSize: 12, color: 'var(--c-muted)', marginTop: 2 }}>{fmt(g.currentValue)}</p>
-                    {g.progressPercent != null && (
-                      <div style={{ height: 4, background: 'var(--c-line)', borderRadius: 999, overflow: 'hidden', marginTop: 8 }}>
-                        <div style={{
-                          height: '100%', borderRadius: 999,
-                          width: `${Math.min(100, Math.max(0, g.progressPercent))}%`,
-                          background: 'var(--c-navy)',
-                        }} />
-                      </div>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-
-            <div style={{ padding: '12px 16px 16px', flexShrink: 0 }}>
-              <button
-                onClick={handleConfirm}
-                disabled={!selected || confirming}
-                style={{
-                  width: '100%', padding: '14px 0', borderRadius: 12, border: 'none',
-                  background: selected ? 'var(--c-navy)' : 'var(--c-line)',
-                  color: selected ? '#fff' : 'var(--c-muted)',
-                  fontSize: 15, fontWeight: 700,
-                  cursor: selected && !confirming ? 'pointer' : 'default',
-                  opacity: confirming ? 0.7 : 1,
-                  transition: 'background 0.15s',
-                }}
-              >
-                {confirming
-                  ? (isVI ? 'Đang xử lý…' : 'Assigning…')
-                  : (isVI ? 'Xác nhận gán' : 'Confirm assignment')}
-              </button>
-            </div>
-          </>
-        )}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px 16px' }}>
+          {body}
+        </div>
       </div>
     </div>
   )

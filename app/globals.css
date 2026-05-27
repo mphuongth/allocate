@@ -229,6 +229,18 @@
   from { opacity: 0; transform: scale(0.96); }
   to   { opacity: 1; transform: scale(1); }
 }
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes slide-right {
+  from { opacity: 0; transform: translateX(16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes modal-in {
+  from { opacity: 0; transform: scale(0.96) translateY(8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
 
 /* Landing page scroll-reveal */
 .reveal {
@@ -246,3 +258,46 @@
 .reveal-delay-4 { transition-delay: 0.32s; }
 .reveal-delay-5 { transition-delay: 0.40s; }
 .reveal-delay-6 { transition-delay: 0.48s; }
+
+/* ── Cairn desktop design system atoms ─────────────────────────────────────
+   Mirrors tokens.css from the design prototype. Used across desktop screens. */
+
+.cn-card {
+  background: var(--c-card);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-card);
+}
+
+.cn-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  font-family: inherit; font-size: 13px; font-weight: 500;
+  padding: 8px 14px;
+  border-radius: var(--r-control);
+  border: 1px solid var(--c-line);
+  background: var(--c-card);
+  color: var(--c-ink);
+  cursor: pointer;
+  transition: background 120ms, border-color 120ms;
+  white-space: nowrap;
+}
+.cn-btn:hover { background: var(--c-card-2); }
+.cn-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.cn-btn.primary { background: var(--c-btn-primary); color: #fff; border-color: var(--c-btn-primary); }
+.cn-btn.primary:hover { background: var(--c-btn-primary-hover); border-color: var(--c-btn-primary-hover); }
+.cn-btn.ghost { border: none; background: transparent; }
+.cn-btn.ghost:hover { background: var(--c-card-2); }
+
+.cn-input {
+  display: block; width: 100%;
+  padding: 9px 12px;
+  font-family: inherit; font-size: 13px;
+  background: var(--c-canvas);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-control);
+  color: var(--c-ink);
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 120ms;
+}
+.cn-input:focus { border-color: var(--c-navy); }

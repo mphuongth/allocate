@@ -2,7 +2,9 @@ name: CI
 
 on:
   pull_request:
-    branches: [main, feature/redesign-mobile]
+    branches: [main, feature/redesign-desktop]
+  push:
+    branches: [feature/redesign-desktop]
 
 jobs:
   test:

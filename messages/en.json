@@ -422,7 +422,7 @@
     "netWorth": "Net Worth",
     "overall": "overall",
     "transactions": "transactions",
-    "tracked": "tracked",
+    "tracked": "goals tracked",
     "member": "member",
     "members": "members",
     "liabilities": "Liabilities",
@@ -469,9 +469,9 @@
     "timeDaysAgo": "{days}d ago"
   },
   "funds": {
-    "title": "Fund Library",
-    "pageTitle": "Fund Library",
-    "pageSubtitle": "Funds",
+    "title": "Fund library",
+    "pageTitle": "Fund library",
+    "pageSubtitle": "Library",
     "desc": "Manage investment funds",
     "refreshNav": "Refresh NAV",
     "refreshingNav": "Refreshing…",

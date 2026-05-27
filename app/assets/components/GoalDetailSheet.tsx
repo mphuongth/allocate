@@ -11,6 +11,17 @@ import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import type { GoalData, FundBreakdownItem } from '../DashboardClient'
 import TransactionHistorySheet, { type PurchaseHistoryRow } from './TransactionHistorySheet'
 
+// Same SVG as DesktopGoalDetail.UnlinkSvg — matches design's "unlink" glyph
+function UnlinkSvg({ size = 20, color = 'currentColor' }: { size?: number; color?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block', flexShrink: 0 }}>
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+      <path d="M2 2l20 20" />
+    </svg>
+  )
+}
+
 interface InvestmentTx {
   transaction_id: string
   transaction_type: string
@@ -34,6 +45,13 @@ interface Props {
   open: boolean
   onClose: () => void
   onDataChanged: () => void
+  /**
+   * Monotonically increases each time the parent's dashboard data refreshes
+   * (e.g. after assigning an investment from Unallocated). Including it in
+   * the transactions-fetching useEffect ensures this sheet shows fresh data
+   * without requiring a hard page reload.
+   */
+  refreshKey?: number
 }
 
 const GD_COLORS: Record<string, string> = {
@@ -41,6 +59,13 @@ const GD_COLORS: Record<string, string> = {
   bank: '#047857',
   gold: '#d97706',
   stock: '#7c3aed',
+}
+
+function calcDeadlineMonths(targetDate: string | null): number {
+  if (!targetDate) return 12
+  const [ty, tm] = targetDate.split('-').map(Number)
+  const now = new Date()
+  return Math.max(1, (ty - now.getFullYear()) * 12 + (tm - 1 - now.getMonth()))
 }
 
 function TypeIcon({ type, size = 16 }: { type: string; size?: number }) {
@@ -326,12 +351,14 @@ function InvestmentActionSheet({
   inv,
   onViewHistory,
   onSell,
+  onUnassign,
 }: {
   open: boolean
   onClose: () => void
   inv: InvRow | null
   onViewHistory: () => void
   onSell: () => void
+  onUnassign: () => void
 }) {
   const isVI = useLocale() === 'vi'
   const [mounted, setMounted] = useState(false)
@@ -351,12 +378,16 @@ function InvestmentActionSheet({
     historySub: 'Xem các lần mua / bán trước đây',
     sell: isBank ? 'Rút tiền' : 'Bán',
     sellSub: isBank ? 'Rút tiền gửi khỏi mục tiêu' : 'Bán khoản đầu tư',
+    unassign: 'Bỏ gán mục tiêu',
+    unassignSub: 'Chuyển khoản đầu tư này sang trạng thái chưa gán',
   } : {
     title: 'Options',
     history: 'Transaction history',
     historySub: 'View past buys & sells',
     sell: isBank ? 'Withdraw' : 'Sell',
     sellSub: isBank ? 'Withdraw deposit from goal' : 'Liquidate this investment',
+    unassign: 'Unassign from goal',
+    unassignSub: 'Move this investment to unassigned',
   }
 
   return (
@@ -432,6 +463,29 @@ function InvestmentActionSheet({
             <ChevronRight size={16} color="var(--c-muted)" />
           </button>
 
+          {/* Unassign from goal */}
+          <button
+            onClick={() => { onClose(); setTimeout(onUnassign, 60) }}
+            style={{
+              width: '100%', textAlign: 'left', padding: '14px 16px',
+              background: 'var(--c-card)', border: '1px solid var(--c-line)',
+              borderRadius: 14, cursor: 'pointer', fontFamily: 'inherit',
+              display: 'flex', alignItems: 'center', gap: 14,
+              transition: 'background 120ms',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--c-card-2)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--c-card)')}
+          >
+            <div style={{ width: 42, height: 42, borderRadius: 12, background: 'var(--c-warn-tint, #fef3c7)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <UnlinkSvg size={20} color="var(--c-warn, #b45309)" />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-ink)' }}>{t.unassign}</div>
+              <div style={{ fontSize: 12, color: 'var(--c-muted)', marginTop: 2 }}>{t.unassignSub}</div>
+            </div>
+            <ChevronRight size={16} color="var(--c-muted)" />
+          </button>
+
           {/* Sell / Withdraw */}
           <button
             onClick={() => { onClose(); setTimeout(onSell, 60) }}
@@ -459,7 +513,118 @@ function InvestmentActionSheet({
   )
 }
 
-export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: Props) {
+function UnassignConfirmSheet({
+  open,
+  onClose,
+  inv,
+  onConfirm,
+  unassigning,
+}: {
+  open: boolean
+  onClose: () => void
+  inv: InvRow | null
+  onConfirm: () => void
+  unassigning: boolean
+}) {
+  const isVI = useLocale() === 'vi'
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    if (open) setMounted(true)
+    else { const t = setTimeout(() => setMounted(false), 220); return () => clearTimeout(t) }
+  }, [open])
+  if (!mounted || !inv) return null
+
+  const t = isVI ? {
+    title: 'Bỏ gán mục tiêu?',
+    body: 'Khoản đầu tư này sẽ được chuyển sang "Chưa gán". Bạn có thể gán lại bất kỳ lúc nào từ trang Kế hoạch.',
+    confirm: 'Bỏ gán',
+    cancel: 'Hủy',
+    working: 'Đang xử lý…',
+  } : {
+    title: 'Unassign from goal?',
+    body: 'This investment will be moved to "Unassigned". You can re-assign it any time from the Planning page.',
+    confirm: 'Unassign',
+    cancel: 'Cancel',
+    working: 'Working…',
+  }
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.2)',
+        zIndex: 160, pointerEvents: open ? 'auto' : 'none',
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0,
+          background: 'var(--c-card)', borderRadius: '16px 16px 0 0',
+          padding: '0 0 env(safe-area-inset-bottom,0)',
+          animation: open
+            ? 'slide-up 220ms cubic-bezier(0.2, 0.8, 0.2, 1)'
+            : 'slide-down 180ms ease forwards',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ width: 36, height: 4, background: 'var(--c-line-strong)', borderRadius: 999, margin: '6px auto 14px' }} />
+        <div style={{ padding: '0 16px 20px', display: 'grid', gap: 14 }}>
+          <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, letterSpacing: '-0.01em' }}>{t.title}</h2>
+
+          {/* Item summary */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'var(--c-card-2)', borderRadius: 12 }}>
+            <div style={{
+              width: 32, height: 32, borderRadius: 8,
+              background: 'var(--c-warn-tint, #fef3c7)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              color: 'var(--c-warn, #b45309)',
+            }}>
+              <TypeIcon type={inv.type} size={15} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{inv.name}</div>
+              <div style={{ fontSize: 12, color: 'var(--c-muted)', marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(inv.value)}</div>
+            </div>
+          </div>
+
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--c-muted)', lineHeight: 1.55 }}>{t.body}</p>
+
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={onClose}
+              disabled={unassigning}
+              style={{
+                flex: 1, padding: '11px 14px', fontSize: 13, fontWeight: 500,
+                background: 'var(--c-card)', border: '1px solid var(--c-line)',
+                borderRadius: 10, color: 'var(--c-ink)', fontFamily: 'inherit',
+                cursor: unassigning ? 'default' : 'pointer',
+              }}
+            >
+              {t.cancel}
+            </button>
+            <button
+              onClick={onConfirm}
+              disabled={unassigning}
+              style={{
+                flex: 2, padding: '11px 14px', fontSize: 13, fontWeight: 600,
+                background: 'var(--c-warn, #b45309)', color: '#fff',
+                border: 'none', borderRadius: 10, fontFamily: 'inherit',
+                cursor: unassigning ? 'default' : 'pointer',
+                opacity: unassigning ? 0.6 : 1,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              }}
+            >
+              <UnlinkSvg size={14} color="#fff" />
+              {unassigning ? t.working : t.confirm}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, refreshKey }: Props) {
   const isVI = useLocale() === 'vi'
   const [mounted, setMounted] = useState(false)
   const [activeTab, setActiveTab] = useState<'investments' | 'calculator' | 'history'>('investments')
@@ -470,6 +635,9 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: 
   const [isDeleting, setIsDeleting] = useState(false)
   const [actionInv, setActionInv] = useState<InvRow | null>(null)
   const [investActionOpen, setInvestActionOpen] = useState(false)
+  const [unassignConfirmOpen, setUnassignConfirmOpen] = useState(false)
+  const [unassigning, setUnassigning] = useState(false)
+  const [unassignedIds, setUnassignedIds] = useState<string[]>([])
   const [fundDetailId, setFundDetailId] = useState<string | null>(null)
   const [purchaseHistory, setPurchaseHistory] = useState<PurchaseHistoryRow[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
@@ -488,12 +656,18 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: 
   useEffect(() => {
     if (!open || !goal) return
     setTxLoading(true)
-    fetch(`/api/v1/investment-transactions?goal_id=${goal.goalId}&limit=200`)
+    // The new server response is the source of truth — drop any locally
+    // hidden tx IDs from the unassign flow so a re-assigned tx isn't stuck
+    // behind the optimistic filter on subsequent refreshes.
+    setUnassignedIds([])
+    // cache: 'no-store' — without it the browser can serve a stale list when
+    // an investment was just (re)assigned to this goal in the same session.
+    fetch(`/api/v1/investment-transactions?goal_id=${goal.goalId}&limit=200`, { cache: 'no-store' })
       .then((r) => r.ok ? r.json() : { transactions: [] })
       .then((res) => setTransactions(res.transactions ?? []))
       .catch(() => setTransactions([]))
       .finally(() => setTxLoading(false))
-  }, [open, goal])
+  }, [open, goal, refreshKey])
 
   async function handleDelete() {
     if (!goal) return
@@ -505,6 +679,41 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: 
       setIsDeleting(false)
     }
     setActionsOpen(false)
+  }
+
+  // Mirror of DesktopGoalDetail.handleUnassign — fund rows aggregate every
+  // fund-investment under the same fund, non-fund rows correspond to a
+  // single investment_transactions row.
+  async function handleUnassignConfirm() {
+    if (!actionInv) return
+    setUnassigning(true)
+    try {
+      if (actionInv.fund) {
+        const res = await fetch(`/api/v1/fund-investments?fund_id=${actionInv.fund.fundId}`)
+        if (!res.ok) throw new Error('fetch failed')
+        const data = await res.json() as { investments?: Array<{ id: string }> }
+        const investments = data.investments ?? []
+        await Promise.all(investments.map((fi) =>
+          fetch(`/api/v1/fund-investments/${fi.id}/goal`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ goal_id: null }),
+          })
+        ))
+      } else {
+        await fetch(`/api/v1/investment-transactions/${actionInv.id}/assign`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ goal_id: null }),
+        })
+      }
+      setUnassignedIds((prev) => [...prev, actionInv.id])
+      setUnassignConfirmOpen(false)
+      setActionInv(null)
+      onDataChanged()
+    } finally {
+      setUnassigning(false)
+    }
   }
 
   async function openFundDetail(fund: FundBreakdownItem) {
@@ -573,22 +782,21 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: 
     }
 
     return { id: tx.transaction_id, name, type: tx.asset_type, value, gainPct, units, principal, fund: fund ?? null }
-  })
+  }).filter((row) => !unassignedIds.includes(row.id))
 
   const allFundValue = fundItems.reduce((s, f) => s + f.currentValue, 0)
 
   // Calculator
   const remaining = goal.targetAmount ? Math.max(goal.targetAmount - goal.currentValue, 0) : 0
-  const neededPerMonth = remaining > 0 ? Math.ceil(remaining / 12) : 0
-  const monthly = parseFloat(monthlyContrib.replace(/,/g, '')) || 0
-  let projectedMonths = 0
-  if (monthly > 0 && remaining > 0) {
-    const r = 0.12 / 12
-    projectedMonths = Math.ceil(Math.log(1 + (remaining * r) / monthly) / Math.log(1 + r))
-  }
+  const monthsLeft = calcDeadlineMonths(goal.targetDate)
+  const neededPerMonth = remaining > 0 ? remaining / monthsLeft : 0
+  const monthly = Math.max(0, parseFloat(monthlyContrib.replace(/,/g, '')) || 0)
+  const projectedMonths = monthly > 0 && remaining > 0 ? Math.ceil(remaining / monthly) : 0
   const projectedDate = projectedMonths > 0
-    ? new Date(Date.now() + projectedMonths * 30 * 24 * 60 * 60 * 1000)
+    ? (() => { const d = new Date(); d.setMonth(d.getMonth() + projectedMonths); return d })()
     : null
+  const isOnTrack = monthly > 0 && monthly >= neededPerMonth
+  const gap = Math.abs(neededPerMonth - monthly)
 
   const detailFund = fundDetailId ? (fundMap.get(fundDetailId) ?? null) : null
 
@@ -856,7 +1064,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: 
                   </div>
                   {goal.targetAmount && neededPerMonth > 0 && (
                     <button
-                      onClick={() => setMonthlyContrib(String(neededPerMonth))}
+                      onClick={() => setMonthlyContrib(String(Math.round(neededPerMonth)))}
                       style={{
                         flexShrink: 0, padding: '8px 10px',
                         background: 'var(--c-navy-tint)', color: 'var(--c-navy)',
@@ -901,17 +1109,21 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: 
               {monthly > 0 && projectedDate && goal.targetAmount && (
                 <div style={{
                   padding: 16, borderRadius: 14,
-                  background: 'var(--c-pos-tint)',
-                  border: '1px solid rgba(4,120,87,0.15)',
+                  background: isOnTrack ? 'var(--c-pos-tint)' : 'var(--c-warn-tint)',
+                  border: `1px solid ${isOnTrack ? 'rgba(4,120,87,0.15)' : 'rgba(180,83,9,0.15)'}`,
                 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--c-pos)', marginBottom: 6 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: isOnTrack ? 'var(--c-pos)' : 'var(--c-warn)', marginBottom: 6 }}>
                     {isVI ? 'Dự kiến hoàn thành' : 'Projected completion'}
                   </div>
-                  <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.025em', color: 'var(--c-pos)', lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
+                  <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.025em', color: isOnTrack ? 'var(--c-pos)' : 'var(--c-warn)', lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
                     {projectedDate.toLocaleDateString(isVI ? 'vi-VN' : 'en-GB', { month: 'long', year: 'numeric' })}
                   </div>
-                  <div style={{ fontSize: 12, color: 'var(--c-pos)', marginTop: 6, opacity: 0.85 }}>
+                  <div style={{ fontSize: 12, color: isOnTrack ? 'var(--c-pos)' : 'var(--c-warn)', marginTop: 6, opacity: 0.85 }}>
                     {isVI ? `Sau ${projectedMonths} tháng` : `In ${projectedMonths} months`}
+                    {goal.targetDate && (isOnTrack
+                      ? (isVI ? ` · ${monthsLeft - projectedMonths} tháng sớm hơn` : ` · ${monthsLeft - projectedMonths} months early`)
+                      : (isVI ? ` · ${projectedMonths - monthsLeft} tháng trễ hạn` : ` · ${projectedMonths - monthsLeft} months late`)
+                    )}
                   </div>
                 </div>
               )}
@@ -921,9 +1133,9 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1, background: 'var(--c-line)', borderRadius: 12, overflow: 'hidden' }}>
                   {[
                     { l: isVI ? 'Còn thiếu' : 'Still needed', v: fmtCompact(remaining), c: 'var(--c-ink)' },
-                    { l: isVI ? 'Tháng dự kiến' : 'Projected months', v: projectedMonths > 0 ? String(projectedMonths) : '—', c: 'var(--c-ink)' },
-                    { l: isVI ? 'Cần tối thiểu/tháng' : 'Min needed/month', v: neededPerMonth > 0 ? fmtCompact(neededPerMonth) : '—', c: 'var(--c-muted)' },
-                    { l: isVI ? 'Chênh lệch' : 'vs minimum', v: neededPerMonth > 0 ? fmtCompact(Math.abs(monthly - neededPerMonth)) : '—', c: monthly >= neededPerMonth ? 'var(--c-pos)' : 'var(--c-neg)' },
+                    { l: isVI ? 'Tháng còn lại' : 'Months left', v: String(monthsLeft), c: 'var(--c-ink)' },
+                    { l: isVI ? 'Tối thiểu/tháng' : 'Min/month', v: neededPerMonth > 0 ? fmtCompact(neededPerMonth) : '—', c: 'var(--c-muted)' },
+                    { l: isOnTrack ? (isVI ? 'Dư/tháng' : 'Surplus/mo') : (isVI ? 'Thiếu/tháng' : 'Gap/month'), v: neededPerMonth > 0 ? fmtCompact(gap) : '—', c: isOnTrack ? 'var(--c-pos)' : 'var(--c-neg)' },
                   ].map((k, i) => (
                     <div key={i} style={{ background: 'var(--c-card)', padding: '10px 12px' }}>
                       <div style={{ fontSize: 10, color: 'var(--c-muted)' }}>{k.l}</div>
@@ -1029,6 +1241,15 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged }: 
         inv={actionInv}
         onViewHistory={() => actionInv?.fund && openFundDetail(actionInv.fund)}
         onSell={() => { /* SellWithdrawSheet integration point */ }}
+        onUnassign={() => setUnassignConfirmOpen(true)}
+      />
+
+      <UnassignConfirmSheet
+        open={unassignConfirmOpen}
+        onClose={() => !unassigning && setUnassignConfirmOpen(false)}
+        inv={actionInv}
+        onConfirm={handleUnassignConfirm}
+        unassigning={unassigning}
       />
 
       <TransactionHistorySheet

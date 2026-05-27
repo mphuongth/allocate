@@ -14,7 +14,7 @@ export async function GET() {
     supabase.from('monthly_plans').select('id').eq('user_id', user.id),
     supabase
       .from('savings_goals')
-      .select('goal_id, goal_name, target_amount')
+      .select('goal_id, goal_name, target_amount, target_date')
       .eq('user_id', user.id),
     supabase
       .from('investment_transactions')
@@ -87,6 +87,7 @@ export async function GET() {
     goalId: string
     goalName: string
     targetAmount: number | null
+    targetDate: string | null
     currentValue: number
     totalInvested: number
     transactionCount: number
@@ -109,6 +110,7 @@ export async function GET() {
       goalId: goal.goal_id,
       goalName: goal.goal_name,
       targetAmount: goal.target_amount ?? null,
+      targetDate: goal.target_date ?? null,
       currentValue: 0,
       totalInvested: 0,
       transactionCount: 0,
@@ -283,6 +285,7 @@ export async function GET() {
       goalId: g.goalId,
       goalName: g.goalName,
       targetAmount: g.targetAmount,
+      targetDate: g.targetDate,
       currentValue: g.currentValue,
       totalInvested: g.totalInvested,
       profitLoss,

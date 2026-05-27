@@ -31,6 +31,7 @@ const mockGoal: GoalData = {
   goalId: 'g1',
   goalName: 'Mua nhà',
   targetAmount: 1_000_000_000,
+  targetDate: null,
   currentValue: 300_000_000,
   totalInvested: 250_000_000,
   profitLoss: 50_000_000,

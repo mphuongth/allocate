@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import { toast } from 'sonner'
 import { Plus } from 'lucide-react'
@@ -28,9 +28,19 @@ function getDisplayName(email: string): string {
   return firstName.charAt(0).toUpperCase() + firstName.slice(1)
 }
 
+// Pages that provide their own desktop top bar and don't need the shared Header.
+// Checked synchronously via usePathname so there is no flash on hard refresh.
+const PAGES_WITH_OWN_HEADER = new Set(['/dashboard', '/planning', '/funds', '/settings'])
+
+// Pages that manage their own full-height desktop layout (no <main> padding/scroll on md+).
+const PAGES_WITH_FULL_HEIGHT_DESKTOP = new Set(['/dashboard', '/planning', '/funds', '/settings'])
+
 function AuthenticatedLayoutInner({ children, email, initials }: { children: React.ReactNode; email: string; initials: string }) {
   const { mobileTopBar } = useNavigation()
   const [showAddTx, setShowAddTx] = useState(false)
+  const pathname = usePathname()
+  const hideDesktopHeader = PAGES_WITH_OWN_HEADER.has(pathname)
+  const isFullHeightDesktop = PAGES_WITH_FULL_HEIGHT_DESKTOP.has(pathname)
 
   return (
     <div className="flex h-screen bg-canvas dark:bg-gray-950 overflow-hidden">
@@ -41,10 +51,12 @@ function AuthenticatedLayoutInner({ children, email, initials }: { children: Rea
 
       {/* Main area */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        {/* Desktop header */}
-        <div className="hidden md:block">
-          <Header />
-        </div>
+        {/* Desktop header — hidden for pages that provide their own DTopBar */}
+        {!hideDesktopHeader && (
+          <div className="hidden md:block">
+            <Header />
+          </div>
+        )}
         {/* Mobile top bar — lives outside <main> so it never scrolls away */}
         {mobileTopBar.title && (
           <div className="md:hidden">
@@ -56,28 +68,31 @@ function AuthenticatedLayoutInner({ children, email, initials }: { children: Rea
             />
           </div>
         )}
-        <main className="flex-1 overflow-y-auto px-4 md:px-6 py-4 pb-20 md:pb-4">
+        <main className={`flex-1 overflow-y-auto px-4 py-4 pb-20 md:pb-4${isFullHeightDesktop ? ' md:p-0 md:overflow-hidden md:flex md:flex-col' : ' md:px-6'}`}>
           {children}
         </main>
       </div>
 
-      {/* Mobile FAB — add transaction */}
-      <button
-        onClick={() => setShowAddTx(true)}
-        aria-label="Add transaction"
-        className="md:hidden"
-        style={{
-          position: 'fixed', right: 16, bottom: 80,
-          width: 52, height: 52, borderRadius: 26,
-          background: 'var(--c-navy)', color: '#fff',
-          border: 'none',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          boxShadow: '0 6px 16px rgba(15, 42, 74, 0.25), 0 2px 4px rgba(15, 42, 74, 0.1)',
-          cursor: 'pointer', zIndex: 35,
-        }}
-      >
-        <Plus size={22} strokeWidth={2.2} />
-      </button>
+      {/* Mobile FAB — add transaction.
+          The button's inline `display: flex` would override a `md:hidden` class
+          (inline > class specificity), so the wrapper handles md+ hiding. */}
+      <div className="md:hidden">
+        <button
+          onClick={() => setShowAddTx(true)}
+          aria-label="Add transaction"
+          style={{
+            position: 'fixed', right: 16, bottom: 80,
+            width: 52, height: 52, borderRadius: 26,
+            background: 'var(--c-navy)', color: '#fff',
+            border: 'none',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 6px 16px rgba(15, 42, 74, 0.25), 0 2px 4px rgba(15, 42, 74, 0.1)',
+            cursor: 'pointer', zIndex: 35,
+          }}
+        >
+          <Plus size={22} strokeWidth={2.2} />
+        </button>
+      </div>
 
       {/* Mobile bottom tab navigation */}
       <MobileBottomTabs />

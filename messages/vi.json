@@ -422,7 +422,7 @@
     "netWorth": "Tài sản Ròng",
     "overall": "tổng thể",
     "transactions": "giao dịch",
-    "tracked": "theo dõi",
+    "tracked": "mục tiêu đang theo dõi",
     "member": "thành viên",
     "members": "thành viên",
     "liabilities": "Nợ",
@@ -469,9 +469,9 @@
     "timeDaysAgo": "{days} ngày trước"
   },
   "funds": {
-    "title": "Thư viện Quỹ",
-    "pageTitle": "Thư viện Quỹ",
-    "pageSubtitle": "Quỹ",
+    "title": "Quỹ đầu tư",
+    "pageTitle": "Quỹ đầu tư",
+    "pageSubtitle": "Thư viện",
     "desc": "Quản lý các quỹ đầu tư",
     "refreshNav": "Làm mới NAV",
     "refreshingNav": "Đang làm mới…",

@@ -292,9 +292,10 @@ export default function InsuranceMembersTab() {
                 <Label htmlFor="annual_payment_vnd">{t('annualLabel')} <span className="text-red-500">*</span></Label>
                 <Input
                   id="annual_payment_vnd"
-                  type="number"
-                  value={form.annual_payment_vnd}
-                  onChange={(e) => setForm({ ...form, annual_payment_vnd: e.target.value })}
+                  type="text"
+                  inputMode="numeric"
+                  value={form.annual_payment_vnd ? Number(form.annual_payment_vnd).toLocaleString('en-US') : ''}
+                  onChange={(e) => setForm({ ...form, annual_payment_vnd: e.target.value.replace(/,/g, '').replace(/[^0-9]/g, '') })}
                   placeholder={t('annualPlaceholder')}
                 />
                 {form.annual_payment_vnd && Number(form.annual_payment_vnd) > 0 && (
