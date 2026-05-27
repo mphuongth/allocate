@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { ValidationError, validateAmount, validateUUID } from '@/lib/validation'
 
 export async function POST(request: NextRequest) {
   const supabase = await createSupabaseServerClient()
@@ -9,15 +10,21 @@ export async function POST(request: NextRequest) {
   const body = await request.json()
   const { insurance_member_id, amount_saved_vnd } = body
 
-  if (!insurance_member_id) return NextResponse.json({ error: 'insurance_member_id is required' }, { status: 400 })
-  const amount = Number(amount_saved_vnd)
-  if (!amount_saved_vnd || isNaN(amount) || amount <= 0) {
-    return NextResponse.json({ error: 'Amount must be greater than 0' }, { status: 400 })
+  let cleanMemberId: string
+  let cleanAmount: number
+  try {
+    if (!insurance_member_id) throw new ValidationError('insurance_member_id is required')
+    cleanMemberId = validateUUID(insurance_member_id, 'insurance_member_id')
+    cleanAmount = validateAmount(amount_saved_vnd, 'amount_saved_vnd')
+    if (cleanAmount <= 0) throw new ValidationError('Amount must be greater than 0')
+  } catch (e) {
+    if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
+    throw e
   }
 
   const { data, error } = await supabase
     .from('insurance_savings')
-    .insert({ user_id: user.id, insurance_member_id, amount_saved_vnd: amount })
+    .insert({ user_id: user.id, insurance_member_id: cleanMemberId, amount_saved_vnd: cleanAmount })
     .select('id, amount_saved_vnd, created_at')
     .single()
 

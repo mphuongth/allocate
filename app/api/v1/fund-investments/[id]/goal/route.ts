@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { ValidationError, validateUUID } from '@/lib/validation'
 
 export async function PATCH(
   request: NextRequest,
@@ -13,10 +14,22 @@ export async function PATCH(
   const body = await request.json()
   const { goal_id } = body
 
+  let txId: string
+  let cleanGoalId: string | null = null
+  try {
+    txId = validateUUID(id, 'transaction_id')
+    if (goal_id !== null && goal_id !== undefined && goal_id !== '') {
+      cleanGoalId = validateUUID(goal_id, 'goal_id')
+    }
+  } catch (e) {
+    if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
+    throw e
+  }
+
   const { data, error } = await supabase
     .from('investment_transactions')
-    .update({ goal_id: goal_id ?? null })
-    .eq('transaction_id', id)
+    .update({ goal_id: cleanGoalId })
+    .eq('transaction_id', txId)
     .eq('user_id', user.id)
     .select()
     .single()

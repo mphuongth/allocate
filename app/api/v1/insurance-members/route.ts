@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { ValidationError, validateAmount, validateDate, validateText } from '@/lib/validation'
 
 export async function GET() {
   const supabase = await createSupabaseServerClient()
@@ -8,7 +9,7 @@ export async function GET() {
 
   const { data: members, error } = await supabase
     .from('insurance_members')
-    .select('*, insurance_savings(id, amount_saved_vnd, saved_date, created_at)')
+    .select('member_id, member_name, relationship, annual_payment_vnd, monthly_premium_vnd, payment_date, coverage_type, last_payment_date, amount_saved_vnd, version, created_at, updated_at, insurance_savings(id, amount_saved_vnd, saved_date, created_at)')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
 
@@ -31,25 +32,30 @@ export async function POST(request: NextRequest) {
   const body = await request.json()
   const { member_name, relationship, annual_payment_vnd, payment_date } = body
 
-  if (!member_name || typeof member_name !== 'string' || member_name.trim().length === 0) {
-    return NextResponse.json({ error: 'Member name is required.' }, { status: 400 })
-  }
-  if (!relationship || typeof relationship !== 'string' || relationship.trim().length === 0) {
-    return NextResponse.json({ error: 'Relationship is required.' }, { status: 400 })
-  }
-  const annualNum = Number(annual_payment_vnd)
-  if (!annual_payment_vnd || isNaN(annualNum) || annualNum <= 0) {
-    return NextResponse.json({ error: 'Annual payment must be greater than 0.' }, { status: 400 })
+  let cleanName: string
+  let cleanRelationship: string
+  let cleanAnnual: number
+  let cleanPaymentDate: string | null = null
+
+  try {
+    cleanName = validateText(member_name, 'member_name')
+    cleanRelationship = validateText(relationship, 'relationship')
+    cleanAnnual = validateAmount(annual_payment_vnd, 'annual_payment_vnd')
+    if (cleanAnnual <= 0) throw new ValidationError('Annual payment must be greater than 0.')
+    if (payment_date) cleanPaymentDate = validateDate(payment_date, 'payment_date')
+  } catch (e) {
+    if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
+    throw e
   }
 
   const { data: member, error } = await supabase
     .from('insurance_members')
     .insert({
       user_id: user.id,
-      member_name: member_name.trim(),
-      relationship: relationship.trim(),
-      annual_payment_vnd: annualNum,
-      payment_date: payment_date || null,
+      member_name: cleanName,
+      relationship: cleanRelationship,
+      annual_payment_vnd: cleanAnnual,
+      payment_date: cleanPaymentDate,
     })
     .select()
     .single()
