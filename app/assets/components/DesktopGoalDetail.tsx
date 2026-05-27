@@ -35,6 +35,13 @@ interface Props {
   locale: string
   onClose: () => void
   onDataChanged: () => void
+  /**
+   * Monotonically increases each time the parent's dashboard data refreshes
+   * (e.g. after assigning an investment from Unallocated). Including it in
+   * the transactions-fetching useEffect keeps this panel in sync without
+   * requiring a hard page reload.
+   */
+  refreshKey?: number
 }
 
 const GD_COLORS: Record<string, string> = {
@@ -68,7 +75,7 @@ function UnlinkSvg({ size = 18, color = 'currentColor' }: { size?: number; color
   )
 }
 
-export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged }: Props) {
+export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged, refreshKey }: Props) {
   const isVi = locale === 'vi'
   const [tab, setTab] = useState<'investments' | 'calculator' | 'history'>('investments')
   const [transactions, setTransactions] = useState<InvestmentTx[]>([])
@@ -89,13 +96,22 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
 
   useEffect(() => {
     setTxLoading(true)
-    setTab('investments')
+    // The new server response is the source of truth — drop any locally
+    // hidden tx IDs from the unassign flow so a re-assigned tx isn't stuck
+    // behind the optimistic filter on subsequent refreshes.
     setUnassignedIds([])
-    fetch(`/api/v1/investment-transactions?goal_id=${goal.goalId}&limit=200`)
+    // cache: 'no-store' — same reason as GoalDetailSheet: prevent the browser
+    // from serving a stale list after an assign-from-Unallocated.
+    fetch(`/api/v1/investment-transactions?goal_id=${goal.goalId}&limit=200`, { cache: 'no-store' })
       .then((r) => r.ok ? r.json() : { transactions: [] })
       .then((res) => setTransactions(res.transactions ?? []))
       .catch(() => setTransactions([]))
       .finally(() => setTxLoading(false))
+  }, [goal.goalId, refreshKey])
+
+  // Reset tab when the selected goal itself changes.
+  useEffect(() => {
+    setTab('investments')
   }, [goal.goalId])
 
   async function handleDelete() {

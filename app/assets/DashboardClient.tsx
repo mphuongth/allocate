@@ -234,12 +234,18 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const [isGeneratingReport, setIsGeneratingReport] = useState(false)
   const [historyKey, setHistoryKey] = useState(0)
   const [pullY, setPullY] = useState(0)
-  const [selectedGoal, setSelectedGoal] = useState<GoalData | null>(null)
+  // Track the goal by id rather than by object reference. When fetchData
+  // refreshes data.goals (e.g. after an Unallocated → Assign-to-goal flow),
+  // selectedGoal automatically picks up the new GoalData with updated funds
+  // so the goal detail panel/sheet shows the new investment without a hard
+  // page reload.
+  const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null)
   const [goalDetailOpen, setGoalDetailOpen] = useState(false)
   const [showReportSheet, setShowReportSheet] = useState(false)
   const [selectedInsurance, setSelectedInsurance] = useState<InsuranceData | null>(null)
   const [desktopAddTxOpen, setDesktopAddTxOpen] = useState(false)
   const [showAddInsurance, setShowAddInsurance] = useState(false)
+  const selectedGoal = data?.goals.find((g) => g.goalId === selectedGoalId) ?? null
   const PULL_THRESHOLD = 65
 
   const fetchDataRef = useRef<(opts?: { force?: boolean }) => Promise<void>>(async () => {})
@@ -689,7 +695,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                           key={goal.goalId}
                           goal={goal}
                           locale={locale}
-                          onClick={() => { setSelectedGoal(goal); setSelectedInsurance(null) }}
+                          onClick={() => { setSelectedGoalId(goal.goalId); setSelectedInsurance(null) }}
                         />
                       ))}
                     </div>
@@ -770,8 +776,9 @@ export default function DashboardClient({ userId }: { userId: string }) {
                   <DesktopGoalDetail
                     goal={selectedGoal}
                     locale={locale}
-                    onClose={() => setSelectedGoal(null)}
-                    onDataChanged={() => { setSelectedGoal(null); fetchData({ force: true }) }}
+                    onClose={() => setSelectedGoalId(null)}
+                    onDataChanged={() => { setSelectedGoalId(null); fetchData({ force: true }) }}
+                    refreshKey={historyKey}
                   />
                 ) : selectedInsurance ? (
                   <DesktopInsuranceDetail
@@ -850,7 +857,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                       <GoalCard
                         key={goal.goalId}
                         {...goal}
-                        onClick={() => { setSelectedGoal(goal); setGoalDetailOpen(true) }}
+                        onClick={() => { setSelectedGoalId(goal.goalId); setGoalDetailOpen(true) }}
                       />
                     ))}
                   </div>
@@ -1004,6 +1011,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
         open={goalDetailOpen}
         onClose={() => setGoalDetailOpen(false)}
         onDataChanged={() => fetchData({ force: true })}
+        refreshKey={historyKey}
       />
 
       {/* Desktop: Add Transaction Sheet */}
