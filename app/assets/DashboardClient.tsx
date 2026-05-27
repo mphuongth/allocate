@@ -532,7 +532,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const detailFund = fundDetailId ? allFunds.find((f) => f.fundId === fundDetailId) : null
 
   return (
-    <div className="space-y-4 md:space-y-6 md:h-full md:flex md:flex-col md:space-y-0">
+    <div className="space-y-4 md:space-y-0 md:flex md:flex-col md:flex-1 md:min-h-0">
         {/* Pull-to-refresh indicator (mobile PWA only) */}
         <div
           className="md:hidden -mx-4 -mt-4 overflow-hidden flex items-center justify-center"
@@ -624,13 +624,14 @@ export default function DashboardClient({ userId }: { userId: string }) {
           isDesktop ? (
             /* ── Desktop: two-column layout — self-contained scroll context
                so the page header sits outside the scroll and stays pinned
-               (same pattern as DesktopPlanningView). ── */
+               (same pattern as DesktopPlanningView). <main> is full-bleed
+               on /dashboard via PAGES_WITH_FULL_HEIGHT_DESKTOP, so no
+               negative margins are needed here. ── */
             <div
               data-testid="desktop-overview"
-              style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden', margin: '-16px -24px -16px' }}
+              style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}
             >
-              {/* Page title — outside the scrollable body so it stays at the top.
-                  No negative margins because the parent already escaped <main>'s padding. */}
+              {/* Page title — outside the scrollable body so it stays at the top. */}
               <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 28px 16px', borderBottom: '1px solid var(--c-line)', background: 'var(--c-canvas)', flexShrink: 0 }}>
                 <div>
                   <div data-testid="desktop-page-title" style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--c-muted)', marginBottom: 3 }}>
