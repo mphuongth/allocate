@@ -532,7 +532,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const detailFund = fundDetailId ? allFunds.find((f) => f.fundId === fundDetailId) : null
 
   return (
-    <div className="space-y-4 md:space-y-6">
+    <div className="space-y-4 md:space-y-6 md:h-full md:flex md:flex-col md:space-y-0">
         {/* Pull-to-refresh indicator (mobile PWA only) */}
         <div
           className="md:hidden -mx-4 -mt-4 overflow-hidden flex items-center justify-center"
@@ -622,17 +622,16 @@ export default function DashboardClient({ userId }: { userId: string }) {
         {/* Dashboard content — conditionally renders desktop or mobile layout (no DOM duplication) */}
         {!loading && data && !isEmpty && (
           isDesktop ? (
-            /* ── Desktop: two-column layout ── */
+            /* ── Desktop: two-column layout — self-contained scroll context
+               so the page header sits outside the scroll and stays pinned
+               (same pattern as DesktopPlanningView). ── */
             <div
               data-testid="desktop-overview"
-              style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}
+              style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden', margin: '-16px -24px -16px' }}
             >
-              {/* Page title — layout matches Plan / Funds / Settings.
-                  Negative margins escape <main>'s md:px-6 / py-4 so the
-                  border-bottom and background span the full content width,
-                  flush against the sidebar like the other desktop pages.
-                  Sticky so it stays visible while the two-column body scrolls. */}
-              <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '-16px -24px 0', padding: '20px 28px 16px', borderBottom: '1px solid var(--c-line)', background: 'var(--c-canvas)', flexShrink: 0, position: 'sticky', top: 0, zIndex: 10 }}>
+              {/* Page title — outside the scrollable body so it stays at the top.
+                  No negative margins because the parent already escaped <main>'s padding. */}
+              <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 28px 16px', borderBottom: '1px solid var(--c-line)', background: 'var(--c-canvas)', flexShrink: 0 }}>
                 <div>
                   <div data-testid="desktop-page-title" style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--c-muted)', marginBottom: 3 }}>
                     {t('overview')}
@@ -663,10 +662,10 @@ export default function DashboardClient({ userId }: { userId: string }) {
                 </div>
               </header>
 
-              {/* Two-column body */}
-              <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+              {/* Two-column body — clips overflow so each column scrolls on its own */}
+              <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
               {/* Left column: goals, unallocated, insurance */}
-              <div style={{ flex: 1, minWidth: 0, paddingTop: 20, paddingRight: 20 }}>
+              <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', padding: '20px 20px 40px 28px' }}>
                 {/* Goals */}
                 {sortedGoals.length > 0 && (
                   <section style={{ marginBottom: 24 }}>
@@ -761,19 +760,14 @@ export default function DashboardClient({ userId }: { userId: string }) {
 
               </div>
 
-              {/* Right column: net worth panel (sticky).
-                  top offset = sticky page-header height (~76px) so this column
-                  parks below the header instead of underneath it. */}
+              {/* Right column: net worth panel — has its own scroll inside the
+                  two-column body, no sticky needed since the body itself is the
+                  scroll container. */}
               <div style={{
                 width: 300, flexShrink: 0,
                 borderLeft: '1px solid var(--c-line)',
-                paddingTop: 20,
-                paddingLeft: 20,
-                position: 'sticky',
-                top: 76,
-                alignSelf: 'flex-start',
-                maxHeight: 'calc(100vh - 56px - 76px)',
                 overflowY: 'auto',
+                padding: '20px 28px 40px 20px',
               }}>
                 {selectedGoal ? (
                   <DesktopGoalDetail
