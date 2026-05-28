@@ -1050,6 +1050,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
         onClose={() => setShowAddInsurance(false)}
         onCreated={() => fetchData({ force: true })}
         locale={locale}
+        desktop={isDesktop}
       />
 
       {/* Mobile: Insurance detail sheet */}
