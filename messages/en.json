@@ -453,6 +453,7 @@
     "statusDue": "Due soon",
     "statusOverdue": "Overdue",
     "statusCompleted": "Paid",
+    "statusPaidForYear": "Paid for {year}",
     "statusReady": "Ready to pay",
     "goldPrice": "Doji Gold Price",
     "navUpdated": "NAV updated",

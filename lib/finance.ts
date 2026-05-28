@@ -30,3 +30,15 @@ export function insuranceStatus(
   if (payment <= thirtyDaysLater) return 'upcoming'
   return 'on_track'
 }
+
+// Returns the calendar year a member's premium was last settled for, but only
+// when that payment happened in the current year — i.e. the current cycle is
+// paid. Returns null otherwise. The date is parsed as local so a plain
+// YYYY-MM-DD string never shifts across a timezone boundary.
+export function insurancePaidYear(lastPaymentDate: string | null): number | null {
+  if (!lastPaymentDate) return null
+  const [y, m, d] = lastPaymentDate.split('-').map(Number)
+  const paid = new Date(y, (m ?? 1) - 1, d ?? 1)
+  if (isNaN(paid.getTime())) return null
+  return paid.getFullYear() === new Date().getFullYear() ? paid.getFullYear() : null
+}

@@ -1,10 +1,11 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import InsuranceCard from '../InsuranceCard'
 
 vi.mock('next-intl', () => ({
-  useTranslations: () => (key: string) => key,
+  useTranslations: () => (key: string, vars?: Record<string, unknown>) =>
+    vars && 'year' in vars ? `${key}:${vars.year}` : key,
 }))
 
 const baseProps = {
@@ -28,5 +29,25 @@ describe('InsuranceCard — tappable on mobile (issue #222)', () => {
   it('exposes the row as an interactive button when onClick is provided', () => {
     render(<InsuranceCard {...baseProps} onClick={vi.fn()} />)
     expect(screen.getByRole('button', { name: /john doe/i })).toBeInTheDocument()
+  })
+})
+
+describe('InsuranceCard — paid-for-the-year badge (issue #227)', () => {
+  afterEach(() => vi.useRealTimers())
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 4, 28))
+  })
+
+  it('shows the "Paid for <year>" badge when the last payment is in the current year', () => {
+    render(<InsuranceCard {...baseProps} status="on_track" lastPaymentDate="2026-05-28" />)
+    expect(screen.getByText('statusPaidForYear:2026')).toBeInTheDocument()
+    expect(screen.queryByText('statusDue')).not.toBeInTheDocument()
+  })
+
+  it('falls back to the computed status when not paid this year', () => {
+    render(<InsuranceCard {...baseProps} status="on_track" lastPaymentDate="2025-05-28" />)
+    expect(screen.getByText('statusDue')).toBeInTheDocument()
+    expect(screen.queryByText(/statusPaidForYear/)).not.toBeInTheDocument()
   })
 })

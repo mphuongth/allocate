@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { calcProjectedInterest, isNavStale, insuranceStatus } from '../finance'
+import { calcProjectedInterest, isNavStale, insuranceStatus, insurancePaidYear } from '../finance'
 
 describe('calcProjectedInterest', () => {
   it('returns 0 when rate is null', () => {
@@ -79,5 +79,31 @@ describe('insuranceStatus', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-04-29'))
     expect(insuranceStatus('2026-06-15')).toBe('on_track')
+  })
+})
+
+describe('insurancePaidYear', () => {
+  afterEach(() => vi.useRealTimers())
+
+  it('returns null when lastPaymentDate is null', () => {
+    expect(insurancePaidYear(null)).toBeNull()
+  })
+  it('returns the calendar year when paid in the current year', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-05-28'))
+    expect(insurancePaidYear('2026-05-28')).toBe(2026)
+  })
+  it('returns null when the last payment was in a previous year', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-05-28'))
+    expect(insurancePaidYear('2025-12-31')).toBeNull()
+  })
+  it('treats a Jan 1st plain date as a local date (no shift to the prior year)', () => {
+    vi.useFakeTimers()
+    // Mid-year local time so "current year" is unambiguously 2026 regardless of
+    // the test machine's timezone. A naive new Date('2026-01-01') parses as UTC
+    // midnight and slips to 2025 in negative-offset zones — local parsing must not.
+    vi.setSystemTime(new Date(2026, 5, 15))
+    expect(insurancePaidYear('2026-01-01')).toBe(2026)
   })
 })

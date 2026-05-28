@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import DesktopInsuranceDetail from '../DesktopInsuranceDetail'
 import type { InsuranceData } from '../../DashboardClient'
@@ -53,5 +53,53 @@ describe('DesktopInsuranceDetail — payment history (issue #223)', () => {
     const total = await screen.findByTestId('insurance-history-total')
     // 1,500,000 + 1,000,000 = 2,500,000 == amountSaved
     expect(total).toHaveTextContent(/₫\s?2\.500\.000/)
+  })
+})
+
+describe('DesktopInsuranceDetail — paid-for-the-year state (issue #227)', () => {
+  afterEach(() => vi.useRealTimers())
+
+  // After mark-paid the backend sets last_payment_date to today, advances the
+  // due date a year, and resets savings — so status recomputes to on_track.
+  const paidIns: InsuranceData = {
+    ...ins,
+    status: 'on_track',
+    amountSaved: 0,
+    savingsProgressPercentage: 0,
+    nextPaymentDate: '2027-05-28',
+    lastPaymentDate: '2026-05-28',
+  } as InsuranceData
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 4, 28))
+  })
+
+  it('shows a "Paid for <year>" status badge instead of the computed status', () => {
+    render(<DesktopInsuranceDetail ins={paidIns} locale="en" onClose={vi.fn()} />)
+    expect(screen.getByText('Paid for 2026')).toBeInTheDocument()
+    expect(screen.queryByText('Due soon')).not.toBeInTheDocument()
+  })
+
+  it('shows the "<year> premium settled" confirmation chip', () => {
+    render(<DesktopInsuranceDetail ins={paidIns} locale="en" onClose={vi.fn()} />)
+    expect(screen.getByText('2026 premium settled')).toBeInTheDocument()
+  })
+
+  it('reframes the savings block as saving for the next year', () => {
+    render(<DesktopInsuranceDetail ins={paidIns} locale="en" onClose={vi.fn()} />)
+    expect(screen.getByText('Saving for 2027')).toBeInTheDocument()
+  })
+
+  it('hides the "Mark as paid" status CTA once paid this year', () => {
+    render(<DesktopInsuranceDetail ins={paidIns} locale="en" onClose={vi.fn()} />)
+    expect(screen.queryByTestId('insurance-cta-status')).not.toBeInTheDocument()
+  })
+
+  it('does NOT show the paid state when the last payment was a previous year', () => {
+    const stale: InsuranceData = { ...paidIns, lastPaymentDate: '2025-05-28' } as InsuranceData
+    render(<DesktopInsuranceDetail ins={stale} locale="en" onClose={vi.fn()} />)
+    expect(screen.queryByText('Paid for 2025')).not.toBeInTheDocument()
+    expect(screen.queryByText(/premium settled/)).not.toBeInTheDocument()
   })
 })
