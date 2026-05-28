@@ -755,7 +755,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                     <DesktopInsuranceList
                       insurance={data.insurance}
                       locale={locale}
-                      onOpen={(ins) => setSelectedInsurance(selectedInsurance?.insuranceId === ins.insuranceId ? null : ins)}
+                      onOpen={(ins) => { setSelectedGoalId(null); setSelectedInsurance(selectedInsurance?.insuranceId === ins.insuranceId ? null : ins) }}
                       onAdd={() => setShowAddInsurance(true)}
                     />
                   </section>
