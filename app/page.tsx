@@ -163,12 +163,8 @@ html, body { overflow-x: hidden; }
   /* Footer */
   .lp-footer { padding: 22px 0 !important; }
   .lp-footer-inner {
-    flex-direction: column !important;
-    align-items: flex-start !important;
-    gap: 14px !important;
     padding: 0 20px !important;
   }
-  .lp-footer-links { gap: 18px !important; flex-wrap: wrap !important; }
 }
 
 /* ── Responsive: small phone polish ─────────────────────────────────────── */
@@ -511,17 +507,11 @@ export default async function HomePage() {
         </section>
 
         {/* ── Footer ──────────────────────────────────────────────────────────── */}
-        <footer className="lp-footer" style={{ background: '#081b30', padding: '28px 0', borderTop: '1px solid rgba(255,255,255,0.12)' }}>
+        <footer className="lp-footer" style={{ background: '#081b30', padding: '28px 0', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
           <div className="lp-footer-inner" style={{ maxWidth: 1120, margin: '0 auto', padding: '0 48px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+            <div className="lp-footer-brand" style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
               <span style={{ opacity: 0.45 }}><CairnLogo width={22} height={19} /></span>
-              <span style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.35)' }}>{t('footerCopy')}</span>
-            </div>
-            <div className="lp-footer-links" style={{ display: 'flex', gap: 22 }}>
-              {[['#features', 'Features'], ['#how', 'How it works'], ['#plan', 'Monthly plan']].map(([href, label]) => (
-                <a key={href} href={href} style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.35)', textDecoration: 'none' }}
-                  className="hover:!text-white/65 transition-colors duration-150">{label}</a>
-              ))}
+              <span className="lp-footer-copy" style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.35)' }}>{t('footerCopy')}</span>
             </div>
           </div>
         </footer>
