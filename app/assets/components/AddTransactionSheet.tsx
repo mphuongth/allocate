@@ -16,7 +16,7 @@ interface Props {
 
 const inputStyle: React.CSSProperties = {
   width: '100%', boxSizing: 'border-box',
-  padding: '10px 12px', fontSize: 14,
+  padding: '10px 12px', fontSize: 16,
   background: 'var(--c-card-2)', border: '1px solid var(--c-line)',
   borderRadius: 10, color: 'var(--c-ink)', fontFamily: 'inherit',
   outline: 'none',
@@ -95,6 +95,13 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop }:
       return () => clearTimeout(t)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+
+  // Lock background scroll while the sheet is open so the page behind it can't move.
+  useEffect(() => {
+    if (!open) return
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = '' }
   }, [open])
 
   function resetForm() {
@@ -563,7 +570,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop }:
             <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em' }}>{t('title')}</h3>
             <button onClick={onClose} style={{ padding: 6, border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', color: 'var(--c-muted)', display: 'flex' }} aria-label="Close"><X size={18} /></button>
           </div>
-          <div style={{ flex: 1, padding: '18px 20px', overflowY: 'auto' }}>
+          <div style={{ flex: 1, padding: '18px 20px', overflowY: 'auto', overflowX: 'hidden', overscrollBehavior: 'contain' }}>
             {formBody}
           </div>
         </div>
@@ -589,7 +596,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop }:
           width: '100%', maxWidth: 480, maxHeight: '90dvh',
           background: 'var(--c-card)',
           borderTopLeftRadius: 20, borderTopRightRadius: 20,
-          display: 'flex', flexDirection: 'column',
+          display: 'flex', flexDirection: 'column', overflow: 'hidden',
           animation: open ? 'slide-up 220ms cubic-bezier(0.2, 0.8, 0.2, 1)' : 'slide-down 180ms ease forwards',
           boxShadow: '0 -8px 24px rgba(0,0,0,0.12)',
         }}
@@ -612,7 +619,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop }:
         </div>
 
         {/* Scrollable form body */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '0 16px 32px' }}>
+        <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', overscrollBehavior: 'contain', touchAction: 'pan-y', padding: '0 16px 32px' }}>
           {formBody}
         </div>
       </div>

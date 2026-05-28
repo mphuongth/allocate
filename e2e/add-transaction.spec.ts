@@ -102,6 +102,32 @@ test('Add transaction sheet closes when Cancel is clicked', async ({ page }) => 
   await expect(page.locator('text=Add transaction').first()).not.toBeVisible({ timeout: 5_000 })
 })
 
+// ─── Background scroll lock (issue #219) ─────────────────────────────────────
+// While the sheet is open the page behind it must not scroll, otherwise the user
+// can drag the underlying page around behind the modal.
+test('opening the sheet locks background scroll', async ({ page }) => {
+  await page.goto('/dashboard')
+  await page.waitForLoadState('networkidle')
+  await expect(page.evaluate(() => getComputedStyle(document.body).overflow)).resolves.not.toBe('hidden')
+
+  await page.getByRole('button', { name: /add transaction/i }).click()
+  await expect(page.locator('text=Add transaction').first()).toBeVisible({ timeout: 5_000 })
+
+  await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).overflow)).toBe('hidden')
+})
+
+test('closing the sheet restores background scroll', async ({ page }) => {
+  await page.goto('/dashboard')
+  await page.waitForLoadState('networkidle')
+  await page.getByRole('button', { name: /add transaction/i }).click()
+  await expect(page.locator('text=Add transaction').first()).toBeVisible({ timeout: 5_000 })
+  await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).overflow)).toBe('hidden')
+
+  await page.getByRole('button', { name: /^cancel$/i }).click()
+  await expect(page.locator('text=Add transaction').first()).not.toBeVisible({ timeout: 5_000 })
+  await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).overflow)).not.toBe('hidden')
+})
+
 test('switching to Bank type shows Deposit and Withdraw directions', async ({ page }) => {
   await page.goto('/dashboard')
   await page.waitForLoadState('networkidle')
