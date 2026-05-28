@@ -107,6 +107,29 @@ test('login page has link to signup', async ({ page }) => {
   await expect(page.getByRole('link', { name: /sign up/i })).toBeVisible()
 })
 
+// ─── Mobile: prevent iOS auto-zoom on input focus ────────────────────────────
+// iOS Safari zooms the viewport when a focused input has font-size < 16px, and
+// never resets it — leaving subsequent pages (e.g. Overview after login) zoomed.
+test.describe('mobile input font-size', () => {
+  test.use({ viewport: { width: 390, height: 844 } })
+
+  test('login email input renders at >=16px to avoid iOS zoom', async ({ page }) => {
+    await page.goto('/auth/login')
+    const fontSize = await page.locator('#email').evaluate(
+      (el) => parseFloat(getComputedStyle(el).fontSize)
+    )
+    expect(fontSize).toBeGreaterThanOrEqual(16)
+  })
+
+  test('login password input renders at >=16px to avoid iOS zoom', async ({ page }) => {
+    await page.goto('/auth/login')
+    const fontSize = await page.locator('#password').evaluate(
+      (el) => parseFloat(getComputedStyle(el).fontSize)
+    )
+    expect(fontSize).toBeGreaterThanOrEqual(16)
+  })
+})
+
 // ─── Desktop centered card layout ───────────────────────────────────────────
 
 test('login form is inside a card', async ({ page }) => {
