@@ -97,6 +97,13 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop }:
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
+  // Lock background scroll while the sheet is open so the page behind it can't move.
+  useEffect(() => {
+    if (!open) return
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = '' }
+  }, [open])
+
   function resetForm() {
     setAssetType('fund')
     setDir('buy')
