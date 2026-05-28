@@ -244,10 +244,14 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null)
   const [goalDetailOpen, setGoalDetailOpen] = useState(false)
   const [showReportSheet, setShowReportSheet] = useState(false)
-  const [selectedInsurance, setSelectedInsurance] = useState<InsuranceData | null>(null)
+  const [selectedInsuranceId, setSelectedInsuranceId] = useState<string | null>(null)
   const [desktopAddTxOpen, setDesktopAddTxOpen] = useState(false)
   const [showAddInsurance, setShowAddInsurance] = useState(false)
   const selectedGoal = data?.goals.find((g) => g.goalId === selectedGoalId) ?? null
+  // Derive the selected insurance from fresh data (mirrors selectedGoal) so the
+  // detail panel reflects updates after mark-paid / log-payment refetches
+  // instead of rendering a stale snapshot.
+  const selectedInsurance = data?.insurance.find((i) => i.insuranceId === selectedInsuranceId) ?? null
   const PULL_THRESHOLD = 65
 
   const fetchDataRef = useRef<(opts?: { force?: boolean }) => Promise<void>>(async () => {})
@@ -698,7 +702,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                           key={goal.goalId}
                           goal={goal}
                           locale={locale}
-                          onClick={() => { setSelectedGoalId(goal.goalId); setSelectedInsurance(null) }}
+                          onClick={() => { setSelectedGoalId(goal.goalId); setSelectedInsuranceId(null) }}
                         />
                       ))}
                     </div>
@@ -755,7 +759,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                     <DesktopInsuranceList
                       insurance={data.insurance}
                       locale={locale}
-                      onOpen={(ins) => { setSelectedGoalId(null); setSelectedInsurance(selectedInsurance?.insuranceId === ins.insuranceId ? null : ins) }}
+                      onOpen={(ins) => { setSelectedGoalId(null); setSelectedInsuranceId(selectedInsuranceId === ins.insuranceId ? null : ins.insuranceId) }}
                       onAdd={() => setShowAddInsurance(true)}
                     />
                   </section>
@@ -784,7 +788,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                   <DesktopInsuranceDetail
                     ins={selectedInsurance}
                     locale={locale}
-                    onClose={() => setSelectedInsurance(null)}
+                    onClose={() => setSelectedInsuranceId(null)}
                     onChanged={() => fetchData({ force: true })}
                   />
                 ) : (
@@ -916,7 +920,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                         key={ins.insuranceId}
                         {...ins}
                         isLast={idx === data.insurance.length - 1}
-                        onClick={() => setSelectedInsurance(ins)}
+                        onClick={() => setSelectedInsuranceId(ins.insuranceId)}
                       />
                     ))}
                   </div>
@@ -1052,7 +1056,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
         open={!isDesktop && !!selectedInsurance}
         ins={selectedInsurance}
         locale={locale}
-        onClose={() => setSelectedInsurance(null)}
+        onClose={() => setSelectedInsuranceId(null)}
         onChanged={() => fetchData({ force: true })}
       />
     </div>
