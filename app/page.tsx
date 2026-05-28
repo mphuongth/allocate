@@ -35,11 +35,11 @@ function CheckIcon() {
 }
 
 const LANDING_RESPONSIVE_CSS = `
-/* Horizontal overflow guard — applied to body, NOT the .lp-root wrapper, so
-   the sticky <nav> can still pin against the viewport on mobile. (overflow-x
-   on the wrapper makes that wrapper the scroll container, which breaks
-   position: sticky for descendants.) */
-html, body { overflow-x: hidden; }
+/* Horizontal overflow guard — use overflow-x:clip instead of hidden so
+   the sticky <nav> still pins. overflow:hidden creates a scroll container
+   which can make position:sticky stop working in iOS Safari and some
+   Chrome configurations. clip clips without creating a scroll context. */
+html, body { overflow-x: clip; }
 
 /* ── Responsive: tablet ─────────────────────────────────────────────────── */
 @media (max-width: 960px) {
@@ -76,11 +76,16 @@ html, body { overflow-x: hidden; }
   /* Nav — collapse links, keep brand + lang + login */
   .lp-nav-inner { height: 54px !important; padding: 0 18px !important; }
   .lp-nav-links { display: none !important; }
-  .lp-nav-actions { gap: 6px !important; }
+  .lp-nav-actions { gap: 6px !important; flex-shrink: 0 !important; }
   /* Both auth buttons get the smaller mobile padding so Vietnamese labels
      (Đăng nhập / Đăng ký) fit cleanly next to the language toggle. */
   .lp-nav-login,
-  .lp-nav-signup { padding: 6px 12px !important; font-size: 12px !important; }
+  .lp-nav-signup {
+    padding: 6px 10px !important;
+    font-size: 12px !important;
+    white-space: nowrap !important;
+  }
+  .lp-logo { flex-shrink: 0 !important; }
   .lp-logo-wordmark { font-size: 17px !important; }
 
   /* Hero — denser, full-width */
@@ -239,7 +244,7 @@ export default async function HomePage() {
         {/* ── Nav ───────────────────────────────────────────────────────────── */}
         <nav className="lp-nav" style={{ position: 'sticky', top: 0, zIndex: 200, background: NAVY, borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
           <div className="lp-nav-inner" style={{ maxWidth: 1120, margin: '0 auto', padding: '0 48px', height: 58, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 9, textDecoration: 'none' }}>
+            <Link href="/" className="lp-logo" style={{ display: 'flex', alignItems: 'center', gap: 9, textDecoration: 'none' }}>
               <CairnLogo width={26} height={22} />
               <span className="lp-logo-wordmark" style={{ fontSize: 19, fontWeight: 700, color: '#fff', letterSpacing: '-0.03em' }}>Cairn</span>
             </Link>
