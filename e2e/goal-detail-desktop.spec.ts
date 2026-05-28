@@ -57,4 +57,15 @@ test.describe('Desktop goal detail panel', () => {
     await expect(page.getByTestId('desktop-goal-detail')).not.toBeVisible()
     await expect(page.getByTestId('desktop-net-worth-panel')).toBeVisible({ timeout: 10_000 })
   })
+
+  test('clicking an insurance row while goal detail is open switches to insurance detail', async ({ page }) => {
+    // Bug #226: with goal detail open in the right panel, clicking an insurance
+    // member did nothing because the panel prioritised the still-selected goal.
+    await page.getByText('E2E Desktop Goal').first().click()
+    await expect(page.getByTestId('desktop-goal-detail')).toBeVisible({ timeout: 5_000 })
+
+    await page.getByTestId('insurance-row').first().click()
+    await expect(page.getByTestId('insurance-detail-panel')).toBeVisible({ timeout: 5_000 })
+    await expect(page.getByTestId('desktop-goal-detail')).not.toBeVisible()
+  })
 })
