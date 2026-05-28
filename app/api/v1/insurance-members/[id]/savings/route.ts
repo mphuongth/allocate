@@ -19,9 +19,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   const { data, error } = await supabase
     .from('insurance_savings')
-    .select('id, amount_saved_vnd, created_at')
+    .select('id, amount_saved_vnd, saved_date, created_at')
     .eq('insurance_member_id', memberId)
     .eq('user_id', user.id)
+    .order('saved_date', { ascending: false })
     .order('created_at', { ascending: false })
 
   if (error) return NextResponse.json({ error: 'Failed to fetch savings' }, { status: 500 })

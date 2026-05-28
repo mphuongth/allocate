@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { Check, ChevronLeft, Edit2, Plus, Trash2, Calendar, X } from 'lucide-react'
-import { fmtCompact } from '@/lib/formatters'
+import { fmt, fmtCompact } from '@/lib/formatters'
 import type { InsuranceData } from '../DashboardClient'
 import LogInsurancePaymentModal from './LogInsurancePaymentModal'
 
@@ -38,6 +38,7 @@ const COVERAGE_OPTIONS: { value: string; label: string; labelVi: string }[] = [
 interface SavingsEntry {
   id: string
   amount_saved_vnd: number
+  saved_date: string | null
   created_at: string
 }
 
@@ -368,7 +369,12 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
               </div>
             ) : (
               history.map((p, i) => {
-                const dt = new Date(p.created_at)
+                // Use the dedicated saved_date column (a plain date) and parse it
+                // as a local date so it never shifts across timezones. Fall back to
+                // the created_at date portion for older records without saved_date.
+                const dateOnly = (p.saved_date ?? p.created_at).slice(0, 10)
+                const [yy, mm, dd] = dateOnly.split('-').map(Number)
+                const dt = new Date(yy, (mm ?? 1) - 1, dd ?? 1)
                 const dateStr = dt.toLocaleDateString(isVi ? 'vi-VN' : 'en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
                 const isLast = i === history.length - 1
                 return (
@@ -388,7 +394,7 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
                       <div style={{ fontSize: 12, fontWeight: 500 }}>{dateStr}</div>
                     </div>
                     <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>
-                      {fmtCompact(p.amount_saved_vnd)}
+                      {fmt(Number(p.amount_saved_vnd))}
                     </span>
                   </div>
                 )

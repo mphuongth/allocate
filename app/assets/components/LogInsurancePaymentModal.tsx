@@ -55,12 +55,15 @@ export default function LogInsurancePaymentModal({ open, onClose, onSaved, ins, 
     setSubmitting(true)
     setError(null)
     try {
+      const now = new Date()
+      const savedDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
       const res = await fetch('/api/v1/insurance-savings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           insurance_member_id: ins.insuranceId,
           amount_saved_vnd: amountNum,
+          saved_date: savedDate,
         }),
       })
       if (!res.ok) {
