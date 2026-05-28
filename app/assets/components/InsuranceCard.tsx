@@ -1,6 +1,6 @@
 'use client'
 
-import { Shield } from 'lucide-react'
+import { Shield, ChevronRight } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { fmtCompact } from '@/lib/formatters'
 
@@ -13,6 +13,7 @@ interface Props {
   savingsProgressPercentage: number
   status: 'on_track' | 'upcoming' | 'overdue' | 'completed' | 'ready'
   isLast?: boolean
+  onClick?: () => void
 }
 
 const STATUS_COLOR: Record<string, string> = {
@@ -33,7 +34,7 @@ const BAR_COLOR: Record<string, string> = {
 
 export default function InsuranceCard({
   insuranceName, coverageType, annualPremium, amountSaved,
-  savingsProgressPercentage, status, isLast,
+  savingsProgressPercentage, status, isLast, onClick,
 }: Props) {
   const t = useTranslations('dashboard')
 
@@ -50,10 +51,18 @@ export default function InsuranceCard({
   }
 
   return (
-    <div style={{
-      padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12,
-      borderBottom: isLast ? 'none' : '1px solid var(--c-line)',
-    }}>
+    <div
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick() } } : undefined}
+      style={{
+        padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12,
+        borderBottom: isLast ? 'none' : '1px solid var(--c-line)',
+        cursor: onClick ? 'pointer' : undefined,
+        WebkitTapHighlightColor: 'transparent',
+      }}
+    >
       <div style={{
         width: 32, height: 32, borderRadius: 8, flexShrink: 0,
         background: 'var(--c-card-2)',
@@ -86,6 +95,10 @@ export default function InsuranceCard({
           {fmtCompact(amountSaved)} / {fmtCompact(annualPremium)}
         </div>
       </div>
+
+      {onClick && (
+        <ChevronRight size={16} style={{ flexShrink: 0, color: 'var(--c-muted)' }} />
+      )}
     </div>
   )
 }
