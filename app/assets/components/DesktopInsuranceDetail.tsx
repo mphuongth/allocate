@@ -35,11 +35,11 @@ const COVERAGE_OPTIONS: { value: string; label: string; labelVi: string }[] = [
   { value: 'Child', label: 'Child', labelVi: 'Con' },
 ]
 
-interface SavingsEntry {
+interface HistoryEntry {
   id: string
-  amount_saved_vnd: number
-  saved_date: string | null
-  created_at: string
+  amount: number
+  date: string          // YYYY-MM-DD
+  kind: 'logged' | 'plan'
 }
 
 function initialsFor(name: string): string {
@@ -69,7 +69,7 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
-  const [history, setHistory] = useState<SavingsEntry[] | null>(null)
+  const [history, setHistory] = useState<HistoryEntry[] | null>(null)
   const [historyLoading, setHistoryLoading] = useState(false)
 
   // Sync edit form when target member changes
@@ -88,7 +88,7 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
       const res = await fetch(`/api/v1/insurance-members/${ins.insuranceId}/savings`)
       if (res.ok) {
         const j = await res.json()
-        setHistory(j.savings ?? [])
+        setHistory(j.entries ?? [])
       } else {
         setHistory([])
       }
@@ -368,37 +368,55 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
                 {isVi ? 'Chưa có giao dịch' : 'No payments yet'}
               </div>
             ) : (
-              history.map((p, i) => {
-                // Use the dedicated saved_date column (a plain date) and parse it
-                // as a local date so it never shifts across timezones. Fall back to
-                // the created_at date portion for older records without saved_date.
-                const dateOnly = (p.saved_date ?? p.created_at).slice(0, 10)
-                const [yy, mm, dd] = dateOnly.split('-').map(Number)
-                const dt = new Date(yy, (mm ?? 1) - 1, dd ?? 1)
-                const dateStr = dt.toLocaleDateString(isVi ? 'vi-VN' : 'en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-                const isLast = i === history.length - 1
-                return (
-                  <div key={p.id} style={{
-                    display: 'flex', alignItems: 'center', gap: 10,
-                    padding: '11px 16px',
-                    borderBottom: isLast ? 'none' : '1px solid var(--c-line)',
-                  }}>
-                    <div style={{
-                      width: 28, height: 28, borderRadius: 7,
-                      background: 'var(--c-pos-tint)', color: 'var(--c-pos)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              <>
+                {history.map((p) => {
+                  // Parse the plain date as a local date so it never shifts across timezones.
+                  const [yy, mm, dd] = p.date.split('-').map(Number)
+                  const dt = new Date(yy, (mm ?? 1) - 1, dd ?? 1)
+                  const isPlan = p.kind === 'plan'
+                  const dateStr = isPlan
+                    ? dt.toLocaleDateString(isVi ? 'vi-VN' : 'en-GB', { month: 'short', year: 'numeric' })
+                    : dt.toLocaleDateString(isVi ? 'vi-VN' : 'en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+                  const sub = isPlan
+                    ? (isVi ? 'Kế hoạch hàng tháng' : 'Monthly plan')
+                    : (isVi ? 'Đã ghi nhận' : 'Logged payment')
+                  return (
+                    <div key={p.id} style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '11px 16px',
+                      borderBottom: '1px solid var(--c-line)',
                     }}>
-                      <Check size={12} strokeWidth={2.5} />
+                      <div style={{
+                        width: 28, height: 28, borderRadius: 7,
+                        background: isPlan ? 'var(--c-navy-tint)' : 'var(--c-pos-tint)',
+                        color: isPlan ? 'var(--c-navy)' : 'var(--c-pos)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                      }}>
+                        {isPlan ? <Calendar size={12} strokeWidth={2.2} /> : <Check size={12} strokeWidth={2.5} />}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 500 }}>{dateStr}</div>
+                        <div style={{ fontSize: 10, color: 'var(--c-muted)', marginTop: 1 }}>{sub}</div>
+                      </div>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>
+                        {fmt(p.amount)}
+                      </span>
                     </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 12, fontWeight: 500 }}>{dateStr}</div>
-                    </div>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>
-                      {fmt(Number(p.amount_saved_vnd))}
-                    </span>
-                  </div>
-                )
-              })
+                  )
+                })}
+                {/* Total — reconciles with the "Saved" KPI above */}
+                <div data-testid="insurance-history-total" style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '11px 16px', background: 'var(--c-card-2)',
+                }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--c-muted)' }}>
+                    {isVi ? 'Tổng đã tích lũy' : 'Total saved'}
+                  </span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>
+                    {fmt(history.reduce((s, e) => s + e.amount, 0))}
+                  </span>
+                </div>
+              </>
             )}
           </div>
 
