@@ -4,7 +4,10 @@ import userEvent from '@testing-library/user-event'
 import GoalDetailSheet from '../GoalDetailSheet'
 import type { GoalData } from '../../DashboardClient'
 
-vi.mock('next-intl', () => ({ useLocale: () => 'en' }))
+vi.mock('next-intl', () => ({
+  useLocale: () => 'en',
+  useTranslations: () => (k: string) => k,
+}))
 
 const mockFund = {
   fundId: 'fund-1',
@@ -248,6 +251,72 @@ describe('GoalDetailSheet — unassign from goal', () => {
       ([, init]) => init?.method === 'PATCH' || init?.method === 'PUT' || init?.method === 'DELETE'
     )
     expect(writes.length).toBe(0)
+  })
+})
+
+describe('GoalDetailSheet — investment options Sell / history (issue #224)', () => {
+  const mockBankTx = {
+    transaction_id: 'tx-bank-1',
+    transaction_type: 'investment',
+    asset_type: 'bank',
+    fund_id: null,
+    fund_name: null,
+    fund_code: null,
+    investment_date: '2026-01-01',
+    amount_vnd: 5_000_000,
+    units: null,
+    unit_price: null,
+    interest_rate: null,
+    expiry_date: null,
+    notes: 'Techcombank',
+    principal_withdrawn: null,
+    units_withdrawn: null,
+  }
+  const bankGoal: GoalData = { ...mockGoal, funds: [] }
+
+  it('opens the Sell sheet when "Sell" is tapped on a fund investment', async () => {
+    render(<GoalDetailSheet {...baseProps} />)
+    await waitFor(() => screen.getByText('VNINDEX ETF'))
+    await userEvent.click(screen.getByRole('button', { name: /options/i }))
+    await waitFor(() => expect(screen.getByText('Sell')).toBeInTheDocument())
+    await userEvent.click(screen.getByText('Sell'))
+    await waitFor(() => expect(screen.getByTestId('sell-sheet')).toBeInTheDocument())
+  })
+
+  it('opens the Withdraw sheet when "Withdraw" is tapped on a bank investment', async () => {
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('investment-transactions')) {
+        return Promise.resolve({ ok: true, json: async () => ({ transactions: [mockBankTx] }) })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+    render(<GoalDetailSheet {...baseProps} goal={bankGoal} />)
+    await waitFor(() => screen.getByText('Techcombank'))
+    await userEvent.click(screen.getByRole('button', { name: /options/i }))
+    await waitFor(() => expect(screen.getByText('Withdraw')).toBeInTheDocument())
+    await userEvent.click(screen.getByText('Withdraw'))
+    await waitFor(() => expect(screen.getByTestId('sell-sheet')).toBeInTheDocument())
+  })
+
+  it('switches to the History tab when "Transaction history" is tapped on a non-fund investment', async () => {
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('investment-transactions')) {
+        return Promise.resolve({ ok: true, json: async () => ({ transactions: [mockBankTx] }) })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+    render(<GoalDetailSheet {...baseProps} goal={bankGoal} />)
+    await waitFor(() => screen.getByText('Techcombank'))
+    await userEvent.click(screen.getByRole('button', { name: /options/i }))
+    await waitFor(() => expect(screen.getByText('Transaction history')).toBeInTheDocument())
+    await userEvent.click(screen.getByText('Transaction history'))
+
+    // Non-fund history has no per-investment sheet, so it falls back to the
+    // goal's History tab (the tab button becomes active).
+    await waitFor(() => {
+      const historyTab = screen.getByRole('button', { name: 'History' })
+      expect(historyTab.style.borderBottom).toContain('var(--c-navy)')
+    })
   })
 })
 
