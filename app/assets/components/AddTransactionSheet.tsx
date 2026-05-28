@@ -16,7 +16,7 @@ interface Props {
 
 const inputStyle: React.CSSProperties = {
   width: '100%', boxSizing: 'border-box',
-  padding: '10px 12px', fontSize: 14,
+  padding: '10px 12px', fontSize: 16,
   background: 'var(--c-card-2)', border: '1px solid var(--c-line)',
   borderRadius: 10, color: 'var(--c-ink)', fontFamily: 'inherit',
   outline: 'none',
@@ -570,7 +570,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop }:
             <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em' }}>{t('title')}</h3>
             <button onClick={onClose} style={{ padding: 6, border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', color: 'var(--c-muted)', display: 'flex' }} aria-label="Close"><X size={18} /></button>
           </div>
-          <div style={{ flex: 1, padding: '18px 20px', overflowY: 'auto' }}>
+          <div style={{ flex: 1, padding: '18px 20px', overflowY: 'auto', overscrollBehavior: 'contain' }}>
             {formBody}
           </div>
         </div>
@@ -619,7 +619,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop }:
         </div>
 
         {/* Scrollable form body */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '0 16px 32px' }}>
+        <div style={{ flex: 1, overflowY: 'auto', overscrollBehavior: 'contain', padding: '0 16px 32px' }}>
           {formBody}
         </div>
       </div>
