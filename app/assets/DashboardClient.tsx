@@ -751,20 +751,13 @@ export default function DashboardClient({ userId }: { userId: string }) {
 
                 {/* Insurance */}
                 <section style={{ marginBottom: 24 }}>
-                  {data.insurance.length > 0 ? (
-                    <DesktopInsuranceList
-                      insurance={data.insurance}
-                      locale={locale}
-                      onOpen={(ins) => { setSelectedGoalId(null); setSelectedInsurance(selectedInsurance?.insuranceId === ins.insuranceId ? null : ins) }}
-                      onAdd={() => setShowAddInsurance(true)}
-                    />
-                  ) : (
-                    <InsuranceEmpty
-                      goalCount={data.goals.length}
-                      locale={locale}
-                      onAdd={() => setShowAddInsurance(true)}
-                    />
-                  )}
+                  <DesktopInsuranceList
+                    insurance={data.insurance}
+                    locale={locale}
+                    goalCount={data.goals.length}
+                    onOpen={(ins) => { setSelectedGoalId(null); setSelectedInsurance(selectedInsurance?.insuranceId === ins.insuranceId ? null : ins) }}
+                    onAdd={() => setShowAddInsurance(true)}
+                  />
                 </section>
 
               </div>
