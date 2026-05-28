@@ -77,10 +77,10 @@ html, body { overflow-x: hidden; }
   .lp-nav-inner { height: 54px !important; padding: 0 18px !important; }
   .lp-nav-links { display: none !important; }
   .lp-nav-actions { gap: 6px !important; }
-  .lp-nav-login { padding: 6px 12px !important; font-size: 12px !important; }
-  /* Signup hidden on phone — Vietnamese labels overflow the row;
-     design's spec says "keep brand + lang + login" on phone. */
-  .lp-nav-signup { display: none !important; }
+  /* Both auth buttons get the smaller mobile padding so Vietnamese labels
+     (Đăng nhập / Đăng ký) fit cleanly next to the language toggle. */
+  .lp-nav-login,
+  .lp-nav-signup { padding: 6px 12px !important; font-size: 12px !important; }
   .lp-logo-wordmark { font-size: 17px !important; }
 
   /* Hero — denser, full-width */
