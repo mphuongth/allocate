@@ -10,6 +10,7 @@ import { useLocale } from 'next-intl'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import type { GoalData, FundBreakdownItem } from '../DashboardClient'
 import TransactionHistorySheet, { type PurchaseHistoryRow } from './TransactionHistorySheet'
+import { SellWithdrawSheet, type SellItem } from './SellWithdrawSheet'
 
 // Same SVG as DesktopGoalDetail.UnlinkSvg — matches design's "unlink" glyph
 function UnlinkSvg({ size = 20, color = 'currentColor' }: { size?: number; color?: string }) {
@@ -345,6 +346,34 @@ interface InvRow {
   fund: FundBreakdownItem | null
 }
 
+// Mirror of DashboardClient.openSellFund / openSellNonFund so the goal-detail
+// sell flow submits the same payload the SellWithdrawSheet expects.
+function invToSellItem(inv: InvRow): SellItem {
+  if (inv.fund) {
+    return {
+      type: 'fund',
+      name: inv.fund.fundName,
+      currentValue: inv.fund.currentValue,
+      units: inv.fund.quantity,
+      navPerUnit: inv.fund.currentNAV,
+      gainPct: inv.fund.profitLossPercentage,
+      fundId: inv.fund.fundId,
+      purchasePrice: inv.fund.purchasePrice,
+    }
+  }
+  const navPerUnit = inv.units && inv.units > 0 ? inv.value / inv.units : undefined
+  return {
+    type: inv.type as 'bank' | 'gold' | 'stock',
+    name: inv.name,
+    currentValue: inv.value,
+    units: inv.units ?? undefined,
+    navPerUnit,
+    gainPct: inv.gainPct ?? undefined,
+    transactionId: inv.id,
+    purchasePrice: inv.principal ?? inv.value,
+  }
+}
+
 function InvestmentActionSheet({
   open,
   onClose,
@@ -635,6 +664,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
   const [isDeleting, setIsDeleting] = useState(false)
   const [actionInv, setActionInv] = useState<InvRow | null>(null)
   const [investActionOpen, setInvestActionOpen] = useState(false)
+  const [sellOpen, setSellOpen] = useState(false)
   const [unassignConfirmOpen, setUnassignConfirmOpen] = useState(false)
   const [unassigning, setUnassigning] = useState(false)
   const [unassignedIds, setUnassignedIds] = useState<string[]>([])
@@ -1239,9 +1269,24 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
         open={investActionOpen}
         onClose={() => setInvestActionOpen(false)}
         inv={actionInv}
-        onViewHistory={() => actionInv?.fund && openFundDetail(actionInv.fund)}
-        onSell={() => { /* SellWithdrawSheet integration point */ }}
+        onViewHistory={() => {
+          if (actionInv?.fund) openFundDetail(actionInv.fund)
+          else setActiveTab('history')
+        }}
+        onSell={() => setSellOpen(true)}
         onUnassign={() => setUnassignConfirmOpen(true)}
+      />
+
+      <SellWithdrawSheet
+        open={sellOpen}
+        item={actionInv ? invToSellItem(actionInv) : null}
+        context="goal"
+        onClose={() => setSellOpen(false)}
+        onSuccess={() => {
+          setSellOpen(false)
+          if (actionInv) setUnassignedIds((prev) => [...prev, actionInv.id])
+          onDataChanged()
+        }}
       />
 
       <UnassignConfirmSheet
