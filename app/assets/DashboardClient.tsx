@@ -13,6 +13,7 @@ import NetWorthCard from './components/NetWorthCard'
 import GoalCard from './components/GoalCard'
 import UnallocatedSection from './components/UnallocatedSection'
 import InsuranceCard from './components/InsuranceCard'
+import InsuranceDetailSheet from './components/InsuranceDetailSheet'
 import { SellWithdrawSheet, type SellItem } from './components/SellWithdrawSheet'
 import GoalDetailSheet from './components/GoalDetailSheet'
 import AssignGoalSheet from './components/AssignGoalSheet'
@@ -915,6 +916,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                         key={ins.insuranceId}
                         {...ins}
                         isLast={idx === data.insurance.length - 1}
+                        onClick={() => setSelectedInsurance(ins)}
                       />
                     ))}
                   </div>
@@ -1043,6 +1045,15 @@ export default function DashboardClient({ userId }: { userId: string }) {
         onClose={() => setShowAddInsurance(false)}
         onCreated={() => fetchData({ force: true })}
         locale={locale}
+      />
+
+      {/* Mobile: Insurance detail sheet */}
+      <InsuranceDetailSheet
+        open={!isDesktop && !!selectedInsurance}
+        ins={selectedInsurance}
+        locale={locale}
+        onClose={() => setSelectedInsurance(null)}
+        onChanged={() => fetchData({ force: true })}
       />
     </div>
   )
