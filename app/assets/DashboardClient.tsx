@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import Link from 'next/link'
 import { fmt } from '@/lib/formatters'
 import { Plus, ArrowDownToLine, ChevronDown, Check } from 'lucide-react'
 import { useTranslations, useLocale } from 'next-intl'
@@ -896,19 +895,19 @@ export default function DashboardClient({ userId }: { userId: string }) {
                       {data.insurance.length} {data.insurance.length === 1 ? t('member') : t('members')}
                     </p>
                   </div>
-                  <Link
-                    href="/settings?tab=insurance"
+                  <button
+                    onClick={() => setShowAddInsurance(true)}
                     style={{
                       display: 'inline-flex', alignItems: 'center', gap: 4,
                       fontSize: 12, fontWeight: 500, padding: '4px 8px',
                       border: 'none', borderRadius: 'var(--r-control)',
                       background: 'transparent', color: 'var(--c-ink)',
-                      textDecoration: 'none',
+                      cursor: 'pointer', fontFamily: 'inherit',
                     }}
                   >
                     <Plus size={12} strokeWidth={2.4} />
                     {t('add')}
-                  </Link>
+                  </button>
                 </div>
                 {data.insurance.length > 0 ? (
                   <div style={{
