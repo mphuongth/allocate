@@ -30,7 +30,7 @@ describe('AddTransactionSheet — background scroll lock (issue #219)', () => {
     expect(document.body.style.overflow).toBe('')
   })
 
-  it('contains overscroll on the scrollable body so dragging does not move the modal around', () => {
+  it('contains overscroll and clips horizontal overflow so the modal cannot be dragged around', () => {
     const { container } = render(<AddTransactionSheet open onClose={vi.fn()} />)
     const scrollers = Array.from(container.querySelectorAll<HTMLElement>('div')).filter(
       (el) => el.style.overflowY === 'auto'
@@ -38,6 +38,8 @@ describe('AddTransactionSheet — background scroll lock (issue #219)', () => {
     expect(scrollers.length).toBeGreaterThan(0)
     for (const el of scrollers) {
       expect(el.style.overscrollBehavior).toBe('contain')
+      // overflowX:auto would let any horizontal overflow pan the whole sheet sideways
+      expect(el.style.overflowX).toBe('hidden')
     }
   })
 
