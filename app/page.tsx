@@ -35,6 +35,12 @@ function CheckIcon() {
 }
 
 const LANDING_RESPONSIVE_CSS = `
+/* Horizontal overflow guard — applied to body, NOT the .lp-root wrapper, so
+   the sticky <nav> can still pin against the viewport on mobile. (overflow-x
+   on the wrapper makes that wrapper the scroll container, which breaks
+   position: sticky for descendants.) */
+html, body { overflow-x: hidden; }
+
 /* ── Responsive: tablet ─────────────────────────────────────────────────── */
 @media (max-width: 960px) {
   .lp-nav-inner,
@@ -72,6 +78,9 @@ const LANDING_RESPONSIVE_CSS = `
   .lp-nav-links { display: none !important; }
   .lp-nav-actions { gap: 6px !important; }
   .lp-nav-login { padding: 6px 12px !important; font-size: 12px !important; }
+  /* Signup hidden on phone — Vietnamese labels overflow the row;
+     design's spec says "keep brand + lang + login" on phone. */
+  .lp-nav-signup { display: none !important; }
   .lp-logo-wordmark { font-size: 17px !important; }
 
   /* Hero — denser, full-width */
@@ -228,7 +237,7 @@ export default async function HomePage() {
   return (
     <>
       <ScrollRevealInit />
-      <div style={{ fontFamily: "'Be Vietnam Pro', -apple-system, sans-serif", overflowX: 'hidden', background: CANVAS }}>
+      <div className="lp-root" style={{ fontFamily: "'Be Vietnam Pro', -apple-system, sans-serif", background: CANVAS }}>
         <style dangerouslySetInnerHTML={{ __html: LANDING_RESPONSIVE_CSS }} />
 
         {/* ── Nav ───────────────────────────────────────────────────────────── */}
@@ -253,7 +262,7 @@ export default async function HomePage() {
               </Link>
               <Link href="/auth/signup"
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fff', color: NAVY, fontSize: 13, fontWeight: 600, padding: '7px 16px', borderRadius: 10, border: 'none', textDecoration: 'none' }}
-                className="hover:opacity-90 transition-opacity duration-150">
+                className="lp-nav-signup hover:opacity-90 transition-opacity duration-150">
                 {t('signupLink')}
               </Link>
             </div>
@@ -502,7 +511,7 @@ export default async function HomePage() {
         </section>
 
         {/* ── Footer ──────────────────────────────────────────────────────────── */}
-        <footer className="lp-footer" style={{ background: '#081b30', padding: '28px 0', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+        <footer className="lp-footer" style={{ background: '#081b30', padding: '28px 0', borderTop: '1px solid rgba(255,255,255,0.12)' }}>
           <div className="lp-footer-inner" style={{ maxWidth: 1120, margin: '0 auto', padding: '0 48px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
               <span style={{ opacity: 0.45 }}><CairnLogo width={22} height={19} /></span>
