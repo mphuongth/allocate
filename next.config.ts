@@ -39,6 +39,12 @@ const nextConfig: NextConfig = {
         headers: securityHeaders,
       },
       {
+        // Always revalidate the worker script so new deploys are detected
+        // promptly instead of being masked by the HTTP cache.
+        source: '/sw.js',
+        headers: [{ key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' }],
+      },
+      {
         source: '/favicon.ico',
         headers: [{ key: 'Cache-Control', value: 'no-store' }],
       },
