@@ -17,8 +17,8 @@ interface Props {
 }
 
 const STATUS_COLOR: Record<string, string> = {
-  on_track:  'var(--c-warn)',
-  upcoming:  'var(--c-muted)',
+  on_track:  'var(--c-muted)',
+  upcoming:  'var(--c-warn)',
   overdue:   'var(--c-neg)',
   completed: 'var(--c-pos)',
   ready:     'var(--c-navy)',
@@ -43,8 +43,8 @@ export default function InsuranceCard({
   const progress = Math.min(savingsProgressPercentage, 100)
 
   const statusLabel: Record<string, string> = {
-    on_track:  t('statusDue'),
-    upcoming:  t('statusNotDue'),
+    on_track:  t('statusNotDue'),
+    upcoming:  t('statusDue'),
     overdue:   t('statusOverdue'),
     completed: t('statusCompleted'),
     ready:     t('statusReady'),
