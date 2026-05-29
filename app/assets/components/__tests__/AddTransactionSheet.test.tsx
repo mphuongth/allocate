@@ -53,10 +53,28 @@ describe('AddTransactionSheet — background scroll lock (issue #219)', () => {
   })
 })
 
+describe('AddTransactionSheet — goal selector (issue #232)', () => {
+  // /api/v1/savings-goals returns { goals: [...] }, not a bare array — the goal
+  // selector must read that shape or it stays empty/hidden.
+  it('populates the goal select from the { goals } API shape', async () => {
+    const fetchMock = vi.fn((url: string) => {
+      if (String(url).includes('/savings-goals')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ goals: [{ goal_id: 'g1', goal_name: 'House Fund' }] }) })
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<AddTransactionSheet open onClose={vi.fn()} />)
+
+    expect(await screen.findByText('House Fund')).toBeInTheDocument()
+  })
+})
+
 describe('AddTransactionSheet — gold unit (issue #232)', () => {
   // Gold is valued per chỉ, so a lượng entry must be normalized: 1 lượng = 10 chỉ.
   it('normalizes a lượng entry to chỉ on save', async () => {
-    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve([]) }))
+    const fetchMock = vi.fn((_url: string, _init?: RequestInit) => Promise.resolve({ ok: true, json: () => Promise.resolve([]) }))
     vi.stubGlobal('fetch', fetchMock)
 
     render(<AddTransactionSheet open onClose={vi.fn()} onSaved={vi.fn()} />)
@@ -68,9 +86,9 @@ describe('AddTransactionSheet — gold unit (issue #232)', () => {
     fireEvent.click(screen.getByText('save'))
 
     await waitFor(() => {
-      const post = fetchMock.mock.calls.find(([u]) => String(u).includes('/investment-transactions'))
+      const post = fetchMock.mock.calls.find((c) => String(c[0]).includes('/investment-transactions'))
       expect(post).toBeTruthy()
-      const body = JSON.parse((post![1] as RequestInit).body as string)
+      const body = JSON.parse(String((post![1] as RequestInit).body))
       expect(body.units).toBe(10)              // 1 lượng → 10 chỉ
       expect(body.unit_price).toBe(9_200_000)  // ₫ per chỉ
       expect(body.amount_vnd).toBe(92_000_000) // total unchanged

@@ -83,7 +83,10 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop }:
         fetch('/api/v1/savings-goals').then(r => r.json()),
       ]).then(([fundsData, goalsData]) => {
         const fundList: Fund[] = Array.isArray(fundsData) ? fundsData : []
-        const goalList: Goal[] = Array.isArray(goalsData) ? goalsData : []
+        // /api/v1/savings-goals returns { goals: [...] }, not a bare array.
+        const goalList: Goal[] = Array.isArray(goalsData)
+          ? goalsData
+          : (Array.isArray(goalsData?.goals) ? goalsData.goals : [])
         setFunds(fundList)
         setGoals(goalList)
         if (fundList.length > 0 && !fundId) setFundId(fundList[0].id)
@@ -285,8 +288,9 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop }:
             </div>
           </div>
 
-          {/* Goal */}
-          {goals.length > 0 && (
+          {/* Goal — attribution applies to Buy/Deposit; for Sell the source
+              holding determines the goal (mobile design). */}
+          {dir === 'buy' && (
             <div>
               <label style={labelStyle}>{t('goal')}</label>
               <select
