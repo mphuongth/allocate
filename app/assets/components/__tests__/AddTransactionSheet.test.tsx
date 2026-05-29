@@ -71,6 +71,40 @@ describe('AddTransactionSheet — goal selector (issue #232)', () => {
   })
 })
 
+describe('AddTransactionSheet — sell flow (issue #232)', () => {
+  it('lists holdings from the overview and posts a fund withdrawal on confirm', async () => {
+    const overview = {
+      goals: [{ goalName: 'Goal A', funds: [{ fundId: 'f1', fundName: 'VESAF', quantity: 100, currentNAV: 20000, currentValue: 2_000_000, purchasePrice: 18000, profitLossPercentage: 11.11 }] }],
+      unallocated: { funds: [], nonFunds: [] },
+    }
+    const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
+      if (String(url).includes('/dashboard/overview')) return Promise.resolve({ ok: true, json: () => Promise.resolve(overview) })
+      if (String(url).includes('/savings-goals')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ goals: [] }) })
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<AddTransactionSheet open onClose={vi.fn()} onSaved={vi.fn()} />)
+
+    fireEvent.click(screen.getByText('sell'))   // direction = sell → lazy-loads holdings
+    await screen.findAllByText(/VESAF/)          // holding picker + summary populated
+    fireEvent.change(screen.getByPlaceholderText('0'), { target: { value: '1000000' } })
+    fireEvent.click(screen.getByText('confirmSale'))
+
+    await waitFor(() => {
+      const post = fetchMock.mock.calls.find((c) => String(c[0]).includes('/investment-transactions'))
+      expect(post).toBeTruthy()
+      const body = JSON.parse(String((post![1] as RequestInit).body))
+      expect(body.transaction_type).toBe('withdrawal')
+      expect(body.asset_type).toBe('fund')
+      expect(body.fund_id).toBe('f1')
+      expect(body.amount_vnd).toBe(1_000_000)
+      expect(body.units_withdrawn).toBe(50)         // 1,000,000 / 20,000 NAV
+      expect(body.principal_withdrawn).toBe(900_000) // 50% of cost basis (18,000 × 100)
+    })
+  })
+})
+
 describe('AddTransactionSheet — gold unit (issue #232)', () => {
   // Gold is valued per chỉ, so a lượng entry must be normalized: 1 lượng = 10 chỉ.
   it('normalizes a lượng entry to chỉ on save', async () => {
