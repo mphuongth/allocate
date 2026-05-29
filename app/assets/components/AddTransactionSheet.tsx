@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { X, TrendingUp, Building2, Coins, ArrowUpRight, ArrowDownRight } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 
-interface Fund { id: string; name: string; nav: number; code: string | null }
+interface Fund { id: string; name: string; nav: number; code: string | null; fund_type?: string }
 interface Goal { goal_id: string; goal_name: string }
 
 interface Props {
@@ -29,9 +29,9 @@ const labelStyle: React.CSSProperties = {
 }
 
 const ASSET_TYPES = [
-  { v: 'fund', Icon: TrendingUp, enLabel: 'Fund',  viLabel: 'Quỹ' },
-  { v: 'bank', Icon: Building2,  enLabel: 'Bank',  viLabel: 'Ngân hàng' },
-  { v: 'gold', Icon: Coins,      enLabel: 'Gold',  viLabel: 'Vàng' },
+  { v: 'fund', Icon: TrendingUp, enLabel: 'Fund', viLabel: 'Quỹ',       color: '#2563eb', bg: 'rgba(37,99,235,0.10)' },
+  { v: 'bank', Icon: Building2,  enLabel: 'Bank', viLabel: 'Ngân hàng', color: '#047857', bg: 'rgba(4,120,87,0.10)' },
+  { v: 'gold', Icon: Coins,      enLabel: 'Gold', viLabel: 'Vàng',      color: '#b45309', bg: 'rgba(180,83,9,0.10)' },
 ] as const
 
 type AssetType = typeof ASSET_TYPES[number]['v']
@@ -67,6 +67,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop }:
 
   // gold fields
   const [goldProvider, setGoldProvider] = useState('PNJ')
+  const [goldUnit, setGoldUnit] = useState<'chi' | 'luong'>('chi')
   const [goldQty, setGoldQty] = useState('')
   const [goldPrice, setGoldPrice] = useState('')
 
@@ -119,6 +120,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop }:
     setRate('')
     setMaturity('')
     setGoldProvider('PNJ')
+    setGoldUnit('chi')
     setGoldQty('')
     setGoldPrice('')
     setError('')
@@ -169,15 +171,18 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop }:
         expiry_date: maturity || null,
       }
     } else {
-      // gold
+      // gold — qty/price are in the selected unit; normalize to chỉ for storage
+      // since gold is valued per chỉ.
       const qty = Number(goldQty)
       const price = Number(goldPrice.replace(/\./g, ''))
       if (!qty || !price) { setError(t('amountRequired')); return }
+      const unitsInChi = goldUnit === 'luong' ? qty * 10 : qty
+      const pricePerChi = goldUnit === 'luong' ? Math.round(price / 10) : price
       body = {
         ...body,
         amount_vnd: Math.round(qty * price),
-        units: qty,
-        unit_price: price,
+        units: unitsInChi,
+        unit_price: pricePerChi,
         notes: goldProvider || null,
       }
     }
@@ -220,7 +225,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop }:
           <div>
             <label style={labelStyle}>{t('assetType')}</label>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
-              {ASSET_TYPES.map(({ v, Icon, enLabel }) => {
+              {ASSET_TYPES.map(({ v, Icon, enLabel, color, bg }) => {
                 const active = assetType === v
                 return (
                   <button
@@ -229,9 +234,9 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop }:
                     onClick={() => handleAssetTypeChange(v)}
                     style={{
                       padding: '9px 4px',
-                      background: active ? 'var(--c-navy-tint)' : 'var(--c-card-2)',
-                      color: active ? 'var(--c-navy)' : 'var(--c-muted)',
-                      border: `1.5px solid ${active ? 'var(--c-navy)' : 'transparent'}`,
+                      background: active ? bg : 'var(--c-card-2)',
+                      color: active ? color : 'var(--c-muted)',
+                      border: `1.5px solid ${active ? color : 'transparent'}`,
                       borderRadius: 10,
                       display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
                       cursor: 'pointer', fontFamily: 'inherit',
@@ -317,9 +322,10 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop }:
                   {funds.length === 0 && <option value="">{t('noFunds')}</option>}
                 </select>
                 {selectedFund && (
-                  <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--c-muted)' }}>
-                    NAV {selectedFund.nav.toLocaleString('vi-VN')} ₫
-                  </p>
+                  <div style={{ display: 'flex', gap: 12, margin: '5px 0 0', fontSize: 11, color: 'var(--c-muted)' }}>
+                    <span>NAV <strong style={{ color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>{selectedFund.nav.toLocaleString('vi-VN')} ₫</strong></span>
+                    {selectedFund.fund_type && <span style={{ textTransform: 'capitalize', color: 'var(--c-muted-2, var(--c-muted))' }}>{selectedFund.fund_type}</span>}
+                  </div>
                 )}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 10 }}>
@@ -424,6 +430,17 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop }:
                   />
                 </div>
               )}
+              {depositType === 'term' && Number(bankAmount) > 0 && Number(rate) > 0 && (
+                <div style={{
+                  background: 'var(--c-pos-tint)', borderRadius: 10, padding: '9px 14px',
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                }}>
+                  <span style={{ fontSize: 12, color: 'var(--c-pos)', fontWeight: 500 }}>{t('estInterestYr')}</span>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-pos)', fontVariantNumeric: 'tabular-nums' }}>
+                    +{Math.round(Number(bankAmount) * Number(rate) / 100).toLocaleString('vi-VN')} ₫
+                  </span>
+                </div>
+              )}
             </>
           )}
 
@@ -456,6 +473,39 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop }:
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <div>
+                  <label style={labelStyle}>{t('unit')}</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                    {(['chi', 'luong'] as const).map((u) => {
+                      const active = goldUnit === u
+                      return (
+                        <button
+                          key={u}
+                          type="button"
+                          onClick={() => {
+                            // Keep the per-unit price consistent when switching:
+                            // 1 lượng = 10 chỉ.
+                            if (goldUnit !== u && goldPrice) {
+                              const p = Number(goldPrice.replace(/[^0-9]/g, ''))
+                              setGoldPrice(String(Math.round(p * (u === 'luong' ? 10 : 0.1))))
+                            }
+                            setGoldUnit(u)
+                          }}
+                          style={{
+                            padding: '9px 4px', borderRadius: 8,
+                            background: active ? 'rgba(180,83,9,0.10)' : 'var(--c-card-2)',
+                            color: active ? '#b45309' : 'var(--c-muted)',
+                            border: `1px solid ${active ? '#b45309' : 'var(--c-line)'}`,
+                            cursor: 'pointer', fontFamily: 'inherit',
+                            fontSize: 13, fontWeight: 600, transition: 'all 120ms',
+                          }}
+                        >
+                          {u === 'chi' ? t('unitChi') : t('unitLuong')}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+                <div>
                   <label style={labelStyle}>{t('qty')}</label>
                   <input
                     type="number"
@@ -466,17 +516,17 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop }:
                     style={inputStyle}
                   />
                 </div>
-                <div>
-                  <label style={labelStyle}>{t('pricePerUnit')}</label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={goldPrice ? Number(goldPrice).toLocaleString('en-US') : ''}
-                    onChange={(e) => setGoldPrice(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))}
-                    placeholder="9,200,000"
-                    style={inputStyle}
-                  />
-                </div>
+              </div>
+              <div>
+                <label style={labelStyle}>{goldUnit === 'chi' ? t('pricePerChi') : t('pricePerLuong')}</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={goldPrice ? Number(goldPrice).toLocaleString('en-US') : ''}
+                  onChange={(e) => setGoldPrice(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))}
+                  placeholder="9,200,000"
+                  style={inputStyle}
+                />
               </div>
               {goldQty && goldPrice && (
                 <div style={{

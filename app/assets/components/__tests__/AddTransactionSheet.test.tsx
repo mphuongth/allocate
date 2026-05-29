@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import AddTransactionSheet from '../AddTransactionSheet'
 
 vi.mock('next-intl', () => ({
@@ -50,5 +50,30 @@ describe('AddTransactionSheet — background scroll lock (issue #219)', () => {
     for (const field of fields) {
       expect(parseFloat(getComputedStyle(field).fontSize)).toBeGreaterThanOrEqual(16)
     }
+  })
+})
+
+describe('AddTransactionSheet — gold unit (issue #232)', () => {
+  // Gold is valued per chỉ, so a lượng entry must be normalized: 1 lượng = 10 chỉ.
+  it('normalizes a lượng entry to chỉ on save', async () => {
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve([]) }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<AddTransactionSheet open onClose={vi.fn()} onSaved={vi.fn()} />)
+
+    fireEvent.click(screen.getByText('Gold'))          // asset type
+    fireEvent.click(screen.getByText('unitLuong'))      // unit = lượng
+    fireEvent.change(screen.getByPlaceholderText('1'), { target: { value: '1' } })           // 1 lượng
+    fireEvent.change(screen.getByPlaceholderText('9,200,000'), { target: { value: '92000000' } }) // ₫/lượng
+    fireEvent.click(screen.getByText('save'))
+
+    await waitFor(() => {
+      const post = fetchMock.mock.calls.find(([u]) => String(u).includes('/investment-transactions'))
+      expect(post).toBeTruthy()
+      const body = JSON.parse((post![1] as RequestInit).body as string)
+      expect(body.units).toBe(10)              // 1 lượng → 10 chỉ
+      expect(body.unit_price).toBe(9_200_000)  // ₫ per chỉ
+      expect(body.amount_vnd).toBe(92_000_000) // total unchanged
+    })
   })
 })
