@@ -91,12 +91,13 @@ export function isPlanMonthRealized(year: number, month: number): boolean {
   return year < nowYear || (year === nowYear && month <= nowMonth)
 }
 
-// A contribution counts toward the CURRENT premium cycle only when it was made
-// after the last settlement. Once a premium is marked paid, prior savings funded
-// that (now-settled) cycle; new savings accrue toward the next one. With no
-// recorded payment yet, every contribution counts. Dates are compared as
-// YYYY-MM-DD strings (lexicographic order matches chronological order).
+// A contribution counts toward the CURRENT premium cycle when it was made on or
+// after the last settlement. Once a premium is marked paid, earlier savings
+// funded that (now-settled) cycle; contributions from the settlement day onward
+// accrue toward the next one — so paying and then logging toward next year on the
+// same day still counts. With no recorded payment yet, every contribution counts.
+// Dates are compared as YYYY-MM-DD strings (lexicographic order = chronological).
 export function isInCurrentCycle(contribDateISO: string, lastPaymentDate: string | null): boolean {
   if (!lastPaymentDate) return true
-  return contribDateISO.slice(0, 10) > lastPaymentDate.slice(0, 10)
+  return contribDateISO.slice(0, 10) >= lastPaymentDate.slice(0, 10)
 }

@@ -136,12 +136,16 @@ describe('isInCurrentCycle', () => {
   it('counts a contribution made after the last settlement', () => {
     expect(isInCurrentCycle('2026-06-01', '2026-05-20')).toBe(true)
   })
-  it('excludes a contribution made on or before the last settlement', () => {
-    expect(isInCurrentCycle('2026-05-20', '2026-05-20')).toBe(false)
+  // A contribution made on the settlement date starts the next cycle — e.g. you
+  // pay today, then log money toward next year today. It must count.
+  it('counts a contribution made on the settlement date', () => {
+    expect(isInCurrentCycle('2026-05-20', '2026-05-20')).toBe(true)
+  })
+  it('excludes a contribution made before the last settlement', () => {
     expect(isInCurrentCycle('2026-05-01', '2026-05-20')).toBe(false)
   })
   it('reads only the date portion of a timestamptz', () => {
-    expect(isInCurrentCycle('2026-06-01', '2026-05-20T00:00:00+00:00')).toBe(true)
+    expect(isInCurrentCycle('2026-05-20', '2026-05-20T00:00:00+00:00')).toBe(true)
   })
 })
 
