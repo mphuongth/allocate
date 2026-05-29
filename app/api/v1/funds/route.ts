@@ -8,7 +8,7 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from('funds')
-    .select('id, name, nav, code')
+    .select('id, name, nav, code, fund_type')
     .eq('user_id', user.id)
     .order('name', { ascending: true })
 
