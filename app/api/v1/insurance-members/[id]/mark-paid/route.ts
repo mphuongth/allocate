@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { ValidationError, validateUUID } from '@/lib/validation'
+import { ValidationError, validateUUID, validateDate } from '@/lib/validation'
 
 function err(status: number, code: string, message: string) {
   return NextResponse.json({ error: code, message }, { status })
@@ -32,8 +32,19 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   if (fetchError || !member) return err(404, 'NOT_FOUND', 'Insurance member not found')
   if (member.user_id !== user.id) return err(403, 'FORBIDDEN', "You don't have permission to mark this payment")
 
+  // Optional payment date from the body — when the user records the payment on a
+  // date other than today. Defaults to today when absent.
   const now = new Date()
-  const todayISO = now.toISOString().split('T')[0]
+  let paidISO = now.toISOString().split('T')[0]
+  const body = await _req.json().catch(() => null)
+  if (body && body.paid_date != null && body.paid_date !== '') {
+    try {
+      paidISO = validateDate(body.paid_date, 'paid_date')
+    } catch (e) {
+      if (e instanceof ValidationError) return err(400, 'INVALID_PAID_DATE', 'Invalid payment date')
+      throw e
+    }
+  }
 
   // Advance payment_date by exactly 1 year (keep month/day, increment year)
   const nextPaymentDate = member.payment_date
@@ -69,7 +80,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     .from('insurance_members')
     .update({
       payment_date: nextPaymentDate,
-      last_payment_date: todayISO,
+      last_payment_date: paidISO,
       updated_at: now.toISOString(),
     })
     .eq('member_id', memberId)
@@ -95,7 +106,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       name: member.member_name,
       amount_saved: 0,
       payment_date: nextPaymentDate,
-      last_payment_date: todayISO,
+      last_payment_date: paidISO,
       monthly_allocation: member.monthly_premium_vnd ?? Math.round((member.annual_payment_vnd ?? 0) / 12),
       updated_at: updatedAt,
     },

@@ -73,6 +73,9 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
   const [editError, setEditError] = useState<string | null>(null)
 
   const [showLogPayment, setShowLogPayment] = useState(false)
+  // When true the payment modal settles the premium (mark-paid); otherwise it
+  // logs a savings contribution.
+  const [settleMode, setSettleMode] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
@@ -127,16 +130,11 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
     : ({ overdue: 'Pay now', on_track: 'Mark as paid', ready: 'Confirm payment sent' } as Record<string, string>)[ins.status]
   const ctaBg = ins.status === 'overdue' ? 'var(--c-neg)' : 'var(--c-btn-primary)'
 
-  async function handleStatusCta() {
-    // overdue / on_track / ready → mark current cycle as paid (advances payment_date)
-    try {
-      const res = await fetch(`/api/v1/insurance-members/${ins.insuranceId}/mark-paid`, { method: 'POST' })
-      if (res.ok) {
-        onChanged?.()
-      }
-    } catch {
-      // ignore — silent failure surface; status reload via parent
-    }
+  function handleStatusCta() {
+    // overdue / on_track / ready → open the payment modal to confirm and settle
+    // the cycle (advances payment_date, records the payment) → "Paid for {year}".
+    setSettleMode(true)
+    setShowLogPayment(true)
   }
 
   async function handleSaveEdit() {
@@ -375,7 +373,7 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
             ) : (
               <button
                 data-testid="insurance-cta-log"
-                onClick={() => setShowLogPayment(true)}
+                onClick={() => { setSettleMode(false); setShowLogPayment(true) }}
                 className="cn-btn"
                 style={{ width: '100%', justifyContent: 'center', marginTop: 12, gap: 6, fontSize: 12 }}
               >
@@ -479,6 +477,7 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
         onSaved={() => { onChanged?.(); loadHistory() }}
         ins={ins}
         locale={locale}
+        settle={settleMode}
       />
 
       {showDeleteConfirm && (

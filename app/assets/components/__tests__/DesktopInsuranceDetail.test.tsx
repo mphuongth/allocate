@@ -105,11 +105,32 @@ describe('DesktopInsuranceDetail — paid-for-the-year state (issue #227)', () =
   })
 })
 
-describe('DesktopInsuranceDetail — overdue can be settled', () => {
-  // An overdue policy must be able to settle the missed renewal. The CTA now
-  // calls mark-paid (advances the cycle + records the payment) rather than only
-  // opening the savings log, which never settled the premium.
-  it('settles via mark-paid when the overdue CTA is clicked', async () => {
+describe('DesktopInsuranceDetail — settle via the payment modal', () => {
+  // The status CTA opens the editable payment modal (like the design). The
+  // overdue case must reach a modal that, on confirm, settles via mark-paid.
+  it('opens the payment modal in settle mode when the overdue CTA is clicked', async () => {
+    const fetchMock = vi.fn((url: string) => {
+      if (typeof url === 'string' && url.includes('/savings')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ entries: [], totalSaved: 0 }) })
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const overdue = { ...ins, status: 'overdue' } as InsuranceData
+
+    render(<DesktopInsuranceDetail ins={overdue} locale="en" onClose={vi.fn()} onChanged={vi.fn()} />)
+
+    // Clicking the CTA opens the modal (it does NOT settle on its own).
+    fireEvent.click(screen.getByTestId('insurance-cta-status'))
+    expect(screen.getByTestId('log-payment-modal')).toBeInTheDocument()
+    expect(screen.getByText('Mark as paid')).toBeInTheDocument()
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      expect.stringContaining('/mark-paid'),
+      expect.anything()
+    )
+  })
+
+  it('settles via mark-paid when the modal is confirmed', async () => {
     const fetchMock = vi.fn((url: string) => {
       if (typeof url === 'string' && url.includes('/savings')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ entries: [], totalSaved: 0 }) })
@@ -123,6 +144,9 @@ describe('DesktopInsuranceDetail — overdue can be settled', () => {
     render(<DesktopInsuranceDetail ins={overdue} locale="en" onClose={vi.fn()} onChanged={onChanged} />)
 
     fireEvent.click(screen.getByTestId('insurance-cta-status'))
+    // Fill the amount via Suggested, then confirm.
+    fireEvent.click(screen.getByRole('button', { name: /suggested/i }))
+    fireEvent.click(screen.getByRole('button', { name: /confirm/i }))
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
@@ -131,7 +155,5 @@ describe('DesktopInsuranceDetail — overdue can be settled', () => {
       )
     )
     await waitFor(() => expect(onChanged).toHaveBeenCalled())
-    // Overdue no longer routes to the savings-only log modal.
-    expect(screen.queryByTestId('log-payment-modal')).not.toBeInTheDocument()
   })
 })

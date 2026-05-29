@@ -30,12 +30,35 @@ describe('LogInsurancePaymentModal (issue #223)', () => {
     await userEvent.click(screen.getByRole('button', { name: /confirm/i }))
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
-    const [, init] = fetchMock.mock.calls[0]
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe('/api/v1/insurance-savings')
     const body = JSON.parse((init as RequestInit).body as string)
     expect(body.amount_saved_vnd).toBe(1_500_000)
 
     const now = new Date()
     const expected = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
     expect(body.saved_date).toBe(expected)
+  })
+})
+
+describe('LogInsurancePaymentModal — settle mode', () => {
+  // In settle mode the modal confirms a premium payment: it calls mark-paid
+  // (which advances the cycle and records the settlement) rather than logging a
+  // savings contribution. The chosen date is sent as paid_date.
+  it('calls mark-paid with the chosen paid_date instead of logging savings', async () => {
+    render(<LogInsurancePaymentModal open settle ins={ins} locale="en" onClose={vi.fn()} onSaved={vi.fn()} />)
+
+    // Fill the amount via the Suggested shortcut so Confirm is enabled.
+    await userEvent.click(screen.getByRole('button', { name: /suggested/i }))
+    await userEvent.click(screen.getByRole('button', { name: /confirm/i }))
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe('/api/v1/insurance-members/ins-1/mark-paid')
+    expect((init as RequestInit).method).toBe('POST')
+    const body = JSON.parse((init as RequestInit).body as string)
+    const now = new Date()
+    const expected = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    expect(body.paid_date).toBe(expected)
   })
 })
