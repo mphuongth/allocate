@@ -773,7 +773,9 @@ export default function DashboardClient({ userId }: { userId: string }) {
                 width: 300, flexShrink: 0,
                 borderLeft: '1px solid var(--c-line)',
                 overflowY: 'auto',
-                padding: '20px 28px 40px 20px',
+                // Match the Plan page's right panel: content sits ~flush to the
+                // divider, no extra left/right margin (issue #230).
+                padding: '20px 20px 40px 4px',
               }}>
                 {selectedGoal ? (
                   <DesktopGoalDetail
