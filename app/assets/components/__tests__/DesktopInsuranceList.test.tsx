@@ -62,3 +62,29 @@ describe('DesktopInsuranceList — empty state (desktop design)', () => {
     expect(screen.queryByText('No members yet')).not.toBeInTheDocument()
   })
 })
+
+describe('DesktopInsuranceList — status labels', () => {
+  // The labels were inverted: `upcoming` (due within 30 days) read "Not due"
+  // and `on_track` (31+ days out) read "Due soon". Labels must match meaning.
+  it('labels an upcoming (within 30 days) member "Due soon"', () => {
+    const m = { ...member, status: 'upcoming' as const }
+    render(<DesktopInsuranceList insurance={[m]} goalCount={0} locale="en" onOpen={vi.fn()} onAdd={vi.fn()} />)
+    expect(screen.getByTestId('insurance-row')).toHaveTextContent('Due soon')
+    expect(screen.queryByText('Not due')).not.toBeInTheDocument()
+  })
+
+  it('labels an on_track (far off) member "Not due"', () => {
+    const m = { ...member, status: 'on_track' as const }
+    render(<DesktopInsuranceList insurance={[m]} goalCount={0} locale="en" onOpen={vi.fn()} onAdd={vi.fn()} />)
+    expect(screen.getByTestId('insurance-row')).toHaveTextContent('Not due')
+    expect(screen.queryByText('Due soon')).not.toBeInTheDocument()
+  })
+
+  // The list said "Ready" while the detail panel and mobile card both say
+  // "Ready to pay" (the statusReady i18n string). Keep the label consistent.
+  it('labels a ready member "Ready to pay", matching the other views', () => {
+    const m = { ...member, status: 'ready' as const }
+    render(<DesktopInsuranceList insurance={[m]} goalCount={0} locale="en" onOpen={vi.fn()} onAdd={vi.fn()} />)
+    expect(screen.getByTestId('insurance-row')).toHaveTextContent('Ready to pay')
+  })
+})

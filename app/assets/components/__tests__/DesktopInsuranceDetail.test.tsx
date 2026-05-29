@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import DesktopInsuranceDetail from '../DesktopInsuranceDetail'
 import type { InsuranceData } from '../../DashboardClient'
 
@@ -53,5 +53,36 @@ describe('DesktopInsuranceDetail — payment history (issue #223)', () => {
     const total = await screen.findByTestId('insurance-history-total')
     // 1,500,000 + 1,000,000 = 2,500,000 == amountSaved
     expect(total).toHaveTextContent(/₫\s?2\.500\.000/)
+  })
+})
+
+describe('DesktopInsuranceDetail — overdue can be settled', () => {
+  // An overdue policy must be able to settle the missed renewal. The CTA now
+  // calls mark-paid (advances the cycle + records the payment) rather than only
+  // opening the savings log, which never settled the premium.
+  it('settles via mark-paid when the overdue CTA is clicked', async () => {
+    const fetchMock = vi.fn((url: string) => {
+      if (typeof url === 'string' && url.includes('/savings')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ entries: [], totalSaved: 0 }) })
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const onChanged = vi.fn()
+    const overdue = { ...ins, status: 'overdue' } as InsuranceData
+
+    render(<DesktopInsuranceDetail ins={overdue} locale="en" onClose={vi.fn()} onChanged={onChanged} />)
+
+    fireEvent.click(screen.getByTestId('insurance-cta-status'))
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/api/v1/insurance-members/ins-1/mark-paid'),
+        expect.objectContaining({ method: 'POST' })
+      )
+    )
+    await waitFor(() => expect(onChanged).toHaveBeenCalled())
+    // Overdue no longer routes to the savings-only log modal.
+    expect(screen.queryByTestId('log-payment-modal')).not.toBeInTheDocument()
   })
 })
