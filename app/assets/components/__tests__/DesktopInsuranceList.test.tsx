@@ -79,4 +79,12 @@ describe('DesktopInsuranceList — status labels', () => {
     expect(screen.getByTestId('insurance-row')).toHaveTextContent('Not due')
     expect(screen.queryByText('Due soon')).not.toBeInTheDocument()
   })
+
+  // The list said "Ready" while the detail panel and mobile card both say
+  // "Ready to pay" (the statusReady i18n string). Keep the label consistent.
+  it('labels a ready member "Ready to pay", matching the other views', () => {
+    const m = { ...member, status: 'ready' as const }
+    render(<DesktopInsuranceList insurance={[m]} goalCount={0} locale="en" onOpen={vi.fn()} onAdd={vi.fn()} />)
+    expect(screen.getByTestId('insurance-row')).toHaveTextContent('Ready to pay')
+  })
 })

@@ -45,8 +45,8 @@ export default function DesktopInsuranceList({ insurance, locale, goalCount, onO
 
   function statusLabel(s: string) {
     return isVi
-      ? ({ on_track: 'Chưa đến hạn', completed: 'Đã thanh toán', overdue: 'Quá hạn', upcoming: 'Sắp đến hạn', ready: 'Sẵn sàng' } as Record<string, string>)[s] ?? s
-      : ({ on_track: 'Not due', completed: 'Paid', overdue: 'Overdue', upcoming: 'Due soon', ready: 'Ready' } as Record<string, string>)[s] ?? s
+      ? ({ on_track: 'Chưa đến hạn', completed: 'Đã thanh toán', overdue: 'Quá hạn', upcoming: 'Sắp đến hạn', ready: 'Đã tích lũy đủ' } as Record<string, string>)[s] ?? s
+      : ({ on_track: 'Not due', completed: 'Paid', overdue: 'Overdue', upcoming: 'Due soon', ready: 'Ready to pay' } as Record<string, string>)[s] ?? s
   }
 
   return (
