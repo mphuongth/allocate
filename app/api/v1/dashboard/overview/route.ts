@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { calcProjectedInterest, isNavStale, insuranceStatus } from '@/lib/finance'
+import { calcProjectedInterest, isNavStale, insuranceStatus, insuranceReadyStatus } from '@/lib/finance'
 import { buildWithdrawalMaps } from '@/lib/withdrawalProgress'
 
 export const dynamic = 'force-dynamic'
@@ -311,10 +311,9 @@ export async function GET() {
     const amountSaved = lumpSumSaved + monthlySavedFromPlanning
     const savingsProgressPercentage = annualPremium > 0 ? (amountSaved / annualPremium) * 100 : 0
     const baseStatus = insuranceStatus(m.payment_date, m.last_payment_date)
-    const status: 'on_track' | 'upcoming' | 'overdue' | 'completed' | 'ready' =
-      amountSaved >= annualPremium && (baseStatus === 'on_track' || baseStatus === 'upcoming')
-        ? 'ready'
-        : baseStatus
+    // "Ready to pay" is gated on the real saved amount (logged contributions),
+    // not the projected plan allocations folded into amountSaved.
+    const status = insuranceReadyStatus(baseStatus, lumpSumSaved, annualPremium)
 
     return {
       insuranceId: m.member_id,

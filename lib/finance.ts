@@ -67,3 +67,17 @@ export function insuranceStatus(
   if (nextDue <= thirtyDaysLater) return 'upcoming'
   return 'on_track'
 }
+
+// Promote a not-yet-due policy to "ready" (the premium is saved, just confirm
+// the payment was sent) only when it has been GENUINELY saved — i.e. real
+// logged contributions, not amounts merely projected from monthly plans. This
+// keeps "Ready to pay" meaning the money is actually there.
+export function insuranceReadyStatus(
+  baseStatus: 'on_track' | 'upcoming' | 'overdue' | 'completed',
+  savedVnd: number,
+  annualPremiumVnd: number
+): 'on_track' | 'upcoming' | 'overdue' | 'completed' | 'ready' {
+  const fullySaved = annualPremiumVnd > 0 && savedVnd >= annualPremiumVnd
+  if (fullySaved && (baseStatus === 'on_track' || baseStatus === 'upcoming')) return 'ready'
+  return baseStatus
+}

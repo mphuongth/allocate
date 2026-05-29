@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { calcProjectedInterest, isNavStale, insuranceStatus } from '../finance'
+import { calcProjectedInterest, isNavStale, insuranceStatus, insuranceReadyStatus } from '../finance'
 
 describe('calcProjectedInterest', () => {
   it('returns 0 when rate is null', () => {
@@ -125,5 +125,36 @@ describe('insuranceStatus', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date(2026, 3, 29)) // 29 Apr 2026
     expect(insuranceStatus('2025-04-01', '2026-04-05T00:00:00+00:00')).toBe('on_track')
+  })
+})
+
+describe('insuranceReadyStatus', () => {
+  const PREMIUM = 12_000_000
+
+  it('promotes on_track to ready when the premium is fully saved', () => {
+    expect(insuranceReadyStatus('on_track', PREMIUM, PREMIUM)).toBe('ready')
+  })
+
+  it('promotes upcoming to ready when the premium is fully saved', () => {
+    expect(insuranceReadyStatus('upcoming', PREMIUM, PREMIUM)).toBe('ready')
+  })
+
+  // The bug: projected plan allocations made amountSaved reach the premium even
+  // when little was actually saved. With the real saved amount short, it must
+  // stay on_track, not jump to "Ready to pay".
+  it('stays on_track when the real saved amount is short of the premium', () => {
+    expect(insuranceReadyStatus('on_track', 3_000_000, PREMIUM)).toBe('on_track')
+  })
+
+  it('never promotes an overdue policy', () => {
+    expect(insuranceReadyStatus('overdue', PREMIUM, PREMIUM)).toBe('overdue')
+  })
+
+  it('treats saved == premium as fully saved (boundary)', () => {
+    expect(insuranceReadyStatus('upcoming', PREMIUM, PREMIUM)).toBe('ready')
+  })
+
+  it('does not promote when the premium is zero', () => {
+    expect(insuranceReadyStatus('on_track', 0, 0)).toBe('on_track')
   })
 })
