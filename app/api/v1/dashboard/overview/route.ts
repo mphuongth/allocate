@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { calcProjectedInterest, isNavStale, insuranceStatus } from '@/lib/finance'
+import { calcProjectedInterest, isNavStale, insuranceStatus, insuranceReadyStatus, isPlanMonthRealized } from '@/lib/finance'
 import { buildWithdrawalMaps } from '@/lib/withdrawalProgress'
 
 export const dynamic = 'force-dynamic'
@@ -11,7 +11,7 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const [plansRes, goalsRes, txRes, insuranceRes, insuranceSavingsRes, goldPriceRes] = await Promise.all([
-    supabase.from('monthly_plans').select('id').eq('user_id', user.id),
+    supabase.from('monthly_plans').select('id, month, year').eq('user_id', user.id),
     supabase
       .from('savings_goals')
       .select('goal_id, goal_name, target_amount, target_date')
@@ -35,7 +35,11 @@ export async function GET() {
       .single(),
   ])
 
-  const planIds = (plansRes.data ?? []).map((p: { id: string }) => p.id)
+  const plans = (plansRes.data ?? []) as { id: string; month: number; year: number }[]
+  const planIds = plans.map((p) => p.id)
+  // Only plans whose month has arrived count toward real savings — a future
+  // month's allocation is budgeted, not yet saved.
+  const realizedPlans = plans.filter((p) => isPlanMonthRealized(p.year, p.month))
 
   const [insExclusionsRes, insOverridesRes] = await Promise.all([
     planIds.length > 0
@@ -304,17 +308,17 @@ export async function GET() {
     const annualPremium = m.annual_payment_vnd
     const lumpSumSaved = insuranceLumpSumMap.get(m.member_id) ?? 0
     const defaultMonthly = Math.round(annualPremium / 12)
-    const monthlySavedFromPlanning = planIds.reduce((sum, planId) => {
-      if (excludedSet.has(`${planId}::${m.member_id}`)) return sum
-      return sum + (overrideMap.get(`${planId}::${m.member_id}`) ?? defaultMonthly)
+    const monthlySavedFromPlanning = realizedPlans.reduce((sum, p) => {
+      if (excludedSet.has(`${p.id}::${m.member_id}`)) return sum
+      return sum + (overrideMap.get(`${p.id}::${m.member_id}`) ?? defaultMonthly)
     }, 0)
+    // Real saved: logged contributions + plan allocations for months that have
+    // arrived. Future months are excluded, so progress and "Ready to pay"
+    // reflect money actually set aside, not projected.
     const amountSaved = lumpSumSaved + monthlySavedFromPlanning
     const savingsProgressPercentage = annualPremium > 0 ? (amountSaved / annualPremium) * 100 : 0
-    const baseStatus = insuranceStatus(m.payment_date)
-    const status: 'on_track' | 'upcoming' | 'overdue' | 'completed' | 'ready' =
-      amountSaved >= annualPremium && (baseStatus === 'on_track' || baseStatus === 'upcoming')
-        ? 'ready'
-        : baseStatus
+    const baseStatus = insuranceStatus(m.payment_date, m.last_payment_date)
+    const status = insuranceReadyStatus(baseStatus, amountSaved, annualPremium)
 
     return {
       insuranceId: m.member_id,

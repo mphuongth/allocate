@@ -15,8 +15,8 @@ interface Props {
 }
 
 const STATUS_COLOR: Record<string, string> = {
-  on_track: 'var(--c-warn)',
-  upcoming: 'var(--c-muted)',
+  on_track: 'var(--c-muted)',
+  upcoming: 'var(--c-warn)',
   overdue: 'var(--c-neg)',
   completed: 'var(--c-pos)',
   ready: 'var(--c-navy)',
@@ -110,15 +110,17 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
 
   function statusLabel(s: string) {
     return isVi
-      ? ({ on_track: 'Sắp đến hạn', completed: 'Đã thanh toán', overdue: 'Quá hạn', upcoming: 'Chưa đến hạn', ready: 'Đã tích lũy đủ' } as Record<string, string>)[s] ?? s
-      : ({ on_track: 'Due soon', completed: 'Paid', overdue: 'Overdue', upcoming: 'Not due', ready: 'Ready to pay' } as Record<string, string>)[s] ?? s
+      ? ({ on_track: 'Chưa đến hạn', completed: 'Đã thanh toán', overdue: 'Quá hạn', upcoming: 'Sắp đến hạn', ready: 'Đã tích lũy đủ' } as Record<string, string>)[s] ?? s
+      : ({ on_track: 'Not due', completed: 'Paid', overdue: 'Overdue', upcoming: 'Due soon', ready: 'Ready to pay' } as Record<string, string>)[s] ?? s
   }
 
-  // Status-aware CTA
-  // - overdue → "Pay now" (red) → open LogPayment
-  // - on_track → "Mark as paid" (navy) → call mark-paid
-  // - ready → "Confirm payment sent" (navy) → call mark-paid
-  // - other → "Log payment" (default) → open LogPayment
+  // Status-aware CTA — all three settle the current cycle via mark-paid
+  // (advances payment_date, records the payment, resets savings), and the CTA is
+  // hidden once the year's premium is already settled:
+  // - overdue → "Pay now" (red)
+  // - on_track → "Mark as paid" (navy)
+  // - ready → "Confirm payment sent" (navy)
+  // - other → "Log payment" (default) → open LogPayment (records a contribution)
   const showStatusCta = !paidThisYear && ['overdue', 'on_track', 'ready'].includes(ins.status)
   const ctaLabel = isVi
     ? ({ overdue: 'Thanh toán ngay', on_track: 'Đánh dấu đã thanh toán', ready: 'Xác nhận đã thanh toán' } as Record<string, string>)[ins.status]
@@ -126,11 +128,7 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
   const ctaBg = ins.status === 'overdue' ? 'var(--c-neg)' : 'var(--c-btn-primary)'
 
   async function handleStatusCta() {
-    if (ins.status === 'overdue') {
-      setShowLogPayment(true)
-      return
-    }
-    // on_track / ready → mark current cycle as paid (advances payment_date)
+    // overdue / on_track / ready → mark current cycle as paid (advances payment_date)
     try {
       const res = await fetch(`/api/v1/insurance-members/${ins.insuranceId}/mark-paid`, { method: 'POST' })
       if (res.ok) {

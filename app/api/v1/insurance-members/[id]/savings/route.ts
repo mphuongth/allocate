@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateUUID } from '@/lib/validation'
+import { isPlanMonthRealized } from '@/lib/finance'
 
 type HistoryEntry = {
   id: string
@@ -78,9 +79,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     })
   }
 
-  // Auto-accrued monthly contribution from each (non-excluded) plan
+  // Auto-accrued monthly contribution from each (non-excluded) plan whose month
+  // has arrived. Future months are budgeted, not yet saved, so they're excluded
+  // to reconcile with the dashboard's real "Saved" amount.
   for (const p of plans) {
     if (excludedSet.has(`${p.id}::${memberId}`)) continue
+    if (!isPlanMonthRealized(p.year, p.month)) continue
     entries.push({
       id: `plan-${p.id}`,
       amount: Number(overrideMap.get(`${p.id}::${memberId}`) ?? defaultMonthly),

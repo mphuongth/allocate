@@ -74,13 +74,40 @@ describe('DesktopInsuranceList — paid-for-the-year badge (issue #227)', () => 
     const paid = { ...member, lastPaymentDate: '2026-05-28' }
     render(<DesktopInsuranceList insurance={[paid]} goalCount={2} locale="en" onOpen={vi.fn()} onAdd={vi.fn()} />)
     expect(screen.getByText('Paid for 2026')).toBeInTheDocument()
-    expect(screen.queryByText('Due soon')).not.toBeInTheDocument()
+    // member fixture is on_track → "Not due"; the paid badge replaces it.
+    expect(screen.queryByText('Not due')).not.toBeInTheDocument()
   })
 
   it('shows the computed status when not paid this year', () => {
     const stale = { ...member, lastPaymentDate: '2025-05-28' }
     render(<DesktopInsuranceList insurance={[stale]} goalCount={2} locale="en" onOpen={vi.fn()} onAdd={vi.fn()} />)
-    expect(screen.getByText('Due soon')).toBeInTheDocument()
+    expect(screen.getByText('Not due')).toBeInTheDocument()
     expect(screen.queryByText(/Paid for/)).not.toBeInTheDocument()
+  })
+})
+
+describe('DesktopInsuranceList — status labels', () => {
+  // The labels were inverted: `upcoming` (due within 30 days) read "Not due"
+  // and `on_track` (31+ days out) read "Due soon". Labels must match meaning.
+  it('labels an upcoming (within 30 days) member "Due soon"', () => {
+    const m = { ...member, status: 'upcoming' as const }
+    render(<DesktopInsuranceList insurance={[m]} goalCount={0} locale="en" onOpen={vi.fn()} onAdd={vi.fn()} />)
+    expect(screen.getByTestId('insurance-row')).toHaveTextContent('Due soon')
+    expect(screen.queryByText('Not due')).not.toBeInTheDocument()
+  })
+
+  it('labels an on_track (far off) member "Not due"', () => {
+    const m = { ...member, status: 'on_track' as const }
+    render(<DesktopInsuranceList insurance={[m]} goalCount={0} locale="en" onOpen={vi.fn()} onAdd={vi.fn()} />)
+    expect(screen.getByTestId('insurance-row')).toHaveTextContent('Not due')
+    expect(screen.queryByText('Due soon')).not.toBeInTheDocument()
+  })
+
+  // The list said "Ready" while the detail panel and mobile card both say
+  // "Ready to pay" (the statusReady i18n string). Keep the label consistent.
+  it('labels a ready member "Ready to pay", matching the other views', () => {
+    const m = { ...member, status: 'ready' as const }
+    render(<DesktopInsuranceList insurance={[m]} goalCount={0} locale="en" onOpen={vi.fn()} onAdd={vi.fn()} />)
+    expect(screen.getByTestId('insurance-row')).toHaveTextContent('Ready to pay')
   })
 })

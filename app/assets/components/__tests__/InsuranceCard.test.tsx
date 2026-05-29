@@ -42,12 +42,13 @@ describe('InsuranceCard — paid-for-the-year badge (issue #227)', () => {
   it('shows the "Paid for <year>" badge when the last payment is in the current year', () => {
     render(<InsuranceCard {...baseProps} status="on_track" lastPaymentDate="2026-05-28" />)
     expect(screen.getByText('statusPaidForYear:2026')).toBeInTheDocument()
-    expect(screen.queryByText('statusDue')).not.toBeInTheDocument()
+    // on_track maps to statusNotDue; the paid badge replaces it.
+    expect(screen.queryByText('statusNotDue')).not.toBeInTheDocument()
   })
 
   it('falls back to the computed status when not paid this year', () => {
     render(<InsuranceCard {...baseProps} status="on_track" lastPaymentDate="2025-05-28" />)
-    expect(screen.getByText('statusDue')).toBeInTheDocument()
+    expect(screen.getByText('statusNotDue')).toBeInTheDocument()
     expect(screen.queryByText(/statusPaidForYear/)).not.toBeInTheDocument()
   })
 })

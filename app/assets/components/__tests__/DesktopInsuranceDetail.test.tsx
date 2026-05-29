@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import DesktopInsuranceDetail from '../DesktopInsuranceDetail'
 import type { InsuranceData } from '../../DashboardClient'
 
@@ -78,7 +78,8 @@ describe('DesktopInsuranceDetail — paid-for-the-year state (issue #227)', () =
   it('shows a "Paid for <year>" status badge instead of the computed status', () => {
     render(<DesktopInsuranceDetail ins={paidIns} locale="en" onClose={vi.fn()} />)
     expect(screen.getByText('Paid for 2026')).toBeInTheDocument()
-    expect(screen.queryByText('Due soon')).not.toBeInTheDocument()
+    // on_track now renders "Not due"; the paid badge replaces it.
+    expect(screen.queryByText('Not due')).not.toBeInTheDocument()
   })
 
   it('shows the "<year> premium settled" confirmation chip', () => {
@@ -101,5 +102,36 @@ describe('DesktopInsuranceDetail — paid-for-the-year state (issue #227)', () =
     render(<DesktopInsuranceDetail ins={stale} locale="en" onClose={vi.fn()} />)
     expect(screen.queryByText('Paid for 2025')).not.toBeInTheDocument()
     expect(screen.queryByText(/premium settled/)).not.toBeInTheDocument()
+  })
+})
+
+describe('DesktopInsuranceDetail — overdue can be settled', () => {
+  // An overdue policy must be able to settle the missed renewal. The CTA now
+  // calls mark-paid (advances the cycle + records the payment) rather than only
+  // opening the savings log, which never settled the premium.
+  it('settles via mark-paid when the overdue CTA is clicked', async () => {
+    const fetchMock = vi.fn((url: string) => {
+      if (typeof url === 'string' && url.includes('/savings')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ entries: [], totalSaved: 0 }) })
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const onChanged = vi.fn()
+    const overdue = { ...ins, status: 'overdue' } as InsuranceData
+
+    render(<DesktopInsuranceDetail ins={overdue} locale="en" onClose={vi.fn()} onChanged={onChanged} />)
+
+    fireEvent.click(screen.getByTestId('insurance-cta-status'))
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/api/v1/insurance-members/ins-1/mark-paid'),
+        expect.objectContaining({ method: 'POST' })
+      )
+    )
+    await waitFor(() => expect(onChanged).toHaveBeenCalled())
+    // Overdue no longer routes to the savings-only log modal.
+    expect(screen.queryByTestId('log-payment-modal')).not.toBeInTheDocument()
   })
 })
