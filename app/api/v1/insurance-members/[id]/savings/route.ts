@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateUUID } from '@/lib/validation'
-import { isPlanMonthRealized } from '@/lib/finance'
+import { isPlanMonthRealized, isInCurrentCycle } from '@/lib/finance'
 
 type HistoryEntry = {
   id: string
@@ -32,7 +32,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const [memberRes, savingsRes, plansRes] = await Promise.all([
     supabase
       .from('insurance_members')
-      .select('annual_payment_vnd, user_id')
+      .select('annual_payment_vnd, user_id, last_payment_date')
       .eq('member_id', memberId)
       .single(),
     supabase
@@ -51,6 +51,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   if (savingsRes.error) return NextResponse.json({ error: 'Failed to fetch savings' }, { status: 500 })
 
   const annualPremium = memberRes.data.annual_payment_vnd ?? 0
+  const lastPaymentDate = memberRes.data.last_payment_date ?? null
   const defaultMonthly = Math.round(annualPremium / 12)
   const plans = plansRes.data ?? []
   const planIds = plans.map((p) => p.id)
@@ -69,26 +70,31 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   const entries: HistoryEntry[] = []
 
-  // Manually logged payments
+  // Manually logged payments — limited to the current cycle (after the last
+  // settlement) so the history reconciles with the dashboard's "Saved" amount.
   for (const s of (savingsRes.data ?? [])) {
+    const savedDate = String(s.saved_date ?? s.created_at ?? '').slice(0, 10)
+    if (!isInCurrentCycle(savedDate, lastPaymentDate)) continue
     entries.push({
       id: s.id,
       amount: Number(s.amount_saved_vnd ?? 0),
-      date: String(s.saved_date ?? s.created_at ?? '').slice(0, 10),
+      date: savedDate,
       kind: 'logged',
     })
   }
 
   // Auto-accrued monthly contribution from each (non-excluded) plan whose month
-  // has arrived. Future months are budgeted, not yet saved, so they're excluded
-  // to reconcile with the dashboard's real "Saved" amount.
+  // has arrived and falls in the current cycle. Future / already-settled months
+  // are excluded so the history reconciles with the dashboard's "Saved" amount.
   for (const p of plans) {
     if (excludedSet.has(`${p.id}::${memberId}`)) continue
     if (!isPlanMonthRealized(p.year, p.month)) continue
+    const planMonthStart = `${p.year}-${String(p.month).padStart(2, '0')}-01`
+    if (!isInCurrentCycle(planMonthStart, lastPaymentDate)) continue
     entries.push({
       id: `plan-${p.id}`,
       amount: Number(overrideMap.get(`${p.id}::${memberId}`) ?? defaultMonthly),
-      date: `${p.year}-${String(p.month).padStart(2, '0')}-01`,
+      date: planMonthStart,
       kind: 'plan',
     })
   }

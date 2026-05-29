@@ -54,7 +54,10 @@ export default function LogInsurancePaymentModal({ open, onClose, onSaved, ins, 
   if (!open || !ins) return null
 
   const amountNum = Number(amount)
-  const canSubmit = amountNum > 0 && !submitting
+  // Settle confirms the premium transfer (no amount to enter); logging requires
+  // a positive contribution amount.
+  const canSubmit = settle ? !submitting : amountNum > 0 && !submitting
+  const settleYear = Number(date.slice(0, 4))
 
   const t = isVi
     ? { title: settle ? 'Đánh dấu đã thanh toán' : 'Ghi nhận thanh toán', amount: 'Số tiền (₫)', date: 'Ngày thanh toán',
@@ -174,6 +177,15 @@ export default function LogInsurancePaymentModal({ open, onClose, onSaved, ins, 
                 </div>
               </div>
 
+              {settle && (
+                <p style={{ margin: 0, fontSize: 12, color: 'var(--c-muted)', lineHeight: 1.5 }}>
+                  {isVi
+                    ? `Xác nhận đã chuyển phí ${settleYear} cho công ty bảo hiểm. Kỳ gia hạn sẽ chuyển sang năm sau.`
+                    : `Confirm you've transferred the ${settleYear} premium to the insurer. The renewal will move to next year.`}
+                </p>
+              )}
+
+              {!settle && (
               <FormField label={t.amount}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8 }}>
                   <div style={{
@@ -211,6 +223,7 @@ export default function LogInsurancePaymentModal({ open, onClose, onSaved, ins, 
                   </button>
                 </div>
               </FormField>
+              )}
 
               <FormField label={t.date}>
                 <input

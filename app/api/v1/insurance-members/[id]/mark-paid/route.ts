@@ -55,25 +55,9 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       })()
     : null
 
-  // Count savings records before deletion for audit log
-  const { count: savingsCount } = await supabase
-    .from('insurance_savings')
-    .select('*', { count: 'exact', head: true })
-    .eq('insurance_member_id', memberId)
-    .eq('user_id', user.id)
-
-  // Delete all savings records first (reset balance to 0)
-  // Delete before update so that if delete fails, member state is unchanged
-  const { error: deleteError } = await supabase
-    .from('insurance_savings')
-    .delete()
-    .eq('insurance_member_id', memberId)
-    .eq('user_id', user.id)
-
-  if (deleteError) {
-    console.error('[mark-paid] Failed to delete savings', { user_id: user.id, member_id: memberId, error: deleteError.message })
-    return err(500, 'INTERNAL_ERROR', 'An error occurred while processing your request')
-  }
+  // Savings history is preserved. Contributions made on/before this payment
+  // funded the now-settled cycle; progress for the next cycle is computed from
+  // contributions made after last_payment_date (see isInCurrentCycle).
 
   // Advance payment_date by 1 year and record last_payment_date
   const { data: updated, error: updateError } = await supabase
@@ -94,11 +78,10 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const updatedAt = updated?.updated_at ?? now.toISOString()
-  const deletedCount = savingsCount ?? 0
 
-  // Audit log — log the action with deletion count, not raw user/member UUIDs.
-  // The Vercel request ID (in headers) is the trace key if we need to correlate.
-  console.log(`[AUDIT] mark-paid: deleted ${deletedCount} savings records at ${now.toISOString()}`)
+  // Audit log — no raw user/member UUIDs. The Vercel request ID (in headers) is
+  // the trace key if we need to correlate.
+  console.log(`[AUDIT] mark-paid: settled premium (paid ${paidISO}) at ${now.toISOString()}`)
 
   return NextResponse.json({
     data: {

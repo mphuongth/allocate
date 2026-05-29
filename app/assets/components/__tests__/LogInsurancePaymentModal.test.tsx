@@ -48,8 +48,7 @@ describe('LogInsurancePaymentModal — settle mode', () => {
   it('calls mark-paid with the chosen paid_date instead of logging savings', async () => {
     render(<LogInsurancePaymentModal open settle ins={ins} locale="en" onClose={vi.fn()} onSaved={vi.fn()} />)
 
-    // Fill the amount via the Suggested shortcut so Confirm is enabled.
-    await userEvent.click(screen.getByRole('button', { name: /suggested/i }))
+    // Settle mode has no amount to enter — confirm directly.
     await userEvent.click(screen.getByRole('button', { name: /confirm/i }))
 
     expect(fetchMock).toHaveBeenCalledTimes(1)

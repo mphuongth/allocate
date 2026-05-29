@@ -120,10 +120,10 @@ describe('DesktopInsuranceDetail — settle via the payment modal', () => {
 
     render(<DesktopInsuranceDetail ins={overdue} locale="en" onClose={vi.fn()} onChanged={vi.fn()} />)
 
-    // Clicking the CTA opens the modal (it does NOT settle on its own).
+    // Clicking the CTA opens the modal in settle mode (it does NOT settle on its own).
     fireEvent.click(screen.getByTestId('insurance-cta-status'))
     expect(screen.getByTestId('log-payment-modal')).toBeInTheDocument()
-    expect(screen.getByText('Mark as paid')).toBeInTheDocument()
+    expect(screen.getByText(/transferred the .* premium to the insurer/i)).toBeInTheDocument()
     expect(fetchMock).not.toHaveBeenCalledWith(
       expect.stringContaining('/mark-paid'),
       expect.anything()
@@ -144,8 +144,7 @@ describe('DesktopInsuranceDetail — settle via the payment modal', () => {
     render(<DesktopInsuranceDetail ins={overdue} locale="en" onClose={vi.fn()} onChanged={onChanged} />)
 
     fireEvent.click(screen.getByTestId('insurance-cta-status'))
-    // Fill the amount via Suggested, then confirm.
-    fireEvent.click(screen.getByRole('button', { name: /suggested/i }))
+    // Settle mode has no amount — confirm directly.
     fireEvent.click(screen.getByRole('button', { name: /confirm/i }))
 
     await waitFor(() =>

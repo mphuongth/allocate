@@ -80,20 +80,6 @@ export function insurancePaidYear(lastPaymentDate: string | null): number | null
   return paid.getFullYear() === new Date().getFullYear() ? paid.getFullYear() : null
 }
 
-// Promote a not-yet-due policy to "ready" (the premium is saved, just confirm
-// the payment was sent) only when it has been GENUINELY saved — i.e. real
-// logged contributions, not amounts merely projected from monthly plans. This
-// keeps "Ready to pay" meaning the money is actually there.
-export function insuranceReadyStatus(
-  baseStatus: 'on_track' | 'upcoming' | 'overdue' | 'completed',
-  savedVnd: number,
-  annualPremiumVnd: number
-): 'on_track' | 'upcoming' | 'overdue' | 'completed' | 'ready' {
-  const fullySaved = annualPremiumVnd > 0 && savedVnd >= annualPremiumVnd
-  if (fullySaved && (baseStatus === 'on_track' || baseStatus === 'upcoming')) return 'ready'
-  return baseStatus
-}
-
 // A monthly plan exists only once income is set for that month, and its
 // insurance allocation counts as saved once the month has arrived — the current
 // month or any past month. A future month's allocation is not saved yet.
@@ -102,4 +88,14 @@ export function isPlanMonthRealized(year: number, month: number): boolean {
   const nowYear = now.getFullYear()
   const nowMonth = now.getMonth() + 1
   return year < nowYear || (year === nowYear && month <= nowMonth)
+}
+
+// A contribution counts toward the CURRENT premium cycle only when it was made
+// after the last settlement. Once a premium is marked paid, prior savings funded
+// that (now-settled) cycle; new savings accrue toward the next one. With no
+// recorded payment yet, every contribution counts. Dates are compared as
+// YYYY-MM-DD strings (lexicographic order matches chronological order).
+export function isInCurrentCycle(contribDateISO: string, lastPaymentDate: string | null): boolean {
+  if (!lastPaymentDate) return true
+  return contribDateISO.slice(0, 10) > lastPaymentDate.slice(0, 10)
 }

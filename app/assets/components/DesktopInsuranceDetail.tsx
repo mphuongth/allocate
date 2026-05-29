@@ -117,23 +117,22 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
       : ({ on_track: 'Not due', completed: 'Paid', overdue: 'Overdue', upcoming: 'Due soon', ready: 'Ready to pay' } as Record<string, string>)[s] ?? s
   }
 
-  // Status-aware CTA — all three settle the current cycle via mark-paid
-  // (advances payment_date, records the payment, resets savings), and the CTA is
-  // hidden once the year's premium is already settled:
-  // - overdue → "Pay now" (red)
-  // - on_track → "Mark as paid" (navy)
-  // - ready → "Confirm payment sent" (navy)
-  // - other → "Log payment" (default) → open LogPayment (records a contribution)
-  const showStatusCta = !paidThisYear && ['overdue', 'on_track', 'ready'].includes(ins.status)
-  const ctaLabel = isVi
-    ? ({ overdue: 'Thanh toán ngay', on_track: 'Đánh dấu đã thanh toán', ready: 'Xác nhận đã thanh toán' } as Record<string, string>)[ins.status]
-    : ({ overdue: 'Pay now', on_track: 'Mark as paid', ready: 'Confirm payment sent' } as Record<string, string>)[ins.status]
-  const ctaBg = ins.status === 'overdue' ? 'var(--c-neg)' : 'var(--c-btn-primary)'
+  // Two independent actions:
+  // - "Mark as paid" (shown until the year's premium is settled) → confirm the
+  //   transfer to the insurer → "Paid for {year}" + advance the renewal.
+  // - "Log payment" (always shown) → record a contribution toward the premium
+  //   (most saving accrues automatically from monthly plans; this is for ad-hoc
+  //   amounts). Never renews.
+  const showMarkPaid = !paidThisYear
+  const markPaidLabel = isVi ? 'Đánh dấu đã thanh toán' : 'Mark as paid'
 
-  function handleStatusCta() {
-    // overdue / on_track / ready → open the payment modal to confirm and settle
-    // the cycle (advances payment_date, records the payment) → "Paid for {year}".
+  function handleMarkPaid() {
     setSettleMode(true)
+    setShowLogPayment(true)
+  }
+
+  function handleLogPayment() {
+    setSettleMode(false)
     setShowLogPayment(true)
   }
 
@@ -353,14 +352,14 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
               </div>
             )}
 
-            {/* Status-aware CTA */}
-            {showStatusCta ? (
+            {/* Actions: "Mark as paid" (until settled) + always-available "Log payment" */}
+            {showMarkPaid && (
               <button
                 data-testid="insurance-cta-status"
-                onClick={handleStatusCta}
+                onClick={handleMarkPaid}
                 style={{
                   width: '100%', justifyContent: 'center', marginTop: 12, gap: 6, fontSize: 12,
-                  padding: 10, background: ctaBg, color: '#fff', border: 'none',
+                  padding: 10, background: 'var(--c-btn-primary)', color: '#fff', border: 'none',
                   borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600,
                   display: 'flex', alignItems: 'center', transition: 'opacity 120ms',
                 }}
@@ -368,19 +367,18 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = '1' }}
               >
                 <Check size={13} strokeWidth={2.4} />
-                {ctaLabel}
-              </button>
-            ) : (
-              <button
-                data-testid="insurance-cta-log"
-                onClick={() => { setSettleMode(false); setShowLogPayment(true) }}
-                className="cn-btn"
-                style={{ width: '100%', justifyContent: 'center', marginTop: 12, gap: 6, fontSize: 12 }}
-              >
-                <Plus size={13} strokeWidth={2.4} />
-                {isVi ? 'Ghi nhận thanh toán' : 'Log payment'}
+                {markPaidLabel}
               </button>
             )}
+            <button
+              data-testid="insurance-cta-log"
+              onClick={handleLogPayment}
+              className="cn-btn"
+              style={{ width: '100%', justifyContent: 'center', marginTop: showMarkPaid ? 8 : 12, gap: 6, fontSize: 12 }}
+            >
+              <Plus size={13} strokeWidth={2.4} />
+              {isVi ? 'Ghi nhận thanh toán' : 'Log payment'}
+            </button>
           </div>
 
           {/* Payment history */}

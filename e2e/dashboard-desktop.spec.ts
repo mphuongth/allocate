@@ -181,6 +181,11 @@ test.describe('Desktop insurance — mark as paid (issue #227)', () => {
     await expect(cta).toBeVisible({ timeout: 5_000 })
     await cta.click()
 
+    // The CTA opens the payment modal in settle mode; confirm to settle.
+    const modal = page.getByTestId('log-payment-modal')
+    await expect(modal).toBeVisible({ timeout: 5_000 })
+    await modal.getByRole('button', { name: /confirm|xác nhận/i }).click()
+
     const year = new Date().getFullYear()
     await expect(panel.getByText(new RegExp(`Paid for ${year}|Đã thanh toán ${year}`))).toBeVisible({ timeout: 8_000 })
     await expect(page.getByTestId('insurance-cta-status')).not.toBeVisible()

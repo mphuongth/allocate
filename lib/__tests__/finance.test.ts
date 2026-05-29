@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { calcProjectedInterest, isNavStale, insuranceStatus, insurancePaidYear, insuranceReadyStatus, isPlanMonthRealized } from '../finance'
+import { calcProjectedInterest, isNavStale, insuranceStatus, insurancePaidYear, isPlanMonthRealized, isInCurrentCycle } from '../finance'
 
 describe('calcProjectedInterest', () => {
   it('returns 0 when rate is null', () => {
@@ -128,34 +128,20 @@ describe('insuranceStatus', () => {
   })
 })
 
-describe('insuranceReadyStatus', () => {
-  const PREMIUM = 12_000_000
-
-  it('promotes on_track to ready when the premium is fully saved', () => {
-    expect(insuranceReadyStatus('on_track', PREMIUM, PREMIUM)).toBe('ready')
+describe('isInCurrentCycle', () => {
+  it('counts every contribution when nothing has been settled yet', () => {
+    expect(isInCurrentCycle('2026-01-01', null)).toBe(true)
+    expect(isInCurrentCycle('2026-12-31', null)).toBe(true)
   })
-
-  it('promotes upcoming to ready when the premium is fully saved', () => {
-    expect(insuranceReadyStatus('upcoming', PREMIUM, PREMIUM)).toBe('ready')
+  it('counts a contribution made after the last settlement', () => {
+    expect(isInCurrentCycle('2026-06-01', '2026-05-20')).toBe(true)
   })
-
-  // The bug: projected plan allocations made amountSaved reach the premium even
-  // when little was actually saved. With the real saved amount short, it must
-  // stay on_track, not jump to "Ready to pay".
-  it('stays on_track when the real saved amount is short of the premium', () => {
-    expect(insuranceReadyStatus('on_track', 3_000_000, PREMIUM)).toBe('on_track')
+  it('excludes a contribution made on or before the last settlement', () => {
+    expect(isInCurrentCycle('2026-05-20', '2026-05-20')).toBe(false)
+    expect(isInCurrentCycle('2026-05-01', '2026-05-20')).toBe(false)
   })
-
-  it('never promotes an overdue policy', () => {
-    expect(insuranceReadyStatus('overdue', PREMIUM, PREMIUM)).toBe('overdue')
-  })
-
-  it('treats saved == premium as fully saved (boundary)', () => {
-    expect(insuranceReadyStatus('upcoming', PREMIUM, PREMIUM)).toBe('ready')
-  })
-
-  it('does not promote when the premium is zero', () => {
-    expect(insuranceReadyStatus('on_track', 0, 0)).toBe('on_track')
+  it('reads only the date portion of a timestamptz', () => {
+    expect(isInCurrentCycle('2026-06-01', '2026-05-20T00:00:00+00:00')).toBe(true)
   })
 })
 
