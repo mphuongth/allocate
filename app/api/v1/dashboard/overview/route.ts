@@ -26,7 +26,7 @@ export async function GET() {
       .eq('user_id', user.id),
     supabase
       .from('insurance_savings')
-      .select('insurance_member_id, amount_saved_vnd, saved_date')
+      .select('insurance_member_id, amount_saved_vnd, saved_date, created_at')
       .eq('user_id', user.id),
     supabase
       .from('gold_price_settings')
@@ -71,7 +71,9 @@ export async function GET() {
   const insuranceSavingsByMember = new Map<string, { amount: number; date: string }[]>()
   for (const s of (insuranceSavingsRes.data ?? [])) {
     const rows = insuranceSavingsByMember.get(s.insurance_member_id) ?? []
-    rows.push({ amount: s.amount_saved_vnd ?? 0, date: String(s.saved_date ?? '') })
+    // Fall back to created_at when saved_date is null, matching the savings
+    // history endpoint so the "Saved" amount and history reconcile.
+    rows.push({ amount: s.amount_saved_vnd ?? 0, date: String(s.saved_date ?? s.created_at ?? '') })
     insuranceSavingsByMember.set(s.insurance_member_id, rows)
   }
 
