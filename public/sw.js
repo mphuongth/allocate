@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v5'
+const CACHE_VERSION = 'v6'
 const API_CACHE = `api-v1-${CACHE_VERSION}`
 const STATIC_CACHE = `static-assets-${CACHE_VERSION}`
 const PAGE_CACHE = `pages-${CACHE_VERSION}`

@@ -5,6 +5,7 @@ import { writeFileSync } from 'node:fs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const publicDir = resolve(__dirname, '../public')
+const appDir = resolve(__dirname, '../app')
 
 // Cairn brand palette — navy base, emerald lead, mint secondary.
 // Keeping these in one place makes a future palette tweak a one-line change.
@@ -83,6 +84,39 @@ for (const { filename, size } of pngIcons) {
     .toFile(resolve(publicDir, filename))
   console.log(`Generated public/${filename}`)
 }
+
+// favicon.ico — multi-resolution (16/32/48), same navy-background mark as the
+// app icons so the browser-tab favicon matches everywhere. Next.js App Router
+// auto-serves app/favicon.ico, and Chrome prefers it, so it must be regenerated
+// here rather than left as a hand-made (and previously background-less) file.
+function buildIco(images) {
+  const header = Buffer.alloc(6)
+  header.writeUInt16LE(0, 0) // reserved
+  header.writeUInt16LE(1, 2) // type: 1 = icon
+  header.writeUInt16LE(images.length, 4)
+  const dir = Buffer.alloc(16 * images.length)
+  let offset = 6 + 16 * images.length
+  images.forEach((img, i) => {
+    const d = 16 * i
+    dir.writeUInt8(img.size >= 256 ? 0 : img.size, d)      // width (0 = 256)
+    dir.writeUInt8(img.size >= 256 ? 0 : img.size, d + 1)  // height
+    dir.writeUInt8(0, d + 2)  // palette count
+    dir.writeUInt8(0, d + 3)  // reserved
+    dir.writeUInt16LE(1, d + 4)   // color planes
+    dir.writeUInt16LE(32, d + 6)  // bits per pixel
+    dir.writeUInt32LE(img.buffer.length, d + 8)  // image byte size
+    dir.writeUInt32LE(offset, d + 12)            // image offset
+    offset += img.buffer.length
+  })
+  return Buffer.concat([header, dir, ...images.map((i) => i.buffer)])
+}
+
+const icoImages = []
+for (const size of [16, 32, 48]) {
+  icoImages.push({ size, buffer: await sharp(Buffer.from(buildSvg(size))).png().toBuffer() })
+}
+writeFileSync(resolve(appDir, 'favicon.ico'), buildIco(icoImages))
+console.log('Generated app/favicon.ico')
 
 // Also emit a crisp master SVG (rendered version matches the 512 PNG) and a
 // transparent variant handy for embedding in dark-mode UIs or marketing pages.
