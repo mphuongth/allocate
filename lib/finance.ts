@@ -74,7 +74,8 @@ export function insuranceStatus(
 // YYYY-MM-DD string never shifts across a timezone boundary.
 export function insurancePaidYear(lastPaymentDate: string | null): number | null {
   if (!lastPaymentDate) return null
-  const [y, m, d] = lastPaymentDate.split('-').map(Number)
+  // last_payment_date is a timestamptz, so trim any time part to the date first.
+  const [y, m, d] = lastPaymentDate.slice(0, 10).split('-').map(Number)
   const paid = new Date(y, (m ?? 1) - 1, d ?? 1)
   if (isNaN(paid.getTime())) return null
   return paid.getFullYear() === new Date().getFullYear() ? paid.getFullYear() : null

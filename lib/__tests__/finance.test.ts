@@ -197,4 +197,12 @@ describe('insurancePaidYear', () => {
     vi.setSystemTime(new Date(2026, 5, 15))
     expect(insurancePaidYear('2026-01-01')).toBe(2026)
   })
+  // last_payment_date is a timestamptz column, so the API returns it with a time
+  // part. Parsing must read only the date portion or the year is lost (which hid
+  // the "Paid for {year}" badge after marking paid).
+  it('parses a timestamptz value (date portion only)', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 4, 29))
+    expect(insurancePaidYear('2026-05-29T00:00:00+00:00')).toBe(2026)
+  })
 })
