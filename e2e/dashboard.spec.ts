@@ -351,3 +351,26 @@ test('insurance "Mark as Paid" updates status', async ({ page }) => {
     await page.waitForTimeout(1000)
   }
 })
+
+// Regression: a policy whose start date is in the past was incorrectly rendered
+// as "Overdue". The premium isn't due until the next anniversary, so the row
+// must show the on-track ("Due soon") status — not Overdue.
+test('a policy started in the past is not shown as Overdue', async ({ page }) => {
+  // Started ~60 days ago → next anniversary ~10 months out → on_track.
+  const start = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+  const member = await api.createInsuranceMember({
+    member_name: 'E2E Past Start Member',
+    relationship: 'Self',
+    annual_payment_vnd: 12_000_000,
+    payment_date: start,
+  })
+  cleanup.add(() => api.deleteInsuranceMember(member.member_id))
+
+  await page.goto('/dashboard')
+  await page.waitForLoadState('networkidle')
+
+  const row = page.getByTestId('insurance-row').filter({ hasText: 'E2E Past Start Member' })
+  await expect(row).toBeVisible({ timeout: 10_000 })
+  await expect(row).not.toContainText(/Overdue|Quá hạn/)
+  await expect(row).toContainText(/Due soon|Sắp đến hạn/)
+})

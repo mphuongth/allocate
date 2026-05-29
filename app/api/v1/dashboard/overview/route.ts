@@ -310,7 +310,7 @@ export async function GET() {
     }, 0)
     const amountSaved = lumpSumSaved + monthlySavedFromPlanning
     const savingsProgressPercentage = annualPremium > 0 ? (amountSaved / annualPremium) * 100 : 0
-    const baseStatus = insuranceStatus(m.payment_date)
+    const baseStatus = insuranceStatus(m.payment_date, m.last_payment_date)
     const status: 'on_track' | 'upcoming' | 'overdue' | 'completed' | 'ready' =
       amountSaved >= annualPremium && (baseStatus === 'on_track' || baseStatus === 'upcoming')
         ? 'ready'
