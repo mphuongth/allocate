@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import Link from 'next/link'
 import { fmt } from '@/lib/formatters'
 import { Plus, ArrowDownToLine, ChevronDown, Check } from 'lucide-react'
 import { useTranslations, useLocale } from 'next-intl'
@@ -26,6 +25,7 @@ import DesktopNetWorthPanel from './components/DesktopNetWorthPanel'
 import DesktopGoalCard from './components/DesktopGoalCard'
 import DesktopInsuranceList from './components/DesktopInsuranceList'
 import DesktopInsuranceDetail from './components/DesktopInsuranceDetail'
+import InsuranceEmpty from './components/InsuranceEmpty'
 import AddInsuranceMemberModal from './components/AddInsuranceMemberModal'
 import DesktopGoalDetail from './components/DesktopGoalDetail'
 
@@ -754,16 +754,15 @@ export default function DashboardClient({ userId }: { userId: string }) {
                 )}
 
                 {/* Insurance */}
-                {data.insurance.length > 0 && (
-                  <section style={{ marginBottom: 24 }}>
-                    <DesktopInsuranceList
-                      insurance={data.insurance}
-                      locale={locale}
-                      onOpen={(ins) => { setSelectedGoalId(null); setSelectedInsuranceId(selectedInsuranceId === ins.insuranceId ? null : ins.insuranceId) }}
-                      onAdd={() => setShowAddInsurance(true)}
-                    />
-                  </section>
-                )}
+                <section style={{ marginBottom: 24 }}>
+                  <DesktopInsuranceList
+                    insurance={data.insurance}
+                    locale={locale}
+                    goalCount={data.goals.length}
+                    onOpen={(ins) => { setSelectedGoalId(null); setSelectedInsuranceId(selectedInsuranceId === ins.insuranceId ? null : ins.insuranceId) }}
+                    onAdd={() => setShowAddInsurance(true)}
+                  />
+                </section>
 
               </div>
 
@@ -885,29 +884,29 @@ export default function DashboardClient({ userId }: { userId: string }) {
               )}
 
               {/* Insurance */}
-              {data.insurance.length > 0 && (
-                <section>
-                  <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
-                    <div>
-                      <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600, letterSpacing: '-0.01em' }}>{t('sectionInsurance')}</h2>
-                      <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--c-muted)' }}>
-                        {data.insurance.length} {data.insurance.length === 1 ? t('member') : t('members')}
-                      </p>
-                    </div>
-                    <Link
-                      href="/settings?tab=insurance"
-                      style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 4,
-                        fontSize: 12, fontWeight: 500, padding: '4px 8px',
-                        border: 'none', borderRadius: 'var(--r-control)',
-                        background: 'transparent', color: 'var(--c-ink)',
-                        textDecoration: 'none',
-                      }}
-                    >
-                      <Plus size={12} strokeWidth={2.4} />
-                      {t('add')}
-                    </Link>
+              <section>
+                <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+                  <div>
+                    <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600, letterSpacing: '-0.01em' }}>{t('sectionInsurance')}</h2>
+                    <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--c-muted)' }}>
+                      {data.insurance.length} {data.insurance.length === 1 ? t('member') : t('members')}
+                    </p>
                   </div>
+                  <button
+                    onClick={() => setShowAddInsurance(true)}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                      fontSize: 12, fontWeight: 500, padding: '4px 8px',
+                      border: 'none', borderRadius: 'var(--r-control)',
+                      background: 'transparent', color: 'var(--c-ink)',
+                      cursor: 'pointer', fontFamily: 'inherit',
+                    }}
+                  >
+                    <Plus size={12} strokeWidth={2.4} />
+                    {t('add')}
+                  </button>
+                </div>
+                {data.insurance.length > 0 ? (
                   <div style={{
                     background: 'var(--c-card)',
                     border: '1px solid var(--c-line)',
@@ -924,8 +923,14 @@ export default function DashboardClient({ userId }: { userId: string }) {
                       />
                     ))}
                   </div>
-                </section>
-              )}
+                ) : (
+                  <InsuranceEmpty
+                    goalCount={data.goals.length}
+                    locale={locale}
+                    onAdd={() => setShowAddInsurance(true)}
+                  />
+                )}
+              </section>
 
               {/* NAV updated footer */}
               {data.netWorth.navUpdatedAt && (
@@ -1049,6 +1054,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
         onClose={() => setShowAddInsurance(false)}
         onCreated={() => fetchData({ force: true })}
         locale={locale}
+        desktop={isDesktop}
       />
 
       {/* Mobile: Insurance detail sheet */}

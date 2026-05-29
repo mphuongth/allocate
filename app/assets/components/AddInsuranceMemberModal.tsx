@@ -9,6 +9,8 @@ interface Props {
   onClose: () => void
   onCreated?: () => void
   locale: string
+  /** Centered modal when true; mobile bottom sheet when false/omitted. */
+  desktop?: boolean
 }
 
 const COVERAGE_OPTIONS: { value: string; label: string; labelVi: string }[] = [
@@ -17,7 +19,7 @@ const COVERAGE_OPTIONS: { value: string; label: string; labelVi: string }[] = [
   { value: 'Child', label: 'Child', labelVi: 'Con' },
 ]
 
-export default function AddInsuranceMemberModal({ open, onClose, onCreated, locale }: Props) {
+export default function AddInsuranceMemberModal({ open, onClose, onCreated, locale, desktop }: Props) {
   const isVi = locale === 'vi'
   const [name, setName] = useState('')
   const [coverage, setCoverage] = useState('Self')
@@ -25,17 +27,30 @@ export default function AddInsuranceMemberModal({ open, onClose, onCreated, loca
   const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Keep the mobile sheet mounted through its slide-down exit animation.
+  const [mounted, setMounted] = useState(open)
 
-  // Reset form when reopened
+  // Reset form when reopened; keep mounted during the mobile exit animation
   useEffect(() => {
     if (open) {
+      setMounted(true)
       setName('')
       setCoverage('Self')
       setPremium(12_000_000)
       setStartDate(new Date().toISOString().slice(0, 10))
       setSubmitting(false)
       setError(null)
+    } else {
+      const tmo = setTimeout(() => setMounted(false), 220)
+      return () => clearTimeout(tmo)
     }
+  }, [open])
+
+  // Lock background scroll while open
+  useEffect(() => {
+    if (!open) return
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = '' }
   }, [open])
 
   // Close on Escape
@@ -48,7 +63,7 @@ export default function AddInsuranceMemberModal({ open, onClose, onCreated, loca
     return () => document.removeEventListener('keydown', onKey)
   }, [open, onClose])
 
-  if (!open) return null
+  if (desktop ? !open : !mounted) return null
 
   const monthly = (premium || 0) / 12
   const canSubmit = name.trim().length > 0 && premium > 0 && !submitting
@@ -90,14 +105,172 @@ export default function AddInsuranceMemberModal({ open, onClose, onCreated, loca
     }
   }
 
+  const formBody = (
+    <div style={{ display: 'grid', gap: 14 }}>
+      {/* Name */}
+      <FormField label={t.name}>
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder={t.namePh}
+          autoFocus
+          className="cn-input"
+        />
+      </FormField>
+
+      {/* Coverage */}
+      <FormField label={t.coverage}>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {COVERAGE_OPTIONS.map((o) => {
+            const active = coverage === o.value
+            return (
+              <button
+                key={o.value}
+                type="button"
+                onClick={() => setCoverage(o.value)}
+                style={{
+                  flex: 1, padding: 8, borderRadius: 8, fontSize: 12, fontWeight: 600,
+                  background: active ? 'var(--c-btn-primary)' : 'var(--c-card-2)',
+                  color: active ? '#fff' : 'var(--c-muted)',
+                  border: `1px solid ${active ? 'var(--c-btn-primary)' : 'var(--c-line)'}`,
+                  cursor: 'pointer', fontFamily: 'inherit', transition: 'all 120ms',
+                }}
+              >
+                {isVi ? o.labelVi : o.label}
+              </button>
+            )
+          })}
+        </div>
+      </FormField>
+
+      {/* Premium */}
+      <FormField label={t.premium}>
+        <input
+          type="text"
+          inputMode="numeric"
+          value={premium ? Number(premium).toLocaleString('en-US') : ''}
+          onChange={(e) => setPremium(Number(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, '')))}
+          className="cn-input"
+          style={{ fontVariantNumeric: 'tabular-nums' }}
+        />
+      </FormField>
+
+      {/* Monthly preview */}
+      <div style={{
+        background: 'var(--c-navy-tint)', borderRadius: 10, padding: '12px 16px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <div style={{
+          fontSize: 11, fontWeight: 600, letterSpacing: '0.06em',
+          textTransform: 'uppercase', color: 'var(--c-navy)',
+        }}>
+          {t.monthly}
+        </div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--c-navy)', fontVariantNumeric: 'tabular-nums' }}>
+          {fmtCompact(monthly)}
+        </div>
+      </div>
+
+      {/* Start date */}
+      <FormField label={t.start}>
+        <input
+          type="date"
+          value={startDate}
+          onChange={(e) => setStartDate(e.target.value)}
+          className="cn-input"
+        />
+      </FormField>
+
+      {error && (
+        <div role="alert" style={{ fontSize: 12, color: 'var(--c-neg)' }}>
+          {error}
+        </div>
+      )}
+
+      {/* Footer buttons */}
+      <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+        <button
+          type="button"
+          onClick={onClose}
+          className="cn-btn ghost"
+          style={{ flex: 1, justifyContent: 'center', border: '1px solid var(--c-line)' }}
+        >
+          {t.cancel}
+        </button>
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={!canSubmit}
+          className="cn-btn primary"
+          style={{ flex: 2, justifyContent: 'center', gap: 6, opacity: canSubmit ? 1 : 0.6 }}
+        >
+          <Plus size={14} strokeWidth={2.4} />
+          {t.save}
+        </button>
+      </div>
+    </div>
+  )
+
+  if (desktop) {
+    return (
+      <div
+        data-testid="add-insurance-modal"
+        onClick={onClose}
+        style={{
+          position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.4)',
+          zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: 24, backdropFilter: 'blur(2px)',
+        }}
+      >
+        <div
+          onClick={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+          aria-label={t.title}
+          style={{
+            width: '100%', maxWidth: 440,
+            maxHeight: 'calc(100vh - 48px)',
+            background: 'var(--c-card)', borderRadius: 16,
+            boxShadow: '0 24px 48px rgba(15,23,42,0.18), 0 8px 16px rgba(15,23,42,0.08)',
+            display: 'flex', flexDirection: 'column', overflow: 'hidden',
+          }}
+        >
+          {/* Header */}
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '18px 20px 14px', borderBottom: '1px solid var(--c-line)', flexShrink: 0,
+          }}>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em' }}>{t.title}</h3>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label={isVi ? 'Đóng' : 'Close'}
+              className="cn-btn ghost"
+              style={{ padding: 6 }}
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          {/* Body */}
+          <div style={{ padding: '18px 20px', overflowY: 'auto' }}>
+            {formBody}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Mobile — bottom sheet
   return (
     <div
       data-testid="add-insurance-modal"
       onClick={onClose}
       style={{
-        position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.4)',
-        zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: 24, backdropFilter: 'blur(2px)',
+        position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.45)',
+        zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+        animation: open ? 'fade-in 180ms ease' : 'fade-out 180ms ease forwards',
+        pointerEvents: open ? 'auto' : 'none',
       }}
     >
       <div
@@ -106,19 +279,20 @@ export default function AddInsuranceMemberModal({ open, onClose, onCreated, loca
         aria-modal="true"
         aria-label={t.title}
         style={{
-          width: '100%', maxWidth: 440,
-          maxHeight: 'calc(100vh - 48px)',
-          background: 'var(--c-card)', borderRadius: 16,
-          boxShadow: '0 24px 48px rgba(15,23,42,0.18), 0 8px 16px rgba(15,23,42,0.08)',
+          width: '100%', maxWidth: 480, maxHeight: '90dvh',
+          background: 'var(--c-card)',
+          borderTopLeftRadius: 20, borderTopRightRadius: 20,
           display: 'flex', flexDirection: 'column', overflow: 'hidden',
+          animation: open ? 'slide-up 220ms cubic-bezier(0.2, 0.8, 0.2, 1)' : 'slide-down 180ms ease forwards',
+          boxShadow: '0 -8px 24px rgba(0,0,0,0.12)',
         }}
       >
+        {/* Drag handle */}
+        <div data-testid="add-insurance-sheet-handle" style={{ width: 36, height: 4, background: 'var(--c-line-strong)', borderRadius: 999, margin: '6px auto 14px', flexShrink: 0 }} />
+
         {/* Header */}
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '18px 20px 14px', borderBottom: '1px solid var(--c-line)', flexShrink: 0,
-        }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em' }}>{t.title}</h3>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px 16px', flexShrink: 0 }}>
+          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600, color: 'var(--c-ink)' }}>{t.title}</h3>
           <button
             type="button"
             onClick={onClose}
@@ -130,111 +304,9 @@ export default function AddInsuranceMemberModal({ open, onClose, onCreated, loca
           </button>
         </div>
 
-        {/* Body */}
-        <div style={{ padding: '18px 20px', overflowY: 'auto' }}>
-          <div style={{ display: 'grid', gap: 14 }}>
-            {/* Name */}
-            <FormField label={t.name}>
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder={t.namePh}
-                autoFocus
-                className="cn-input"
-              />
-            </FormField>
-
-            {/* Coverage */}
-            <FormField label={t.coverage}>
-              <div style={{ display: 'flex', gap: 8 }}>
-                {COVERAGE_OPTIONS.map((o) => {
-                  const active = coverage === o.value
-                  return (
-                    <button
-                      key={o.value}
-                      type="button"
-                      onClick={() => setCoverage(o.value)}
-                      style={{
-                        flex: 1, padding: 8, borderRadius: 8, fontSize: 12, fontWeight: 600,
-                        background: active ? 'var(--c-btn-primary)' : 'var(--c-card-2)',
-                        color: active ? '#fff' : 'var(--c-muted)',
-                        border: `1px solid ${active ? 'var(--c-btn-primary)' : 'var(--c-line)'}`,
-                        cursor: 'pointer', fontFamily: 'inherit', transition: 'all 120ms',
-                      }}
-                    >
-                      {isVi ? o.labelVi : o.label}
-                    </button>
-                  )
-                })}
-              </div>
-            </FormField>
-
-            {/* Premium */}
-            <FormField label={t.premium}>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={premium ? Number(premium).toLocaleString('en-US') : ''}
-                onChange={(e) => setPremium(Number(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, '')))}
-                className="cn-input"
-                style={{ fontVariantNumeric: 'tabular-nums' }}
-              />
-            </FormField>
-
-            {/* Monthly preview */}
-            <div style={{
-              background: 'var(--c-navy-tint)', borderRadius: 10, padding: '12px 16px',
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            }}>
-              <div style={{
-                fontSize: 11, fontWeight: 600, letterSpacing: '0.06em',
-                textTransform: 'uppercase', color: 'var(--c-navy)',
-              }}>
-                {t.monthly}
-              </div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--c-navy)', fontVariantNumeric: 'tabular-nums' }}>
-                {fmtCompact(monthly)}
-              </div>
-            </div>
-
-            {/* Start date */}
-            <FormField label={t.start}>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="cn-input"
-              />
-            </FormField>
-
-            {error && (
-              <div role="alert" style={{ fontSize: 12, color: 'var(--c-neg)' }}>
-                {error}
-              </div>
-            )}
-
-            {/* Footer buttons */}
-            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-              <button
-                type="button"
-                onClick={onClose}
-                className="cn-btn ghost"
-                style={{ flex: 1, justifyContent: 'center', border: '1px solid var(--c-line)' }}
-              >
-                {t.cancel}
-              </button>
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={!canSubmit}
-                className="cn-btn primary"
-                style={{ flex: 2, justifyContent: 'center', gap: 6, opacity: canSubmit ? 1 : 0.6 }}
-              >
-                <Plus size={14} strokeWidth={2.4} />
-                {t.save}
-              </button>
-            </div>
-          </div>
+        {/* Scrollable body */}
+        <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', overscrollBehavior: 'contain', touchAction: 'pan-y', padding: '0 16px 32px' }}>
+          {formBody}
         </div>
       </div>
     </div>
