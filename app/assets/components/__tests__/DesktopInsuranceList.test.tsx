@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import DesktopInsuranceList from '../DesktopInsuranceList'
@@ -60,6 +60,29 @@ describe('DesktopInsuranceList — empty state (desktop design)', () => {
     expect(screen.getByTestId('insurance-row')).toBeInTheDocument()
     expect(screen.queryByText(/unprotected/)).not.toBeInTheDocument()
     expect(screen.queryByText('No members yet')).not.toBeInTheDocument()
+  })
+})
+
+describe('DesktopInsuranceList — paid-for-the-year badge (issue #227)', () => {
+  afterEach(() => vi.useRealTimers())
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 4, 28))
+  })
+
+  it('shows "Paid for <year>" when the last payment is in the current year', () => {
+    const paid = { ...member, lastPaymentDate: '2026-05-28' }
+    render(<DesktopInsuranceList insurance={[paid]} goalCount={2} locale="en" onOpen={vi.fn()} onAdd={vi.fn()} />)
+    expect(screen.getByText('Paid for 2026')).toBeInTheDocument()
+    // member fixture is on_track → "Not due"; the paid badge replaces it.
+    expect(screen.queryByText('Not due')).not.toBeInTheDocument()
+  })
+
+  it('shows the computed status when not paid this year', () => {
+    const stale = { ...member, lastPaymentDate: '2025-05-28' }
+    render(<DesktopInsuranceList insurance={[stale]} goalCount={2} locale="en" onOpen={vi.fn()} onAdd={vi.fn()} />)
+    expect(screen.getByText('Not due')).toBeInTheDocument()
+    expect(screen.queryByText(/Paid for/)).not.toBeInTheDocument()
   })
 })
 

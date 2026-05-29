@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import * as api from './helpers/api'
 
 // All tests run on Desktop Chrome (1280×800) by default from playwright config.
 // These verify the two-column desktop layout for the Overview page.
@@ -136,5 +137,57 @@ test.describe('Desktop overview layout', () => {
     await expect(row).toBeVisible({ timeout: 10_000 })
     await row.click()
     await expect(page.getByTestId('insurance-remove-btn')).toBeVisible({ timeout: 5_000 })
+  })
+})
+
+test.describe('Desktop insurance — mark as paid (issue #227)', () => {
+  const MEMBER = 'E2E Pay Member'
+  let memberId: string
+
+  test.beforeAll(async () => {
+    // Future due date (~60 days out) → status on_track → "Mark as paid" CTA.
+    const due = new Date()
+    due.setDate(due.getDate() + 60)
+    const m = await api.createInsuranceMember({
+      member_name: MEMBER,
+      relationship: 'Self',
+      annual_payment_vnd: 12_000_000,
+      payment_date: due.toISOString().slice(0, 10),
+    })
+    memberId = m.member_id
+  })
+
+  test.afterAll(async () => {
+    if (memberId) await api.deleteInsuranceMember(memberId)
+  })
+
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/dashboard')
+    await page.waitForLoadState('networkidle')
+  })
+
+  test('clicking "Mark as paid" updates the panel to the paid-for-year state', async ({ page }) => {
+    // Regression: the panel rendered a stale snapshot, so after mark-paid the
+    // CTA stayed and "nothing happened". The detail must reflect fresh data and
+    // show the "Paid for <year>" state.
+    const row = page.getByTestId('insurance-row').filter({ hasText: MEMBER })
+    await expect(row).toBeVisible({ timeout: 10_000 })
+    await row.click()
+
+    const panel = page.getByTestId('insurance-detail-panel')
+    await expect(panel).toBeVisible({ timeout: 5_000 })
+
+    const cta = page.getByTestId('insurance-cta-status')
+    await expect(cta).toBeVisible({ timeout: 5_000 })
+    await cta.click()
+
+    // The CTA opens the payment modal in settle mode; confirm to settle.
+    const modal = page.getByTestId('log-payment-modal')
+    await expect(modal).toBeVisible({ timeout: 5_000 })
+    await modal.getByRole('button', { name: /confirm|xác nhận/i }).click()
+
+    const year = new Date().getFullYear()
+    await expect(panel.getByText(new RegExp(`Paid for ${year}|Đã thanh toán ${year}`))).toBeVisible({ timeout: 8_000 })
+    await expect(page.getByTestId('insurance-cta-status')).not.toBeVisible()
   })
 })

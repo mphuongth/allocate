@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import DesktopInsuranceDetail from '../DesktopInsuranceDetail'
 import type { InsuranceData } from '../../DashboardClient'
@@ -56,11 +56,81 @@ describe('DesktopInsuranceDetail — payment history (issue #223)', () => {
   })
 })
 
-describe('DesktopInsuranceDetail — overdue can be settled', () => {
-  // An overdue policy must be able to settle the missed renewal. The CTA now
-  // calls mark-paid (advances the cycle + records the payment) rather than only
-  // opening the savings log, which never settled the premium.
-  it('settles via mark-paid when the overdue CTA is clicked', async () => {
+describe('DesktopInsuranceDetail — paid-for-the-year state (issue #227)', () => {
+  afterEach(() => vi.useRealTimers())
+
+  // After mark-paid the backend sets last_payment_date to today, advances the
+  // due date a year, and resets savings — so status recomputes to on_track.
+  const paidIns: InsuranceData = {
+    ...ins,
+    status: 'on_track',
+    amountSaved: 0,
+    savingsProgressPercentage: 0,
+    nextPaymentDate: '2027-05-28',
+    lastPaymentDate: '2026-05-28',
+  } as InsuranceData
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 4, 28))
+  })
+
+  it('shows a "Paid for <year>" status badge instead of the computed status', () => {
+    render(<DesktopInsuranceDetail ins={paidIns} locale="en" onClose={vi.fn()} />)
+    expect(screen.getByText('Paid for 2026')).toBeInTheDocument()
+    // on_track now renders "Not due"; the paid badge replaces it.
+    expect(screen.queryByText('Not due')).not.toBeInTheDocument()
+  })
+
+  it('shows the "<year> premium settled" confirmation chip', () => {
+    render(<DesktopInsuranceDetail ins={paidIns} locale="en" onClose={vi.fn()} />)
+    expect(screen.getByText('2026 premium settled')).toBeInTheDocument()
+  })
+
+  it('reframes the savings block as saving for the next year', () => {
+    render(<DesktopInsuranceDetail ins={paidIns} locale="en" onClose={vi.fn()} />)
+    expect(screen.getByText('Saving for 2027')).toBeInTheDocument()
+  })
+
+  it('hides the "Mark as paid" status CTA once paid this year', () => {
+    render(<DesktopInsuranceDetail ins={paidIns} locale="en" onClose={vi.fn()} />)
+    expect(screen.queryByTestId('insurance-cta-status')).not.toBeInTheDocument()
+  })
+
+  it('does NOT show the paid state when the last payment was a previous year', () => {
+    const stale: InsuranceData = { ...paidIns, lastPaymentDate: '2025-05-28' } as InsuranceData
+    render(<DesktopInsuranceDetail ins={stale} locale="en" onClose={vi.fn()} />)
+    expect(screen.queryByText('Paid for 2025')).not.toBeInTheDocument()
+    expect(screen.queryByText(/premium settled/)).not.toBeInTheDocument()
+  })
+})
+
+describe('DesktopInsuranceDetail — settle via the payment modal', () => {
+  // The status CTA opens the editable payment modal (like the design). The
+  // overdue case must reach a modal that, on confirm, settles via mark-paid.
+  it('opens the payment modal in settle mode when the overdue CTA is clicked', async () => {
+    const fetchMock = vi.fn((url: string) => {
+      if (typeof url === 'string' && url.includes('/savings')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ entries: [], totalSaved: 0 }) })
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const overdue = { ...ins, status: 'overdue' } as InsuranceData
+
+    render(<DesktopInsuranceDetail ins={overdue} locale="en" onClose={vi.fn()} onChanged={vi.fn()} />)
+
+    // Clicking the CTA opens the modal in settle mode (it does NOT settle on its own).
+    fireEvent.click(screen.getByTestId('insurance-cta-status'))
+    expect(screen.getByTestId('log-payment-modal')).toBeInTheDocument()
+    expect(screen.getByText(/transferred the .* premium to the insurer/i)).toBeInTheDocument()
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      expect.stringContaining('/mark-paid'),
+      expect.anything()
+    )
+  })
+
+  it('settles via mark-paid when the modal is confirmed', async () => {
     const fetchMock = vi.fn((url: string) => {
       if (typeof url === 'string' && url.includes('/savings')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ entries: [], totalSaved: 0 }) })
@@ -74,6 +144,8 @@ describe('DesktopInsuranceDetail — overdue can be settled', () => {
     render(<DesktopInsuranceDetail ins={overdue} locale="en" onClose={vi.fn()} onChanged={onChanged} />)
 
     fireEvent.click(screen.getByTestId('insurance-cta-status'))
+    // Settle mode has no amount — confirm directly.
+    fireEvent.click(screen.getByRole('button', { name: /confirm/i }))
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
@@ -82,7 +154,5 @@ describe('DesktopInsuranceDetail — overdue can be settled', () => {
       )
     )
     await waitFor(() => expect(onChanged).toHaveBeenCalled())
-    // Overdue no longer routes to the savings-only log modal.
-    expect(screen.queryByTestId('log-payment-modal')).not.toBeInTheDocument()
   })
 })

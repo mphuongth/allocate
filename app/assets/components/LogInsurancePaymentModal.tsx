@@ -11,12 +11,23 @@ interface Props {
   onSaved?: () => void
   ins: InsuranceData | null
   locale: string
+  // When true the modal confirms a premium payment (calls mark-paid → "Paid for
+  // {year}") instead of logging a savings contribution.
+  settle?: boolean
 }
 
-export default function LogInsurancePaymentModal({ open, onClose, onSaved, ins, locale }: Props) {
+function todayLocalISO(): string {
+  const n = new Date()
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
+}
+
+export default function LogInsurancePaymentModal({ open, onClose, onSaved, ins, locale, settle = false }: Props) {
   const isVi = locale === 'vi'
-  const suggested = ins ? Math.round(ins.annualPremium / 12) : 0
+  // In settle mode you're paying the whole annual premium; otherwise suggest a
+  // single monthly contribution.
+  const suggested = ins ? (settle ? ins.annualPremium : Math.round(ins.annualPremium / 12)) : 0
   const [amount, setAmount] = useState('')
+  const [date, setDate] = useState(todayLocalISO)
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -24,6 +35,7 @@ export default function LogInsurancePaymentModal({ open, onClose, onSaved, ins, 
   useEffect(() => {
     if (open) {
       setAmount('')
+      setDate(todayLocalISO())
       setSubmitting(false)
       setDone(false)
       setError(null)
@@ -42,33 +54,40 @@ export default function LogInsurancePaymentModal({ open, onClose, onSaved, ins, 
   if (!open || !ins) return null
 
   const amountNum = Number(amount)
-  const canSubmit = amountNum > 0 && !submitting
+  // Settle confirms the premium transfer (no amount to enter); logging requires
+  // a positive contribution amount.
+  const canSubmit = settle ? !submitting : amountNum > 0 && !submitting
+  const settleYear = Number(date.slice(0, 4))
 
   const t = isVi
-    ? { title: 'Ghi nhận thanh toán', amount: 'Số tiền (₫)',
-        suggest: 'Gợi ý', cancel: 'Hủy', save: 'Xác nhận', doneMsg: 'Đã ghi nhận!' }
-    : { title: 'Log payment', amount: 'Amount (₫)',
-        suggest: 'Suggested', cancel: 'Cancel', save: 'Confirm', doneMsg: 'Payment logged!' }
+    ? { title: settle ? 'Đánh dấu đã thanh toán' : 'Ghi nhận thanh toán', amount: 'Số tiền (₫)', date: 'Ngày thanh toán',
+        suggest: 'Gợi ý', cancel: 'Hủy', save: 'Xác nhận', doneMsg: settle ? 'Đã đánh dấu thanh toán!' : 'Đã ghi nhận!' }
+    : { title: settle ? 'Mark as paid' : 'Log payment', amount: 'Amount (₫)', date: 'Payment date',
+        suggest: 'Suggested', cancel: 'Cancel', save: 'Confirm', doneMsg: settle ? 'Marked as paid!' : 'Payment logged!' }
 
   async function handleSave() {
     if (!canSubmit || !ins) return
     setSubmitting(true)
     setError(null)
     try {
-      const now = new Date()
-      const savedDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-      const res = await fetch('/api/v1/insurance-savings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          insurance_member_id: ins.insuranceId,
-          amount_saved_vnd: amountNum,
-          saved_date: savedDate,
-        }),
-      })
+      const res = settle
+        ? await fetch(`/api/v1/insurance-members/${ins.insuranceId}/mark-paid`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ paid_date: date }),
+          })
+        : await fetch('/api/v1/insurance-savings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              insurance_member_id: ins.insuranceId,
+              amount_saved_vnd: amountNum,
+              saved_date: date,
+            }),
+          })
       if (!res.ok) {
         const j = await res.json().catch(() => ({}))
-        throw new Error(j?.error || (isVi ? 'Không thể ghi nhận' : 'Failed to log payment'))
+        throw new Error(j?.error || (isVi ? (settle ? 'Không thể đánh dấu' : 'Không thể ghi nhận') : (settle ? 'Failed to mark as paid' : 'Failed to log payment')))
       }
       setDone(true)
       onSaved?.()
@@ -158,6 +177,15 @@ export default function LogInsurancePaymentModal({ open, onClose, onSaved, ins, 
                 </div>
               </div>
 
+              {settle && (
+                <p style={{ margin: 0, fontSize: 12, color: 'var(--c-muted)', lineHeight: 1.5 }}>
+                  {isVi
+                    ? `Xác nhận đã chuyển phí ${settleYear} cho công ty bảo hiểm. Kỳ gia hạn sẽ chuyển sang năm sau.`
+                    : `Confirm you've transferred the ${settleYear} premium to the insurer. The renewal will move to next year.`}
+                </p>
+              )}
+
+              {!settle && (
               <FormField label={t.amount}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8 }}>
                   <div style={{
@@ -194,6 +222,17 @@ export default function LogInsurancePaymentModal({ open, onClose, onSaved, ins, 
                     {t.suggest}
                   </button>
                 </div>
+              </FormField>
+              )}
+
+              <FormField label={t.date}>
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="cn-input"
+                  style={{ fontFamily: 'inherit' }}
+                />
               </FormField>
 
               {error && (

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { calcProjectedInterest, isNavStale, insuranceStatus, insuranceReadyStatus, isPlanMonthRealized } from '../finance'
+import { calcProjectedInterest, isNavStale, insuranceStatus, insurancePaidYear, isPlanMonthRealized, isInCurrentCycle } from '../finance'
 
 describe('calcProjectedInterest', () => {
   it('returns 0 when rate is null', () => {
@@ -128,34 +128,51 @@ describe('insuranceStatus', () => {
   })
 })
 
-describe('insuranceReadyStatus', () => {
-  const PREMIUM = 12_000_000
+describe('isInCurrentCycle', () => {
+  it('counts every contribution when nothing has been settled yet', () => {
+    expect(isInCurrentCycle('2026-01-01', null)).toBe(true)
+    expect(isInCurrentCycle('2026-12-31', null)).toBe(true)
+  })
+  it('counts a contribution made after the last settlement', () => {
+    expect(isInCurrentCycle('2026-06-01', '2026-05-20')).toBe(true)
+  })
+  // A contribution made on the settlement date starts the next cycle — e.g. you
+  // pay today, then log money toward next year today. It must count.
+  it('counts a contribution made on the settlement date', () => {
+    expect(isInCurrentCycle('2026-05-20', '2026-05-20')).toBe(true)
+  })
+  it('excludes a contribution made before the last settlement', () => {
+    expect(isInCurrentCycle('2026-05-01', '2026-05-20')).toBe(false)
+  })
+  it('reads only the date portion of a timestamptz', () => {
+    expect(isInCurrentCycle('2026-05-20', '2026-05-20T00:00:00+00:00')).toBe(true)
+  })
+})
 
-  it('promotes on_track to ready when the premium is fully saved', () => {
-    expect(insuranceReadyStatus('on_track', PREMIUM, PREMIUM)).toBe('ready')
+// The overview/savings routes count a plan month toward the current cycle only
+// when BOTH gates pass: the month has arrived AND it's on/after the last
+// settlement. This proves the transition after paying for a year.
+describe('plan allocation counting after a payment (combined gates)', () => {
+  afterEach(() => vi.useRealTimers())
+
+  const counts = (y: number, mo: number, lastPaid: string | null) =>
+    isPlanMonthRealized(y, mo) &&
+    isInCurrentCycle(`${y}-${String(mo).padStart(2, '0')}-01`, lastPaid)
+
+  it('after paying 29 May 2026, forward months count toward next year', () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 6, 15)) // 15 Jul 2026
+    const paid = '2026-05-29'
+    expect(counts(2026, 6, paid)).toBe(true)   // Jun 2026 → toward 2027
+    expect(counts(2026, 7, paid)).toBe(true)   // Jul 2026 → toward 2027
+    expect(counts(2026, 5, paid)).toBe(false)  // May funded the paid 2026 cycle
+    expect(counts(2026, 8, paid)).toBe(false)  // Aug hasn't arrived yet
   })
 
-  it('promotes upcoming to ready when the premium is fully saved', () => {
-    expect(insuranceReadyStatus('upcoming', PREMIUM, PREMIUM)).toBe('ready')
-  })
-
-  // The bug: projected plan allocations made amountSaved reach the premium even
-  // when little was actually saved. With the real saved amount short, it must
-  // stay on_track, not jump to "Ready to pay".
-  it('stays on_track when the real saved amount is short of the premium', () => {
-    expect(insuranceReadyStatus('on_track', 3_000_000, PREMIUM)).toBe('on_track')
-  })
-
-  it('never promotes an overdue policy', () => {
-    expect(insuranceReadyStatus('overdue', PREMIUM, PREMIUM)).toBe('overdue')
-  })
-
-  it('treats saved == premium as fully saved (boundary)', () => {
-    expect(insuranceReadyStatus('upcoming', PREMIUM, PREMIUM)).toBe('ready')
-  })
-
-  it('does not promote when the premium is zero', () => {
-    expect(insuranceReadyStatus('on_track', 0, 0)).toBe('on_track')
+  it('a 2027 month counts toward the cycle once it arrives', () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date(2027, 1, 10)) // 10 Feb 2027
+    const paid = '2026-05-29'
+    expect(counts(2027, 1, paid)).toBe(true)   // Jan 2027 arrived → counts
+    expect(counts(2027, 3, paid)).toBe(false)  // Mar 2027 not arrived
   })
 })
 
@@ -184,5 +201,39 @@ describe('isPlanMonthRealized', () => {
   it('excludes any month of a future year', () => {
     vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 4, 28)) // May 2026
     expect(isPlanMonthRealized(2027, 1)).toBe(false)
+  })
+})
+
+describe('insurancePaidYear', () => {
+  afterEach(() => vi.useRealTimers())
+
+  it('returns null when lastPaymentDate is null', () => {
+    expect(insurancePaidYear(null)).toBeNull()
+  })
+  it('returns the calendar year when paid in the current year', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-05-28'))
+    expect(insurancePaidYear('2026-05-28')).toBe(2026)
+  })
+  it('returns null when the last payment was in a previous year', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-05-28'))
+    expect(insurancePaidYear('2025-12-31')).toBeNull()
+  })
+  it('treats a Jan 1st plain date as a local date (no shift to the prior year)', () => {
+    vi.useFakeTimers()
+    // Mid-year local time so "current year" is unambiguously 2026 regardless of
+    // the test machine's timezone. A naive new Date('2026-01-01') parses as UTC
+    // midnight and slips to 2025 in negative-offset zones — local parsing must not.
+    vi.setSystemTime(new Date(2026, 5, 15))
+    expect(insurancePaidYear('2026-01-01')).toBe(2026)
+  })
+  // last_payment_date is a timestamptz column, so the API returns it with a time
+  // part. Parsing must read only the date portion or the year is lost (which hid
+  // the "Paid for {year}" badge after marking paid).
+  it('parses a timestamptz value (date portion only)', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 4, 29))
+    expect(insurancePaidYear('2026-05-29T00:00:00+00:00')).toBe(2026)
   })
 })

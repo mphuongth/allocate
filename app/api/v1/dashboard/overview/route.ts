@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { calcProjectedInterest, isNavStale, insuranceStatus, insuranceReadyStatus, isPlanMonthRealized } from '@/lib/finance'
+import { calcProjectedInterest, isNavStale, insuranceStatus, isPlanMonthRealized, isInCurrentCycle } from '@/lib/finance'
 import { buildWithdrawalMaps } from '@/lib/withdrawalProgress'
 
 export const dynamic = 'force-dynamic'
@@ -26,7 +26,7 @@ export async function GET() {
       .eq('user_id', user.id),
     supabase
       .from('insurance_savings')
-      .select('insurance_member_id, amount_saved_vnd')
+      .select('insurance_member_id, amount_saved_vnd, saved_date, created_at')
       .eq('user_id', user.id),
     supabase
       .from('gold_price_settings')
@@ -37,9 +37,6 @@ export async function GET() {
 
   const plans = (plansRes.data ?? []) as { id: string; month: number; year: number }[]
   const planIds = plans.map((p) => p.id)
-  // Only plans whose month has arrived count toward real savings — a future
-  // month's allocation is budgeted, not yet saved.
-  const realizedPlans = plans.filter((p) => isPlanMonthRealized(p.year, p.month))
 
   const [insExclusionsRes, insOverridesRes] = await Promise.all([
     planIds.length > 0
@@ -69,10 +66,15 @@ export async function GET() {
   const insuranceMembers = insuranceRes.data ?? []
   const goldPricePerChi: number | null = goldPriceRes.data?.price_per_chi ?? null
 
-  const insuranceLumpSumMap = new Map<string, number>()
+  // Keep raw savings rows per member so each can be filtered to the member's
+  // current premium cycle (savings made after its last settlement).
+  const insuranceSavingsByMember = new Map<string, { amount: number; date: string }[]>()
   for (const s of (insuranceSavingsRes.data ?? [])) {
-    const prev = insuranceLumpSumMap.get(s.insurance_member_id) ?? 0
-    insuranceLumpSumMap.set(s.insurance_member_id, prev + (s.amount_saved_vnd ?? 0))
+    const rows = insuranceSavingsByMember.get(s.insurance_member_id) ?? []
+    // Fall back to created_at when saved_date is null, matching the savings
+    // history endpoint so the "Saved" amount and history reconcile.
+    rows.push({ amount: s.amount_saved_vnd ?? 0, date: String(s.saved_date ?? s.created_at ?? '') })
+    insuranceSavingsByMember.set(s.insurance_member_id, rows)
   }
 
   const excludedSet = new Set<string>()
@@ -306,19 +308,23 @@ export async function GET() {
 
   const insuranceOutput = insuranceMembers.map((m) => {
     const annualPremium = m.annual_payment_vnd
-    const lumpSumSaved = insuranceLumpSumMap.get(m.member_id) ?? 0
+    const lastPaymentDate = m.last_payment_date ?? null
     const defaultMonthly = Math.round(annualPremium / 12)
-    const monthlySavedFromPlanning = realizedPlans.reduce((sum, p) => {
+    // Saved toward the CURRENT cycle only: logged contributions + plan
+    // allocations for months that have arrived — both limited to dates after the
+    // last settlement, so progress resets once a premium is marked paid.
+    const lumpSumSaved = (insuranceSavingsByMember.get(m.member_id) ?? []).reduce(
+      (sum, s) => (isInCurrentCycle(s.date, lastPaymentDate) ? sum + s.amount : sum), 0)
+    const monthlySavedFromPlanning = plans.reduce((sum, p) => {
       if (excludedSet.has(`${p.id}::${m.member_id}`)) return sum
+      if (!isPlanMonthRealized(p.year, p.month)) return sum
+      const planMonthStart = `${p.year}-${String(p.month).padStart(2, '0')}-01`
+      if (!isInCurrentCycle(planMonthStart, lastPaymentDate)) return sum
       return sum + (overrideMap.get(`${p.id}::${m.member_id}`) ?? defaultMonthly)
     }, 0)
-    // Real saved: logged contributions + plan allocations for months that have
-    // arrived. Future months are excluded, so progress and "Ready to pay"
-    // reflect money actually set aside, not projected.
     const amountSaved = lumpSumSaved + monthlySavedFromPlanning
     const savingsProgressPercentage = annualPremium > 0 ? (amountSaved / annualPremium) * 100 : 0
-    const baseStatus = insuranceStatus(m.payment_date, m.last_payment_date)
-    const status = insuranceReadyStatus(baseStatus, amountSaved, annualPremium)
+    const status = insuranceStatus(m.payment_date, m.last_payment_date)
 
     return {
       insuranceId: m.member_id,

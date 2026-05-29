@@ -453,6 +453,7 @@
     "statusDue": "Sắp đến hạn",
     "statusOverdue": "Quá hạn",
     "statusCompleted": "Đã thanh toán",
+    "statusPaidForYear": "Đã thanh toán {year}",
     "statusReady": "Đã tích lũy đủ",
     "goldPrice": "Giá vàng Doji",
     "navUpdated": "NAV cập nhật",

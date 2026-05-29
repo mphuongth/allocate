@@ -68,18 +68,17 @@ export function insuranceStatus(
   return 'on_track'
 }
 
-// Promote a not-yet-due policy to "ready" (the premium is saved, just confirm
-// the payment was sent) only when it has been GENUINELY saved — i.e. real
-// logged contributions, not amounts merely projected from monthly plans. This
-// keeps "Ready to pay" meaning the money is actually there.
-export function insuranceReadyStatus(
-  baseStatus: 'on_track' | 'upcoming' | 'overdue' | 'completed',
-  savedVnd: number,
-  annualPremiumVnd: number
-): 'on_track' | 'upcoming' | 'overdue' | 'completed' | 'ready' {
-  const fullySaved = annualPremiumVnd > 0 && savedVnd >= annualPremiumVnd
-  if (fullySaved && (baseStatus === 'on_track' || baseStatus === 'upcoming')) return 'ready'
-  return baseStatus
+// Returns the calendar year a member's premium was last settled for, but only
+// when that payment happened in the current year — i.e. the current cycle is
+// paid. Returns null otherwise. The date is parsed as local so a plain
+// YYYY-MM-DD string never shifts across a timezone boundary.
+export function insurancePaidYear(lastPaymentDate: string | null): number | null {
+  if (!lastPaymentDate) return null
+  // last_payment_date is a timestamptz, so trim any time part to the date first.
+  const [y, m, d] = lastPaymentDate.slice(0, 10).split('-').map(Number)
+  const paid = new Date(y, (m ?? 1) - 1, d ?? 1)
+  if (isNaN(paid.getTime())) return null
+  return paid.getFullYear() === new Date().getFullYear() ? paid.getFullYear() : null
 }
 
 // A monthly plan exists only once income is set for that month, and its
@@ -90,4 +89,15 @@ export function isPlanMonthRealized(year: number, month: number): boolean {
   const nowYear = now.getFullYear()
   const nowMonth = now.getMonth() + 1
   return year < nowYear || (year === nowYear && month <= nowMonth)
+}
+
+// A contribution counts toward the CURRENT premium cycle when it was made on or
+// after the last settlement. Once a premium is marked paid, earlier savings
+// funded that (now-settled) cycle; contributions from the settlement day onward
+// accrue toward the next one — so paying and then logging toward next year on the
+// same day still counts. With no recorded payment yet, every contribution counts.
+// Dates are compared as YYYY-MM-DD strings (lexicographic order = chronological).
+export function isInCurrentCycle(contribDateISO: string, lastPaymentDate: string | null): boolean {
+  if (!lastPaymentDate) return true
+  return contribDateISO.slice(0, 10) >= lastPaymentDate.slice(0, 10)
 }

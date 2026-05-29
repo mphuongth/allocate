@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Check, ChevronLeft, Edit2, Plus, Trash2, Calendar, X } from 'lucide-react'
 import { fmt, fmtCompact } from '@/lib/formatters'
+import { insurancePaidYear } from '@/lib/finance'
 import type { InsuranceData } from '../DashboardClient'
 import LogInsurancePaymentModal from './LogInsurancePaymentModal'
 
@@ -54,8 +55,14 @@ function initialsFor(name: string): string {
 export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged }: Props) {
   const isVi = locale === 'vi'
   const progress = Math.min(ins.savingsProgressPercentage, 100)
-  const barColor = BAR_COLOR[ins.status] ?? 'var(--c-warn)'
-  const dotColor = STATUS_COLOR[ins.status] ?? 'var(--c-muted)'
+  // Once the current year's premium is settled, the member presents a "paid"
+  // state (green badge + saving-for-next-year framing) regardless of the
+  // recomputed due-date status.
+  const paidYear = insurancePaidYear(ins.lastPaymentDate)
+  const paidThisYear = paidYear !== null
+  const effectiveStatus = paidThisYear ? 'completed' : ins.status
+  const barColor = BAR_COLOR[effectiveStatus] ?? 'var(--c-warn)'
+  const dotColor = STATUS_COLOR[effectiveStatus] ?? 'var(--c-muted)'
 
   const [editing, setEditing] = useState(false)
   const [editName, setEditName] = useState(ins.insuranceName)
@@ -66,6 +73,9 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
   const [editError, setEditError] = useState<string | null>(null)
 
   const [showLogPayment, setShowLogPayment] = useState(false)
+  // When true the payment modal settles the premium (mark-paid); otherwise it
+  // logs a savings contribution.
+  const [settleMode, setSettleMode] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
@@ -107,28 +117,23 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
       : ({ on_track: 'Not due', completed: 'Paid', overdue: 'Overdue', upcoming: 'Due soon', ready: 'Ready to pay' } as Record<string, string>)[s] ?? s
   }
 
-  // Status-aware CTA — all three settle the current cycle via mark-paid
-  // (advances payment_date, records the payment, resets savings):
-  // - overdue → "Pay now" (red)
-  // - on_track → "Mark as paid" (navy)
-  // - ready → "Confirm payment sent" (navy)
-  // - other → "Log payment" (default) → open LogPayment (records a contribution)
-  const showStatusCta = ['overdue', 'on_track', 'ready'].includes(ins.status)
-  const ctaLabel = isVi
-    ? ({ overdue: 'Thanh toán ngay', on_track: 'Đánh dấu đã thanh toán', ready: 'Xác nhận đã thanh toán' } as Record<string, string>)[ins.status]
-    : ({ overdue: 'Pay now', on_track: 'Mark as paid', ready: 'Confirm payment sent' } as Record<string, string>)[ins.status]
-  const ctaBg = ins.status === 'overdue' ? 'var(--c-neg)' : 'var(--c-btn-primary)'
+  // Two independent actions:
+  // - "Mark as paid" (shown until the year's premium is settled) → confirm the
+  //   transfer to the insurer → "Paid for {year}" + advance the renewal.
+  // - "Log payment" (always shown) → record a contribution toward the premium
+  //   (most saving accrues automatically from monthly plans; this is for ad-hoc
+  //   amounts). Never renews.
+  const showMarkPaid = !paidThisYear
+  const markPaidLabel = isVi ? 'Đánh dấu đã thanh toán' : 'Mark as paid'
 
-  async function handleStatusCta() {
-    // overdue / on_track / ready → mark current cycle as paid (advances payment_date)
-    try {
-      const res = await fetch(`/api/v1/insurance-members/${ins.insuranceId}/mark-paid`, { method: 'POST' })
-      if (res.ok) {
-        onChanged?.()
-      }
-    } catch {
-      // ignore — silent failure surface; status reload via parent
-    }
+  function handleMarkPaid() {
+    setSettleMode(true)
+    setShowLogPayment(true)
+  }
+
+  function handleLogPayment() {
+    setSettleMode(false)
+    setShowLogPayment(true)
   }
 
   async function handleSaveEdit() {
@@ -279,9 +284,37 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
                 <span style={{ width: 7, height: 7, borderRadius: 999, background: dotColor }} />
-                <span style={{ fontSize: 11, fontWeight: 600, color: dotColor }}>{statusLabel(ins.status)}</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: dotColor }}>
+                  {paidThisYear
+                    ? (isVi ? `Đã thanh toán ${paidYear}` : `Paid for ${paidYear}`)
+                    : statusLabel(ins.status)}
+                </span>
               </div>
             </div>
+
+            {/* "Premium settled" confirmation + saving-for-next-year framing */}
+            {paidThisYear && (
+              <>
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12,
+                  padding: '9px 12px', background: 'var(--c-pos-tint)',
+                  borderRadius: 10, border: '1px solid rgba(5,150,105,0.15)',
+                }}>
+                  <div style={{
+                    width: 20, height: 20, borderRadius: 10, background: 'var(--c-pos)', color: '#fff',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                  }}>
+                    <Check size={12} strokeWidth={2.6} />
+                  </div>
+                  <div style={{ flex: 1, fontSize: 12, color: 'var(--c-pos)', fontWeight: 500 }}>
+                    {isVi ? `Phí ${paidYear} đã thanh toán` : `${paidYear} premium settled`}
+                  </div>
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--c-muted)', marginBottom: 6, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                  {isVi ? `Tích lũy cho ${paidYear! + 1}` : `Saving for ${paidYear! + 1}`}
+                </div>
+              </>
+            )}
 
             {/* Progress */}
             <div style={{ width: '100%', height: 6, background: 'var(--c-card-2)', borderRadius: 999, overflow: 'hidden' }}>
@@ -291,7 +324,7 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
             {/* KPIs — Annual / Saved / Progress / Monthly */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1, marginTop: 12, background: 'var(--c-line)', borderRadius: 8, overflow: 'hidden' }}>
               {[
-                { l: isVi ? 'Phí hàng năm' : 'Annual premium', v: fmtCompact(ins.annualPremium) },
+                { l: paidThisYear ? (isVi ? `Phí ${paidYear! + 1}` : `${paidYear! + 1} premium`) : (isVi ? 'Phí hàng năm' : 'Annual premium'), v: fmtCompact(ins.annualPremium) },
                 { l: isVi ? 'Đã tích lũy' : 'Saved', v: fmtCompact(ins.amountSaved) },
                 { l: isVi ? 'Tiến độ' : 'Progress', v: `${ins.savingsProgressPercentage.toFixed(1)}%` },
                 { l: isVi ? 'Hàng tháng' : 'Monthly', v: fmtCompact(ins.annualPremium / 12) },
@@ -304,7 +337,7 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
             </div>
 
             {/* Ready info note */}
-            {ins.status === 'ready' && (
+            {!paidThisYear && ins.status === 'ready' && (
               <div style={{
                 display: 'flex', gap: 8, alignItems: 'flex-start',
                 padding: '10px 12px', background: 'var(--c-navy-tint)',
@@ -319,14 +352,14 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
               </div>
             )}
 
-            {/* Status-aware CTA */}
-            {showStatusCta ? (
+            {/* Actions: "Mark as paid" (until settled) + always-available "Log payment" */}
+            {showMarkPaid && (
               <button
                 data-testid="insurance-cta-status"
-                onClick={handleStatusCta}
+                onClick={handleMarkPaid}
                 style={{
                   width: '100%', justifyContent: 'center', marginTop: 12, gap: 6, fontSize: 12,
-                  padding: 10, background: ctaBg, color: '#fff', border: 'none',
+                  padding: 10, background: 'var(--c-btn-primary)', color: '#fff', border: 'none',
                   borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600,
                   display: 'flex', alignItems: 'center', transition: 'opacity 120ms',
                 }}
@@ -334,19 +367,18 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = '1' }}
               >
                 <Check size={13} strokeWidth={2.4} />
-                {ctaLabel}
-              </button>
-            ) : (
-              <button
-                data-testid="insurance-cta-log"
-                onClick={() => setShowLogPayment(true)}
-                className="cn-btn"
-                style={{ width: '100%', justifyContent: 'center', marginTop: 12, gap: 6, fontSize: 12 }}
-              >
-                <Plus size={13} strokeWidth={2.4} />
-                {isVi ? 'Ghi nhận thanh toán' : 'Log payment'}
+                {markPaidLabel}
               </button>
             )}
+            <button
+              data-testid="insurance-cta-log"
+              onClick={handleLogPayment}
+              className="cn-btn"
+              style={{ width: '100%', justifyContent: 'center', marginTop: showMarkPaid ? 8 : 12, gap: 6, fontSize: 12 }}
+            >
+              <Plus size={13} strokeWidth={2.4} />
+              {isVi ? 'Ghi nhận thanh toán' : 'Log payment'}
+            </button>
           </div>
 
           {/* Payment history */}
@@ -443,6 +475,7 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
         onSaved={() => { onChanged?.(); loadHistory() }}
         ins={ins}
         locale={locale}
+        settle={settleMode}
       />
 
       {showDeleteConfirm && (

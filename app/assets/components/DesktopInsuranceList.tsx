@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Shield, Plus, AlertTriangle } from 'lucide-react'
 import { fmtCompact } from '@/lib/formatters'
+import { insurancePaidYear } from '@/lib/finance'
 import type { InsuranceData } from '../DashboardClient'
 
 interface Props {
@@ -146,9 +147,14 @@ export default function DesktopInsuranceList({ insurance, locale, goalCount, onO
 
       {/* Rows */}
       {insurance.map((ins, i) => {
-        const dotColor = STATUS_COLOR[ins.status] ?? 'var(--c-muted)'
-        const barColor = BAR_COLOR[ins.status] ?? 'var(--c-warn)'
+        const paidYear = insurancePaidYear(ins.lastPaymentDate)
+        const effectiveStatus = paidYear !== null ? 'completed' : ins.status
+        const dotColor = STATUS_COLOR[effectiveStatus] ?? 'var(--c-muted)'
+        const barColor = BAR_COLOR[effectiveStatus] ?? 'var(--c-warn)'
         const progress = Math.min(ins.savingsProgressPercentage, 100)
+        const rowLabel = paidYear !== null
+          ? (isVi ? `Đã thanh toán ${paidYear}` : `Paid for ${paidYear}`)
+          : statusLabel(ins.status)
         const isLast = i === insurance.length - 1
 
         return (
@@ -181,7 +187,7 @@ export default function DesktopInsuranceList({ insurance, locale, goalCount, onO
             <div style={{ textAlign: 'right', flexShrink: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end' }}>
                 <span style={{ width: 6, height: 6, borderRadius: 3, background: dotColor, display: 'inline-block' }} />
-                <span style={{ fontSize: 10, fontWeight: 600, color: dotColor }}>{statusLabel(ins.status)}</span>
+                <span style={{ fontSize: 10, fontWeight: 600, color: dotColor }}>{rowLabel}</span>
               </div>
               <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
                 {fmtCompact(ins.amountSaved)} / {fmtCompact(ins.annualPremium)}

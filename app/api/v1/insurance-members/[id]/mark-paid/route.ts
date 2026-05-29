@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { ValidationError, validateUUID } from '@/lib/validation'
+import { ValidationError, validateUUID, validateDate } from '@/lib/validation'
 
 function err(status: number, code: string, message: string) {
   return NextResponse.json({ error: code, message }, { status })
@@ -32,8 +32,19 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   if (fetchError || !member) return err(404, 'NOT_FOUND', 'Insurance member not found')
   if (member.user_id !== user.id) return err(403, 'FORBIDDEN', "You don't have permission to mark this payment")
 
+  // Optional payment date from the body — when the user records the payment on a
+  // date other than today. Defaults to today when absent.
   const now = new Date()
-  const todayISO = now.toISOString().split('T')[0]
+  let paidISO = now.toISOString().split('T')[0]
+  const body = await _req.json().catch(() => null)
+  if (body && body.paid_date != null && body.paid_date !== '') {
+    try {
+      paidISO = validateDate(body.paid_date, 'paid_date')
+    } catch (e) {
+      if (e instanceof ValidationError) return err(400, 'INVALID_PAID_DATE', 'Invalid payment date')
+      throw e
+    }
+  }
 
   // Advance payment_date by exactly 1 year (keep month/day, increment year)
   const nextPaymentDate = member.payment_date
@@ -44,32 +55,16 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       })()
     : null
 
-  // Count savings records before deletion for audit log
-  const { count: savingsCount } = await supabase
-    .from('insurance_savings')
-    .select('*', { count: 'exact', head: true })
-    .eq('insurance_member_id', memberId)
-    .eq('user_id', user.id)
-
-  // Delete all savings records first (reset balance to 0)
-  // Delete before update so that if delete fails, member state is unchanged
-  const { error: deleteError } = await supabase
-    .from('insurance_savings')
-    .delete()
-    .eq('insurance_member_id', memberId)
-    .eq('user_id', user.id)
-
-  if (deleteError) {
-    console.error('[mark-paid] Failed to delete savings', { user_id: user.id, member_id: memberId, error: deleteError.message })
-    return err(500, 'INTERNAL_ERROR', 'An error occurred while processing your request')
-  }
+  // Savings history is preserved. Contributions made on/before this payment
+  // funded the now-settled cycle; progress for the next cycle is computed from
+  // contributions made after last_payment_date (see isInCurrentCycle).
 
   // Advance payment_date by 1 year and record last_payment_date
   const { data: updated, error: updateError } = await supabase
     .from('insurance_members')
     .update({
       payment_date: nextPaymentDate,
-      last_payment_date: todayISO,
+      last_payment_date: paidISO,
       updated_at: now.toISOString(),
     })
     .eq('member_id', memberId)
@@ -83,11 +78,10 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const updatedAt = updated?.updated_at ?? now.toISOString()
-  const deletedCount = savingsCount ?? 0
 
-  // Audit log — log the action with deletion count, not raw user/member UUIDs.
-  // The Vercel request ID (in headers) is the trace key if we need to correlate.
-  console.log(`[AUDIT] mark-paid: deleted ${deletedCount} savings records at ${now.toISOString()}`)
+  // Audit log — no raw user/member UUIDs. The Vercel request ID (in headers) is
+  // the trace key if we need to correlate.
+  console.log(`[AUDIT] mark-paid: settled premium (paid ${paidISO}) at ${now.toISOString()}`)
 
   return NextResponse.json({
     data: {
@@ -95,7 +89,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       name: member.member_name,
       amount_saved: 0,
       payment_date: nextPaymentDate,
-      last_payment_date: todayISO,
+      last_payment_date: paidISO,
       monthly_allocation: member.monthly_premium_vnd ?? Math.round((member.annual_payment_vnd ?? 0) / 12),
       updated_at: updatedAt,
     },
