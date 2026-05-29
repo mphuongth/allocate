@@ -105,6 +105,28 @@ describe('AddTransactionSheet — sell flow (issue #232)', () => {
   })
 })
 
+describe('AddTransactionSheet — sell lists goal-allocated bank/gold (issue #232)', () => {
+  it('includes bank/gold holdings attributed to a goal, not just unallocated', async () => {
+    const overview = {
+      goals: [{ goalName: 'Goal A', funds: [], nonFunds: [{ transactionId: 't1', type: 'bank', amount: 5_000_000, currentValue: 5_200_000, interestRate: 6, units: null, notes: 'Techcombank' }] }],
+      unallocated: { funds: [], nonFunds: [] },
+    }
+    const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
+      if (String(url).includes('/dashboard/overview')) return Promise.resolve({ ok: true, json: () => Promise.resolve(overview) })
+      if (String(url).includes('/savings-goals')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ goals: [] }) })
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<AddTransactionSheet open onClose={vi.fn()} onSaved={vi.fn()} />)
+
+    fireEvent.click(screen.getByText('Bank'))      // asset type = bank
+    fireEvent.click(screen.getByText('withdraw'))  // sell direction (bank → Withdraw)
+
+    expect(await screen.findAllByText(/Techcombank/)).not.toHaveLength(0)
+  })
+})
+
 describe('AddTransactionSheet — gold unit (issue #232)', () => {
   // Gold is valued per chỉ, so a lượng entry must be normalized: 1 lượng = 10 chỉ.
   it('normalizes a lượng entry to chỉ on save', async () => {

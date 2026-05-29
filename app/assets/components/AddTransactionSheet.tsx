@@ -25,10 +25,11 @@ interface Holding {
 }
 
 function collectHoldings(d: {
-  goals?: { goalName: string; funds?: FundLike[] }[]
+  goals?: { goalName: string; funds?: FundLike[]; nonFunds?: NonFundLike[] }[]
   unallocated?: { funds?: FundLike[]; nonFunds?: NonFundLike[] }
 }): Holding[] {
   const out: Holding[] = []
+  // Funds: allocated to goals or unallocated.
   const fundSources: { f: FundLike; source: string }[] = [
     ...(d.goals ?? []).flatMap((g) => (g.funds ?? []).map((f) => ({ f, source: g.goalName }))),
     ...((d.unallocated?.funds) ?? []).map((f) => ({ f, source: 'Unallocated' })),
@@ -41,10 +42,15 @@ function collectHoldings(d: {
       fundId: f.fundId, purchasePrice: f.purchasePrice,
     })
   })
-  ;((d.unallocated?.nonFunds) ?? []).forEach((it, i) => {
+  // Bank / gold: also allocated to goals or unallocated.
+  const nonFundSources: { it: NonFundLike; source: string }[] = [
+    ...(d.goals ?? []).flatMap((g) => (g.nonFunds ?? []).map((it) => ({ it, source: g.goalName }))),
+    ...((d.unallocated?.nonFunds) ?? []).map((it) => ({ it, source: 'Unallocated' })),
+  ]
+  nonFundSources.forEach(({ it, source }, i) => {
     if (it.type !== 'bank' && it.type !== 'gold') return
     out.push({
-      key: `nf-${it.transactionId}-${i}`, name: it.notes || it.type, source: 'Unallocated',
+      key: `nf-${it.transactionId}-${i}`, name: it.notes || it.type, source,
       type: it.type as AssetType,
       currentValue: it.currentValue, units: it.units,
       navPerUnit: it.units && it.units > 0 ? it.currentValue / it.units : null,
