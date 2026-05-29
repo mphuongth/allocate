@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { calcProjectedInterest, isNavStale, insuranceStatus, insuranceReadyStatus } from '../finance'
+import { calcProjectedInterest, isNavStale, insuranceStatus, insuranceReadyStatus, isPlanMonthRealized } from '../finance'
 
 describe('calcProjectedInterest', () => {
   it('returns 0 when rate is null', () => {
@@ -156,5 +156,33 @@ describe('insuranceReadyStatus', () => {
 
   it('does not promote when the premium is zero', () => {
     expect(insuranceReadyStatus('on_track', 0, 0)).toBe('on_track')
+  })
+})
+
+describe('isPlanMonthRealized', () => {
+  afterEach(() => vi.useRealTimers())
+
+  // A monthly plan only exists once income is set for that month. Its insurance
+  // allocation counts as saved once the month has arrived (current or past);
+  // a future month's allocation is not saved yet.
+  it('counts a past month in the current year', () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 4, 28)) // May 2026
+    expect(isPlanMonthRealized(2026, 3)).toBe(true)
+  })
+  it('counts the current month', () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 4, 28)) // May 2026
+    expect(isPlanMonthRealized(2026, 5)).toBe(true)
+  })
+  it('excludes a future month in the current year', () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 4, 28)) // May 2026
+    expect(isPlanMonthRealized(2026, 6)).toBe(false)
+  })
+  it('counts any month of a prior year', () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 4, 28)) // May 2026
+    expect(isPlanMonthRealized(2025, 12)).toBe(true)
+  })
+  it('excludes any month of a future year', () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 4, 28)) // May 2026
+    expect(isPlanMonthRealized(2027, 1)).toBe(false)
   })
 })

@@ -81,3 +81,13 @@ export function insuranceReadyStatus(
   if (fullySaved && (baseStatus === 'on_track' || baseStatus === 'upcoming')) return 'ready'
   return baseStatus
 }
+
+// A monthly plan exists only once income is set for that month, and its
+// insurance allocation counts as saved once the month has arrived — the current
+// month or any past month. A future month's allocation is not saved yet.
+export function isPlanMonthRealized(year: number, month: number): boolean {
+  const now = new Date()
+  const nowYear = now.getFullYear()
+  const nowMonth = now.getMonth() + 1
+  return year < nowYear || (year === nowYear && month <= nowMonth)
+}
