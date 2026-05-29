@@ -149,6 +149,33 @@ describe('isInCurrentCycle', () => {
   })
 })
 
+// The overview/savings routes count a plan month toward the current cycle only
+// when BOTH gates pass: the month has arrived AND it's on/after the last
+// settlement. This proves the transition after paying for a year.
+describe('plan allocation counting after a payment (combined gates)', () => {
+  afterEach(() => vi.useRealTimers())
+
+  const counts = (y: number, mo: number, lastPaid: string | null) =>
+    isPlanMonthRealized(y, mo) &&
+    isInCurrentCycle(`${y}-${String(mo).padStart(2, '0')}-01`, lastPaid)
+
+  it('after paying 29 May 2026, forward months count toward next year', () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 6, 15)) // 15 Jul 2026
+    const paid = '2026-05-29'
+    expect(counts(2026, 6, paid)).toBe(true)   // Jun 2026 → toward 2027
+    expect(counts(2026, 7, paid)).toBe(true)   // Jul 2026 → toward 2027
+    expect(counts(2026, 5, paid)).toBe(false)  // May funded the paid 2026 cycle
+    expect(counts(2026, 8, paid)).toBe(false)  // Aug hasn't arrived yet
+  })
+
+  it('a 2027 month counts toward the cycle once it arrives', () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date(2027, 1, 10)) // 10 Feb 2027
+    const paid = '2026-05-29'
+    expect(counts(2027, 1, paid)).toBe(true)   // Jan 2027 arrived → counts
+    expect(counts(2027, 3, paid)).toBe(false)  // Mar 2027 not arrived
+  })
+})
+
 describe('isPlanMonthRealized', () => {
   afterEach(() => vi.useRealTimers())
 
