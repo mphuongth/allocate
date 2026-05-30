@@ -33,6 +33,13 @@ const authStyles = `
 .cn-auth-card {
   width: 100%;
 }
+/* On mobile the form sits directly on the canvas (no card), so the inputs take
+   a card-colored fill + stronger border to stand out — matching the prototype.
+   Without this they'd be canvas-on-canvas and look invisible. */
+.cn-auth-card .cn-input {
+  background: var(--c-card);
+  border-color: var(--c-line-strong);
+}
 .cn-auth-title {
   margin: 0 0 8px;
   font-size: 28px;
@@ -77,6 +84,12 @@ const authStyles = `
     border-radius: var(--r-card);
     box-shadow: var(--shadow-card);
     padding: 28px 24px;
+  }
+  /* Desktop: the form sits inside a white card, so inputs revert to the canvas
+     fill (the default) to stay distinct from the card surface. */
+  .cn-auth-card .cn-input {
+    background: var(--c-canvas);
+    border-color: var(--c-line);
   }
   .cn-auth-title {
     margin-bottom: 4px;

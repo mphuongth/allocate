@@ -153,6 +153,18 @@ test.describe('mobile auth redesign', () => {
     expect(fontSize).toBeGreaterThanOrEqual(24)
   })
 
+  test('input fields are visually distinct from the page background on mobile', async ({ page }) => {
+    await page.goto('/auth/login')
+    const emailBg = await page.locator('#email').evaluate(
+      (el) => getComputedStyle(el).backgroundColor
+    )
+    const pageBg = await page.locator('.cn-auth-root').evaluate(
+      (el) => getComputedStyle(el).backgroundColor
+    )
+    // Without a card behind the form, a canvas-on-canvas input would be invisible.
+    expect(emailBg).not.toBe(pageBg)
+  })
+
   test('brand is pinned to the top-left, not vertically centered, on mobile', async ({ page }) => {
     await page.goto('/auth/login')
     const box = await page.locator('[data-testid="brand-mark"]').boundingBox()
