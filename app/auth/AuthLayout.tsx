@@ -18,6 +18,7 @@ const authStyles = `
   display: flex;
   flex-direction: column;
   gap: 28px;
+  flex: 1;
 }
 .cn-auth-brand {
   display: flex;
@@ -55,6 +56,9 @@ const authStyles = `
 }
 .cn-auth-alt {
   margin: 0;
+  /* Pin the "Don't have an account? Sign up" line to the bottom of the screen
+     on mobile (the prototype puts the form in a flex:1 region above it). */
+  margin-top: auto;
   font-size: 13px;
   color: var(--c-muted);
   text-align: center;
@@ -70,6 +74,7 @@ const authStyles = `
     max-width: 380px;
     gap: 20px;
     align-items: center;
+    flex: none;
   }
   .cn-auth-brand {
     margin-bottom: 8px;
@@ -100,6 +105,10 @@ const authStyles = `
   .cn-auth-sub {
     margin-bottom: 22px;
     font-size: 13px;
+  }
+  /* Desktop: form is a centered card, so the toggle sits directly under it. */
+  .cn-auth-alt {
+    margin-top: 0;
   }
 }
 `

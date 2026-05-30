@@ -173,6 +173,16 @@ test.describe('mobile auth redesign', () => {
     expect(box!.x).toBeLessThan(80)
     expect(box!.y).toBeLessThan(160)
   })
+
+  test('the sign-up toggle is pinned near the bottom of the screen on mobile', async ({ page }) => {
+    await page.goto('/auth/login')
+    const link = page.getByRole('link', { name: /sign up/i })
+    const box = await link.boundingBox()
+    expect(box).not.toBeNull()
+    // 844px tall viewport — the toggle should sit in the lower portion, not up
+    // near the form. Pinned to the bottom it lands well past the halfway mark.
+    expect(box!.y).toBeGreaterThan(600)
+  })
 })
 
 // ─── Desktop centered card layout ───────────────────────────────────────────
