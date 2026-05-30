@@ -658,6 +658,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
   const [mounted, setMounted] = useState(false)
   const [activeTab, setActiveTab] = useState<'investments' | 'calculator' | 'history'>('investments')
   const [transactions, setTransactions] = useState<InvestmentTx[]>([])
+  const [goldPricePerChi, setGoldPricePerChi] = useState<number | null>(null)
   const [txLoading, setTxLoading] = useState(false)
   const [actionsOpen, setActionsOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
@@ -697,6 +698,12 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
       .then((res) => setTransactions(res.transactions ?? []))
       .catch(() => setTransactions([]))
       .finally(() => setTxLoading(false))
+    // Gold is valued at the live market price per chỉ, not its purchase cost —
+    // without this the sell sheet would prefill the stale buy price (issue #251).
+    fetch('/api/v1/gold-price', { cache: 'no-store' })
+      .then((r) => r.ok ? r.json() : null)
+      .then((res) => setGoldPricePerChi(res?.price_per_chi ?? null))
+      .catch(() => setGoldPricePerChi(null))
   }, [open, goal, refreshKey])
 
   async function handleDelete() {
@@ -804,6 +811,16 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
       gainPct = tx.amount_vnd > 0 ? ((value - tx.amount_vnd) / tx.amount_vnd) * 100 : 0
       units = null
       principal = tx.amount_vnd
+    } else if (tx.asset_type === 'gold' && goldPricePerChi && tx.units) {
+      // Value remaining gold at the current market price per chỉ so the sell
+      // sheet prefills today's price, not the buy price (issue #251). Mirrors
+      // the dashboard overview's gold valuation.
+      const effectiveUnits = tx.units - (tx.units_withdrawn ?? 0)
+      const effectivePrincipal = tx.amount_vnd - (tx.principal_withdrawn ?? 0)
+      value = effectiveUnits * goldPricePerChi
+      gainPct = effectivePrincipal > 0 ? ((value - effectivePrincipal) / effectivePrincipal) * 100 : null
+      units = effectiveUnits
+      principal = effectivePrincipal
     } else {
       value = tx.amount_vnd
       gainPct = null
