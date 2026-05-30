@@ -109,6 +109,15 @@ export async function GET() {
       profitLossPercentage: number
       goalId: string
     }>
+    nonFunds: Array<{
+      transactionId: string
+      type: string
+      amount: number
+      currentValue: number
+      interestRate: number | null
+      units: number | null
+      notes: string | null
+    }>
   }>()
 
   for (const goal of goals) {
@@ -121,6 +130,7 @@ export async function GET() {
       totalInvested: 0,
       transactionCount: 0,
       funds: [],
+      nonFunds: [],
     })
   }
 
@@ -216,6 +226,15 @@ export async function GET() {
         goalEntry.totalInvested += effectiveAmount
         goalEntry.currentValue += currentValue
         goalEntry.transactionCount += 1
+        goalEntry.nonFunds.push({
+          transactionId: tx.transaction_id,
+          type: tx.asset_type,
+          amount: effectiveAmount,
+          currentValue,
+          interestRate: tx.interest_rate ?? null,
+          units: effectiveUnits,
+          notes: tx.notes ?? null,
+        })
       } else {
         unallocatedNonFundValue += currentValue
         unallocatedNonFunds.push({
@@ -303,6 +322,7 @@ export async function GET() {
       progressPercentage,
       transactionCount: g.transactionCount,
       funds: g.funds,
+      nonFunds: g.nonFunds,
     }
   })
 

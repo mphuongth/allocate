@@ -748,24 +748,42 @@ function UnassignConfirmModal({ inv, unassigning, isVi, onCancel, onConfirm }: {
 function SellModal({ inv, isVi, onClose, onSuccess }: {
   inv: InvRow; isVi: boolean; onClose: () => void; onSuccess: () => void
 }) {
-  const [amount, setAmount] = useState('')
-  const [units, setUnits] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
-  const [confirmed, setConfirmed] = useState(false)
-  const [soldAmount, setSoldAmount] = useState(0)
-
   const isFund = inv.type === 'fund'
   const isGold = inv.type === 'gold'
   const isBank = inv.type === 'bank'
   const navPerUnit = isFund
     ? (inv.fund?.currentNAV ?? null)
     : (inv.units && inv.units > 0 ? inv.value / inv.units : null)
+
+  const [amount, setAmount] = useState('')
+  const [units, setUnits] = useState('')
+  // Gold sale price per chỉ, prefilled with the current market price.
+  const [salePrice, setSalePrice] = useState(() => (isGold && navPerUnit ? String(Math.round(navPerUnit)) : ''))
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [confirmed, setConfirmed] = useState(false)
+  const [soldAmount, setSoldAmount] = useState(0)
+
   const maxAmount = inv.value
   const numAmount = Number(amount) || 0
-  const isOverMax = numAmount > maxAmount && maxAmount > 0
-  const isValid = numAmount > 0 && !isOverMax && !saving
   const remaining = maxAmount - numAmount
+
+  // Gold: quantity (chỉ) × sale price → proceeds / cost / profit
+  const numUnits = Number(units) || 0
+  const numSalePrice = Number(salePrice) || 0
+  const goldMaxUnits = inv.units ?? 0
+  const goldBuyUnit = isGold && inv.units && inv.units > 0 && inv.principal != null
+    ? Math.round(inv.principal / inv.units) : null
+  const goldProceeds = isGold ? Math.round(numUnits * numSalePrice) : 0
+  const goldCostSold = goldBuyUnit != null ? Math.round(goldBuyUnit * numUnits) : null
+  const goldProfit = isGold && goldProceeds > 0 && goldCostSold != null ? goldProceeds - goldCostSold : null
+  const goldRemUnits = isGold && inv.units != null ? inv.units - numUnits : null
+  const isOverUnits = isGold && inv.units != null && numUnits > inv.units
+
+  const isOverMax = isGold ? isOverUnits : (numAmount > maxAmount && maxAmount > 0)
+  const isValid = isGold
+    ? (numUnits > 0 && !isOverUnits && numSalePrice > 0 && !saving)
+    : (numAmount > 0 && !isOverMax && !saving)
 
   const gainLoss = useMemo(() => {
     if (!numAmount || inv.gainPct == null) return null
@@ -796,6 +814,7 @@ function SellModal({ inv, isVi, onClose, onSuccess }: {
   }
 
   function handleSetAll() {
+    if (isGold && inv.units != null) { setUnits(String(inv.units)); return }
     setAmount(String(maxAmount))
     if (navPerUnit && inv.units != null) setUnits(inv.units.toFixed(2))
   }
@@ -826,9 +845,12 @@ function SellModal({ inv, isVi, onClose, onSuccess }: {
         const body: Record<string, unknown> = {
           transaction_type: 'withdrawal', asset_type: inv.type,
           parent_transaction_id: inv.id, investment_date: today,
-          amount_vnd: Math.round(numAmount), principal_withdrawn: Math.round(numAmount), goal_id: null,
+          // Gold: amount = proceeds (qty × sale price), principal = cost basis.
+          amount_vnd: isGold ? goldProceeds : Math.round(numAmount),
+          principal_withdrawn: isGold ? (goldCostSold ?? goldProceeds) : Math.round(numAmount),
+          goal_id: null,
         }
-        if (isGold && units && navPerUnit) body.units_withdrawn = parseFloat(units)
+        if (isGold) body.units_withdrawn = parseFloat(numUnits.toFixed(4))
         const res = await fetch('/api/v1/investment-transactions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -836,7 +858,7 @@ function SellModal({ inv, isVi, onClose, onSuccess }: {
         })
         if (!res.ok) { const { error: e } = await res.json(); setError(e ?? (isVi ? 'Không thể xử lý' : 'Could not process')); setSaving(false); return }
       }
-      setSoldAmount(numAmount); setConfirmed(true)
+      setSoldAmount(isGold ? goldProceeds : numAmount); setConfirmed(true)
       setTimeout(() => { setConfirmed(false); onSuccess(); onClose() }, 2000)
     } catch { setError(isVi ? 'Lỗi kết nối' : 'Connection error') }
     setSaving(false)
@@ -876,6 +898,8 @@ function SellModal({ inv, isVi, onClose, onSuccess }: {
             </div>
           </div>
 
+          {!isGold ? (
+          <>
           {/* Amount input */}
           <div>
             <div style={{ fontSize: 11, color: 'var(--c-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
@@ -941,6 +965,68 @@ function SellModal({ inv, isVi, onClose, onSuccess }: {
               </div>
             )
           })()}
+          </>
+          ) : (
+          <>
+          {/* Gold: quantity (chỉ) to sell */}
+          <div>
+            <div style={{ fontSize: 11, color: 'var(--c-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{isVi ? 'Số lượng bán' : 'Quantity to sell'}</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'var(--c-card)', border: `1.5px solid ${isOverUnits ? 'var(--c-neg)' : 'var(--c-navy)'}`, borderRadius: 10 }}>
+                <input autoFocus type="number" step="0.1" value={units} onChange={(e) => { setUnits(e.target.value); setError('') }} placeholder="0.00"
+                  style={{ flex: 1, border: 'none', outline: 'none', fontSize: 15, fontWeight: 600, fontFamily: 'inherit', background: 'transparent', color: isOverUnits ? 'var(--c-neg)' : 'var(--c-ink)' }} />
+                <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>chỉ</span>
+              </div>
+              <button onClick={handleSetAll} style={{ padding: '8px 14px', background: 'var(--c-navy-tint)', color: 'var(--c-navy)', border: '1px solid var(--c-navy-tint)', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>{isVi ? 'Tất cả' : 'All'}</button>
+            </div>
+            {isOverUnits && (
+              <div style={{ fontSize: 11, color: 'var(--c-neg)', marginTop: 5, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <X size={12} strokeWidth={2.5} /> {isVi ? 'Vượt quá số lượng đang giữ' : 'Exceeds quantity held'} · {isVi ? 'Tối đa' : 'Max'} {goldMaxUnits} chỉ
+              </div>
+            )}
+          </div>
+
+          {/* Gold: sale price per chỉ */}
+          <div>
+            <div style={{ fontSize: 11, color: 'var(--c-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{isVi ? 'Giá bán mỗi chỉ' : 'Sale price per chỉ'}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 10 }}>
+              <span style={{ fontSize: 14, color: 'var(--c-muted)' }}>₫</span>
+              <input type="number" value={salePrice} onChange={(e) => { setSalePrice(e.target.value); setError('') }} placeholder="0"
+                style={{ flex: 1, border: 'none', outline: 'none', fontSize: 15, fontWeight: 600, fontFamily: 'inherit', background: 'transparent', color: 'var(--c-ink)' }} />
+              <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>/chỉ</span>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 4 }}>{isVi ? 'Tạm tính theo giá hiện tại — sửa theo giá bạn bán được' : 'Pre-filled at current price — edit to what you can sell for'}</div>
+          </div>
+
+          {/* Gold summary */}
+          {numUnits > 0 && !isOverUnits && numSalePrice > 0 && (
+            <div style={{ background: 'var(--c-card-2)', borderRadius: 12, overflow: 'hidden' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid var(--c-line)' }}>
+                <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{isVi ? 'Tổng tiền nhận được' : 'Total received'}<span style={{ opacity: 0.7 }}> · {numUnits.toLocaleString('vi-VN')} chỉ × {fmtCompact(numSalePrice)}</span></span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(goldProceeds)}</span>
+              </div>
+              {goldCostSold != null && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid var(--c-line)' }}>
+                  <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{isVi ? 'Giá vốn' : 'Your cost'}{goldBuyUnit != null && <span style={{ opacity: 0.7 }}> · {numUnits.toLocaleString('vi-VN')} chỉ × {fmtCompact(goldBuyUnit)}</span>}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(goldCostSold)}</span>
+                </div>
+              )}
+              {goldProfit != null && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 14px', borderBottom: '1px solid var(--c-line)' }}>
+                  <span style={{ fontSize: 12, fontWeight: 600 }}>{isVi ? 'Lãi/Lỗ' : 'Profit / Loss'}</span>
+                  <span style={{ fontSize: 15, fontWeight: 700, color: goldProfit >= 0 ? 'var(--c-pos)' : 'var(--c-neg)', fontVariantNumeric: 'tabular-nums' }}>{goldProfit >= 0 ? '+' : '−'}{fmtCompact(Math.abs(goldProfit))}</span>
+                </div>
+              )}
+              {goldRemUnits != null && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px' }}>
+                  <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{isVi ? 'Còn lại sau giao dịch' : 'Remaining after transaction'}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>{Math.max(0, goldRemUnits).toLocaleString('vi-VN')} chỉ</span>
+                </div>
+              )}
+            </div>
+          )}
+          </>
+          )}
 
           {/* Bank early withdrawal warning */}
           {isBank && (
@@ -983,9 +1069,10 @@ function SellModal({ inv, isVi, onClose, onSuccess }: {
               transition: 'background 120ms, color 120ms',
             }}>
               {isBank ? <ArrowDownToLine size={15} strokeWidth={2.2} /> : <ArrowDownRight size={15} strokeWidth={2.2} />}
-              {numAmount <= 0
-                ? (isVi ? (isBank ? 'Nhập số tiền rút' : 'Nhập số tiền bán') : (isBank ? 'Enter withdrawal amount' : 'Enter sale amount'))
-                : isOverMax ? (isVi ? 'Vượt quá số dư' : 'Exceeds balance')
+              {(isGold ? numUnits <= 0 : numAmount <= 0)
+                ? (isVi ? (isBank ? 'Nhập số tiền rút' : isGold ? 'Nhập số lượng bán' : 'Nhập số tiền bán') : (isBank ? 'Enter withdrawal amount' : isGold ? 'Enter quantity to sell' : 'Enter sale amount'))
+                : (isGold && numSalePrice <= 0) ? (isVi ? 'Nhập giá bán' : 'Enter sale price')
+                : isOverMax ? (isVi ? (isGold ? 'Vượt quá số lượng' : 'Vượt quá số dư') : (isGold ? 'Exceeds quantity' : 'Exceeds balance'))
                 : saving ? (isVi ? 'Đang xử lý…' : 'Processing…')
                 : isBank ? (isVi ? 'Xác nhận rút' : 'Confirm withdrawal') : (isVi ? 'Xác nhận bán' : 'Confirm sale')}
             </button>

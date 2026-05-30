@@ -54,6 +54,7 @@ export interface GoalData {
   progressPercentage: number | null
   transactionCount: number
   funds: FundBreakdownItem[]
+  nonFunds?: NonFundUnallocatedItem[]
 }
 
 export interface InsuranceData {
