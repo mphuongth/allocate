@@ -86,4 +86,10 @@ describe('SellWithdrawSheet — responsive presentation (#248)', () => {
     render(<SellWithdrawSheet item={item} open context="unallocated" desktop onClose={vi.fn()} onSuccess={vi.fn()} />)
     expect(screen.getByTestId('sell-sheet').style.alignItems).toBe('center')
   })
+
+  // issue #256 — on desktop the item card sat flush against the header divider.
+  it('pads the body below the header divider on desktop', () => {
+    render(<SellWithdrawSheet item={item} open context="unallocated" desktop onClose={vi.fn()} onSuccess={vi.fn()} />)
+    expect(screen.getByTestId('sell-body').style.paddingTop).toBe('16px')
+  })
 })

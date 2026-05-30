@@ -305,8 +305,10 @@ export function SellWithdrawSheet({ item, open, context, onClose, onSuccess, des
           </button>
         </div>
 
-        {/* Scrollable body — wraps both success and form states */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '0 16px 32px' }}>
+        {/* Scrollable body — wraps both success and form states. Desktop adds a
+            top gap so the item card doesn't sit flush against the header divider
+            (issue #256); mobile relies on the header's own bottom padding. */}
+        <div data-testid="sell-body" style={{ flex: 1, overflowY: 'auto', padding: desktop ? '16px 16px 32px' : '0 16px 32px' }}>
         {confirmed ? (
           // ── Success state ────────────────────────────────────────────────
           <div data-testid="sell-success" style={{ padding: '32px 0', textAlign: 'center' }}>
