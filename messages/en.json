@@ -64,7 +64,13 @@
     "totalReceived": "Total received",
     "yourCost": "Your cost",
     "profitLoss": "Profit / Loss",
-    "chiShort": "chỉ"
+    "chiShort": "chỉ",
+    "unitsToSell": "Units to sell",
+    "navLinkHint": "Enter an amount or units — they stay in sync",
+    "amountReceived": "Amount you'll receive",
+    "receivedHint": "Pre-filled at current value — edit down if early withdrawal cuts interest",
+    "principalPortion": "Principal",
+    "gainLoss": "Gain / Loss"
   },
   "common": {
     "save": "Save",

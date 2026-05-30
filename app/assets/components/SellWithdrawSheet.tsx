@@ -48,6 +48,7 @@ export function SellWithdrawSheet({ item, open, context, onClose, onSuccess }: P
 
   const [amount, setAmount] = useState('')
   const [units, setUnits] = useState('')
+  const [received, setReceived] = useState('') // bank: cash actually received
   const [salePrice, setSalePrice] = useState('') // gold: sale price per chỉ
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -63,6 +64,7 @@ export function SellWithdrawSheet({ item, open, context, onClose, onSuccess }: P
         setMounted(false)
         setAmount('')
         setUnits('')
+        setReceived('')
         setSalePrice('')
         setSaving(false)
         setError('')
@@ -95,20 +97,25 @@ export function SellWithdrawSheet({ item, open, context, onClose, onSuccess }: P
   const goldRemUnits = isGold && item?.units != null ? item.units - numUnits : null
   const isOverUnits = isGold && item?.units != null && numUnits > item.units
 
+  // Bank: cash received is editable; split principal out of the withdrawn amount
+  // so the summary can show an accurate gain/loss.
+  const numReceived = Number(received) || 0
+  const bankPrincipal = item?.purchasePrice ?? maxAmount
+  const bankFraction = maxAmount > 0 ? Math.min(1, numAmount / maxAmount) : 0
+  const bankPrincipalPortion = Math.round(bankPrincipal * bankFraction)
+  const bankGain = isBank && numReceived > 0 && numAmount > 0 ? numReceived - bankPrincipalPortion : null
+
   const isOverMax = isGold ? isOverUnits : (numAmount > maxAmount && maxAmount > 0)
   const isValid = isGold
     ? (numUnits > 0 && !isOverUnits && numSalePrice > 0 && !saving)
-    : (numAmount > 0 && !isOverMax && !saving)
+    : isBank
+      ? (numAmount > 0 && !isOverMax && numReceived > 0 && !saving)
+      : (numAmount > 0 && !isOverMax && !saving)
 
   const gainLoss = useMemo(() => {
-    if (!numAmount || item?.gainPct == null) return null
+    if (!numAmount || isBank || item?.gainPct == null) return null
     return numAmount * item.gainPct / (100 + item.gainPct)
-  }, [numAmount, item?.gainPct])
-
-  const penaltyAmount = useMemo(() => {
-    if (!isBank || !numAmount || !item?.interestRate) return null
-    return Math.round(numAmount * (item.interestRate / 100) * 0.5)
-  }, [isBank, numAmount, item?.interestRate])
+  }, [numAmount, isBank, item?.gainPct])
 
   const taxAmount = useMemo(() => {
     if (!isFund || !numAmount) return null
@@ -126,6 +133,7 @@ export function SellWithdrawSheet({ item, open, context, onClose, onSuccess }: P
     const raw = val.replace(/,/g, '').replace(/[^0-9]/g, '')
     setAmount(raw)
     setError('')
+    if (isBank) setReceived(raw)  // received tracks the amount until edited down
     if (navPerUnit && raw) {
       const u = Number(raw) / navPerUnit
       setUnits(u > 0 ? u.toFixed(2) : '')
@@ -152,6 +160,7 @@ export function SellWithdrawSheet({ item, open, context, onClose, onSuccess }: P
       return
     }
     setAmount(String(maxAmount))
+    if (isBank) setReceived(String(Math.round(maxAmount)))
     if (navPerUnit && item?.units != null) setUnits(item.units.toFixed(2))
     setError('')
   }
@@ -195,9 +204,9 @@ export function SellWithdrawSheet({ item, open, context, onClose, onSuccess }: P
           parent_transaction_id: item.transactionId,
           investment_date: today,
           // Gold: amount = proceeds (qty × sale price), principal = cost basis of
-          // the sold chỉ. Bank: amount = principal withdrawn.
-          amount_vnd: isGold ? goldProceeds : Math.round(numAmount),
-          principal_withdrawn: isGold ? (goldCostSold ?? goldProceeds) : Math.round(numAmount),
+          // the sold chỉ. Bank: amount = cash received, principal = principal portion.
+          amount_vnd: isGold ? goldProceeds : isBank ? Math.round(numReceived) : Math.round(numAmount),
+          principal_withdrawn: isGold ? (goldCostSold ?? goldProceeds) : isBank ? bankPrincipalPortion : Math.round(numAmount),
           goal_id: null,
         }
         if (isGold) {
@@ -216,7 +225,7 @@ export function SellWithdrawSheet({ item, open, context, onClose, onSuccess }: P
         }
       }
 
-      setSoldAmount(isGold ? goldProceeds : numAmount)
+      setSoldAmount(isGold ? goldProceeds : isBank ? numReceived : numAmount)
       setConfirmed(true)
       setTimeout(() => {
         setConfirmed(false)
@@ -368,6 +377,28 @@ export function SellWithdrawSheet({ item, open, context, onClose, onSuccess }: P
               )}
             </div>
 
+            {/* Bank: editable cash received (early withdrawal can cut interest) */}
+            {isBank && (
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--c-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{isVI ? 'Số tiền thực nhận' : "Amount you'll receive"}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'var(--c-card)', border: '1.5px solid var(--c-navy, #1e3a5f)', borderRadius: 10 }}>
+                  <span style={{ fontSize: 14, color: 'var(--c-muted)' }}>₫</span>
+                  <input
+                    data-testid="sell-received-input"
+                    type="text"
+                    inputMode="numeric"
+                    value={received ? Number(received).toLocaleString('vi-VN') : ''}
+                    onChange={e => { setReceived(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, '')); setError('') }}
+                    placeholder="0"
+                    style={{ flex: 1, border: 'none', outline: 'none', fontSize: 15, fontWeight: 600, background: 'transparent', color: 'var(--c-ink)' }}
+                  />
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 4 }}>
+                  {isVI ? 'Tạm tính theo giá trị hiện tại — sửa nếu rút sớm bị trừ lãi' : 'Pre-filled at current value — edit down if early withdrawal cuts interest'}
+                </div>
+              </div>
+            )}
+
             {/* Units input — fund & gold only */}
             {showUnits && (
               <div>
@@ -390,25 +421,19 @@ export function SellWithdrawSheet({ item, open, context, onClose, onSuccess }: P
               </div>
             )}
 
-            {/* Summary strip */}
-            {numAmount > 0 && !isOverMax && (
+            {/* Fund summary: remaining / gain-loss / tax */}
+            {!isBank && numAmount > 0 && !isOverMax && (
               <div data-testid="sell-summary-strip" style={{ background: 'var(--c-card-2)', borderRadius: 12, overflow: 'hidden' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid var(--c-line)' }}>
                   <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{isVI ? 'Còn lại sau giao dịch' : 'Remaining after transaction'}</span>
                   <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)' }}>{fmtVND(Math.max(0, remaining), locale)}</span>
                 </div>
                 {gainLoss != null && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: (penaltyAmount || taxAmount) ? '1px solid var(--c-line)' : 'none' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: taxAmount ? '1px solid var(--c-line)' : 'none' }}>
                     <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{isVI ? 'Lãi/Lỗ ước tính' : 'Est. gain / loss'}</span>
                     <span style={{ fontSize: 13, fontWeight: 600, color: gainLoss >= 0 ? 'var(--c-pos, #16a34a)' : 'var(--c-neg, #dc2626)' }}>
                       {gainLoss >= 0 ? '+' : ''}{fmtVND(gainLoss, locale)}
                     </span>
-                  </div>
-                )}
-                {penaltyAmount != null && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: taxAmount ? '1px solid var(--c-line)' : 'none' }}>
-                    <span style={{ fontSize: 12, color: 'var(--c-warn, #d97706)' }}>{isVI ? 'Lãi mất ước tính' : 'Est. interest forfeited'}</span>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-warn, #d97706)' }}>−{fmtVND(penaltyAmount, locale)}</span>
                   </div>
                 )}
                 {taxAmount != null && (
@@ -417,6 +442,30 @@ export function SellWithdrawSheet({ item, open, context, onClose, onSuccess }: P
                     <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-muted)' }}>−{fmtVND(taxAmount, locale)}</span>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Bank summary: principal portion / received / gain-loss / remaining */}
+            {isBank && numAmount > 0 && !isOverMax && numReceived > 0 && (
+              <div data-testid="sell-summary-strip" style={{ background: 'var(--c-card-2)', borderRadius: 12, overflow: 'hidden' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid var(--c-line)' }}>
+                  <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{isVI ? 'Tiền gốc' : 'Principal'}{bankFraction < 0.999 && <span style={{ opacity: 0.7 }}> · {Math.round(bankFraction * 100)}%</span>}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)' }}>{fmtVND(bankPrincipalPortion, locale)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid var(--c-line)' }}>
+                  <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{isVI ? 'Số tiền thực nhận' : "Amount you'll receive"}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)' }}>{fmtVND(numReceived, locale)}</span>
+                </div>
+                {bankGain != null && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 14px', borderBottom: '1px solid var(--c-line)' }}>
+                    <span style={{ fontSize: 12, fontWeight: 600 }}>{isVI ? 'Lãi/Lỗ' : 'Gain / Loss'}</span>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: bankGain >= 0 ? 'var(--c-pos, #16a34a)' : 'var(--c-neg, #dc2626)' }}>{bankGain >= 0 ? '+' : '−'}{fmtVND(Math.abs(bankGain), locale)}</span>
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px' }}>
+                  <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{isVI ? 'Còn lại sau giao dịch' : 'Remaining after transaction'}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)' }}>{fmtVND(Math.max(0, remaining), locale)}</span>
+                </div>
               </div>
             )}
             </>
@@ -555,6 +604,8 @@ export function SellWithdrawSheet({ item, open, context, onClose, onSuccess }: P
                   ? (isVI ? 'Nhập giá bán' : 'Enter sale price')
                   : isOverMax
                   ? (isVI ? (isGold ? 'Vượt quá số lượng' : 'Vượt quá số dư') : (isGold ? 'Exceeds quantity' : 'Exceeds balance'))
+                  : (isBank && numReceived <= 0)
+                  ? (isVI ? 'Nhập số tiền thực nhận' : 'Enter amount received')
                   : saving
                   ? (isVI ? 'Đang xử lý…' : 'Processing…')
                   : confirmLabel}

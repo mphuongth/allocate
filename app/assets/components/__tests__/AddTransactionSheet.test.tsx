@@ -105,6 +105,71 @@ describe('AddTransactionSheet — sell flow (issue #232)', () => {
   })
 })
 
+describe('AddTransactionSheet — fund sell units field (two-way linked)', () => {
+  it('entering units fills the amount and posts the matching withdrawal', async () => {
+    const overview = {
+      goals: [{ goalName: 'Goal A', funds: [{ fundId: 'f1', fundName: 'VESAF', quantity: 100, currentNAV: 20000, currentValue: 2_000_000, purchasePrice: 18000, profitLossPercentage: 11.11 }] }],
+      unallocated: { funds: [], nonFunds: [] },
+    }
+    const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
+      if (String(url).includes('/dashboard/overview')) return Promise.resolve({ ok: true, json: () => Promise.resolve(overview) })
+      if (String(url).includes('/savings-goals')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ goals: [] }) })
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<AddTransactionSheet open onClose={vi.fn()} onSaved={vi.fn()} />)
+
+    fireEvent.click(screen.getByText('sell'))
+    await screen.findAllByText(/VESAF/)
+    fireEvent.change(screen.getByTestId('sell-fund-units-input'), { target: { value: '50' } })  // 50 units
+    fireEvent.click(screen.getByText('confirmSale'))
+
+    await waitFor(() => {
+      const post = fetchMock.mock.calls.find((c) => String(c[0]).includes('/investment-transactions'))
+      expect(post).toBeTruthy()
+      const body = JSON.parse(String((post![1] as RequestInit).body))
+      expect(body.asset_type).toBe('fund')
+      expect(body.amount_vnd).toBe(1_000_000)        // 50 × 20,000 NAV
+      expect(body.units_withdrawn).toBe(50)
+      expect(body.principal_withdrawn).toBe(900_000)  // 50% of cost basis
+    })
+  })
+})
+
+describe('AddTransactionSheet — bank withdraw (received + principal portion)', () => {
+  it('defaults received to current value and posts received + principal portion', async () => {
+    const overview = {
+      goals: [{ goalName: 'Goal A', funds: [], nonFunds: [{ transactionId: 't1', type: 'bank', amount: 5_000_000, currentValue: 5_200_000, interestRate: 6, units: null, notes: 'Techcombank' }] }],
+      unallocated: { funds: [], nonFunds: [] },
+    }
+    const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
+      if (String(url).includes('/dashboard/overview')) return Promise.resolve({ ok: true, json: () => Promise.resolve(overview) })
+      if (String(url).includes('/savings-goals')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ goals: [] }) })
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<AddTransactionSheet open onClose={vi.fn()} onSaved={vi.fn()} />)
+
+    fireEvent.click(screen.getByText('Bank'))
+    fireEvent.click(screen.getByText('withdraw'))
+    await screen.findAllByText(/Techcombank/)
+    fireEvent.click(screen.getByText('all'))   // amount = 5,200,000 → received defaults to 5,200,000
+    fireEvent.click(screen.getByText('confirmWithdrawal'))
+
+    await waitFor(() => {
+      const post = fetchMock.mock.calls.find((c) => String(c[0]).includes('/investment-transactions'))
+      expect(post).toBeTruthy()
+      const body = JSON.parse(String((post![1] as RequestInit).body))
+      expect(body.asset_type).toBe('bank')
+      expect(body.parent_transaction_id).toBe('t1')
+      expect(body.amount_vnd).toBe(5_200_000)         // cash received
+      expect(body.principal_withdrawn).toBe(5_000_000) // full principal removed
+    })
+  })
+})
+
 describe('AddTransactionSheet — sell lists goal-allocated bank/gold (issue #232)', () => {
   it('includes bank/gold holdings attributed to a goal, not just unallocated', async () => {
     const overview = {
