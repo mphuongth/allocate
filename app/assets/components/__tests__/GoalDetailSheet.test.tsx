@@ -320,6 +320,50 @@ describe('GoalDetailSheet — investment options Sell / history (issue #224)', (
   })
 })
 
+describe('GoalDetailSheet — gold sell uses current price (issue #251)', () => {
+  // Bought 1 chỉ at 9,000,000. Current market price is 9,200,000.
+  const mockGoldTx = {
+    transaction_id: 'tx-gold-1',
+    transaction_type: 'investment',
+    asset_type: 'gold',
+    fund_id: null,
+    fund_name: null,
+    fund_code: null,
+    investment_date: '2026-01-01',
+    amount_vnd: 9_000_000,
+    units: 1,
+    unit_price: 9_000_000,
+    interest_rate: null,
+    expiry_date: null,
+    notes: 'PNJ Gold',
+    principal_withdrawn: null,
+    units_withdrawn: null,
+  }
+  const goldGoal: GoalData = { ...mockGoal, funds: [] }
+
+  it('prefills the sale price with the current gold price, not the buy price', async () => {
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('investment-transactions')) {
+        return Promise.resolve({ ok: true, json: async () => ({ transactions: [mockGoldTx] }) })
+      }
+      if (url.includes('gold-price')) {
+        return Promise.resolve({ ok: true, json: async () => ({ price_per_chi: 9_200_000 }) })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+
+    render(<GoalDetailSheet {...baseProps} goal={goldGoal} />)
+    await waitFor(() => screen.getByText('PNJ Gold'))
+    await userEvent.click(screen.getByRole('button', { name: /options/i }))
+    await waitFor(() => expect(screen.getByText('Sell')).toBeInTheDocument())
+    await userEvent.click(screen.getByText('Sell'))
+
+    const priceInput = await screen.findByTestId('sell-gold-price-input')
+    // Must be the live market price (9,200,000), not the 9,000,000 buy price.
+    await waitFor(() => expect((priceInput as HTMLInputElement).value).toBe('9200000'))
+  })
+})
+
 describe('GoalDetailSheet — refreshKey triggers refetch', () => {
   it('refetches /investment-transactions when refreshKey changes', async () => {
     const fetchMock = vi.fn().mockImplementation((url: string) => {
