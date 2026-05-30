@@ -653,17 +653,24 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop }:
                   />
                 </div>
               )}
-              {depositType === 'term' && Number(bankAmount) > 0 && Number(rate) > 0 && (
-                <div style={{
-                  background: 'var(--c-pos-tint)', borderRadius: 10, padding: '9px 14px',
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                }}>
-                  <span style={{ fontSize: 12, color: 'var(--c-pos)', fontWeight: 500 }}>{t('estInterestYr')}</span>
-                  <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-pos)', fontVariantNumeric: 'tabular-nums' }}>
-                    +{Math.round(Number(bankAmount) * Number(rate) / 100).toLocaleString('vi-VN')} ₫
-                  </span>
-                </div>
-              )}
+              {depositType === 'term' && Number(bankAmount) > 0 && Number(rate) > 0 && maturity && (() => {
+                // Interest the user actually receives by maturity, prorated over
+                // the term (deposit date → maturity) — not the full-year figure.
+                const termDays = (Date.parse(maturity) - Date.parse(date)) / 86_400_000
+                if (!(termDays > 0)) return null
+                const interest = Math.round((Number(bankAmount) * Number(rate) / 100) * termDays / 365)
+                return (
+                  <div style={{
+                    background: 'var(--c-pos-tint)', borderRadius: 10, padding: '9px 14px',
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  }}>
+                    <span style={{ fontSize: 12, color: 'var(--c-pos)', fontWeight: 500 }}>{t('estInterestReceivable')}</span>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-pos)', fontVariantNumeric: 'tabular-nums' }}>
+                      +{interest.toLocaleString('vi-VN')} ₫
+                    </span>
+                  </div>
+                )
+              })()}
             </>
           )}
 

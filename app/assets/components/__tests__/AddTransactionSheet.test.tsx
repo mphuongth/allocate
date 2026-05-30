@@ -227,6 +227,47 @@ describe('AddTransactionSheet — gold sell (quantity × price) (issue #232)', (
   })
 })
 
+describe('AddTransactionSheet — bank term interest receivable (issue #245)', () => {
+  // The box should show the interest the user actually receives by maturity,
+  // prorated over the deposit term — not the full-year interest.
+  it('prorates interest to the maturity date instead of showing interest/yr', () => {
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve([]) }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { container } = render(<AddTransactionSheet open onClose={vi.fn()} />)
+
+    fireEvent.click(screen.getByText('Bank'))   // asset type = bank ('term' is default)
+    fireEvent.change(screen.getByPlaceholderText('10,000,000'), { target: { value: '100000000' } })
+    fireEvent.change(screen.getByPlaceholderText('5.5'), { target: { value: '6' } })
+
+    // DOM order: [0] = maturity (bank section), [1] = transaction date (footer)
+    const dateInputs = container.querySelectorAll<HTMLInputElement>('input[type="date"]')
+    fireEvent.change(dateInputs[1], { target: { value: '2026-01-01' } })
+    fireEvent.change(dateInputs[0], { target: { value: '2026-07-01' } })
+
+    const termDays = (Date.parse('2026-07-01') - Date.parse('2026-01-01')) / 86_400_000  // 181
+    const expected = Math.round((100_000_000 * 6 / 100) * termDays / 365)
+    expect(screen.getByText('estInterestReceivable')).toBeInTheDocument()
+    expect(screen.getByText(`+${expected.toLocaleString('vi-VN')} ₫`)).toBeInTheDocument()
+    // The old per-year figure (6,000,000 ₫) must NOT be shown.
+    expect(screen.queryByText(`+${(6_000_000).toLocaleString('vi-VN')} ₫`)).not.toBeInTheDocument()
+    expect(screen.queryByText('estInterestYr')).not.toBeInTheDocument()
+  })
+
+  it('hides the interest box until a maturity date is set', () => {
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve([]) }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<AddTransactionSheet open onClose={vi.fn()} />)
+
+    fireEvent.click(screen.getByText('Bank'))
+    fireEvent.change(screen.getByPlaceholderText('10,000,000'), { target: { value: '100000000' } })
+    fireEvent.change(screen.getByPlaceholderText('5.5'), { target: { value: '6' } })
+
+    expect(screen.queryByText('estInterestReceivable')).not.toBeInTheDocument()
+  })
+})
+
 describe('AddTransactionSheet — gold unit (issue #232)', () => {
   // Gold is valued per chỉ, so a lượng entry must be normalized: 1 lượng = 10 chỉ.
   it('normalizes a lượng entry to chỉ on save', async () => {

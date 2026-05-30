@@ -24,7 +24,7 @@
     "pricePerChi": "Giá/chỉ (₫)",
     "pricePerLuong": "Giá/lượng (₫)",
     "pricePerUnit": "Giá/chỉ (₫)",
-    "estInterestYr": "Lãi/năm ước tính",
+    "estInterestReceivable": "Lãi ước tính nhận được",
     "total": "Tổng tiền",
     "date": "Ngày",
     "note": "Ghi chú",
