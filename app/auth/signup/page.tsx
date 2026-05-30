@@ -10,8 +10,8 @@ import { AuthLayout } from '../AuthLayout'
 
 const fieldLabelStyle: React.CSSProperties = {
   fontSize: 11,
-  fontWeight: 600,
-  letterSpacing: '0.05em',
+  fontWeight: 500,
+  letterSpacing: '0.02em',
   textTransform: 'uppercase',
   color: 'var(--c-muted)',
 }
@@ -86,7 +86,7 @@ export default function SignupPage() {
   if (confirmSent) {
     return (
       <AuthLayout>
-        <div data-testid="auth-card" className="cn-card" style={{ width: '100%', padding: '28px 24px', textAlign: 'center' }}>
+        <div data-testid="auth-card" className="cn-auth-card" style={{ textAlign: 'center' }}>
           <div style={{
             width: 48, height: 48, borderRadius: 12,
             background: 'var(--c-navy-tint)',
@@ -95,12 +95,8 @@ export default function SignupPage() {
           }}>
             📧
           </div>
-          <h1 style={{ margin: '0 0 12px', fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--c-ink)' }}>
-            {t('checkEmailTitle')}
-          </h1>
-          <p style={{ margin: '0 0 24px', fontSize: 13, color: 'var(--c-muted)' }}>
-            {t('checkEmailMessage')}
-          </p>
+          <h1 className="cn-auth-title" style={{ marginBottom: 12 }}>{t('checkEmailTitle')}</h1>
+          <p className="cn-auth-sub" style={{ marginBottom: 24 }}>{t('checkEmailMessage')}</p>
           <Link
             href="/auth/login"
             className="cn-btn primary"
@@ -115,13 +111,9 @@ export default function SignupPage() {
 
   return (
     <AuthLayout>
-      <div data-testid="auth-card" className="cn-card" style={{ width: '100%', padding: '28px 24px' }}>
-        <h1 style={{ margin: '0 0 4px', fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--c-ink)' }}>
-          {t('signupTitle')}
-        </h1>
-        <p style={{ margin: '0 0 22px', fontSize: 13, color: 'var(--c-muted)' }}>
-          {t('signupSubtitle')}
-        </p>
+      <div data-testid="auth-card" className="cn-auth-card">
+        <h1 className="cn-auth-title">{t('signupTitle')}</h1>
+        <p className="cn-auth-sub">{t('signupSubtitle')}</p>
 
         {formError && (
           <div role="alert" style={{
@@ -206,8 +198,8 @@ export default function SignupPage() {
             className="cn-btn primary"
             style={{
               width: '100%',
-              padding: '11px',
-              marginTop: 4,
+              padding: '13px 16px',
+              marginTop: 18,
               fontSize: 14,
               fontWeight: 600,
               opacity: loading ? 0.7 : 1,
@@ -218,7 +210,7 @@ export default function SignupPage() {
         </form>
       </div>
 
-      <p style={{ margin: 0, fontSize: 13, color: 'var(--c-muted)', textAlign: 'center' }}>
+      <p className="cn-auth-alt">
         {t('hasAccount')}{' '}
         <Link href="/auth/login" style={{ color: 'var(--c-navy)', fontWeight: 600, textDecoration: 'none' }}>
           {t('loginLink')}

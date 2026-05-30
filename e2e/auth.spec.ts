@@ -130,6 +130,61 @@ test.describe('mobile input font-size', () => {
   })
 })
 
+// ─── Mobile: full-screen redesign (issue #243) ───────────────────────────────
+// On mobile the auth screen is a full-bleed layout: brand pinned top-left, a
+// large hero heading, and the form flush to the top — not a vertically-centered
+// card. These assert the user-visible result of that redesign.
+test.describe('mobile auth redesign', () => {
+  test.use({ viewport: { width: 390, height: 844 } })
+
+  test('login heading renders as a large hero (>=24px) on mobile', async ({ page }) => {
+    await page.goto('/auth/login')
+    const fontSize = await page.locator('h1').first().evaluate(
+      (el) => parseFloat(getComputedStyle(el).fontSize)
+    )
+    expect(fontSize).toBeGreaterThanOrEqual(24)
+  })
+
+  test('signup heading renders as a large hero (>=24px) on mobile', async ({ page }) => {
+    await page.goto('/auth/signup')
+    const fontSize = await page.locator('h1').first().evaluate(
+      (el) => parseFloat(getComputedStyle(el).fontSize)
+    )
+    expect(fontSize).toBeGreaterThanOrEqual(24)
+  })
+
+  test('input fields are visually distinct from the page background on mobile', async ({ page }) => {
+    await page.goto('/auth/login')
+    const emailBg = await page.locator('#email').evaluate(
+      (el) => getComputedStyle(el).backgroundColor
+    )
+    const pageBg = await page.locator('.cn-auth-root').evaluate(
+      (el) => getComputedStyle(el).backgroundColor
+    )
+    // Without a card behind the form, a canvas-on-canvas input would be invisible.
+    expect(emailBg).not.toBe(pageBg)
+  })
+
+  test('brand is pinned to the top-left, not vertically centered, on mobile', async ({ page }) => {
+    await page.goto('/auth/login')
+    const box = await page.locator('[data-testid="brand-mark"]').boundingBox()
+    expect(box).not.toBeNull()
+    // Top-left: near the left edge and in the upper portion of the screen.
+    expect(box!.x).toBeLessThan(80)
+    expect(box!.y).toBeLessThan(160)
+  })
+
+  test('the sign-up toggle is pinned near the bottom of the screen on mobile', async ({ page }) => {
+    await page.goto('/auth/login')
+    const link = page.getByRole('link', { name: /sign up/i })
+    const box = await link.boundingBox()
+    expect(box).not.toBeNull()
+    // 844px tall viewport — the toggle should sit in the lower portion, not up
+    // near the form. Pinned to the bottom it lands well past the halfway mark.
+    expect(box!.y).toBeGreaterThan(600)
+  })
+})
+
 // ─── Desktop centered card layout ───────────────────────────────────────────
 
 test('login form is inside a card', async ({ page }) => {
