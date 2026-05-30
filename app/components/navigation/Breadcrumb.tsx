@@ -1,8 +1,6 @@
 'use client'
 
-import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { ChevronRight } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 
 const PATH_TO_NAV_KEY: Record<string, 'dashboard' | 'planning' | 'funds' | 'settings'> = {
@@ -26,18 +24,5 @@ export default function Breadcrumb() {
         </span>
       </span>
     </nav>
-  )
-}
-
-export function PageTitle() {
-  const pathname = usePathname()
-  const t = useTranslations('nav')
-  const key = PATH_TO_NAV_KEY[pathname]
-  const title = key ? t(key) : pathname.slice(1)
-
-  return (
-    <p className="text-sm font-medium text-gray-700 dark:text-gray-300 md:hidden px-4 py-2 border-b border-gray-100 dark:border-gray-700">
-      {title}
-    </p>
   )
 }

@@ -57,21 +57,6 @@ const ASSET_COLORS: Record<AssetType, string> = {
   gold: 'bg-amber-100 text-amber-700',
 }
 
-function calcCurrentValue(tx: Transaction): number {
-  if (tx.transaction_type === 'withdrawal') return tx.amount_vnd
-  if (tx.asset_type === 'fund' && tx.units) {
-    const fund = Array.isArray(tx.funds) ? tx.funds[0] : tx.funds
-    return tx.units * (fund?.nav ?? tx.unit_price ?? 0)
-  }
-  if (!tx.interest_rate) return tx.amount_vnd
-  const endMs = tx.expiry_date
-    ? Math.min(Date.now(), new Date(tx.expiry_date).getTime())
-    : Date.now()
-  const days = Math.max(0, (endMs - new Date(tx.investment_date).getTime()) / 86400000)
-  return tx.amount_vnd * Math.pow(1 + tx.interest_rate / 100, days / 365)
-}
-
-
 interface AppliedFilters { asset_type: string; goal_id: string; from_date: string; to_date: string }
 const EMPTY_FILTERS: AppliedFilters = { asset_type: '', goal_id: '', from_date: '', to_date: '' }
 
@@ -383,7 +368,6 @@ export default function InvestmentTransactionsTab() {
             <div className="sm:hidden divide-y divide-black/5 dark:divide-gray-700 px-4 py-2">
               {transactions.map((tx) => {
                 const isWithdrawal = tx.transaction_type === 'withdrawal'
-                const currentValue = calcCurrentValue(tx)
                 const gain = isWithdrawal && tx.principal_withdrawn != null ? tx.amount_vnd - tx.principal_withdrawn : null
                 const rateOrNav = tx.asset_type === 'fund'
                   ? (tx.unit_price != null ? fmtNav(tx.unit_price) : '—')
@@ -488,7 +472,6 @@ export default function InvestmentTransactionsTab() {
                 <tbody className="divide-y divide-black/5 dark:divide-gray-700">
                   {transactions.map((tx) => {
                     const isWithdrawal = tx.transaction_type === 'withdrawal'
-                    const currentValue = calcCurrentValue(tx)
                     const gain = isWithdrawal && tx.principal_withdrawn != null ? tx.amount_vnd - tx.principal_withdrawn : null
                     const rateOrNav = tx.asset_type === 'fund'
                       ? (tx.unit_price != null ? fmtNav(tx.unit_price) : '—')

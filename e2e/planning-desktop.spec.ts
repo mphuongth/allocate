@@ -11,7 +11,6 @@ test.afterEach(() => cleanup.run())
 const today = new Date()
 const MONTH = today.getMonth() + 1
 const YEAR = today.getFullYear()
-const PREV_MONTH = MONTH === 1 ? 12 : MONTH - 1
 const PREV_YEAR = MONTH === 1 ? YEAR - 1 : YEAR
 
 async function goto(page: Page) {

@@ -5,9 +5,9 @@ import { useLocale } from 'next-intl'
 import {
   Wallet, Target, Shield, ShoppingCart,
   ChevronDown, ChevronUp,
-  MoreHorizontal, Plus, Check, RefreshCw, X, Calendar,
+  MoreHorizontal, Plus, Check, X, Calendar,
 } from 'lucide-react'
-import { fmtCompact, fmt } from '@/lib/formatters'
+import { fmtCompact } from '@/lib/formatters'
 import type {
   MonthlyPlan, FundInvestment, DirectSaving, FixedExpense,
   InsuranceMember, OtherExpense, Fund, Goal,
@@ -303,101 +303,6 @@ function DeletePlanSheet({
           >
             <TrashIcon size={14} />
             {deleting ? (isVI ? 'Đang xoá...' : 'Deleting...') : (isVI ? 'Xoá kế hoạch' : 'Delete plan')}
-          </button>
-        </div>
-      </div>
-    </Sheet>
-  )
-}
-
-// ─── Override sheet (fixed expense or insurance) ──────────────────────────────
-
-function OverrideSheet({
-  open, onClose, name, defaultAmount, planId, apiPath, onRefresh, onToast,
-}: {
-  open: boolean
-  onClose: () => void
-  name: string
-  defaultAmount: number
-  planId: string
-  apiPath: string
-  onRefresh: () => void
-  onToast: (msg: string) => void
-}) {
-  const isVI = useLocale() === 'vi'
-  const [value, setValue] = useState(String(defaultAmount))
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
-
-  useEffect(() => { if (open) { setValue(String(defaultAmount)); setError('') } }, [open, defaultAmount])
-
-  async function handleSave() {
-    const num = Number(value)
-    if (!value || isNaN(num) || num <= 0) { setError(isVI ? 'Vui lòng nhập số tiền hợp lệ' : 'Please enter a valid amount'); return }
-    setError('')
-    setSaving(true)
-    try {
-      const res = await fetch(`/api/v1/monthly-plans/${planId}/${apiPath}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(apiPath.includes('fixed') ? { fixed_expense_id: apiPath.split('/')[0], monthly_amount_override_vnd: num } : { member_id: apiPath.split('/')[0], monthly_amount_override_vnd: num }),
-      })
-      if (!res.ok) { const { error: e } = await res.json(); setError(e ?? 'Error'); setSaving(false); return }
-      onRefresh()
-      onToast(isVI ? 'Đã lưu' : 'Saved')
-      onClose()
-    } catch { setError(isVI ? 'Lỗi kết nối' : 'Connection error') }
-    setSaving(false)
-  }
-
-  return (
-    <Sheet open={open} onClose={onClose} title={isVI ? 'Ghi đè số tiền' : 'Override amount'}>
-      <div style={{ display: 'grid', gap: 14 }}>
-        <div style={{ fontSize: 13, color: 'var(--c-muted)' }}>{name}</div>
-        {error && <p style={{ color: 'var(--c-neg)', fontSize: 13 }}>{error}</p>}
-        <input
-          type="text"
-          inputMode="numeric"
-          value={value ? Number(value).toLocaleString('en-US') : ''}
-          onChange={(e) => setValue(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))}
-          style={{
-            width: '100%', padding: '10px 12px', fontSize: 15,
-            border: '1px solid var(--c-line)', borderRadius: 10,
-            background: 'var(--c-card-2)', color: 'var(--c-ink)', boxSizing: 'border-box',
-          }}
-          autoFocus
-        />
-        <button
-          onClick={() => setValue(String(defaultAmount))}
-          style={{
-            alignSelf: 'flex-start', padding: '4px 8px', fontSize: 11,
-            background: 'transparent', border: '1px solid var(--c-line)',
-            borderRadius: 6, color: 'var(--c-navy)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500,
-          }}
-        >
-          {isVI ? 'Mặc định' : 'Default'}: {fmtCompact(defaultAmount)}
-        </button>
-        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-          <button
-            onClick={onClose}
-            style={{
-              flex: 1, padding: '10px 0', borderRadius: 10, border: '1px solid var(--c-line)',
-              background: 'var(--c-card)', color: 'var(--c-ink)', fontSize: 14, fontWeight: 500,
-              cursor: 'pointer', fontFamily: 'inherit',
-            }}
-          >
-            {isVI ? 'Hủy' : 'Cancel'}
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving || !value || Number(value) <= 0}
-            style={{
-              flex: 2, padding: '10px 0', borderRadius: 10, border: 'none',
-              background: 'var(--c-navy)', color: '#fff', fontSize: 14, fontWeight: 600,
-              cursor: 'pointer', fontFamily: 'inherit',
-            }}
-          >
-            {isVI ? 'Lưu' : 'Save'}
           </button>
         </div>
       </div>
@@ -922,16 +827,14 @@ function PlanLineItem({
 
 export default function MobilePlanningView({
   month, year, plan, investments, savings, fixedExpenses, insuranceMembers, otherExpenses,
-  funds, goals, onPlanCreated, onPlanDeleted, onRefresh, onToast,
+  onPlanCreated, onPlanDeleted, onRefresh, onToast,
 }: Props) {
   const locale = useLocale()
   const isVI = locale === 'vi'
   const [sheet, setSheet] = useState<SheetState>(null)
   const [overrideTarget, setOverrideTarget] = useState<{ type: 'fe' | 'ins'; id: string; name: string; defaultAmount: number } | null>(null)
-  const [otherSheetTarget, setOtherSheetTarget] = useState<OtherExpense | null | 'new'>('new')
 
   const monthLabel = getMonthLabel(month, year)
-  const shortLabel = getMonthLabel(month, year, true)
 
   // ─── Computed totals ────────────────────────────────────────────────────────
 
@@ -1183,7 +1086,7 @@ export default function MobilePlanningView({
                     {fmtCompact(o.amount_vnd)}
                   </span>
                   <button
-                    onClick={() => { setOtherSheetTarget(o); setSheet({ type: 'other-expense', existing: o }) }}
+                    onClick={() => { setSheet({ type: 'other-expense', existing: o }) }}
                     aria-label="Edit expense"
                     style={{ padding: 4, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 4, display: 'flex', alignItems: 'center' }}
                   >
@@ -1193,7 +1096,7 @@ export default function MobilePlanningView({
               ))}
               <div style={{ padding: '10px 14px 12px 60px' }}>
                 <button
-                  onClick={() => { setOtherSheetTarget('new'); setSheet({ type: 'other-expense', existing: null }) }}
+                  onClick={() => { setSheet({ type: 'other-expense', existing: null }) }}
                   style={{
                     padding: '4px 0', fontSize: 12, color: 'var(--c-navy)',
                     border: 'none', background: 'transparent', cursor: 'pointer',

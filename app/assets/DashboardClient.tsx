@@ -1,11 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { fmt } from '@/lib/formatters'
 import { Plus, ArrowDownToLine, ChevronDown, Check } from 'lucide-react'
 import { useTranslations, useLocale } from 'next-intl'
 import { useNavigation } from '@/app/components/navigation/NavigationContext'
-import dynamic from 'next/dynamic'
 import { CreateGoalSheet } from './components/CreateGoalSheet'
 import { NetWorthSkeleton, GoalSkeleton, InsuranceSkeleton } from './components/Skeletons'
 import NetWorthCard from './components/NetWorthCard'
@@ -19,7 +17,6 @@ import AssignGoalSheet from './components/AssignGoalSheet'
 import DownloadReportSheet from './components/DownloadReportSheet'
 import AddTransactionSheet from './components/AddTransactionSheet'
 
-const GoldPriceWidget = dynamic(() => import('./components/GoldPriceWidget'))
 import TransactionHistorySheet from './components/TransactionHistorySheet'
 import DesktopNetWorthPanel from './components/DesktopNetWorthPanel'
 import DesktopGoalCard from './components/DesktopGoalCard'
@@ -212,7 +209,6 @@ function useIsDesktop(): boolean {
 export default function DashboardClient({ userId }: { userId: string }) {
   const t = useTranslations('dashboard')
   const tc = useTranslations('common')
-  const tg = useTranslations('goals')
   const locale = useLocale()
   const { userName, setMobileTopBar } = useNavigation()
   const isDesktop = useIsDesktop()
@@ -222,14 +218,10 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const [fundDetailId, setFundDetailId] = useState<string | null>(null)
   const [goalPickerFundId, setGoalPickerFundId] = useState<string | null>(null)
   const [goalPickerFundItem, setGoalPickerFundItem] = useState<{ name: string; value: number; type: string } | null>(null)
-  const [assignLoading, setAssignLoading] = useState(false)
-  const [assignError, setAssignError] = useState('')
   const [purchaseHistory, setPurchaseHistory] = useState<PurchaseHistory[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const [nonFundPickerTxId, setNonFundPickerTxId] = useState<string | null>(null)
   const [nonFundPickerItem, setNonFundPickerItem] = useState<{ name: string; value: number; type: string } | null>(null)
-  const [nonFundAssignLoading, setNonFundAssignLoading] = useState(false)
-  const [nonFundAssignError, setNonFundAssignError] = useState('')
   const [goalSort, setGoalSort] = useState<SortValue>('manual')
   const [showGoalForm, setShowGoalForm] = useState(false)
   const [sellItem, setSellItem] = useState<SellItem | null>(null)
@@ -433,84 +425,6 @@ export default function DashboardClient({ userId }: { userId: string }) {
       purchasePrice: item.amount,
     })
     setSellSheetOpen(true)
-  }
-
-  async function handleAssignToGoal(fundId: string, goalId: string) {
-    if (!data) return
-    setAssignLoading(true)
-    setAssignError('')
-
-    // Optimistic update — find all investments for this fund and move to goal
-    const prevData = data
-    const movedFund = [...data.unallocated.funds, ...data.goals.flatMap((g) => g.funds)]
-      .find((f) => f.fundId === fundId)
-
-    if (movedFund) {
-      const targetGoal = data.goals.find((g) => g.goalId === goalId)
-      if (targetGoal) {
-        setData({
-          ...data,
-          unallocated: {
-            ...data.unallocated,
-            funds: data.unallocated.funds.filter((f) => f.fundId !== fundId),
-            totalValue: data.unallocated.totalValue - movedFund.currentValue,
-          },
-          goals: data.goals.map((g) =>
-            g.goalId === goalId
-              ? { ...g, funds: [...g.funds, { ...movedFund, goalId }], currentValue: g.currentValue + movedFund.currentValue }
-              : { ...g, funds: g.funds.filter((f) => f.fundId !== fundId) }
-          ),
-        })
-      }
-    }
-
-    // Find the actual investment IDs for this fund (we need to PATCH each one)
-    try {
-      const res = await fetch(`/api/v1/fund-investments?fund_id=${fundId}`)
-      if (res.ok) {
-        const investments = await res.json() as Array<{ id: string }>
-        await Promise.all(
-          investments.map((inv) =>
-            fetch(`/api/v1/fund-investments/${inv.id}/goal`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ goal_id: goalId }),
-            })
-          )
-        )
-        setGoalPickerFundId(null)
-        await fetchData({ force: true })
-      } else {
-        setData(prevData)
-        setAssignError('Failed to reassign fund. Please try again.')
-      }
-    } catch {
-      setData(prevData)
-      setAssignError('Unable to save. Please check your connection and try again.')
-    }
-    setAssignLoading(false)
-  }
-
-  async function handleAssignNonFundToGoal(txId: string, goalId: string) {
-    setNonFundAssignLoading(true)
-    setNonFundAssignError('')
-    try {
-      const res = await fetch(`/api/v1/investment-transactions/${txId}/assign`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ goal_id: goalId }),
-      })
-      if (!res.ok) {
-        const { error } = await res.json()
-        setNonFundAssignError(error ?? 'Failed to assign. Please try again.')
-      } else {
-        setNonFundPickerTxId(null)
-        await fetchData({ force: true })
-      }
-    } catch {
-      setNonFundAssignError('Unable to save. Please check your connection.')
-    }
-    setNonFundAssignLoading(false)
   }
 
   const isEmpty = data && data.goals.length === 0 && data.unallocated.funds.length === 0 && data.unallocated.nonFunds.length === 0 && data.insurance.length === 0

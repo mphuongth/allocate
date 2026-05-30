@@ -8,7 +8,6 @@ test.afterEach(() => cleanup.run())
 const today = new Date()
 const MONTH = today.getMonth() + 1
 const YEAR = today.getFullYear()
-const NEXT_MONTH = MONTH === 12 ? 1 : MONTH + 1
 const NEXT_YEAR = MONTH === 12 ? YEAR + 1 : YEAR
 
 test('planning page shows current month and year heading', async ({ page }) => {
