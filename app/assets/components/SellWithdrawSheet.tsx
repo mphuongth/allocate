@@ -26,6 +26,8 @@ interface Props {
   context: 'unallocated' | 'goal'
   onClose: () => void
   onSuccess: () => void
+  // Desktop renders a centered modal dialog; mobile keeps the bottom sheet.
+  desktop?: boolean
 }
 
 const TYPE_ICON = {
@@ -42,7 +44,7 @@ const TYPE_COLOR = {
   stock: '#7c3aed',
 } as const
 
-export function SellWithdrawSheet({ item, open, context, onClose, onSuccess }: Props) {
+export function SellWithdrawSheet({ item, open, context, onClose, onSuccess, desktop }: Props) {
   const locale = useLocale()
   const t = useTranslations('Dashboard')
 
@@ -266,29 +268,37 @@ export function SellWithdrawSheet({ item, open, context, onClose, onSuccess }: P
       onClick={onClose}
       style={{
         position: 'fixed', inset: 0,
-        background: 'rgba(15, 23, 42, 0.2)',
-        zIndex: 100,
-        display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+        background: desktop ? 'rgba(15, 23, 42, 0.4)' : 'rgba(15, 23, 42, 0.2)',
+        zIndex: desktop ? 200 : 100,
+        display: 'flex', alignItems: desktop ? 'center' : 'flex-end', justifyContent: 'center',
+        padding: desktop ? 24 : 0,
+        backdropFilter: desktop ? 'blur(2px)' : undefined,
         animation: open ? 'fade-in 180ms ease' : 'fade-out 180ms ease forwards',
         pointerEvents: open ? 'auto' : 'none',
       }}
     >
       <div
+        role="dialog"
+        aria-modal="true"
         onClick={(e) => e.stopPropagation()}
         style={{
-          width: '100%', maxWidth: 480, maxHeight: '90dvh',
+          width: '100%', maxWidth: 480, maxHeight: desktop ? 'calc(100vh - 48px)' : '90dvh',
           background: 'var(--c-card)',
-          borderTopLeftRadius: 20, borderTopRightRadius: 20,
+          borderRadius: desktop ? 20 : '20px 20px 0 0',
           display: 'flex', flexDirection: 'column',
-          animation: open ? 'slide-up 220ms cubic-bezier(0.2, 0.8, 0.2, 1)' : 'slide-down 180ms ease forwards',
-          boxShadow: '0 -8px 24px rgba(0,0,0,0.12)',
+          animation: open
+            ? (desktop ? 'modal-in 200ms cubic-bezier(0.2,0.8,0.2,1)' : 'slide-up 220ms cubic-bezier(0.2, 0.8, 0.2, 1)')
+            : (desktop ? 'fade-out 150ms ease forwards' : 'slide-down 180ms ease forwards'),
+          boxShadow: desktop
+            ? '0 24px 48px rgba(15,23,42,0.18), 0 8px 16px rgba(15,23,42,0.08)'
+            : '0 -8px 24px rgba(0,0,0,0.12)',
         }}
       >
-        {/* Drag handle */}
-        <div style={{ width: 36, height: 4, background: 'var(--c-line-strong, #cbd5e1)', borderRadius: 999, margin: '6px auto 14px', flexShrink: 0 }} />
+        {/* Drag handle — mobile bottom-sheet affordance only */}
+        {!desktop && <div style={{ width: 36, height: 4, background: 'var(--c-line-strong, #cbd5e1)', borderRadius: 999, margin: '6px auto 14px', flexShrink: 0 }} />}
 
         {/* Header — pinned, sits outside the scrollable body */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px 16px', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: desktop ? '18px 20px 14px' : '0 16px 16px', borderBottom: desktop ? '1px solid var(--c-line)' : undefined, flexShrink: 0 }}>
           <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>{titleText}</h3>
           <button onClick={onClose} style={{ padding: 6, border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', color: 'var(--c-muted)', display: 'flex' }}>
             <X size={18} />
