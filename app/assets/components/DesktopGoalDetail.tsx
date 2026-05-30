@@ -16,6 +16,8 @@ interface InvestmentTx {
   units: number | null
   interest_rate: number | null
   notes: string | null
+  principal_withdrawn: number | null
+  units_withdrawn: number | null
 }
 
 interface InvRow {
@@ -79,6 +81,7 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
   const isVi = locale === 'vi'
   const [tab, setTab] = useState<'investments' | 'calculator' | 'history'>('investments')
   const [transactions, setTransactions] = useState<InvestmentTx[]>([])
+  const [goldPricePerChi, setGoldPricePerChi] = useState<number | null>(null)
   const [txLoading, setTxLoading] = useState(false)
   const [actionsOpen, setActionsOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
@@ -107,6 +110,12 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
       .then((res) => setTransactions(res.transactions ?? []))
       .catch(() => setTransactions([]))
       .finally(() => setTxLoading(false))
+    // Gold is valued at the live market price per chỉ, not its purchase cost —
+    // without this the sell modal would prefill the stale buy price (issue #251).
+    fetch('/api/v1/gold-price', { cache: 'no-store' })
+      .then((r) => r.ok ? r.json() : null)
+      .then((res) => setGoldPricePerChi(res?.price_per_chi ?? null))
+      .catch(() => setGoldPricePerChi(null))
   }, [goal.goalId, refreshKey])
 
   // Reset tab when the selected goal itself changes.
@@ -193,6 +202,16 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
       gainPct = tx.amount_vnd > 0 ? ((value - tx.amount_vnd) / tx.amount_vnd) * 100 : 0
       units = null
       principal = tx.amount_vnd
+    } else if (tx.asset_type === 'gold' && goldPricePerChi && tx.units) {
+      // Value remaining gold at the current market price per chỉ so the sell
+      // modal prefills today's price, not the buy price (issue #251). Mirrors
+      // the dashboard overview's gold valuation.
+      const effectiveUnits = tx.units - (tx.units_withdrawn ?? 0)
+      const effectivePrincipal = tx.amount_vnd - (tx.principal_withdrawn ?? 0)
+      value = effectiveUnits * goldPricePerChi
+      gainPct = effectivePrincipal > 0 ? ((value - effectivePrincipal) / effectivePrincipal) * 100 : null
+      units = effectiveUnits
+      principal = effectivePrincipal
     } else {
       value = tx.amount_vnd
       gainPct = null
@@ -1041,7 +1060,7 @@ function SellModal({ inv, isVi, onClose, onSuccess }: {
             <div style={{ fontSize: 11, color: 'var(--c-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{isVi ? 'Giá bán mỗi chỉ' : 'Sale price per chỉ'}</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 10 }}>
               <span style={{ fontSize: 14, color: 'var(--c-muted)' }}>₫</span>
-              <input type="number" value={salePrice} onChange={(e) => { setSalePrice(e.target.value); setError('') }} placeholder="0"
+              <input data-testid="sell-gold-price-input" type="number" value={salePrice} onChange={(e) => { setSalePrice(e.target.value); setError('') }} placeholder="0"
                 style={{ flex: 1, border: 'none', outline: 'none', fontSize: 15, fontWeight: 600, fontFamily: 'inherit', background: 'transparent', color: 'var(--c-ink)' }} />
               <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>/chỉ</span>
             </div>
