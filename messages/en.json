@@ -56,7 +56,15 @@
     "switchToBuy": "Switch to \"Buy\" to start investing.",
     "confirmSale": "Confirm sale",
     "confirmWithdrawal": "Confirm withdrawal",
-    "holdingRequired": "Please pick a holding."
+    "holdingRequired": "Please pick a holding.",
+    "quantityToSell": "Quantity to sell",
+    "exceedsQty": "Exceeds quantity held",
+    "salePricePerChi": "Sale price per chỉ",
+    "salePriceHint": "Pre-filled at current price — edit to what you can sell for",
+    "totalReceived": "Total received",
+    "yourCost": "Your cost",
+    "profitLoss": "Profit / Loss",
+    "chiShort": "chỉ"
   },
   "common": {
     "save": "Save",

@@ -56,7 +56,15 @@
     "switchToBuy": "Chuyển sang \"Mua\" để bắt đầu đầu tư.",
     "confirmSale": "Xác nhận bán",
     "confirmWithdrawal": "Xác nhận rút",
-    "holdingRequired": "Vui lòng chọn khoản."
+    "holdingRequired": "Vui lòng chọn khoản.",
+    "quantityToSell": "Số lượng bán",
+    "exceedsQty": "Vượt quá số lượng đang giữ",
+    "salePricePerChi": "Giá bán mỗi chỉ",
+    "salePriceHint": "Tạm tính theo giá hiện tại — sửa theo giá bạn bán được",
+    "totalReceived": "Tổng tiền nhận được",
+    "yourCost": "Giá vốn",
+    "profitLoss": "Lãi/Lỗ",
+    "chiShort": "chỉ"
   },
   "common": {
     "save": "Lưu",

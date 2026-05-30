@@ -127,6 +127,41 @@ describe('AddTransactionSheet — sell lists goal-allocated bank/gold (issue #23
   })
 })
 
+describe('AddTransactionSheet — gold sell (quantity × price) (issue #232)', () => {
+  it('sells gold by quantity (chỉ) and posts proceeds + cost basis', async () => {
+    const overview = {
+      goals: [],
+      unallocated: { funds: [], nonFunds: [{ transactionId: 'g1', type: 'gold', amount: 9_000_000, currentValue: 9_200_000, interestRate: null, units: 1, notes: 'PNJ' }] },
+    }
+    const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
+      if (String(url).includes('/dashboard/overview')) return Promise.resolve({ ok: true, json: () => Promise.resolve(overview) })
+      if (String(url).includes('/savings-goals')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ goals: [] }) })
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<AddTransactionSheet open onClose={vi.fn()} onSaved={vi.fn()} />)
+
+    fireEvent.click(screen.getByText('Gold'))    // asset type = gold
+    fireEvent.click(screen.getByText('sell'))    // direction = sell
+    await screen.findAllByText(/PNJ/)             // gold holding loaded (price prefills to 9,200,000)
+    fireEvent.change(screen.getByPlaceholderText('0.00'), { target: { value: '1' } })  // 1 chỉ
+    fireEvent.click(screen.getByText('confirmSale'))
+
+    await waitFor(() => {
+      const post = fetchMock.mock.calls.find((c) => String(c[0]).includes('/investment-transactions'))
+      expect(post).toBeTruthy()
+      const body = JSON.parse(String((post![1] as RequestInit).body))
+      expect(body.transaction_type).toBe('withdrawal')
+      expect(body.asset_type).toBe('gold')
+      expect(body.parent_transaction_id).toBe('g1')
+      expect(body.units_withdrawn).toBe(1)            // 1 chỉ
+      expect(body.amount_vnd).toBe(9_200_000)         // proceeds = 1 × current price
+      expect(body.principal_withdrawn).toBe(9_000_000) // cost basis (amount / units × 1)
+    })
+  })
+})
+
 describe('AddTransactionSheet — gold unit (issue #232)', () => {
   // Gold is valued per chỉ, so a lượng entry must be normalized: 1 lượng = 10 chỉ.
   it('normalizes a lượng entry to chỉ on save', async () => {
