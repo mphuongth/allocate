@@ -1016,6 +1016,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
         item={sellItem}
         open={sellSheetOpen}
         context="unallocated"
+        desktop={isDesktop}
         onClose={() => setSellSheetOpen(false)}
         onSuccess={() => fetchData({ force: true })}
       />

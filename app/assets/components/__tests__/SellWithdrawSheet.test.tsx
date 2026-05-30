@@ -69,3 +69,21 @@ describe('SellWithdrawSheet — gold sell (quantity × price) (issue #232)', () 
     })
   })
 })
+
+describe('SellWithdrawSheet — responsive presentation (#248)', () => {
+  const item = {
+    type: 'fund' as const, name: 'VESAF',
+    currentValue: 10_000_000, units: 100, navPerUnit: 100_000,
+    fundId: 'f1', purchasePrice: 9_000_000,
+  }
+
+  it('docks to the bottom as a sheet on mobile', () => {
+    render(<SellWithdrawSheet item={item} open context="unallocated" onClose={vi.fn()} onSuccess={vi.fn()} />)
+    expect(screen.getByTestId('sell-sheet').style.alignItems).toBe('flex-end')
+  })
+
+  it('opens as a centered modal on desktop', () => {
+    render(<SellWithdrawSheet item={item} open context="unallocated" desktop onClose={vi.fn()} onSuccess={vi.fn()} />)
+    expect(screen.getByTestId('sell-sheet').style.alignItems).toBe('center')
+  })
+})
