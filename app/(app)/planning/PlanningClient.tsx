@@ -112,7 +112,7 @@ export default function PlanningClient() {
   const [funds, setFunds] = useState<Fund[]>(initialCache?.funds ?? [])
   const [goals, setGoals] = useState<Goal[]>(initialCache?.goals ?? [])
   const [loading, setLoading] = useState(!initialCache)
-  const [toast, setToast] = useState('')
+  const [, setToast] = useState('')
 
   const showToast = useCallback((msg: string) => {
     setToast(msg)

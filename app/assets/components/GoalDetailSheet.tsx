@@ -831,8 +831,6 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
     return { id: tx.transaction_id, name, type: tx.asset_type, value, gainPct, units, principal, fund: fund ?? null }
   }).filter((row) => !unassignedIds.includes(row.id))
 
-  const allFundValue = fundItems.reduce((s, f) => s + f.currentValue, 0)
-
   // Calculator
   const remaining = goal.targetAmount ? Math.max(goal.targetAmount - goal.currentValue, 0) : 0
   const monthsLeft = calcDeadlineMonths(goal.targetDate)

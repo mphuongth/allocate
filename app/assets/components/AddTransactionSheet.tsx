@@ -432,7 +432,6 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop }:
 
   if (desktop ? !open : !mounted) return null
 
-  const isVI = false // will be driven by next-intl locale in future
   const dirLabels = {
     fund:  { buy: t('buy'),      sell: t('sell')     },
     bank:  { buy: t('deposit'),  sell: t('withdraw') },

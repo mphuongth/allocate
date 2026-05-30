@@ -8,7 +8,7 @@ import type { FundBreakdownItem, NonFundUnallocatedItem } from '../DashboardClie
 import { fmtCompact, fmtNav, fmtPct } from '@/lib/formatters'
 
 function DesktopAssignPicker({
-  item, goals, loading, selected, onSelect, confirming, error, success, successName,
+  goals, loading, selected, onSelect, confirming, error, success, successName,
   isVI, onBack, onConfirm, actionName, actionValue, actionType,
 }: {
   item: { kind: 'fund' | 'nonFund' }
