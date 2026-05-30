@@ -10,8 +10,8 @@ import { AuthLayout } from '../AuthLayout'
 
 const fieldLabelStyle: React.CSSProperties = {
   fontSize: 11,
-  fontWeight: 600,
-  letterSpacing: '0.05em',
+  fontWeight: 500,
+  letterSpacing: '0.02em',
   textTransform: 'uppercase',
   color: 'var(--c-muted)',
 }
@@ -57,13 +57,9 @@ function LoginForm() {
 
   return (
     <>
-      <div data-testid="auth-card" className="cn-card" style={{ width: '100%', padding: '28px 24px' }}>
-        <h1 style={{ margin: '0 0 4px', fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--c-ink)' }}>
-          {t('loginTitle')}
-        </h1>
-        <p style={{ margin: '0 0 22px', fontSize: 13, color: 'var(--c-muted)' }}>
-          {t('loginSubtitle')}
-        </p>
+      <div data-testid="auth-card" className="cn-auth-card">
+        <h1 className="cn-auth-title">{t('loginTitle')}</h1>
+        <p className="cn-auth-sub">{t('loginSubtitle')}</p>
 
         {error && (
           <div role="alert" style={{
@@ -140,8 +136,8 @@ function LoginForm() {
             className="cn-btn primary"
             style={{
               width: '100%',
-              padding: '11px',
-              marginTop: 4,
+              padding: '13px 16px',
+              marginTop: 18,
               fontSize: 14,
               fontWeight: 600,
               opacity: loading || redirecting ? 0.7 : 1,
@@ -152,7 +148,7 @@ function LoginForm() {
         </form>
       </div>
 
-      <p style={{ margin: 0, fontSize: 13, color: 'var(--c-muted)', textAlign: 'center' }}>
+      <p className="cn-auth-alt">
         {t('noAccount')}{' '}
         <Link href="/auth/signup" style={{ color: 'var(--c-navy)', fontWeight: 600, textDecoration: 'none' }}>
           {t('signupLink')}

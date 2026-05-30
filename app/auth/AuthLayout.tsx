@@ -1,5 +1,95 @@
 // Shared layout for auth pages (login / signup).
-// Centered single-column: Cairn logo above the form card.
+// Mobile (issue #243): full-bleed screen — brand pinned top-left, large hero
+// heading, form flush to the top. Desktop: centered single-column card with the
+// Cairn logo above. The responsive switch lives in the scoped <style> below so
+// the page components can stay styling-light.
+
+const authStyles = `
+.cn-auth-root {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--c-canvas);
+  padding: 74px 24px 24px;
+}
+.cn-auth-col {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+.cn-auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.cn-auth-wordmark {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--c-navy);
+}
+.cn-auth-card {
+  width: 100%;
+}
+.cn-auth-title {
+  margin: 0 0 8px;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+  color: var(--c-ink);
+}
+.cn-auth-sub {
+  margin: 0 0 28px;
+  font-size: 14px;
+  color: var(--c-muted);
+}
+.cn-auth-alt {
+  margin: 0;
+  font-size: 13px;
+  color: var(--c-muted);
+  text-align: center;
+}
+
+@media (min-width: 640px) {
+  .cn-auth-root {
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .cn-auth-col {
+    max-width: 380px;
+    gap: 20px;
+    align-items: center;
+  }
+  .cn-auth-brand {
+    margin-bottom: 8px;
+  }
+  .cn-auth-wordmark {
+    font-size: 22px;
+    letter-spacing: -0.03em;
+  }
+  .cn-auth-card {
+    background: var(--c-card);
+    border: 1px solid var(--c-line);
+    border-radius: var(--r-card);
+    box-shadow: var(--shadow-card);
+    padding: 28px 24px;
+  }
+  .cn-auth-title {
+    margin-bottom: 4px;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .cn-auth-sub {
+    margin-bottom: 22px;
+    font-size: 13px;
+  }
+}
+`
 
 function CairnMark({ size = 32, testId }: { size?: number; testId?: string }) {
   const h = Math.round(size * 0.85)
@@ -15,39 +105,13 @@ function CairnMark({ size = 32, testId }: { size?: number; testId?: string }) {
 
 export function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'var(--c-canvas)',
-        padding: '24px',
-      }}
-    >
-      <div
-        style={{
-          width: '100%',
-          maxWidth: 380,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 20,
-          alignItems: 'center',
-        }}
-      >
+    <div className="cn-auth-root">
+      <style dangerouslySetInnerHTML={{ __html: authStyles }} />
+      <div className="cn-auth-col">
         {/* Cairn logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+        <div className="cn-auth-brand">
           <CairnMark size={32} testId="brand-mark" />
-          <span
-            style={{
-              fontSize: 22,
-              fontWeight: 700,
-              letterSpacing: '-0.03em',
-              color: 'var(--c-navy)',
-            }}
-          >
-            Cairn
-          </span>
+          <span className="cn-auth-wordmark">Cairn</span>
         </div>
 
         {children}
