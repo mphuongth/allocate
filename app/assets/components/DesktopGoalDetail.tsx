@@ -757,6 +757,7 @@ function SellModal({ inv, isVi, onClose, onSuccess }: {
 
   const [amount, setAmount] = useState('')
   const [units, setUnits] = useState('')
+  const [received, setReceived] = useState('') // bank: cash actually received
   // Gold sale price per chỉ, prefilled with the current market price.
   const [salePrice, setSalePrice] = useState(() => (isGold && navPerUnit ? String(Math.round(navPerUnit)) : ''))
   const [saving, setSaving] = useState(false)
@@ -780,20 +781,25 @@ function SellModal({ inv, isVi, onClose, onSuccess }: {
   const goldRemUnits = isGold && inv.units != null ? inv.units - numUnits : null
   const isOverUnits = isGold && inv.units != null && numUnits > inv.units
 
+  // Bank: cash received is editable; split principal out of the withdrawn amount
+  // so the summary can show an accurate gain/loss.
+  const numReceived = Number(received) || 0
+  const bankPrincipal = inv.principal ?? maxAmount
+  const bankFraction = maxAmount > 0 ? Math.min(1, numAmount / maxAmount) : 0
+  const bankPrincipalPortion = Math.round(bankPrincipal * bankFraction)
+  const bankGain = isBank && numReceived > 0 && numAmount > 0 ? numReceived - bankPrincipalPortion : null
+
   const isOverMax = isGold ? isOverUnits : (numAmount > maxAmount && maxAmount > 0)
   const isValid = isGold
     ? (numUnits > 0 && !isOverUnits && numSalePrice > 0 && !saving)
-    : (numAmount > 0 && !isOverMax && !saving)
+    : isBank
+      ? (numAmount > 0 && !isOverMax && numReceived > 0 && !saving)
+      : (numAmount > 0 && !isOverMax && !saving)
 
   const gainLoss = useMemo(() => {
-    if (!numAmount || inv.gainPct == null) return null
+    if (!numAmount || isBank || inv.gainPct == null) return null
     return numAmount * inv.gainPct / (100 + inv.gainPct)
-  }, [numAmount, inv.gainPct])
-
-  const penaltyAmount = useMemo(() => {
-    if (!isBank || !numAmount || !inv.interestRate) return null
-    return Math.round(numAmount * (inv.interestRate / 100) * 0.5)
-  }, [isBank, numAmount, inv.interestRate])
+  }, [numAmount, isBank, inv.gainPct])
 
   const taxAmount = useMemo(() => {
     if (!isFund || !numAmount) return null
@@ -803,6 +809,7 @@ function SellModal({ inv, isVi, onClose, onSuccess }: {
   function handleAmountChange(val: string) {
     const raw = val.replace(/[^0-9]/g, '')
     setAmount(raw)
+    if (isBank) setReceived(raw)  // received tracks the amount until edited down
     if (navPerUnit && raw) setUnits((Number(raw) / navPerUnit).toFixed(2))
     else setUnits('')
   }
@@ -816,6 +823,7 @@ function SellModal({ inv, isVi, onClose, onSuccess }: {
   function handleSetAll() {
     if (isGold && inv.units != null) { setUnits(String(inv.units)); return }
     setAmount(String(maxAmount))
+    if (isBank) setReceived(String(Math.round(maxAmount)))
     if (navPerUnit && inv.units != null) setUnits(inv.units.toFixed(2))
   }
 
@@ -846,8 +854,9 @@ function SellModal({ inv, isVi, onClose, onSuccess }: {
           transaction_type: 'withdrawal', asset_type: inv.type,
           parent_transaction_id: inv.id, investment_date: today,
           // Gold: amount = proceeds (qty × sale price), principal = cost basis.
-          amount_vnd: isGold ? goldProceeds : Math.round(numAmount),
-          principal_withdrawn: isGold ? (goldCostSold ?? goldProceeds) : Math.round(numAmount),
+          // Bank: amount = cash received, principal = principal portion.
+          amount_vnd: isGold ? goldProceeds : isBank ? Math.round(numReceived) : Math.round(numAmount),
+          principal_withdrawn: isGold ? (goldCostSold ?? goldProceeds) : isBank ? bankPrincipalPortion : Math.round(numAmount),
           goal_id: null,
         }
         if (isGold) body.units_withdrawn = parseFloat(numUnits.toFixed(4))
@@ -858,7 +867,7 @@ function SellModal({ inv, isVi, onClose, onSuccess }: {
         })
         if (!res.ok) { const { error: e } = await res.json(); setError(e ?? (isVi ? 'Không thể xử lý' : 'Could not process')); setSaving(false); return }
       }
-      setSoldAmount(isGold ? goldProceeds : numAmount); setConfirmed(true)
+      setSoldAmount(isGold ? goldProceeds : isBank ? numReceived : numAmount); setConfirmed(true)
       setTimeout(() => { setConfirmed(false); onSuccess(); onClose() }, 2000)
     } catch { setError(isVi ? 'Lỗi kết nối' : 'Connection error') }
     setSaving(false)
@@ -929,6 +938,24 @@ function SellModal({ inv, isVi, onClose, onSuccess }: {
             )}
           </div>
 
+          {/* Bank: editable cash received (early withdrawal can cut interest) */}
+          {isBank && (
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--c-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{isVi ? 'Số tiền thực nhận' : "Amount you'll receive"}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'var(--c-card)', border: '1.5px solid var(--c-navy)', borderRadius: 10 }}>
+                <span style={{ fontSize: 14, color: 'var(--c-muted)' }}>₫</span>
+                <input
+                  type="text" inputMode="numeric"
+                  value={received ? Number(received).toLocaleString('vi-VN') : ''}
+                  onChange={(e) => { setReceived(e.target.value.replace(/[^0-9]/g, '')); setError('') }}
+                  placeholder="0"
+                  style={{ flex: 1, border: 'none', outline: 'none', fontSize: 15, fontWeight: 600, fontFamily: 'inherit', background: 'transparent', color: 'var(--c-ink)' }}
+                />
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 4 }}>{isVi ? 'Tạm tính theo giá trị hiện tại — sửa nếu rút sớm bị trừ lãi' : 'Pre-filled at current value — edit down if early withdrawal cuts interest'}</div>
+            </div>
+          )}
+
           {/* Units input — fund & gold only */}
           {(isFund || isGold) && inv.units != null && (
             <div>
@@ -946,25 +973,48 @@ function SellModal({ inv, isVi, onClose, onSuccess }: {
             </div>
           )}
 
-          {/* Summary strip */}
-          {numAmount > 0 && !isOverMax && (() => {
+          {/* Fund summary: remaining / gain-loss / tax */}
+          {!isBank && numAmount > 0 && !isOverMax && (() => {
             const rows = [
               { show: true, label: isVi ? 'Còn lại sau giao dịch' : 'Remaining after transaction', value: fmtCompact(Math.max(0, remaining)), color: 'var(--c-ink)' },
               { show: gainLoss != null, label: isVi ? 'Lãi/Lỗ ước tính' : 'Est. gain / loss', value: `${gainLoss! >= 0 ? '+' : ''}${fmtCompact(gainLoss!)}`, color: gainLoss! >= 0 ? 'var(--c-pos)' : 'var(--c-neg)' },
-              { show: penaltyAmount != null, label: isVi ? 'Lãi mất ước tính' : 'Est. interest forfeited', value: `−${fmtCompact(penaltyAmount!)}`, color: 'var(--c-warn)' },
               { show: taxAmount != null, label: isVi ? 'Thuế TNCN (0.1%)' : 'Personal income tax (0.1%)', value: `−${fmtCompact(taxAmount!)}`, color: 'var(--c-muted)' },
             ].filter((r) => r.show)
             return (
               <div style={{ background: 'var(--c-card-2)', borderRadius: 12, overflow: 'hidden' }}>
                 {rows.map((r, i) => (
                   <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: i < rows.length - 1 ? '1px solid var(--c-line)' : 'none' }}>
-                    <span style={{ fontSize: 12, color: r.color === 'var(--c-warn)' ? 'var(--c-warn)' : 'var(--c-muted)' }}>{r.label}</span>
+                    <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{r.label}</span>
                     <span style={{ fontSize: 13, fontWeight: 600, color: r.color, fontVariantNumeric: 'tabular-nums' }}>{r.value}</span>
                   </div>
                 ))}
               </div>
             )
           })()}
+
+          {/* Bank summary: principal portion / received / gain-loss / remaining */}
+          {isBank && numAmount > 0 && !isOverMax && numReceived > 0 && (
+            <div style={{ background: 'var(--c-card-2)', borderRadius: 12, overflow: 'hidden' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid var(--c-line)' }}>
+                <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{isVi ? 'Tiền gốc' : 'Principal'}{bankFraction < 0.999 && <span style={{ opacity: 0.7 }}> · {Math.round(bankFraction * 100)}%</span>}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(bankPrincipalPortion)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid var(--c-line)' }}>
+                <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{isVi ? 'Số tiền thực nhận' : "Amount you'll receive"}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(numReceived)}</span>
+              </div>
+              {bankGain != null && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 14px', borderBottom: '1px solid var(--c-line)' }}>
+                  <span style={{ fontSize: 12, fontWeight: 600 }}>{isVi ? 'Lãi/Lỗ' : 'Gain / Loss'}</span>
+                  <span style={{ fontSize: 15, fontWeight: 700, color: bankGain >= 0 ? 'var(--c-pos)' : 'var(--c-neg)', fontVariantNumeric: 'tabular-nums' }}>{bankGain >= 0 ? '+' : '−'}{fmtCompact(Math.abs(bankGain))}</span>
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px' }}>
+                <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{isVi ? 'Còn lại sau giao dịch' : 'Remaining after transaction'}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(Math.max(0, remaining))}</span>
+              </div>
+            </div>
+          )}
           </>
           ) : (
           <>
@@ -1073,6 +1123,7 @@ function SellModal({ inv, isVi, onClose, onSuccess }: {
                 ? (isVi ? (isBank ? 'Nhập số tiền rút' : isGold ? 'Nhập số lượng bán' : 'Nhập số tiền bán') : (isBank ? 'Enter withdrawal amount' : isGold ? 'Enter quantity to sell' : 'Enter sale amount'))
                 : (isGold && numSalePrice <= 0) ? (isVi ? 'Nhập giá bán' : 'Enter sale price')
                 : isOverMax ? (isVi ? (isGold ? 'Vượt quá số lượng' : 'Vượt quá số dư') : (isGold ? 'Exceeds quantity' : 'Exceeds balance'))
+                : (isBank && numReceived <= 0) ? (isVi ? 'Nhập số tiền thực nhận' : 'Enter amount received')
                 : saving ? (isVi ? 'Đang xử lý…' : 'Processing…')
                 : isBank ? (isVi ? 'Xác nhận rút' : 'Confirm withdrawal') : (isVi ? 'Xác nhận bán' : 'Confirm sale')}
             </button>

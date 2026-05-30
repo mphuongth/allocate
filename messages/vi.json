@@ -64,7 +64,13 @@
     "totalReceived": "Tổng tiền nhận được",
     "yourCost": "Giá vốn",
     "profitLoss": "Lãi/Lỗ",
-    "chiShort": "chỉ"
+    "chiShort": "chỉ",
+    "unitsToSell": "Số phần muốn bán",
+    "navLinkHint": "Nhập số tiền hoặc số phần — tự động đồng bộ",
+    "amountReceived": "Số tiền thực nhận",
+    "receivedHint": "Tạm tính theo giá trị hiện tại — sửa nếu rút sớm bị trừ lãi",
+    "principalPortion": "Tiền gốc",
+    "gainLoss": "Lãi/Lỗ"
   },
   "common": {
     "save": "Lưu",
