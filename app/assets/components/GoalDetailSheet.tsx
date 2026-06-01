@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import {
   ChevronLeft, ChevronRight, MoreHorizontal,
-  TrendingUp, Building, CircleDollarSign, BarChart2,
   Edit2, Trash2, Calendar, Download, ArrowDownRight, ArrowUpRight, Target,
 } from 'lucide-react'
 import { useLocale } from 'next-intl'
@@ -11,17 +10,7 @@ import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import type { GoalData, FundBreakdownItem } from '../DashboardClient'
 import TransactionHistorySheet, { type PurchaseHistoryRow } from './TransactionHistorySheet'
 import { SellWithdrawSheet, type SellItem } from './SellWithdrawSheet'
-
-// Same SVG as DesktopGoalDetail.UnlinkSvg — matches design's "unlink" glyph
-function UnlinkSvg({ size = 20, color = 'currentColor' }: { size?: number; color?: string }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block', flexShrink: 0 }}>
-      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-      <path d="M2 2l20 20" />
-    </svg>
-  )
-}
+import { GD_COLORS, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, type InvRow } from './goalDetailShared'
 
 interface InvestmentTx {
   transaction_id: string
@@ -53,27 +42,6 @@ interface Props {
    * without requiring a hard page reload.
    */
   refreshKey?: number
-}
-
-const GD_COLORS: Record<string, string> = {
-  fund: '#2563eb',
-  bank: '#047857',
-  gold: '#d97706',
-  stock: '#7c3aed',
-}
-
-function calcDeadlineMonths(targetDate: string | null): number {
-  if (!targetDate) return 12
-  const [ty, tm] = targetDate.split('-').map(Number)
-  const now = new Date()
-  return Math.max(1, (ty - now.getFullYear()) * 12 + (tm - 1 - now.getMonth()))
-}
-
-function TypeIcon({ type, size = 16 }: { type: string; size?: number }) {
-  if (type === 'fund') return <TrendingUp size={size} />
-  if (type === 'bank') return <Building size={size} />
-  if (type === 'gold') return <CircleDollarSign size={size} />
-  return <BarChart2 size={size} />
 }
 
 function GoalActionsSheet({
@@ -333,17 +301,6 @@ function EditGoalSheet({
       </div>
     </div>
   )
-}
-
-interface InvRow {
-  id: string
-  name: string
-  type: string
-  value: number
-  gainPct: number | null
-  units: number | null
-  principal: number | null
-  fund: FundBreakdownItem | null
 }
 
 // Mirror of DashboardClient.openSellFund / openSellNonFund so the goal-detail
@@ -778,58 +735,12 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
   const exceededTarget = goal.progressPercentage !== null && goal.progressPercentage >= 100
   const isPositive = goal.profitLoss >= 0
 
-  const investmentRows = transactions.filter((tx) => tx.transaction_type !== 'withdrawal')
-  const deduped = new Map<string, InvestmentTx>()
-  investmentRows.forEach((tx) => {
-    if (tx.fund_id) {
-      if (!deduped.has(tx.fund_id)) deduped.set(tx.fund_id, tx)
-    } else {
-      deduped.set(tx.transaction_id, tx)
-    }
-  })
-  const investTxRows = Array.from(deduped.values())
+  const fundMap = new Map(goal.funds.map((f) => [f.fundId, f]))
 
-  const fundItems = goal.funds
-  const fundMap = new Map(fundItems.map((f) => [f.fundId, f]))
-
-  // Build typed investment rows for the Investments tab
-  const invRows: InvRow[] = investTxRows.map((tx) => {
-    const fund = tx.fund_id ? fundMap.get(tx.fund_id) ?? null : null
-    const name = fund?.fundName ?? tx.notes ?? (tx.asset_type === 'bank' ? (isVI ? 'Tiền gửi' : 'Bank deposit') : tx.asset_type === 'gold' ? (isVI ? 'Vàng' : 'Gold') : tx.asset_type)
-
-    let value: number, gainPct: number | null, units: number | null, principal: number | null
-    if (fund) {
-      value = fund.currentValue
-      gainPct = fund.profitLossPercentage
-      units = fund.quantity
-      principal = null
-    } else if (tx.asset_type === 'bank' && tx.interest_rate) {
-      const months = Math.max(0, Math.floor(
-        (Date.now() - new Date(tx.investment_date).getTime()) / (1000 * 60 * 60 * 24 * 30.44)
-      ))
-      value = Math.round(tx.amount_vnd * Math.pow(1 + tx.interest_rate / 100 / 12, months))
-      gainPct = tx.amount_vnd > 0 ? ((value - tx.amount_vnd) / tx.amount_vnd) * 100 : 0
-      units = null
-      principal = tx.amount_vnd
-    } else if (tx.asset_type === 'gold' && goldPricePerChi && tx.units) {
-      // Value remaining gold at the current market price per chỉ so the sell
-      // sheet prefills today's price, not the buy price (issue #251). Mirrors
-      // the dashboard overview's gold valuation.
-      const effectiveUnits = tx.units - (tx.units_withdrawn ?? 0)
-      const effectivePrincipal = tx.amount_vnd - (tx.principal_withdrawn ?? 0)
-      value = effectiveUnits * goldPricePerChi
-      gainPct = effectivePrincipal > 0 ? ((value - effectivePrincipal) / effectivePrincipal) * 100 : null
-      units = effectiveUnits
-      principal = effectivePrincipal
-    } else {
-      value = tx.amount_vnd
-      gainPct = null
-      units = tx.units
-      principal = tx.amount_vnd
-    }
-
-    return { id: tx.transaction_id, name, type: tx.asset_type, value, gainPct, units, principal, fund: fund ?? null }
-  }).filter((row) => !unassignedIds.includes(row.id))
+  // Build typed investment rows for the Investments tab, then drop any
+  // optimistically-unassigned ones.
+  const invRows: InvRow[] = buildInvRows(transactions, goal.funds, goldPricePerChi, isVI)
+    .filter((row) => !unassignedIds.includes(row.id))
 
   // Calculator
   const remaining = goal.targetAmount ? Math.max(goal.targetAmount - goal.currentValue, 0) : 0
