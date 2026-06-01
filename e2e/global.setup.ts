@@ -16,8 +16,10 @@ setup('authenticate', async ({ page }) => {
 
   const admin = createClient(supabaseUrl, serviceRoleKey)
 
-  // Create a throwaway test user — admin API bypasses email verification
-  const email = `e2e-${Date.now()}@test.invalid`
+  // Create a throwaway test user — admin API bypasses email verification.
+  // The random suffix keeps the email unique across parallel CI shards, which
+  // each run this setup against the shared Supabase project.
+  const email = `e2e-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@test.invalid`
   const password = 'TestPass123!'
 
   const { data, error } = await admin.auth.admin.createUser({
