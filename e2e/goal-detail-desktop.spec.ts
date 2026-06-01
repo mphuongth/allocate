@@ -81,10 +81,11 @@ test.describe('Desktop goal detail panel', () => {
       await expect(panel.getByText('E2E TCB Deposit')).toBeVisible({ timeout: 10_000 })
 
       // Open the holding's options → Withdraw → withdraw the full balance.
+      // UI text is localised (the suite may run in Vietnamese), so match both.
       await panel.getByRole('button', { name: 'Options' }).first().click()
-      await page.getByText('Withdraw', { exact: true }).click()
-      await page.getByRole('button', { name: 'All' }).click()
-      await page.getByRole('button', { name: /Confirm withdrawal/i }).click()
+      await page.getByText(/^(Withdraw|Rút tiền)$/).click()
+      await page.getByRole('button', { name: /^(All|Tất cả)$/ }).click()
+      await page.getByRole('button', { name: /Confirm withdrawal|Xác nhận rút/i }).click()
 
       // The fully-withdrawn deposit must no longer be listed.
       await expect(panel.getByText('E2E TCB Deposit')).toHaveCount(0, { timeout: 15_000 })
