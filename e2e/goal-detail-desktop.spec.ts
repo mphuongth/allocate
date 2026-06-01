@@ -59,37 +59,39 @@ test.describe('Desktop goal detail panel', () => {
   })
 
   // Issue #261: after fully withdrawing a bank deposit from the goal detail,
-  // it must no longer appear on the Investments tab.
+  // it must no longer appear on the Investments tab. Attach the deposit to the
+  // shared goal (reliably rendered) — the Investments tab fetches transactions
+  // no-store, so the row shows even though the overview may be cached.
   test('fully withdrawn bank deposit disappears from the Investments tab', async ({ page }) => {
-    const goal = await api.createGoal({ goal_name: 'E2E Withdraw Hides Goal', target_amount: 100_000_000 })
     const tx = await api.createTransaction({
       asset_type: 'bank',
       amount_vnd: 10_000_000,
       investment_date: '2026-01-01',
       interest_rate: 6,
-      goal_id: goal.goal_id,
+      goal_id: goalId,
       notes: 'E2E TCB Deposit',
     })
     try {
       await page.goto('/dashboard')
       await page.waitForLoadState('networkidle')
 
-      await page.getByText('E2E Withdraw Hides Goal').first().click()
+      await page.getByText('E2E Desktop Goal').first().click()
       const panel = page.getByTestId('desktop-goal-detail')
       await expect(panel).toBeVisible({ timeout: 10_000 })
       await expect(panel.getByText('E2E TCB Deposit')).toBeVisible({ timeout: 10_000 })
 
       // Open the holding's options → Withdraw → withdraw the full balance.
       await panel.getByRole('button', { name: 'Options' }).first().click()
-      await page.getByText(/^Withdraw$/).click()
+      await page.getByText('Withdraw', { exact: true }).click()
       await page.getByRole('button', { name: 'All' }).click()
       await page.getByRole('button', { name: /Confirm withdrawal/i }).click()
 
       // The fully-withdrawn deposit must no longer be listed.
       await expect(panel.getByText('E2E TCB Deposit')).toHaveCount(0, { timeout: 15_000 })
     } finally {
-      await api.deleteTransaction(tx.transaction_id)
-      await api.deleteGoal(goal.goal_id)
+      // Also removes the withdrawal row created during the test (parent FK is
+      // ON DELETE SET NULL, so it would otherwise linger on the shared goal).
+      await api.deleteTransactionCascade(tx.transaction_id)
     }
   })
 
