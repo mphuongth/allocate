@@ -9,7 +9,6 @@ vi.mock('next-intl', () => ({
 }))
 
 const baseProps = {
-  insuranceId: 'ins-1',
   insuranceName: 'John Doe',
   coverageType: 'Self',
   annualPremium: 12_000_000,
