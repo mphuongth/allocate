@@ -168,7 +168,7 @@ test('assign unallocated fund to a goal via action sheet', async ({ page }) => {
   await expect(page.getByTestId('action-assign')).toBeVisible({ timeout: 5_000 })
   await page.getByTestId('action-assign').click()
 
-  // GoalPickerModal opens — pick our test goal
+  // AssignGoalSheet opens — pick our test goal
   await expect(page.getByRole('dialog').locator('text=E2E Assign Goal')).toBeVisible({ timeout: 5_000 })
   await page.getByRole('dialog').locator('text=E2E Assign Goal').click()
 
