@@ -81,8 +81,10 @@ test.describe('Desktop goal detail panel', () => {
       await expect(panel.getByText('E2E TCB Deposit')).toBeVisible({ timeout: 10_000 })
 
       // Open the holding's options → Withdraw → withdraw the full balance.
+      // exact: true so we hit the row's "Options" button, not the hero's
+      // "Goal options" (substring matches would pick the hero first).
       // UI text is localised (the suite may run in Vietnamese), so match both.
-      await panel.getByRole('button', { name: 'Options' }).first().click()
+      await panel.getByRole('button', { name: 'Options', exact: true }).first().click()
       await page.getByText(/^(Withdraw|Rút tiền)$/).click()
       await page.getByRole('button', { name: /^(All|Tất cả)$/ }).click()
       await page.getByRole('button', { name: /Confirm withdrawal|Xác nhận rút/i }).click()
