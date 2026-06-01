@@ -96,7 +96,6 @@ app/
 │   ├── funds/                # Fund library with NAV refresh
 │   ├── planning/             # Monthly planning with allocation summary
 │   └── settings/             # Goals, transactions, expenses, insurance tabs
-├── savings-goals/[goalId]/   # Goal detail with transaction history
 ├── auth/                     # Login / signup / OAuth callback
 ├── api/v1/                   # Authenticated REST API
 └── components/               # Layouts, navigation, theme
