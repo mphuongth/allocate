@@ -1,4 +1,4 @@
-export function parseVietnameseNumber(raw: string): number {
+function parseVietnameseNumber(raw: string): number {
   const cleaned = raw.replace(/[^\d.,]/g, '').trim()
   if (/,\d{2}$/.test(cleaned)) {
     return parseFloat(cleaned.replace(/\./g, '').replace(',', '.'))

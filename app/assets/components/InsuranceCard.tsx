@@ -6,7 +6,6 @@ import { fmtCompact } from '@/lib/formatters'
 import { STATUS_COLOR, BAR_COLOR, insurancePaidState } from './insuranceShared'
 
 interface Props {
-  insuranceId: string
   insuranceName: string
   coverageType: string | null
   annualPremium: number
