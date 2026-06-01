@@ -26,9 +26,17 @@ jobs:
         run: npm test -- --run
 
   e2e:
-    name: E2E Tests
+    name: E2E Shard
     runs-on: ubuntu-latest
     needs: test
+
+    # Split the suite across parallel runners. Each shard runs global.setup,
+    # which provisions its own throwaway user, so the shared Supabase project
+    # stays collision-free (all data is scoped by user_id).
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
 
     steps:
       - uses: actions/checkout@v4
@@ -52,8 +60,8 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.E2E_SUPABASE_SERVICE_ROLE_KEY }}
           CRON_SECRET: e2e-placeholder
 
-      - name: Run E2E tests
-        run: npm run test:e2e
+      - name: Run E2E tests (shard ${{ matrix.shard }}/3)
+        run: npm run test:e2e -- --shard=${{ matrix.shard }}/3
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.E2E_SUPABASE_ANON_KEY }}
@@ -66,6 +74,22 @@ jobs:
         uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: playwright-report
+          name: playwright-report-shard-${{ matrix.shard }}
           path: playwright-report/
           retention-days: 7
+
+  # Single stable gate: green only when every E2E shard passes. Lets branch
+  # protection / merge automation depend on one check name instead of N shards.
+  e2e-complete:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    needs: e2e
+    if: always()
+    steps:
+      - name: Verify all shards passed
+        run: |
+          if [ "${{ needs.e2e.result }}" != "success" ]; then
+            echo "One or more E2E shards did not pass (result: ${{ needs.e2e.result }})"
+            exit 1
+          fi
+          echo "All E2E shards passed"
