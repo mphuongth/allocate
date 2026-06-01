@@ -58,6 +58,46 @@ test.describe('Desktop goal detail panel', () => {
     await expect(page.getByTestId('desktop-net-worth-panel')).toBeVisible({ timeout: 10_000 })
   })
 
+  // Issue #261: after fully withdrawing a bank deposit from the goal detail,
+  // it must no longer appear on the Investments tab. Attach the deposit to the
+  // shared goal (reliably rendered) — the Investments tab fetches transactions
+  // no-store, so the row shows even though the overview may be cached.
+  test('fully withdrawn bank deposit disappears from the Investments tab', async ({ page }) => {
+    const tx = await api.createTransaction({
+      asset_type: 'bank',
+      amount_vnd: 10_000_000,
+      investment_date: '2026-01-01',
+      interest_rate: 6,
+      goal_id: goalId,
+      notes: 'E2E TCB Deposit',
+    })
+    try {
+      await page.goto('/dashboard')
+      await page.waitForLoadState('networkidle')
+
+      await page.getByText('E2E Desktop Goal').first().click()
+      const panel = page.getByTestId('desktop-goal-detail')
+      await expect(panel).toBeVisible({ timeout: 10_000 })
+      await expect(panel.getByText('E2E TCB Deposit')).toBeVisible({ timeout: 10_000 })
+
+      // Open the holding's options → Withdraw → withdraw the full balance.
+      // exact: true so we hit the row's "Options" button, not the hero's
+      // "Goal options" (substring matches would pick the hero first).
+      // UI text is localised (the suite may run in Vietnamese), so match both.
+      await panel.getByRole('button', { name: 'Options', exact: true }).first().click()
+      await page.getByText(/^(Withdraw|Rút tiền)$/).click()
+      await page.getByRole('button', { name: /^(All|Tất cả)$/ }).click()
+      await page.getByRole('button', { name: /Confirm withdrawal|Xác nhận rút/i }).click()
+
+      // The fully-withdrawn deposit must no longer be listed.
+      await expect(panel.getByText('E2E TCB Deposit')).toHaveCount(0, { timeout: 15_000 })
+    } finally {
+      // Also removes the withdrawal row created during the test (parent FK is
+      // ON DELETE SET NULL, so it would otherwise linger on the shared goal).
+      await api.deleteTransactionCascade(tx.transaction_id)
+    }
+  })
+
   test('clicking an insurance row while goal detail is open switches to insurance detail', async ({ page }) => {
     // Bug #226: with goal detail open in the right panel, clicking an insurance
     // member did nothing because the panel prioritised the still-selected goal.

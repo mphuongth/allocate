@@ -24,6 +24,10 @@ interface Props {
   item: SellItem | null
   open: boolean
   context: 'unallocated' | 'goal'
+  // When withdrawing from a goal, link the withdrawal to that goal so the
+  // goal-detail fetch (filtered by goal_id) returns it and the holding is
+  // valued net of the withdrawal (issue #261).
+  goalId?: string
   onClose: () => void
   onSuccess: () => void
   // Desktop renders a centered modal dialog; mobile keeps the bottom sheet.
@@ -44,7 +48,7 @@ const TYPE_COLOR = {
   stock: '#7c3aed',
 } as const
 
-export function SellWithdrawSheet({ item, open, context, onClose, onSuccess, desktop }: Props) {
+export function SellWithdrawSheet({ item, open, context, goalId, onClose, onSuccess, desktop }: Props) {
   const locale = useLocale()
   const t = useTranslations('Dashboard')
 
@@ -173,6 +177,10 @@ export function SellWithdrawSheet({ item, open, context, onClose, onSuccess, des
     setError('')
     try {
       const today = new Date().toISOString().slice(0, 10)
+      // Withdrawals from a goal carry that goal's id so the goal-detail view
+      // (which fetches by goal_id) sees them; from the unallocated list there
+      // is no goal to link to (issue #261).
+      const withdrawalGoalId = context === 'goal' ? (goalId ?? null) : null
 
       if (isFund && item.fundId) {
         const principalWithdrawn = item.purchasePrice
@@ -190,7 +198,7 @@ export function SellWithdrawSheet({ item, open, context, onClose, onSuccess, des
             amount_vnd: Math.round(numAmount),
             units_withdrawn: parseFloat(unitsWithdrawn.toFixed(4)),
             principal_withdrawn: principalWithdrawn,
-            goal_id: null,
+            goal_id: withdrawalGoalId,
           }),
         })
         if (!res.ok) {
@@ -209,7 +217,7 @@ export function SellWithdrawSheet({ item, open, context, onClose, onSuccess, des
           // the sold chỉ. Bank: amount = cash received, principal = principal portion.
           amount_vnd: isGold ? goldProceeds : isBank ? Math.round(numReceived) : Math.round(numAmount),
           principal_withdrawn: isGold ? (goldCostSold ?? goldProceeds) : isBank ? bankPrincipalPortion : Math.round(numAmount),
-          goal_id: null,
+          goal_id: withdrawalGoalId,
         }
         if (isGold) {
           body.units_withdrawn = parseFloat(numUnits.toFixed(4))

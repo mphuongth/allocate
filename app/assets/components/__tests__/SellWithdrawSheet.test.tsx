@@ -40,6 +40,53 @@ describe('SellWithdrawSheet — bank withdraw (received + principal portion)', (
   })
 })
 
+describe('SellWithdrawSheet — links the withdrawal to its goal (issue #261)', () => {
+  it('posts goal_id when withdrawing in a goal context', async () => {
+    const fetchMock = vi.fn((_url: string, _init?: RequestInit) =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve({}) }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const item = {
+      type: 'bank' as const, name: 'Techcombank',
+      currentValue: 5_000_000, interestRate: 6,
+      transactionId: 't1', purchasePrice: 5_000_000,
+    }
+    render(<SellWithdrawSheet item={item} open context="goal" goalId="goal-1" onClose={vi.fn()} onSuccess={vi.fn()} />)
+
+    fireEvent.click(screen.getByTestId('sell-all-btn'))
+    fireEvent.click(screen.getByTestId('sell-confirm-btn'))
+
+    await waitFor(() => {
+      const post = fetchMock.mock.calls.find((c) => String(c[0]).includes('/investment-transactions'))
+      const body = JSON.parse(String((post![1] as RequestInit).body))
+      expect(body.goal_id).toBe('goal-1')           // linked so the goal-detail fetch returns it
+      expect(body.parent_transaction_id).toBe('t1')
+    })
+  })
+
+  it('keeps goal_id null in the unallocated context', async () => {
+    const fetchMock = vi.fn((_url: string, _init?: RequestInit) =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve({}) }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const item = {
+      type: 'bank' as const, name: 'Techcombank',
+      currentValue: 5_000_000, interestRate: 6,
+      transactionId: 't1', purchasePrice: 5_000_000,
+    }
+    render(<SellWithdrawSheet item={item} open context="unallocated" onClose={vi.fn()} onSuccess={vi.fn()} />)
+
+    fireEvent.click(screen.getByTestId('sell-all-btn'))
+    fireEvent.click(screen.getByTestId('sell-confirm-btn'))
+
+    await waitFor(() => {
+      const post = fetchMock.mock.calls.find((c) => String(c[0]).includes('/investment-transactions'))
+      const body = JSON.parse(String((post![1] as RequestInit).body))
+      expect(body.goal_id).toBeNull()
+    })
+  })
+})
+
 describe('SellWithdrawSheet — gold sell (quantity × price) (issue #232)', () => {
   it('prefills the price and posts proceeds + cost basis', async () => {
     const fetchMock = vi.fn((_url: string, _init?: RequestInit) =>

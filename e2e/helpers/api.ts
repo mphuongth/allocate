@@ -100,6 +100,15 @@ export async function deleteTransaction(txId: string) {
   await supabase.from('investment_transactions').delete().eq('transaction_id', txId)
 }
 
+// Delete a transaction together with any withdrawal rows that reference it.
+// The parent_transaction_id FK is ON DELETE SET NULL, so withdrawals would
+// otherwise be orphaned (and stay attached to their goal) after the parent
+// is removed.
+export async function deleteTransactionCascade(txId: string) {
+  await supabase.from('investment_transactions').delete().eq('parent_transaction_id', txId)
+  await supabase.from('investment_transactions').delete().eq('transaction_id', txId)
+}
+
 export async function createMonthlyPlan(data: {
   month: number
   year: number
