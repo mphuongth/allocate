@@ -6,11 +6,9 @@ import GoalCard from '../GoalCard'
 vi.mock('next-intl', () => ({ useTranslations: () => (key: string, params?: Record<string, unknown>) => params ? `${key}:${JSON.stringify(params)}` : key }))
 
 const baseProps = {
-  goalId: 'goal-1',
   goalName: 'Emergency Fund',
   targetAmount: 100_000_000,
   currentValue: 60_000_000,
-  totalInvested: 55_000_000,
   profitLoss: 5_000_000,
   profitLossPercentage: 9.09,
   progressPercentage: 60,

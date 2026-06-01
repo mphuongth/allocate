@@ -8,12 +8,6 @@ export const fmtUnits = (n: number) =>
 
 export const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`
 
-export const fmtShort = (n: number) => {
-  if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1) + 'B'
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(0) + 'M'
-  return n.toLocaleString('vi-VN')
-}
-
 // Compact money for dense lists: 15.5M ₫, 350K ₫, 1.2B ₫
 export const fmtCompact = (n: number) => {
   const abs = Math.abs(n)

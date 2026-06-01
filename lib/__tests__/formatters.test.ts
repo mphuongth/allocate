@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { fmt, fmtNav, fmtUnits, fmtPct, fmtShort } from '../formatters'
+import { fmt, fmtNav, fmtUnits, fmtPct } from '../formatters'
 
 describe('fmt', () => {
   it('formats whole VND amounts with vi-VN thousands separator', () => {
@@ -61,21 +61,5 @@ describe('fmtPct', () => {
   })
   it('always shows 2 decimal places', () => {
     expect(fmtPct(1)).toBe('+1.00%')
-  })
-})
-
-describe('fmtShort', () => {
-  it('formats billions with 1 decimal and B suffix', () => {
-    expect(fmtShort(1_500_000_000)).toBe('1.5B')
-    expect(fmtShort(1_000_000_000)).toBe('1.0B')
-  })
-  it('formats millions with 0 decimals and M suffix (rounds)', () => {
-    expect(fmtShort(2_000_000)).toBe('2M')
-    expect(fmtShort(2_500_000)).toBe('3M') // .toFixed(0) rounds up at .5
-    expect(fmtShort(1_000_000)).toBe('1M')
-  })
-  it('formats values below 1M using vi-VN locale', () => {
-    expect(fmtShort(500_000)).toBe('500.000')
-    expect(fmtShort(999)).toBe('999')
   })
 })

@@ -4,11 +4,9 @@ import { useTranslations } from 'next-intl'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 
 interface Props {
-  goalId: string
   goalName: string
   targetAmount: number | null
   currentValue: number
-  totalInvested: number
   profitLoss: number
   profitLossPercentage: number
   progressPercentage: number | null
