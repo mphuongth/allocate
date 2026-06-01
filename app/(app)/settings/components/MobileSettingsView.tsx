@@ -13,6 +13,7 @@ import { toast } from 'sonner'
 import { useNavigation } from '@/app/components/navigation/NavigationContext'
 import DownloadReportSheet from '@/app/assets/components/DownloadReportSheet'
 import type { DashboardData } from '@/app/assets/DashboardClient'
+import { clearAppCaches, setLocaleCookie, refreshPrices, fetchOverview, exportPortfolioReport } from '../settingsShared'
 
 interface Props {
   email: string
@@ -391,21 +392,14 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
   }, [isVI, setMobileTopBar])
 
   function switchLocale(next: string) {
-    document.cookie = `locale=${next};path=/;max-age=31536000;SameSite=Lax`
+    setLocaleCookie(next)
     startTransition(() => router.refresh())
   }
 
   async function handleSync() {
     setSyncing(true)
     setSyncDone(false)
-    try {
-      await Promise.all([
-        fetch('/api/cron/refresh-navs'),
-        fetch('/api/cron/refresh-gold'),
-      ])
-    } catch {
-      // ignore
-    }
+    await refreshPrices()
     setSyncing(false)
     setSyncDone(true)
     setLastSync(isVI ? 'Vừa xong' : 'Just now')
@@ -414,21 +408,11 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
 
   function handleOpenReport() {
     setShowReport(true)
-    fetch('/api/v1/dashboard/overview', { cache: 'no-store' })
-      .then(r => r.ok ? r.json() : null)
-      .then((json: DashboardData | null) => { if (json) setOverviewCache(json) })
-      .catch(() => {})
+    fetchOverview().then((json) => { if (json) setOverviewCache(json) })
   }
 
   async function handleExportReport() {
-    let data = overviewCache
-    if (!data) {
-      const res = await fetch('/api/v1/dashboard/overview', { cache: 'no-store' })
-      if (!res.ok) throw new Error('Failed to load portfolio data')
-      data = await res.json()
-    }
-    const { downloadPortfolioPDF } = await import('@/lib/generateReport')
-    await downloadPortfolioPDF(data!, locale)
+    await exportPortfolioReport(overviewCache, locale)
   }
 
   async function handleSignOut() {
@@ -436,16 +420,7 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
     if (error) {
       toast.error(isVI ? 'Đăng xuất thất bại' : 'Sign out failed')
     } else {
-      Object.keys(localStorage)
-        .filter(k =>
-          k.startsWith('dashboardOverviewCache') ||
-          k.startsWith('planningCache_') ||
-          k.startsWith('savingsGoalsCache') ||
-          k.startsWith('fixedExpensesCache') ||
-          k.startsWith('insuranceMembersCache') ||
-          k.startsWith('fundLibraryCache')
-        )
-        .forEach(k => localStorage.removeItem(k))
+      clearAppCaches()
       router.push('/auth/login')
     }
   }
