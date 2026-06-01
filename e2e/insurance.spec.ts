@@ -31,8 +31,16 @@ test('can add an insurance member', async ({ page }) => {
 
   await page.locator('#annual_payment_vnd').fill('12000000')
 
-  await page.getByRole('dialog').getByRole('button', { name: /save|add|lưu/i }).click()
-  await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 5_000 })
+  // Tie the dialog-close assertion to the actual create request so a slow
+  // shared DB (parallel CI shards) can't trip a fixed timeout.
+  await Promise.all([
+    page.waitForResponse(
+      r => r.url().includes('/api/v1/insurance-members') && r.request().method() === 'POST' && r.status() < 400,
+      { timeout: 20_000 }
+    ),
+    page.getByRole('dialog').getByRole('button', { name: /save|add|lưu/i }).click(),
+  ])
+  await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 10_000 })
 
   // Scope to table row (avoids hidden sm:hidden mobile cards)
   const memberRow = page.locator('tr').filter({ hasText: 'E2E Insurance Member' }).first()
@@ -65,8 +73,14 @@ test('can edit insurance member annual premium', async ({ page }) => {
   await annualInput.clear()
   await annualInput.fill('24000000')
 
-  await page.getByRole('button', { name: /save|lưu/i }).click()
-  await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 5_000 })
+  await Promise.all([
+    page.waitForResponse(
+      r => r.url().includes('/api/v1/insurance-members/') && r.request().method() === 'PUT' && r.status() < 400,
+      { timeout: 20_000 }
+    ),
+    page.getByRole('button', { name: /save|lưu/i }).click(),
+  ])
+  await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 10_000 })
 
   // Monthly should now be 24,000,000 / 12 = 2,000,000
   const updatedRow = page.locator('tr').filter({ hasText: 'E2E Edit Insurance' }).first()

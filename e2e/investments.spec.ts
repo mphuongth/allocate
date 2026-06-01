@@ -13,9 +13,11 @@ async function openTransactionsTab(page: import('@playwright/test').Page) {
   await page.evaluate(() => {
     Object.keys(localStorage).filter(k => k.includes('transaction') || k.includes('Transaction')).forEach(k => localStorage.removeItem(k))
   })
-  // Wait for the API response to ensure the table is populated before any assertion
+  // Wait for the API response to ensure the table is populated before any
+  // assertion. Generous timeout + ok() (any 2xx) keeps this robust when the
+  // shared test DB is under concurrent load from parallel CI shards.
   await Promise.all([
-    page.waitForResponse(r => r.url().includes('/api/v1/investment-transactions') && r.status() === 200, { timeout: 20_000 }),
+    page.waitForResponse(r => r.url().includes('/api/v1/investment-transactions') && r.ok(), { timeout: 30_000 }),
     page.goto('/settings?tab=transactions'),
   ])
   await page.waitForSelector('[data-testid="create-btn"]', { timeout: 15_000 })
