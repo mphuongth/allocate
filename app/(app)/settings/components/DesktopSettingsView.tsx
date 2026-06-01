@@ -13,6 +13,7 @@ import {
 import { toast } from 'sonner'
 import DownloadReportSheet from '@/app/assets/components/DownloadReportSheet'
 import type { DashboardData } from '@/app/assets/DashboardClient'
+import { clearAppCaches, setLocaleCookie, refreshPrices, fetchOverview, exportPortfolioReport } from '../settingsShared'
 
 interface Props {
   email: string
@@ -149,7 +150,9 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
     return (v === 'light' || v === 'dark') ? v : 'system'
   }
   const [selectedTheme, setSelectedTheme] = useState<ThemeChoice>(currentTheme)
-  useEffect(() => { setSelectedTheme(storedTheme()) }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  // Sync to the persisted theme after mount (kept in an effect to avoid an SSR
+  // hydration mismatch; both lint rules below are intentional for that reason).
+  useEffect(() => { setSelectedTheme(storedTheme()) }, []) // eslint-disable-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
 
   // Price sync
   const [syncing, setSyncing] = useState(false)
@@ -163,7 +166,7 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
   const isVI = locale === 'vi'
 
   function switchLocale(next: string) {
-    document.cookie = `locale=${next};path=/;max-age=31536000;SameSite=Lax`
+    setLocaleCookie(next)
     startTransition(() => router.refresh())
   }
 
@@ -175,14 +178,7 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
   async function handleSync() {
     setSyncing(true)
     setSyncDone(false)
-    try {
-      await Promise.all([
-        fetch('/api/cron/refresh-navs'),
-        fetch('/api/cron/refresh-gold'),
-      ])
-    } catch {
-      // ignore
-    }
+    await refreshPrices()
     setSyncing(false)
     setSyncDone(true)
     setLastSync(isVI ? 'Vừa xong' : 'Just now')
@@ -191,21 +187,11 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
 
   function handleOpenReport() {
     setShowReport(true)
-    fetch('/api/v1/dashboard/overview', { cache: 'no-store' })
-      .then(r => r.ok ? r.json() : null)
-      .then((json: DashboardData | null) => { if (json) setOverviewCache(json) })
-      .catch(() => {})
+    fetchOverview().then((json) => { if (json) setOverviewCache(json) })
   }
 
   async function handleExportReport() {
-    let data = overviewCache
-    if (!data) {
-      const res = await fetch('/api/v1/dashboard/overview', { cache: 'no-store' })
-      if (!res.ok) throw new Error('Failed to load portfolio data')
-      data = await res.json()
-    }
-    const { downloadPortfolioPDF } = await import('@/lib/generateReport')
-    await downloadPortfolioPDF(data!, locale)
+    await exportPortfolioReport(overviewCache, locale)
   }
 
   function handleOpenProfile() {
@@ -227,16 +213,7 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
     if (error) {
       toast.error(isVI ? 'Đăng xuất thất bại' : 'Sign out failed')
     } else {
-      Object.keys(localStorage)
-        .filter(k =>
-          k.startsWith('dashboardOverviewCache') ||
-          k.startsWith('planningCache_') ||
-          k.startsWith('savingsGoalsCache') ||
-          k.startsWith('fixedExpensesCache') ||
-          k.startsWith('insuranceMembersCache') ||
-          k.startsWith('fundLibraryCache')
-        )
-        .forEach(k => localStorage.removeItem(k))
+      clearAppCaches()
       router.push('/auth/login')
     }
   }
