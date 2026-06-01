@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Shield, Plus, AlertTriangle } from 'lucide-react'
 import { fmtCompact } from '@/lib/formatters'
-import { insurancePaidYear } from '@/lib/finance'
+import { STATUS_COLOR, BAR_COLOR, insurancePaidState, insuranceStatusLabel } from './insuranceShared'
 import type { InsuranceData } from '../DashboardClient'
 
 interface Props {
@@ -16,22 +16,6 @@ interface Props {
 
 const DISMISS_KEY = 'cairn.insuranceCoachDismissed'
 
-const STATUS_COLOR: Record<string, string> = {
-  on_track:  'var(--c-muted)',
-  upcoming:  'var(--c-warn)',
-  overdue:   'var(--c-neg)',
-  completed: 'var(--c-pos)',
-  ready:     'var(--c-navy)',
-}
-
-const BAR_COLOR: Record<string, string> = {
-  on_track:  'var(--c-warn)',
-  upcoming:  'var(--c-warn)',
-  overdue:   'var(--c-neg)',
-  completed: 'var(--c-pos)',
-  ready:     'var(--c-warn)',
-}
-
 export default function DesktopInsuranceList({ insurance, locale, goalCount, onOpen, onAdd }: Props) {
   const isVi = locale === 'vi'
   const isEmpty = insurance.length === 0
@@ -42,12 +26,6 @@ export default function DesktopInsuranceList({ insurance, locale, goalCount, onO
   function dismissCoach() {
     setCoachDismissed(true)
     try { localStorage.setItem(DISMISS_KEY, '1') } catch { /* ignore */ }
-  }
-
-  function statusLabel(s: string) {
-    return isVi
-      ? ({ on_track: 'Chưa đến hạn', completed: 'Đã thanh toán', overdue: 'Quá hạn', upcoming: 'Sắp đến hạn', ready: 'Đã tích lũy đủ' } as Record<string, string>)[s] ?? s
-      : ({ on_track: 'Not due', completed: 'Paid', overdue: 'Overdue', upcoming: 'Due soon', ready: 'Ready to pay' } as Record<string, string>)[s] ?? s
   }
 
   return (
@@ -147,14 +125,13 @@ export default function DesktopInsuranceList({ insurance, locale, goalCount, onO
 
       {/* Rows */}
       {insurance.map((ins, i) => {
-        const paidYear = insurancePaidYear(ins.lastPaymentDate)
-        const effectiveStatus = paidYear !== null ? 'completed' : ins.status
+        const { paidYear, effectiveStatus } = insurancePaidState(ins.status, ins.lastPaymentDate)
         const dotColor = STATUS_COLOR[effectiveStatus] ?? 'var(--c-muted)'
         const barColor = BAR_COLOR[effectiveStatus] ?? 'var(--c-warn)'
         const progress = Math.min(ins.savingsProgressPercentage, 100)
         const rowLabel = paidYear !== null
           ? (isVi ? `Đã thanh toán ${paidYear}` : `Paid for ${paidYear}`)
-          : statusLabel(ins.status)
+          : insuranceStatusLabel(ins.status, isVi)
         const isLast = i === insurance.length - 1
 
         return (

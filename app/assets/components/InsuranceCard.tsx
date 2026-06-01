@@ -3,7 +3,7 @@
 import { Shield, ChevronRight } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { fmtCompact } from '@/lib/formatters'
-import { insurancePaidYear } from '@/lib/finance'
+import { STATUS_COLOR, BAR_COLOR, insurancePaidState } from './insuranceShared'
 
 interface Props {
   insuranceId: string
@@ -18,30 +18,13 @@ interface Props {
   onClick?: () => void
 }
 
-const STATUS_COLOR: Record<string, string> = {
-  on_track:  'var(--c-muted)',
-  upcoming:  'var(--c-warn)',
-  overdue:   'var(--c-neg)',
-  completed: 'var(--c-pos)',
-  ready:     'var(--c-navy)',
-}
-
-const BAR_COLOR: Record<string, string> = {
-  on_track:  'var(--c-warn)',
-  upcoming:  'var(--c-warn)',
-  overdue:   'var(--c-neg)',
-  completed: 'var(--c-pos)',
-  ready:     'var(--c-warn)',
-}
-
 export default function InsuranceCard({
   insuranceName, coverageType, annualPremium, amountSaved,
   savingsProgressPercentage, status, lastPaymentDate, isLast, onClick,
 }: Props) {
   const t = useTranslations('dashboard')
 
-  const paidYear = insurancePaidYear(lastPaymentDate ?? null)
-  const effectiveStatus = paidYear !== null ? 'completed' : status
+  const { paidYear, effectiveStatus } = insurancePaidState(status, lastPaymentDate)
   const dotColor = STATUS_COLOR[effectiveStatus] ?? 'var(--c-muted)'
   const bar = BAR_COLOR[effectiveStatus] ?? 'var(--c-warn)'
   const progress = Math.min(savingsProgressPercentage, 100)

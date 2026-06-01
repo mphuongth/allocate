@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Check, ChevronLeft, Edit2, Plus, Trash2, Calendar, X } from 'lucide-react'
 import { fmt, fmtCompact } from '@/lib/formatters'
-import { insurancePaidYear } from '@/lib/finance'
+import { STATUS_COLOR, BAR_COLOR_DETAIL, insurancePaidState, insuranceStatusLabel } from './insuranceShared'
 import type { InsuranceData } from '../DashboardClient'
 import LogInsurancePaymentModal from './LogInsurancePaymentModal'
 
@@ -12,22 +12,6 @@ interface Props {
   locale: string
   onClose: () => void
   onChanged?: () => void
-}
-
-const STATUS_COLOR: Record<string, string> = {
-  on_track: 'var(--c-muted)',
-  upcoming: 'var(--c-warn)',
-  overdue: 'var(--c-neg)',
-  completed: 'var(--c-pos)',
-  ready: 'var(--c-navy)',
-}
-
-const BAR_COLOR: Record<string, string> = {
-  on_track: 'var(--c-warn)',
-  upcoming: 'var(--c-warn)',
-  overdue: 'var(--c-neg)',
-  completed: 'var(--c-pos)',
-  ready: 'var(--c-navy)',
 }
 
 const COVERAGE_OPTIONS: { value: string; label: string; labelVi: string }[] = [
@@ -58,10 +42,9 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
   // Once the current year's premium is settled, the member presents a "paid"
   // state (green badge + saving-for-next-year framing) regardless of the
   // recomputed due-date status.
-  const paidYear = insurancePaidYear(ins.lastPaymentDate)
+  const { paidYear, effectiveStatus } = insurancePaidState(ins.status, ins.lastPaymentDate)
   const paidThisYear = paidYear !== null
-  const effectiveStatus = paidThisYear ? 'completed' : ins.status
-  const barColor = BAR_COLOR[effectiveStatus] ?? 'var(--c-warn)'
+  const barColor = BAR_COLOR_DETAIL[effectiveStatus] ?? 'var(--c-warn)'
   const dotColor = STATUS_COLOR[effectiveStatus] ?? 'var(--c-muted)'
 
   const [editing, setEditing] = useState(false)
@@ -110,12 +93,6 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
   }, [ins.insuranceId])
 
   useEffect(() => { loadHistory() }, [loadHistory])
-
-  function statusLabel(s: string) {
-    return isVi
-      ? ({ on_track: 'Chưa đến hạn', completed: 'Đã thanh toán', overdue: 'Quá hạn', upcoming: 'Sắp đến hạn', ready: 'Đã tích lũy đủ' } as Record<string, string>)[s] ?? s
-      : ({ on_track: 'Not due', completed: 'Paid', overdue: 'Overdue', upcoming: 'Due soon', ready: 'Ready to pay' } as Record<string, string>)[s] ?? s
-  }
 
   // Two independent actions:
   // - "Mark as paid" (shown until the year's premium is settled) → confirm the
@@ -287,7 +264,7 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
                 <span style={{ fontSize: 11, fontWeight: 600, color: dotColor }}>
                   {paidThisYear
                     ? (isVi ? `Đã thanh toán ${paidYear}` : `Paid for ${paidYear}`)
-                    : statusLabel(ins.status)}
+                    : insuranceStatusLabel(ins.status, isVi)}
                 </span>
               </div>
             </div>
