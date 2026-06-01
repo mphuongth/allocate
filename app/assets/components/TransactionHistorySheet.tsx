@@ -183,6 +183,11 @@ export default function TransactionHistorySheet({
               const amountPaid = row.units != null && row.nav_at_purchase != null
                 ? Math.round(row.units * row.nav_at_purchase)
                 : null
+              // Parse the plain YYYY-MM-DD as a local date so the displayed day
+              // never shifts a month/year for users behind UTC (new Date(str)
+              // would read it as UTC midnight).
+              const [py, pm, pd] = row.purchase_date.slice(0, 10).split('-').map(Number)
+              const purchaseDate = new Date(py, (pm ?? 1) - 1, pd ?? 1)
               return (
                 <div
                   key={i}
@@ -204,7 +209,7 @@ export default function TransactionHistorySheet({
                       {isVI ? 'Mua' : 'Buy'}
                     </div>
                     <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>
-                      {new Date(row.purchase_date).toLocaleDateString(isVI ? 'vi-VN' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      {purchaseDate.toLocaleDateString(isVI ? 'vi-VN' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
                       {row.units != null && <>{' · '}{fmtUnits(row.units)} {isVI ? 'CCQ' : 'units'}</>}
                     </div>
                   </div>
