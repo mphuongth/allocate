@@ -57,6 +57,7 @@ export interface GoalDetailTx {
   transaction_type: string
   asset_type: string
   fund_id: string | null
+  parent_transaction_id: string | null
   investment_date: string
   amount_vnd: number
   units: number | null
@@ -68,15 +69,33 @@ export interface GoalDetailTx {
 
 // Dedup to one row per fund / per non-fund tx, then value each holding:
 // funds at their current value, bank deposits at compounded interest, gold at
-// the live price per chỉ net of any partial withdrawal (issue #251), and
-// everything else at cost. Returns rows unfiltered — callers apply their own
-// optimistic unassign filter.
+// the live price per chỉ, and everything else at cost — each net of any
+// partial withdrawals (issues #251, #261). Holdings that have been fully
+// withdrawn / sold are dropped so they no longer appear on the investment tab.
+// Returns rows otherwise unfiltered — callers apply their own optimistic
+// unassign filter.
 export function buildInvRows(
   transactions: GoalDetailTx[],
   funds: FundBreakdownItem[],
   goldPricePerChi: number | null,
   isVi: boolean,
 ): InvRow[] {
+  // Aggregate withdrawals onto their parent holding. Bank/gold withdrawals are
+  // stored as separate `withdrawal` rows linked via parent_transaction_id, so
+  // the parent investment row itself carries no withdrawn amounts — without
+  // this a withdrawn deposit would still show at full value (issue #261). All
+  // withdrawals count here (regardless of affects_progress): the tab shows what
+  // is actually still held.
+  const wdByParent = new Map<string, { principal: number; units: number }>()
+  for (const tx of transactions) {
+    if (tx.transaction_type === 'withdrawal' && tx.parent_transaction_id) {
+      const e = wdByParent.get(tx.parent_transaction_id) ?? { principal: 0, units: 0 }
+      e.principal += tx.principal_withdrawn ?? 0
+      e.units += tx.units_withdrawn ?? 0
+      wdByParent.set(tx.parent_transaction_id, e)
+    }
+  }
+
   const investmentRows = transactions.filter((tx) => tx.transaction_type !== 'withdrawal')
   const deduped = new Map<string, GoalDetailTx>()
   investmentRows.forEach((tx) => {
@@ -88,7 +107,7 @@ export function buildInvRows(
   })
   const fundMap = new Map(funds.map((f) => [f.fundId, f]))
 
-  return Array.from(deduped.values()).map((tx) => {
+  return Array.from(deduped.values()).map((tx): InvRow | null => {
     const fund = tx.fund_id ? fundMap.get(tx.fund_id) ?? null : null
     const name = fund?.fundName ?? tx.notes ?? (
       tx.asset_type === 'bank' ? (isVi ? 'Tiền gửi' : 'Bank deposit') :
@@ -101,28 +120,36 @@ export function buildInvRows(
       gainPct = fund.profitLossPercentage
       units = fund.quantity
       principal = null
-    } else if (tx.asset_type === 'bank' && tx.interest_rate) {
-      const months = Math.max(0, Math.floor(
-        (Date.now() - new Date(tx.investment_date).getTime()) / (1000 * 60 * 60 * 24 * 30.44)
-      ))
-      value = Math.round(tx.amount_vnd * Math.pow(1 + tx.interest_rate / 100 / 12, months))
-      gainPct = tx.amount_vnd > 0 ? ((value - tx.amount_vnd) / tx.amount_vnd) * 100 : 0
-      units = null
-      principal = tx.amount_vnd
-    } else if (tx.asset_type === 'gold' && goldPricePerChi && tx.units) {
-      const effectiveUnits = tx.units - (tx.units_withdrawn ?? 0)
-      const effectivePrincipal = tx.amount_vnd - (tx.principal_withdrawn ?? 0)
-      value = effectiveUnits * goldPricePerChi
-      gainPct = effectivePrincipal > 0 ? ((value - effectivePrincipal) / effectivePrincipal) * 100 : null
-      units = effectiveUnits
-      principal = effectivePrincipal
     } else {
-      value = tx.amount_vnd
-      gainPct = null
-      units = tx.units
-      principal = tx.amount_vnd
+      const wd = wdByParent.get(tx.transaction_id)
+      const effectivePrincipal = tx.amount_vnd - (wd?.principal ?? 0)
+
+      if (tx.asset_type === 'gold' && goldPricePerChi && tx.units) {
+        const effectiveUnits = tx.units - (wd?.units ?? 0)
+        if (effectiveUnits <= 0) return null // fully sold
+        value = effectiveUnits * goldPricePerChi
+        gainPct = effectivePrincipal > 0 ? ((value - effectivePrincipal) / effectivePrincipal) * 100 : null
+        units = effectiveUnits
+        principal = effectivePrincipal
+      } else {
+        if (effectivePrincipal <= 0) return null // fully withdrawn
+        if (tx.asset_type === 'bank' && tx.interest_rate) {
+          const months = Math.max(0, Math.floor(
+            (Date.now() - new Date(tx.investment_date).getTime()) / (1000 * 60 * 60 * 24 * 30.44)
+          ))
+          value = Math.round(effectivePrincipal * Math.pow(1 + tx.interest_rate / 100 / 12, months))
+          gainPct = ((value - effectivePrincipal) / effectivePrincipal) * 100
+          units = null
+          principal = effectivePrincipal
+        } else {
+          value = effectivePrincipal
+          gainPct = null
+          units = tx.units
+          principal = effectivePrincipal
+        }
+      }
     }
 
     return { id: tx.transaction_id, name, type: tx.asset_type, value, gainPct, units, principal, interestRate: tx.interest_rate ?? null, fund: fund ?? null }
-  })
+  }).filter((row): row is InvRow => row !== null)
 }

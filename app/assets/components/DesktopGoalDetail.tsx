@@ -12,6 +12,7 @@ interface InvestmentTx {
   asset_type: string
   fund_id: string | null
   fund_name: string | null
+  parent_transaction_id: string | null
   investment_date: string
   amount_vnd: number
   units: number | null
@@ -533,6 +534,7 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
         <SellModal
           inv={actionInv}
           isVi={isVi}
+          goalId={goal.goalId}
           onClose={() => setShowSell(false)}
           onSuccess={() => {
             setShowSell(false)
@@ -673,8 +675,8 @@ function UnassignConfirmModal({ inv, unassigning, isVi, onCancel, onConfirm }: {
 }
 
 // ─── Desktop sell / withdraw modal ────────────────────────────────────────
-function SellModal({ inv, isVi, onClose, onSuccess }: {
-  inv: InvRow; isVi: boolean; onClose: () => void; onSuccess: () => void
+function SellModal({ inv, isVi, goalId, onClose, onSuccess }: {
+  inv: InvRow; isVi: boolean; goalId: string; onClose: () => void; onSuccess: () => void
 }) {
   const isFund = inv.type === 'fund'
   const isGold = inv.type === 'gold'
@@ -773,7 +775,7 @@ function SellModal({ inv, isVi, onClose, onSuccess }: {
             fund_id: inv.fund.fundId, investment_date: today,
             amount_vnd: Math.round(numAmount),
             units_withdrawn: parseFloat(unitsWithdrawn.toFixed(4)),
-            principal_withdrawn: principalWithdrawn, goal_id: null,
+            principal_withdrawn: principalWithdrawn, goal_id: goalId,
           }),
         })
         if (!res.ok) { const { error: e } = await res.json(); setError(e ?? (isVi ? 'Không thể xử lý' : 'Could not process')); setSaving(false); return }
@@ -785,7 +787,7 @@ function SellModal({ inv, isVi, onClose, onSuccess }: {
           // Bank: amount = cash received, principal = principal portion.
           amount_vnd: isGold ? goldProceeds : isBank ? Math.round(numReceived) : Math.round(numAmount),
           principal_withdrawn: isGold ? (goldCostSold ?? goldProceeds) : isBank ? bankPrincipalPortion : Math.round(numAmount),
-          goal_id: null,
+          goal_id: goalId,
         }
         if (isGold) body.units_withdrawn = parseFloat(numUnits.toFixed(4))
         const res = await fetch('/api/v1/investment-transactions', {

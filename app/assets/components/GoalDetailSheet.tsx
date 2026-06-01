@@ -19,6 +19,7 @@ interface InvestmentTx {
   fund_id: string | null
   fund_name: string | null
   fund_code: string | null
+  parent_transaction_id: string | null
   investment_date: string
   amount_vnd: number
   units: number | null
@@ -1207,6 +1208,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
         open={sellOpen}
         item={actionInv ? invToSellItem(actionInv) : null}
         context="goal"
+        goalId={goal.goalId}
         onClose={() => setSellOpen(false)}
         onSuccess={() => {
           setSellOpen(false)

@@ -6,6 +6,7 @@ const baseTx = (over: Partial<GoalDetailTx>): GoalDetailTx => ({
   transaction_id: 't', transaction_type: 'investment', asset_type: 'gold',
   fund_id: null, investment_date: '2026-01-01', amount_vnd: 0, units: null,
   interest_rate: null, notes: null, principal_withdrawn: null, units_withdrawn: null,
+  parent_transaction_id: null,
   ...over,
 })
 
@@ -68,6 +69,56 @@ describe('buildInvRows', () => {
     )
     expect(rows).toHaveLength(1)
     expect(rows[0].id).toBe('g1')
+  })
+
+  it('nets a partial bank withdrawal against principal (issue #261)', () => {
+    const rows = buildInvRows(
+      [
+        baseTx({ transaction_id: 'b1', asset_type: 'bank', amount_vnd: 10_000_000, interest_rate: 0 }),
+        baseTx({ transaction_id: 'w1', transaction_type: 'withdrawal', asset_type: 'bank', parent_transaction_id: 'b1', amount_vnd: 4_000_000, principal_withdrawn: 4_000_000 }),
+      ],
+      [], null, false,
+    )
+    expect(rows).toHaveLength(1)
+    expect(rows[0].id).toBe('b1')
+    expect(rows[0].principal).toBe(6_000_000)
+    expect(rows[0].value).toBe(6_000_000)
+  })
+
+  it('drops a fully-withdrawn bank deposit (issue #261)', () => {
+    const rows = buildInvRows(
+      [
+        baseTx({ transaction_id: 'b1', asset_type: 'bank', amount_vnd: 10_000_000, interest_rate: 6 }),
+        baseTx({ transaction_id: 'w1', transaction_type: 'withdrawal', asset_type: 'bank', parent_transaction_id: 'b1', amount_vnd: 10_500_000, principal_withdrawn: 10_000_000 }),
+      ],
+      [], null, false,
+    )
+    expect(rows).toHaveLength(0)
+  })
+
+  it('nets a partial gold sale from a withdrawal row (issue #261)', () => {
+    const rows = buildInvRows(
+      [
+        baseTx({ transaction_id: 'g1', asset_type: 'gold', amount_vnd: 18_000_000, units: 2 }),
+        baseTx({ transaction_id: 'w1', transaction_type: 'withdrawal', asset_type: 'gold', parent_transaction_id: 'g1', amount_vnd: 9_200_000, units_withdrawn: 1, principal_withdrawn: 9_000_000 }),
+      ],
+      [], 9_200_000, false,
+    )
+    expect(rows).toHaveLength(1)
+    expect(rows[0].units).toBe(1)
+    expect(rows[0].value).toBe(9_200_000)     // 1 chỉ left × current price
+    expect(rows[0].principal).toBe(9_000_000) // remaining cost basis
+  })
+
+  it('drops a fully-sold gold holding (issue #261)', () => {
+    const rows = buildInvRows(
+      [
+        baseTx({ transaction_id: 'g1', asset_type: 'gold', amount_vnd: 9_000_000, units: 1 }),
+        baseTx({ transaction_id: 'w1', transaction_type: 'withdrawal', asset_type: 'gold', parent_transaction_id: 'g1', amount_vnd: 9_200_000, units_withdrawn: 1, principal_withdrawn: 9_000_000 }),
+      ],
+      [], 9_200_000, false,
+    )
+    expect(rows).toHaveLength(0)
   })
 
   it('localises bank/gold names when isVi', () => {

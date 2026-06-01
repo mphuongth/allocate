@@ -67,3 +67,55 @@ describe('DesktopGoalDetail — gold sell uses current price (issue #251)', () =
     await waitFor(() => expect((priceInput as HTMLInputElement).value).toBe('9200000'))
   })
 })
+
+describe('DesktopGoalDetail — bank withdrawal links to the goal (issue #261)', () => {
+  const mockBankTx = {
+    transaction_id: 'tx-bank-1',
+    transaction_type: 'investment',
+    asset_type: 'bank',
+    fund_id: null,
+    fund_name: null,
+    parent_transaction_id: null,
+    investment_date: '2026-01-01',
+    amount_vnd: 10_000_000,
+    units: null,
+    interest_rate: 6,
+    notes: 'Techcombank',
+    principal_withdrawn: null,
+    units_withdrawn: null,
+  }
+
+  let postBody: Record<string, unknown> | null
+
+  beforeEach(() => {
+    postBody = null
+    global.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (url.includes('investment-transactions') && init?.method === 'POST') {
+        postBody = JSON.parse(String(init.body))
+        return Promise.resolve({ ok: true, json: async () => ({}) })
+      }
+      if (url.includes('investment-transactions')) {
+        return Promise.resolve({ ok: true, json: async () => ({ transactions: [mockBankTx] }) })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+  })
+
+  it('posts the withdrawal with the goal_id so it is no longer shown at full value', async () => {
+    render(<DesktopGoalDetail {...baseProps} />)
+    await waitFor(() => screen.getByText('Techcombank'))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Options' }))
+    await waitFor(() => expect(screen.getByText('Withdraw')).toBeInTheDocument())
+    await userEvent.click(screen.getByText('Withdraw'))
+
+    // Fill the full balance, then confirm the withdrawal.
+    await userEvent.click(await screen.findByRole('button', { name: 'All' }))
+    await userEvent.click(await screen.findByRole('button', { name: /Confirm withdrawal/i }))
+
+    await waitFor(() => expect(postBody).not.toBeNull())
+    expect(postBody!.transaction_type).toBe('withdrawal')
+    expect(postBody!.parent_transaction_id).toBe('tx-bank-1')
+    expect(postBody!.goal_id).toBe('goal-1')
+  })
+})
