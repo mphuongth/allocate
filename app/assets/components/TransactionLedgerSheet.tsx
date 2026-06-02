@@ -418,11 +418,11 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
                 <div style={{ display: 'grid', gap: 8 }}>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <select value={filters.asset_type} onChange={(e) => setSelectFilter('asset_type', e.target.value)} className="cn-input" style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}>
-                      <option value="">{t('filterAll')}</option>
+                      <option value="">{t('filterAllAssets')}</option>
                       {ASSET_TYPES.map((v) => <option key={v} value={v}>{assetLabelOf(v)}</option>)}
                     </select>
                     <select value={filters.goal_id} onChange={(e) => setSelectFilter('goal_id', e.target.value)} className="cn-input" style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}>
-                      <option value="">{t('allGoals')}</option>
+                      <option value="">{t('filterAllGoals')}</option>
                       <option value="unassigned">{t('noGoal')}</option>
                       {goals.map((g) => <option key={g.goal_id} value={g.goal_id}>{g.goal_name}</option>)}
                     </select>

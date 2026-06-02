@@ -271,6 +271,8 @@
     "lblAsset": "Tài sản",
     "lblFrom": "Từ",
     "lblTo": "Đến",
+    "filterAllAssets": "Mọi tài sản",
+    "filterAllGoals": "Mọi mục tiêu",
     "noMatch": "Không có giao dịch khớp bộ lọc.",
     "empty": "Chưa có giao dịch đầu tư nào.",
     "colDate": "Ngày",
