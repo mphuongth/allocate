@@ -94,3 +94,37 @@ test.describe('Recent activity — rendered row', () => {
     await expect(row).toContainText(/7\.7M/)
   })
 })
+
+// ─── Ledger CRUD: delete from "View all" ─────────────────────────────────────
+// Replaces the legacy Settings-tab delete test now that the tab is removed.
+// Default viewport is desktop, so the ledger opens as the desktop table modal.
+
+test.describe('Recent activity — delete from ledger', () => {
+  const NOTE = 'E2E Ledger Delete'
+
+  test.beforeEach(async () => { await api.deleteAllTransactionsByNotes(NOTE) })
+  test.afterEach(async () => { await api.deleteAllTransactionsByNotes(NOTE) })
+
+  test('a transaction can be deleted from the View all ledger', async ({ page }) => {
+    await api.createTransaction({
+      asset_type: 'bank',
+      amount_vnd: 3_210_000,
+      investment_date: new Date().toISOString().slice(0, 10),
+      notes: NOTE,
+    })
+
+    await page.goto('/dashboard')
+    await page.waitForLoadState('networkidle')
+
+    await page.getByTestId('recent-activity-view-all').click()
+    await expect(page.getByTestId('tx-ledger')).toBeVisible({ timeout: 5_000 })
+
+    const row = page.getByTestId('tx-ledger-row').filter({ hasText: NOTE })
+    await expect(row).toBeVisible({ timeout: 10_000 })
+
+    await row.getByTestId('tx-ledger-delete').click()
+    await page.getByTestId('tx-ledger-delete-confirm').click()
+
+    await expect(page.getByTestId('tx-ledger-row').filter({ hasText: NOTE })).toHaveCount(0, { timeout: 10_000 })
+  })
+})

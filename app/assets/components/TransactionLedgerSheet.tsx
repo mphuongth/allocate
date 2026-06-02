@@ -361,7 +361,7 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
       {!isWithdrawal(tx) && (
         <button onClick={() => (tx.asset_type === 'stock' ? openEdit(tx) : setEditExisting(tx))} className="cn-btn ghost" style={{ padding: 5 }} aria-label={tc('edit')}><Edit2 size={14} color="var(--c-muted)" /></button>
       )}
-      <button onClick={() => setConfirmTx(tx)} className="cn-btn ghost" style={{ padding: 5 }} aria-label={tc('delete')}><Trash size={14} color="var(--c-neg)" /></button>
+      <button data-testid="tx-ledger-delete" onClick={() => setConfirmTx(tx)} className="cn-btn ghost" style={{ padding: 5 }} aria-label={tc('delete')}><Trash size={14} color="var(--c-neg)" /></button>
     </span>
   )
 
@@ -473,7 +473,7 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
                     </thead>
                     <tbody>
                       {transactions.map((tx, i) => (
-                        <tr key={tx.transaction_id} style={{ borderBottom: i < transactions.length - 1 ? '1px solid var(--c-line)' : 'none' }}>
+                        <tr key={tx.transaction_id} data-testid="tx-ledger-row" style={{ borderBottom: i < transactions.length - 1 ? '1px solid var(--c-line)' : 'none' }}>
                           <td className="tabular" style={{ padding: '11px 14px', fontSize: 12, color: 'var(--c-muted)', whiteSpace: 'nowrap' }}>{fmtTxDate(tx.investment_date, locale)}</td>
                           <td style={{ padding: '11px 14px' }}><TxBadge tx={tx} /></td>
                           <td style={{ padding: '11px 14px', fontSize: 13, fontWeight: 500, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{txPrimaryName(tx, assetLabelOf(tx.asset_type))}</td>
@@ -494,7 +494,7 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
                   {transactions.map((tx) => {
                     const m = dirMeta(tx)
                     return (
-                      <div key={tx.transaction_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 12, border: '1px solid var(--c-line)', background: 'var(--c-card)' }}>
+                      <div key={tx.transaction_id} data-testid="tx-ledger-row" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 12, border: '1px solid var(--c-line)', background: 'var(--c-card)' }}>
                         <div style={{ width: 32, height: 32, borderRadius: 8, background: `color-mix(in srgb, ${m.color} 12%, transparent)`, color: m.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                           <m.Icon size={14} strokeWidth={2.2} />
                         </div>
@@ -692,6 +692,7 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => setConfirmTx(null)} className="cn-btn" style={{ flex: 1, justifyContent: 'center' }}>{tc('cancel')}</button>
               <button
+                data-testid="tx-ledger-delete-confirm"
                 onClick={() => handleDelete(confirmTx)}
                 disabled={deletingId === confirmTx.transaction_id}
                 style={{ flex: 2, padding: '10px 14px', background: 'var(--c-neg)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, opacity: deletingId === confirmTx.transaction_id ? 0.7 : 1 }}
