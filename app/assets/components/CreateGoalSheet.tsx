@@ -206,7 +206,7 @@ export function CreateGoalSheet({ open, onClose, onSuccess, desktop }: Props) {
                       title={label}
                       style={{
                         width: 44, height: 44, borderRadius: 10,
-                        background: active ? 'var(--c-navy)' : 'var(--c-card-2)',
+                        background: active ? 'var(--c-btn-primary)' : 'var(--c-card-2)',
                         color: active ? '#fff' : 'var(--c-muted)',
                         border: `1px solid ${active ? 'var(--c-navy)' : 'var(--c-line)'}`,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -277,7 +277,7 @@ export function CreateGoalSheet({ open, onClose, onSuccess, desktop }: Props) {
               disabled={saving}
               style={{
                 flex: 2, padding: '11px 0', borderRadius: 10,
-                background: 'var(--c-navy)', border: '1px solid var(--c-navy)',
+                background: 'var(--c-btn-primary)', border: '1px solid var(--c-btn-primary)',
                 color: '#fff', fontSize: 14, fontWeight: 500,
                 cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,

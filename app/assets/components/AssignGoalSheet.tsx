@@ -195,7 +195,7 @@ export default function AssignGoalSheet({ open, onClose, onConfirm, item, deskto
                     </div>
                   )}
                   {isSel && (
-                    <div style={{ width: 20, height: 20, borderRadius: 10, background: 'var(--c-navy)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <div style={{ width: 20, height: 20, borderRadius: 10, background: 'var(--c-btn-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                       <Check size={12} strokeWidth={2.5} color="#fff" />
                     </div>
                   )}

@@ -290,7 +290,7 @@ function EditGoalSheet({
               disabled={saving}
               style={{
                 flex: 1, padding: '12px 0', borderRadius: 10, border: 'none',
-                background: 'var(--c-navy)', color: '#fff', fontSize: 15,
+                background: 'var(--c-btn-primary)', color: '#fff', fontSize: 15,
                 cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.7 : 1,
                 fontFamily: 'inherit',
               }}
@@ -1048,7 +1048,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
                           onClick={() => setMonthlyContrib(String(preset))}
                           style={{
                             padding: '4px 10px', borderRadius: 999, fontSize: 11, fontWeight: 500,
-                            background: isActive ? 'var(--c-navy)' : 'var(--c-card-2)',
+                            background: isActive ? 'var(--c-btn-primary)' : 'var(--c-card-2)',
                             color: isActive ? '#fff' : 'var(--c-muted)',
                             border: '1px solid var(--c-line)', cursor: 'pointer',
                             fontFamily: 'inherit', transition: 'all 120ms',

@@ -236,7 +236,7 @@ function SalarySheet({
             disabled={saving}
             style={{
               flex: 2, padding: '10px 0', borderRadius: 10, border: 'none',
-              background: 'var(--c-navy)', color: '#fff', fontSize: 14, fontWeight: 600,
+              background: 'var(--c-btn-primary)', color: '#fff', fontSize: 14, fontWeight: 600,
               cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit', opacity: saving ? 0.7 : 1,
             }}
           >
@@ -412,7 +412,7 @@ function OtherExpenseSheet({
             disabled={saving}
             style={{
               flex: 2, padding: '10px 0', borderRadius: 10, border: 'none',
-              background: 'var(--c-navy)', color: '#fff', fontSize: 14, fontWeight: 600,
+              background: 'var(--c-btn-primary)', color: '#fff', fontSize: 14, fontWeight: 600,
               cursor: 'pointer', fontFamily: 'inherit',
             }}
           >
@@ -468,7 +468,7 @@ function NoPlanState({ monthLabel, onSetSalary, isVI }: { monthLabel: string; on
         style={{
           display: 'inline-flex', alignItems: 'center', gap: 6,
           padding: '9px 16px', borderRadius: 10, border: 'none',
-          background: 'var(--c-navy)', color: '#fff', fontSize: 13, fontWeight: 600,
+          background: 'var(--c-btn-primary)', color: '#fff', fontSize: 13, fontWeight: 600,
           cursor: 'pointer', fontFamily: 'inherit',
         }}
       >
@@ -554,7 +554,7 @@ function AllocationSummaryCard({
 
   return (
     <div style={{
-      background: 'var(--c-navy)', color: '#fff',
+      background: 'var(--c-btn-primary)', color: '#fff',
       borderRadius: 16, padding: 16,
       border: '1px solid var(--c-line)', boxShadow: 'var(--shadow-card)',
     }}>
@@ -1275,7 +1275,7 @@ function SimpleOverrideSheet({
           <button
             onClick={handleSave}
             disabled={saving}
-            style={{ flex: 2, padding: '10px 0', borderRadius: 10, border: 'none', background: 'var(--c-navy)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+            style={{ flex: 2, padding: '10px 0', borderRadius: 10, border: 'none', background: 'var(--c-btn-primary)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
           >
             {isVI ? 'Lưu' : 'Save'}
           </button>

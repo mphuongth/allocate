@@ -537,7 +537,7 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
                 const active = txForm.asset_type === v
                 return (
                   <button key={v} type="button" onClick={() => setTxForm((f) => ({ ...f, asset_type: v, fund_id: '', unit_price: '', units: '', interest_rate: '', expiry_date: '' }))}
-                    style={{ padding: '7px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', background: active ? 'var(--c-navy)' : 'var(--c-card-2)', color: active ? '#fff' : 'var(--c-muted)', border: `1px solid ${active ? 'var(--c-navy)' : 'var(--c-line)'}`, transition: 'all 120ms' }}>
+                    style={{ padding: '7px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', background: active ? 'var(--c-btn-primary)' : 'var(--c-card-2)', color: active ? '#fff' : 'var(--c-muted)', border: `1px solid ${active ? 'var(--c-btn-primary)' : 'var(--c-line)'}`, transition: 'all 120ms' }}>
                     {assetLabelOf(v)}
                   </button>
                 )

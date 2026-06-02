@@ -83,7 +83,7 @@ function AuthenticatedLayoutInner({ children, email, initials }: { children: Rea
           style={{
             position: 'fixed', right: 16, bottom: 80,
             width: 52, height: 52, borderRadius: 26,
-            background: 'var(--c-navy)', color: '#fff',
+            background: 'var(--c-btn-primary)', color: '#fff',
             border: 'none',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             boxShadow: '0 6px 16px rgba(15, 42, 74, 0.25), 0 2px 4px rgba(15, 42, 74, 0.1)',

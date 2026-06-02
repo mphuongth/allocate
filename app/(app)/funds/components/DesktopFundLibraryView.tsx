@@ -29,10 +29,10 @@ type TypeFilter = 'all' | 'equity' | 'debt' | 'balanced'
 // ─── Design constants ─────────────────────────────────────────────────────────
 
 const TYPE_META: Record<FundType, { label: string; labelVi: string; color: string; bg: string }> = {
-  equity:   { label: 'Stock',    labelVi: 'Cổ phiếu',   color: '#16a34a', bg: 'oklch(0.97 0.04 150)' },
-  debt:     { label: 'Bond',     labelVi: 'Trái phiếu', color: '#2563eb', bg: '#eff6ff' },
-  balanced: { label: 'Balanced', labelVi: 'Cân bằng',   color: '#7c3aed', bg: '#f5f3ff' },
-  gold:     { label: 'Gold',     labelVi: 'Vàng',       color: '#b45309', bg: '#fef7e6' },
+  equity:   { label: 'Stock',    labelVi: 'Cổ phiếu',   color: 'var(--c-fund-equity)',   bg: 'var(--c-fund-equity-bg)' },
+  debt:     { label: 'Bond',     labelVi: 'Trái phiếu', color: 'var(--c-fund-debt)',     bg: 'var(--c-fund-debt-bg)' },
+  balanced: { label: 'Balanced', labelVi: 'Cân bằng',   color: 'var(--c-fund-balanced)', bg: 'var(--c-fund-balanced-bg)' },
+  gold:     { label: 'Gold',     labelVi: 'Vàng',       color: 'var(--c-fund-gold)',     bg: 'var(--c-fund-gold-bg)' },
 }
 
 const TYPE_FILTERS: { v: TypeFilter; label: string; labelVi: string }[] = [
@@ -216,7 +216,7 @@ function DcaToggle({ fund, editId, editValue, onToggle, onEditStart, onEditChang
         onClick={e => { e.stopPropagation(); onToggle() }}
         style={{
           width: 34, height: 19, borderRadius: 999,
-          background: fund.is_dca ? 'var(--c-navy)' : 'var(--c-line-strong)',
+          background: fund.is_dca ? 'var(--c-btn-primary)' : 'var(--c-line-strong)',
           border: 'none', cursor: 'pointer', position: 'relative',
           transition: 'background 180ms', flexShrink: 0,
         }}
@@ -556,7 +556,7 @@ export default function DesktopFundLibraryView() {
                 style={{
                   padding: '6px 12px', borderRadius: 999, fontSize: 11, fontWeight: 500,
                   background: typeFilter === f.v ? 'var(--c-ink)' : 'var(--c-card)',
-                  color: typeFilter === f.v ? '#fff' : 'var(--c-muted)',
+                  color: typeFilter === f.v ? 'var(--c-card)' : 'var(--c-muted)',
                   border: '1px solid ' + (typeFilter === f.v ? 'var(--c-ink)' : 'var(--c-line)'),
                   cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
                   transition: 'all 120ms',
@@ -725,10 +725,10 @@ export default function DesktopFundLibraryView() {
         )}
 
         {/* NAV info banner */}
-        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '12px 14px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, marginTop: 16 }}>
-          <div style={{ width: 18, height: 18, borderRadius: 9, background: '#2563eb', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1, fontSize: 10, fontWeight: 700 }}>i</div>
-          <div style={{ fontSize: 12, color: '#3b82f6', lineHeight: 1.5 }}>
-            <span style={{ fontWeight: 600, color: '#1e40af' }}>About NAV updates: </span>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '12px 14px', background: 'var(--c-navy-tint)', border: '1px solid var(--c-line)', borderRadius: 10, marginTop: 16 }}>
+          <div style={{ width: 18, height: 18, borderRadius: 9, background: 'var(--c-accent-fund, #2563eb)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1, fontSize: 10, fontWeight: 700 }}>i</div>
+          <div style={{ fontSize: 12, color: 'var(--c-muted)', lineHeight: 1.5 }}>
+            <span style={{ fontWeight: 600, color: 'var(--c-navy)' }}>About NAV updates: </span>
             NAV is updated daily after market close. Click Refresh to fetch the latest prices.
           </div>
         </div>

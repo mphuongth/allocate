@@ -51,7 +51,7 @@ function Switch({ checked, onChange }: { checked: boolean; onChange: (v: boolean
       onClick={() => onChange(!checked)}
       style={{
         width: w, height: h, flexShrink: 0, padding: 2, border: 'none', borderRadius: 999,
-        background: checked ? 'var(--c-navy)' : 'var(--c-line-strong, #cbd5e1)',
+        background: checked ? 'var(--c-btn-primary)' : 'var(--c-line-strong, #cbd5e1)',
         cursor: 'pointer', display: 'inline-flex', alignItems: 'center', transition: 'background 180ms ease',
       }}
     >

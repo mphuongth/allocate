@@ -83,7 +83,7 @@ function DesktopAssignPicker({
                     </div>
                   </div>
                   {g.progressPercent != null && <div style={{ fontSize: 12, fontWeight: 600, color: isSel ? 'var(--c-navy)' : 'var(--c-ink)', flexShrink: 0 }}>{Math.round(g.progressPercent)}%</div>}
-                  {isSel && <div style={{ width: 20, height: 20, borderRadius: 10, background: 'var(--c-navy)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Check size={12} strokeWidth={2.5} color="#fff" /></div>}
+                  {isSel && <div style={{ width: 20, height: 20, borderRadius: 10, background: 'var(--c-btn-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Check size={12} strokeWidth={2.5} color="#fff" /></div>}
                 </div>
                 {g.progressPercent != null && (
                   <div style={{ height: 4, background: 'var(--c-card-2)', borderRadius: 999, overflow: 'hidden', marginTop: 8 }}>

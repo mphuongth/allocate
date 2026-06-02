@@ -244,7 +244,7 @@ function AllocationCard({ salary, totalGoalAmount, fixedTotal, insTotal, otherTo
   ]
 
   return (
-    <div data-testid="planning-alloc-card" style={{ padding: '18px 20px', background: 'var(--c-navy)', color: '#fff', borderRadius: 16, boxShadow: 'var(--shadow-card)' }}>
+    <div data-testid="planning-alloc-card" style={{ padding: '18px 20px', background: 'var(--c-btn-primary)', color: '#fff', borderRadius: 16, boxShadow: 'var(--shadow-card)' }}>
       <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.6)', marginBottom: 4 }}>
         {isVI ? 'Phân bổ tháng này' : "This month's allocation"}
       </div>
@@ -790,7 +790,7 @@ export default function DesktopPlanningView({
             )}
             <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
               <button onClick={() => setShowIncome(false)} style={{ ...btnBase, flex: 1, padding: '10px 14px', background: 'transparent', color: 'var(--c-ink)', border: '1px solid var(--c-line)' }}>{isVI ? 'Hủy' : 'Cancel'}</button>
-              <button onClick={handleSetIncome} disabled={saving || !incomeVal || Number(incomeVal) <= 0} style={{ ...btnBase, flex: 2, padding: '10px 14px', background: 'var(--c-navy)', color: '#fff', opacity: saving || !incomeVal || Number(incomeVal) <= 0 ? 0.6 : 1 }}>
+              <button onClick={handleSetIncome} disabled={saving || !incomeVal || Number(incomeVal) <= 0} style={{ ...btnBase, flex: 2, padding: '10px 14px', background: 'var(--c-btn-primary)', color: '#fff', opacity: saving || !incomeVal || Number(incomeVal) <= 0 ? 0.6 : 1 }}>
                 {saving ? (isVI ? 'Đang lưu...' : 'Saving...') : (isVI ? 'Lưu' : 'Save')}
               </button>
             </div>
@@ -836,7 +836,7 @@ export default function DesktopPlanningView({
             </button>
             <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
               <button onClick={() => setOverrideModal(null)} style={{ ...btnBase, flex: 1, padding: '10px 14px', background: 'transparent', color: 'var(--c-ink)', border: '1px solid var(--c-line)' }}>{isVI ? 'Hủy' : 'Cancel'}</button>
-              <button onClick={handleSaveOverride} disabled={saving || !overrideVal || Number(overrideVal) <= 0} style={{ ...btnBase, flex: 2, padding: '10px 14px', background: 'var(--c-navy)', color: '#fff', opacity: saving || !overrideVal || Number(overrideVal) <= 0 ? 0.6 : 1 }}>
+              <button onClick={handleSaveOverride} disabled={saving || !overrideVal || Number(overrideVal) <= 0} style={{ ...btnBase, flex: 2, padding: '10px 14px', background: 'var(--c-btn-primary)', color: '#fff', opacity: saving || !overrideVal || Number(overrideVal) <= 0 ? 0.6 : 1 }}>
                 {saving ? (isVI ? 'Đang lưu...' : 'Saving...') : (isVI ? 'Lưu' : 'Save')}
               </button>
             </div>
@@ -866,7 +866,7 @@ export default function DesktopPlanningView({
             )}
             <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
               <button onClick={() => setOtherModal(null)} style={{ ...btnBase, flex: 1, padding: '10px 14px', background: 'transparent', color: 'var(--c-ink)', border: '1px solid var(--c-line)' }}>{isVI ? 'Hủy' : 'Cancel'}</button>
-              <button onClick={handleOtherSave} disabled={saving || !otherDesc.trim() || !otherAmt || Number(otherAmt) <= 0} style={{ ...btnBase, flex: 2, padding: '10px 14px', background: 'var(--c-navy)', color: '#fff', opacity: saving || !otherDesc.trim() || !otherAmt || Number(otherAmt) <= 0 ? 0.6 : 1 }}>
+              <button onClick={handleOtherSave} disabled={saving || !otherDesc.trim() || !otherAmt || Number(otherAmt) <= 0} style={{ ...btnBase, flex: 2, padding: '10px 14px', background: 'var(--c-btn-primary)', color: '#fff', opacity: saving || !otherDesc.trim() || !otherAmt || Number(otherAmt) <= 0 ? 0.6 : 1 }}>
                 {saving ? (isVI ? 'Đang lưu...' : 'Saving...') : (isVI ? 'Lưu' : 'Save')}
               </button>
             </div>
