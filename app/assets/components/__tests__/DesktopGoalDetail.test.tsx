@@ -117,5 +117,24 @@ describe('DesktopGoalDetail — bank withdrawal links to the goal (issue #261)',
     expect(postBody!.transaction_type).toBe('withdrawal')
     expect(postBody!.parent_transaction_id).toBe('tx-bank-1')
     expect(postBody!.goal_id).toBe('goal-1')
+    // Count-toward-progress defaults ON.
+    expect(postBody!.affects_progress).toBe(true)
+  })
+
+  it('posts affects_progress=false when the progress toggle is switched off', async () => {
+    render(<DesktopGoalDetail {...baseProps} />)
+    await waitFor(() => screen.getByText('Techcombank'))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Options' }))
+    await waitFor(() => expect(screen.getByText('Withdraw')).toBeInTheDocument())
+    await userEvent.click(screen.getByText('Withdraw'))
+
+    // Switch off "Count toward goal progress", then withdraw the full balance.
+    await userEvent.click(await screen.findByTestId('affects-progress-switch'))
+    await userEvent.click(await screen.findByRole('button', { name: 'All' }))
+    await userEvent.click(await screen.findByRole('button', { name: /Confirm withdrawal/i }))
+
+    await waitFor(() => expect(postBody).not.toBeNull())
+    expect(postBody!.affects_progress).toBe(false)
   })
 })

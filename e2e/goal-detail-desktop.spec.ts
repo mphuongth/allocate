@@ -98,6 +98,52 @@ test.describe('Desktop goal detail panel', () => {
     }
   })
 
+  // Withdrawing from the goal detail can opt out of affecting goal progress
+  // via the "Count toward goal progress" toggle (ported from the legacy
+  // Settings view). Toggling it off must persist affects_progress=false.
+  test('withdraw with progress toggle off stores affects_progress=false', async ({ page }) => {
+    const tx = await api.createTransaction({
+      asset_type: 'bank',
+      amount_vnd: 10_000_000,
+      investment_date: '2026-01-01',
+      interest_rate: 6,
+      goal_id: goalId,
+      notes: 'E2E Progress Toggle Deposit',
+    })
+    try {
+      await page.goto('/dashboard')
+      await page.waitForLoadState('networkidle')
+
+      await page.getByText('E2E Desktop Goal').first().click()
+      const panel = page.getByTestId('desktop-goal-detail')
+      await expect(panel).toBeVisible({ timeout: 10_000 })
+      await expect(panel.getByText('E2E Progress Toggle Deposit')).toBeVisible({ timeout: 10_000 })
+
+      await panel.getByRole('button', { name: 'Options', exact: true }).first().click()
+      await page.getByText(/^(Withdraw|Rút tiền)$/).click()
+
+      // Switch off "Count toward goal progress", then withdraw the full balance.
+      await page.getByTestId('affects-progress-switch').click()
+      await page.getByRole('button', { name: /^(All|Tất cả)$/ }).click()
+      await page.getByRole('button', { name: /Confirm withdrawal|Xác nhận rút/i }).click()
+
+      await expect(panel.getByText('E2E Progress Toggle Deposit')).toHaveCount(0, { timeout: 15_000 })
+
+      // The withdrawal must have been stored with affects_progress=false.
+      const { createClient } = await import('@supabase/supabase-js')
+      const supabase = createClient(process.env.E2E_SUPABASE_URL!, process.env.E2E_SUPABASE_SERVICE_ROLE_KEY!)
+      const { data: withdrawals } = await supabase
+        .from('investment_transactions')
+        .select('affects_progress')
+        .eq('parent_transaction_id', tx.transaction_id)
+        .eq('transaction_type', 'withdrawal')
+      expect(withdrawals).toHaveLength(1)
+      expect(withdrawals![0].affects_progress).toBe(false)
+    } finally {
+      await api.deleteTransactionCascade(tx.transaction_id)
+    }
+  })
+
   test('clicking an insurance row while goal detail is open switches to insurance detail', async ({ page }) => {
     // Bug #226: with goal detail open in the right panel, clicking an insurance
     // member did nothing because the panel prioritised the still-selected goal.

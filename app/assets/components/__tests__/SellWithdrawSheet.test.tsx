@@ -87,6 +87,54 @@ describe('SellWithdrawSheet — links the withdrawal to its goal (issue #261)', 
   })
 })
 
+describe('SellWithdrawSheet — count toward goal progress toggle', () => {
+  const bankItem = {
+    type: 'bank' as const, name: 'Techcombank',
+    currentValue: 5_000_000, interestRate: 6,
+    transactionId: 't1', purchasePrice: 5_000_000,
+  }
+
+  it('shows the toggle in goal context and posts affects_progress=true by default', async () => {
+    const fetchMock = vi.fn((_url: string, _init?: RequestInit) => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<SellWithdrawSheet item={bankItem} open context="goal" goalId="g1" goalCurrentValue={20_000_000} goalTargetAmount={50_000_000} onClose={vi.fn()} onSuccess={vi.fn()} />)
+
+    expect(screen.getByTestId('affects-progress-control')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByTestId('sell-all-btn'))
+    fireEvent.click(screen.getByTestId('sell-confirm-btn'))
+
+    await waitFor(() => {
+      const post = fetchMock.mock.calls.find((c) => String(c[0]).includes('/investment-transactions'))
+      const body = JSON.parse(String((post![1] as RequestInit).body))
+      expect(body.affects_progress).toBe(true)
+    })
+  })
+
+  it('posts affects_progress=false after toggling the switch off', async () => {
+    const fetchMock = vi.fn((_url: string, _init?: RequestInit) => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<SellWithdrawSheet item={bankItem} open context="goal" goalId="g1" goalCurrentValue={20_000_000} goalTargetAmount={50_000_000} onClose={vi.fn()} onSuccess={vi.fn()} />)
+
+    fireEvent.click(screen.getByTestId('affects-progress-switch'))
+    fireEvent.click(screen.getByTestId('sell-all-btn'))
+    fireEvent.click(screen.getByTestId('sell-confirm-btn'))
+
+    await waitFor(() => {
+      const post = fetchMock.mock.calls.find((c) => String(c[0]).includes('/investment-transactions'))
+      const body = JSON.parse(String((post![1] as RequestInit).body))
+      expect(body.affects_progress).toBe(false)
+    })
+  })
+
+  it('hides the toggle in the unallocated context', () => {
+    render(<SellWithdrawSheet item={bankItem} open context="unallocated" onClose={vi.fn()} onSuccess={vi.fn()} />)
+    expect(screen.queryByTestId('affects-progress-control')).not.toBeInTheDocument()
+  })
+})
+
 describe('SellWithdrawSheet — gold sell (quantity × price) (issue #232)', () => {
   it('prefills the price and posts proceeds + cost basis', async () => {
     const fetchMock = vi.fn((_url: string, _init?: RequestInit) =>

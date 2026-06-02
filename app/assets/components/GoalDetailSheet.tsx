@@ -1209,6 +1209,8 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
         item={actionInv ? invToSellItem(actionInv) : null}
         context="goal"
         goalId={goal.goalId}
+        goalCurrentValue={goal.currentValue}
+        goalTargetAmount={goal.targetAmount}
         onClose={() => setSellOpen(false)}
         onSuccess={() => {
           setSellOpen(false)
