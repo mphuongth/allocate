@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslations } from 'next-intl'
-import { Plus, Download, Edit, Trash2, ChevronLeft, ChevronRight, X, Calendar, ArrowUpRight, ArrowDownRight } from 'lucide-react'
+import { Plus, Download, Edit2, Trash2, ChevronLeft, ChevronRight, X, Calendar, ArrowUpRight, ArrowDownRight } from 'lucide-react'
 import ConfirmModal from '@/app/components/ConfirmModal'
 import AmountInput from '@/app/components/ui/AmountInput'
 import DecimalInput from '@/app/components/ui/DecimalInput'
@@ -363,7 +363,7 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
   const rowActions = (tx: LedgerTransaction) => (
     <span style={{ display: 'inline-flex', gap: 2, whiteSpace: 'nowrap' }}>
       {!isWithdrawal(tx) && (
-        <button onClick={() => openEdit(tx)} className="cn-btn ghost" style={{ padding: 5 }} aria-label={tc('edit')}><Edit size={14} color="var(--c-muted)" /></button>
+        <button onClick={() => openEdit(tx)} className="cn-btn ghost" style={{ padding: 5 }} aria-label={tc('edit')}><Edit2 size={14} color="var(--c-muted)" /></button>
       )}
       <button onClick={() => setConfirmTx(tx)} className="cn-btn ghost" style={{ padding: 5 }} aria-label={tc('delete')}><Trash2 size={14} color="var(--c-neg)" /></button>
     </span>
