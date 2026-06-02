@@ -64,11 +64,29 @@ function collectHoldings(d: {
 interface FundLike { fundId: string; fundName: string; quantity: number; currentNAV: number; currentValue: number; purchasePrice: number; profitLossPercentage: number }
 interface NonFundLike { transactionId: string; type: string; amount: number; currentValue: number; interestRate: number | null; units: number | null; notes: string | null }
 
+// When set, the sheet opens in edit mode: fields are prefilled from this
+// transaction and saving issues a PUT instead of a POST. Editing is limited to
+// investments (buy/deposit) — withdrawals are managed via the sell flow.
+export interface EditableTransaction {
+  transaction_id: string
+  asset_type: string | null
+  investment_date: string
+  amount_vnd: number
+  unit_price: number | null
+  units: number | null
+  interest_rate: number | null
+  expiry_date: string | null
+  notes: string | null
+  fund_id: string | null
+  goal_id: string | null
+}
+
 interface Props {
   open: boolean
   onClose: () => void
   onSaved?: () => void
   desktop?: boolean
+  existing?: EditableTransaction | null
 }
 
 const inputStyle: React.CSSProperties = {
@@ -95,7 +113,7 @@ type AssetType = typeof ASSET_TYPES[number]['v']
 
 const GOLD_PROVIDERS = ['PNJ', 'DOJI', 'SJC', 'Bảo Tín']
 
-export default function AddTransactionSheet({ open, onClose, onSaved, desktop }: Props) {
+export default function AddTransactionSheet({ open, onClose, onSaved, desktop, existing }: Props) {
   const t = useTranslations('addTx')
   const tc = useTranslations('common')
 
@@ -156,7 +174,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop }:
           : (Array.isArray(goalsData?.goals) ? goalsData.goals : [])
         setFunds(fundList)
         setGoals(goalList)
-        if (fundList.length > 0 && !fundId) setFundId(fundList[0].id)
+        if (fundList.length > 0 && !fundId && !existing) setFundId(fundList[0].id)
       }).catch(() => {})
     } else {
       const t = setTimeout(() => {
@@ -167,6 +185,36 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop }:
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
+
+  // Edit mode: prefill the form from the existing investment. Only fund / bank
+  // / gold are editable here (the asset types this sheet supports); the ledger
+  // routes other types to its inline form.
+  useEffect(() => {
+    if (!open || !existing) return
+    const at: AssetType = (existing.asset_type === 'bank' || existing.asset_type === 'gold') ? existing.asset_type : 'fund'
+    setAssetType(at)
+    setDir('buy')
+    setGoalId(existing.goal_id || '')
+    setDate(existing.investment_date || new Date().toISOString().slice(0, 10))
+    if (at === 'fund') {
+      setFundId(existing.fund_id || '')
+      setAmount(existing.amount_vnd != null ? String(existing.amount_vnd) : '')
+      setUnits(existing.units != null ? String(existing.units) : '')
+      setNote(existing.notes || '')
+    } else if (at === 'bank') {
+      setBankAmount(existing.amount_vnd != null ? String(existing.amount_vnd) : '')
+      setRate(existing.interest_rate != null ? String(existing.interest_rate) : '')
+      setMaturity(existing.expiry_date || '')
+      setDepositType(existing.interest_rate != null ? 'term' : 'flex')
+      setBankName(existing.notes || '')
+    } else {
+      setGoldProvider(existing.notes || 'PNJ')
+      setGoldUnit('chi')
+      setGoldQty(existing.units != null ? String(existing.units) : '')
+      setGoldPrice(existing.unit_price != null ? String(existing.unit_price) : '')
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, existing])
 
   // Lazily load sellable holdings from the overview the first time the user
   // switches to "Sell" — most opens are buys, so we don't pay for it up front.
@@ -292,6 +340,61 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop }:
 
   async function handleSave() {
     setError('')
+
+    // ── Edit an existing investment (PUT) ──────────────────────────────────
+    if (existing) {
+      let payload: Record<string, unknown>
+      if (assetType === 'fund') {
+        const amt = Number(amount.replace(/\./g, ''))
+        if (!fundId) { setError(t('fundRequired')); return }
+        if (!amt) { setError(t('amountRequired')); return }
+        const u = units ? Number(units) : (selectedFund ? amt / selectedFund.nav : null)
+        payload = {
+          asset_type: 'fund', fund_id: fundId, investment_date: date,
+          amount_vnd: amt, units: u,
+          unit_price: u && amt ? amt / u : (selectedFund?.nav ?? null),
+          goal_id: goalId || null, notes: note || null,
+        }
+      } else if (assetType === 'bank') {
+        const amt = Number(bankAmount.replace(/\./g, ''))
+        if (!amt) { setError(t('amountRequired')); return }
+        payload = {
+          asset_type: 'bank', fund_id: null, investment_date: date, amount_vnd: amt,
+          interest_rate: rate ? Number(rate) : null, expiry_date: maturity || null,
+          goal_id: goalId || null, notes: bankName || note || null,
+        }
+      } else {
+        const qty = Number(goldQty)
+        const price = Number(goldPrice.replace(/\./g, ''))
+        if (!qty || !price) { setError(t('amountRequired')); return }
+        const unitsInChi = goldUnit === 'luong' ? qty * 10 : qty
+        const pricePerChi = goldUnit === 'luong' ? Math.round(price / 10) : price
+        payload = {
+          asset_type: 'gold', fund_id: null, investment_date: date,
+          amount_vnd: Math.round(qty * price), units: unitsInChi, unit_price: pricePerChi,
+          goal_id: goalId || null, notes: goldProvider || null,
+        }
+      }
+      setSaving(true)
+      try {
+        const res = await fetch(`/api/v1/investment-transactions/${existing.transaction_id}`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+        if (!res.ok) {
+          const d = await res.json()
+          setError(d.error ?? tc('error'))
+        } else {
+          onClose()
+          onSaved?.()
+        }
+      } catch {
+        setError(tc('error'))
+      } finally {
+        setSaving(false)
+      }
+      return
+    }
 
     // ── Sell / withdraw: pull from the chosen holding ──────────────────────
     if (dir === 'sell') {
@@ -472,7 +575,8 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop }:
             </div>
           </div>
 
-          {/* Direction */}
+          {/* Direction — hidden when editing (investments only) */}
+          {!existing && (
           <div>
             <label style={labelStyle}>{t('direction')}</label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
@@ -505,6 +609,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop }:
               })}
             </div>
           </div>
+          )}
 
           {/* Goal — attribution applies to Buy/Deposit; for Sell the source
               holding determines the goal (mobile design). */}
@@ -1086,7 +1191,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop }:
                 ? tc('saving')
                 : dir === 'sell'
                 ? (assetType === 'bank' ? t('confirmWithdrawal') : t('confirmSale'))
-                : tc('save')}
+                : existing ? t('saveChanges') : tc('save')}
             </button>
           </div>
         </div>
@@ -1113,7 +1218,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop }:
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px 14px', borderBottom: '1px solid var(--c-line)', flexShrink: 0 }}>
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em' }}>{t('title')}</h3>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em' }}>{existing ? t('editTitle') : t('title')}</h3>
             <button onClick={onClose} style={{ padding: 6, border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', color: 'var(--c-muted)', display: 'flex' }} aria-label="Close"><X size={18} /></button>
           </div>
           <div style={{ flex: 1, padding: '18px 20px', overflowY: 'auto', overflowX: 'hidden', overscrollBehavior: 'contain' }}>
@@ -1153,7 +1258,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop }:
         {/* Header — pinned, sits outside the scrollable body so the title stays put */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px 20px', flexShrink: 0 }}>
           <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600, color: 'var(--c-ink)' }}>
-            {t('title')}
+            {existing ? t('editTitle') : t('title')}
           </h3>
           <button
             onClick={onClose}

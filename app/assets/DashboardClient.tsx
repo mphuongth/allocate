@@ -16,6 +16,7 @@ import GoalDetailSheet from './components/GoalDetailSheet'
 import AssignGoalSheet from './components/AssignGoalSheet'
 import DownloadReportSheet from './components/DownloadReportSheet'
 import AddTransactionSheet from './components/AddTransactionSheet'
+import RecentActivityCard from './components/RecentActivityCard'
 
 import TransactionHistorySheet from './components/TransactionHistorySheet'
 import DesktopNetWorthPanel from './components/DesktopNetWorthPanel'
@@ -679,6 +680,16 @@ export default function DashboardClient({ userId }: { userId: string }) {
                   />
                 </section>
 
+                {/* Recent activity — last section */}
+                <section style={{ marginBottom: 24 }}>
+                  <RecentActivityCard
+                    locale={locale}
+                    desktop={isDesktop}
+                    refreshKey={historyKey}
+                    onChanged={() => fetchData({ force: true })}
+                  />
+                </section>
+
               </div>
 
               {/* Right column: net worth panel — has its own scroll inside the
@@ -848,6 +859,14 @@ export default function DashboardClient({ userId }: { userId: string }) {
                   />
                 )}
               </section>
+
+              {/* Recent activity — last section */}
+              <RecentActivityCard
+                locale={locale}
+                desktop={isDesktop}
+                refreshKey={historyKey}
+                onChanged={() => fetchData({ force: true })}
+              />
 
               {/* NAV updated footer */}
               {data.netWorth.navUpdatedAt && (
