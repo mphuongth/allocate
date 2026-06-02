@@ -669,15 +669,6 @@ export default function DashboardClient({ userId }: { userId: string }) {
                   </div>
                 )}
 
-                {/* Recent activity */}
-                <section style={{ marginBottom: 24 }}>
-                  <RecentActivityCard
-                    locale={locale}
-                    refreshKey={historyKey}
-                    onChanged={() => fetchData({ force: true })}
-                  />
-                </section>
-
                 {/* Insurance */}
                 <section style={{ marginBottom: 24 }}>
                   <DesktopInsuranceList
@@ -686,6 +677,15 @@ export default function DashboardClient({ userId }: { userId: string }) {
                     goalCount={data.goals.length}
                     onOpen={(ins) => { setSelectedGoalId(null); setSelectedInsuranceId(selectedInsuranceId === ins.insuranceId ? null : ins.insuranceId) }}
                     onAdd={() => setShowAddInsurance(true)}
+                  />
+                </section>
+
+                {/* Recent activity — last section */}
+                <section style={{ marginBottom: 24 }}>
+                  <RecentActivityCard
+                    locale={locale}
+                    refreshKey={historyKey}
+                    onChanged={() => fetchData({ force: true })}
                   />
                 </section>
 
@@ -810,13 +810,6 @@ export default function DashboardClient({ userId }: { userId: string }) {
                 />
               )}
 
-              {/* Recent activity */}
-              <RecentActivityCard
-                locale={locale}
-                refreshKey={historyKey}
-                onChanged={() => fetchData({ force: true })}
-              />
-
               {/* Insurance */}
               <section>
                 <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
@@ -865,6 +858,13 @@ export default function DashboardClient({ userId }: { userId: string }) {
                   />
                 )}
               </section>
+
+              {/* Recent activity — last section */}
+              <RecentActivityCard
+                locale={locale}
+                refreshKey={historyKey}
+                onChanged={() => fetchData({ force: true })}
+              />
 
               {/* NAV updated footer */}
               {data.netWorth.navUpdatedAt && (
