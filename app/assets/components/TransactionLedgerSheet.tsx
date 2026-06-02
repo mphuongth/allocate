@@ -369,38 +369,78 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
     <>
       <Shell open={open} onClose={onClose} title={t('ledgerTitle')} desktop={desktop} width={880} testId="tx-ledger">
         <div style={{ display: 'grid', gap: 14 }}>
-          {/* Toolbar: filters + actions */}
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
-            <Field label={t('lblAsset')}>
-              <select value={filters.asset_type} onChange={(e) => setSelectFilter('asset_type', e.target.value)} className="cn-input" style={{ cursor: 'pointer', padding: '8px 10px' }}>
-                <option value="">{t('filterAll')}</option>
-                {ASSET_TYPES.map((v) => <option key={v} value={v}>{assetLabelOf(v)}</option>)}
-              </select>
-            </Field>
-            <Field label={t('filterGoal')}>
-              <select value={filters.goal_id} onChange={(e) => setSelectFilter('goal_id', e.target.value)} className="cn-input" style={{ cursor: 'pointer', padding: '8px 10px' }}>
-                <option value="">{t('allGoals')}</option>
-                <option value="unassigned">{t('noGoal')}</option>
-                {goals.map((g) => <option key={g.goal_id} value={g.goal_id}>{g.goal_name}</option>)}
-              </select>
-            </Field>
-            <Field label={t('lblFrom')}>
-              <input type="date" value={dateFrom} onChange={(e) => setDateFilter('from_date', e.target.value, setDateFrom)} className="cn-input tabular" style={{ padding: '8px 10px' }} />
-            </Field>
-            <Field label={t('lblTo')}>
-              <input type="date" value={dateTo} onChange={(e) => setDateFilter('to_date', e.target.value, setDateTo)} className="cn-input tabular" style={{ padding: '8px 10px' }} />
-            </Field>
-            {hasFilters && (
-              <button onClick={resetFilters} className="cn-btn" style={{ padding: '8px 12px', fontSize: 12 }}>{tc('reset')}</button>
-            )}
-            <div style={{ flex: 1 }} />
-            <button data-testid="tx-ledger-import" onClick={() => { setShowImport(true); setImportRaw(''); setImportRows([]); setImportFundId('') }} className="cn-btn" style={{ padding: '8px 12px', fontSize: 12 }}>
-              <Download size={14} />{t('import')}
-            </button>
-            <button data-testid="tx-ledger-add" onClick={() => setShowAdd(true)} className="cn-btn primary" style={{ padding: '8px 14px', fontSize: 12 }}>
-              <Plus size={14} strokeWidth={2.4} />{t('add')}
-            </button>
-          </div>
+          {/* Toolbar */}
+          {desktop ? (
+            /* Desktop: filters left, actions right */
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
+              <Field label={t('lblAsset')}>
+                <select value={filters.asset_type} onChange={(e) => setSelectFilter('asset_type', e.target.value)} className="cn-input" style={{ cursor: 'pointer', padding: '8px 10px' }}>
+                  <option value="">{t('filterAll')}</option>
+                  {ASSET_TYPES.map((v) => <option key={v} value={v}>{assetLabelOf(v)}</option>)}
+                </select>
+              </Field>
+              <Field label={t('filterGoal')}>
+                <select value={filters.goal_id} onChange={(e) => setSelectFilter('goal_id', e.target.value)} className="cn-input" style={{ cursor: 'pointer', padding: '8px 10px' }}>
+                  <option value="">{t('allGoals')}</option>
+                  <option value="unassigned">{t('noGoal')}</option>
+                  {goals.map((g) => <option key={g.goal_id} value={g.goal_id}>{g.goal_name}</option>)}
+                </select>
+              </Field>
+              <Field label={t('lblFrom')}>
+                <input type="date" value={dateFrom} onChange={(e) => setDateFilter('from_date', e.target.value, setDateFrom)} className="cn-input tabular" style={{ padding: '8px 10px' }} />
+              </Field>
+              <Field label={t('lblTo')}>
+                <input type="date" value={dateTo} onChange={(e) => setDateFilter('to_date', e.target.value, setDateTo)} className="cn-input tabular" style={{ padding: '8px 10px' }} />
+              </Field>
+              {hasFilters && (
+                <button onClick={resetFilters} className="cn-btn" style={{ padding: '8px 12px', fontSize: 12 }}>{tc('reset')}</button>
+              )}
+              <div style={{ flex: 1 }} />
+              <button data-testid="tx-ledger-import" onClick={() => { setShowImport(true); setImportRaw(''); setImportRows([]); setImportFundId('') }} className="cn-btn" style={{ padding: '8px 12px', fontSize: 12 }}>
+                <Download size={14} />{t('import')}
+              </button>
+              <button data-testid="tx-ledger-add" onClick={() => setShowAdd(true)} className="cn-btn primary" style={{ padding: '8px 14px', fontSize: 12 }}>
+                <Plus size={14} strokeWidth={2.4} />{t('add')}
+              </button>
+            </div>
+          ) : (
+            /* Mobile: actions on top, filters below */
+            <div style={{ display: 'grid', gap: 12 }}>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button data-testid="tx-ledger-import" onClick={() => { setShowImport(true); setImportRaw(''); setImportRows([]); setImportFundId('') }} className="cn-btn" style={{ flex: 1, minWidth: 0, justifyContent: 'center', fontSize: 12, gap: 5 }}>
+                  <Download size={14} />{t('import')}
+                </button>
+                <button data-testid="tx-ledger-add" onClick={() => setShowAdd(true)} className="cn-btn primary" style={{ flex: 1, minWidth: 0, justifyContent: 'center', fontSize: 12, gap: 5 }}>
+                  <Plus size={14} strokeWidth={2.4} />{t('add')}
+                </button>
+              </div>
+              {(total > 0 || hasFilters) && (
+                <div style={{ display: 'grid', gap: 8 }}>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <select value={filters.asset_type} onChange={(e) => setSelectFilter('asset_type', e.target.value)} className="cn-input" style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}>
+                      <option value="">{t('filterAll')}</option>
+                      {ASSET_TYPES.map((v) => <option key={v} value={v}>{assetLabelOf(v)}</option>)}
+                    </select>
+                    <select value={filters.goal_id} onChange={(e) => setSelectFilter('goal_id', e.target.value)} className="cn-input" style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}>
+                      <option value="">{t('allGoals')}</option>
+                      <option value="unassigned">{t('noGoal')}</option>
+                      {goals.map((g) => <option key={g.goal_id} value={g.goal_id}>{g.goal_name}</option>)}
+                    </select>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <input type="date" value={dateFrom} onChange={(e) => setDateFilter('from_date', e.target.value, setDateFrom)} aria-label={t('lblFrom')} className="cn-input tabular" style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} />
+                    <input type="date" value={dateTo} onChange={(e) => setDateFilter('to_date', e.target.value, setDateTo)} aria-label={t('lblTo')} className="cn-input tabular" style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} />
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{t('totalCount', { count: total })}</span>
+                    {hasFilters && (
+                      <button onClick={resetFilters} className="cn-btn ghost" style={{ padding: '4px 8px', fontSize: 11, color: 'var(--c-navy)' }}>{tc('reset')}</button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {loading ? (
             <div style={{ padding: '40px 16px', textAlign: 'center', fontSize: 13, color: 'var(--c-muted)' }}>{tc('loading')}</div>
@@ -418,7 +458,7 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
             </div>
           ) : (
             <>
-              <div style={{ fontSize: 12, color: 'var(--c-muted)' }}>{t('totalCount', { count: total })}</div>
+              {desktop && <div style={{ fontSize: 12, color: 'var(--c-muted)' }}>{t('totalCount', { count: total })}</div>}
 
               {desktop ? (
                 /* Desktop table */

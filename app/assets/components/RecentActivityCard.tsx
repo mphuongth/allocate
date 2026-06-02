@@ -24,7 +24,7 @@ const ASSET_BADGE: Record<AssetType, string> = {
 
 interface Props {
   locale: string
-  /** Desktop renders the ledger as a centered modal; mobile as a bottom sheet. */
+  /** Desktop renders an in-card header; mobile a section header above the card. */
   desktop?: boolean
   /** Bumped by the dashboard when it refetches, so the preview stays fresh. */
   refreshKey?: number
@@ -59,6 +59,87 @@ export default function RecentActivityCard({ locale, desktop, refreshKey, onChan
     return () => { cancelled = true }
   }, [refreshKey, localKey])
 
+  const viewAll = (
+    <button
+      data-testid="recent-activity-view-all"
+      onClick={() => setShowLedger(true)}
+      className="cn-btn ghost"
+      style={{ padding: '4px 8px', fontSize: 12, fontWeight: 600, color: 'var(--c-navy)', gap: 4 }}
+    >
+      {t('viewAll')}
+      <ArrowRight size={13} />
+    </button>
+  )
+
+  const rows = total === 0 ? (
+    <div style={{ padding: '20px 16px', fontSize: 13, color: 'var(--c-muted)', textAlign: 'center' }}>
+      {t('recentActivityEmpty')}
+    </div>
+  ) : (
+    txs.map((tx, i) => {
+      const withdrawal = isWithdrawal(tx)
+      const color = withdrawal ? 'var(--c-neg)' : 'var(--c-pos)'
+      const badgeColor = withdrawal ? 'var(--c-neg)' : (ASSET_BADGE[tx.asset_type as AssetType] ?? 'var(--c-muted)')
+      const badgeText = withdrawal ? tt('withdrawal') : assetLabel(tx)
+      const goalName = tx.savings_goals?.goal_name ?? tt('noGoal')
+      return (
+        <div
+          key={tx.transaction_id}
+          data-testid="recent-activity-row"
+          style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', borderBottom: i < txs.length - 1 ? '1px solid var(--c-line)' : 'none' }}
+        >
+          <div style={{ width: 30, height: 30, borderRadius: 8, background: `color-mix(in srgb, ${color} 12%, transparent)`, color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            {withdrawal ? <ArrowDownRight size={14} strokeWidth={2.2} /> : <ArrowUpRight size={14} strokeWidth={2.2} />}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, padding: '1px 6px', borderRadius: 999, color: badgeColor, background: `color-mix(in srgb, ${badgeColor} 12%, transparent)`, flexShrink: 0 }}>
+                {badgeText}
+              </span>
+              <span style={{ fontSize: 12, color: 'var(--c-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {txPrimaryName(tx, assetLabel(tx))}
+              </span>
+            </div>
+            <div style={{ fontSize: 10, color: 'var(--c-muted)', marginTop: 2 }}>
+              {goalName} · {fmtTxDate(tx.investment_date, locale)}
+            </div>
+          </div>
+          <span className="tabular" style={{ fontSize: 12, fontWeight: 600, color, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
+            {withdrawal ? '−' : '+'}{fmtCompact(tx.amount_vnd)}
+          </span>
+        </div>
+      )
+    })
+  )
+
+  const ledger = (
+    <TransactionLedgerSheet
+      open={showLedger}
+      desktop={desktop}
+      locale={locale}
+      onClose={() => setShowLedger(false)}
+      onChanged={() => { setLocalKey((k) => k + 1); onChanged?.() }}
+    />
+  )
+
+  // Mobile: section header above the card (matches Goals / Insurance sections).
+  if (!desktop) {
+    return (
+      <section data-testid="recent-activity">
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600, letterSpacing: '-0.01em' }}>{t('recentActivity')}</h2>
+            <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--c-muted)' }}>{t('transactions', { count: total })}</p>
+          </div>
+          {viewAll}
+        </div>
+        <div className="cn-card" style={{ overflow: 'hidden' }}>{rows}</div>
+        {ledger}
+      </section>
+    )
+  }
+
+  // Desktop: in-card header with the calendar icon.
   return (
     <section data-testid="recent-activity" style={{
       background: 'var(--c-card)',
@@ -67,7 +148,6 @@ export default function RecentActivityCard({ locale, desktop, refreshKey, onChan
       boxShadow: 'var(--shadow-card)',
       overflow: 'hidden',
     }}>
-      {/* Header */}
       <div style={{ padding: '13px 16px', borderBottom: total > 0 ? '1px solid var(--c-line)' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
           <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--c-card-2)', color: 'var(--c-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -78,65 +158,10 @@ export default function RecentActivityCard({ locale, desktop, refreshKey, onChan
             <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 1 }}>{t('transactions', { count: total })}</div>
           </div>
         </div>
-        <button
-          data-testid="recent-activity-view-all"
-          onClick={() => setShowLedger(true)}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, color: 'var(--c-navy)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: '5px 6px', flexShrink: 0 }}
-        >
-          {t('viewAll')}
-          <ArrowRight size={13} />
-        </button>
+        {viewAll}
       </div>
-
-      {/* Rows */}
-      {total === 0 ? (
-        <div style={{ padding: '20px 16px', fontSize: 13, color: 'var(--c-muted)', textAlign: 'center' }}>
-          {t('recentActivityEmpty')}
-        </div>
-      ) : (
-        txs.map((tx, i) => {
-          const withdrawal = isWithdrawal(tx)
-          const color = withdrawal ? 'var(--c-neg)' : 'var(--c-pos)'
-          const badgeColor = withdrawal ? 'var(--c-neg)' : (ASSET_BADGE[tx.asset_type as AssetType] ?? 'var(--c-muted)')
-          const badgeText = withdrawal ? tt('withdrawal') : assetLabel(tx)
-          const goalName = tx.savings_goals?.goal_name ?? tt('noGoal')
-          return (
-            <div
-              key={tx.transaction_id}
-              data-testid="recent-activity-row"
-              style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 16px', borderBottom: i < txs.length - 1 ? '1px solid var(--c-line)' : 'none' }}
-            >
-              <div style={{ width: 30, height: 30, borderRadius: 8, background: `color-mix(in srgb, ${color} 12%, transparent)`, color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                {withdrawal ? <ArrowDownRight size={14} strokeWidth={2.2} /> : <ArrowUpRight size={14} strokeWidth={2.2} />}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, padding: '1px 6px', borderRadius: 999, color: badgeColor, background: `color-mix(in srgb, ${badgeColor} 12%, transparent)`, flexShrink: 0 }}>
-                    {badgeText}
-                  </span>
-                  <span style={{ fontSize: 12, color: 'var(--c-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {txPrimaryName(tx, assetLabel(tx))}
-                  </span>
-                </div>
-                <div style={{ fontSize: 10, color: 'var(--c-muted)', marginTop: 2 }}>
-                  {goalName} · {fmtTxDate(tx.investment_date, locale)}
-                </div>
-              </div>
-              <span className="tabular" style={{ fontSize: 12, fontWeight: 600, color, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
-                {withdrawal ? '−' : '+'}{fmtCompact(tx.amount_vnd)}
-              </span>
-            </div>
-          )
-        })
-      )}
-
-      <TransactionLedgerSheet
-        open={showLedger}
-        desktop={desktop}
-        locale={locale}
-        onClose={() => setShowLedger(false)}
-        onChanged={() => { setLocalKey((k) => k + 1); onChanged?.() }}
-      />
+      {rows}
+      {ledger}
     </section>
   )
 }
