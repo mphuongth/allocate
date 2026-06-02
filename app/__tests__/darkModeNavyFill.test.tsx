@@ -79,6 +79,34 @@ describe('issue #264 — no navy-fill + white-foreground (invisible in dark mode
   })
 })
 
+describe('issue #264 — fund-type chips are theme-tokenized', () => {
+  // The fund-type palette (equity/debt/balanced/gold) drove chip + icon-tile
+  // colours from hardcoded light-pastel hex, which stayed light on the dark
+  // canvas. Both the surface and the accent text must come from flipping
+  // tokens instead.
+  for (const rel of [
+    '(app)/funds/components/MobileFundLibraryView.tsx',
+    '(app)/funds/components/DesktopFundLibraryView.tsx',
+  ]) {
+    it(`${rel} TYPE_META uses CSS tokens, not hardcoded hex`, () => {
+      const src = readFileSync(path.join(APP_DIR, rel), 'utf8')
+      const block = src.match(/const TYPE_META[^=]*=\s*\{([\s\S]*?)\n\}/)
+      expect(block, 'TYPE_META block not found').not.toBeNull()
+      expect(block![1], 'TYPE_META still has a hardcoded hex colour').not.toMatch(/#[0-9a-fA-F]{6}/)
+    })
+  }
+
+  it('globals.css defines fund-type tokens with dark-mode overrides', () => {
+    const css = readFileSync(path.join(process.cwd(), 'app/globals.css'), 'utf8')
+    const root = css.slice(css.indexOf(':root'), css.indexOf('@theme inline'))
+    const dark = css.slice(css.indexOf('.dark {'), css.indexOf('@layer base'))
+    for (const token of ['--c-fund-equity', '--c-fund-debt', '--c-fund-balanced', '--c-fund-gold']) {
+      expect(root, `${token} missing from :root`).toContain(token)
+      expect(dark, `${token} not overridden in .dark`).toContain(token)
+    }
+  })
+})
+
 describe('issue #264 — --c-btn-primary stays navy in both themes', () => {
   it('globals.css does not redefine --c-btn-primary inside the .dark block', () => {
     const css = readFileSync(path.join(process.cwd(), 'app/globals.css'), 'utf8')

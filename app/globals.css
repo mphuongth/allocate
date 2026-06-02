@@ -39,6 +39,13 @@
   --c-accent-fixed: #b45309;
   --c-accent-insurance: #7c3aed;
   --c-accent-other: #475569;
+  /* Fund-type palette (equity/debt/balanced/gold). Each pairs an accent text
+     colour with a tinted surface; both flip in dark mode (see .dark) so the
+     chips/icon tiles adapt to the dark canvas instead of staying pastel. */
+  --c-fund-equity: #16a34a;   --c-fund-equity-bg: #f0fdf4;
+  --c-fund-debt: #2563eb;     --c-fund-debt-bg: #eff6ff;
+  --c-fund-balanced: #7c3aed; --c-fund-balanced-bg: #f5f3ff;
+  --c-fund-gold: #b45309;     --c-fund-gold-bg: #fef7e6;
   /* Primary button fill — stays dark navy in both modes so white text is always legible */
   --c-btn-primary: #0F2A4A;
   --c-btn-primary-hover: #1e3a63;
@@ -152,6 +159,11 @@
   --c-muted-2: #737373;
   --c-navy: #f8fafc;
   --c-navy-tint: #1a2540;
+  /* Fund-type palette — lightened accents on translucent tints for dark mode */
+  --c-fund-equity: #4ade80;   --c-fund-equity-bg: rgba(22, 163, 74, 0.18);
+  --c-fund-debt: #60a5fa;     --c-fund-debt-bg: rgba(37, 99, 235, 0.18);
+  --c-fund-balanced: #a78bfa; --c-fund-balanced-bg: rgba(124, 58, 237, 0.18);
+  --c-fund-gold: #fbbf24;     --c-fund-gold-bg: rgba(180, 83, 9, 0.22);
   /* Tab bar goes dark in dark mode */
   --c-tab-bg: rgba(22, 22, 22, 0.92);
   --c-pos-tint: rgba(4, 120, 87, 0.15);

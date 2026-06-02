@@ -70,10 +70,10 @@ function bustCache() {
 }
 
 const TYPE_META: Record<FundType, { label: string; color: string; bg: string }> = {
-  equity:   { label: 'Stock',    color: '#16a34a', bg: '#f0fdf4' },
-  debt:     { label: 'Bond',     color: '#2563eb', bg: '#eff6ff' },
-  balanced: { label: 'Balanced', color: '#7c3aed', bg: '#f5f3ff' },
-  gold:     { label: 'Gold',     color: '#b45309', bg: '#fef7e6' },
+  equity:   { label: 'Stock',    color: 'var(--c-fund-equity)',   bg: 'var(--c-fund-equity-bg)' },
+  debt:     { label: 'Bond',     color: 'var(--c-fund-debt)',     bg: 'var(--c-fund-debt-bg)' },
+  balanced: { label: 'Balanced', color: 'var(--c-fund-balanced)', bg: 'var(--c-fund-balanced-bg)' },
+  gold:     { label: 'Gold',     color: 'var(--c-fund-gold)',     bg: 'var(--c-fund-gold-bg)' },
 }
 
 const TYPE_FILTERS: Array<{ v: 'all' | FundType; l: string }> = [

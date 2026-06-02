@@ -29,10 +29,10 @@ type TypeFilter = 'all' | 'equity' | 'debt' | 'balanced'
 // ─── Design constants ─────────────────────────────────────────────────────────
 
 const TYPE_META: Record<FundType, { label: string; labelVi: string; color: string; bg: string }> = {
-  equity:   { label: 'Stock',    labelVi: 'Cổ phiếu',   color: '#16a34a', bg: 'oklch(0.97 0.04 150)' },
-  debt:     { label: 'Bond',     labelVi: 'Trái phiếu', color: '#2563eb', bg: '#eff6ff' },
-  balanced: { label: 'Balanced', labelVi: 'Cân bằng',   color: '#7c3aed', bg: '#f5f3ff' },
-  gold:     { label: 'Gold',     labelVi: 'Vàng',       color: '#b45309', bg: '#fef7e6' },
+  equity:   { label: 'Stock',    labelVi: 'Cổ phiếu',   color: 'var(--c-fund-equity)',   bg: 'var(--c-fund-equity-bg)' },
+  debt:     { label: 'Bond',     labelVi: 'Trái phiếu', color: 'var(--c-fund-debt)',     bg: 'var(--c-fund-debt-bg)' },
+  balanced: { label: 'Balanced', labelVi: 'Cân bằng',   color: 'var(--c-fund-balanced)', bg: 'var(--c-fund-balanced-bg)' },
+  gold:     { label: 'Gold',     labelVi: 'Vàng',       color: 'var(--c-fund-gold)',     bg: 'var(--c-fund-gold-bg)' },
 }
 
 const TYPE_FILTERS: { v: TypeFilter; label: string; labelVi: string }[] = [
