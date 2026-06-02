@@ -364,6 +364,61 @@ describe('GoalDetailSheet — gold sell uses current price (issue #251)', () => 
   })
 })
 
+describe('GoalDetailSheet — singular month wording (issue #262)', () => {
+  // 1,000,000₫ left to reach the target, no deadline.
+  const nearGoal: GoalData = { ...mockGoal, targetAmount: 10_000_000, currentValue: 9_000_000, targetDate: null, funds: [] }
+
+  it('says "In 1 month" (not "1 months") when the projection is a single month', async () => {
+    global.fetch = vi.fn().mockImplementation(() =>
+      Promise.resolve({ ok: true, json: async () => ({ transactions: [] }) }),
+    )
+
+    render(<GoalDetailSheet {...baseProps} goal={nearGoal} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Calculator' }))
+
+    // Contributing the full remaining amount finishes in exactly one month.
+    await userEvent.type(screen.getByPlaceholderText('0'), '1000000')
+
+    await waitFor(() => expect(screen.getByText('In 1 month')).toBeInTheDocument())
+    expect(screen.queryByText('In 1 months')).not.toBeInTheDocument()
+  })
+
+  it('shows "1 unit" (not "1 units") for a holding of a single unit', async () => {
+    const oneUnitGold = {
+      transaction_id: 'tx-gold-1',
+      transaction_type: 'investment',
+      asset_type: 'gold',
+      fund_id: null,
+      fund_name: null,
+      fund_code: null,
+      investment_date: '2026-01-01',
+      amount_vnd: 9_000_000,
+      units: 1,
+      unit_price: 9_000_000,
+      interest_rate: null,
+      expiry_date: null,
+      notes: 'PNJ Gold',
+      principal_withdrawn: null,
+      units_withdrawn: null,
+    }
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('investment-transactions')) {
+        return Promise.resolve({ ok: true, json: async () => ({ transactions: [oneUnitGold] }) })
+      }
+      if (url.includes('gold-price')) {
+        return Promise.resolve({ ok: true, json: async () => ({ price_per_chi: 9_200_000 }) })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+
+    render(<GoalDetailSheet {...baseProps} goal={nearGoal} />)
+    await waitFor(() => screen.getByText('PNJ Gold'))
+
+    expect(screen.getByText('1 unit')).toBeInTheDocument()
+    expect(screen.queryByText('1 units')).not.toBeInTheDocument()
+  })
+})
+
 describe('GoalDetailSheet — refreshKey triggers refetch', () => {
   it('refetches /investment-transactions when refreshKey changes', async () => {
     const fetchMock = vi.fn().mockImplementation((url: string) => {

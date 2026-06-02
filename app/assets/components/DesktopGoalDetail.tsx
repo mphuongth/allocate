@@ -302,7 +302,7 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
                     </div>
                     <div style={{ fontSize: 10, color: 'var(--c-muted)', marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>
                       {inv.units != null
-                        ? `${inv.units.toLocaleString('vi-VN')} ${isVi ? 'phần' : 'units'}`
+                        ? `${inv.units.toLocaleString('vi-VN')} ${isVi ? 'phần' : inv.units === 1 ? 'unit' : 'units'}`
                         : inv.principal != null
                           ? `${isVi ? 'Gốc' : 'Principal'} ${fmtCompact(inv.principal)}`
                           : ''}
@@ -388,10 +388,10 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
                     {projectedDate.toLocaleDateString(isVi ? 'vi-VN' : 'en-GB', { month: 'long', year: 'numeric' })}
                   </div>
                   <div style={{ fontSize: 11, color: isOnTrack ? 'var(--c-pos)' : 'var(--c-warn)', marginTop: 4, opacity: 0.85 }}>
-                    {isVi ? `Sau ${monthsToGoal} tháng` : `In ${monthsToGoal} months`}
+                    {isVi ? `Sau ${monthsToGoal} tháng` : `In ${monthsToGoal} ${monthsToGoal === 1 ? 'month' : 'months'}`}
                     {goal.targetDate && monthsToGoal != null && (isOnTrack
-                      ? (isVi ? ` · ${monthsLeft - monthsToGoal} tháng sớm hơn` : ` · ${monthsLeft - monthsToGoal} months early`)
-                      : (isVi ? ` · ${monthsToGoal - monthsLeft} tháng trễ hạn` : ` · ${monthsToGoal - monthsLeft} months late`)
+                      ? (isVi ? ` · ${monthsLeft - monthsToGoal} tháng sớm hơn` : ` · ${monthsLeft - monthsToGoal} ${monthsLeft - monthsToGoal === 1 ? 'month' : 'months'} early`)
+                      : (isVi ? ` · ${monthsToGoal - monthsLeft} tháng trễ hạn` : ` · ${monthsToGoal - monthsLeft} ${monthsToGoal - monthsLeft === 1 ? 'month' : 'months'} late`)
                     )}
                   </div>
                 </div>
@@ -836,7 +836,7 @@ function SellModal({ inv, isVi, goalId, goalCurrentValue, goalTargetAmount, onCl
               <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{inv.name}</div>
               <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 2, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                 <span>{isVi ? 'Khả dụng' : 'Available'}: <span style={{ fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(maxAmount)}</span></span>
-                {inv.units != null && <span style={{ fontVariantNumeric: 'tabular-nums' }}>{inv.units.toLocaleString('vi-VN')} {isVi ? 'phần' : 'units'}</span>}
+                {inv.units != null && <span style={{ fontVariantNumeric: 'tabular-nums' }}>{inv.units.toLocaleString('vi-VN')} {isVi ? 'phần' : inv.units === 1 ? 'unit' : 'units'}</span>}
                 {isBank && inv.interestRate && <span>{inv.interestRate}%/yr</span>}
               </div>
             </div>
@@ -1250,7 +1250,7 @@ function EditGoalModal({ open, onClose, goal, onSaved, isVi }: {
               </div>
             </div>
             <span style={{ background: 'var(--c-card)', color: 'var(--c-navy)', fontWeight: 600, fontSize: 12, padding: '4px 10px', borderRadius: 999, border: '1px solid var(--c-line)' }}>
-              {monthsTo} {isVi ? 'tháng' : 'months'}
+              {monthsTo} {isVi ? 'tháng' : monthsTo === 1 ? 'month' : 'months'}
             </span>
           </div>
         )}
