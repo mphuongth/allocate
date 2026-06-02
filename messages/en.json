@@ -1,6 +1,8 @@
 {
   "addTx": {
     "title": "Add transaction",
+    "editTitle": "Edit transaction",
+    "saveChanges": "Save changes",
     "assetType": "Asset type",
     "direction": "Transaction",
     "goal": "Goal",

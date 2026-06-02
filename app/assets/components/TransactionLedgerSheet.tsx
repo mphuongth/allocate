@@ -131,6 +131,7 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [showAdd, setShowAdd] = useState(false)
+  const [editExisting, setEditExisting] = useState<LedgerTransaction | null>(null)
   const [txForm, setTxForm] = useState(emptyTxForm)
   const [editTx, setEditTx] = useState<LedgerTransaction | null>(null)
   const [formMode, setFormMode] = useState<'edit' | null>(null)
@@ -188,7 +189,7 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
     if (!open) return
     document.body.style.overflow = 'hidden'
     return () => { document.body.style.overflow = '' }
-  }, [open, showAdd, showImport, formMode])
+  }, [open, showAdd, editExisting, showImport, formMode])
 
   function setSelectFilter(key: 'asset_type' | 'goal_id', value: string) {
     setFilters((prev) => ({ ...prev, [key]: value }))
@@ -359,7 +360,7 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
   const rowActions = (tx: LedgerTransaction) => (
     <span style={{ display: 'inline-flex', gap: 2, whiteSpace: 'nowrap' }}>
       {!isWithdrawal(tx) && (
-        <button onClick={() => openEdit(tx)} className="cn-btn ghost" style={{ padding: 5 }} aria-label={tc('edit')}><Edit2 size={14} color="var(--c-muted)" /></button>
+        <button onClick={() => (tx.asset_type === 'stock' ? openEdit(tx) : setEditExisting(tx))} className="cn-btn ghost" style={{ padding: 5 }} aria-label={tc('edit')}><Edit2 size={14} color="var(--c-muted)" /></button>
       )}
       <button onClick={() => setConfirmTx(tx)} className="cn-btn ghost" style={{ padding: 5 }} aria-label={tc('delete')}><Trash size={14} color="var(--c-neg)" /></button>
     </span>
@@ -631,11 +632,13 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
         </div>
       </Shell>
 
-      {/* Add — reuses the app's standard Add transaction modal */}
+      {/* Add / edit — reuses the app's standard transaction modal. Stock rows
+          (not supported by that modal) fall back to the inline form above. */}
       <AddTransactionSheet
-        open={showAdd}
+        open={showAdd || !!editExisting}
+        existing={editExisting}
         desktop={desktop}
-        onClose={() => setShowAdd(false)}
+        onClose={() => { setShowAdd(false); setEditExisting(null) }}
         onSaved={() => { fetchTransactions(); notifyChanged() }}
       />
 

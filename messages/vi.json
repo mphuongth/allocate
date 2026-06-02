@@ -1,6 +1,8 @@
 {
   "addTx": {
     "title": "Thêm giao dịch",
+    "editTitle": "Sửa giao dịch",
+    "saveChanges": "Lưu thay đổi",
     "assetType": "Loại tài sản",
     "direction": "Giao dịch",
     "goal": "Mục tiêu",
