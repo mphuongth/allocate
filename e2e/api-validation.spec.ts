@@ -48,6 +48,13 @@ test.describe('API input validation', () => {
     expect(res.status()).toBe(400)
   })
 
+  test('PATCH /api/v1/savings-goals/<bad-uuid> rejects malformed UUID (400)', async ({ request }) => {
+    const res = await request.patch('/api/v1/savings-goals/not-a-uuid', {
+      data: { goal_name: 'updated' },
+    })
+    expect(res.status()).toBe(400)
+  })
+
   test('POST /api/v1/investment-transactions rejects negative interest_rate beyond -100 (400)', async ({ request }) => {
     const res = await request.post('/api/v1/investment-transactions', {
       data: {

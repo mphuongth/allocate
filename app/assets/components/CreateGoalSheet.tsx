@@ -302,6 +302,8 @@ export function CreateGoalSheet({ open, onClose, onSuccess, desktop }: Props) {
         }}
       >
         <div
+          role="dialog"
+          aria-modal="true"
           onClick={(e) => e.stopPropagation()}
           style={{
             width: '100%', maxWidth: 460, maxHeight: 'calc(100vh - 48px)',
@@ -336,6 +338,8 @@ export function CreateGoalSheet({ open, onClose, onSuccess, desktop }: Props) {
       }}
     >
       <div
+        role="dialog"
+        aria-modal="true"
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%', maxWidth: 480, maxHeight: '90dvh',
