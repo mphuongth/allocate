@@ -5,9 +5,10 @@ import { useLocale } from 'next-intl'
 import {
   Wallet, Target, Shield, ShoppingCart,
   ChevronDown, ChevronUp,
-  MoreHorizontal, Plus, Check, X, Calendar,
+  MoreHorizontal, Plus, Check, X, Calendar, Settings,
 } from 'lucide-react'
 import { fmtCompact } from '@/lib/formatters'
+import FixedExpenseManager from './FixedExpenseManager'
 import type {
   MonthlyPlan, FundInvestment, DirectSaving, FixedExpense,
   InsuranceMember, OtherExpense, Fund, Goal,
@@ -46,6 +47,7 @@ type SheetState =
   | { type: 'override-fe'; expense: FixedExpense }
   | { type: 'override-ins'; member: InsuranceMember }
   | { type: 'other-expense'; existing: OtherExpense | null }
+  | { type: 'manage-fixed' }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -613,7 +615,7 @@ function FixedExpIcon({ size = 16 }: { size?: number }) {
 // ─── BudgetSection ────────────────────────────────────────────────────────────
 
 function BudgetSection({
-  icon: Icon, iconColor, title, total, count, defaultOpen = true, children, testId,
+  icon: Icon, iconColor, title, total, count, defaultOpen = true, children, testId, action,
 }: {
   icon: React.ElementType
   iconColor: string
@@ -623,39 +625,46 @@ function BudgetSection({
   defaultOpen?: boolean
   children: React.ReactNode
   testId?: string
+  action?: React.ReactNode
 }) {
   const [open, setOpen] = useState(defaultOpen)
+  const toggle = () => setOpen((o) => !o)
   return (
     <div data-testid="budget-section" style={{
       background: 'var(--c-card)', border: '1px solid var(--c-line)',
       borderRadius: 16, boxShadow: 'var(--shadow-card)', overflow: 'hidden',
     }}>
-      <button
-        onClick={() => setOpen((o) => !o)}
-        data-testid={testId}
-        style={{
-          width: '100%', textAlign: 'left',
-          background: 'transparent', border: 'none', cursor: 'pointer',
-          padding: '14px', display: 'flex', alignItems: 'center', gap: 12,
-          fontFamily: 'inherit',
-        }}
-      >
-        <div style={{
-          width: 36, height: 36, borderRadius: 8,
-          background: 'var(--c-card-2)', color: iconColor,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-        }}>
-          <Icon size={16} />
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-ink)' }}>{title}</div>
-          {count && <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 2 }}>{count}</div>}
-        </div>
-        <span style={{ fontSize: 14, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: 'var(--c-ink)' }}>
-          {fmtCompact(total)}
-        </span>
-        {open ? <ChevronUp size={16} color="var(--c-muted)" /> : <ChevronDown size={16} color="var(--c-muted)" />}
-      </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px' }}>
+        <button
+          onClick={toggle}
+          data-testid={testId}
+          style={{
+            flex: 1, minWidth: 0, textAlign: 'left',
+            background: 'transparent', border: 'none', cursor: 'pointer',
+            padding: 0, display: 'flex', alignItems: 'center', gap: 12,
+            fontFamily: 'inherit',
+          }}
+        >
+          <div style={{
+            width: 36, height: 36, borderRadius: 8,
+            background: 'var(--c-card-2)', color: iconColor,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          }}>
+            <Icon size={16} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-ink)' }}>{title}</div>
+            {count && <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 2 }}>{count}</div>}
+          </div>
+          <span style={{ fontSize: 14, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: 'var(--c-ink)' }}>
+            {fmtCompact(total)}
+          </span>
+        </button>
+        {action}
+        <button onClick={toggle} aria-label="Toggle section" style={{ background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', color: 'var(--c-muted)', padding: 0 }}>
+          {open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </button>
+      </div>
       {open && (
         <div style={{ borderTop: '1px solid var(--c-line)', background: 'var(--c-card-2)' }}>
           {children}
@@ -991,15 +1000,30 @@ export default function MobilePlanningView({
             </BudgetSection>
 
             {/* Fixed expenses section */}
-            {fixedExpenses.length > 0 && (
-              <BudgetSection
+            <BudgetSection
                 icon={FixedExpIcon}
                 iconColor="var(--c-accent-fixed)"
                 title={isVI ? 'Chi phí cố định' : 'Fixed expenses'}
                 count={`${fixedExpenses.length} ${isVI ? 'khoản' : fixedExpenses.length === 1 ? 'item' : 'items'}`}
                 total={totalFixed}
                 testId="section-fixed-expenses"
+                action={
+                  <button
+                    data-testid="mobile-manage-fixed"
+                    onClick={() => setSheet({ type: 'manage-fixed' })}
+                    aria-label={isVI ? 'Quản lý chi phí cố định' : 'Manage fixed expenses'}
+                    style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 8px', fontSize: 12, fontWeight: 600, color: 'var(--c-navy)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', borderRadius: 6 }}
+                  >
+                    <Settings size={14} />
+                    {isVI ? 'Quản lý' : 'Manage'}
+                  </button>
+                }
               >
+                {fixedExpenses.length === 0 && (
+                  <div style={{ padding: '14px', fontSize: 13, color: 'var(--c-muted)' }}>
+                    {isVI ? 'Chưa có chi phí cố định.' : 'No fixed expenses yet.'}
+                  </div>
+                )}
                 {fixedExpenses.map((fe, i) => {
                   const isSkipped = fe.override === 0
                   const hasOverride = fe.override != null && fe.override > 0 && fe.override !== fe.amount_vnd
@@ -1023,7 +1047,6 @@ export default function MobilePlanningView({
                   )
                 })}
               </BudgetSection>
-            )}
 
             {/* Insurance section */}
             {insuranceMembers.length > 0 && (
@@ -1162,6 +1185,17 @@ export default function MobilePlanningView({
           onToast={onToast}
         />
       )}
+
+      {/* ─── Manage fixed expenses sheet ───────────────────────────────────── */}
+      <Sheet
+        open={sheet?.type === 'manage-fixed'}
+        onClose={() => setSheet(null)}
+        title={isVI ? 'Quản lý chi phí cố định' : 'Manage fixed expenses'}
+      >
+        {sheet?.type === 'manage-fixed' && (
+          <FixedExpenseManager onChange={onRefresh} onToast={onToast} variant="sheet" />
+        )}
+      </Sheet>
     </div>
   )
 }

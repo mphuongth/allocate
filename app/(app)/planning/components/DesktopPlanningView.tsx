@@ -4,10 +4,11 @@ import React, { useState, useMemo, useRef } from 'react'
 import {
   ChevronLeft, ChevronRight, ChevronDown, ChevronUp,
   Target, Shield, ShoppingCart,
-  MoreHorizontal, Check, RefreshCw, X, Plus,
+  MoreHorizontal, Check, RefreshCw, X, Plus, Settings,
 } from 'lucide-react'
 import { useLocale } from 'next-intl'
 import { fmtCompact } from '@/lib/formatters'
+import FixedExpenseManager from './FixedExpenseManager'
 import type {
   MonthlyPlan, FundInvestment, DirectSaving, FixedExpense,
   InsuranceMember, OtherExpense, Fund, Goal,
@@ -94,24 +95,30 @@ function DModal({ onClose, title, width = 400, children }: {
 
 // ─── PlanTable — collapsible section ─────────────────────────────────────────
 
-function PlanTable({ icon, iconColor, title, total, defaultOpen = true, children }: {
+function PlanTable({ icon, iconColor, title, total, defaultOpen = true, action, children }: {
   icon: React.ReactNode; iconColor: string; title: string; total: number
-  defaultOpen?: boolean; children: React.ReactNode
+  defaultOpen?: boolean; action?: React.ReactNode; children: React.ReactNode
 }) {
   const [open, setOpen] = useState(defaultOpen)
+  const toggle = () => setOpen(o => !o)
   return (
     <div style={{ background: 'var(--c-card)', borderRadius: 16, border: '1px solid var(--c-line)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', marginBottom: 12 }}>
-      <button
-        onClick={() => setOpen(o => !o)}
-        style={{ width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer', background: 'transparent', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 12, padding: '13px 16px', borderBottom: open ? '1px solid var(--c-line)' : 'none' }}
-      >
-        <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--c-card-2)', color: iconColor, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          {icon}
-        </div>
-        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-ink)', flex: 1 }}>{title}</span>
-        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(total)}</span>
-        {open ? <ChevronUp size={15} color="var(--c-muted)" /> : <ChevronDown size={15} color="var(--c-muted)" />}
-      </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 16px', borderBottom: open ? '1px solid var(--c-line)' : 'none' }}>
+        <button
+          onClick={toggle}
+          style={{ flex: 1, minWidth: 0, textAlign: 'left', border: 'none', cursor: 'pointer', background: 'transparent', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 12, padding: 0 }}
+        >
+          <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--c-card-2)', color: iconColor, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            {icon}
+          </div>
+          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-ink)', flex: 1 }}>{title}</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(total)}</span>
+        </button>
+        {action}
+        <button onClick={toggle} aria-label="Toggle section" style={{ border: 'none', cursor: 'pointer', background: 'transparent', display: 'flex', color: 'var(--c-muted)', padding: 0 }}>
+          {open ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+        </button>
+      </div>
       {open && (
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           {children}
@@ -330,6 +337,7 @@ export default function DesktopPlanningView({
   const [otherModal, setOtherModal] = useState<OtherExpense | Record<string, never> | null>(null)
   const [otherDesc, setOtherDesc] = useState('')
   const [otherAmt, setOtherAmt] = useState('')
+  const [showFEManage, setShowFEManage] = useState(false)
 
   // ── Derived values ──
   const byGoal = useMemo(() => buildByGoal(investments, savings), [investments, savings])
@@ -640,7 +648,22 @@ export default function DesktopPlanningView({
               </PlanTable>
 
               {/* Fixed expenses */}
-              <PlanTable icon={<svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="3" width="16" height="18" rx="1" /><path d="M9 8h2M13 8h2M9 12h2M13 12h2M9 16h2M13 16h2" /></svg>} iconColor="var(--c-accent-fixed,#b45309)" title={isVI ? 'Chi phí cố định' : 'Fixed expenses'} total={fixedTotal}>
+              <PlanTable
+                icon={<svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="3" width="16" height="18" rx="1" /><path d="M9 8h2M13 8h2M9 12h2M13 12h2M9 16h2M13 16h2" /></svg>}
+                iconColor="var(--c-accent-fixed,#b45309)"
+                title={isVI ? 'Chi phí cố định' : 'Fixed expenses'}
+                total={fixedTotal}
+                action={
+                  <button
+                    data-testid="desktop-manage-fixed"
+                    onClick={() => setShowFEManage(true)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', fontSize: 12, fontWeight: 600, color: 'var(--c-navy)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', borderRadius: 8 }}
+                  >
+                    <Settings size={14} />
+                    {isVI ? 'Quản lý' : 'Manage'}
+                  </button>
+                }
+              >
                 <THead col1={isVI ? 'Chi phí' : 'Expense'} col2={isVI ? 'Số tiền' : 'Amount'} />
                 <tbody>
                   {fixedExpenses.length === 0 ? (
@@ -848,6 +871,12 @@ export default function DesktopPlanningView({
               </button>
             </div>
           </div>
+        </DModal>
+      )}
+
+      {showFEManage && (
+        <DModal onClose={() => setShowFEManage(false)} title={isVI ? 'Quản lý chi phí cố định' : 'Manage fixed expenses'} width={460}>
+          <FixedExpenseManager onChange={onRefresh} onToast={onToast} />
         </DModal>
       )}
     </div>

@@ -1,20 +1,14 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import MobileSettingsView from './components/MobileSettingsView'
 import DesktopSettingsView from './components/DesktopSettingsView'
 import InvestmentTransactionsTab from './tabs/InvestmentTransactionsTab'
-import FixedExpensesTab from './tabs/FixedExpensesTab'
 
-// Goals and insurance members are managed from the dashboard now; their legacy
-// tabs were removed. The remaining data tabs are reachable only via ?tab=<id>.
-const TAB_IDS = ['transactions', 'expenses'] as const
-
-type TabId = typeof TAB_IDS[number]
-
-const VALID_TABS = TAB_IDS as unknown as string[]
+// Goals, insurance and fixed expenses are managed from the dashboard / plan
+// page now; their legacy Settings tabs were removed. The only remaining data
+// tab — investment transactions — is reachable via ?tab=transactions.
+const VALID_TABS = ['transactions']
 
 interface Props {
   initialTab?: string
@@ -24,51 +18,22 @@ interface Props {
 }
 
 export default function SettingsClient({ initialTab, email, initials, displayName }: Props) {
-  const router = useRouter()
   const t = useTranslations('settings')
-  const showDataTabs = VALID_TABS.includes(initialTab ?? '')
-  const [activeTab, setActiveTab] = useState<TabId>(
-    showDataTabs ? (initialTab as TabId) : 'transactions'
-  )
-
-  function handleTabChange(tab: TabId) {
-    setActiveTab(tab)
-    router.replace(`/settings?tab=${tab}`)
-  }
+  const showDataTab = VALID_TABS.includes(initialTab ?? '')
 
   return (
     <>
       {/* Mobile redesign view */}
       <MobileSettingsView email={email} initials={initials} displayName={displayName} />
 
-      {showDataTabs ? (
-        /* Desktop tab-based view for data management tabs (transactions/expenses) */
+      {showDataTab ? (
+        /* Desktop data-management view (investment transactions) */
         <div className="hidden md:block space-y-6">
           <div>
             <p className="text-sm text-gray-500 dark:text-gray-400">{t('description')}</p>
           </div>
-
-          <div className="flex flex-col gap-2">
-            <div className="grid grid-cols-2 w-full items-center rounded-xl bg-[#ececf0] dark:bg-gray-800 p-[3px] gap-[3px]">
-              {TAB_IDS.map((tabId) => (
-                <button
-                  key={tabId}
-                  onClick={() => handleTabChange(tabId)}
-                  className={`inline-flex items-center justify-center rounded-[10px] border px-3 py-2 text-xs sm:text-sm font-medium text-center leading-tight transition-[color,box-shadow] ${
-                    activeTab === tabId
-                      ? 'border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
-                      : 'border-transparent text-gray-900 dark:text-gray-400'
-                  }`}
-                >
-                  {t(`tabs.${tabId}`)}
-                </button>
-              ))}
-            </div>
-
-            <div className="mt-4">
-              {activeTab === 'transactions' && <InvestmentTransactionsTab />}
-              {activeTab === 'expenses' && <FixedExpensesTab />}
-            </div>
+          <div className="mt-4">
+            <InvestmentTransactionsTab />
           </div>
         </div>
       ) : (

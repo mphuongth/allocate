@@ -106,8 +106,7 @@
     "pageSubtitle": "Account",
     "description": "Manage savings goals, investments, expenses and insurance.",
     "tabs": {
-      "transactions": "Investment Transactions",
-      "expenses": "Fixed Expenses"
+      "transactions": "Investment Transactions"
     }
   },
   "goals": {
@@ -605,7 +604,7 @@
     "noGoals": "No goals",
     "unassigned": "Unassigned",
     "fixedExpensesTitle": "Fixed Expenses",
-    "fixedExpensesDesc": "Monthly amounts from Settings. Override or skip for this month.",
+    "fixedExpensesDesc": "Recurring monthly amounts. Override or skip for this month.",
     "colExpense": "Expense",
     "colDefault": "Default / Month",
     "colThisMonth": "This Month",
