@@ -56,14 +56,17 @@ describe('issue #264 — no navy-fill + white-foreground (invisible in dark mode
     expect(offenders).toEqual([])
   })
 
-  it('fund filter chip uses an inverting token (not hardcoded white) for the active label', () => {
-    const src = readFileSync(
-      path.join(APP_DIR, '(app)/funds/components/MobileFundLibraryView.tsx'),
-      'utf8',
-    )
-    // Active chip background is --c-ink (flips to light in dark mode), so the
-    // active label must invert too — `var(--c-card)`, not `#fff`.
-    expect(src).not.toMatch(/filter === f\.v \? '#fff'/)
+  it('fund filter pills use an inverting token (not hardcoded white) for the active label', () => {
+    // Active pill background is --c-ink (flips to light in dark mode), so the
+    // active label must invert too — `var(--c-card)`, not `#fff`. Covers both
+    // the mobile (`filter`) and desktop (`typeFilter`) view variable names.
+    for (const rel of [
+      '(app)/funds/components/MobileFundLibraryView.tsx',
+      '(app)/funds/components/DesktopFundLibraryView.tsx',
+    ]) {
+      const src = readFileSync(path.join(APP_DIR, rel), 'utf8')
+      expect(src, `${rel} still hardcodes white for the active filter label`).not.toMatch(/=== f\.v \? '#fff'/)
+    }
   })
 
   it('NAV info banner uses theme tokens, not hardcoded light blue', () => {

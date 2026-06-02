@@ -556,7 +556,7 @@ export default function DesktopFundLibraryView() {
                 style={{
                   padding: '6px 12px', borderRadius: 999, fontSize: 11, fontWeight: 500,
                   background: typeFilter === f.v ? 'var(--c-ink)' : 'var(--c-card)',
-                  color: typeFilter === f.v ? '#fff' : 'var(--c-muted)',
+                  color: typeFilter === f.v ? 'var(--c-card)' : 'var(--c-muted)',
                   border: '1px solid ' + (typeFilter === f.v ? 'var(--c-ink)' : 'var(--c-line)'),
                   cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
                   transition: 'all 120ms',
