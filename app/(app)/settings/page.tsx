@@ -24,19 +24,13 @@ function getDisplayName(email: string, userMetaName?: string): string {
   return firstName.charAt(0).toUpperCase() + firstName.slice(1)
 }
 
-export default async function SettingsPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ tab?: string }>
-}) {
-  const { tab } = await searchParams
+export default async function SettingsPage() {
   const supabase = await createSupabaseServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   const email = user?.email ?? ''
 
   return (
     <SettingsClient
-      initialTab={tab}
       email={email}
       initials={getInitials(email)}
       displayName={getDisplayName(email, user?.user_metadata?.display_name)}
