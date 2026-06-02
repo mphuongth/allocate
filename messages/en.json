@@ -260,6 +260,9 @@
   },
   "transactions": {
     "title": "Investment Transactions",
+    "ledgerTitle": "Transactions",
+    "addTitle": "Add transaction",
+    "editTitle": "Edit transaction",
     "create": "Create Transaction",
     "add": "Add",
     "import": "Import",

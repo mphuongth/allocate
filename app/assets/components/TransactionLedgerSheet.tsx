@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslations } from 'next-intl'
-import { Plus, FileSpreadsheet, Edit, Trash2, ChevronLeft, ChevronRight, X, Calendar, ArrowUpRight, ArrowDownRight } from 'lucide-react'
+import { Plus, Download, Edit, Trash2, ChevronLeft, ChevronRight, X, Calendar, ArrowUpRight, ArrowDownRight } from 'lucide-react'
 import ConfirmModal from '@/app/components/ConfirmModal'
 import AmountInput from '@/app/components/ui/AmountInput'
 import DecimalInput from '@/app/components/ui/DecimalInput'
@@ -371,7 +371,7 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
 
   return (
     <>
-      <Shell open={open} onClose={onClose} title={t('title')} desktop={desktop} width={880} testId="tx-ledger">
+      <Shell open={open} onClose={onClose} title={t('ledgerTitle')} desktop={desktop} width={880} testId="tx-ledger">
         <div style={{ display: 'grid', gap: 14 }}>
           {/* Toolbar: filters + actions */}
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
@@ -399,7 +399,7 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
             )}
             <div style={{ flex: 1 }} />
             <button data-testid="tx-ledger-import" onClick={() => { setShowImport(true); setImportRaw(''); setImportRows([]); setImportFundId('') }} className="cn-btn" style={{ padding: '8px 12px', fontSize: 12 }}>
-              <FileSpreadsheet size={14} />{t('import')}
+              <Download size={14} />{t('import')}
             </button>
             <button data-testid="tx-ledger-add" onClick={openAdd} className="cn-btn primary" style={{ padding: '8px 14px', fontSize: 12 }}>
               <Plus size={14} strokeWidth={2.4} />{t('add')}
@@ -416,8 +416,8 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
               </div>
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{t('empty')}</h3>
               <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 18 }}>
-                <button onClick={() => { setShowImport(true); setImportRaw(''); setImportRows([]); setImportFundId('') }} className="cn-btn"><FileSpreadsheet size={15} />{t('importModalTitle')}</button>
-                <button onClick={openAdd} className="cn-btn primary"><Plus size={15} strokeWidth={2.4} />{t('create')}</button>
+                <button onClick={() => { setShowImport(true); setImportRaw(''); setImportRows([]); setImportFundId('') }} className="cn-btn"><Download size={15} />{t('importModalTitle')}</button>
+                <button onClick={openAdd} className="cn-btn primary"><Plus size={15} strokeWidth={2.4} />{t('addTitle')}</button>
               </div>
             </div>
           ) : (
@@ -493,7 +493,7 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
       </Shell>
 
       {/* Add / edit */}
-      <Shell open={!!formMode} onClose={() => setFormMode(null)} title={formMode === 'add' ? t('create') : tc('edit')} desktop={desktop} width={520}>
+      <Shell open={!!formMode} onClose={() => setFormMode(null)} title={formMode === 'add' ? t('addTitle') : t('editTitle')} desktop={desktop} width={520}>
         <form onSubmit={(e) => { e.preventDefault(); handleSave() }} style={{ display: 'grid', gap: 14 }}>
           <Field label={t('filterAssetType')}>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>

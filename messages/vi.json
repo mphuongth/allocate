@@ -260,6 +260,9 @@
   },
   "transactions": {
     "title": "Giao dịch Đầu tư",
+    "ledgerTitle": "Giao dịch",
+    "addTitle": "Thêm giao dịch",
+    "editTitle": "Sửa giao dịch",
     "create": "Tạo Giao dịch",
     "add": "Thêm",
     "import": "Nhập Excel",
