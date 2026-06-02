@@ -52,8 +52,12 @@ test('can create a fixed expense from the plan page', async ({ page }) => {
   await page.getByTestId('fe-amount').fill('5000000')
   await page.getByTestId('fe-save').click()
 
-  // Returns to the list view with the new row
-  await expect(page.getByText('E2E Plan Rent').first()).toBeVisible({ timeout: 8_000 })
+  // Returns to the list view with the new row (scope to the desktop view —
+  // the mobile view is also mounted but md:hidden, so an unscoped .first()
+  // could match the hidden mobile copy of the same text).
+  await expect(
+    page.getByTestId('desktop-planning').getByText('E2E Plan Rent').first()
+  ).toBeVisible({ timeout: 8_000 })
 
   // Close loop: the expense appears in the plan's Fixed expenses section
   await closeManager(page)
@@ -87,7 +91,10 @@ test('can edit a fixed expense from the plan page', async ({ page }) => {
   await name.fill('E2E Plan Edit Updated')
   await page.getByTestId('fe-save').click()
 
-  await expect(page.getByText('E2E Plan Edit Updated').first()).toBeVisible({ timeout: 8_000 })
+  // Scope to the desktop view (mobile view is mounted but md:hidden).
+  await expect(
+    page.getByTestId('desktop-planning').getByText('E2E Plan Edit Updated').first()
+  ).toBeVisible({ timeout: 8_000 })
 })
 
 test('can delete a fixed expense from the plan page', async ({ page }) => {
