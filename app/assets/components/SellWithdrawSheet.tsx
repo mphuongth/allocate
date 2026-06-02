@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useLocale, useTranslations } from 'next-intl'
 import { ArrowDownRight, ArrowDownToLine, Building, Check, CircleDollarSign, Shield, TrendingUp, Wallet, X } from 'lucide-react'
 import { fmt } from '@/lib/formatters'
+import { AffectsProgressControl } from './goalDetailShared'
 const fmtVND = (n: number, _locale?: string) => fmt(n)
 
 export interface SellItem {
@@ -28,6 +29,10 @@ interface Props {
   // goal-detail fetch (filtered by goal_id) returns it and the holding is
   // valued net of the withdrawal (issue #261).
   goalId?: string
+  // Goal value & target drive the "count toward goal progress" preview. Only
+  // used in the 'goal' context.
+  goalCurrentValue?: number
+  goalTargetAmount?: number | null
   onClose: () => void
   onSuccess: () => void
   // Desktop renders a centered modal dialog; mobile keeps the bottom sheet.
@@ -48,7 +53,7 @@ const TYPE_COLOR = {
   stock: '#7c3aed',
 } as const
 
-export function SellWithdrawSheet({ item, open, context, goalId, onClose, onSuccess, desktop }: Props) {
+export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValue, goalTargetAmount, onClose, onSuccess, desktop }: Props) {
   const locale = useLocale()
   const t = useTranslations('Dashboard')
 
@@ -60,6 +65,7 @@ export function SellWithdrawSheet({ item, open, context, goalId, onClose, onSucc
   const [error, setError] = useState('')
   const [confirmed, setConfirmed] = useState(false)
   const [soldAmount, setSoldAmount] = useState(0)
+  const [affectsProgress, setAffectsProgress] = useState(true)
   const [mounted, setMounted] = useState(open)
 
   useEffect(() => {
@@ -76,6 +82,7 @@ export function SellWithdrawSheet({ item, open, context, goalId, onClose, onSucc
         setError('')
         setConfirmed(false)
         setSoldAmount(0)
+        setAffectsProgress(true)
       }, 220) // matches slide-down animation duration
       return () => clearTimeout(timer)
     }
@@ -199,6 +206,7 @@ export function SellWithdrawSheet({ item, open, context, goalId, onClose, onSucc
             units_withdrawn: parseFloat(unitsWithdrawn.toFixed(4)),
             principal_withdrawn: principalWithdrawn,
             goal_id: withdrawalGoalId,
+            affects_progress: context === 'goal' ? affectsProgress : true,
           }),
         })
         if (!res.ok) {
@@ -218,6 +226,7 @@ export function SellWithdrawSheet({ item, open, context, goalId, onClose, onSucc
           amount_vnd: isGold ? goldProceeds : isBank ? Math.round(numReceived) : Math.round(numAmount),
           principal_withdrawn: isGold ? (goldCostSold ?? goldProceeds) : isBank ? bankPrincipalPortion : Math.round(numAmount),
           goal_id: withdrawalGoalId,
+          affects_progress: context === 'goal' ? affectsProgress : true,
         }
         if (isGold) {
           body.units_withdrawn = parseFloat(numUnits.toFixed(4))
@@ -567,6 +576,18 @@ export function SellWithdrawSheet({ item, open, context, goalId, onClose, onSucc
               </div>
             )}
             </>
+            )}
+
+            {/* Count toward goal progress — only when withdrawing from a goal */}
+            {context === 'goal' && (
+              <AffectsProgressControl
+                checked={affectsProgress}
+                onChange={setAffectsProgress}
+                isVi={isVI}
+                currentValue={goalCurrentValue ?? 0}
+                targetAmount={goalTargetAmount ?? null}
+                withdrawnValue={isGold ? goldProceeds : numAmount}
+              />
             )}
 
             {/* Bank early-withdrawal warning */}
