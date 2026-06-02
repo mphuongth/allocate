@@ -375,7 +375,7 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
         <div style={{ display: 'grid', gap: 14 }}>
           {/* Toolbar: filters + actions */}
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
-            <Field label={t('filterAssetType')}>
+            <Field label={t('lblAsset')}>
               <select value={filters.asset_type} onChange={(e) => setSelectFilter('asset_type', e.target.value)} className="cn-input" style={{ cursor: 'pointer', padding: '8px 10px' }}>
                 <option value="">{t('filterAll')}</option>
                 {ASSET_TYPES.map((v) => <option key={v} value={v}>{assetLabelOf(v)}</option>)}
@@ -388,10 +388,10 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
                 {goals.map((g) => <option key={g.goal_id} value={g.goal_id}>{g.goal_name}</option>)}
               </select>
             </Field>
-            <Field label={t('filterFrom')}>
+            <Field label={t('lblFrom')}>
               <input type="date" value={dateFrom} onChange={(e) => setDateFilter('from_date', e.target.value, setDateFrom)} className="cn-input tabular" style={{ padding: '8px 10px' }} />
             </Field>
-            <Field label={t('filterTo')}>
+            <Field label={t('lblTo')}>
               <input type="date" value={dateTo} onChange={(e) => setDateFilter('to_date', e.target.value, setDateTo)} className="cn-input tabular" style={{ padding: '8px 10px' }} />
             </Field>
             {hasFilters && (
@@ -430,7 +430,7 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ background: 'var(--c-card-2)', borderBottom: '1px solid var(--c-line)' }}>
-                        {[t('colDate'), t('colTransaction'), t('colAsset'), t('colGoal'), t('colAmount'), ''].map((h, i) => (
+                        {[t('colDate'), t('colTransaction'), t('lblAsset'), t('colGoal'), t('colAmount'), ''].map((h, i) => (
                           <th key={i} style={{ padding: '9px 14px', textAlign: i >= 4 ? 'right' : 'left', fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--c-muted)' }}>{h}</th>
                         ))}
                       </tr>
