@@ -964,7 +964,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
                         {inv.units != null
-                          ? `${inv.units.toLocaleString('vi-VN')} ${isVI ? 'phần' : 'units'}`
+                          ? `${inv.units.toLocaleString('vi-VN')} ${isVI ? 'phần' : inv.units === 1 ? 'unit' : 'units'}`
                           : inv.principal != null
                             ? `${isVI ? 'Gốc' : 'Principal'} ${fmtCompact(inv.principal)}`
                             : ''}
@@ -1076,10 +1076,10 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
                     {projectedDate.toLocaleDateString(isVI ? 'vi-VN' : 'en-GB', { month: 'long', year: 'numeric' })}
                   </div>
                   <div style={{ fontSize: 12, color: isOnTrack ? 'var(--c-pos)' : 'var(--c-warn)', marginTop: 6, opacity: 0.85 }}>
-                    {isVI ? `Sau ${projectedMonths} tháng` : `In ${projectedMonths} months`}
+                    {isVI ? `Sau ${projectedMonths} tháng` : `In ${projectedMonths} ${projectedMonths === 1 ? 'month' : 'months'}`}
                     {goal.targetDate && (isOnTrack
-                      ? (isVI ? ` · ${monthsLeft - projectedMonths} tháng sớm hơn` : ` · ${monthsLeft - projectedMonths} months early`)
-                      : (isVI ? ` · ${projectedMonths - monthsLeft} tháng trễ hạn` : ` · ${projectedMonths - monthsLeft} months late`)
+                      ? (isVI ? ` · ${monthsLeft - projectedMonths} tháng sớm hơn` : ` · ${monthsLeft - projectedMonths} ${monthsLeft - projectedMonths === 1 ? 'month' : 'months'} early`)
+                      : (isVI ? ` · ${projectedMonths - monthsLeft} tháng trễ hạn` : ` · ${projectedMonths - monthsLeft} ${projectedMonths - monthsLeft === 1 ? 'month' : 'months'} late`)
                     )}
                   </div>
                 </div>

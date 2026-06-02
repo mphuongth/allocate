@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import DesktopGoalDetail from '../DesktopGoalDetail'
 import type { GoalData } from '../../DashboardClient'
@@ -136,5 +136,95 @@ describe('DesktopGoalDetail — bank withdrawal links to the goal (issue #261)',
 
     await waitFor(() => expect(postBody).not.toBeNull())
     expect(postBody!.affects_progress).toBe(false)
+  })
+})
+
+describe('DesktopGoalDetail — singular month wording (issue #262)', () => {
+  // 1,000,000₫ left to reach the target.
+  const nearGoal: GoalData = { ...mockGoal, targetAmount: 10_000_000, currentValue: 9_000_000, targetDate: null }
+
+  // Format a YYYY-MM string `n` months from today (deterministic regardless of run date).
+  function monthsFromNow(n: number): string {
+    const d = new Date()
+    d.setMonth(d.getMonth() + n)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  }
+
+  beforeEach(() => {
+    global.fetch = vi.fn().mockImplementation(() =>
+      Promise.resolve({ ok: true, json: async () => ({ transactions: [] }) }),
+    )
+  })
+
+  it('says "In 1 month" (not "1 months") when the projection is a single month', async () => {
+    render(<DesktopGoalDetail {...baseProps} goal={nearGoal} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Calculator' }))
+
+    // Contributing the full remaining amount finishes in exactly one month.
+    await userEvent.type(screen.getByPlaceholderText('0'), '1000000')
+
+    await waitFor(() => expect(screen.getByText('In 1 month')).toBeInTheDocument())
+    expect(screen.queryByText('In 1 months')).not.toBeInTheDocument()
+  })
+
+  it('says "1 month early" (not "1 months early") when finishing one month ahead', async () => {
+    // Deadline two months out; finishing in one month is one month early.
+    render(<DesktopGoalDetail {...baseProps} goal={{ ...nearGoal, targetDate: monthsFromNow(2) }} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Calculator' }))
+    await userEvent.type(screen.getByPlaceholderText('0'), '1000000')
+
+    await waitFor(() => expect(screen.getByText(/1 month early/)).toBeInTheDocument())
+    expect(screen.queryByText(/months early/)).not.toBeInTheDocument()
+  })
+
+  it('shows "1 unit" (not "1 units") for a holding of a single unit', async () => {
+    const oneUnitGold = {
+      transaction_id: 'tx-gold-1',
+      transaction_type: 'investment',
+      asset_type: 'gold',
+      fund_id: null,
+      fund_name: null,
+      investment_date: '2026-01-01',
+      amount_vnd: 9_000_000,
+      units: 1,
+      interest_rate: null,
+      notes: 'PNJ Gold',
+      principal_withdrawn: null,
+      units_withdrawn: null,
+    }
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('investment-transactions')) {
+        return Promise.resolve({ ok: true, json: async () => ({ transactions: [oneUnitGold] }) })
+      }
+      if (url.includes('gold-price')) {
+        return Promise.resolve({ ok: true, json: async () => ({ price_per_chi: 9_200_000 }) })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+
+    render(<DesktopGoalDetail {...baseProps} />)
+    await waitFor(() => screen.getByText('PNJ Gold'))
+
+    expect(screen.getByText('1 unit')).toBeInTheDocument()
+    expect(screen.queryByText('1 units')).not.toBeInTheDocument()
+  })
+
+  it('shows "1 month" (not "1 months") on the edit-sheet target badge', async () => {
+    const { container } = render(<DesktopGoalDetail {...baseProps} goal={nearGoal} />)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Goal options' }))
+    await waitFor(() => expect(screen.getByText('Edit goal')).toBeInTheDocument())
+    await userEvent.click(screen.getByText('Edit goal'))
+
+    // A deadline one month out makes the target badge read "1 month".
+    const dateInput = await waitFor(() => {
+      const el = container.querySelector('input[type="month"]')
+      if (!el) throw new Error('date input not mounted yet')
+      return el as HTMLInputElement
+    })
+    fireEvent.change(dateInput, { target: { value: monthsFromNow(1) } })
+
+    await waitFor(() => expect(screen.getByText('1 month')).toBeInTheDocument())
+    expect(screen.queryByText('1 months')).not.toBeInTheDocument()
   })
 })
