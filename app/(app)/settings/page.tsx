@@ -27,9 +27,9 @@ function getDisplayName(email: string, userMetaName?: string): string {
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; goal?: string }>
+  searchParams: Promise<{ tab?: string }>
 }) {
-  const { tab, goal } = await searchParams
+  const { tab } = await searchParams
   const supabase = await createSupabaseServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   const email = user?.email ?? ''
@@ -37,7 +37,6 @@ export default async function SettingsPage({
   return (
     <SettingsClient
       initialTab={tab}
-      initialGoalId={goal}
       email={email}
       initials={getInitials(email)}
       displayName={getDisplayName(email, user?.user_metadata?.display_name)}

@@ -106,7 +106,6 @@
     "pageSubtitle": "Account",
     "description": "Manage savings goals, investments, expenses and insurance.",
     "tabs": {
-      "goals": "Savings Goals",
       "transactions": "Investment Transactions",
       "expenses": "Fixed Expenses",
       "insurance": "Insurance Members"

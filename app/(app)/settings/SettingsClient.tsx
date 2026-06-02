@@ -1,16 +1,17 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import MobileSettingsView from './components/MobileSettingsView'
 import DesktopSettingsView from './components/DesktopSettingsView'
-import SavingsGoalsTab from './tabs/SavingsGoalsTab'
 import InvestmentTransactionsTab from './tabs/InvestmentTransactionsTab'
 import FixedExpensesTab from './tabs/FixedExpensesTab'
 import InsuranceMembersTab from './tabs/InsuranceMembersTab'
 
-const TAB_IDS = ['goals', 'transactions', 'expenses', 'insurance'] as const
+// Goals are managed from the dashboard goal detail now; the legacy goals tab
+// was removed. The remaining data tabs are reachable only via ?tab=<id>.
+const TAB_IDS = ['transactions', 'expenses', 'insurance'] as const
 
 type TabId = typeof TAB_IDS[number]
 
@@ -18,18 +19,17 @@ const VALID_TABS = TAB_IDS as unknown as string[]
 
 interface Props {
   initialTab?: string
-  initialGoalId?: string
   email: string
   initials: string
   displayName: string
 }
 
-export default function SettingsClient({ initialTab, initialGoalId, email, initials, displayName }: Props) {
+export default function SettingsClient({ initialTab, email, initials, displayName }: Props) {
   const router = useRouter()
   const t = useTranslations('settings')
   const showDataTabs = VALID_TABS.includes(initialTab ?? '')
   const [activeTab, setActiveTab] = useState<TabId>(
-    showDataTabs ? (initialTab as TabId) : 'goals'
+    showDataTabs ? (initialTab as TabId) : 'transactions'
   )
 
   function handleTabChange(tab: TabId) {
@@ -37,28 +37,20 @@ export default function SettingsClient({ initialTab, initialGoalId, email, initi
     router.replace(`/settings?tab=${tab}`)
   }
 
-  const handleGoalChange = useCallback((goalId: string | null) => {
-    if (goalId) {
-      router.replace(`/settings?tab=goals&goal=${goalId}`)
-    } else {
-      router.replace('/settings?tab=goals')
-    }
-  }, [router])
-
   return (
     <>
       {/* Mobile redesign view */}
       <MobileSettingsView email={email} initials={initials} displayName={displayName} />
 
       {showDataTabs ? (
-        /* Desktop tab-based view for data management tabs (goals/expenses/insurance/transactions) */
+        /* Desktop tab-based view for data management tabs (transactions/expenses/insurance) */
         <div className="hidden md:block space-y-6">
           <div>
             <p className="text-sm text-gray-500 dark:text-gray-400">{t('description')}</p>
           </div>
 
           <div className="flex flex-col gap-2">
-            <div className="grid grid-cols-2 sm:grid-cols-4 w-full items-center rounded-xl bg-[#ececf0] dark:bg-gray-800 p-[3px] gap-[3px]">
+            <div className="grid grid-cols-3 w-full items-center rounded-xl bg-[#ececf0] dark:bg-gray-800 p-[3px] gap-[3px]">
               {TAB_IDS.map((tabId) => (
                 <button
                   key={tabId}
@@ -75,12 +67,6 @@ export default function SettingsClient({ initialTab, initialGoalId, email, initi
             </div>
 
             <div className="mt-4">
-              {activeTab === 'goals' && (
-                <SavingsGoalsTab
-                  initialGoalId={initialGoalId}
-                  onGoalChange={handleGoalChange}
-                />
-              )}
               {activeTab === 'transactions' && <InvestmentTransactionsTab />}
               {activeTab === 'expenses' && <FixedExpensesTab />}
               {activeTab === 'insurance' && <InsuranceMembersTab />}

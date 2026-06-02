@@ -106,7 +106,6 @@
     "pageSubtitle": "Tài khoản",
     "description": "Quản lý mục tiêu tiết kiệm, đầu tư, chi phí và bảo hiểm.",
     "tabs": {
-      "goals": "Mục tiêu Tiết kiệm",
       "transactions": "Giao dịch Đầu tư",
       "expenses": "Chi phí Cố định",
       "insurance": "Thành viên Bảo hiểm"
