@@ -107,8 +107,7 @@
     "description": "Quản lý mục tiêu tiết kiệm, đầu tư, chi phí và bảo hiểm.",
     "tabs": {
       "transactions": "Giao dịch Đầu tư",
-      "expenses": "Chi phí Cố định",
-      "insurance": "Thành viên Bảo hiểm"
+      "expenses": "Chi phí Cố định"
     }
   },
   "goals": {

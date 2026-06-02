@@ -22,7 +22,7 @@ export async function GET() {
       .eq('user_id', user.id),
     supabase
       .from('insurance_members')
-      .select('member_id, member_name, coverage_type, annual_payment_vnd, payment_date, last_payment_date')
+      .select('member_id, member_name, relationship, annual_payment_vnd, payment_date, last_payment_date')
       .eq('user_id', user.id),
     supabase
       .from('insurance_savings')
@@ -349,7 +349,9 @@ export async function GET() {
     return {
       insuranceId: m.member_id,
       insuranceName: m.member_name,
-      coverageType: m.coverage_type ?? null,
+      // Read relationship — the column both the add & edit forms actually write
+      // (coverage_type was added for display but never populated).
+      coverageType: m.relationship ?? null,
       annualPremium,
       amountSaved,
       savingsProgressPercentage,

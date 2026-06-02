@@ -2,110 +2,128 @@ import { test, expect } from '@playwright/test'
 import * as api from './helpers/api'
 import { makeCleanupStack } from './helpers/cleanup'
 
+// Insurance members are managed from the dashboard now — the legacy Settings
+// insurance tab (/settings?tab=insurance) was removed. Covers add (with the
+// coverage round-trip) / edit premium / delete via the dashboard UI.
+
 const cleanup = makeCleanupStack()
 test.afterEach(() => cleanup.run())
 
-async function openInsuranceTab(page: import('@playwright/test').Page) {
+// Load the dashboard with a clean overview cache so fresh members show.
+async function gotoDashboardFresh(page: import('@playwright/test').Page) {
   await page.goto('/dashboard')
-  await page.evaluate(() => localStorage.removeItem('insuranceMembersCache'))
-  await page.goto('/settings?tab=insurance')
-  await page.waitForSelector('[data-testid="create-btn"]', { timeout: 15_000 })
+  await page.evaluate(() =>
+    Object.keys(localStorage)
+      .filter((k) => k.startsWith('dashboardOverviewCache'))
+      .forEach((k) => localStorage.removeItem(k))
+  )
+  await page.reload()
+  await page.waitForLoadState('networkidle')
 }
 
-test('insurance tab renders table or empty state', async ({ page }) => {
-  await openInsuranceTab(page)
-  const content = page.locator('table').or(page.getByText(/no insurance members yet|chưa có thành viên/i)).first()
-  await expect(content).toBeVisible({ timeout: 15_000 })
-})
+test('add an insurance member; its coverage round-trips to the detail panel', async ({ page }) => {
+  await api.deleteAllInsuranceMembersByName('E2E Dash Insurance')
+  await gotoDashboardFresh(page)
 
-test('can add an insurance member', async ({ page }) => {
-  await openInsuranceTab(page)
-  await page.getByTestId('create-btn').click()
+  await page.getByTestId('insurance-add-btn').click()
+  const modal = page.getByTestId('add-insurance-modal')
+  await expect(modal).toBeVisible()
 
-  await expect(page.getByRole('dialog')).toBeVisible()
-  await page.locator('#member_name').fill('E2E Insurance Member')
+  await modal.locator('input.cn-input').first().fill('E2E Dash Insurance')
+  await modal.getByRole('button', { name: /^(Parent|Cha\/Mẹ)$/ }).click()   // a non-default coverage
+  await modal.locator('input[inputmode="numeric"]').fill('12000000')
 
-  // #relationship is a @base-ui/react Select — exclude native <option> elements, force:true for animation
-  await page.locator('#relationship').click()
-  await page.locator('[data-open] [role="option"]:not(option)').first().click({ force: true })
-
-  await page.locator('#annual_payment_vnd').fill('12000000')
-
-  // Tie the dialog-close assertion to the actual create request so a slow
-  // shared DB (parallel CI shards) can't trip a fixed timeout.
   await Promise.all([
     page.waitForResponse(
-      r => r.url().includes('/api/v1/insurance-members') && r.request().method() === 'POST' && r.status() < 400,
+      (r) => r.url().includes('/api/v1/insurance-members') && r.request().method() === 'POST' && r.status() < 400,
       { timeout: 20_000 }
     ),
-    page.getByRole('dialog').getByRole('button', { name: /save|add|lưu/i }).click(),
+    modal.getByRole('button', { name: /add member|thêm thành viên/i }).click(),
   ])
-  await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 10_000 })
+  await expect(modal).not.toBeVisible({ timeout: 10_000 })
 
-  // Scope to table row (avoids hidden sm:hidden mobile cards)
-  const memberRow = page.locator('tr').filter({ hasText: 'E2E Insurance Member' }).first()
-  await expect(memberRow).toBeVisible({ timeout: 15_000 })
-  // Monthly fee: 12,000,000 / 12 = 1,000,000
-  await expect(memberRow.locator('text=/1.000.000|1,000,000/').first()).toBeVisible({ timeout: 5_000 })
+  const found = await api.findInsuranceMemberByName('E2E Dash Insurance')
+  expect(found).toBeTruthy()
+  cleanup.add(() => api.deleteInsuranceMember(found!.member_id))
 
-  const found = await api.findInsuranceMemberByName('E2E Insurance Member')
-  if (found) cleanup.add(() => api.deleteInsuranceMember(found.member_id))
+  // Stored as relationship = Parent…
+  const { createClient } = await import('@supabase/supabase-js')
+  const supabase = createClient(process.env.E2E_SUPABASE_URL!, process.env.E2E_SUPABASE_SERVICE_ROLE_KEY!)
+  const { data: member } = await supabase
+    .from('insurance_members')
+    .select('relationship')
+    .eq('member_id', found!.member_id)
+    .single()
+  expect(member?.relationship).toBe('Parent')
+
+  // …and it round-trips back to the detail panel (was broken: read coverage_type).
+  const row = page.getByTestId('insurance-row').filter({ hasText: 'E2E Dash Insurance' }).first()
+  await expect(row).toBeVisible({ timeout: 10_000 })
+  await row.click()
+  const panel = page.getByTestId('insurance-detail-panel')
+  await expect(panel).toBeVisible({ timeout: 5_000 })
+  await expect(panel.getByText('Parent')).toBeVisible({ timeout: 10_000 })
 })
 
-test('can edit insurance member annual premium', async ({ page }) => {
+test('edit an insurance member annual premium', async ({ page }) => {
   const member = await api.createInsuranceMember({
-    member_name: 'E2E Edit Insurance',
+    member_name: 'E2E Dash Edit Insurance',
     relationship: 'Spouse',
     annual_payment_vnd: 12_000_000,
   })
   cleanup.add(() => api.deleteInsuranceMember(member.member_id))
 
-  await openInsuranceTab(page)
-  const memberRow = page.locator('tr').filter({ hasText: 'E2E Edit Insurance' }).first()
-  await expect(memberRow).toBeVisible({ timeout: 15_000 })
+  await gotoDashboardFresh(page)
+  const row = page.getByTestId('insurance-row').filter({ hasText: 'E2E Dash Edit Insurance' }).first()
+  await expect(row).toBeVisible({ timeout: 10_000 })
+  await row.click()
 
-  // Edit button is first icon button in the row
-  const editBtn = memberRow.locator('button').nth(0)
-  await editBtn.click()
-  await expect(page.getByRole('dialog')).toBeVisible()
+  const panel = page.getByTestId('insurance-detail-panel')
+  await expect(panel).toBeVisible({ timeout: 5_000 })
+  await panel.getByTestId('insurance-edit-btn').click()
 
-  const annualInput = page.locator('#annual_payment_vnd')
-  await annualInput.clear()
-  await annualInput.fill('24000000')
+  const premium = panel.locator('input[inputmode="numeric"]')
+  await premium.clear()
+  await premium.fill('24000000')
 
   await Promise.all([
     page.waitForResponse(
-      r => r.url().includes('/api/v1/insurance-members/') && r.request().method() === 'PUT' && r.status() < 400,
+      (r) => r.url().includes('/api/v1/insurance-members/') && r.request().method() === 'PUT' && r.status() < 400,
       { timeout: 20_000 }
     ),
-    page.getByRole('button', { name: /save|lưu/i }).click(),
+    panel.getByRole('button', { name: /^(Save|Lưu)$/ }).click(),
   ])
-  await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 10_000 })
 
-  // Monthly should now be 24,000,000 / 12 = 2,000,000
-  const updatedRow = page.locator('tr').filter({ hasText: 'E2E Edit Insurance' }).first()
-  await expect(updatedRow.locator('text=/2.000.000|2,000,000/').first()).toBeVisible({ timeout: 5_000 })
+  await expect.poll(async () => {
+    const { createClient } = await import('@supabase/supabase-js')
+    const supabase = createClient(process.env.E2E_SUPABASE_URL!, process.env.E2E_SUPABASE_SERVICE_ROLE_KEY!)
+    const { data } = await supabase
+      .from('insurance_members')
+      .select('annual_payment_vnd')
+      .eq('member_id', member.member_id)
+      .single()
+    return data?.annual_payment_vnd
+  }, { timeout: 10_000 }).toBe(24_000_000)
 })
 
-test('can delete an insurance member', async ({ page }) => {
-  await api.deleteAllInsuranceMembersByName('E2E Delete Insurance')
-
+test('delete an insurance member', async ({ page }) => {
+  await api.deleteAllInsuranceMembersByName('E2E Dash Delete Insurance')
   const member = await api.createInsuranceMember({
-    member_name: 'E2E Delete Insurance',
+    member_name: 'E2E Dash Delete Insurance',
     relationship: 'Self',
     annual_payment_vnd: 6_000_000,
   })
   cleanup.add(() => api.deleteInsuranceMember(member.member_id))
 
-  await openInsuranceTab(page)
-  const memberRow = page.locator('tr').filter({ hasText: 'E2E Delete Insurance' }).first()
-  await expect(memberRow).toBeVisible({ timeout: 15_000 })
+  await gotoDashboardFresh(page)
+  const row = page.getByTestId('insurance-row').filter({ hasText: 'E2E Dash Delete Insurance' }).first()
+  await expect(row).toBeVisible({ timeout: 10_000 })
+  await row.click()
 
-  // Delete button is second icon button in the row
-  const deleteBtn = memberRow.locator('button').nth(1)
-  await deleteBtn.click()
-  await expect(page.getByRole('dialog')).toBeVisible()
-  await page.getByRole('button', { name: /xác nhận|confirm|delete|xóa/i }).last().click()
+  const panel = page.getByTestId('insurance-detail-panel')
+  await expect(panel).toBeVisible({ timeout: 5_000 })
+  await panel.getByTestId('insurance-remove-btn').click()
+  await page.getByTestId('insurance-remove-confirm').click()
 
-  await expect(page.locator('tr').filter({ hasText: 'E2E Delete Insurance' })).toHaveCount(0, { timeout: 15_000 })
+  await expect.poll(async () => await api.findInsuranceMemberByName('E2E Dash Delete Insurance'), { timeout: 10_000 }).toBeFalsy()
 })
