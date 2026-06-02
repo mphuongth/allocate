@@ -216,7 +216,7 @@ function DcaToggle({ fund, editId, editValue, onToggle, onEditStart, onEditChang
         onClick={e => { e.stopPropagation(); onToggle() }}
         style={{
           width: 34, height: 19, borderRadius: 999,
-          background: fund.is_dca ? 'var(--c-navy)' : 'var(--c-line-strong)',
+          background: fund.is_dca ? 'var(--c-btn-primary)' : 'var(--c-line-strong)',
           border: 'none', cursor: 'pointer', position: 'relative',
           transition: 'background 180ms', flexShrink: 0,
         }}
@@ -725,10 +725,10 @@ export default function DesktopFundLibraryView() {
         )}
 
         {/* NAV info banner */}
-        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '12px 14px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, marginTop: 16 }}>
-          <div style={{ width: 18, height: 18, borderRadius: 9, background: '#2563eb', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1, fontSize: 10, fontWeight: 700 }}>i</div>
-          <div style={{ fontSize: 12, color: '#3b82f6', lineHeight: 1.5 }}>
-            <span style={{ fontWeight: 600, color: '#1e40af' }}>About NAV updates: </span>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '12px 14px', background: 'var(--c-navy-tint)', border: '1px solid var(--c-line)', borderRadius: 10, marginTop: 16 }}>
+          <div style={{ width: 18, height: 18, borderRadius: 9, background: 'var(--c-accent-fund, #2563eb)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1, fontSize: 10, fontWeight: 700 }}>i</div>
+          <div style={{ fontSize: 12, color: 'var(--c-muted)', lineHeight: 1.5 }}>
+            <span style={{ fontWeight: 600, color: 'var(--c-navy)' }}>About NAV updates: </span>
             NAV is updated daily after market close. Click Refresh to fetch the latest prices.
           </div>
         </div>

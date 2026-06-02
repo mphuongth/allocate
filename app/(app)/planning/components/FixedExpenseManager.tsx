@@ -62,7 +62,7 @@ const ghostBtn: React.CSSProperties = {
 }
 const primaryBtn: React.CSSProperties = {
   flex: 2, padding: '10px 0', borderRadius: 10, border: 'none',
-  background: 'var(--c-navy)', color: '#fff', fontSize: 14, fontWeight: 600,
+  background: 'var(--c-btn-primary)', color: '#fff', fontSize: 14, fontWeight: 600,
   cursor: 'pointer', fontFamily: 'inherit',
 }
 

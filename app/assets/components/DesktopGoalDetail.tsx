@@ -364,7 +364,7 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
                       return (
                         <button key={mul} onClick={() => setCalcAmount(String(preset))} style={{
                           padding: '4px 10px', borderRadius: 999, fontSize: 11, fontWeight: 500,
-                          background: Number(calcAmount) === preset ? 'var(--c-navy)' : 'var(--c-card-2)',
+                          background: Number(calcAmount) === preset ? 'var(--c-btn-primary)' : 'var(--c-card-2)',
                           color: Number(calcAmount) === preset ? '#fff' : 'var(--c-muted)',
                           border: '1px solid var(--c-line)', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 120ms',
                         }}>{fmtCompact(preset)}</button>

@@ -386,7 +386,7 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, onEdit, onDelete
             onClick={onToggleDca}
             disabled={toggling}
             aria-label={fund.is_dca ? 'Disable DCA' : 'Enable DCA'}
-            style={{ width: 36, height: 20, borderRadius: 10, background: fund.is_dca ? 'var(--c-navy)' : 'var(--c-line-strong)', border: 'none', cursor: toggling ? 'not-allowed' : 'pointer', position: 'relative', transition: 'background 180ms', flexShrink: 0, opacity: toggling ? 0.5 : 1 }}
+            style={{ width: 36, height: 20, borderRadius: 10, background: fund.is_dca ? 'var(--c-btn-primary)' : 'var(--c-line-strong)', border: 'none', cursor: toggling ? 'not-allowed' : 'pointer', position: 'relative', transition: 'background 180ms', flexShrink: 0, opacity: toggling ? 0.5 : 1 }}
           >
             <span style={{ position: 'absolute', top: 2, left: fund.is_dca ? 18 : 2, width: 16, height: 16, borderRadius: 8, background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.2)', transition: 'left 180ms' }} />
           </button>
@@ -534,7 +534,7 @@ export default function MobileFundLibraryView() {
           </button>
           <button
             onClick={() => { setFormError(null); setAddOpen(true) }}
-            style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', fontSize: 12, fontWeight: 600, background: 'var(--c-navy)', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}
+            style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', fontSize: 12, fontWeight: 600, background: 'var(--c-btn-primary)', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}
           >
             <Plus size={14} strokeWidth={2.5} />
             Add
@@ -701,7 +701,7 @@ export default function MobileFundLibraryView() {
               <button
                 key={f.v}
                 onClick={() => setFilter(f.v)}
-                style={{ padding: '5px 10px', borderRadius: 999, fontSize: 11, fontWeight: 500, background: filter === f.v ? 'var(--c-ink)' : 'var(--c-card)', color: filter === f.v ? '#fff' : 'var(--c-muted)', border: '1px solid ' + (filter === f.v ? 'var(--c-ink)' : 'var(--c-line)'), cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit', transition: 'background 150ms, color 150ms' }}
+                style={{ padding: '5px 10px', borderRadius: 999, fontSize: 11, fontWeight: 500, background: filter === f.v ? 'var(--c-ink)' : 'var(--c-card)', color: filter === f.v ? 'var(--c-card)' : 'var(--c-muted)', border: '1px solid ' + (filter === f.v ? 'var(--c-ink)' : 'var(--c-line)'), cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit', transition: 'background 150ms, color 150ms' }}
               >
                 {f.l}
               </button>
@@ -736,7 +736,7 @@ export default function MobileFundLibraryView() {
         {!loading && error && (
           <div style={{ padding: '32px 20px', textAlign: 'center', background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 16 }}>
             <p style={{ color: 'var(--c-neg)', fontSize: 13, margin: '0 0 12px' }}>{error}</p>
-            <button onClick={() => loadFunds()} style={{ padding: '8px 16px', fontSize: 13, fontWeight: 600, background: 'var(--c-navy)', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}>
+            <button onClick={() => loadFunds()} style={{ padding: '8px 16px', fontSize: 13, fontWeight: 600, background: 'var(--c-btn-primary)', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}>
               Retry
             </button>
           </div>
@@ -748,7 +748,7 @@ export default function MobileFundLibraryView() {
             <div style={{ fontSize: 32, marginBottom: 10 }}>📚</div>
             <h3 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 600, color: 'var(--c-ink)' }}>{t('empty')}</h3>
             <p style={{ margin: '0 0 14px', fontSize: 12, color: 'var(--c-muted)' }}>{t('emptyDesc')}</p>
-            <button onClick={() => { setFormError(null); setAddOpen(true) }} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', fontSize: 13, fontWeight: 600, background: 'var(--c-navy)', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}>
+            <button onClick={() => { setFormError(null); setAddOpen(true) }} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', fontSize: 13, fontWeight: 600, background: 'var(--c-btn-primary)', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}>
               <Plus size={14} />
               {t('add')}
             </button>
@@ -785,11 +785,11 @@ export default function MobileFundLibraryView() {
 
         {/* NAV info banner */}
         {!loading && (
-          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '12px 14px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, marginTop: 4 }}>
-            <div style={{ width: 20, height: 20, borderRadius: 10, background: '#2563eb', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1, fontSize: 11, fontWeight: 700 }}>i</div>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '12px 14px', background: 'var(--c-navy-tint)', border: '1px solid var(--c-line)', borderRadius: 10, marginTop: 4 }}>
+            <div style={{ width: 20, height: 20, borderRadius: 10, background: 'var(--c-accent-fund, #2563eb)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1, fontSize: 11, fontWeight: 700 }}>i</div>
             <div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#1e40af', marginBottom: 2 }}>{t('navInfoTitle')}</div>
-              <div style={{ fontSize: 11, color: '#3b82f6', lineHeight: 1.5 }}>{t('navInfoDesc', { refreshNav: t('refreshNav') })}</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-navy)', marginBottom: 2 }}>{t('navInfoTitle')}</div>
+              <div style={{ fontSize: 11, color: 'var(--c-muted)', lineHeight: 1.5 }}>{t('navInfoDesc', { refreshNav: t('refreshNav') })}</div>
             </div>
           </div>
         )}
