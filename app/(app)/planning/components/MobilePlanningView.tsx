@@ -1193,7 +1193,7 @@ export default function MobilePlanningView({
         title={isVI ? 'Quản lý chi phí cố định' : 'Manage fixed expenses'}
       >
         {sheet?.type === 'manage-fixed' && (
-          <FixedExpenseManager onChange={onRefresh} onToast={onToast} />
+          <FixedExpenseManager onChange={onRefresh} onToast={onToast} variant="sheet" />
         )}
       </Sheet>
     </div>

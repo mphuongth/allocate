@@ -69,9 +69,12 @@ const primaryBtn: React.CSSProperties = {
 interface Props {
   onChange: () => void
   onToast?: (msg: string) => void
+  // Controls how the delete confirmation is presented: a centered card for the
+  // desktop modal, or a bottom-anchored sheet for the mobile bottom sheet.
+  variant?: 'modal' | 'sheet'
 }
 
-export default function FixedExpenseManager({ onChange, onToast }: Props) {
+export default function FixedExpenseManager({ onChange, onToast, variant = 'modal' }: Props) {
   const t = useTranslations('expenses')
   const tc = useTranslations('common')
   const isVI = useLocale() === 'vi'
@@ -328,17 +331,13 @@ export default function FixedExpenseManager({ onChange, onToast }: Props) {
         <Plus size={15} strokeWidth={2.4} />{t('create')}
       </button>
 
-      {confirmDelete && (
-        <div
-          style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(15,23,42,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
-          onClick={() => !deleting && setConfirmDelete(null)}
-        >
-          <div onClick={(e) => e.stopPropagation()} style={{ width: 360, maxWidth: '100%', background: 'var(--c-card)', borderRadius: 14, padding: 20, boxShadow: '0 20px 50px rgba(15,23,42,0.25)' }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--c-ink)' }}>{t('deleteModal')}</div>
-            <div style={{ fontSize: 13, color: 'var(--c-muted)', marginTop: 6 }}>
+      {confirmDelete && (() => {
+        const body = (
+          <>
+            <div style={{ fontSize: 13, color: 'var(--c-muted)' }}>
               {confirmDelete.expense_name} — {fmtCompact(confirmDelete.amount_vnd)}
             </div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+            <div style={{ display: 'flex', gap: 8 }}>
               <button type="button" onClick={() => setConfirmDelete(null)} style={ghostBtn}>{tc('cancel')}</button>
               <button
                 type="button"
@@ -350,9 +349,45 @@ export default function FixedExpenseManager({ onChange, onToast }: Props) {
                 {isVI ? 'Xoá' : 'Delete'}
               </button>
             </div>
+          </>
+        )
+
+        if (variant === 'sheet') {
+          // Bottom-anchored sheet so it sits on the phone frame (mirrors the
+          // mobile plan's bottom sheets) instead of floating mid-screen.
+          return (
+            <div
+              data-testid="fe-delete-overlay"
+              style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(15,23,42,0.4)', display: 'flex', alignItems: 'flex-end' }}
+              onClick={() => !deleting && setConfirmDelete(null)}
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{ width: '100%', background: 'var(--c-card)', borderRadius: '16px 16px 0 0', paddingBottom: 'env(safe-area-inset-bottom,0)', animation: 'slide-up 220ms cubic-bezier(0.2,0.8,0.2,1)' }}
+              >
+                <div style={{ width: 36, height: 4, background: 'var(--c-line-strong)', borderRadius: 999, margin: '8px auto 0' }} />
+                <div style={{ padding: '14px 16px 0' }}>
+                  <p style={{ fontWeight: 700, fontSize: 16, color: 'var(--c-ink)', margin: '0 0 16px' }}>{t('deleteModal')}</p>
+                </div>
+                <div style={{ padding: '0 16px 24px', display: 'grid', gap: 16 }}>{body}</div>
+              </div>
+            </div>
+          )
+        }
+
+        return (
+          <div
+            data-testid="fe-delete-overlay"
+            style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(15,23,42,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+            onClick={() => !deleting && setConfirmDelete(null)}
+          >
+            <div onClick={(e) => e.stopPropagation()} style={{ width: 360, maxWidth: '100%', background: 'var(--c-card)', borderRadius: 14, padding: 20, boxShadow: '0 20px 50px rgba(15,23,42,0.25)', display: 'grid', gap: 16 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--c-ink)' }}>{t('deleteModal')}</div>
+              {body}
+            </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
     </div>
   )
 }

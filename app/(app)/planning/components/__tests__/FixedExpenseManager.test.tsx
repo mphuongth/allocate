@@ -153,4 +153,26 @@ describe('FixedExpenseManager — delete', () => {
     })
     expect(onChange).toHaveBeenCalled()
   })
+
+  it('centers the delete confirmation in the default (modal) variant', async () => {
+    render(<FixedExpenseManager onChange={vi.fn()} />)
+    await screen.findByText('Rent')
+    await userEvent.click(within(screen.getByTestId('fe-row-fe1')).getByTestId('fe-delete'))
+    expect(screen.getByTestId('fe-delete-overlay')).toHaveStyle({ alignItems: 'center' })
+  })
+
+  it('anchors the delete confirmation to the bottom in the sheet (mobile) variant', async () => {
+    render(<FixedExpenseManager onChange={vi.fn()} variant="sheet" />)
+    await screen.findByText('Rent')
+    await userEvent.click(within(screen.getByTestId('fe-row-fe1')).getByTestId('fe-delete'))
+    expect(screen.getByTestId('fe-delete-overlay')).toHaveStyle({ alignItems: 'flex-end' })
+
+    // Still confirms + deletes from the sheet-style confirmation
+    await userEvent.click(screen.getByTestId('fe-delete-confirm'))
+    await waitFor(() => {
+      expect(
+        fetchMock.mock.calls.find(([url, init]) => url === '/api/v1/fixed-expenses/fe1' && init?.method === 'DELETE')
+      ).toBeTruthy()
+    })
+  })
 })
