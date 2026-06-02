@@ -1,103 +1,118 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
 import * as api from './helpers/api'
 import { makeCleanupStack } from './helpers/cleanup'
+
+// Fixed expenses are now managed from the Plan page (Manage button on the Fixed
+// expenses section) instead of the removed Settings → Fixed Expenses tab.
+test.use({ viewport: { width: 1280, height: 800 } })
 
 const cleanup = makeCleanupStack()
 test.afterEach(() => cleanup.run())
 
-async function openExpensesTab(page: import('@playwright/test').Page) {
-  await page.goto('/dashboard')
-  await page.evaluate(() => {
-    Object.keys(localStorage).filter(k => k.startsWith('fixedExpensesCache')).forEach(k => localStorage.removeItem(k))
-  })
-  await page.goto('/settings?tab=expenses')
-  await page.waitForSelector('[data-testid="create-btn"]', { timeout: 15_000 })
+const today = new Date()
+const MONTH = today.getMonth() + 1
+const YEAR = today.getFullYear()
+
+// Ensure a plan exists for the current month so the Fixed expenses section
+// (and its Manage button) renders. Only schedule deletion for plans we create.
+async function ensurePlan() {
+  const existing = await api.findMonthlyPlan(MONTH, YEAR)
+  if (existing) return
+  const plan = await api.createMonthlyPlan({ month: MONTH, year: YEAR, salary_vnd: 30_000_000 })
+  cleanup.add(() => api.deleteMonthlyPlan(plan.id))
 }
 
-test('fixed expenses tab renders', async ({ page }) => {
-  await openExpensesTab(page)
-  const content = page.locator('table').or(page.getByText(/no expenses yet|chưa có chi phí/i)).first()
-  await expect(content).toBeVisible({ timeout: 15_000 })
+async function openManager(page: Page) {
+  await ensurePlan()
+  await page.goto('/planning')
+  await page.waitForLoadState('networkidle')
+  const desktop = page.getByTestId('desktop-planning')
+  await expect(desktop).toBeVisible({ timeout: 8_000 })
+  await desktop.getByTestId('desktop-manage-fixed').click()
+  await expect(page.getByTestId('fixed-expense-manager')).toBeVisible({ timeout: 5_000 })
+}
+
+async function closeManager(page: Page) {
+  await page.getByRole('button', { name: 'Close' }).click()
+  await expect(page.getByTestId('fixed-expense-manager')).not.toBeVisible({ timeout: 5_000 })
+}
+
+test('manage modal opens from the plan page', async ({ page }) => {
+  await openManager(page)
+  await expect(page.getByTestId('fe-add')).toBeVisible()
 })
 
-test('can create a fixed expense', async ({ page }) => {
-  await openExpensesTab(page)
-  await page.getByTestId('create-btn').click()
+test('can create a fixed expense from the plan page', async ({ page }) => {
+  await api.deleteAllFixedExpensesByName('E2E Plan Rent')
+  await openManager(page)
 
-  await expect(page.getByRole('dialog')).toBeVisible()
-  await page.locator('#expense_name').fill('E2E Rent')
+  await page.getByTestId('fe-add').click()
+  await page.getByTestId('fe-name').fill('E2E Plan Rent')
+  await page.getByTestId('fe-category').selectOption('Housing')
+  await page.getByTestId('fe-amount').fill('5000000')
+  await page.getByTestId('fe-save').click()
 
-  // #category is a @base-ui/react Select — exclude native <option> elements, force:true for animation
-  await page.locator('#category').click()
-  await page.locator('[data-open] [role="option"]:not(option)').first().click({ force: true })
+  // Returns to the list view with the new row
+  await expect(page.getByText('E2E Plan Rent').first()).toBeVisible({ timeout: 8_000 })
 
-  await page.locator('#amount_vnd').fill('5000000')
+  // Close loop: the expense appears in the plan's Fixed expenses section
+  await closeManager(page)
+  await expect(
+    page.getByTestId('desktop-planning').locator('text=E2E Plan Rent').first()
+  ).toBeVisible({ timeout: 8_000 })
 
-  await page.getByRole('button', { name: /save|create|lưu/i }).click()
-  await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 5_000 })
-
-  // Scope to table row (avoids hidden sm:hidden mobile cards)
-  await expect(page.locator('tr').filter({ hasText: 'E2E Rent' }).first()).toBeVisible({ timeout: 15_000 })
-
-  const found = await api.findFixedExpenseByName('E2E Rent')
+  const found = await api.findFixedExpenseByName('E2E Plan Rent')
+  expect(found).toBeTruthy()
   if (found) cleanup.add(() => api.deleteFixedExpense(found.expense_id))
 })
 
-test('can edit a fixed expense', async ({ page }) => {
+test('can edit a fixed expense from the plan page', async ({ page }) => {
+  await api.deleteAllFixedExpensesByName('E2E Plan Edit')
+  await api.deleteAllFixedExpensesByName('E2E Plan Edit Updated')
   const expense = await api.createFixedExpense({
-    expense_name: 'E2E Edit Expense',
+    expense_name: 'E2E Plan Edit',
     amount_vnd: 3_000_000,
     category: 'Housing',
   })
   cleanup.add(() => api.deleteFixedExpense(expense.expense_id))
 
-  await openExpensesTab(page)
-  const row = page.locator('tr').filter({ hasText: 'E2E Edit Expense' }).first()
-  await expect(row).toBeVisible({ timeout: 15_000 })
+  await openManager(page)
 
-  // Edit button is first icon button in the row
-  const editBtn = row.locator('button').nth(0)
-  await editBtn.click()
-  await expect(page.getByRole('dialog')).toBeVisible()
+  const row = page.getByTestId(`fe-row-${expense.expense_id}`)
+  await expect(row).toBeVisible({ timeout: 8_000 })
+  await row.getByTestId('fe-edit').click()
 
-  const nameInput = page.locator('#expense_name')
-  await nameInput.clear()
-  await nameInput.fill('E2E Edit Expense Updated')
+  const name = page.getByTestId('fe-name')
+  await expect(name).toHaveValue('E2E Plan Edit')
+  await name.fill('E2E Plan Edit Updated')
+  await page.getByTestId('fe-save').click()
 
-  await page.getByRole('button', { name: /save|lưu/i }).click()
-  await expect(page.locator('tr').filter({ hasText: 'E2E Edit Expense Updated' }).first()).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByText('E2E Plan Edit Updated').first()).toBeVisible({ timeout: 8_000 })
 })
 
-test('can delete a fixed expense', async ({ page }) => {
-  await api.deleteAllFixedExpensesByName('E2E Delete Expense')
-
+test('can delete a fixed expense from the plan page', async ({ page }) => {
+  await api.deleteAllFixedExpensesByName('E2E Plan Delete')
   const expense = await api.createFixedExpense({
-    expense_name: 'E2E Delete Expense',
+    expense_name: 'E2E Plan Delete',
     amount_vnd: 2_000_000,
     category: 'Housing',
   })
   cleanup.add(() => api.deleteFixedExpense(expense.expense_id))
 
-  await openExpensesTab(page)
-  const row = page.locator('tr').filter({ hasText: 'E2E Delete Expense' }).first()
-  await expect(row).toBeVisible({ timeout: 15_000 })
+  await openManager(page)
 
-  // Delete button is second icon button in the row
-  const deleteBtn = row.locator('button').nth(1)
-  await deleteBtn.click()
-  await expect(page.getByRole('dialog')).toBeVisible()
-  await page.getByRole('button', { name: /xác nhận|confirm|delete|xóa/i }).last().click()
+  const row = page.getByTestId(`fe-row-${expense.expense_id}`)
+  await expect(row).toBeVisible({ timeout: 8_000 })
+  await row.getByTestId('fe-delete').click()
+  await page.getByTestId('fe-delete-confirm').click()
 
-  await expect(page.locator('tr').filter({ hasText: 'E2E Delete Expense' })).toHaveCount(0, { timeout: 15_000 })
+  await expect(page.getByTestId(`fe-row-${expense.expense_id}`)).toHaveCount(0, { timeout: 8_000 })
 })
 
 test('effective period hides expense outside date range on planning page', async ({ page }) => {
-  const today = new Date()
-  const month = today.getMonth() + 1
-  const year = today.getFullYear()
-  const currentMonthStr = `${year}-${String(month).padStart(2, '0')}-01`
+  const currentMonthStr = `${YEAR}-${String(MONTH).padStart(2, '0')}-01`
 
-  // Create expense valid for current month only
+  // Expense valid for the current month only
   const expense = await api.createFixedExpense({
     expense_name: 'E2E Period Expense',
     amount_vnd: 1_000_000,
@@ -107,21 +122,15 @@ test('effective period hides expense outside date range on planning page', async
   })
   cleanup.add(() => api.deleteFixedExpense(expense.expense_id))
 
-  // Verify it appears in settings
-  await openExpensesTab(page)
-  await expect(page.locator('tr').filter({ hasText: 'E2E Period Expense' }).first()).toBeVisible({ timeout: 15_000 })
-
-  // Navigate to planning for current month — expense should appear
-  const plan = await api.createMonthlyPlan({ month, year, salary_vnd: 10_000_000 })
-  cleanup.add(() => api.deleteMonthlyPlan(plan.id))
+  await ensurePlan()
 
   await page.goto('/planning')
   await page.waitForLoadState('networkidle')
-  // Scope to desktop view — mobile view (md:hidden) renders same content but is invisible on desktop
-  await expect(page.getByTestId('desktop-planning').locator('text=E2E Period Expense').first()).toBeVisible({ timeout: 15_000 })
+  const desktop = page.getByTestId('desktop-planning')
+  await expect(desktop.locator('text=E2E Period Expense').first()).toBeVisible({ timeout: 15_000 })
 
-  // Navigate to next month — expense should NOT appear
-  await page.getByTestId('next-month').click()
+  // Next month — expense should NOT appear
+  await desktop.getByTestId('next-month').click()
   await page.waitForLoadState('networkidle')
-  await expect(page.getByTestId('desktop-planning').locator('text=E2E Period Expense')).not.toBeVisible({ timeout: 5_000 })
+  await expect(desktop.locator('text=E2E Period Expense')).not.toBeVisible({ timeout: 5_000 })
 })

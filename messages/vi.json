@@ -106,8 +106,7 @@
     "pageSubtitle": "Tài khoản",
     "description": "Quản lý mục tiêu tiết kiệm, đầu tư, chi phí và bảo hiểm.",
     "tabs": {
-      "transactions": "Giao dịch Đầu tư",
-      "expenses": "Chi phí Cố định"
+      "transactions": "Giao dịch Đầu tư"
     }
   },
   "goals": {
@@ -605,7 +604,7 @@
     "noGoals": "Chưa có mục tiêu",
     "unassigned": "Chưa gán",
     "fixedExpensesTitle": "Chi phí Cố định",
-    "fixedExpensesDesc": "Số tiền hàng tháng theo Cài đặt. Ghi đè hoặc bỏ qua cho tháng này.",
+    "fixedExpensesDesc": "Số tiền định kỳ hàng tháng. Ghi đè hoặc bỏ qua cho tháng này.",
     "colExpense": "Chi phí",
     "colDefault": "Mặc định / Tháng",
     "colThisMonth": "Tháng này",
