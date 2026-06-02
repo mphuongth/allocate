@@ -322,6 +322,7 @@
     "unitsStock": "CP",
     "unitsGold": "Chỉ",
     "unitsDefault": "Đơn vị",
+    "deleteTitle": "Xoá giao dịch?",
     "deleteMessage": "Bạn có chắc muốn xóa giao dịch đầu tư này?",
     "amountRequired": "Số tiền phải lớn hơn 0.",
     "dateRequired": "Ngày đầu tư là bắt buộc."

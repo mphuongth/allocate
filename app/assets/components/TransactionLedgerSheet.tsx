@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslations } from 'next-intl'
 import { Plus, Download, Edit2, Trash, ChevronLeft, ChevronRight, X, Calendar, ArrowUpRight, ArrowDownRight } from 'lucide-react'
-import ConfirmModal from '@/app/components/ConfirmModal'
 import AmountInput from '@/app/components/ui/AmountInput'
 import DecimalInput from '@/app/components/ui/DecimalInput'
 import { fmtCompact, fmtNav, fmtUnits } from '@/lib/formatters'
@@ -642,14 +641,27 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
         onSaved={() => { fetchTransactions(); notifyChanged() }}
       />
 
-      <ConfirmModal
-        open={!!confirmTx}
-        title={tc('delete')}
-        message={confirmTx ? t('deleteMessage') : ''}
-        confirming={deletingId === confirmTx?.transaction_id}
-        onConfirm={() => confirmTx && handleDelete(confirmTx)}
-        onCancel={() => setConfirmTx(null)}
-      />
+      {/* Delete confirm — token-styled Shell so it stacks above the ledger
+          (the shared ConfirmModal is a Radix dialog at a lower z-index). */}
+      <Shell open={!!confirmTx} onClose={() => setConfirmTx(null)} title={t('deleteTitle')} desktop={desktop} width={380}>
+        {confirmTx && (
+          <div style={{ display: 'grid', gap: 16 }}>
+            <div style={{ fontSize: 13, color: 'var(--c-muted)', lineHeight: 1.5 }}>
+              {dirMeta(confirmTx).label} · {txPrimaryName(confirmTx, assetLabelOf(confirmTx.asset_type))} — <span className="tabular">{fmtCompact(confirmTx.amount_vnd)}</span>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setConfirmTx(null)} className="cn-btn" style={{ flex: 1, justifyContent: 'center' }}>{tc('cancel')}</button>
+              <button
+                onClick={() => handleDelete(confirmTx)}
+                disabled={deletingId === confirmTx.transaction_id}
+                style={{ flex: 2, padding: '10px 14px', background: 'var(--c-neg)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, opacity: deletingId === confirmTx.transaction_id ? 0.7 : 1 }}
+              >
+                <Trash size={14} />{deletingId === confirmTx.transaction_id ? tc('loading') : tc('delete')}
+              </button>
+            </div>
+          </div>
+        )}
+      </Shell>
     </>
   )
 }
