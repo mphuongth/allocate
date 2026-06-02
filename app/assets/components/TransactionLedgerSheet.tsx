@@ -8,6 +8,7 @@ import AmountInput from '@/app/components/ui/AmountInput'
 import DecimalInput from '@/app/components/ui/DecimalInput'
 import { fmtCompact, fmtNav, fmtUnits } from '@/lib/formatters'
 import { parseExcelPaste, type ParsedRow } from '@/lib/parseExcelPaste'
+import AddTransactionSheet from './AddTransactionSheet'
 import { ASSET_TYPES, type AssetType, type LedgerTransaction, isWithdrawal, txPrimaryName, fmtTxDate } from './transactionUtils'
 
 interface Goal { goal_id: string; goal_name: string }
@@ -129,9 +130,10 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
   const [dateTo, setDateTo] = useState('')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  const [showAdd, setShowAdd] = useState(false)
   const [txForm, setTxForm] = useState(emptyTxForm)
   const [editTx, setEditTx] = useState<LedgerTransaction | null>(null)
-  const [formMode, setFormMode] = useState<'add' | 'edit' | null>(null)
+  const [formMode, setFormMode] = useState<'edit' | null>(null)
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -180,12 +182,13 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
   useEffect(() => { if (open) { fetchGoals(); fetchFunds() } }, [open, fetchGoals, fetchFunds])
   useEffect(() => { if (open) fetchTransactions() }, [open, fetchTransactions])
 
-  // Lock background scroll while the ledger is open.
+  // Lock background scroll while the ledger is open. Re-assert when a nested
+  // sheet (add/import/edit) closes, since those clear body.overflow on unmount.
   useEffect(() => {
     if (!open) return
     document.body.style.overflow = 'hidden'
     return () => { document.body.style.overflow = '' }
-  }, [open])
+  }, [open, showAdd, showImport, formMode])
 
   function setSelectFilter(key: 'asset_type' | 'goal_id', value: string) {
     setFilters((prev) => ({ ...prev, [key]: value }))
@@ -207,13 +210,6 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
     setDateTo('')
     setFilters(EMPTY_FILTERS)
     setPage(1)
-  }
-
-  function openAdd() {
-    setTxForm({ ...emptyTxForm, investment_date: new Date().toISOString().slice(0, 10) })
-    setEditTx(null)
-    setFormError('')
-    setFormMode('add')
   }
 
   function openEdit(tx: LedgerTransaction) {
@@ -401,7 +397,7 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
             <button data-testid="tx-ledger-import" onClick={() => { setShowImport(true); setImportRaw(''); setImportRows([]); setImportFundId('') }} className="cn-btn" style={{ padding: '8px 12px', fontSize: 12 }}>
               <Download size={14} />{t('import')}
             </button>
-            <button data-testid="tx-ledger-add" onClick={openAdd} className="cn-btn primary" style={{ padding: '8px 14px', fontSize: 12 }}>
+            <button data-testid="tx-ledger-add" onClick={() => setShowAdd(true)} className="cn-btn primary" style={{ padding: '8px 14px', fontSize: 12 }}>
               <Plus size={14} strokeWidth={2.4} />{t('add')}
             </button>
           </div>
@@ -417,7 +413,7 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{t('empty')}</h3>
               <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 18 }}>
                 <button onClick={() => { setShowImport(true); setImportRaw(''); setImportRows([]); setImportFundId('') }} className="cn-btn"><Download size={15} />{t('importModalTitle')}</button>
-                <button onClick={openAdd} className="cn-btn primary"><Plus size={15} strokeWidth={2.4} />{t('addTitle')}</button>
+                <button onClick={() => setShowAdd(true)} className="cn-btn primary"><Plus size={15} strokeWidth={2.4} />{t('addTitle')}</button>
               </div>
             </div>
           ) : (
@@ -493,7 +489,7 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
       </Shell>
 
       {/* Add / edit */}
-      <Shell open={!!formMode} onClose={() => setFormMode(null)} title={formMode === 'add' ? t('addTitle') : t('editTitle')} desktop={desktop} width={520}>
+      <Shell open={!!formMode} onClose={() => setFormMode(null)} title={t('editTitle')} desktop={desktop} width={520}>
         <form onSubmit={(e) => { e.preventDefault(); handleSave() }} style={{ display: 'grid', gap: 14 }}>
           <Field label={t('filterAssetType')}>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -634,6 +630,14 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
           </div>
         </div>
       </Shell>
+
+      {/* Add — reuses the app's standard Add transaction modal */}
+      <AddTransactionSheet
+        open={showAdd}
+        desktop={desktop}
+        onClose={() => setShowAdd(false)}
+        onSaved={() => { fetchTransactions(); notifyChanged() }}
+      />
 
       <ConfirmModal
         open={!!confirmTx}
