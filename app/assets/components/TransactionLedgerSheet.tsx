@@ -2,28 +2,29 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslations } from 'next-intl'
-import { Plus, FileSpreadsheet, Edit, Trash2, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
+import { Plus, FileSpreadsheet, Edit, Trash2, ChevronLeft, ChevronRight, X, Calendar, ArrowUpRight, ArrowDownRight } from 'lucide-react'
 import ConfirmModal from '@/app/components/ConfirmModal'
 import AmountInput from '@/app/components/ui/AmountInput'
 import DecimalInput from '@/app/components/ui/DecimalInput'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
-import { fmt, fmtNav, fmtUnits } from '@/lib/formatters'
+import { fmtCompact, fmtNav, fmtUnits } from '@/lib/formatters'
 import { parseExcelPaste, type ParsedRow } from '@/lib/parseExcelPaste'
-import { ASSET_TYPES, type AssetType, type LedgerTransaction } from './transactionUtils'
+import { ASSET_TYPES, type AssetType, type LedgerTransaction, isWithdrawal, txPrimaryName, fmtTxDate } from './transactionUtils'
 
 interface Goal { goal_id: string; goal_name: string }
 interface Fund { id: string; name: string; code: string; nav: number }
 
-const ASSET_COLORS: Record<AssetType, string> = {
-  fund: 'bg-purple-100 text-purple-700',
-  bank: 'bg-blue-100 text-blue-700',
-  stock: 'bg-green-100 text-green-700',
-  gold: 'bg-amber-100 text-amber-700',
+// Asset-type pill colors — match RecentActivityCard.
+const ASSET_BADGE: Record<AssetType, string> = {
+  fund: '#2563eb',
+  bank: '#047857',
+  stock: '#7c3aed',
+  gold: '#b45309',
+}
+
+const labelStyle: React.CSSProperties = {
+  display: 'block', fontSize: 10, fontWeight: 600,
+  letterSpacing: '0.06em', textTransform: 'uppercase',
+  color: 'var(--c-muted)', marginBottom: 6,
 }
 
 interface AppliedFilters { asset_type: string; goal_id: string; from_date: string; to_date: string }
@@ -52,13 +53,67 @@ function bustDashboardCache() {
   } catch { /* ignore */ }
 }
 
+// ─── Modal (desktop) / bottom sheet (mobile) shell ──────────────────────────
+// Mirrors AddTransactionSheet so every transaction surface shares one chrome.
+function Shell({ open, onClose, title, desktop, width = 520, testId, children }: {
+  open: boolean
+  onClose: () => void
+  title: string
+  desktop?: boolean
+  width?: number
+  testId?: string
+  children: React.ReactNode
+}) {
+  const [mounted, setMounted] = useState(open)
+  useEffect(() => {
+    if (open) { setMounted(true); return }
+    const t = setTimeout(() => setMounted(false), 220)
+    return () => clearTimeout(t)
+  }, [open])
+  if (desktop ? !open : !mounted) return null
+
+  const header = (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: desktop ? '18px 20px 14px' : '0 16px 16px', borderBottom: desktop ? '1px solid var(--c-line)' : 'none', flexShrink: 0 }}>
+      <h3 style={{ margin: 0, fontSize: desktop ? 16 : 17, fontWeight: desktop ? 700 : 600, letterSpacing: '-0.01em', color: 'var(--c-ink)' }}>{title}</h3>
+      <button onClick={onClose} style={{ padding: 6, border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', color: 'var(--c-muted)', display: 'flex' }} aria-label="Close"><X size={18} /></button>
+    </div>
+  )
+
+  if (desktop) {
+    return (
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.4)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, animation: 'fade-in 150ms ease', backdropFilter: 'blur(2px)' }}>
+        <div data-testid={testId} onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: width, maxHeight: 'calc(100vh - 48px)', background: 'var(--c-card)', borderRadius: 16, boxShadow: '0 24px 48px rgba(15,23,42,0.18), 0 8px 16px rgba(15,23,42,0.08)', display: 'flex', flexDirection: 'column', animation: 'modal-in 200ms cubic-bezier(0.2,0.8,0.2,1)', overflow: 'hidden' }}>
+          {header}
+          <div style={{ flex: 1, padding: '18px 20px', overflowY: 'auto', overflowX: 'hidden', overscrollBehavior: 'contain' }}>{children}</div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', zIndex: 100, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', animation: open ? 'fade-in 180ms ease' : 'fade-out 180ms ease forwards', pointerEvents: open ? 'auto' : 'none' }}>
+      <div data-testid={testId} onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 520, maxHeight: '90dvh', background: 'var(--c-card)', borderTopLeftRadius: 20, borderTopRightRadius: 20, display: 'flex', flexDirection: 'column', overflow: 'hidden', animation: open ? 'slide-up 220ms cubic-bezier(0.2,0.8,0.2,1)' : 'slide-down 180ms ease forwards', boxShadow: '0 -8px 24px rgba(0,0,0,0.12)' }}>
+        <div style={{ width: 36, height: 4, background: 'var(--c-line-strong)', borderRadius: 999, margin: '6px auto 14px', flexShrink: 0 }} />
+        {header}
+        <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', overscrollBehavior: 'contain', touchAction: 'pan-y', padding: '0 16px 24px' }}>{children}</div>
+      </div>
+    </div>
+  )
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return <div style={{ minWidth: 0 }}><label style={labelStyle}>{label}</label>{children}</div>
+}
+
 interface Props {
   open: boolean
+  desktop?: boolean
+  locale: string
   onClose: () => void
   onChanged?: () => void
 }
 
-export default function TransactionLedgerSheet({ open, onClose, onChanged }: Props) {
+export default function TransactionLedgerSheet({ open, desktop, locale, onClose, onChanged }: Props) {
   const t = useTranslations('transactions')
   const tc = useTranslations('common')
 
@@ -88,6 +143,11 @@ export default function TransactionLedgerSheet({ open, onClose, onChanged }: Pro
   const [importRows, setImportRows] = useState<ParsedRow[]>([])
   const [importing, setImporting] = useState(false)
 
+  const assetLabelOf = useCallback((a?: string | null): string => {
+    if (!a) return '—'
+    return t(`asset${a.charAt(0).toUpperCase() + a.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold')
+  }, [t])
+
   const fetchGoals = useCallback(async () => {
     const res = await fetch('/api/v1/savings-goals')
     const { goals: g } = res.ok ? await res.json() : { goals: [] }
@@ -116,9 +176,16 @@ export default function TransactionLedgerSheet({ open, onClose, onChanged }: Pro
     setLoading(false)
   }, [page, filters])
 
-  // Only load while open — avoids fetching for every dashboard render.
+  // Load only while open — avoids fetching for every dashboard render.
   useEffect(() => { if (open) { fetchGoals(); fetchFunds() } }, [open, fetchGoals, fetchFunds])
   useEffect(() => { if (open) fetchTransactions() }, [open, fetchTransactions])
+
+  // Lock background scroll while the ledger is open.
+  useEffect(() => {
+    if (!open) return
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = '' }
+  }, [open])
 
   function setSelectFilter(key: 'asset_type' | 'goal_id', value: string) {
     setFilters((prev) => ({ ...prev, [key]: value }))
@@ -255,440 +322,327 @@ export default function TransactionLedgerSheet({ open, onClose, onChanged }: Pro
   }
 
   const totalPages = Math.max(1, Math.ceil(total / 20))
+  const hasFilters = !!(filters.asset_type || filters.goal_id || filters.from_date || filters.to_date)
+
+  const dirMeta = (tx: LedgerTransaction) => isWithdrawal(tx)
+    ? { Icon: ArrowDownRight, color: 'var(--c-neg)', label: t('withdrawal') }
+    : { Icon: ArrowUpRight, color: 'var(--c-pos)', label: t('investment') }
+
+  // ── Type badge (icon chip + direction label + asset pill) ──
+  const TxBadge = ({ tx }: { tx: LedgerTransaction }) => {
+    const m = dirMeta(tx)
+    const aColor = ASSET_BADGE[tx.asset_type as AssetType] ?? 'var(--c-muted)'
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ width: 22, height: 22, borderRadius: 6, background: `color-mix(in srgb, ${m.color} 12%, transparent)`, color: m.color, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <m.Icon size={12} strokeWidth={2.2} />
+        </span>
+        <span style={{ fontSize: 12, fontWeight: 600, color: m.color }}>{m.label}</span>
+        {tx.asset_type && (
+          <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 999, color: aColor, background: `color-mix(in srgb, ${aColor} 14%, transparent)` }}>{assetLabelOf(tx.asset_type)}</span>
+        )}
+      </span>
+    )
+  }
+
+  const goalPill = (tx: LedgerTransaction) => (
+    tx.savings_goals?.goal_name
+      ? <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 999, background: 'var(--c-navy-tint)', color: 'var(--c-navy)' }}>{tx.savings_goals.goal_name}</span>
+      : <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 999, background: 'var(--c-card-2)', color: 'var(--c-muted)' }}>{t('noGoal')}</span>
+  )
+
+  const amountCell = (tx: LedgerTransaction) => {
+    const w = isWithdrawal(tx)
+    return (
+      <span className="tabular" style={{ fontSize: 13, fontWeight: 600, color: w ? 'var(--c-neg)' : 'var(--c-ink)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+        {w ? '−' : ''}{fmtCompact(tx.amount_vnd)}
+      </span>
+    )
+  }
+
+  const rowActions = (tx: LedgerTransaction) => (
+    <span style={{ display: 'inline-flex', gap: 2, whiteSpace: 'nowrap' }}>
+      {!isWithdrawal(tx) && (
+        <button onClick={() => openEdit(tx)} className="cn-btn ghost" style={{ padding: 5 }} aria-label={tc('edit')}><Edit size={14} color="var(--c-muted)" /></button>
+      )}
+      <button onClick={() => setConfirmTx(tx)} className="cn-btn ghost" style={{ padding: 5 }} aria-label={tc('delete')}><Trash2 size={14} color="var(--c-neg)" /></button>
+    </span>
+  )
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
-      <DialogContent data-testid="tx-ledger" className="sm:max-w-[880px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{t('title')}</DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-5">
+    <>
+      <Shell open={open} onClose={onClose} title={t('title')} desktop={desktop} width={880} testId="tx-ledger">
+        <div style={{ display: 'grid', gap: 14 }}>
           {/* Toolbar: filters + actions */}
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="min-w-0">
-              <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5 block uppercase tracking-wide">{t('filterAssetType')}</label>
-              <div className="relative">
-                <select
-                  value={filters.asset_type}
-                  onChange={(e) => setSelectFilter('asset_type', e.target.value)}
-                  className="appearance-none border border-black/10 dark:border-gray-600 rounded-lg pl-3 pr-8 py-2 text-sm font-medium bg-[#f3f3f5] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  <option value="">{t('filterAll')}</option>
-                  {ASSET_TYPES.map((type) => <option key={type} value={type}>{t(`asset${type.charAt(0).toUpperCase() + type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold')}</option>)}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              </div>
-            </div>
-            <div className="min-w-0">
-              <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5 block uppercase tracking-wide">{t('filterGoal')}</label>
-              <div className="relative">
-                <select
-                  value={filters.goal_id}
-                  onChange={(e) => setSelectFilter('goal_id', e.target.value)}
-                  className="appearance-none border border-black/10 dark:border-gray-600 rounded-lg pl-3 pr-8 py-2 text-sm font-medium bg-[#f3f3f5] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  <option value="">{t('allGoals')}</option>
-                  <option value="unassigned">{t('noGoal')}</option>
-                  {goals.map((g) => <option key={g.goal_id} value={g.goal_id}>{g.goal_name}</option>)}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              </div>
-            </div>
-            <div className="min-w-0">
-              <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5 block uppercase tracking-wide">{t('filterFrom')}</label>
-              <input type="date" value={dateFrom} onChange={(e) => setDateFilter('from_date', e.target.value, setDateFrom)}
-                className="border border-black/10 dark:border-gray-600 rounded-lg px-3 py-2 text-sm font-medium bg-[#f3f3f5] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-            </div>
-            <div className="min-w-0">
-              <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5 block uppercase tracking-wide">{t('filterTo')}</label>
-              <input type="date" value={dateTo} onChange={(e) => setDateFilter('to_date', e.target.value, setDateTo)}
-                className="border border-black/10 dark:border-gray-600 rounded-lg px-3 py-2 text-sm font-medium bg-[#f3f3f5] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-            </div>
-            {(filters.asset_type || filters.goal_id || filters.from_date || filters.to_date) && (
-              <button onClick={resetFilters} className="h-9 px-3 text-sm font-medium text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">{tc('reset')}</button>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
+            <Field label={t('filterAssetType')}>
+              <select value={filters.asset_type} onChange={(e) => setSelectFilter('asset_type', e.target.value)} className="cn-input" style={{ cursor: 'pointer', padding: '8px 10px' }}>
+                <option value="">{t('filterAll')}</option>
+                {ASSET_TYPES.map((v) => <option key={v} value={v}>{assetLabelOf(v)}</option>)}
+              </select>
+            </Field>
+            <Field label={t('filterGoal')}>
+              <select value={filters.goal_id} onChange={(e) => setSelectFilter('goal_id', e.target.value)} className="cn-input" style={{ cursor: 'pointer', padding: '8px 10px' }}>
+                <option value="">{t('allGoals')}</option>
+                <option value="unassigned">{t('noGoal')}</option>
+                {goals.map((g) => <option key={g.goal_id} value={g.goal_id}>{g.goal_name}</option>)}
+              </select>
+            </Field>
+            <Field label={t('filterFrom')}>
+              <input type="date" value={dateFrom} onChange={(e) => setDateFilter('from_date', e.target.value, setDateFrom)} className="cn-input tabular" style={{ padding: '8px 10px' }} />
+            </Field>
+            <Field label={t('filterTo')}>
+              <input type="date" value={dateTo} onChange={(e) => setDateFilter('to_date', e.target.value, setDateTo)} className="cn-input tabular" style={{ padding: '8px 10px' }} />
+            </Field>
+            {hasFilters && (
+              <button onClick={resetFilters} className="cn-btn" style={{ padding: '8px 12px', fontSize: 12 }}>{tc('reset')}</button>
             )}
-            <div className="flex-1" />
-            <button
-              data-testid="tx-ledger-import"
-              onClick={() => { setShowImport(true); setImportRaw(''); setImportRows([]); setImportFundId('') }}
-              className="flex items-center gap-2 h-9 px-3 text-sm font-medium text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-            >
-              <FileSpreadsheet className="h-4 w-4 shrink-0" />
-              <span className="hidden sm:inline">{t('import')}</span>
+            <div style={{ flex: 1 }} />
+            <button data-testid="tx-ledger-import" onClick={() => { setShowImport(true); setImportRaw(''); setImportRows([]); setImportFundId('') }} className="cn-btn" style={{ padding: '8px 12px', fontSize: 12 }}>
+              <FileSpreadsheet size={14} />{t('import')}
             </button>
-            <button
-              data-testid="tx-ledger-add"
-              onClick={openAdd}
-              className="flex items-center gap-2 h-9 px-3 sm:px-4 bg-gray-950 hover:bg-gray-800 text-white text-sm font-bold rounded-md transition-colors"
-            >
-              <Plus className="h-4 w-4 shrink-0" />
-              <span className="hidden sm:inline">{t('add')}</span>
+            <button data-testid="tx-ledger-add" onClick={openAdd} className="cn-btn primary" style={{ padding: '8px 14px', fontSize: 12 }}>
+              <Plus size={14} strokeWidth={2.4} />{t('add')}
             </button>
           </div>
 
-          {/* Count */}
-          {!loading && total > 0 && (
-            <p className="text-sm text-gray-500 dark:text-gray-400">{t('totalCount', { count: total })}</p>
-          )}
-
-          {/* List */}
-          <div className="bg-white dark:bg-gray-900 rounded-xl border border-black/10 dark:border-gray-700 overflow-hidden">
-            {loading ? (
-              <div className="text-center py-10 text-gray-400 dark:text-gray-500 text-sm">{tc('loading')}</div>
-            ) : transactions.length === 0 ? (
-              <div className="text-center py-10 text-gray-400 dark:text-gray-500 text-sm">
-                {(filters.asset_type || filters.goal_id || filters.from_date || filters.to_date) ? t('noMatch') : t('empty')}
+          {loading ? (
+            <div style={{ padding: '40px 16px', textAlign: 'center', fontSize: 13, color: 'var(--c-muted)' }}>{tc('loading')}</div>
+          ) : total === 0 && !hasFilters ? (
+            /* Empty state */
+            <div style={{ padding: '44px 20px', textAlign: 'center', border: '1px dashed var(--c-line-strong)', borderRadius: 14 }}>
+              <div style={{ width: 52, height: 52, borderRadius: 26, background: 'var(--c-card-2)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14, color: 'var(--c-muted)' }}>
+                <Calendar size={24} />
               </div>
-            ) : (
-              <>
-                {/* Mobile card layout */}
-                <div className="sm:hidden divide-y divide-black/5 dark:divide-gray-700 px-4 py-2">
-                  {transactions.map((tx) => {
-                    const isWithdrawal = tx.transaction_type === 'withdrawal'
-                    const gain = isWithdrawal && tx.principal_withdrawn != null ? tx.amount_vnd - tx.principal_withdrawn : null
-                    const rateOrNav = tx.asset_type === 'fund'
-                      ? (tx.unit_price != null ? fmtNav(tx.unit_price) : '—')
-                      : (tx.interest_rate != null ? `${tx.interest_rate}%` : '—')
-                    const rateOrNavLabel = tx.asset_type === 'fund' ? t('colTransaction') : t('colInterest')
-                    const fundCode = tx.asset_type === 'fund' ? funds.find((f) => f.id === tx.fund_id)?.code : null
-                    return (
-                      <div key={tx.transaction_id} className="py-3 space-y-2">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            {isWithdrawal ? (
-                              <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">{t('withdrawal')}</span>
-                            ) : (
-                              <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${ASSET_COLORS[tx.asset_type as AssetType] ?? 'bg-gray-100 text-gray-700'}`}>
-                                {tx.asset_type ? t(`asset${tx.asset_type.charAt(0).toUpperCase() + tx.asset_type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold') : '—'}
-                              </span>
-                            )}
-                            {fundCode && <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{fundCode}</span>}
-                          </div>
-                          <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">{new Date(tx.investment_date).toLocaleDateString('vi-VN')}</span>
-                        </div>
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                          <div>
-                            <span className="text-gray-500 dark:text-gray-400">{isWithdrawal ? t('amountReceived') : t('colAmount')}: </span>
-                            <span className="font-medium text-gray-900 dark:text-gray-100">{fmt(tx.amount_vnd)}</span>
-                          </div>
-                          {isWithdrawal ? (
-                            <div>
-                              <span className="text-gray-500 dark:text-gray-400">{t('gainLoss')}: </span>
-                              {gain != null ? (
-                                <span className={`font-medium ${gain >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>{gain >= 0 ? '+' : ''}{fmt(gain)}</span>
-                              ) : <span className="text-gray-400">—</span>}
-                            </div>
-                          ) : (
-                            <div>
-                              <span className="text-gray-500 dark:text-gray-400">{rateOrNavLabel}: </span>
-                              <span className="text-gray-700 dark:text-gray-300">{rateOrNav}</span>
-                            </div>
-                          )}
-                          <div className="col-span-2">
-                            <span className="text-gray-500 dark:text-gray-400">{t('colGoal')}: </span>
-                            {tx.savings_goals?.goal_name
-                              ? <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900">{tx.savings_goals.goal_name}</span>
-                              : <span className="text-gray-400 dark:text-gray-500">{t('noGoal')}</span>}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1 pt-0.5">
-                          {!isWithdrawal && (
-                            <button onClick={() => openEdit(tx)} className="h-8 w-8 p-0 flex items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                              <Edit className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                            </button>
-                          )}
-                          <button onClick={() => setConfirmTx(tx)} className="h-8 w-8 p-0 flex items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                            <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
-                          </button>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{t('empty')}</h3>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 18 }}>
+                <button onClick={() => { setShowImport(true); setImportRaw(''); setImportRows([]); setImportFundId('') }} className="cn-btn"><FileSpreadsheet size={15} />{t('importModalTitle')}</button>
+                <button onClick={openAdd} className="cn-btn primary"><Plus size={15} strokeWidth={2.4} />{t('create')}</button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div style={{ fontSize: 12, color: 'var(--c-muted)' }}>{t('totalCount', { count: total })}</div>
 
-                {/* Desktop table layout */}
-                <div className="hidden sm:block overflow-x-auto">
-                  <table className="w-full">
+              {desktop ? (
+                /* Desktop table */
+                <div className="cn-card" style={{ overflow: 'hidden' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
-                      <tr className="border-b border-black/10 dark:border-gray-700 text-left">
-                        <th className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colDate')}</th>
-                        <th className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colAsset')}</th>
-                        <th className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-right">{t('colAmount')}</th>
-                        <th className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('colGoal')}</th>
-                        <th className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase text-center">{tc('actions')}</th>
+                      <tr style={{ background: 'var(--c-card-2)', borderBottom: '1px solid var(--c-line)' }}>
+                        {[t('colDate'), t('colTransaction'), t('colAsset'), t('colGoal'), t('colAmount'), ''].map((h, i) => (
+                          <th key={i} style={{ padding: '9px 14px', textAlign: i >= 4 ? 'right' : 'left', fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--c-muted)' }}>{h}</th>
+                        ))}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-black/5 dark:divide-gray-700">
-                      {transactions.map((tx) => {
-                        const isWithdrawal = tx.transaction_type === 'withdrawal'
-                        const fundCode = tx.asset_type === 'fund' ? funds.find((f) => f.id === tx.fund_id)?.code : null
-                        return (
-                          <tr key={tx.transaction_id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                            <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">{new Date(tx.investment_date).toLocaleDateString('vi-VN')}</td>
-                            <td className="px-4 py-3">
-                              <div className="flex items-center gap-2">
-                                {isWithdrawal ? (
-                                  <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">{t('withdrawal')}</span>
-                                ) : (
-                                  <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${ASSET_COLORS[tx.asset_type as AssetType] ?? 'bg-gray-100 text-gray-700'}`}>
-                                    {tx.asset_type ? t(`asset${tx.asset_type.charAt(0).toUpperCase() + tx.asset_type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold') : '—'}
-                                  </span>
-                                )}
-                                {fundCode && <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{fundCode}</span>}
-                              </div>
-                            </td>
-                            <td className={`px-4 py-3 text-right font-medium whitespace-nowrap ${isWithdrawal ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-gray-100'}`}>
-                              {isWithdrawal ? '−' : '+'}{fmt(tx.amount_vnd)}
-                            </td>
-                            <td className="px-4 py-3">
-                              {tx.savings_goals?.goal_name
-                                ? <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900">{tx.savings_goals.goal_name}</span>
-                                : <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400">{t('noGoal')}</span>}
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              <div className="flex items-center justify-center gap-1">
-                                {!isWithdrawal && (
-                                  <button onClick={() => openEdit(tx)} className="h-8 w-8 p-0 flex items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                                    <Edit className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                                  </button>
-                                )}
-                                <button onClick={() => setConfirmTx(tx)} className="h-8 w-8 p-0 flex items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                                  <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        )
-                      })}
+                    <tbody>
+                      {transactions.map((tx, i) => (
+                        <tr key={tx.transaction_id} style={{ borderBottom: i < transactions.length - 1 ? '1px solid var(--c-line)' : 'none' }}>
+                          <td className="tabular" style={{ padding: '11px 14px', fontSize: 12, color: 'var(--c-muted)', whiteSpace: 'nowrap' }}>{fmtTxDate(tx.investment_date, locale)}</td>
+                          <td style={{ padding: '11px 14px' }}><TxBadge tx={tx} /></td>
+                          <td style={{ padding: '11px 14px', fontSize: 13, fontWeight: 500, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{txPrimaryName(tx, assetLabelOf(tx.asset_type))}</td>
+                          <td style={{ padding: '11px 14px' }}>{goalPill(tx)}</td>
+                          <td style={{ padding: '11px 14px', textAlign: 'right' }}>{amountCell(tx)}</td>
+                          <td style={{ padding: '11px 10px 11px 4px', textAlign: 'right' }}>{rowActions(tx)}</td>
+                        </tr>
+                      ))}
+                      {transactions.length === 0 && (
+                        <tr><td colSpan={6} style={{ padding: '28px 14px', textAlign: 'center', fontSize: 13, color: 'var(--c-muted)' }}>{t('noMatch')}</td></tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
+              ) : (
+                /* Mobile list */
+                <div style={{ display: 'grid', gap: 8 }}>
+                  {transactions.map((tx) => {
+                    const m = dirMeta(tx)
+                    return (
+                      <div key={tx.transaction_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 12, border: '1px solid var(--c-line)', background: 'var(--c-card)' }}>
+                        <div style={{ width: 32, height: 32, borderRadius: 8, background: `color-mix(in srgb, ${m.color} 12%, transparent)`, color: m.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <m.Icon size={14} strokeWidth={2.2} />
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{txPrimaryName(tx, assetLabelOf(tx.asset_type))}</div>
+                          <div style={{ fontSize: 10, color: 'var(--c-muted)', marginTop: 2 }}>{m.label} · {tx.savings_goals?.goal_name ?? t('noGoal')} · {fmtTxDate(tx.investment_date, locale)}</div>
+                        </div>
+                        {amountCell(tx)}
+                        {rowActions(tx)}
+                      </div>
+                    )
+                  })}
+                  {transactions.length === 0 && (
+                    <div style={{ padding: '24px 12px', textAlign: 'center', fontSize: 13, color: 'var(--c-muted)' }}>{t('noMatch')}</div>
+                  )}
+                </div>
+              )}
 
-                {/* Pagination */}
-                {totalPages > 1 && (
-                  <div className="flex items-center justify-between px-4 py-4 border-t border-black/10 dark:border-gray-700">
-                    <p className="text-sm text-gray-600 dark:text-gray-400">{t('page')} {page} / {totalPages}</p>
-                    <div className="flex gap-2">
-                      <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
-                        className="h-9 px-3 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-40 transition-colors">
-                        <ChevronLeft className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-                      </button>
-                      <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-                        className="h-9 px-3 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-40 transition-colors">
-                        <ChevronRight className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Import from Excel modal */}
-        <Dialog open={showImport} onOpenChange={(o) => { if (!o) setShowImport(false) }}>
-          <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>{t('importModalTitle')}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-5 py-2">
-              <div className="space-y-2">
-                <Label htmlFor="ledger_import_fund">{t('assetFund')}</Label>
-                <select
-                  id="ledger_import_fund"
-                  value={importFundId}
-                  onChange={(e) => setImportFundId(e.target.value)}
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  <option value="">{t('selectFund')}</option>
-                  {funds.map((f) => <option key={f.id} value={f.id}>{f.code} - {f.name}</option>)}
-                </select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="ledger_import_raw">{t('pasteFromExcel')}</Label>
-                <p className="text-xs text-gray-400 dark:text-gray-500">Column order: Tháng | Tiền chuyển | Tiền mua (skip) | NAV mua | CCQ mua</p>
-                <Textarea
-                  id="ledger_import_raw"
-                  value={importRaw}
-                  onChange={(e) => handleImportPaste(e.target.value)}
-                  rows={6}
-                  placeholder={'7/2023\t10,000,000\t9,876,543\t23,375.28\t42.78\n8/2023\t10,000,000\t9,876,543\t24,100.00\t40.98'}
-                  className="font-mono resize-none"
-                />
-              </div>
-              {importRows.length > 0 && (
-                <div>
-                  <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
-                    {t('importPreview', { valid: importRows.filter((r) => !r.error).length, total: importRows.length })}
-                  </p>
-                  <div className="overflow-x-auto rounded-lg border border-gray-100 dark:border-gray-700 max-h-56 overflow-y-auto">
-                    <table className="w-full text-xs">
-                      <thead className="bg-gray-50 dark:bg-gray-800">
-                        <tr>
-                          {[t('colImportDate'), t('colImportAmount'), t('colImportNav'), t('colImportUnits'), t('colImportStatus')].map((h) => (
-                            <th key={h} className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
-                        {importRows.map((row, i) => (
-                          <tr key={i} className={row.error ? 'bg-red-50 dark:bg-red-900/10' : ''}>
-                            <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{row.investment_date || '—'}</td>
-                            <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{isNaN(row.amount_vnd) ? '—' : Math.round(row.amount_vnd).toLocaleString('vi-VN')}</td>
-                            <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{isNaN(row.unit_price) ? '—' : fmtNav(row.unit_price)}</td>
-                            <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{isNaN(row.units) ? '—' : fmtUnits(row.units)}</td>
-                            <td className="px-3 py-2">{row.error ? <span className="text-red-500 dark:text-red-400">{row.error}</span> : <span className="text-green-600 dark:text-green-400">✓</span>}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{t('page')} {page} / {totalPages}</span>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="cn-btn" style={{ padding: '6px 10px' }}><ChevronLeft size={14} /></button>
+                    <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="cn-btn" style={{ padding: '6px 10px' }}><ChevronRight size={14} /></button>
                   </div>
                 </div>
               )}
-            </div>
-            <div className="flex gap-3">
-              <Button variant="outline" className="flex-1" onClick={() => setShowImport(false)}>{tc('cancel')}</Button>
-              <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={handleImport} disabled={importing || !importFundId || importRows.filter((r) => !r.error).length === 0}>
-                {importing ? t('importing') : t('importCount', { count: importRows.filter((r) => !r.error).length })}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </>
+          )}
+        </div>
+      </Shell>
 
-        {/* Add / edit modal */}
-        <Dialog open={!!formMode} onOpenChange={(o) => { if (!o) setFormMode(null) }}>
-          <DialogContent className="sm:max-w-[520px] max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>{formMode === 'add' ? t('create') : tc('edit')}</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={(e) => { e.preventDefault(); handleSave() }}>
-              <div className="space-y-5 py-2">
-                <div className="space-y-2">
-                  <Label htmlFor="ledger_asset_type">{t('filterAssetType')} <span className="text-red-500">*</span></Label>
-                  <Select value={txForm.asset_type} onValueChange={(value) => { if (value) setTxForm((f) => ({ ...f, asset_type: value, fund_id: '', unit_price: '', units: '', interest_rate: '', expiry_date: '' })) }}>
-                    <SelectTrigger id="ledger_asset_type">
-                      <SelectValue>{t(`asset${txForm.asset_type.charAt(0).toUpperCase() + txForm.asset_type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold')}</SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ASSET_TYPES.map((type) => (
-                        <SelectItem key={type} value={type}>{t(`asset${type.charAt(0).toUpperCase() + type.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold')}</SelectItem>
+      {/* Add / edit */}
+      <Shell open={!!formMode} onClose={() => setFormMode(null)} title={formMode === 'add' ? t('create') : tc('edit')} desktop={desktop} width={520}>
+        <form onSubmit={(e) => { e.preventDefault(); handleSave() }} style={{ display: 'grid', gap: 14 }}>
+          <Field label={t('filterAssetType')}>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {ASSET_TYPES.map((v) => {
+                const active = txForm.asset_type === v
+                return (
+                  <button key={v} type="button" onClick={() => setTxForm((f) => ({ ...f, asset_type: v, fund_id: '', unit_price: '', units: '', interest_rate: '', expiry_date: '' }))}
+                    style={{ padding: '7px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', background: active ? 'var(--c-navy)' : 'var(--c-card-2)', color: active ? '#fff' : 'var(--c-muted)', border: `1px solid ${active ? 'var(--c-navy)' : 'var(--c-line)'}`, transition: 'all 120ms' }}>
+                    {assetLabelOf(v)}
+                  </button>
+                )
+              })}
+            </div>
+          </Field>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            {txForm.asset_type === 'fund' ? (
+              <Field label={t('assetFund')}>
+                <select value={txForm.fund_id} onChange={(e) => setTxForm((f) => ({ ...f, fund_id: e.target.value }))} className="cn-input" style={{ cursor: 'pointer' }}>
+                  <option value="">{t('selectFund')}</option>
+                  {funds.map((f) => <option key={f.id} value={f.id}>{f.code} - {f.name}</option>)}
+                </select>
+              </Field>
+            ) : <div />}
+            <Field label={t('colGoal')}>
+              <select value={txForm.goal_id} onChange={(e) => setTxForm((f) => ({ ...f, goal_id: e.target.value }))} className="cn-input" style={{ cursor: 'pointer' }}>
+                <option value="">{t('noGoal')}</option>
+                {goals.map((g) => <option key={g.goal_id} value={g.goal_id}>{g.goal_name}</option>)}
+              </select>
+            </Field>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <Field label={t('colDate')}>
+              <input type="date" value={txForm.investment_date} onChange={(e) => setTxForm((f) => ({ ...f, investment_date: e.target.value }))} className="cn-input tabular" />
+            </Field>
+            <Field label={t('colAmount')}>
+              <AmountInput value={txForm.amount_vnd} onChange={(raw) => setTxForm((f) => ({ ...f, amount_vnd: raw }))} placeholder="10,000,000" className="cn-input tabular" />
+            </Field>
+          </div>
+
+          {txForm.asset_type === 'fund' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <Field label={t('navAtBuy')}>
+                <DecimalInput value={txForm.unit_price} onChange={(v) => setTxForm((f) => ({ ...f, unit_price: v }))} placeholder="22,215.12" className="cn-input tabular" />
+              </Field>
+              <Field label={t('unitsFund')}>
+                <DecimalInput value={txForm.units} onChange={(v) => setTxForm((f) => ({ ...f, units: v }))} placeholder="450.25" className="cn-input tabular" />
+              </Field>
+            </div>
+          )}
+
+          {txForm.asset_type !== 'bank' && txForm.asset_type !== 'fund' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <Field label={t('unitPrice')}>
+                <DecimalInput value={txForm.unit_price} onChange={(v) => setTxForm((f) => ({ ...f, unit_price: v }))} className="cn-input tabular" />
+              </Field>
+              <Field label={txForm.asset_type === 'stock' ? t('unitsStock') : t('unitsGold')}>
+                <DecimalInput value={txForm.units} onChange={(v) => setTxForm((f) => ({ ...f, units: v }))} className="cn-input tabular" />
+              </Field>
+            </div>
+          )}
+
+          {txForm.asset_type === 'bank' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <Field label={t('colInterest')}>
+                <input type="number" step="0.01" value={txForm.interest_rate} onChange={(e) => setTxForm((f) => ({ ...f, interest_rate: e.target.value }))} placeholder="6.5" className="cn-input tabular" />
+              </Field>
+              <Field label={t('colExpiry')}>
+                <input type="date" value={txForm.expiry_date} onChange={(e) => setTxForm((f) => ({ ...f, expiry_date: e.target.value }))} className="cn-input tabular" />
+              </Field>
+            </div>
+          )}
+
+          <Field label={tc('notes')}>
+            <textarea value={txForm.notes} onChange={(e) => setTxForm((f) => ({ ...f, notes: e.target.value }))} rows={2} className="cn-input" style={{ resize: 'none' }} />
+          </Field>
+
+          {formError && <p style={{ margin: 0, fontSize: 13, color: 'var(--c-neg)' }}>{formError}</p>}
+
+          <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+            <button type="button" onClick={() => setFormMode(null)} className="cn-btn" style={{ flex: 1, justifyContent: 'center' }}>{tc('cancel')}</button>
+            <button type="submit" className="cn-btn primary" style={{ flex: 2, justifyContent: 'center' }} disabled={saving}>{saving ? tc('saving') : tc('save')}</button>
+          </div>
+        </form>
+      </Shell>
+
+      {/* Import from Excel */}
+      <Shell open={showImport} onClose={() => setShowImport(false)} title={t('importModalTitle')} desktop={desktop} width={640}>
+        <div style={{ display: 'grid', gap: 14 }}>
+          <Field label={t('assetFund')}>
+            <select value={importFundId} onChange={(e) => setImportFundId(e.target.value)} className="cn-input" style={{ cursor: 'pointer' }}>
+              <option value="">{t('selectFund')}</option>
+              {funds.map((f) => <option key={f.id} value={f.id}>{f.code} - {f.name}</option>)}
+            </select>
+          </Field>
+          <Field label={t('pasteFromExcel')}>
+            <div style={{ fontSize: 11, color: 'var(--c-muted)', marginBottom: 6 }}>Tháng | Tiền chuyển | (skip) | NAV | CCQ</div>
+            <textarea value={importRaw} onChange={(e) => handleImportPaste(e.target.value)} rows={5} className="cn-input tabular" style={{ resize: 'vertical', fontFamily: 'monospace', fontSize: 12 }}
+              placeholder={'7/2023\t10,000,000\t9,876,543\t23,375.28\t42.78\n8/2023\t10,000,000\t9,876,543\t24,100.00\t40.98'} />
+          </Field>
+
+          {importRows.length > 0 && (
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--c-muted)', marginBottom: 6 }}>
+                {t('importPreview', { valid: importRows.filter((r) => !r.error).length, total: importRows.length })}
+              </div>
+              <div className="cn-card" style={{ overflow: 'hidden', maxHeight: 220, overflowY: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ background: 'var(--c-card-2)' }}>
+                      {[t('colImportDate'), t('colImportAmount'), t('colImportNav'), t('colImportUnits'), ''].map((h, i) => (
+                        <th key={i} style={{ padding: '7px 10px', textAlign: i === 0 ? 'left' : 'right', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: 'var(--c-muted)', letterSpacing: '0.05em' }}>{h}</th>
                       ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="ledger_goal">{t('colGoal')}</Label>
-                  <Select value={txForm.goal_id || 'unassigned'} onValueChange={(value) => { if (value) setTxForm((f) => ({ ...f, goal_id: value === 'unassigned' ? '' : value })) }}>
-                    <SelectTrigger id="ledger_goal">
-                      <SelectValue>{txForm.goal_id ? goals.find((g) => g.goal_id === txForm.goal_id)?.goal_name : t('noGoal')}</SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="unassigned">{t('noGoal')}</SelectItem>
-                      {goals.map((g) => <SelectItem key={g.goal_id} value={g.goal_id}>{g.goal_name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {txForm.asset_type === 'fund' && (
-                  <div className="space-y-2">
-                    <Label htmlFor="ledger_fund">{t('assetFund')} <span className="text-red-500">*</span></Label>
-                    <Select value={txForm.fund_id || undefined} onValueChange={(value) => { if (value) setTxForm((f) => ({ ...f, fund_id: value })) }}>
-                      <SelectTrigger id="ledger_fund">
-                        <SelectValue placeholder={t('selectFund')}>{txForm.fund_id ? funds.find((f) => f.id === txForm.fund_id)?.name : undefined}</SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {funds.map((f) => <SelectItem key={f.id} value={f.id}>{f.code} - {f.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-
-                <div className="space-y-2">
-                  <Label htmlFor="ledger_date">{t('colDate')} <span className="text-red-500">*</span></Label>
-                  <Input id="ledger_date" type="date" value={txForm.investment_date} onChange={(e) => setTxForm((f) => ({ ...f, investment_date: e.target.value }))} />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="ledger_amount">{t('colAmount')} <span className="text-red-500">*</span></Label>
-                  <AmountInput
-                    id="ledger_amount"
-                    value={txForm.amount_vnd}
-                    onChange={(raw) => setTxForm((f) => ({ ...f, amount_vnd: raw }))}
-                    placeholder="e.g. 10,000,000"
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
-                  />
-                </div>
-
-                {txForm.asset_type === 'fund' && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="ledger_nav">{t('navAtBuy')} <span className="text-red-500">*</span></Label>
-                      <DecimalInput id="ledger_nav" placeholder="e.g., 22,215.12" value={txForm.unit_price} onChange={(v) => setTxForm((f) => ({ ...f, unit_price: v }))}
-                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring md:text-sm" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="ledger_units">{t('unitsFund')} <span className="text-red-500">*</span></Label>
-                      <DecimalInput id="ledger_units" placeholder="e.g., 450.25" value={txForm.units} onChange={(v) => setTxForm((f) => ({ ...f, units: v }))}
-                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring md:text-sm" />
-                    </div>
-                  </div>
-                )}
-
-                {txForm.asset_type !== 'bank' && txForm.asset_type !== 'fund' && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="ledger_price">{t('unitPrice')} <span className="text-red-500">*</span></Label>
-                      <DecimalInput id="ledger_price" value={txForm.unit_price} onChange={(v) => setTxForm((f) => ({ ...f, unit_price: v }))}
-                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring md:text-sm" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="ledger_qty">{txForm.asset_type === 'stock' ? t('unitsStock') : txForm.asset_type === 'gold' ? t('unitsGold') : t('unitsDefault')} <span className="text-red-500">*</span></Label>
-                      <DecimalInput id="ledger_qty" value={txForm.units} onChange={(v) => setTxForm((f) => ({ ...f, units: v }))}
-                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring md:text-sm" />
-                    </div>
-                  </div>
-                )}
-
-                {txForm.asset_type === 'bank' && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="ledger_rate">{t('colInterest')}</Label>
-                      <Input id="ledger_rate" type="number" step="0.01" value={txForm.interest_rate} onChange={(e) => setTxForm((f) => ({ ...f, interest_rate: e.target.value }))} placeholder="e.g., 6.5" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="ledger_expiry">{t('colExpiry')}</Label>
-                      <Input id="ledger_expiry" type="date" value={txForm.expiry_date} onChange={(e) => setTxForm((f) => ({ ...f, expiry_date: e.target.value }))} />
-                    </div>
-                  </div>
-                )}
-
-                <div className="space-y-2">
-                  <Label htmlFor="ledger_notes">{tc('notes')}</Label>
-                  <Textarea id="ledger_notes" value={txForm.notes} onChange={(e) => setTxForm((f) => ({ ...f, notes: e.target.value }))} rows={3} placeholder="Additional notes..." className="resize-none" />
-                </div>
-
-                {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {importRows.map((r, i) => (
+                      <tr key={i} style={{ borderTop: '1px solid var(--c-line)', background: r.error ? 'var(--c-neg-tint)' : 'var(--c-card)' }}>
+                        <td style={{ padding: '7px 10px', color: 'var(--c-ink)' }}>{r.investment_date || '—'}</td>
+                        <td className="tabular" style={{ padding: '7px 10px', textAlign: 'right' }}>{isNaN(r.amount_vnd) ? '—' : Math.round(r.amount_vnd).toLocaleString('en-US')}</td>
+                        <td className="tabular" style={{ padding: '7px 10px', textAlign: 'right' }}>{isNaN(r.unit_price) ? '—' : fmtNav(r.unit_price)}</td>
+                        <td className="tabular" style={{ padding: '7px 10px', textAlign: 'right' }}>{isNaN(r.units) ? '—' : fmtUnits(r.units)}</td>
+                        <td style={{ padding: '7px 10px', textAlign: 'right' }}>{r.error ? <span style={{ color: 'var(--c-neg)', fontSize: 11 }}>{r.error}</span> : <span style={{ color: 'var(--c-pos)' }}>✓</span>}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
+            </div>
+          )}
 
-              <div className="flex gap-3">
-                <Button type="button" variant="outline" className="flex-1" onClick={() => setFormMode(null)}>{tc('cancel')}</Button>
-                <Button type="submit" className="flex-1 bg-emerald-600 hover:bg-emerald-700" disabled={saving}>{saving ? tc('saving') : tc('save')}</Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => setShowImport(false)} className="cn-btn" style={{ flex: 1, justifyContent: 'center' }}>{tc('cancel')}</button>
+            <button onClick={handleImport} className="cn-btn primary" style={{ flex: 2, justifyContent: 'center' }} disabled={importing || !importFundId || importRows.filter((r) => !r.error).length === 0}>
+              {importing ? t('importing') : t('importCount', { count: importRows.filter((r) => !r.error).length })}
+            </button>
+          </div>
+        </div>
+      </Shell>
 
-        <ConfirmModal
-          open={!!confirmTx}
-          title={tc('delete')}
-          message={confirmTx ? t('deleteMessage') : ''}
-          confirming={deletingId === confirmTx?.transaction_id}
-          onConfirm={() => confirmTx && handleDelete(confirmTx)}
-          onCancel={() => setConfirmTx(null)}
-        />
-      </DialogContent>
-    </Dialog>
+      <ConfirmModal
+        open={!!confirmTx}
+        title={tc('delete')}
+        message={confirmTx ? t('deleteMessage') : ''}
+        confirming={deletingId === confirmTx?.transaction_id}
+        onConfirm={() => confirmTx && handleDelete(confirmTx)}
+        onCancel={() => setConfirmTx(null)}
+      />
+    </>
   )
 }

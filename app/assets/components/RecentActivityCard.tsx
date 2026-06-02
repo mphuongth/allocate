@@ -24,13 +24,15 @@ const ASSET_BADGE: Record<AssetType, string> = {
 
 interface Props {
   locale: string
+  /** Desktop renders the ledger as a centered modal; mobile as a bottom sheet. */
+  desktop?: boolean
   /** Bumped by the dashboard when it refetches, so the preview stays fresh. */
   refreshKey?: number
   /** Called after a mutation in the ledger so the dashboard can refresh. */
   onChanged?: () => void
 }
 
-export default function RecentActivityCard({ locale, refreshKey, onChanged }: Props) {
+export default function RecentActivityCard({ locale, desktop, refreshKey, onChanged }: Props) {
   const t = useTranslations('dashboard')
   const tt = useTranslations('transactions')
   const [txs, setTxs] = useState<LedgerTransaction[]>([])
@@ -130,6 +132,8 @@ export default function RecentActivityCard({ locale, refreshKey, onChanged }: Pr
 
       <TransactionLedgerSheet
         open={showLedger}
+        desktop={desktop}
+        locale={locale}
         onClose={() => setShowLedger(false)}
         onChanged={() => { setLocalKey((k) => k + 1); onChanged?.() }}
       />

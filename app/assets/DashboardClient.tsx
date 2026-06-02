@@ -684,6 +684,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                 <section style={{ marginBottom: 24 }}>
                   <RecentActivityCard
                     locale={locale}
+                    desktop={isDesktop}
                     refreshKey={historyKey}
                     onChanged={() => fetchData({ force: true })}
                   />
@@ -862,6 +863,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
               {/* Recent activity — last section */}
               <RecentActivityCard
                 locale={locale}
+                desktop={isDesktop}
                 refreshKey={historyKey}
                 onChanged={() => fetchData({ force: true })}
               />
