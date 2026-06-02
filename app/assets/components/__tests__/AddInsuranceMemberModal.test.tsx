@@ -30,4 +30,13 @@ describe('AddInsuranceMemberModal — responsive presentation', () => {
     expect(screen.getByText('Add insurance member')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /add member/i })).toBeInTheDocument()
   })
+
+  it('offers the full relationship set including Parent and Other (no Husband/Wife)', () => {
+    render(<AddInsuranceMemberModal open onClose={vi.fn()} locale="en" />)
+    for (const label of ['Self', 'Spouse', 'Child', 'Parent', 'Other']) {
+      expect(screen.getByRole('button', { name: label })).toBeInTheDocument()
+    }
+    expect(screen.queryByRole('button', { name: 'Husband' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Wife' })).not.toBeInTheDocument()
+  })
 })

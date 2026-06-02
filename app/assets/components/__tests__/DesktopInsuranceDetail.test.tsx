@@ -56,6 +56,28 @@ describe('DesktopInsuranceDetail — payment history (issue #223)', () => {
   })
 })
 
+describe('DesktopInsuranceDetail — coverage round-trips through relationship', () => {
+  it('preselects the member’s coverage in the edit form and offers Parent/Other', async () => {
+    const parentIns = { ...ins, coverageType: 'Parent' } as InsuranceData
+    render(<DesktopInsuranceDetail ins={parentIns} locale="en" onClose={vi.fn()} />)
+
+    // Coverage shown on the header (proves it round-trips, not stuck on Self).
+    expect(screen.getByText('Parent')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByTestId('insurance-edit-btn'))
+
+    // Full option set available, Husband/Wife folded away.
+    for (const label of ['Self', 'Spouse', 'Child', 'Parent', 'Other']) {
+      expect(screen.getByRole('button', { name: label })).toBeInTheDocument()
+    }
+    expect(screen.queryByRole('button', { name: 'Husband' })).not.toBeInTheDocument()
+
+    // The member's current coverage (Parent) is the selected/active option.
+    expect(screen.getByRole('button', { name: 'Parent' })).toHaveStyle({ color: 'rgb(255, 255, 255)' })
+    expect(screen.getByRole('button', { name: 'Self' })).not.toHaveStyle({ color: 'rgb(255, 255, 255)' })
+  })
+})
+
 describe('DesktopInsuranceDetail — paid-for-the-year state (issue #227)', () => {
   afterEach(() => vi.useRealTimers())
 

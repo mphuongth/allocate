@@ -6,6 +6,17 @@
 
 import { insurancePaidYear } from '@/lib/finance'
 
+// Relationship / coverage options for the add & edit member forms — the single
+// source of truth so both stay in sync. "Spouse" covers husband/wife (the old
+// separate Husband/Wife options were folded into it).
+export const COVERAGE_OPTIONS: { value: string; label: string; labelVi: string }[] = [
+  { value: 'Self', label: 'Self', labelVi: 'Bản thân' },
+  { value: 'Spouse', label: 'Spouse', labelVi: 'Vợ/Chồng' },
+  { value: 'Child', label: 'Child', labelVi: 'Con' },
+  { value: 'Parent', label: 'Parent', labelVi: 'Cha/Mẹ' },
+  { value: 'Other', label: 'Other', labelVi: 'Khác' },
+]
+
 // Dot / badge colour by status — identical across all insurance views.
 export const STATUS_COLOR: Record<string, string> = {
   on_track:  'var(--c-muted)',

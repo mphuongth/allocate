@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Plus, X } from 'lucide-react'
 import { fmtCompact } from '@/lib/formatters'
+import { COVERAGE_OPTIONS } from './insuranceShared'
 
 interface Props {
   open: boolean
@@ -12,12 +13,6 @@ interface Props {
   /** Centered modal when true; mobile bottom sheet when false/omitted. */
   desktop?: boolean
 }
-
-const COVERAGE_OPTIONS: { value: string; label: string; labelVi: string }[] = [
-  { value: 'Self', label: 'Self', labelVi: 'Bản thân' },
-  { value: 'Spouse', label: 'Spouse', labelVi: 'Vợ/Chồng' },
-  { value: 'Child', label: 'Child', labelVi: 'Con' },
-]
 
 export default function AddInsuranceMemberModal({ open, onClose, onCreated, locale, desktop }: Props) {
   const isVi = locale === 'vi'

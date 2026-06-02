@@ -7,11 +7,10 @@ import MobileSettingsView from './components/MobileSettingsView'
 import DesktopSettingsView from './components/DesktopSettingsView'
 import InvestmentTransactionsTab from './tabs/InvestmentTransactionsTab'
 import FixedExpensesTab from './tabs/FixedExpensesTab'
-import InsuranceMembersTab from './tabs/InsuranceMembersTab'
 
-// Goals are managed from the dashboard goal detail now; the legacy goals tab
-// was removed. The remaining data tabs are reachable only via ?tab=<id>.
-const TAB_IDS = ['transactions', 'expenses', 'insurance'] as const
+// Goals and insurance members are managed from the dashboard now; their legacy
+// tabs were removed. The remaining data tabs are reachable only via ?tab=<id>.
+const TAB_IDS = ['transactions', 'expenses'] as const
 
 type TabId = typeof TAB_IDS[number]
 
@@ -43,14 +42,14 @@ export default function SettingsClient({ initialTab, email, initials, displayNam
       <MobileSettingsView email={email} initials={initials} displayName={displayName} />
 
       {showDataTabs ? (
-        /* Desktop tab-based view for data management tabs (transactions/expenses/insurance) */
+        /* Desktop tab-based view for data management tabs (transactions/expenses) */
         <div className="hidden md:block space-y-6">
           <div>
             <p className="text-sm text-gray-500 dark:text-gray-400">{t('description')}</p>
           </div>
 
           <div className="flex flex-col gap-2">
-            <div className="grid grid-cols-3 w-full items-center rounded-xl bg-[#ececf0] dark:bg-gray-800 p-[3px] gap-[3px]">
+            <div className="grid grid-cols-2 w-full items-center rounded-xl bg-[#ececf0] dark:bg-gray-800 p-[3px] gap-[3px]">
               {TAB_IDS.map((tabId) => (
                 <button
                   key={tabId}
@@ -69,7 +68,6 @@ export default function SettingsClient({ initialTab, email, initials, displayNam
             <div className="mt-4">
               {activeTab === 'transactions' && <InvestmentTransactionsTab />}
               {activeTab === 'expenses' && <FixedExpensesTab />}
-              {activeTab === 'insurance' && <InsuranceMembersTab />}
             </div>
           </div>
         </div>

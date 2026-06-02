@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Check, ChevronLeft, Edit2, Plus, Trash2, Calendar, X } from 'lucide-react'
 import { fmt, fmtCompact } from '@/lib/formatters'
-import { STATUS_COLOR, BAR_COLOR_DETAIL, insurancePaidState, insuranceStatusLabel } from './insuranceShared'
+import { STATUS_COLOR, BAR_COLOR_DETAIL, COVERAGE_OPTIONS, insurancePaidState, insuranceStatusLabel } from './insuranceShared'
 import type { InsuranceData } from '../DashboardClient'
 import LogInsurancePaymentModal from './LogInsurancePaymentModal'
 
@@ -13,12 +13,6 @@ interface Props {
   onClose: () => void
   onChanged?: () => void
 }
-
-const COVERAGE_OPTIONS: { value: string; label: string; labelVi: string }[] = [
-  { value: 'Self', label: 'Self', labelVi: 'Bản thân' },
-  { value: 'Spouse', label: 'Spouse', labelVi: 'Vợ/Chồng' },
-  { value: 'Child', label: 'Child', labelVi: 'Con' },
-]
 
 interface HistoryEntry {
   id: string
