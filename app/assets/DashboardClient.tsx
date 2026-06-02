@@ -16,6 +16,7 @@ import GoalDetailSheet from './components/GoalDetailSheet'
 import AssignGoalSheet from './components/AssignGoalSheet'
 import DownloadReportSheet from './components/DownloadReportSheet'
 import AddTransactionSheet from './components/AddTransactionSheet'
+import RecentActivityCard from './components/RecentActivityCard'
 
 import TransactionHistorySheet from './components/TransactionHistorySheet'
 import DesktopNetWorthPanel from './components/DesktopNetWorthPanel'
@@ -668,6 +669,15 @@ export default function DashboardClient({ userId }: { userId: string }) {
                   </div>
                 )}
 
+                {/* Recent activity */}
+                <section style={{ marginBottom: 24 }}>
+                  <RecentActivityCard
+                    locale={locale}
+                    refreshKey={historyKey}
+                    onChanged={() => fetchData({ force: true })}
+                  />
+                </section>
+
                 {/* Insurance */}
                 <section style={{ marginBottom: 24 }}>
                   <DesktopInsuranceList
@@ -799,6 +809,13 @@ export default function DashboardClient({ userId }: { userId: string }) {
                   onSellNonFund={openSellNonFund}
                 />
               )}
+
+              {/* Recent activity */}
+              <RecentActivityCard
+                locale={locale}
+                refreshKey={historyKey}
+                onChanged={() => fetchData({ force: true })}
+              />
 
               {/* Insurance */}
               <section>
