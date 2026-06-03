@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslations, useLocale } from 'next-intl'
 import { Plus, ChevronLeft } from 'lucide-react'
-import { fmtCompact } from '@/lib/formatters'
+import { fmt } from '@/lib/formatters'
 
 // Master fixed-expense definitions. Categories mirror the Settings tab and the
 // API's accepted values; labels are localised for display only.
@@ -37,12 +37,12 @@ const SHORT_MONTHS_VI = ['Th1', 'Th2', 'Th3', 'Th4', 'Th5', 'Th6', 'Th7', 'Th8',
 function periodLabel(e: Expense, isVI: boolean): string {
   if (!e.effective_from && !e.effective_to) return isVI ? 'Luôn áp dụng' : 'Always'
   const months = isVI ? SHORT_MONTHS_VI : SHORT_MONTHS_EN
-  const fmt = (d: string | null) => {
+  const fmtMonth = (d: string | null) => {
     if (!d) return null
     const [y, m] = d.split('-').map(Number)
     return `${months[m - 1]} ${y}`
   }
-  return `${fmt(e.effective_from) || '…'} → ${fmt(e.effective_to) || '∞'}`
+  return `${fmtMonth(e.effective_from) || '…'} → ${fmtMonth(e.effective_to) || '∞'}`
 }
 
 const emptyForm = { expense_name: '', amount_vnd: '', category: '', effective_from: '', effective_to: '' }
@@ -270,7 +270,7 @@ export default function FixedExpenseManager({ onChange, onToast, variant = 'moda
     <div data-testid="fixed-expense-manager" style={{ display: 'grid', gap: 12 }}>
       {!loading && items.length > 0 && (
         <div style={{ fontSize: 12, color: 'var(--c-muted)' }}>
-          {items.length} {isVI ? 'khoản' : items.length === 1 ? 'item' : 'items'} · {fmtCompact(total)}/{isVI ? 'tháng' : 'mo'}
+          {items.length} {isVI ? 'khoản' : items.length === 1 ? 'item' : 'items'} · {fmt(total)}/{isVI ? 'tháng' : 'mo'}
         </div>
       )}
 
@@ -296,7 +296,7 @@ export default function FixedExpenseManager({ onChange, onToast, variant = 'moda
                   </span>
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 3, fontVariantNumeric: 'tabular-nums' }}>
-                  {fmtCompact(e.amount_vnd)} · {periodLabel(e, isVI)}
+                  {fmt(e.amount_vnd)} · {periodLabel(e, isVI)}
                 </div>
               </div>
               <button
@@ -335,7 +335,7 @@ export default function FixedExpenseManager({ onChange, onToast, variant = 'moda
         const body = (
           <>
             <div style={{ fontSize: 13, color: 'var(--c-muted)' }}>
-              {confirmDelete.expense_name} — {fmtCompact(confirmDelete.amount_vnd)}
+              {confirmDelete.expense_name} — {fmt(confirmDelete.amount_vnd)}
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button type="button" onClick={() => setConfirmDelete(null)} style={ghostBtn}>{tc('cancel')}</button>

@@ -123,10 +123,12 @@ describe('MobilePlanningView — with plan', () => {
     expect(screen.getByText(/Monthly income/i)).toBeInTheDocument()
   })
 
-  it('shows formatted salary in salary card', () => {
+  it('shows the exact salary in the salary card, not an abbreviated amount', () => {
     render(<MobilePlanningView {...defaultProps} plan={basePlan} />)
-    // 45_000_000 → "45.0M ₫" from fmtCompact mock (appears in salary card and remaining strip)
-    expect(screen.getAllByText('45.0M ₫').length).toBeGreaterThan(0)
+    // 45_000_000 → exact "₫ 45000000" from fmt mock (appears in salary card and remaining strip)
+    expect(screen.getAllByText('₫ 45000000').length).toBeGreaterThan(0)
+    // The shortened "45.0M ₫" form must NOT appear on the Plan page
+    expect(screen.queryByText('45.0M ₫')).not.toBeInTheDocument()
   })
 
   it('shows Outflow label in summary strip', () => {
@@ -202,11 +204,11 @@ describe('MobilePlanningView — fixed expenses section', () => {
       { expense_id: 'fe2', expense_name: 'Gym', amount_vnd: 600_000, override: 0 },
     ]
     render(<MobilePlanningView {...defaultProps} plan={basePlan} fixedExpenses={expenses} />)
-    // Section total should be 8.5M only (gym is skipped)
+    // Section total should be the exact 8,500,000 only (gym is skipped)
     const section = screen.getByTestId('section-fixed-expenses').closest('[data-testid="budget-section"]')
     if (section) {
-      expect(section).toHaveTextContent('8.5M ₫')
-      expect(section).not.toHaveTextContent('9.1M ₫') // 8.5 + 0.6
+      expect(section).toHaveTextContent('₫ 8500000')
+      expect(section).not.toHaveTextContent('₫ 9100000') // 8.5M + 0.6M
     }
   })
 })

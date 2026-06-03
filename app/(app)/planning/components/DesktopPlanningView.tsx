@@ -7,7 +7,7 @@ import {
   MoreHorizontal, Check, RefreshCw, X, Plus, Settings,
 } from 'lucide-react'
 import { useLocale } from 'next-intl'
-import { fmtCompact } from '@/lib/formatters'
+import { fmt } from '@/lib/formatters'
 import FixedExpenseManager from './FixedExpenseManager'
 import type {
   MonthlyPlan, FundInvestment, DirectSaving, FixedExpense,
@@ -112,7 +112,7 @@ function PlanTable({ icon, iconColor, title, total, defaultOpen = true, action, 
             {icon}
           </div>
           <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-ink)', flex: 1 }}>{title}</span>
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(total)}</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>{fmt(total)}</span>
         </button>
         {action}
         <button onClick={toggle} aria-label="Toggle section" style={{ border: 'none', cursor: 'pointer', background: 'transparent', display: 'flex', color: 'var(--c-muted)', padding: 0 }}>
@@ -186,7 +186,7 @@ function DPlanRow({ primary, secondary, amount, muted, last, isVI, onSkip, onRes
       </td>
       <td style={{ padding: '11px 12px', textAlign: 'right', verticalAlign: 'middle' }}>
         <span style={{ fontSize: 13, fontWeight: 600, color: muted ? 'var(--c-muted)' : 'var(--c-ink)', textDecoration: muted ? 'line-through' : 'none', fontVariantNumeric: 'tabular-nums' }}>
-          {fmtCompact(amount)}
+          {fmt(amount)}
         </span>
       </td>
       <td style={{ padding: '11px 8px 11px 4px', textAlign: 'right', verticalAlign: 'middle', width: 36 }}>
@@ -249,7 +249,7 @@ function AllocationCard({ salary, totalGoalAmount, fixedTotal, insTotal, otherTo
         {isVI ? 'Phân bổ tháng này' : "This month's allocation"}
       </div>
       <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums' }}>
-        {fmtCompact(totalAllocated)}
+        {fmt(totalAllocated)}
       </div>
       <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', marginTop: 2 }}>
         {pct(totalAllocated)} {isVI ? 'thu nhập' : 'of income'}
@@ -263,7 +263,7 @@ function AllocationCard({ salary, totalGoalAmount, fixedTotal, insTotal, otherTo
           <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ width: 8, height: 8, borderRadius: 2, background: r.c, flexShrink: 0 }} />
             <span style={{ flex: 1, fontSize: 12, color: 'rgba(255,255,255,0.7)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.l}</span>
-            <span style={{ fontSize: 12, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(r.v)}</span>
+            <span style={{ fontSize: 12, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmt(r.v)}</span>
             <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', minWidth: 30, textAlign: 'right' }}>{pct(r.v)}</span>
           </div>
         ))}
@@ -273,7 +273,7 @@ function AllocationCard({ salary, totalGoalAmount, fixedTotal, insTotal, otherTo
             {isVI ? 'Còn lại' : 'Remaining'}
           </span>
           <span style={{ fontSize: 13, fontWeight: 700, color: remaining >= 0 ? '#86efac' : '#fca5a5', fontVariantNumeric: 'tabular-nums' }}>
-            {remaining >= 0 ? '+' : ''}{fmtCompact(remaining)}
+            {remaining >= 0 ? '+' : ''}{fmt(remaining)}
           </span>
         </div>
       </div>
@@ -596,7 +596,7 @@ export default function DesktopPlanningView({
                     <div>
                       <div style={{ fontSize: 11, color: 'var(--c-muted)' }}>{k.l}</div>
                       <div style={{ fontSize: 18, fontWeight: 700, color: k.c, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
-                        {k.custom ?? fmtCompact(k.v!)}
+                        {k.custom ?? fmt(k.v!)}
                       </div>
                     </div>
                     {k.extra}
@@ -623,7 +623,7 @@ export default function DesktopPlanningView({
                           </div>
                         </td>
                         <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                          <span style={{ fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(g.totalAllocated)}</span>
+                          <span style={{ fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{fmt(g.totalAllocated)}</span>
                         </td>
                         <td />
                       </tr>
@@ -637,7 +637,7 @@ export default function DesktopPlanningView({
                             </div>
                           </td>
                           <td style={{ padding: '9px 12px', textAlign: 'right', verticalAlign: 'middle' }}>
-                            <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--c-muted)', fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(inv.amount)}</span>
+                            <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--c-muted)', fontVariantNumeric: 'tabular-nums' }}>{fmt(inv.amount)}</span>
                           </td>
                           <td />
                         </tr>
@@ -724,7 +724,7 @@ export default function DesktopPlanningView({
                     <tr key={o.id} style={{ borderBottom: i < otherExpenses.length - 1 ? '1px solid var(--c-line)' : 'none', background: 'var(--c-card)' }}>
                       <td style={{ padding: '10px 16px', fontSize: 13, fontWeight: 500 }}>{o.description}</td>
                       <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                        <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(o.amount_vnd)}</span>
+                        <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmt(o.amount_vnd)}</span>
                       </td>
                       <td style={{ padding: '10px 8px 10px 4px', textAlign: 'right', width: 36 }}>
                         <button aria-label="Edit" onClick={() => openOtherModal(o)} style={{ padding: 5, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, color: 'var(--c-muted)', display: 'flex' }}>
@@ -832,7 +832,7 @@ export default function DesktopPlanningView({
               </div>
             )}
             <button onClick={() => setOverrideVal(String(overrideModal.defaultAmount))} style={{ alignSelf: 'flex-start', fontSize: 11, padding: '4px 8px', background: 'transparent', border: '1px solid var(--c-line)', borderRadius: 6, color: 'var(--c-navy)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
-              {isVI ? 'Mặc định' : 'Default'}: {fmtCompact(overrideModal.defaultAmount)}
+              {isVI ? 'Mặc định' : 'Default'}: {fmt(overrideModal.defaultAmount)}
             </button>
             <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
               <button onClick={() => setOverrideModal(null)} style={{ ...btnBase, flex: 1, padding: '10px 14px', background: 'transparent', color: 'var(--c-ink)', border: '1px solid var(--c-line)' }}>{isVI ? 'Hủy' : 'Cancel'}</button>

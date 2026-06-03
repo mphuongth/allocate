@@ -88,6 +88,20 @@ test('desktop planning: summary strip shows Income / Outflow / Remaining when pl
   await expect(strip.getByText(/Remaining|Còn lại/i).first()).toBeVisible()
 })
 
+test('desktop planning: amounts are shown in full, not abbreviated', async ({ page }) => {
+  const plan = await api.createMonthlyPlan({ month: MONTH, year: YEAR, salary_vnd: 30_000_000 })
+  cleanup.add(() => api.deleteMonthlyPlan(plan.id))
+
+  await goto(page)
+  const desktop = page.getByTestId('desktop-planning')
+  const strip = desktop.getByTestId('planning-summary-strip')
+  await expect(strip).toBeVisible({ timeout: 8_000 })
+
+  // Income renders the exact amount "30.000.000" (vi-VN grouping), not the shortened "30.0M"
+  await expect(strip.getByText('30.000.000').first()).toBeVisible()
+  await expect(desktop.getByText(/30[.,]0M/)).toHaveCount(0)
+})
+
 test('desktop planning: allocation card is visible in right panel', async ({ page }) => {
   const plan = await api.createMonthlyPlan({ month: MONTH, year: YEAR, salary_vnd: 30_000_000 })
   cleanup.add(() => api.deleteMonthlyPlan(plan.id))

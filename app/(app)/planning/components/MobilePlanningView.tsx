@@ -7,7 +7,7 @@ import {
   ChevronDown, ChevronUp,
   MoreHorizontal, Plus, Check, X, Calendar, Settings,
 } from 'lucide-react'
-import { fmtCompact } from '@/lib/formatters'
+import { fmt } from '@/lib/formatters'
 import FixedExpenseManager from './FixedExpenseManager'
 import type {
   MonthlyPlan, FundInvestment, DirectSaving, FixedExpense,
@@ -500,7 +500,7 @@ function SalaryCard({ amount, isVI, onEdit, onDelete }: { amount: number; isVI: 
           {isVI ? 'Thu nhập tháng' : 'Monthly income'}
         </div>
         <div style={{ fontSize: 20, fontWeight: 600, fontVariantNumeric: 'tabular-nums', marginTop: 2 }}>
-          {fmtCompact(amount)}
+          {fmt(amount)}
         </div>
       </div>
       <div style={{ display: 'flex', gap: 4 }}>
@@ -562,7 +562,7 @@ function AllocationSummaryCard({
         {isVI ? 'Phân bổ tháng này' : "This month's allocation"}
       </div>
       <div style={{ fontSize: 26, fontWeight: 600, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.025em', marginTop: 4 }}>
-        {fmtCompact(totalAllocated)}
+        {fmt(totalAllocated)}
       </div>
       <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>
         {pct(totalAllocated)} {isVI ? 'thu nhập' : 'of income'}
@@ -584,7 +584,7 @@ function AllocationSummaryCard({
           <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ width: 8, height: 8, borderRadius: 2, background: r.color, flexShrink: 0 }} />
             <span style={{ flex: 1, fontSize: 12, color: 'rgba(255,255,255,0.75)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.l}</span>
-            <span style={{ fontSize: 12, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(r.v)}</span>
+            <span style={{ fontSize: 12, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmt(r.v)}</span>
             <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)', minWidth: 30, textAlign: 'right' }}>{pct(r.v)}</span>
           </div>
         ))}
@@ -595,7 +595,7 @@ function AllocationSummaryCard({
             {isVI ? 'Còn lại' : 'Remaining'}
           </span>
           <span style={{ fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: remaining >= 0 ? '#86efac' : '#fca5a5' }}>
-            {remaining >= 0 ? '+' : ''}{fmtCompact(remaining)}
+            {remaining >= 0 ? '+' : ''}{fmt(remaining)}
           </span>
         </div>
       </div>
@@ -657,7 +657,7 @@ function BudgetSection({
             {count && <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 2 }}>{count}</div>}
           </div>
           <span style={{ fontSize: 14, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: 'var(--c-ink)' }}>
-            {fmtCompact(total)}
+            {fmt(total)}
           </span>
         </button>
         {action}
@@ -700,7 +700,7 @@ function GoalAllocationRow({ entry, isVI }: { entry: GoalRow; isVI: boolean }) {
           </div>
         </div>
         <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: 'var(--c-ink)' }}>
-          {fmtCompact(entry.totalAllocated)}
+          {fmt(entry.totalAllocated)}
         </span>
         {open ? <ChevronUp size={14} color="var(--c-muted)" /> : <ChevronDown size={14} color="var(--c-muted)" />}
       </button>
@@ -721,7 +721,7 @@ function GoalAllocationRow({ entry, isVI }: { entry: GoalRow; isVI: boolean }) {
             </div>
           </div>
           <span style={{ fontSize: 12, fontWeight: 500, fontVariantNumeric: 'tabular-nums', color: 'var(--c-muted)' }}>
-            {fmtCompact(item.amount)}
+            {fmt(item.amount)}
           </span>
         </div>
       ))}
@@ -779,7 +779,7 @@ function PlanLineItem({
         textDecoration: muted ? 'line-through' : 'none',
         opacity: muted ? 0.55 : 1,
       }}>
-        {fmtCompact(muted ? 0 : amount)}
+        {fmt(muted ? 0 : amount)}
       </span>
       {/* Kebab menu — dropdown uses position:fixed to escape overflow:hidden on BudgetSection */}
       <button
@@ -958,8 +958,8 @@ export default function MobilePlanningView({
               gap: 1, overflow: 'hidden', background: 'var(--c-line)',
             } as React.CSSProperties}>
               {[
-                { l: isVI ? 'Tổng chi' : 'Outflow', v: fmtCompact(totalOutflow), c: 'var(--c-ink)' },
-                { l: isVI ? 'Còn lại' : 'Remaining', v: fmtCompact(remaining), c: remaining >= 0 ? 'var(--c-pos)' : 'var(--c-neg)' },
+                { l: isVI ? 'Tổng chi' : 'Outflow', v: fmt(totalOutflow), c: 'var(--c-ink)' },
+                { l: isVI ? 'Còn lại' : 'Remaining', v: fmt(remaining), c: remaining >= 0 ? 'var(--c-pos)' : 'var(--c-neg)' },
                 { l: isVI ? '% Tiết kiệm' : 'Saved %', v: plan.salary_vnd > 0 ? `${Math.round((totalGoals / plan.salary_vnd) * 100)}%` : '—', c: 'var(--c-navy)' },
               ].map((k, i) => (
                 <div key={i} style={{ background: 'var(--c-card)', padding: '10px 12px' }}>
@@ -1106,7 +1106,7 @@ export default function MobilePlanningView({
                     </div>
                   </div>
                   <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: 'var(--c-ink)' }}>
-                    {fmtCompact(o.amount_vnd)}
+                    {fmt(o.amount_vnd)}
                   </span>
                   <button
                     onClick={() => { setSheet({ type: 'other-expense', existing: o }) }}
@@ -1266,7 +1266,7 @@ function SimpleOverrideSheet({
             borderRadius: 6, color: 'var(--c-navy)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500,
           }}
         >
-          {isVI ? 'Mặc định' : 'Default'}: {fmtCompact(defaultAmount)}
+          {isVI ? 'Mặc định' : 'Default'}: {fmt(defaultAmount)}
         </button>
         <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
           <button onClick={onClose} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: '1px solid var(--c-line)', background: 'var(--c-card)', color: 'var(--c-ink)', fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>
