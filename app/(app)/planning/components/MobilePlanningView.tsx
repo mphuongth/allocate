@@ -653,12 +653,14 @@ function BudgetSection({
             <Icon size={16} />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-ink)' }}>{title}</div>
-            {count && <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 2 }}>{count}</div>}
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
+            {/* Full total sits under the title (next to the count) so the wider
+                exact amount doesn't collide with the action/chevron on the right. */}
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: 'var(--c-ink)' }}>{fmt(total)}</span>
+              {count && <span style={{ fontSize: 11, color: 'var(--c-muted)' }}>· {count}</span>}
+            </div>
           </div>
-          <span style={{ fontSize: 14, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: 'var(--c-ink)' }}>
-            {fmt(total)}
-          </span>
         </button>
         {action}
         <button onClick={toggle} aria-label="Toggle section" style={{ background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', color: 'var(--c-muted)', padding: 0 }}>
