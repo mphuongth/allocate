@@ -255,6 +255,20 @@ describe('MobilePlanningView — other expenses section', () => {
   })
 })
 
+describe('MobilePlanningView — iOS zoom guard (issue #265)', () => {
+  // iOS Safari zooms when a focused native field is < 16px. The "Add item" form
+  // (description + amount) must render its inputs at >= 16px.
+  it('renders the other-expense form inputs at >=16px', async () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} />)
+    await userEvent.click(screen.getByRole('button', { name: /Add item/i }))
+    const inputs = screen.getAllByRole('textbox')
+    expect(inputs.length).toBeGreaterThan(0)
+    for (const el of inputs) {
+      expect(parseFloat(getComputedStyle(el).fontSize)).toBeGreaterThanOrEqual(16)
+    }
+  })
+})
+
 describe('MobilePlanningView — by goal section', () => {
   it('shows investments grouped by goal', () => {
     render(<MobilePlanningView {...defaultProps} plan={basePlan} investments={baseInvestments} savings={baseSavings} />)

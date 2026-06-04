@@ -313,7 +313,12 @@
   transition: border-color 120ms;
 }
 .cn-input:focus { border-color: var(--c-navy); }
-/* iOS Safari zooms on focus when an input is < 16px and never resets the zoom. */
+/* iOS Safari zooms on focus when a native field is < 16px and never resets the
+   zoom. Keep .cn-input — and, as a floor, every native form control — at >= 16px
+   on mobile. The bare element selector is only a floor: higher-specificity sizes
+   (Tailwind text-*, inline styles) still win, so intentionally larger fields are
+   left untouched while any unsized field is protected. */
 @media (max-width: 768px) {
   .cn-input { font-size: 16px; }
+  input, textarea, select { font-size: 16px; }
 }

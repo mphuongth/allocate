@@ -203,7 +203,7 @@ export default function LogInsurancePaymentModal({ open, onClose, onSaved, ins, 
                       autoFocus
                       style={{
                         flex: 1, minWidth: 0, border: 'none', outline: 'none',
-                        fontSize: 15, fontWeight: 600, fontFamily: 'inherit',
+                        fontSize: 16, fontWeight: 600, fontFamily: 'inherit',
                         background: 'transparent', color: 'var(--c-ink)',
                         fontVariantNumeric: 'tabular-nums',
                       }}

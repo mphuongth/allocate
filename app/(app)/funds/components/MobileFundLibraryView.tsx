@@ -263,7 +263,7 @@ function FundForm({ existing, title, onClose, onSave, saving, formError }: {
 
   const disabled = !name.trim() || !code.trim() || !nav || Number(nav) <= 0 || saving
 
-  const inputStyle: React.CSSProperties = { width: '100%', padding: '10px 12px', fontSize: 13, border: '1px solid var(--c-line)', borderRadius: 10, background: 'var(--c-card)', color: 'var(--c-ink)', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }
+  const inputStyle: React.CSSProperties = { width: '100%', padding: '10px 12px', fontSize: 16, border: '1px solid var(--c-line)', borderRadius: 10, background: 'var(--c-card)', color: 'var(--c-ink)', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }
   const labelStyle: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: 'var(--c-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }
 
   return (
@@ -405,7 +405,7 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, onEdit, onDelete
                   if (e.key === 'Escape') setDcaEditId(null)
                 }}
                 placeholder="Amount ₫"
-                style={{ width: 90, padding: '3px 8px', fontSize: 11, border: '1px solid var(--c-navy)', borderRadius: 6, background: 'var(--c-card)', fontFamily: 'inherit', outline: 'none', color: 'var(--c-ink)' }}
+                style={{ width: 90, padding: '3px 8px', fontSize: 16, border: '1px solid var(--c-navy)', borderRadius: 6, background: 'var(--c-card)', fontFamily: 'inherit', outline: 'none', color: 'var(--c-ink)' }}
               />
             ) : fund.dca_monthly_amount_vnd ? (
               <button
@@ -685,7 +685,7 @@ export default function MobileFundLibraryView() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t('searchPlaceholder')}
-            style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 13, color: 'var(--c-ink)', fontFamily: 'inherit' }}
+            style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 16, color: 'var(--c-ink)', fontFamily: 'inherit' }}
           />
           {query && (
             <button onClick={() => setQuery('')} style={{ padding: 4, background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>

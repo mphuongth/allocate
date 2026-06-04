@@ -87,6 +87,23 @@ describe('SellWithdrawSheet — links the withdrawal to its goal (issue #261)', 
   })
 })
 
+describe('SellWithdrawSheet — iOS zoom guard (issue #265)', () => {
+  // iOS Safari zooms when a focused native field is < 16px. The amount and
+  // received inputs must render at >= 16px on mobile.
+  it('renders the sell amount and received inputs at >=16px', () => {
+    const item = {
+      type: 'bank' as const, name: 'Techcombank',
+      currentValue: 5_000_000, interestRate: 6,
+      transactionId: 't1', purchasePrice: 5_000_000,
+    }
+    render(<SellWithdrawSheet item={item} open context="unallocated" onClose={vi.fn()} onSuccess={vi.fn()} />)
+    for (const id of ['sell-amount-input', 'sell-received-input']) {
+      const el = screen.getByTestId(id)
+      expect(parseFloat(getComputedStyle(el).fontSize)).toBeGreaterThanOrEqual(16)
+    }
+  })
+})
+
 describe('SellWithdrawSheet — count toward goal progress toggle', () => {
   const bankItem = {
     type: 'bank' as const, name: 'Techcombank',

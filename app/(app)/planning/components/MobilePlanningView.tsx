@@ -372,7 +372,7 @@ function OtherExpenseSheet({
             onChange={(e) => setDesc(e.target.value)}
             placeholder={isVI ? 'VD. Mua laptop...' : 'e.g. Buy laptop...'}
             style={{
-              width: '100%', padding: '10px 12px', fontSize: 14,
+              width: '100%', padding: '10px 12px', fontSize: 16,
               border: '1px solid var(--c-line)', borderRadius: 10,
               background: 'var(--c-card-2)', color: 'var(--c-ink)', boxSizing: 'border-box',
             }}
@@ -390,7 +390,7 @@ function OtherExpenseSheet({
             onChange={(e) => setAmount(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))}
             placeholder="0"
             style={{
-              width: '100%', padding: '10px 12px', fontSize: 14, fontVariantNumeric: 'tabular-nums',
+              width: '100%', padding: '10px 12px', fontSize: 16, fontVariantNumeric: 'tabular-nums',
               border: '1px solid var(--c-line)', borderRadius: 10,
               background: 'var(--c-card-2)', color: 'var(--c-ink)', boxSizing: 'border-box',
             }}

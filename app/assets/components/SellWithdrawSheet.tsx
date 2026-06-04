@@ -387,7 +387,7 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
                     value={amount ? Number(amount).toLocaleString('vi-VN') : ''}
                     onChange={e => handleAmountChange(e.target.value)}
                     placeholder="0"
-                    style={{ flex: 1, border: 'none', outline: 'none', fontSize: 15, fontWeight: 600, background: 'transparent', color: isOverMax ? 'var(--c-neg, #dc2626)' : 'var(--c-ink)' }}
+                    style={{ flex: 1, border: 'none', outline: 'none', fontSize: 16, fontWeight: 600, background: 'transparent', color: isOverMax ? 'var(--c-neg, #dc2626)' : 'var(--c-ink)' }}
                   />
                 </div>
                 <button
@@ -419,7 +419,7 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
                     value={received ? Number(received).toLocaleString('vi-VN') : ''}
                     onChange={e => { setReceived(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, '')); setError('') }}
                     placeholder="0"
-                    style={{ flex: 1, border: 'none', outline: 'none', fontSize: 15, fontWeight: 600, background: 'transparent', color: 'var(--c-ink)' }}
+                    style={{ flex: 1, border: 'none', outline: 'none', fontSize: 16, fontWeight: 600, background: 'transparent', color: 'var(--c-ink)' }}
                   />
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 4 }}>
@@ -438,7 +438,7 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
                     value={units}
                     onChange={e => handleUnitsChange(e.target.value)}
                     placeholder="0.00"
-                    style={{ flex: 1, border: 'none', outline: 'none', fontSize: 15, fontWeight: 600, background: 'transparent', color: 'var(--c-ink)' }}
+                    style={{ flex: 1, border: 'none', outline: 'none', fontSize: 16, fontWeight: 600, background: 'transparent', color: 'var(--c-ink)' }}
                   />
                   <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{isVI ? 'phần' : 'units'}</span>
                 </div>
@@ -512,7 +512,7 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
                     value={units}
                     onChange={e => { setUnits(e.target.value); setError('') }}
                     placeholder="0.00"
-                    style={{ flex: 1, border: 'none', outline: 'none', fontSize: 15, fontWeight: 600, background: 'transparent', color: isOverUnits ? 'var(--c-neg, #dc2626)' : 'var(--c-ink)' }}
+                    style={{ flex: 1, border: 'none', outline: 'none', fontSize: 16, fontWeight: 600, background: 'transparent', color: isOverUnits ? 'var(--c-neg, #dc2626)' : 'var(--c-ink)' }}
                   />
                   <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>chỉ</span>
                 </div>
@@ -539,7 +539,7 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
                   value={salePrice}
                   onChange={e => { setSalePrice(e.target.value); setError('') }}
                   placeholder="0"
-                  style={{ flex: 1, border: 'none', outline: 'none', fontSize: 15, fontWeight: 600, background: 'transparent', color: 'var(--c-ink)' }}
+                  style={{ flex: 1, border: 'none', outline: 'none', fontSize: 16, fontWeight: 600, background: 'transparent', color: 'var(--c-ink)' }}
                 />
                 <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>/chỉ</span>
               </div>
