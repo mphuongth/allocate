@@ -7,7 +7,7 @@ import {
   ChevronDown, ChevronUp,
   MoreHorizontal, Plus, Check, X, Calendar, Settings,
 } from 'lucide-react'
-import { fmtCompact } from '@/lib/formatters'
+import { fmt, fmtCompact } from '@/lib/formatters'
 import FixedExpenseManager from './FixedExpenseManager'
 import type {
   MonthlyPlan, FundInvestment, DirectSaving, FixedExpense,
@@ -500,7 +500,7 @@ function SalaryCard({ amount, isVI, onEdit, onDelete }: { amount: number; isVI: 
           {isVI ? 'Thu nhập tháng' : 'Monthly income'}
         </div>
         <div style={{ fontSize: 20, fontWeight: 600, fontVariantNumeric: 'tabular-nums', marginTop: 2 }}>
-          {fmtCompact(amount)}
+          {fmt(amount)}
         </div>
       </div>
       <div style={{ display: 'flex', gap: 4 }}>
@@ -653,12 +653,14 @@ function BudgetSection({
             <Icon size={16} />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-ink)' }}>{title}</div>
-            {count && <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 2 }}>{count}</div>}
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
+            {/* Full total sits under the title (next to the count) so the wider
+                exact amount doesn't collide with the action/chevron on the right. */}
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: 'var(--c-ink)' }}>{fmt(total)}</span>
+              {count && <span style={{ fontSize: 11, color: 'var(--c-muted)' }}>· {count}</span>}
+            </div>
           </div>
-          <span style={{ fontSize: 14, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: 'var(--c-ink)' }}>
-            {fmtCompact(total)}
-          </span>
         </button>
         {action}
         <button onClick={toggle} aria-label="Toggle section" style={{ background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', color: 'var(--c-muted)', padding: 0 }}>
@@ -700,7 +702,7 @@ function GoalAllocationRow({ entry, isVI }: { entry: GoalRow; isVI: boolean }) {
           </div>
         </div>
         <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: 'var(--c-ink)' }}>
-          {fmtCompact(entry.totalAllocated)}
+          {fmt(entry.totalAllocated)}
         </span>
         {open ? <ChevronUp size={14} color="var(--c-muted)" /> : <ChevronDown size={14} color="var(--c-muted)" />}
       </button>
@@ -721,7 +723,7 @@ function GoalAllocationRow({ entry, isVI }: { entry: GoalRow; isVI: boolean }) {
             </div>
           </div>
           <span style={{ fontSize: 12, fontWeight: 500, fontVariantNumeric: 'tabular-nums', color: 'var(--c-muted)' }}>
-            {fmtCompact(item.amount)}
+            {fmt(item.amount)}
           </span>
         </div>
       ))}
@@ -779,7 +781,7 @@ function PlanLineItem({
         textDecoration: muted ? 'line-through' : 'none',
         opacity: muted ? 0.55 : 1,
       }}>
-        {fmtCompact(muted ? 0 : amount)}
+        {fmt(muted ? 0 : amount)}
       </span>
       {/* Kebab menu — dropdown uses position:fixed to escape overflow:hidden on BudgetSection */}
       <button
@@ -1106,7 +1108,7 @@ export default function MobilePlanningView({
                     </div>
                   </div>
                   <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: 'var(--c-ink)' }}>
-                    {fmtCompact(o.amount_vnd)}
+                    {fmt(o.amount_vnd)}
                   </span>
                   <button
                     onClick={() => { setSheet({ type: 'other-expense', existing: o }) }}
