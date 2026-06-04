@@ -88,18 +88,21 @@ test('desktop planning: summary strip shows Income / Outflow / Remaining when pl
   await expect(strip.getByText(/Remaining|Còn lại/i).first()).toBeVisible()
 })
 
-test('desktop planning: amounts are shown in full, not abbreviated', async ({ page }) => {
+test('desktop planning: line-item amounts are shown in full, not abbreviated', async ({ page }) => {
   const plan = await api.createMonthlyPlan({ month: MONTH, year: YEAR, salary_vnd: 30_000_000 })
   cleanup.add(() => api.deleteMonthlyPlan(plan.id))
+  // A non-round amount so compact (7.3M) and full (7.250.000) are clearly distinct
+  const fe = await api.createFixedExpense({ expense_name: 'E2E Full Amount Rent', amount_vnd: 7_250_000, category: 'Housing' })
+  cleanup.add(() => api.deleteFixedExpense(fe.expense_id))
 
   await goto(page)
   const desktop = page.getByTestId('desktop-planning')
-  const strip = desktop.getByTestId('planning-summary-strip')
-  await expect(strip).toBeVisible({ timeout: 8_000 })
+  await expect(desktop.getByText('E2E Full Amount Rent')).toBeVisible({ timeout: 8_000 })
 
-  // Income renders the exact amount "30.000.000" (vi-VN grouping), not the shortened "30.0M"
-  await expect(strip.getByText('30.000.000').first()).toBeVisible()
-  await expect(desktop.getByText(/30[.,]0M/)).toHaveCount(0)
+  // The fixed-expense row renders the exact amount "7.250.000" (vi-VN grouping),
+  // not the shortened "7.3M". The dense allocation card / summary strip stay compact.
+  await expect(desktop.getByText('7.250.000').first()).toBeVisible()
+  await expect(desktop.getByText(/7[.,]3M/)).toHaveCount(0)
 })
 
 test('desktop planning: allocation card is visible in right panel', async ({ page }) => {

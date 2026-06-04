@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslations, useLocale } from 'next-intl'
 import { Plus, ChevronLeft } from 'lucide-react'
-import { fmt } from '@/lib/formatters'
+import { fmt, fmtCompact } from '@/lib/formatters'
 
 // Master fixed-expense definitions. Categories mirror the Settings tab and the
 // API's accepted values; labels are localised for display only.
@@ -335,7 +335,7 @@ export default function FixedExpenseManager({ onChange, onToast, variant = 'moda
         const body = (
           <>
             <div style={{ fontSize: 13, color: 'var(--c-muted)' }}>
-              {confirmDelete.expense_name} — {fmt(confirmDelete.amount_vnd)}
+              {confirmDelete.expense_name} — {fmtCompact(confirmDelete.amount_vnd)}
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button type="button" onClick={() => setConfirmDelete(null)} style={ghostBtn}>{tc('cancel')}</button>

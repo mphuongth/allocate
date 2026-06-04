@@ -125,10 +125,12 @@ describe('MobilePlanningView — with plan', () => {
 
   it('shows the exact salary in the salary card, not an abbreviated amount', () => {
     render(<MobilePlanningView {...defaultProps} plan={basePlan} />)
-    // 45_000_000 → exact "₫ 45000000" from fmt mock (appears in salary card and remaining strip)
-    expect(screen.getAllByText('₫ 45000000').length).toBeGreaterThan(0)
-    // The shortened "45.0M ₫" form must NOT appear on the Plan page
-    expect(screen.queryByText('45.0M ₫')).not.toBeInTheDocument()
+    // The salary card renders the income in full (fmt → "₫ 45000000"), not the
+    // shortened "45.0M ₫". Scope to the salary card since compact amounts still
+    // legitimately appear in the dense allocation card / summary strip.
+    const valueEl = screen.getByText(/Monthly income/i).nextElementSibling
+    expect(valueEl).toHaveTextContent('₫ 45000000')
+    expect(valueEl).not.toHaveTextContent('45.0M')
   })
 
   it('shows Outflow label in summary strip', () => {
