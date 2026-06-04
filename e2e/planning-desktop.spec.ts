@@ -99,10 +99,13 @@ test('desktop planning: line-item amounts are shown in full, not abbreviated', a
   const desktop = page.getByTestId('desktop-planning')
   await expect(desktop.getByText('E2E Full Amount Rent')).toBeVisible({ timeout: 8_000 })
 
-  // The fixed-expense row renders the exact amount "7.250.000" (vi-VN grouping),
-  // not the shortened "7.3M". The dense allocation card / summary strip stay compact.
-  await expect(desktop.getByText('7.250.000').first()).toBeVisible()
-  await expect(desktop.getByText(/7[.,]3M/)).toHaveCount(0)
+  // Scope to the fixed-expense row: the line item renders the exact amount
+  // "7.250.000" (vi-VN grouping), never the shortened "7.3M". (The dense
+  // allocation card legitimately shows the same total compact, so we must not
+  // assert "7.3M" is absent page-wide.)
+  const row = desktop.getByRole('row', { name: /E2E Full Amount Rent/ })
+  await expect(row.getByText('7.250.000')).toBeVisible()
+  await expect(row.getByText(/7[.,]3M/)).toHaveCount(0)
 })
 
 test('desktop planning: allocation card is visible in right panel', async ({ page }) => {
