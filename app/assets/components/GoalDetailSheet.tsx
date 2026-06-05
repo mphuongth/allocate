@@ -249,7 +249,7 @@ function EditGoalSheet({
               value={name}
               onChange={(e) => setName(e.target.value)}
               style={{
-                width: '100%', padding: '10px 12px', fontSize: 15,
+                width: '100%', padding: '10px 12px', fontSize: 16,
                 border: '1px solid var(--c-line)', borderRadius: 10,
                 background: 'var(--c-card-2)', color: 'var(--c-ink)',
                 boxSizing: 'border-box',
@@ -267,7 +267,7 @@ function EditGoalSheet({
               onChange={(e) => setTarget(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))}
               placeholder="0"
               style={{
-                width: '100%', padding: '10px 12px', fontSize: 15,
+                width: '100%', padding: '10px 12px', fontSize: 16,
                 border: '1px solid var(--c-line)', borderRadius: 10,
                 background: 'var(--c-card-2)', color: 'var(--c-ink)',
                 boxSizing: 'border-box',

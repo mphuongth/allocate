@@ -141,6 +141,22 @@ describe('MobileSettingsView — profile sheet', () => {
   })
 })
 
+// ─── iOS auto-zoom guard (issue #265) ──────────────────────────────────────────
+// iOS Safari zooms the page when a focused native field has font-size < 16px and
+// never resets it. Every field must render at >= 16px on mobile.
+
+describe('MobileSettingsView — iOS zoom guard (issue #265)', () => {
+  it('renders the profile name and email inputs at >=16px', async () => {
+    render(<MobileSettingsView {...defaultProps} />)
+    await userEvent.click(screen.getByRole('button', { name: /profile/i }))
+    const nameInput = screen.getByDisplayValue('Phuong')
+    const emailInput = screen.getByDisplayValue('phuong.tran@example.com')
+    for (const el of [nameInput, emailInput]) {
+      expect(parseFloat(getComputedStyle(el).fontSize)).toBeGreaterThanOrEqual(16)
+    }
+  })
+})
+
 // ─── Preferences section ───────────────────────────────────────────────────────
 
 describe('MobileSettingsView — preferences section', () => {

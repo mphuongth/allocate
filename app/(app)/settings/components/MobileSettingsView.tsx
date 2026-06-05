@@ -123,7 +123,7 @@ function ProfileSheet({ open, onClose, onSave, displayName, email }: {
               value={name}
               onChange={e => setName(e.target.value)}
               style={{
-                width: '100%', padding: '10px 12px', fontSize: 13,
+                width: '100%', padding: '10px 12px', fontSize: 16,
                 background: 'var(--c-card-2)', border: '1px solid var(--c-line)',
                 borderRadius: 10, color: 'var(--c-ink)', fontFamily: 'inherit',
                 outline: 'none',
@@ -139,7 +139,7 @@ function ProfileSheet({ open, onClose, onSave, displayName, email }: {
               defaultValue={email}
               readOnly
               style={{
-                width: '100%', padding: '10px 12px', fontSize: 13,
+                width: '100%', padding: '10px 12px', fontSize: 16,
                 background: 'var(--c-card-2)', border: '1px solid var(--c-line)',
                 borderRadius: 10, color: 'var(--c-muted)', fontFamily: 'inherit',
                 outline: 'none',

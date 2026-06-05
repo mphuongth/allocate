@@ -116,7 +116,7 @@ export function CreateGoalSheet({ open, onClose, onSuccess, desktop }: Props) {
                 autoFocus
                 style={{
                   width: '100%', boxSizing: 'border-box',
-                  padding: '10px 12px', fontSize: 14,
+                  padding: '10px 12px', fontSize: 16,
                   background: 'var(--c-card-2)', border: '1px solid var(--c-line)',
                   borderRadius: 10, color: 'var(--c-ink)', fontFamily: 'inherit',
                   outline: 'none',
@@ -137,7 +137,7 @@ export function CreateGoalSheet({ open, onClose, onSuccess, desktop }: Props) {
                 placeholder="100.000.000"
                 style={{
                   width: '100%', boxSizing: 'border-box',
-                  padding: '10px 12px', fontSize: 14, fontVariantNumeric: 'tabular-nums',
+                  padding: '10px 12px', fontSize: 16, fontVariantNumeric: 'tabular-nums',
                   background: 'var(--c-card-2)', border: '1px solid var(--c-line)',
                   borderRadius: 10, color: 'var(--c-ink)', fontFamily: 'inherit',
                   outline: 'none',
@@ -156,7 +156,7 @@ export function CreateGoalSheet({ open, onClose, onSuccess, desktop }: Props) {
                 onChange={(e) => setTargetDate(e.target.value)}
                 style={{
                   width: '100%', boxSizing: 'border-box',
-                  padding: '10px 12px', fontSize: 14,
+                  padding: '10px 12px', fontSize: 16,
                   background: 'var(--c-card-2)', border: '1px solid var(--c-line)',
                   borderRadius: 10, color: 'var(--c-ink)', fontFamily: 'inherit',
                   outline: 'none',

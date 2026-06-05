@@ -41,6 +41,16 @@ describe('LogInsurancePaymentModal (issue #223)', () => {
   })
 })
 
+describe('LogInsurancePaymentModal — iOS zoom guard (issue #265)', () => {
+  // iOS Safari zooms when a focused native field is < 16px. The amount input
+  // must render at >= 16px on mobile.
+  it('renders the amount input at >=16px', () => {
+    render(<LogInsurancePaymentModal open ins={ins} locale="en" onClose={vi.fn()} onSaved={vi.fn()} />)
+    const input = screen.getByRole('textbox')
+    expect(parseFloat(getComputedStyle(input).fontSize)).toBeGreaterThanOrEqual(16)
+  })
+})
+
 describe('LogInsurancePaymentModal — settle mode', () => {
   // In settle mode the modal confirms a premium payment: it calls mark-paid
   // (which advances the cycle and records the settlement) rather than logging a

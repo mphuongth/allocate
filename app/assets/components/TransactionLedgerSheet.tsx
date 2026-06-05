@@ -628,7 +628,7 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
           </Field>
           <Field label={t('pasteFromExcel')}>
             <div style={{ fontSize: 11, color: 'var(--c-muted)', marginBottom: 6 }}>Tháng | Tiền chuyển | (skip) | NAV | CCQ</div>
-            <textarea value={importRaw} onChange={(e) => handleImportPaste(e.target.value)} rows={5} className="cn-input tabular" style={{ resize: 'vertical', fontFamily: 'monospace', fontSize: 12 }}
+            <textarea value={importRaw} onChange={(e) => handleImportPaste(e.target.value)} rows={5} className="cn-input tabular" style={{ resize: 'vertical', fontFamily: 'monospace' }}
               placeholder={'7/2023\t10,000,000\t9,876,543\t23,375.28\t42.78\n8/2023\t10,000,000\t9,876,543\t24,100.00\t40.98'} />
           </Field>
 

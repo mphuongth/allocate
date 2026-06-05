@@ -69,6 +69,24 @@ describe('FixedExpenseManager — list', () => {
   })
 })
 
+describe('FixedExpenseManager — iOS zoom guard (issue #265)', () => {
+  // iOS Safari zooms when a focused native field is < 16px. The shared inputStyle
+  // backs every field in the create/edit form, so check a representative few.
+  it('renders all form fields at >=16px', async () => {
+    render(<FixedExpenseManager onChange={vi.fn()} />)
+    await screen.findByText('Rent')
+    await userEvent.click(screen.getByTestId('fe-add'))
+    const fields = [
+      screen.getByTestId('fe-name'),
+      screen.getByTestId('fe-category'),
+      screen.getByTestId('fe-amount'),
+    ]
+    for (const el of fields) {
+      expect(parseFloat(getComputedStyle(el).fontSize)).toBeGreaterThanOrEqual(16)
+    }
+  })
+})
+
 describe('FixedExpenseManager — create', () => {
   it('POSTs a new expense and calls onChange', async () => {
     const onChange = vi.fn()

@@ -50,7 +50,7 @@ const emptyForm = { expense_name: '', amount_vnd: '', category: '', effective_fr
 // ─── Inline style tokens (work in both the desktop modal and mobile sheet) ──────
 
 const inputStyle: React.CSSProperties = {
-  width: '100%', padding: '10px 12px', fontSize: 14,
+  width: '100%', padding: '10px 12px', fontSize: 16,
   border: '1px solid var(--c-line)', borderRadius: 10,
   background: 'var(--c-card-2)', color: 'var(--c-ink)', boxSizing: 'border-box',
 }
