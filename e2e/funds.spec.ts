@@ -173,7 +173,11 @@ test('mobile funds DCA goal selection persists', async ({ page }) => {
   await card.getByRole('button', { name: /dca/i }).click()
   const select = card.getByTestId(`dca-goal-${fund.id}`)
   await expect(select).toBeVisible({ timeout: 5_000 })
-  await select.selectOption(goal.goal_id)
+  // Wait for the persisting PUT to land before reloading (avoids racing the save).
+  await Promise.all([
+    page.waitForResponse(r => r.url().includes(`/api/funds/${fund.id}`) && r.request().method() === 'PUT' && r.ok()),
+    select.selectOption(goal.goal_id),
+  ])
 
   // Persisted: reload and confirm the goal is still selected
   await page.reload()

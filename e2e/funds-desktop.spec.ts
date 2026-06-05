@@ -174,7 +174,11 @@ test('desktop funds DCA goal selection persists across reload', async ({ page })
   await row.getByTestId('dca-toggle').click()
   const select = row.getByTestId(`dca-goal-${fund.id}`)
   await expect(select).toBeVisible({ timeout: 5_000 })
-  await select.selectOption(goal.goal_id)
+  // Wait for the persisting PUT to land before reloading (avoids racing the save).
+  await Promise.all([
+    page.waitForResponse(r => r.url().includes(`/api/funds/${fund.id}`) && r.request().method() === 'PUT' && r.ok()),
+    select.selectOption(goal.goal_id),
+  ])
 
   await page.reload()
   await page.waitForLoadState('networkidle')
