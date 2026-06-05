@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { createClient } from '@supabase/supabase-js'
 import path from 'path'
 import fs from 'fs'
 
@@ -70,6 +71,54 @@ test('unauthenticated access to /dashboard redirects to /auth/login', async ({ p
   await page.goto('/dashboard')
   await page.waitForURL('**/auth/login', { timeout: 10_000 })
   await expect(page).toHaveURL(/auth\/login/)
+})
+
+// Regression: a stale/server-invalid Supabase session cookie left over from a
+// previous session (e.g. token revoked, project restarted) must not block a
+// fresh login. Previously the browser client would fail to refresh with
+// "Invalid Refresh Token: Refresh Token Not Found", and a soft router.push()
+// after sign-in bounced straight back to /auth/login — the button stuck on
+// "redirecting", never reaching Overview. See fix in app/auth/login/page.tsx.
+test('login succeeds even when a stale/invalid session cookie is present', async ({ page }) => {
+  const adminUrl = process.env.E2E_SUPABASE_URL
+  const serviceRoleKey = process.env.E2E_SUPABASE_SERVICE_ROLE_KEY
+  test.skip(!adminUrl || !serviceRoleKey, 'requires E2E Supabase admin credentials')
+
+  const admin = createClient(adminUrl!, serviceRoleKey!)
+
+  // Create a throwaway user and sign them in through the real form so the
+  // browser ends up with a genuine, correctly-formatted @supabase/ssr auth
+  // cookie — then delete the user so that cookie's refresh token no longer
+  // exists on the server. This reproduces the exact "Refresh Token Not Found"
+  // state the user hit, without hand-crafting cookie internals.
+  const staleEmail = `e2e-stale-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@test.invalid`
+  const stalePassword = 'TestPass123!'
+  const { data: created, error: createErr } = await admin.auth.admin.createUser({
+    email: staleEmail,
+    password: stalePassword,
+    email_confirm: true,
+  })
+  if (createErr || !created.user) throw createErr ?? new Error('Failed to create stale user')
+
+  await page.goto('/auth/login')
+  await page.locator('#email').fill(staleEmail)
+  await page.locator('#password').fill(stalePassword)
+  await page.locator('button[type="submit"]').click()
+  await page.waitForURL('**/dashboard', { timeout: 15_000 })
+
+  // Invalidate the session server-side — the cookie now holds an orphaned
+  // refresh token.
+  await admin.auth.admin.deleteUser(created.user.id)
+
+  // Now log in as the real test user. With the stale cookie present this must
+  // still land on the dashboard rather than getting stuck on the login page.
+  const { email, password } = getTestCredentials()
+  await page.goto('/auth/login')
+  await page.locator('#email').fill(email)
+  await page.locator('#password').fill(password)
+  await page.locator('button[type="submit"]').click()
+  await page.waitForURL('**/dashboard', { timeout: 15_000 })
+  await expect(page).toHaveURL(/dashboard/)
 })
 
 // ─── Signup page structure ──────────────────────────────────────────────────

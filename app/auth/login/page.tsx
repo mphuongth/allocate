@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import { useState, Suspense } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { useTranslations } from 'next-intl'
@@ -18,7 +18,6 @@ const fieldLabelStyle: React.CSSProperties = {
 
 function LoginForm() {
   const t = useTranslations('auth')
-  const router = useRouter()
   const searchParams = useSearchParams()
   const expired = searchParams.get('expired') === 'true'
 
@@ -46,8 +45,13 @@ function LoginForm() {
         setLoading(false)
       } else {
         setRedirecting(true)
-        router.push('/dashboard')
-        router.refresh()
+        // Full-page navigation rather than router.push(): this forces the
+        // server (middleware in proxy.ts + the (app) layout) to re-read the
+        // freshly-set auth cookies on a clean request. A soft client-side push
+        // can race with auth-cookie propagation and get bounced straight back
+        // to /auth/login by getUser() — especially when a stale/expired session
+        // cookie was already present — leaving the button stuck on "redirecting".
+        window.location.assign('/dashboard')
       }
     } catch {
       setError(t('cannotConnect'))
