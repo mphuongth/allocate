@@ -54,7 +54,7 @@ function Sparkline({ data, positive }: { data: ChartPoint[]; positive: boolean }
 const ALLOC_COLORS: Record<string, { color: string; label: string; labelVi: string }> = {
   fund:  { color: '#2563eb', label: 'Funds',   labelVi: 'Quỹ' },
   bank:  { color: '#047857', label: 'Savings', labelVi: 'Tiết kiệm' },
-  gold:  { color: '#d97706', label: 'Gold',    labelVi: 'Vàng' },
+  gold:  { color: 'var(--c-fund-gold)', label: 'Gold',    labelVi: 'Vàng' },
   stock: { color: '#7c3aed', label: 'Stock',   labelVi: 'Cổ phiếu' },
 }
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { useLocale, useTranslations } from 'next-intl'
-import { ArrowDownRight, ArrowDownToLine, Building, Check, CircleDollarSign, Shield, TrendingUp, Wallet, X } from 'lucide-react'
+import { ArrowDownRight, ArrowDownToLine, Building, Check, Coins, Shield, TrendingUp, Wallet, X } from 'lucide-react'
 import { fmt } from '@/lib/formatters'
 import { AffectsProgressControl } from './goalDetailShared'
 const fmtVND = (n: number, _locale?: string) => fmt(n)
@@ -42,14 +42,14 @@ interface Props {
 const TYPE_ICON = {
   fund: TrendingUp,
   bank: Building,
-  gold: CircleDollarSign,
+  gold: Coins,
   stock: TrendingUp,
 } as const
 
 const TYPE_COLOR = {
   fund: '#2563eb',
   bank: '#047857',
-  gold: '#d97706',
+  gold: 'var(--c-fund-gold)',
   stock: '#7c3aed',
 } as const
 

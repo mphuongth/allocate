@@ -44,7 +44,7 @@ function Sparkline({ data, positive }: { data: ChartPoint[]; positive: boolean }
 const ALLOC_COLORS = {
   fund:  '#2563eb',
   bank:  '#047857',
-  gold:  '#d97706',
+  gold:  'var(--c-fund-gold)',
   stock: '#7c3aed',
 } as const
 
