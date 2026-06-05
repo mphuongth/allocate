@@ -246,8 +246,10 @@ describe('MobileSettingsView — data section', () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
-    fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify(mockOverviewResponse), { status: 200 })
+    // Fresh Response per call: the component also fetches the last-sync time on
+    // mount, and a Response body can only be read once.
+    fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(
+      async () => new Response(JSON.stringify(mockOverviewResponse), { status: 200 })
     )
   })
   afterEach(() => fetchSpy.mockRestore())

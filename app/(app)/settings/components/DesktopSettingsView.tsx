@@ -13,7 +13,7 @@ import {
 import { toast } from 'sonner'
 import DownloadReportSheet from '@/app/assets/components/DownloadReportSheet'
 import type { DashboardData } from '@/app/assets/DashboardClient'
-import { clearAppCaches, setLocaleCookie, refreshPrices, fetchOverview, exportPortfolioReport } from '../settingsShared'
+import { clearAppCaches, setLocaleCookie, refreshPrices, fetchOverview, exportPortfolioReport, fetchLastSync, formatLastSync } from '../settingsShared'
 
 interface Props {
   email: string
@@ -157,7 +157,9 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
   // Price sync
   const [syncing, setSyncing] = useState(false)
   const [syncDone, setSyncDone] = useState(false)
-  const [lastSync, setLastSync] = useState('2h')
+  // undefined = loading, null = never synced, otherwise the last-sync ISO time.
+  const [lastSyncIso, setLastSyncIso] = useState<string | null | undefined>(undefined)
+  useEffect(() => { fetchLastSync().then(setLastSyncIso) }, [])
 
   // Export
   const [showReport, setShowReport] = useState(false)
@@ -181,7 +183,7 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
     await refreshPrices()
     setSyncing(false)
     setSyncDone(true)
-    setLastSync(isVI ? 'Vừa xong' : 'Just now')
+    setLastSyncIso(new Date().toISOString())
     setTimeout(() => setSyncDone(false), 3000)
   }
 
@@ -402,7 +404,7 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
                       ? (isVI ? 'Đang tải…' : 'Updating…')
                       : syncDone
                       ? (isVI ? '✓ Đã cập nhật' : '✓ Updated')
-                      : (isVI ? `Lần cuối: ${lastSync} trước` : `Last synced: ${lastSync} ago`)}
+                      : `${isVI ? 'Lần cuối: ' : 'Last synced: '}${formatLastSync(lastSyncIso, locale)}`}
                   </div>
                 </div>
                 <button
