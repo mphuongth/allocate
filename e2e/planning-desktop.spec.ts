@@ -129,3 +129,16 @@ test('desktop planning: collapsible sections visible when plan exists', async ({
   await expect(desktop.getByText(/Fixed expenses|Chi phí cố định/i).first()).toBeVisible()
   await expect(desktop.getByText(/Insurance|Bảo hiểm/i).first()).toBeVisible()
 })
+
+test('desktop planning: Manage savings opens the recurring-saving manager', async ({ page }) => {
+  const plan = await api.createMonthlyPlan({ month: MONTH, year: YEAR, salary_vnd: 30_000_000 })
+  cleanup.add(() => api.deleteMonthlyPlan(plan.id))
+
+  await goto(page)
+  const desktop = page.getByTestId('desktop-planning')
+
+  await desktop.getByTestId('desktop-manage-savings').click()
+  // Manager renders its list view (Add button) regardless of how many rules exist
+  await expect(page.getByTestId('recurring-saving-manager')).toBeVisible({ timeout: 8_000 })
+  await expect(page.getByTestId('rs-add')).toBeVisible()
+})

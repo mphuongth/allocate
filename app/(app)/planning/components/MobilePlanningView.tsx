@@ -5,13 +5,15 @@ import { useLocale } from 'next-intl'
 import {
   Wallet, Target, Shield, ShoppingCart,
   ChevronDown, ChevronUp,
-  MoreHorizontal, Plus, Check, X, Calendar, Settings,
+  MoreHorizontal, Plus, Check, X, Calendar, Settings, RefreshCw, TrendingUp,
 } from 'lucide-react'
 import { fmt, fmtCompact } from '@/lib/formatters'
 import FixedExpenseManager from './FixedExpenseManager'
+import RecurringSavingManager from './RecurringSavingManager'
+import { buildByGoal, resolveRecurringSavings, type GoalRow, type GoalItem } from '@/lib/planning'
 import type {
   MonthlyPlan, FundInvestment, DirectSaving, FixedExpense,
-  InsuranceMember, OtherExpense, Fund, Goal,
+  InsuranceMember, OtherExpense, RecurringSaving, RecurringSavingOverride, Fund, Goal,
 } from '../PlanningClient'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -25,6 +27,8 @@ interface Props {
   fixedExpenses: FixedExpense[]
   insuranceMembers: InsuranceMember[]
   otherExpenses: OtherExpense[]
+  recurringSavings: RecurringSaving[]
+  recurringSavingOverrides: RecurringSavingOverride[]
   funds: Fund[]
   goals: Goal[]
   onPlanCreated: (plan: MonthlyPlan) => void
@@ -33,21 +37,16 @@ interface Props {
   onToast: (msg: string) => void
 }
 
-interface GoalRow {
-  goalId: string
-  goalName: string
-  totalAllocated: number
-  items: Array<{ name: string; type: string; amount: number; isDCA?: boolean }>
-}
-
 type SheetState =
   | null
   | { type: 'salary' }
   | { type: 'delete-plan' }
   | { type: 'override-fe'; expense: FixedExpense }
   | { type: 'override-ins'; member: InsuranceMember }
+  | { type: 'override-rec'; item: GoalItem }
   | { type: 'other-expense'; existing: OtherExpense | null }
   | { type: 'manage-fixed' }
+  | { type: 'manage-recurring' }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -71,34 +70,6 @@ function getInsTotal(insuranceMembers: InsuranceMember[]) {
     if (m.excluded) return s
     return s + (m.monthlyOverride ?? Math.round(m.annual_payment_vnd / 12))
   }, 0)
-}
-
-function buildByGoal(investments: FundInvestment[], savings: DirectSaving[]): GoalRow[] {
-  const map = new Map<string, GoalRow>()
-
-  for (const inv of investments) {
-    const goalId = inv.goal_id ?? '__unassigned__'
-    const goalName = inv.savings_goals?.goal_name ?? 'Unassigned'
-    if (!map.has(goalId)) {
-      map.set(goalId, { goalId, goalName, totalAllocated: 0, items: [] })
-    }
-    const row = map.get(goalId)!
-    row.totalAllocated += inv.amount_vnd
-    row.items.push({ name: inv.funds?.name ?? 'Unknown fund', type: 'fund', amount: inv.amount_vnd, isDCA: inv.is_dca_seeded })
-  }
-
-  for (const sav of savings) {
-    const goalId = sav.goal_id ?? '__unassigned__'
-    const goalName = sav.savings_goals?.goal_name ?? 'Unassigned'
-    if (!map.has(goalId)) {
-      map.set(goalId, { goalId, goalName, totalAllocated: 0, items: [] })
-    }
-    const row = map.get(goalId)!
-    row.totalAllocated += sav.amount_vnd
-    row.items.push({ name: 'Direct savings', type: 'bank', amount: sav.amount_vnd })
-  }
-
-  return [...map.values()].sort((a, b) => a.goalName.localeCompare(b.goalName))
 }
 
 function EditIcon({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) {
@@ -584,8 +555,8 @@ function AllocationSummaryCard({
           <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ width: 8, height: 8, borderRadius: 2, background: r.color, flexShrink: 0 }} />
             <span style={{ flex: 1, fontSize: 12, color: 'rgba(255,255,255,0.75)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.l}</span>
-            <span style={{ fontSize: 12, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(r.v)}</span>
-            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)', minWidth: 30, textAlign: 'right' }}>{pct(r.v)}</span>
+            <span style={{ fontSize: 12, fontWeight: 600, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{fmtCompact(r.v)}</span>
+            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)', minWidth: 30, textAlign: 'right', flexShrink: 0 }}>{pct(r.v)}</span>
           </div>
         ))}
         {/* Remaining row */}
@@ -678,7 +649,13 @@ function BudgetSection({
 
 // ─── GoalAllocationRow ────────────────────────────────────────────────────────
 
-function GoalAllocationRow({ entry, isVI }: { entry: GoalRow; isVI: boolean }) {
+function GoalAllocationRow({ entry, isVI, onRecSkip, onRecRestore, onRecOverride, onRecEdit }: {
+  entry: GoalRow; isVI: boolean
+  onRecSkip: (item: GoalItem) => void
+  onRecRestore: (item: GoalItem) => void
+  onRecOverride: (item: GoalItem) => void
+  onRecEdit: () => void
+}) {
   const [open, setOpen] = useState(false)
   return (
     <div>
@@ -707,26 +684,86 @@ function GoalAllocationRow({ entry, isVI }: { entry: GoalRow; isVI: boolean }) {
         {open ? <ChevronUp size={14} color="var(--c-muted)" /> : <ChevronDown size={14} color="var(--c-muted)" />}
       </button>
       {open && entry.items.map((item, i) => (
-        <div key={i} style={{
-          padding: '8px 14px 8px 56px', display: 'flex', alignItems: 'center',
-          borderTop: '1px solid var(--c-line)', background: 'var(--c-card)',
-        }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--c-ink)' }}>
-              {item.name}
-            </div>
-            <div style={{ fontSize: 10, color: 'var(--c-muted)', textTransform: 'capitalize', marginTop: 1, display: 'flex', alignItems: 'center', gap: 4 }}>
-              {item.type}
-              {item.isDCA && (
-                <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 4, background: 'var(--c-navy-tint)', color: 'var(--c-navy)', fontWeight: 600 }}>DCA</span>
-              )}
-            </div>
-          </div>
-          <span style={{ fontSize: 12, fontWeight: 500, fontVariantNumeric: 'tabular-nums', color: 'var(--c-muted)' }}>
-            {fmt(item.amount)}
-          </span>
-        </div>
+        <GoalItemRow
+          key={i}
+          item={item}
+          isVI={isVI}
+          onSkip={() => onRecSkip(item)}
+          onRestore={() => onRecRestore(item)}
+          onOverride={() => onRecOverride(item)}
+          onEdit={onRecEdit}
+        />
       ))}
+    </div>
+  )
+}
+
+// ─── GoalItemRow — one allocation under a goal (recurring savings get a kebab) ──
+
+function GoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit }: {
+  item: GoalItem; isVI: boolean
+  onSkip: () => void; onRestore: () => void; onOverride: () => void; onEdit: () => void
+}) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [menuPos, setMenuPos] = useState({ top: 0, right: 0 })
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const skipped = !!item.skipped
+
+  const typeLabel = item.type === 'fund'
+    ? 'Fund'
+    : item.isRecurring ? (isVI ? 'Tiết kiệm định kỳ' : 'Recurring saving') : (isVI ? 'Tiết kiệm' : 'Direct saving')
+
+  function openMenu() {
+    if (btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect()
+      setMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right })
+    }
+    setMenuOpen(true)
+  }
+
+  return (
+    <div style={{
+      padding: '8px 14px 8px 56px', display: 'flex', alignItems: 'center', gap: 8,
+      borderTop: '1px solid var(--c-line)', background: 'var(--c-card)', opacity: skipped ? 0.55 : 1,
+    }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--c-ink)', textDecoration: skipped ? 'line-through' : 'none' }}>
+          {item.name}
+        </div>
+        <div style={{ fontSize: 10, color: item.overridden ? 'var(--c-navy)' : 'var(--c-muted)', marginTop: 1, display: 'flex', alignItems: 'center', gap: 4 }}>
+          {skipped ? (isVI ? 'Bỏ qua tháng này' : 'Skipped this month') : item.overridden ? (isVI ? 'Đã ghi đè tháng này' : 'Overridden this month') : typeLabel}
+          {item.isDCA && (
+            <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 4, background: 'var(--c-navy-tint)', color: 'var(--c-navy)', fontWeight: 600 }}>DCA</span>
+          )}
+        </div>
+      </div>
+      <span style={{ fontSize: 12, fontWeight: 500, fontVariantNumeric: 'tabular-nums', color: 'var(--c-muted)', textDecoration: skipped ? 'line-through' : 'none' }}>
+        {fmt(item.amount)}
+      </span>
+      {item.isRecurring && (
+        <>
+          <button ref={btnRef} onClick={() => (menuOpen ? setMenuOpen(false) : openMenu())} aria-label="Saving actions" style={{ padding: 4, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, color: 'var(--c-muted)', display: 'flex', flexShrink: 0 }}>
+            <MoreHorizontal size={14} />
+          </button>
+          {menuOpen && (
+            <>
+              <div onClick={() => setMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 5 }} />
+              <div style={{ position: 'fixed', top: menuPos.top, right: menuPos.right, zIndex: 6, background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 8, boxShadow: '0 6px 20px rgba(15,23,42,0.12)', minWidth: 200, overflow: 'hidden' }}>
+                {skipped ? (
+                  <MenuItem icon={<Check size={13} />} label={isVI ? 'Bao gồm tháng này' : 'Include this month'} onClick={() => { onRestore(); setMenuOpen(false) }} noBorder />
+                ) : (
+                  <>
+                    <MenuItem icon={<TrendingUp size={13} />} label={isVI ? 'Tiết kiệm thêm tháng này' : 'Save more this month'} onClick={() => { onOverride(); setMenuOpen(false) }} />
+                    <MenuItem icon={<EditIcon size={13} />} label={isVI ? 'Sửa kế hoạch định kỳ' : 'Edit recurring plan'} onClick={() => { onEdit(); setMenuOpen(false) }} />
+                    {item.overridden && <MenuItem icon={<RefreshCw size={13} />} label={isVI ? 'Khôi phục mặc định' : 'Restore default'} onClick={() => { onRestore(); setMenuOpen(false) }} />}
+                    <MenuItem icon={<X size={13} />} label={isVI ? 'Bỏ qua tháng này' : 'Skip this month'} onClick={() => { onSkip(); setMenuOpen(false) }} danger noBorder />
+                  </>
+                )}
+              </div>
+            </>
+          )}
+        </>
+      )}
     </div>
   )
 }
@@ -834,22 +871,50 @@ function PlanLineItem({
   )
 }
 
+// ─── MenuItem — popover row used by the recurring-saving kebab ────────────────
+
+function MenuItem({ icon, label, onClick, danger, noBorder }: {
+  icon: React.ReactNode; label: string; onClick: () => void; danger?: boolean; noBorder?: boolean
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{ width: '100%', textAlign: 'left', padding: '10px 12px', fontSize: 12, background: 'transparent', border: 'none', borderBottom: noBorder ? 'none' : '1px solid var(--c-line)', cursor: 'pointer', fontFamily: 'inherit', color: danger ? 'var(--c-neg)' : 'var(--c-ink)', display: 'flex', alignItems: 'center', gap: 8 }}
+    >
+      <span style={{ color: danger ? 'var(--c-neg)' : 'var(--c-muted)', display: 'flex' }}>{icon}</span>
+      {label}
+    </button>
+  )
+}
+
 // ─── Main MobilePlanningView ──────────────────────────────────────────────────
 
 export default function MobilePlanningView({
   month, year, plan, investments, savings, fixedExpenses, insuranceMembers, otherExpenses,
+  recurringSavings, recurringSavingOverrides, goals,
   onPlanCreated, onPlanDeleted, onRefresh, onToast,
 }: Props) {
   const locale = useLocale()
   const isVI = locale === 'vi'
   const [sheet, setSheet] = useState<SheetState>(null)
-  const [overrideTarget, setOverrideTarget] = useState<{ type: 'fe' | 'ins'; id: string; name: string; defaultAmount: number } | null>(null)
+  const [overrideTarget, setOverrideTarget] = useState<{ type: 'fe' | 'ins' | 'rec'; id: string; name: string; defaultAmount: number } | null>(null)
 
   const monthLabel = getMonthLabel(month, year)
 
   // ─── Computed totals ────────────────────────────────────────────────────────
 
-  const byGoal = useMemo(() => buildByGoal(investments, savings), [investments, savings])
+  const goalsById = useMemo(() => new Map(goals.map(g => [g.goal_id, g.goal_name])), [goals])
+  const resolvedRecurring = useMemo(
+    () => resolveRecurringSavings(recurringSavings, recurringSavingOverrides),
+    [recurringSavings, recurringSavingOverrides],
+  )
+  const byGoal = useMemo(
+    () => buildByGoal(investments, savings, resolvedRecurring, goalsById, {
+      unallocated: isVI ? 'Chưa phân bổ' : 'Unallocated',
+      directSaving: isVI ? 'Tiết kiệm' : 'Direct savings',
+    }),
+    [investments, savings, resolvedRecurring, goalsById, isVI],
+  )
   const totalGoals = useMemo(() => byGoal.reduce((s, g) => s + g.totalAllocated, 0), [byGoal])
   const totalFixed = useMemo(() => getFixedTotal(fixedExpenses), [fixedExpenses])
   const totalInsurance = useMemo(() => getInsTotal(insuranceMembers), [insuranceMembers])
@@ -900,6 +965,35 @@ export default function MobilePlanningView({
     onRefresh()
   }
 
+  async function handleSkipRec(item: GoalItem) {
+    if (!plan || !item.recurringId) return
+    await fetch(`/api/v1/monthly-plans/${plan.id}/recurring-saving-overrides`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ recurring_saving_id: item.recurringId, monthly_amount_override_vnd: 0 }),
+    })
+    onToast(isVI ? `Đã bỏ qua ${item.name}` : `Skipped ${item.name}`)
+    onRefresh()
+  }
+
+  async function handleRestoreRec(item: GoalItem) {
+    if (!plan || !item.recurringId) return
+    const res = await fetch(`/api/v1/monthly-plans/${plan.id}/recurring-saving-overrides`)
+    if (!res.ok) return
+    const overrides: Array<{ id: string; recurring_saving_id: string }> = await res.json()
+    const match = overrides.find((o) => o.recurring_saving_id === item.recurringId)
+    if (!match) return
+    await fetch(`/api/v1/monthly-plans/${plan.id}/recurring-saving-overrides/${match.id}`, { method: 'DELETE' })
+    onToast(isVI ? `Đã khôi phục ${item.name}` : `Restored ${item.name}`)
+    onRefresh()
+  }
+
+  function openOverrideRec(item: GoalItem) {
+    if (!item.recurringId) return
+    setOverrideTarget({ type: 'rec', id: item.recurringId, name: item.name, defaultAmount: item.baseAmount ?? item.amount })
+    setSheet({ type: 'override-rec', item })
+  }
+
   // ─── Override sheet helpers ────────────────────────────────────────────────
 
   function openOverrideFE(expense: FixedExpense) {
@@ -921,6 +1015,12 @@ export default function MobilePlanningView({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fixed_expense_id: overrideTarget.id, monthly_amount_override_vnd: amount }),
+      })
+    } else if (overrideTarget.type === 'rec') {
+      await fetch(`/api/v1/monthly-plans/${plan.id}/recurring-saving-overrides`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recurring_saving_id: overrideTarget.id, monthly_amount_override_vnd: amount }),
       })
     } else {
       await fetch(`/api/v1/monthly-plans/${plan.id}/insurance-overrides`, {
@@ -991,13 +1091,34 @@ export default function MobilePlanningView({
               count={`${byGoal.length} ${isVI ? 'mục tiêu' : byGoal.length === 1 ? 'goal' : 'goals'}`}
               total={totalGoals}
               testId="section-by-goal"
+              action={
+                <button
+                  data-testid="mobile-manage-savings"
+                  onClick={() => setSheet({ type: 'manage-recurring' })}
+                  aria-label={isVI ? 'Quản lý tiết kiệm định kỳ' : 'Manage recurring savings'}
+                  style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 8px', fontSize: 12, fontWeight: 600, color: 'var(--c-navy)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', borderRadius: 6 }}
+                >
+                  <Settings size={14} />
+                  {isVI ? 'Quản lý' : 'Manage'}
+                </button>
+              }
             >
               {byGoal.length === 0 ? (
                 <div style={{ padding: '12px 14px', fontSize: 13, color: 'var(--c-muted)' }}>
                   {isVI ? 'Chưa có phân bổ' : 'No allocations yet'}
                 </div>
               ) : (
-                byGoal.map((entry) => <GoalAllocationRow key={entry.goalId} entry={entry} isVI={isVI} />)
+                byGoal.map((entry) => (
+                  <GoalAllocationRow
+                    key={entry.goalId}
+                    entry={entry}
+                    isVI={isVI}
+                    onRecSkip={handleSkipRec}
+                    onRecRestore={handleRestoreRec}
+                    onRecOverride={openOverrideRec}
+                    onRecEdit={() => setSheet({ type: 'manage-recurring' })}
+                  />
+                ))
               )}
             </BudgetSection>
 
@@ -1164,7 +1285,7 @@ export default function MobilePlanningView({
       {/* ─── Override sheet ────────────────────────────────────────────────── */}
       {overrideTarget && plan && (
         <SimpleOverrideSheet
-          open={sheet?.type === 'override-fe' || sheet?.type === 'override-ins'}
+          open={sheet?.type === 'override-fe' || sheet?.type === 'override-ins' || sheet?.type === 'override-rec'}
           onClose={() => { setSheet(null); setOverrideTarget(null) }}
           name={overrideTarget.name}
           defaultAmount={overrideTarget.defaultAmount}
@@ -1198,6 +1319,17 @@ export default function MobilePlanningView({
           <FixedExpenseManager onChange={onRefresh} onToast={onToast} variant="sheet" />
         )}
       </Sheet>
+
+      {/* ─── Manage recurring savings sheet ─────────────────────────────────── */}
+      <Sheet
+        open={sheet?.type === 'manage-recurring'}
+        onClose={() => setSheet(null)}
+        title={isVI ? 'Tiết kiệm định kỳ' : 'Recurring savings'}
+      >
+        {sheet?.type === 'manage-recurring' && (
+          <RecurringSavingManager goals={goals} onChange={onRefresh} onToast={onToast} variant="sheet" />
+        )}
+      </Sheet>
     </div>
   )
 }
@@ -1213,7 +1345,7 @@ function SimpleOverrideSheet({
   defaultAmount: number
   planId: string
   targetId: string
-  targetType: 'fe' | 'ins'
+  targetType: 'fe' | 'ins' | 'rec'
   isVI: boolean
   onSaved: (amount: number) => void
 }) {

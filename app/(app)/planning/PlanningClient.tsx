@@ -64,6 +64,21 @@ export interface OtherExpense {
   created_at: string
 }
 
+export interface RecurringSaving {
+  saving_id: string
+  name: string
+  goal_id: string | null
+  amount_vnd: number
+  effective_from: string | null
+  effective_to: string | null
+  savings_goals: { goal_name: string } | null
+}
+
+export interface RecurringSavingOverride {
+  recurring_saving_id: string
+  monthly_amount_override_vnd: number
+}
+
 export interface Fund { id: string; name: string; nav: number }
 export interface Goal { goal_id: string; goal_name: string }
 
@@ -109,6 +124,8 @@ export default function PlanningClient() {
   const [fixedExpenses, setFixedExpenses] = useState<FixedExpense[]>(initialCache?.fixedExpenses ?? [])
   const [insuranceMembers, setInsuranceMembers] = useState<InsuranceMember[]>(initialCache?.insuranceMembers ?? [])
   const [otherExpenses, setOtherExpenses] = useState<OtherExpense[]>(initialCache?.otherExpenses ?? [])
+  const [recurringSavings, setRecurringSavings] = useState<RecurringSaving[]>(initialCache?.recurringSavings ?? [])
+  const [recurringSavingOverrides, setRecurringSavingOverrides] = useState<RecurringSavingOverride[]>(initialCache?.recurringSavingOverrides ?? [])
   const [funds, setFunds] = useState<Fund[]>(initialCache?.funds ?? [])
   const [goals, setGoals] = useState<Goal[]>(initialCache?.goals ?? [])
   const [loading, setLoading] = useState(!initialCache)
@@ -158,6 +175,8 @@ export default function PlanningClient() {
         otherExpenses: p.other_expenses ?? [],
         goals: p.goals ?? [],
         funds: p.funds ?? [],
+        recurringSavings: p.recurring_savings ?? [],
+        recurringSavingOverrides: p.recurring_saving_overrides ?? [],
       }
       setPlanCache(month, year, fresh)
       setPlan(fresh.plan)
@@ -168,6 +187,8 @@ export default function PlanningClient() {
       setOtherExpenses(fresh.otherExpenses)
       setGoals(fresh.goals)
       setFunds(fresh.funds)
+      setRecurringSavings(fresh.recurringSavings)
+      setRecurringSavingOverrides(fresh.recurringSavingOverrides)
     } else {
       bustPlanCache(month, year)
       setPlan(null)
@@ -176,6 +197,8 @@ export default function PlanningClient() {
       setOtherExpenses([])
       setGoals([])
       setFunds([])
+      setRecurringSavings([])
+      setRecurringSavingOverrides([])
       // Still load fixed expenses and insurance even without a plan
       const [expRes, insRes] = await Promise.all([
         fetch('/api/v1/fixed-expenses'),
@@ -254,6 +277,8 @@ export default function PlanningClient() {
         fixedExpenses={fixedExpenses}
         insuranceMembers={insuranceMembers}
         otherExpenses={otherExpenses}
+        recurringSavings={recurringSavings}
+        recurringSavingOverrides={recurringSavingOverrides}
         funds={funds}
         goals={goals}
         onPlanCreated={(p) => { setPlan(p); refetch() }}
@@ -279,6 +304,8 @@ export default function PlanningClient() {
         fixedExpenses={fixedExpenses}
         insuranceMembers={insuranceMembers}
         otherExpenses={otherExpenses}
+        recurringSavings={recurringSavings}
+        recurringSavingOverrides={recurringSavingOverrides}
         funds={funds}
         goals={goals}
         loading={loading}

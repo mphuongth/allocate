@@ -27,7 +27,8 @@ export async function GET(request: NextRequest) {
   if (!plan) return NextResponse.json({ error: 'Plan not found for this month' }, { status: 404 })
 
   if (searchParams.get('full') === 'true') {
-    const [invRes, savRes, overridesRes, expRes, insRes, exclRes, insOverridesRes, goalsRes, fundsRes, otherExpRes] = await Promise.all([
+    const planDateForActive = `${plan.year}-${String(plan.month).padStart(2, '0')}-01`
+    const [invRes, savRes, overridesRes, expRes, insRes, exclRes, insOverridesRes, goalsRes, fundsRes, otherExpRes, recSavRes, recSavOverridesRes] = await Promise.all([
       supabase
         .from('investment_transactions')
         .select('transaction_id, plan_id, fund_id, goal_id, amount_vnd, units, unit_price, investment_date, is_dca_seeded, funds(name, nav), savings_goals(goal_name)')
@@ -63,10 +64,19 @@ export async function GET(request: NextRequest) {
         .select('goal_id, goal_name').eq('user_id', user.id).order('created_at', { ascending: false }),
       supabase
         .from('funds')
-        .select('id, name, nav, is_dca, dca_monthly_amount_vnd').eq('user_id', user.id).order('name', { ascending: true }),
+        .select('id, name, nav, is_dca, dca_monthly_amount_vnd, dca_goal_id').eq('user_id', user.id).order('name', { ascending: true }),
       supabase
         .from('plan_other_expenses')
         .select('id, description, amount_vnd, created_at').eq('plan_id', plan.id).order('created_at', { ascending: true }),
+      supabase
+        .from('recurring_savings')
+        .select('saving_id, name, goal_id, amount_vnd, effective_from, effective_to, savings_goals(goal_name)')
+        .eq('user_id', user.id)
+        .or(`effective_from.is.null,effective_from.lte.${planDateForActive}`)
+        .or(`effective_to.is.null,effective_to.gte.${planDateForActive}`),
+      supabase
+        .from('recurring_saving_overrides')
+        .select('recurring_saving_id, monthly_amount_override_vnd').eq('plan_id', plan.id),
     ])
     // Auto-seed DCA fund entries and keep pending rows in sync with current DCA amount
     const allFunds = fundsRes.data ?? []
@@ -132,6 +142,8 @@ export async function GET(request: NextRequest) {
       goals:                   goalsRes.data ?? [],
       funds:                   fundsRes.data ?? [],
       other_expenses:          otherExpRes.data ?? [],
+      recurring_savings:           recSavRes.data ?? [],
+      recurring_saving_overrides:  recSavOverridesRes.data ?? [],
     })
   }
 

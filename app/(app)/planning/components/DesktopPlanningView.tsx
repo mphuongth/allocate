@@ -4,24 +4,17 @@ import React, { useState, useMemo, useRef } from 'react'
 import {
   ChevronLeft, ChevronRight, ChevronDown, ChevronUp,
   Target, Shield, ShoppingCart,
-  MoreHorizontal, Check, RefreshCw, X, Plus, Settings,
+  MoreHorizontal, Check, RefreshCw, X, Plus, Settings, TrendingUp,
 } from 'lucide-react'
 import { useLocale } from 'next-intl'
 import { fmt, fmtCompact } from '@/lib/formatters'
 import FixedExpenseManager from './FixedExpenseManager'
+import RecurringSavingManager from './RecurringSavingManager'
+import { buildByGoal, resolveRecurringSavings, type GoalItem } from '@/lib/planning'
 import type {
   MonthlyPlan, FundInvestment, DirectSaving, FixedExpense,
-  InsuranceMember, OtherExpense, Fund, Goal,
+  InsuranceMember, OtherExpense, RecurringSaving, RecurringSavingOverride, Fund, Goal,
 } from '../PlanningClient'
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface GoalRow {
-  goalId: string
-  goalName: string
-  totalAllocated: number
-  items: { name: string; type: string; amount: number; isDCA?: boolean }[]
-}
 
 // ─── Pure helpers ─────────────────────────────────────────────────────────────
 
@@ -37,27 +30,6 @@ function getInsTotal(insuranceMembers: InsuranceMember[]) {
     if (m.excluded) return s
     return s + (m.monthlyOverride ?? Math.round(m.annual_payment_vnd / 12))
   }, 0)
-}
-
-function buildByGoal(investments: FundInvestment[], savings: DirectSaving[]): GoalRow[] {
-  const map = new Map<string, GoalRow>()
-  for (const inv of investments) {
-    const goalId = inv.goal_id ?? '__unassigned__'
-    const goalName = inv.savings_goals?.goal_name ?? 'Unassigned'
-    if (!map.has(goalId)) map.set(goalId, { goalId, goalName, totalAllocated: 0, items: [] })
-    const row = map.get(goalId)!
-    row.totalAllocated += inv.amount_vnd
-    row.items.push({ name: inv.funds?.name ?? 'Unknown fund', type: 'fund', amount: inv.amount_vnd, isDCA: inv.is_dca_seeded })
-  }
-  for (const sav of savings) {
-    const goalId = sav.goal_id ?? '__unassigned__'
-    const goalName = sav.savings_goals?.goal_name ?? 'Unassigned'
-    if (!map.has(goalId)) map.set(goalId, { goalId, goalName, totalAllocated: 0, items: [] })
-    const row = map.get(goalId)!
-    row.totalAllocated += sav.amount_vnd
-    row.items.push({ name: 'Direct savings', type: 'bank', amount: sav.amount_vnd })
-  }
-  return [...map.values()].sort((a, b) => a.goalName.localeCompare(b.goalName))
 }
 
 const SHORT_MONTHS_EN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
@@ -214,6 +186,71 @@ function DPlanRow({ primary, secondary, amount, muted, last, isVI, onSkip, onRes
   )
 }
 
+// ─── DGoalItemRow — line item under a goal (recurring savings get a kebab) ────
+
+function DGoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit }: {
+  item: GoalItem; isVI: boolean
+  onSkip: () => void; onRestore: () => void; onOverride: () => void; onEdit: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [menuPos, setMenuPos] = useState({ top: 0, right: 0 })
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const skipped = !!item.skipped
+
+  const typeLabel = item.type === 'fund'
+    ? 'Fund'
+    : item.isRecurring ? (isVI ? 'Tiết kiệm định kỳ' : 'Recurring saving') : (isVI ? 'Tiết kiệm' : 'Direct saving')
+
+  function openMenu() {
+    if (btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect()
+      setMenuPos({ top: r.bottom + 4, right: window.innerWidth - r.right })
+    }
+    setOpen(true)
+  }
+
+  return (
+    <tr style={{ borderBottom: '1px solid var(--c-line)', background: 'var(--c-card)', opacity: skipped ? 0.5 : 1 }}>
+      <td style={{ padding: '9px 16px 9px 44px', verticalAlign: 'middle' }}>
+        <div style={{ fontSize: 12, fontWeight: 500, textDecoration: skipped ? 'line-through' : 'none' }}>{item.name}</div>
+        <div style={{ fontSize: 10, color: item.overridden ? 'var(--c-navy)' : 'var(--c-muted)', marginTop: 1 }}>
+          {skipped ? (isVI ? 'Bỏ qua tháng này' : 'Skipped this month') : item.overridden ? (isVI ? 'Đã ghi đè tháng này' : 'Overridden this month') : typeLabel}
+          {item.isDCA && <span style={{ marginLeft: 6, padding: '1px 5px', borderRadius: 4, background: 'var(--c-navy-tint)', color: 'var(--c-navy)', fontSize: 9, fontWeight: 700 }}>DCA</span>}
+        </div>
+      </td>
+      <td style={{ padding: '9px 12px', textAlign: 'right', verticalAlign: 'middle' }}>
+        <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--c-muted)', fontVariantNumeric: 'tabular-nums', textDecoration: skipped ? 'line-through' : 'none' }}>{fmt(item.amount)}</span>
+      </td>
+      <td style={{ padding: '9px 8px 9px 4px', textAlign: 'right', verticalAlign: 'middle', width: 36 }}>
+        {item.isRecurring && (
+          <>
+            <button ref={btnRef} onClick={() => open ? setOpen(false) : openMenu()} aria-label="Saving actions" style={{ padding: 5, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, color: 'var(--c-muted)', display: 'flex' }}>
+              <MoreHorizontal size={14} />
+            </button>
+            {open && (
+              <>
+                <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 5 }} />
+                <div style={{ position: 'fixed', top: menuPos.top, right: menuPos.right, zIndex: 6, background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 8, boxShadow: '0 6px 20px rgba(15,23,42,0.12)', minWidth: 200, overflow: 'hidden' }}>
+                  {skipped ? (
+                    <MenuBtn icon={<Check size={13} />} label={isVI ? 'Bao gồm tháng này' : 'Include this month'} onClick={() => { onRestore(); setOpen(false) }} noBorder />
+                  ) : (
+                    <>
+                      <MenuBtn icon={<TrendingUp size={13} />} label={isVI ? 'Tiết kiệm thêm tháng này' : 'Save more this month'} onClick={() => { onOverride(); setOpen(false) }} />
+                      <MenuBtn icon={<EditIcon size={13} />} label={isVI ? 'Sửa kế hoạch định kỳ' : 'Edit recurring plan'} onClick={() => { onEdit(); setOpen(false) }} />
+                      {item.overridden && <MenuBtn icon={<RefreshCw size={13} />} label={isVI ? 'Khôi phục mặc định' : 'Restore default'} onClick={() => { onRestore(); setOpen(false) }} />}
+                      <MenuBtn icon={<X size={13} />} label={isVI ? 'Bỏ qua tháng này' : 'Skip this month'} onClick={() => { onSkip(); setOpen(false) }} danger noBorder />
+                    </>
+                  )}
+                </div>
+              </>
+            )}
+          </>
+        )}
+      </td>
+    </tr>
+  )
+}
+
 // ─── Stacked bar ─────────────────────────────────────────────────────────────
 
 function StackedBar({ segments, total }: { segments: { color: string; value: number }[]; total: number }) {
@@ -263,8 +300,8 @@ function AllocationCard({ salary, totalGoalAmount, fixedTotal, insTotal, otherTo
           <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ width: 8, height: 8, borderRadius: 2, background: r.c, flexShrink: 0 }} />
             <span style={{ flex: 1, fontSize: 12, color: 'rgba(255,255,255,0.7)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.l}</span>
-            <span style={{ fontSize: 12, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(r.v)}</span>
-            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', minWidth: 30, textAlign: 'right' }}>{pct(r.v)}</span>
+            <span style={{ fontSize: 12, fontWeight: 600, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{fmtCompact(r.v)}</span>
+            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', minWidth: 30, textAlign: 'right', flexShrink: 0 }}>{pct(r.v)}</span>
           </div>
         ))}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.12)', marginTop: 2 }}>
@@ -306,6 +343,8 @@ interface Props {
   fixedExpenses: FixedExpense[]
   insuranceMembers: InsuranceMember[]
   otherExpenses: OtherExpense[]
+  recurringSavings: RecurringSaving[]
+  recurringSavingOverrides: RecurringSavingOverride[]
   funds: Fund[]
   goals: Goal[]
   loading: boolean
@@ -322,7 +361,8 @@ interface Props {
 
 export default function DesktopPlanningView({
   month, year, plan, investments, savings, fixedExpenses, insuranceMembers,
-  otherExpenses, loading, onPrev, onNext, onToday, onPlanCreated, onPlanDeleted, onRefresh, onToast,
+  otherExpenses, recurringSavings, recurringSavingOverrides, goals, loading,
+  onPrev, onNext, onToday, onPlanCreated, onPlanDeleted, onRefresh, onToast,
 }: Props) {
   const locale = useLocale()
   const isVI = locale === 'vi'
@@ -330,7 +370,7 @@ export default function DesktopPlanningView({
   // ── Modal state ──
   const [showIncome, setShowIncome] = useState(false)
   const [showDelete, setShowDelete] = useState(false)
-  const [overrideModal, setOverrideModal] = useState<{ id: string; name: string; defaultAmount: number; type: 'fe' | 'ins' } | null>(null)
+  const [overrideModal, setOverrideModal] = useState<{ id: string; name: string; defaultAmount: number; type: 'fe' | 'ins' | 'rec' } | null>(null)
   const [overrideVal, setOverrideVal] = useState('')
   const [incomeVal, setIncomeVal] = useState('')
   const [saving, setSaving] = useState(false)
@@ -338,9 +378,21 @@ export default function DesktopPlanningView({
   const [otherDesc, setOtherDesc] = useState('')
   const [otherAmt, setOtherAmt] = useState('')
   const [showFEManage, setShowFEManage] = useState(false)
+  const [showRSManage, setShowRSManage] = useState(false)
 
   // ── Derived values ──
-  const byGoal = useMemo(() => buildByGoal(investments, savings), [investments, savings])
+  const goalsById = useMemo(() => new Map(goals.map(g => [g.goal_id, g.goal_name])), [goals])
+  const resolvedRecurring = useMemo(
+    () => resolveRecurringSavings(recurringSavings, recurringSavingOverrides),
+    [recurringSavings, recurringSavingOverrides],
+  )
+  const byGoal = useMemo(
+    () => buildByGoal(investments, savings, resolvedRecurring, goalsById, {
+      unallocated: isVI ? 'Chưa phân bổ' : 'Unallocated',
+      directSaving: isVI ? 'Tiết kiệm' : 'Direct savings',
+    }),
+    [investments, savings, resolvedRecurring, goalsById, isVI],
+  )
   const totalGoalAmount = byGoal.reduce((s, g) => s + g.totalAllocated, 0)
   const fixedTotal = useMemo(() => getFixedTotal(fixedExpenses), [fixedExpenses])
   const insTotal   = useMemo(() => getInsTotal(insuranceMembers), [insuranceMembers])
@@ -436,6 +488,26 @@ export default function DesktopPlanningView({
     onRefresh(); onToast(isVI ? `Đã khôi phục ${m.member_name}` : `Restored ${m.member_name}`)
   }
 
+  async function handleRecSkip(item: { recurringId?: string; name: string }) {
+    if (!plan || !item.recurringId) return
+    await fetch(`/api/v1/monthly-plans/${plan.id}/recurring-saving-overrides`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ recurring_saving_id: item.recurringId, monthly_amount_override_vnd: 0 }),
+    })
+    onRefresh(); onToast(isVI ? `Đã bỏ qua ${item.name}` : `Skipped ${item.name}`)
+  }
+
+  async function handleRecRestore(item: { recurringId?: string; name: string }) {
+    if (!plan || !item.recurringId) return
+    const res = await fetch(`/api/v1/monthly-plans/${plan.id}/recurring-saving-overrides`)
+    if (!res.ok) return
+    const overrides: Array<{ id: string; recurring_saving_id: string }> = await res.json()
+    const match = overrides.find(o => o.recurring_saving_id === item.recurringId)
+    if (match) await fetch(`/api/v1/monthly-plans/${plan.id}/recurring-saving-overrides/${match.id}`, { method: 'DELETE' })
+    onRefresh(); onToast(isVI ? `Đã khôi phục ${item.name}` : `Restored ${item.name}`)
+  }
+
   async function handleSaveOverride() {
     if (!overrideModal || !plan) return
     const num = Number(overrideVal)
@@ -444,10 +516,14 @@ export default function DesktopPlanningView({
     try {
       const url = overrideModal.type === 'fe'
         ? `/api/v1/monthly-plans/${plan.id}/fixed-expense-overrides`
-        : `/api/v1/monthly-plans/${plan.id}/insurance-overrides`
+        : overrideModal.type === 'rec'
+          ? `/api/v1/monthly-plans/${plan.id}/recurring-saving-overrides`
+          : `/api/v1/monthly-plans/${plan.id}/insurance-overrides`
       const body = overrideModal.type === 'fe'
         ? { fixed_expense_id: overrideModal.id, monthly_amount_override_vnd: num }
-        : { member_id: overrideModal.id, monthly_amount_override_vnd: num }
+        : overrideModal.type === 'rec'
+          ? { recurring_saving_id: overrideModal.id, monthly_amount_override_vnd: num }
+          : { member_id: overrideModal.id, monthly_amount_override_vnd: num }
       await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       setOverrideModal(null)
       onRefresh(); onToast(isVI ? 'Đã lưu' : 'Saved')
@@ -605,7 +681,22 @@ export default function DesktopPlanningView({
               </div>
 
               {/* By goal */}
-              <PlanTable icon={<Target size={15} />} iconColor="var(--c-navy)" title={isVI ? 'Theo mục tiêu' : 'By goal'} total={totalGoalAmount}>
+              <PlanTable
+                icon={<Target size={15} />}
+                iconColor="var(--c-navy)"
+                title={isVI ? 'Theo mục tiêu' : 'By goal'}
+                total={totalGoalAmount}
+                action={
+                  <button
+                    data-testid="desktop-manage-savings"
+                    onClick={() => setShowRSManage(true)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', fontSize: 12, fontWeight: 600, color: 'var(--c-navy)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', borderRadius: 8 }}
+                  >
+                    <Settings size={14} />
+                    {isVI ? 'Quản lý tiết kiệm' : 'Manage savings'}
+                  </button>
+                }
+              >
                 <THead col1={isVI ? 'Mục tiêu / Khoản' : 'Goal / Allocation'} col2={isVI ? 'Tháng này' : 'This month'} />
                 <tbody>
                   {byGoal.length === 0 ? (
@@ -628,19 +719,18 @@ export default function DesktopPlanningView({
                         <td />
                       </tr>
                       {g.items.map((inv, ii) => (
-                        <tr key={g.goalId + '-' + ii} style={{ borderBottom: '1px solid var(--c-line)', background: 'var(--c-card)' }}>
-                          <td style={{ padding: '9px 16px 9px 44px', verticalAlign: 'middle' }}>
-                            <div style={{ fontSize: 12, fontWeight: 500 }}>{inv.name}</div>
-                            <div style={{ fontSize: 10, color: 'var(--c-muted)', textTransform: 'capitalize', marginTop: 1 }}>
-                              {inv.type}
-                              {inv.isDCA && <span style={{ marginLeft: 6, padding: '1px 5px', borderRadius: 4, background: 'var(--c-navy-tint)', color: 'var(--c-navy)', fontSize: 9, fontWeight: 700 }}>DCA</span>}
-                            </div>
-                          </td>
-                          <td style={{ padding: '9px 12px', textAlign: 'right', verticalAlign: 'middle' }}>
-                            <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--c-muted)', fontVariantNumeric: 'tabular-nums' }}>{fmt(inv.amount)}</span>
-                          </td>
-                          <td />
-                        </tr>
+                        <DGoalItemRow
+                          key={g.goalId + '-' + ii}
+                          item={inv}
+                          isVI={isVI}
+                          onSkip={() => handleRecSkip(inv)}
+                          onRestore={() => handleRecRestore(inv)}
+                          onEdit={() => setShowRSManage(true)}
+                          onOverride={() => {
+                            setOverrideModal({ id: inv.recurringId!, name: inv.name, defaultAmount: inv.baseAmount ?? inv.amount, type: 'rec' })
+                            setOverrideVal(String(inv.baseAmount ?? inv.amount))
+                          }}
+                        />
                       ))}
                     </React.Fragment>
                   ))}
@@ -877,6 +967,12 @@ export default function DesktopPlanningView({
       {showFEManage && (
         <DModal onClose={() => setShowFEManage(false)} title={isVI ? 'Quản lý chi phí cố định' : 'Manage fixed expenses'} width={460}>
           <FixedExpenseManager onChange={onRefresh} onToast={onToast} />
+        </DModal>
+      )}
+
+      {showRSManage && (
+        <DModal onClose={() => setShowRSManage(false)} title={isVI ? 'Tiết kiệm định kỳ' : 'Recurring savings'} width={460}>
+          <RecurringSavingManager goals={goals} onChange={onRefresh} onToast={onToast} />
         </DModal>
       )}
     </div>
