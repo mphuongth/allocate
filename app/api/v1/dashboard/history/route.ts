@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { rangeStartDate } from '@/lib/historyRange'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,13 +12,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const range = searchParams.get('range') ?? 'all'
 
-  const fromDate = (() => {
-    const now = new Date()
-    if (range === '6m') { now.setMonth(now.getMonth() - 6); return now.toISOString().split('T')[0] }
-    if (range === '1y') { now.setFullYear(now.getFullYear() - 1); return now.toISOString().split('T')[0] }
-    if (range === '3y') { now.setFullYear(now.getFullYear() - 3); return now.toISOString().split('T')[0] }
-    return null
-  })()
+  const fromDate = rangeStartDate(range)
 
   let snapshotQuery = supabase
     .from('net_worth_snapshots')
