@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ChevronDown, ChevronUp, ChevronRight, Target, Building, CircleDollarSign, TrendingUp, BarChart2, Clock, ArrowDownToLine, ArrowDownRight, ArrowRight, Wallet, Check, X } from 'lucide-react'
+import { ChevronDown, ChevronUp, ChevronRight, Target, Building, Coins, TrendingUp, BarChart2, Clock, ArrowDownToLine, ArrowDownRight, ArrowRight, Wallet, Check, X } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useLocale } from 'next-intl'
 import type { FundBreakdownItem, NonFundUnallocatedItem } from '../DashboardClient'
@@ -27,7 +27,7 @@ function DesktopAssignPicker({
   actionValue: number
   actionType: string
 }) {
-  const ItemIcon = { fund: TrendingUp, bank: Building, gold: CircleDollarSign, stock: BarChart2 }[actionType] ?? TrendingUp
+  const ItemIcon = { fund: TrendingUp, bank: Building, gold: Coins, stock: BarChart2 }[actionType] ?? TrendingUp
   const selectedGoal = goals.find((g) => g.id === selected)
 
   if (success) return (
@@ -120,13 +120,13 @@ interface GoalOption {
 const TYPE_ICON: Record<string, React.ElementType> = {
   fund:  TrendingUp,
   bank:  Building,
-  gold:  CircleDollarSign,
+  gold:  Coins,
   stock: BarChart2,
 }
 const TYPE_COLOR: Record<string, string> = {
   fund:  '#2563eb',
   bank:  '#047857',
-  gold:  '#d97706',
+  gold:  'var(--c-fund-gold)',
   stock: '#7c3aed',
 }
 

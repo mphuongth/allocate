@@ -19,7 +19,7 @@ const ASSET_BADGE: Record<AssetType, string> = {
   fund: '#2563eb',
   bank: '#047857',
   stock: '#7c3aed',
-  gold: '#b45309',
+  gold: 'var(--c-fund-gold)',
 }
 
 interface Props {

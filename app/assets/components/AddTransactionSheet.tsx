@@ -106,7 +106,7 @@ const labelStyle: React.CSSProperties = {
 const ASSET_TYPES = [
   { v: 'fund', Icon: TrendingUp, enLabel: 'Fund', viLabel: 'Quỹ',       color: '#2563eb', bg: 'rgba(37,99,235,0.10)' },
   { v: 'bank', Icon: Building2,  enLabel: 'Bank', viLabel: 'Ngân hàng', color: '#047857', bg: 'rgba(4,120,87,0.10)' },
-  { v: 'gold', Icon: Coins,      enLabel: 'Gold', viLabel: 'Vàng',      color: '#b45309', bg: 'rgba(180,83,9,0.10)' },
+  { v: 'gold', Icon: Coins,      enLabel: 'Gold', viLabel: 'Vàng',      color: 'var(--c-fund-gold)', bg: 'rgba(180,83,9,0.10)' },
 ] as const
 
 type AssetType = typeof ASSET_TYPES[number]['v']

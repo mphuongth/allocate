@@ -3,14 +3,14 @@
 // chrome, so the icons, colours, deadline math and — most importantly — the
 // investment-row valuation live here to stay in sync.
 
-import { TrendingUp, Building, CircleDollarSign, BarChart2, Target } from 'lucide-react'
+import { TrendingUp, Building, Coins, BarChart2, Target } from 'lucide-react'
 import { fmtCompact } from '@/lib/formatters'
 import type { FundBreakdownItem } from '../DashboardClient'
 
 export const GD_COLORS: Record<string, string> = {
   fund: '#2563eb',
   bank: '#047857',
-  gold: '#d97706',
+  gold: 'var(--c-fund-gold)',
   stock: '#7c3aed',
 }
 
@@ -24,7 +24,7 @@ export function calcDeadlineMonths(targetDate: string | null): number {
 export function TypeIcon({ type, size = 16 }: { type: string; size?: number }) {
   if (type === 'fund') return <TrendingUp size={size} />
   if (type === 'bank') return <Building size={size} />
-  if (type === 'gold') return <CircleDollarSign size={size} />
+  if (type === 'gold') return <Coins size={size} />
   return <BarChart2 size={size} />
 }
 
