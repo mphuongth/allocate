@@ -563,7 +563,9 @@
     "navInfoTitle": "Về cập nhật NAV",
     "navInfoDesc": "NAV (Giá trị tài sản ròng) được cập nhật hàng ngày bởi các công ty quản lý quỹ. Nhấn \"{refreshNav}\" để lấy giá mới nhất. Giá thường được cập nhật sau khi thị trường đóng cửa.",
     "searchPlaceholder": "Tìm theo tên hoặc mã quỹ...",
-    "fundsCount": "{count} quỹ"
+    "fundsCount": "{count} quỹ",
+    "dcaGoalLabel": "Phân bổ vào",
+    "dcaGoalUnallocated": "Chưa phân bổ"
   },
   "planning": {
     "title": "Kế hoạch Tháng",
