@@ -143,6 +143,45 @@ test('mobile funds DCA toggle shows amount input when enabled', async ({ page })
   await expect(card.getByPlaceholder(/amount/i)).toBeVisible({ timeout: 5_000 })
 })
 
+test('mobile funds DCA shows goal target dropdown when enabled', async ({ page }) => {
+  const fund = await api.createFund({ name: 'E2E DCA Goal Fund', code: 'E2EDCG', fund_type: 'equity', nav: 15000 })
+  cleanup.add(() => api.deleteFund(fund.id))
+
+  await page.goto('/funds')
+  await page.waitForLoadState('networkidle')
+
+  const mf = page.getByTestId('mobile-funds')
+  const card = mf.getByTestId(`fund-card-${fund.id}`)
+  await card.getByRole('button', { name: /dca/i }).click()
+  // Target picker appears; defaults to Unallocated
+  const select = card.getByTestId(`dca-goal-${fund.id}`)
+  await expect(select).toBeVisible({ timeout: 5_000 })
+  await expect(select).toHaveValue('')
+})
+
+test('mobile funds DCA goal selection persists', async ({ page }) => {
+  const goal = await api.createGoal({ goal_name: 'E2E Mobile DCA Goal Target' })
+  cleanup.add(() => api.deleteGoal(goal.goal_id))
+  const fund = await api.createFund({ name: 'E2E DCA Persist Fund', code: 'E2EDCP', fund_type: 'equity', nav: 15000 })
+  cleanup.add(() => api.deleteFund(fund.id))
+
+  await page.goto('/funds')
+  await page.waitForLoadState('networkidle')
+
+  const mf = page.getByTestId('mobile-funds')
+  const card = mf.getByTestId(`fund-card-${fund.id}`)
+  await card.getByRole('button', { name: /dca/i }).click()
+  const select = card.getByTestId(`dca-goal-${fund.id}`)
+  await expect(select).toBeVisible({ timeout: 5_000 })
+  await select.selectOption(goal.goal_id)
+
+  // Persisted: reload and confirm the goal is still selected
+  await page.reload()
+  await page.waitForLoadState('networkidle')
+  const cardAfter = page.getByTestId('mobile-funds').getByTestId(`fund-card-${fund.id}`)
+  await expect(cardAfter.getByTestId(`dca-goal-${fund.id}`)).toHaveValue(goal.goal_id, { timeout: 8_000 })
+})
+
 test('mobile funds shows empty state when no funds exist', async ({ page }) => {
   // We test the empty-data scenario by verifying the page loads without crashing, then rely on the no-results test above for the UI state
   await page.goto('/funds')

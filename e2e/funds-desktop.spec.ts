@@ -144,3 +144,40 @@ test('desktop funds DCA toggle enables inline amount input', async ({ page }) =>
   await row.getByTestId('dca-toggle').click()
   await expect(row.getByPlaceholder(/amount|số tiền/i)).toBeVisible({ timeout: 5_000 })
 })
+
+test('desktop funds DCA shows goal target dropdown when enabled', async ({ page }) => {
+  const fund = await api.createFund({ name: 'E2E Desktop DCA Goal', code: 'DTDCG1', fund_type: 'equity', nav: 15000 })
+  cleanup.add(() => api.deleteFund(fund.id))
+
+  await page.goto('/funds')
+  await page.waitForLoadState('networkidle')
+
+  const table = page.getByTestId('desktop-funds-table')
+  const row = table.getByTestId(`fund-row-${fund.id}`)
+  await row.getByTestId('dca-toggle').click()
+  const select = row.getByTestId(`dca-goal-${fund.id}`)
+  await expect(select).toBeVisible({ timeout: 5_000 })
+  await expect(select).toHaveValue('')
+})
+
+test('desktop funds DCA goal selection persists across reload', async ({ page }) => {
+  const goal = await api.createGoal({ goal_name: 'E2E Desktop DCA Goal Target' })
+  cleanup.add(() => api.deleteGoal(goal.goal_id))
+  const fund = await api.createFund({ name: 'E2E Desktop DCA Persist', code: 'DTDCP1', fund_type: 'equity', nav: 15000 })
+  cleanup.add(() => api.deleteFund(fund.id))
+
+  await page.goto('/funds')
+  await page.waitForLoadState('networkidle')
+
+  const table = page.getByTestId('desktop-funds-table')
+  const row = table.getByTestId(`fund-row-${fund.id}`)
+  await row.getByTestId('dca-toggle').click()
+  const select = row.getByTestId(`dca-goal-${fund.id}`)
+  await expect(select).toBeVisible({ timeout: 5_000 })
+  await select.selectOption(goal.goal_id)
+
+  await page.reload()
+  await page.waitForLoadState('networkidle')
+  const rowAfter = page.getByTestId('desktop-funds-table').getByTestId(`fund-row-${fund.id}`)
+  await expect(rowAfter.getByTestId(`dca-goal-${fund.id}`)).toHaveValue(goal.goal_id, { timeout: 8_000 })
+})

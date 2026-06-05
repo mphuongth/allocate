@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 
 const FUND_TYPES = ['balanced', 'equity', 'debt', 'gold'] as const
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export async function GET() {
   const supabase = await createSupabaseServerClient()
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json()
-  const { name, code, fund_type, nav, nav_source_url, is_dca, dca_monthly_amount_vnd } = body
+  const { name, code, fund_type, nav, nav_source_url, is_dca, dca_monthly_amount_vnd, dca_goal_id } = body
 
   // Validate required fields
   if (!name || typeof name !== 'string' || name.trim().length === 0) {
@@ -59,6 +60,9 @@ export async function POST(request: NextRequest) {
   if (!nav || isNaN(navNum) || navNum < 0.01) {
     return NextResponse.json({ error: 'NAV must be greater than 0' }, { status: 400 })
   }
+  if (dca_goal_id != null && dca_goal_id !== '' && (typeof dca_goal_id !== 'string' || !UUID_RE.test(dca_goal_id))) {
+    return NextResponse.json({ error: 'Invalid goal' }, { status: 400 })
+  }
 
   const { data: fund, error } = await supabase
     .from('funds')
@@ -71,6 +75,8 @@ export async function POST(request: NextRequest) {
       nav_source_url: typeof nav_source_url === 'string' && nav_source_url.trim() ? nav_source_url.trim() : null,
       is_dca: is_dca === true,
       dca_monthly_amount_vnd: is_dca === true && dca_monthly_amount_vnd ? Number(dca_monthly_amount_vnd) : null,
+      // Goal target only applies while DCA is on; cleared otherwise.
+      dca_goal_id: is_dca === true && dca_goal_id ? dca_goal_id : null,
     })
     .select()
     .single()

@@ -563,7 +563,9 @@
     "navInfoTitle": "About NAV Updates",
     "navInfoDesc": "NAV (Net Asset Value) is updated daily by fund providers. Click \"{refreshNav}\" to fetch the latest prices. Prices are typically updated after market close.",
     "searchPlaceholder": "Search by fund name or code...",
-    "fundsCount": "{count, plural, one {# fund} other {# funds}}"
+    "fundsCount": "{count, plural, one {# fund} other {# funds}}",
+    "dcaGoalLabel": "Allocate to",
+    "dcaGoalUnallocated": "Unallocated"
   },
   "planning": {
     "title": "Monthly Plan",

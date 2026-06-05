@@ -39,9 +39,12 @@ type Fund = {
   nav_source_url: string | null
   is_dca: boolean
   dca_monthly_amount_vnd: number | null
+  dca_goal_id: string | null
   created_at: string
   updated_at: string
 }
+
+type Goal = { goal_id: string; goal_name: string }
 
 type Toast = { id: number; message: string; type: 'success' | 'error' }
 type SortKey = 'code' | 'nav' | 'name'
@@ -314,15 +317,19 @@ function FundForm({ existing, title, onClose, onSave, saving, formError }: {
 
 // ─── FundCard ────────────────────────────────────────────────────────────────
 
-function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, onEdit, onDelete, onToggleDca, onSaveDcaAmount, setDcaEditId, setDcaEditValue }: {
+function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel, unallocatedLabel, onEdit, onDelete, onToggleDca, onSaveDcaAmount, onGoalChange, setDcaEditId, setDcaEditValue }: {
   fund: Fund
   dcaEditId: string | null
   dcaEditValue: string
   togglingIds: Set<string>
+  goals: Goal[]
+  goalLabel: string
+  unallocatedLabel: string
   onEdit: () => void
   onDelete: () => void
   onToggleDca: () => void
   onSaveDcaAmount: (val: string) => void
+  onGoalChange: (goalId: string | null) => void
   setDcaEditId: (id: string | null) => void
   setDcaEditValue: (v: string) => void
 }) {
@@ -379,7 +386,7 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, onEdit, onDelete
           )}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <span style={{ fontSize: 10, color: 'var(--c-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>DCA</span>
           <button
             type="button"
@@ -425,6 +432,26 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, onEdit, onDelete
               </button>
             )
           )}
+
+          {/* Goal target — recurring contributions for this fund count toward this goal */}
+          {fund.is_dca && (
+            <select
+              data-testid={`dca-goal-${fund.id}`}
+              value={fund.dca_goal_id ?? ''}
+              title={goalLabel}
+              aria-label={goalLabel}
+              onChange={(e) => onGoalChange(e.target.value || null)}
+              style={{
+                fontSize: 13, fontWeight: 500, padding: '3px 6px', maxWidth: 130,
+                border: '1px solid var(--c-line)', borderRadius: 6,
+                background: 'var(--c-card)', color: 'var(--c-muted)',
+                fontFamily: 'inherit', cursor: 'pointer', appearance: 'none', outline: 'none',
+              }}
+            >
+              {goals.map((g) => <option key={g.goal_id} value={g.goal_id}>{g.goal_name}</option>)}
+              <option value="">{unallocatedLabel}</option>
+            </select>
+          )}
         </div>
       </div>
     </div>
@@ -443,6 +470,7 @@ export default function MobileFundLibraryView() {
   const [loading, setLoading] = useState(() => !getCache())
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [goals, setGoals] = useState<Goal[]>([])
 
   // ── UI state ──────────────────────────────────────────────────────────────
   const [query, setQuery] = useState('')
@@ -493,6 +521,16 @@ export default function MobileFundLibraryView() {
   }, [])
 
   useEffect(() => { loadFunds() }, [loadFunds])
+
+  // Load savings goals once for the DCA target dropdown.
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/v1/savings-goals')
+      .then((res) => res.ok ? res.json() : { goals: [] })
+      .then(({ goals: data }) => { if (!cancelled) setGoals(data ?? []) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
 
   useEffect(() => {
     const handler = () => { if (!_suppressNotify) loadFunds({ force: true }) }
@@ -664,6 +702,24 @@ export default function MobileFundLibraryView() {
     }
   }
 
+  async function handleSetDcaGoal(fund: Fund, goalId: string | null) {
+    const prevGoalId = fund.dca_goal_id
+    setFunds((prev) => prev.map((f) => f.id === fund.id ? { ...f, dca_goal_id: goalId } : f))
+    setTogglingIds((prev) => new Set([...prev, fund.id]))
+    try {
+      const res = await fetch(`/api/funds/${fund.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: fund.name, code: fund.code, fund_type: fund.fund_type, nav: fund.nav, nav_source_url: fund.nav_source_url, is_dca: true, dca_monthly_amount_vnd: fund.dca_monthly_amount_vnd, dca_goal_id: goalId }) })
+      if (!res.ok) throw new Error()
+      bustCache()
+      await loadFunds({ force: true })
+      notifyFundsUpdated()
+    } catch {
+      setFunds((prev) => prev.map((f) => f.id === fund.id ? { ...f, dca_goal_id: prevGoalId } : f))
+      addToast('Failed to update goal', 'error')
+    } finally {
+      setTogglingIds((prev) => { const s = new Set(prev); s.delete(fund.id); return s })
+    }
+  }
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -772,10 +828,14 @@ export default function MobileFundLibraryView() {
                 dcaEditId={dcaEditId}
                 dcaEditValue={dcaEditValue}
                 togglingIds={togglingIds}
+                goals={goals}
+                goalLabel={t('dcaGoalLabel')}
+                unallocatedLabel={t('dcaGoalUnallocated')}
                 onEdit={() => { setFormError(null); setEditFund(fund) }}
                 onDelete={() => setDeleteFund(fund)}
                 onToggleDca={() => handleToggleDca(fund)}
                 onSaveDcaAmount={(val) => handleSaveDcaAmount(fund, val)}
+                onGoalChange={(goalId) => handleSetDcaGoal(fund, goalId)}
                 setDcaEditId={setDcaEditId}
                 setDcaEditValue={setDcaEditValue}
               />
