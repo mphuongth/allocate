@@ -39,6 +39,42 @@ export async function refreshPrices(): Promise<void> {
   }
 }
 
+// Fetch the most recent price-sync time for the current user — the latest
+// updated_at across their funds (NAV) and gold price. Returns an ISO string, or
+// null when nothing has synced yet or the request fails.
+export async function fetchLastSync(): Promise<string | null> {
+  try {
+    const res = await fetch('/api/v1/prices/last-sync', { cache: 'no-store' })
+    if (!res.ok) return null
+    const json = await res.json()
+    return json?.lastSync ?? null
+  } catch {
+    return null
+  }
+}
+
+// Format a price-sync timestamp into a compact, bilingual relative phrase for
+// the Price sync card (e.g. "2h ago" / "2 giờ trước"). `now` is injectable for
+// deterministic tests. `undefined` renders a loading placeholder; `null` (never
+// synced) renders a distinct label.
+export function formatLastSync(
+  iso: string | null | undefined,
+  locale: string,
+  now: number = Date.now(),
+): string {
+  const isVI = locale === 'vi'
+  if (iso === undefined) return '…'
+  if (iso === null) return isVI ? 'Chưa đồng bộ' : 'Never'
+
+  const mins = Math.floor((now - new Date(iso).getTime()) / 60000)
+  if (mins < 1) return isVI ? 'vừa xong' : 'just now'
+  if (mins < 60) return isVI ? `${mins} phút trước` : `${mins}m ago`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return isVI ? `${hours} giờ trước` : `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  return isVI ? `${days} ngày trước` : `${days}d ago`
+}
+
 // Prefetch the dashboard overview for the report sheet. Returns null on any
 // failure (the export path re-fetches and surfaces the error itself).
 export async function fetchOverview(): Promise<DashboardData | null> {

@@ -5,6 +5,8 @@ import {
   refreshPrices,
   fetchOverview,
   exportPortfolioReport,
+  fetchLastSync,
+  formatLastSync,
 } from '../settingsShared'
 
 const downloadPortfolioPDF = vi.fn()
@@ -78,6 +80,72 @@ describe('fetchOverview', () => {
   it('returns null when the request throws', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network')))
     expect(await fetchOverview()).toBeNull()
+  })
+})
+
+describe('fetchLastSync', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it('returns the lastSync timestamp when the response is ok', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ lastSync: '2026-06-05T10:00:00.000Z' }),
+    }))
+    expect(await fetchLastSync()).toBe('2026-06-05T10:00:00.000Z')
+  })
+
+  it('returns null when the response carries no timestamp', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ lastSync: null }),
+    }))
+    expect(await fetchLastSync()).toBeNull()
+  })
+
+  it('returns null on a non-ok response', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }))
+    expect(await fetchLastSync()).toBeNull()
+  })
+
+  it('returns null when the request throws', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network')))
+    expect(await fetchLastSync()).toBeNull()
+  })
+})
+
+describe('formatLastSync', () => {
+  // Fixed reference instant so relative output is deterministic.
+  const now = new Date('2026-06-05T12:00:00.000Z').getTime()
+  const ago = (ms: number) => new Date(now - ms).toISOString()
+
+  it('shows a loading placeholder before the timestamp has loaded', () => {
+    expect(formatLastSync(undefined, 'en', now)).toBe('…')
+    expect(formatLastSync(undefined, 'vi', now)).toBe('…')
+  })
+
+  it('shows a never-synced label when there is no timestamp', () => {
+    expect(formatLastSync(null, 'en', now)).toBe('Never')
+    expect(formatLastSync(null, 'vi', now)).toBe('Chưa đồng bộ')
+  })
+
+  it('shows "just now" for under a minute', () => {
+    expect(formatLastSync(ago(30 * 1000), 'en', now)).toBe('just now')
+    expect(formatLastSync(ago(30 * 1000), 'vi', now)).toBe('vừa xong')
+  })
+
+  it('formats minutes', () => {
+    expect(formatLastSync(ago(5 * 60 * 1000), 'en', now)).toBe('5m ago')
+    expect(formatLastSync(ago(5 * 60 * 1000), 'vi', now)).toBe('5 phút trước')
+  })
+
+  it('formats hours', () => {
+    expect(formatLastSync(ago(2 * 60 * 60 * 1000), 'en', now)).toBe('2h ago')
+    expect(formatLastSync(ago(2 * 60 * 60 * 1000), 'vi', now)).toBe('2 giờ trước')
+  })
+
+  it('formats days', () => {
+    expect(formatLastSync(ago(3 * 24 * 60 * 60 * 1000), 'en', now)).toBe('3d ago')
+    expect(formatLastSync(ago(3 * 24 * 60 * 60 * 1000), 'vi', now)).toBe('3 ngày trước')
   })
 })
 

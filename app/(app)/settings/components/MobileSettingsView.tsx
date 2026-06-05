@@ -13,7 +13,7 @@ import { toast } from 'sonner'
 import { useNavigation } from '@/app/components/navigation/NavigationContext'
 import DownloadReportSheet from '@/app/assets/components/DownloadReportSheet'
 import type { DashboardData } from '@/app/assets/DashboardClient'
-import { clearAppCaches, setLocaleCookie, refreshPrices, fetchOverview, exportPortfolioReport } from '../settingsShared'
+import { clearAppCaches, setLocaleCookie, refreshPrices, fetchOverview, exportPortfolioReport, fetchLastSync, formatLastSync } from '../settingsShared'
 
 interface Props {
   email: string
@@ -379,7 +379,9 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
 
   const [syncing, setSyncing] = useState(false)
   const [syncDone, setSyncDone] = useState(false)
-  const [lastSync, setLastSync] = useState('2h')
+  // undefined = loading, null = never synced, otherwise the last-sync ISO time.
+  const [lastSyncIso, setLastSyncIso] = useState<string | null | undefined>(undefined)
+  useEffect(() => { fetchLastSync().then(setLastSyncIso) }, [])
 
   const isVI = locale === 'vi'
 
@@ -402,7 +404,7 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
     await refreshPrices()
     setSyncing(false)
     setSyncDone(true)
-    setLastSync(isVI ? 'Vừa xong' : 'Just now')
+    setLastSyncIso(new Date().toISOString())
     setTimeout(() => setSyncDone(false), 3000)
   }
 
@@ -526,7 +528,7 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
                     ? (isVI ? 'Đang tải...' : 'Updating…')
                     : syncDone
                     ? (isVI ? '✓ Đã cập nhật' : '✓ Updated')
-                    : (isVI ? `Lần cuối: ${lastSync} trước` : `Last synced: ${lastSync} ago`)}
+                    : `${isVI ? 'Lần cuối: ' : 'Last synced: '}${formatLastSync(lastSyncIso, locale)}`}
                 </div>
               </div>
               <button
