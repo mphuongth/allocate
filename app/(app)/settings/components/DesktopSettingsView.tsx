@@ -8,7 +8,7 @@ import { useTheme, type ThemeChoice } from '@/app/components/ThemeProvider'
 import { useNavigation } from '@/app/components/navigation/NavigationContext'
 import {
   Sun, Moon, Settings, RefreshCw, TrendingUp,
-  CircleDollarSign, LogOut, Download, X, Check, Edit2,
+  Coins, LogOut, Download, X, Check, Edit2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import DownloadReportSheet from '@/app/assets/components/DownloadReportSheet'
@@ -424,7 +424,7 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
               <div style={{ display: 'grid', gap: 10, paddingTop: 12, borderTop: '1px solid var(--c-line)' }}>
                 {[
                   { icon: <TrendingUp size={13} />, color: '#2563eb', label: isVI ? 'NAV quỹ đầu tư' : 'Fund NAV',         note: isVI ? 'Tự động đồng bộ lúc 18:00' : 'Auto-syncs daily at 6:00 PM' },
-                  { icon: <CircleDollarSign size={13} />, color: '#d97706', label: isVI ? 'Giá vàng DOJI' : 'Gold price (DOJI)', note: isVI ? 'Tự động đồng bộ lúc 09:00' : 'Auto-syncs daily at 9:00 AM' },
+                  { icon: <Coins size={13} />, color: 'var(--c-fund-gold)', label: isVI ? 'Giá vàng DOJI' : 'Gold price (DOJI)', note: isVI ? 'Tự động đồng bộ lúc 09:00' : 'Auto-syncs daily at 9:00 AM' },
                 ].map((row, i) => (
                   <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <div style={{ width: 28, height: 28, borderRadius: 7, background: 'var(--c-card-2)', color: row.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>

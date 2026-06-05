@@ -7,7 +7,7 @@ import { createBrowserClient } from '@supabase/ssr'
 import { useTheme, type ThemeChoice } from '@/app/components/ThemeProvider'
 import {
   Globe, Sun, Wallet, Download, RefreshCw,
-  TrendingUp, CircleDollarSign, LogOut, ChevronRight, Check,
+  TrendingUp, Coins, LogOut, ChevronRight, Check,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useNavigation } from '@/app/components/navigation/NavigationContext'
@@ -559,8 +559,8 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
                   note: isVI ? 'Tự động đồng bộ lúc 18:00 mỗi ngày' : 'Auto-syncs daily at 6:00 PM',
                 },
                 {
-                  icon: <CircleDollarSign size={14} />,
-                  color: '#d97706',
+                  icon: <Coins size={14} />,
+                  color: 'var(--c-fund-gold)',
                   label: isVI ? 'Giá vàng DOJI' : 'Gold price (DOJI)',
                   note: isVI ? 'Tự động đồng bộ lúc 09:00 mỗi ngày' : 'Auto-syncs daily at 9:00 AM',
                 },

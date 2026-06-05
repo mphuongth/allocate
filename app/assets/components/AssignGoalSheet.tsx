@@ -36,7 +36,7 @@ const TYPE_ICON: Record<string, React.ElementType> = {
 const TYPE_COLOR: Record<string, string> = {
   fund:  '#2563eb',
   bank:  '#047857',
-  gold:  '#d97706',
+  gold:  'var(--c-fund-gold)',
   stock: '#7c3aed',
 }
 
