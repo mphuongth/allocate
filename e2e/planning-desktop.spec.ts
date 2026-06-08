@@ -158,8 +158,9 @@ test('desktop planning: a DCA fund is grouped under its goal with a Buy action a
   const desktop = page.getByTestId('desktop-planning')
 
   // The DCA fund is seeded under its goal (goal_id fix) and shows a Record buy pill.
+  // CI runs the app in Vietnamese, so match the aria-label bilingually.
   await expect(desktop.getByText('E2E DCA Fund')).toBeVisible({ timeout: 8_000 })
-  await expect(desktop.getByRole('button', { name: /Record buy/i }).first()).toBeVisible()
+  await expect(desktop.getByRole('button', { name: /Record buy|Ghi nhận mua/i }).first()).toBeVisible()
   // The allocation card shows the contributed-this-month footer.
   await expect(desktop.getByTestId('planning-contributed')).toBeVisible()
 })
