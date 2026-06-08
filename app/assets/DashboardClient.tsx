@@ -17,6 +17,7 @@ import AssignGoalSheet from './components/AssignGoalSheet'
 import DownloadReportSheet from './components/DownloadReportSheet'
 import AddTransactionSheet from './components/AddTransactionSheet'
 import RecentActivityCard from './components/RecentActivityCard'
+import { loadOverview, overviewErrorText, getCachedOverview, setCachedOverview } from './overviewData'
 
 import TransactionHistorySheet from './components/TransactionHistorySheet'
 import DesktopNetWorthPanel from './components/DesktopNetWorthPanel'
@@ -97,24 +98,6 @@ export interface DashboardData {
   byType: { bank: number; gold: number; stock: number }
   goldUnits?: number
   insurance: InsuranceData[]
-}
-
-const OVERVIEW_CACHE_TTL = 2 * 60 * 1000 // 2 minutes
-
-function overviewCacheKey(userId: string) { return `dashboardOverviewCache_${userId}` }
-
-function getCachedOverview(userId: string): DashboardData | null {
-  try {
-    const raw = localStorage.getItem(overviewCacheKey(userId))
-    if (!raw) return null
-    const { data, ts } = JSON.parse(raw)
-    if (Date.now() - ts > OVERVIEW_CACHE_TTL) return null
-    return data
-  } catch { return null }
-}
-
-function setCachedOverview(userId: string, data: DashboardData) {
-  try { localStorage.setItem(overviewCacheKey(userId), JSON.stringify({ data, ts: Date.now() })) } catch { /* ignore */ }
 }
 
 // Fetch fund detail (purchase history) from investment_transactions
@@ -263,24 +246,28 @@ export default function DashboardClient({ userId }: { userId: string }) {
     // Only show skeleton on initial load — if data is already visible, refresh silently
     if (!hasDataRef.current) setLoading(true)
     setError('')
-    try {
-      const res = await fetch('/api/v1/dashboard/overview', { cache: 'no-store' })
-      if (!res.ok) {
-        const { error: e } = await res.json()
-        setError(e ?? tc('error'))
-      } else {
-        const json = await res.json()
-        setData(json)
-        hasDataRef.current = true
-        setHistoryKey((k) => k + 1)
-        setCachedOverview(userId, json)
+
+    // Resilient load: retries once on a transient failure (e.g. the service
+    // worker's synthetic "Offline" 503 from a slow cold start) and falls back to
+    // the last cached snapshot before ever surfacing an error banner.
+    const result = await loadOverview({
+      getCache: (allowStale) => getCachedOverview(userId, { allowStale }),
+      setCache: (json) => setCachedOverview(userId, json),
+    })
+
+    if (result.data) {
+      setData(result.data)
+      hasDataRef.current = true
+      setHistoryKey((k) => k + 1)
+      // Only mark a real network refresh (not a stale-cache fallback) so the PWA
+      // foreground-staleness check still triggers a true refetch later.
+      if (!result.fromCache) {
         try { localStorage.setItem('pwa_last_fetch', String(Date.now())) } catch {}
       }
-    } catch {
-      setError(tc('error'))
     }
+    setError(overviewErrorText(result, tc('error')) ?? '')
     setLoading(false)
-  }, [])
+  }, [userId, tc])
 
   useEffect(() => { fetchDataRef.current = fetchData }, [fetchData])
 
