@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main, feature/redesign-desktop]
   push:
-    branches: [feature/redesign-desktop]
+    branches: [main, feature/redesign-desktop]
 
 jobs:
   test:
@@ -93,3 +93,31 @@ jobs:
             exit 1
           fi
           echo "All E2E shards passed"
+
+  # Apply pending migrations to the production Supabase project on every merge to
+  # main, so schema changes ship automatically instead of needing a manual
+  # `supabase db push`. Gated on the unit-test job only: e2e runs against a
+  # *separate* test project, so gating prod migrations on e2e could deadlock —
+  # an e2e suite that needs the new schema can't go green until the migration is
+  # applied. `supabase db push` is idempotent (only applies migrations not yet in
+  # the remote history), so re-runs are safe.
+  migrate:
+    name: Apply DB migrations (production)
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Push migrations to the production database
+        run: |
+          supabase link --project-ref "$SUPABASE_PROJECT_REF"
+          supabase db push
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
