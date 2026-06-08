@@ -178,6 +178,9 @@ export async function createFund(data: {
   code: string
   fund_type: string
   nav: number
+  is_dca?: boolean
+  dca_monthly_amount_vnd?: number
+  dca_goal_id?: string
 }) {
   const userId = await getTestUserId()
   const { data: fund, error } = await supabase
