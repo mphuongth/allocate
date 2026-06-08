@@ -68,7 +68,11 @@ export function recurringSavingsTotal(resolved: ResolvedSaving[]): number {
 export interface GoalInvestment {
   goal_id: string | null
   amount_vnd: number
+  units?: number | null // a recorded buy when non-null; pending DCA row when null
   is_dca_seeded?: boolean
+  skipped?: boolean // synthesized: a DCA fund skipped this month
+  fund_id?: string | null
+  transaction_id?: string
   funds?: { name: string } | null
   savings_goals?: { goal_name: string } | null
 }
@@ -85,6 +89,10 @@ export interface GoalItem {
   amount: number
   baseAmount?: number
   isDCA?: boolean
+  isFundDca?: boolean // a fund DCA plan line (gets Buy / skip actions)
+  fundId?: string | null
+  transactionId?: string
+  recorded?: boolean // the DCA buy has been logged (units set)
   isRecurring?: boolean
   recurringId?: string
   skipped?: boolean
@@ -94,23 +102,25 @@ export interface GoalItem {
 export interface GoalRow {
   goalId: string
   goalName: string
-  totalAllocated: number
+  totalAllocated: number // planned this month (DCA + recurring savings)
+  contributed: number // actually logged this month (recorded buys + bank deposits)
   isUnallocated: boolean
   items: GoalItem[]
 }
 
-// Merge fund investments, one-off direct savings and resolved recurring savings
-// into goal groups. `goalsById` resolves a goal id to its display name when the
-// row itself doesn't carry one. The Unallocated group (null goal) is sorted last.
+// Merge fund DCA plans, recorded contributions and recurring savings into goal
+// groups. PLANNED (totalAllocated) = fund DCA + recurring savings line items.
+// CONTRIBUTED = money actually logged this month: recorded fund buys (units set)
+// and bank deposits. `goalsById` resolves a goal id to its display name when the
+// row doesn't carry one. The Unallocated group (null goal) is sorted last.
 export function buildByGoal(
   investments: GoalInvestment[],
   directSavings: GoalDirectSaving[],
   recurring: ResolvedSaving[],
   goalsById: Map<string, string>,
-  labels?: { unallocated?: string; directSaving?: string },
+  labels?: { unallocated?: string },
 ): GoalRow[] {
   const unallocatedLabel = labels?.unallocated ?? 'Unallocated'
-  const directLabel = labels?.directSaving ?? 'Direct savings'
   const map = new Map<string, GoalRow>()
 
   const ensure = (goalId: string | null, name?: string | null): GoalRow => {
@@ -121,6 +131,7 @@ export function buildByGoal(
         goalId: key,
         goalName: isUnallocated ? unallocatedLabel : name || goalsById.get(goalId!) || 'Unassigned',
         totalAllocated: 0,
+        contributed: 0,
         isUnallocated,
         items: [],
       })
@@ -130,19 +141,36 @@ export function buildByGoal(
 
   for (const inv of investments) {
     const row = ensure(inv.goal_id, inv.savings_goals?.goal_name)
-    row.totalAllocated += inv.amount_vnd
-    row.items.push({
-      name: inv.funds?.name ?? 'Unknown fund',
-      type: 'fund',
-      amount: inv.amount_vnd,
-      isDCA: inv.is_dca_seeded,
-    })
+    const recorded = inv.units != null
+
+    if (inv.skipped) {
+      // A DCA fund skipped this month — show it struck through, 0 planned.
+      row.items.push({
+        name: inv.funds?.name ?? 'Unknown fund',
+        type: 'fund', amount: 0, baseAmount: inv.amount_vnd,
+        isDCA: true, isFundDca: true, fundId: inv.fund_id, skipped: true,
+      })
+      continue
+    }
+
+    if (inv.is_dca_seeded) {
+      // A planned DCA line. Counts toward planned; toward contributed once logged.
+      row.totalAllocated += inv.amount_vnd
+      row.items.push({
+        name: inv.funds?.name ?? 'Unknown fund',
+        type: 'fund', amount: inv.amount_vnd,
+        isDCA: true, isFundDca: true, fundId: inv.fund_id,
+        transactionId: inv.transaction_id, recorded,
+      })
+    }
+    // Any recorded buy (DCA or ad-hoc) is money that actually went in.
+    if (recorded) row.contributed += inv.amount_vnd
   }
 
   for (const sav of directSavings) {
+    // A bank deposit is a contribution, not a planned line.
     const row = ensure(sav.goal_id, sav.savings_goals?.goal_name)
-    row.totalAllocated += sav.amount_vnd
-    row.items.push({ name: directLabel, type: 'bank', amount: sav.amount_vnd })
+    row.contributed += sav.amount_vnd
   }
 
   for (const r of recurring) {

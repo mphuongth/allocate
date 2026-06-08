@@ -142,3 +142,24 @@ test('desktop planning: Manage savings opens the recurring-saving manager', asyn
   await expect(page.getByTestId('recurring-saving-manager')).toBeVisible({ timeout: 8_000 })
   await expect(page.getByTestId('rs-add')).toBeVisible()
 })
+
+test('desktop planning: a DCA fund is grouped under its goal with a Buy action and contributed footer', async ({ page }) => {
+  const goal = await api.createGoal({ goal_name: `E2E DCA Goal ${Date.now()}` })
+  cleanup.add(() => api.deleteGoal(goal.goal_id))
+  const fund = await api.createFund({
+    name: 'E2E DCA Fund', code: `EDCA${Date.now() % 100000}`, fund_type: 'equity', nav: 10000,
+    is_dca: true, dca_monthly_amount_vnd: 3_000_000, dca_goal_id: goal.goal_id,
+  })
+  cleanup.add(() => api.deleteFund(fund.id))
+  const plan = await api.createMonthlyPlan({ month: MONTH, year: YEAR, salary_vnd: 30_000_000 })
+  cleanup.add(() => api.deleteMonthlyPlan(plan.id))
+
+  await goto(page)
+  const desktop = page.getByTestId('desktop-planning')
+
+  // The DCA fund is seeded under its goal (goal_id fix) and shows a Record buy pill.
+  await expect(desktop.getByText('E2E DCA Fund')).toBeVisible({ timeout: 8_000 })
+  await expect(desktop.getByRole('button', { name: /Record buy/i }).first()).toBeVisible()
+  // The allocation card shows the contributed-this-month footer.
+  await expect(desktop.getByTestId('planning-contributed')).toBeVisible()
+})

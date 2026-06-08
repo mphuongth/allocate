@@ -79,7 +79,14 @@ export interface RecurringSavingOverride {
   monthly_amount_override_vnd: number
 }
 
-export interface Fund { id: string; name: string; nav: number }
+export interface Fund {
+  id: string; name: string; nav: number
+  is_dca?: boolean
+  dca_monthly_amount_vnd?: number | null
+  dca_goal_id?: string | null
+}
+
+export interface DcaSkip { fund_id: string }
 export interface Goal { goal_id: string; goal_name: string }
 
 const PLAN_CACHE_TTL = 2 * 60 * 1000
@@ -126,6 +133,7 @@ export default function PlanningClient() {
   const [otherExpenses, setOtherExpenses] = useState<OtherExpense[]>(initialCache?.otherExpenses ?? [])
   const [recurringSavings, setRecurringSavings] = useState<RecurringSaving[]>(initialCache?.recurringSavings ?? [])
   const [recurringSavingOverrides, setRecurringSavingOverrides] = useState<RecurringSavingOverride[]>(initialCache?.recurringSavingOverrides ?? [])
+  const [dcaSkips, setDcaSkips] = useState<DcaSkip[]>(initialCache?.dcaSkips ?? [])
   const [funds, setFunds] = useState<Fund[]>(initialCache?.funds ?? [])
   const [goals, setGoals] = useState<Goal[]>(initialCache?.goals ?? [])
   const [loading, setLoading] = useState(!initialCache)
@@ -177,6 +185,7 @@ export default function PlanningClient() {
         funds: p.funds ?? [],
         recurringSavings: p.recurring_savings ?? [],
         recurringSavingOverrides: p.recurring_saving_overrides ?? [],
+        dcaSkips: p.dca_skips ?? [],
       }
       setPlanCache(month, year, fresh)
       setPlan(fresh.plan)
@@ -189,6 +198,7 @@ export default function PlanningClient() {
       setFunds(fresh.funds)
       setRecurringSavings(fresh.recurringSavings)
       setRecurringSavingOverrides(fresh.recurringSavingOverrides)
+      setDcaSkips(fresh.dcaSkips)
     } else {
       bustPlanCache(month, year)
       setPlan(null)
@@ -199,6 +209,7 @@ export default function PlanningClient() {
       setFunds([])
       setRecurringSavings([])
       setRecurringSavingOverrides([])
+      setDcaSkips([])
       // Still load fixed expenses and insurance even without a plan
       const [expRes, insRes] = await Promise.all([
         fetch('/api/v1/fixed-expenses'),
@@ -279,6 +290,7 @@ export default function PlanningClient() {
         otherExpenses={otherExpenses}
         recurringSavings={recurringSavings}
         recurringSavingOverrides={recurringSavingOverrides}
+        dcaSkips={dcaSkips}
         funds={funds}
         goals={goals}
         onPlanCreated={(p) => { setPlan(p); refetch() }}
@@ -306,6 +318,7 @@ export default function PlanningClient() {
         otherExpenses={otherExpenses}
         recurringSavings={recurringSavings}
         recurringSavingOverrides={recurringSavingOverrides}
+        dcaSkips={dcaSkips}
         funds={funds}
         goals={goals}
         loading={loading}

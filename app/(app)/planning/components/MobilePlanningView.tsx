@@ -13,7 +13,7 @@ import RecurringSavingManager from './RecurringSavingManager'
 import { buildByGoal, resolveRecurringSavings, type GoalRow, type GoalItem } from '@/lib/planning'
 import type {
   MonthlyPlan, FundInvestment, DirectSaving, FixedExpense,
-  InsuranceMember, OtherExpense, RecurringSaving, RecurringSavingOverride, Fund, Goal,
+  InsuranceMember, OtherExpense, RecurringSaving, RecurringSavingOverride, DcaSkip, Fund, Goal,
 } from '../PlanningClient'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -29,6 +29,7 @@ interface Props {
   otherExpenses: OtherExpense[]
   recurringSavings: RecurringSaving[]
   recurringSavingOverrides: RecurringSavingOverride[]
+  dcaSkips: DcaSkip[]
   funds: Fund[]
   goals: Goal[]
   onPlanCreated: (plan: MonthlyPlan) => void
@@ -47,6 +48,7 @@ type SheetState =
   | { type: 'other-expense'; existing: OtherExpense | null }
   | { type: 'manage-fixed' }
   | { type: 'manage-recurring' }
+  | { type: 'buy'; transactionId: string; name: string }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -501,13 +503,14 @@ function SalaryCard({ amount, isVI, onEdit, onDelete }: { amount: number; isVI: 
 // ─── AllocationSummaryCard ────────────────────────────────────────────────────
 
 function AllocationSummaryCard({
-  salary, totalGoals, totalFixed, totalInsurance, totalOther, isVI,
+  salary, totalGoals, totalFixed, totalInsurance, totalOther, contributedTotal, isVI,
 }: {
   salary: number
   totalGoals: number
   totalFixed: number
   totalInsurance: number
   totalOther: number
+  contributedTotal: number
   isVI: boolean
 }) {
   const totalAllocated = totalGoals + totalFixed + totalInsurance + totalOther
@@ -570,6 +573,20 @@ function AllocationSummaryCard({
           </span>
         </div>
       </div>
+
+      {totalGoals > 0 && (
+        <div data-testid="planning-contributed" style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.12)' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>{isVI ? 'Đã góp tháng này' : 'Contributed this month'}</span>
+            <span style={{ fontSize: 12, fontWeight: 600, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+              {fmtCompact(contributedTotal)} <span style={{ color: 'rgba(255,255,255,0.45)' }}>/ {fmtCompact(totalGoals)}</span>
+            </span>
+          </div>
+          <div style={{ marginTop: 8, height: 6, borderRadius: 999, background: 'rgba(255,255,255,0.12)', overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${Math.min(100, totalGoals > 0 ? Math.round(contributedTotal / totalGoals * 100) : 0)}%`, background: '#86efac', borderRadius: 999, transition: 'width 200ms' }} />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -649,14 +666,19 @@ function BudgetSection({
 
 // ─── GoalAllocationRow ────────────────────────────────────────────────────────
 
-function GoalAllocationRow({ entry, isVI, onRecSkip, onRecRestore, onRecOverride, onRecEdit }: {
+function GoalAllocationRow({ entry, isVI, onRecSkip, onRecRestore, onRecOverride, onRecEdit, onRecordBuy, onDcaSkip, onDcaRestore }: {
   entry: GoalRow; isVI: boolean
   onRecSkip: (item: GoalItem) => void
   onRecRestore: (item: GoalItem) => void
   onRecOverride: (item: GoalItem) => void
   onRecEdit: () => void
+  onRecordBuy: (item: GoalItem) => void
+  onDcaSkip: (item: GoalItem) => void
+  onDcaRestore: (item: GoalItem) => void
 }) {
   const [open, setOpen] = useState(false)
+  const pct = entry.totalAllocated > 0 ? Math.min(100, Math.round(entry.contributed / entry.totalAllocated * 100)) : (entry.contributed > 0 ? 100 : 0)
+  const met = entry.totalAllocated > 0 && entry.contributed >= entry.totalAllocated
   return (
     <div>
       <button
@@ -674,9 +696,20 @@ function GoalAllocationRow({ entry, isVI, onRecSkip, onRecRestore, onRecOverride
           <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--c-ink)' }}>
             {entry.goalName}
           </div>
-          <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 1 }}>
-            {entry.items.length} {isVI ? 'khoản' : entry.items.length === 1 ? 'allocation' : 'allocations'}
-          </div>
+          {entry.totalAllocated > 0 ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+              <div style={{ flex: 1, maxWidth: 120, height: 4, borderRadius: 999, background: 'var(--c-line)', overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${pct}%`, background: met ? 'var(--c-pos)' : 'var(--c-navy)', borderRadius: 999, transition: 'width 200ms' }} />
+              </div>
+              <span style={{ fontSize: 10, color: entry.contributed > 0 ? 'var(--c-pos)' : 'var(--c-muted)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                {entry.contributed > 0 ? `${fmt(entry.contributed)} ${isVI ? 'đã góp' : 'in'}` : (isVI ? 'Chưa góp' : 'Nothing yet')}
+              </span>
+            </div>
+          ) : (
+            <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 1 }}>
+              {entry.items.length} {isVI ? 'khoản' : entry.items.length === 1 ? 'allocation' : 'allocations'}
+            </div>
+          )}
         </div>
         <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: 'var(--c-ink)' }}>
           {fmt(entry.totalAllocated)}
@@ -692,6 +725,9 @@ function GoalAllocationRow({ entry, isVI, onRecSkip, onRecRestore, onRecOverride
           onRestore={() => onRecRestore(item)}
           onOverride={() => onRecOverride(item)}
           onEdit={onRecEdit}
+          onRecordBuy={() => onRecordBuy(item)}
+          onDcaSkip={() => onDcaSkip(item)}
+          onDcaRestore={() => onDcaRestore(item)}
         />
       ))}
     </div>
@@ -700,18 +736,26 @@ function GoalAllocationRow({ entry, isVI, onRecSkip, onRecRestore, onRecOverride
 
 // ─── GoalItemRow — one allocation under a goal (recurring savings get a kebab) ──
 
-function GoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit }: {
+function GoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit, onRecordBuy, onDcaSkip, onDcaRestore }: {
   item: GoalItem; isVI: boolean
   onSkip: () => void; onRestore: () => void; onOverride: () => void; onEdit: () => void
+  onRecordBuy: () => void; onDcaSkip: () => void; onDcaRestore: () => void
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPos, setMenuPos] = useState({ top: 0, right: 0 })
   const btnRef = useRef<HTMLButtonElement>(null)
   const skipped = !!item.skipped
+  const recorded = !!item.recorded
 
-  const typeLabel = item.type === 'fund'
-    ? 'Fund'
-    : item.isRecurring ? (isVI ? 'Tiết kiệm định kỳ' : 'Recurring saving') : (isVI ? 'Tiết kiệm' : 'Direct saving')
+  const sublabel = skipped
+    ? (isVI ? 'Bỏ qua tháng này' : 'Skipped this month')
+    : item.overridden
+      ? (isVI ? 'Đã ghi đè tháng này' : 'Overridden this month')
+      : recorded
+        ? (isVI ? 'Đã mua' : 'Recorded')
+        : item.type === 'fund'
+          ? 'Fund'
+          : item.isRecurring ? (isVI ? 'Tiết kiệm định kỳ' : 'Recurring saving') : (isVI ? 'Tiết kiệm' : 'Direct saving')
 
   function openMenu() {
     if (btnRef.current) {
@@ -730,8 +774,8 @@ function GoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit }: {
         <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--c-ink)', textDecoration: skipped ? 'line-through' : 'none' }}>
           {item.name}
         </div>
-        <div style={{ fontSize: 10, color: item.overridden ? 'var(--c-navy)' : 'var(--c-muted)', marginTop: 1, display: 'flex', alignItems: 'center', gap: 4 }}>
-          {skipped ? (isVI ? 'Bỏ qua tháng này' : 'Skipped this month') : item.overridden ? (isVI ? 'Đã ghi đè tháng này' : 'Overridden this month') : typeLabel}
+        <div style={{ fontSize: 10, color: item.overridden ? 'var(--c-navy)' : recorded ? 'var(--c-pos)' : 'var(--c-muted)', marginTop: 1, display: 'flex', alignItems: 'center', gap: 4 }}>
+          {sublabel}
           {item.isDCA && (
             <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 4, background: 'var(--c-navy-tint)', color: 'var(--c-navy)', fontWeight: 600 }}>DCA</span>
           )}
@@ -740,7 +784,7 @@ function GoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit }: {
       <span style={{ fontSize: 12, fontWeight: 500, fontVariantNumeric: 'tabular-nums', color: 'var(--c-muted)', textDecoration: skipped ? 'line-through' : 'none' }}>
         {fmt(item.amount)}
       </span>
-      {item.isRecurring && (
+      {item.isRecurring ? (
         <>
           <button ref={btnRef} onClick={() => (menuOpen ? setMenuOpen(false) : openMenu())} aria-label="Saving actions" style={{ padding: 4, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, color: 'var(--c-muted)', display: 'flex', flexShrink: 0 }}>
             <MoreHorizontal size={14} />
@@ -763,7 +807,33 @@ function GoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit }: {
             </>
           )}
         </>
-      )}
+      ) : item.isFundDca && skipped ? (
+        <button onClick={onDcaRestore} aria-label="Restore DCA" style={{ padding: '4px 9px', fontSize: 11, fontWeight: 600, color: 'var(--c-muted)', background: 'transparent', border: '1px solid var(--c-line)', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+          <Check size={12} />{isVI ? 'Khôi phục' : 'Restore'}
+        </button>
+      ) : item.isFundDca && recorded ? (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--c-pos)', fontSize: 11, fontWeight: 600, flexShrink: 0 }}>
+          <Check size={13} />{isVI ? 'Đã mua' : 'Bought'}
+        </span>
+      ) : item.isFundDca ? (
+        <>
+          <button onClick={onRecordBuy} aria-label={isVI ? 'Ghi nhận mua' : 'Record buy'} style={{ padding: '4px 9px', fontSize: 11, fontWeight: 600, color: 'var(--c-pos)', background: 'var(--c-pos-tint)', border: '1px solid transparent', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0, whiteSpace: 'nowrap' }}>
+            <Plus size={12} strokeWidth={2.4} />{isVI ? 'Mua' : 'Buy'}
+          </button>
+          <button ref={btnRef} onClick={() => (menuOpen ? setMenuOpen(false) : openMenu())} aria-label="DCA actions" style={{ padding: 4, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, color: 'var(--c-muted)', display: 'flex', flexShrink: 0 }}>
+            <MoreHorizontal size={14} />
+          </button>
+          {menuOpen && (
+            <>
+              <div onClick={() => setMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 5 }} />
+              <div style={{ position: 'fixed', top: menuPos.top, right: menuPos.right, zIndex: 6, background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 8, boxShadow: '0 6px 20px rgba(15,23,42,0.12)', minWidth: 200, overflow: 'hidden' }}>
+                <MenuItem icon={<Plus size={13} />} label={isVI ? 'Ghi nhận mua tháng này' : 'Record buy this month'} onClick={() => { onRecordBuy(); setMenuOpen(false) }} />
+                <MenuItem icon={<X size={13} />} label={isVI ? 'Bỏ qua tháng này' : 'Skip this month'} onClick={() => { onDcaSkip(); setMenuOpen(false) }} danger noBorder />
+              </div>
+            </>
+          )}
+        </>
+      ) : null}
     </div>
   )
 }
@@ -891,7 +961,7 @@ function MenuItem({ icon, label, onClick, danger, noBorder }: {
 
 export default function MobilePlanningView({
   month, year, plan, investments, savings, fixedExpenses, insuranceMembers, otherExpenses,
-  recurringSavings, recurringSavingOverrides, goals,
+  recurringSavings, recurringSavingOverrides, dcaSkips, funds, goals,
   onPlanCreated, onPlanDeleted, onRefresh, onToast,
 }: Props) {
   const locale = useLocale()
@@ -908,14 +978,28 @@ export default function MobilePlanningView({
     () => resolveRecurringSavings(recurringSavings, recurringSavingOverrides),
     [recurringSavings, recurringSavingOverrides],
   )
+  // Skipped DCA funds aren't seeded as rows — synthesize struck-through lines.
+  const skippedDcaInvestments = useMemo(() => {
+    const skipped = new Set(dcaSkips.map(s => s.fund_id))
+    return funds
+      .filter(f => f.is_dca && f.dca_monthly_amount_vnd && skipped.has(f.id))
+      .map(f => ({
+        goal_id: f.dca_goal_id ?? null,
+        amount_vnd: f.dca_monthly_amount_vnd as number,
+        is_dca_seeded: true,
+        skipped: true,
+        fund_id: f.id,
+        funds: { name: f.name },
+      }))
+  }, [funds, dcaSkips])
   const byGoal = useMemo(
-    () => buildByGoal(investments, savings, resolvedRecurring, goalsById, {
+    () => buildByGoal([...investments, ...skippedDcaInvestments], savings, resolvedRecurring, goalsById, {
       unallocated: isVI ? 'Chưa phân bổ' : 'Unallocated',
-      directSaving: isVI ? 'Tiết kiệm' : 'Direct savings',
     }),
-    [investments, savings, resolvedRecurring, goalsById, isVI],
+    [investments, skippedDcaInvestments, savings, resolvedRecurring, goalsById, isVI],
   )
   const totalGoals = useMemo(() => byGoal.reduce((s, g) => s + g.totalAllocated, 0), [byGoal])
+  const contributedTotal = useMemo(() => byGoal.reduce((s, g) => s + g.contributed, 0), [byGoal])
   const totalFixed = useMemo(() => getFixedTotal(fixedExpenses), [fixedExpenses])
   const totalInsurance = useMemo(() => getInsTotal(insuranceMembers), [insuranceMembers])
   const totalOther = useMemo(() => otherExpenses.reduce((s, e) => s + e.amount_vnd, 0), [otherExpenses])
@@ -992,6 +1076,40 @@ export default function MobilePlanningView({
     if (!item.recurringId) return
     setOverrideTarget({ type: 'rec', id: item.recurringId, name: item.name, defaultAmount: item.baseAmount ?? item.amount })
     setSheet({ type: 'override-rec', item })
+  }
+
+  async function handleDcaSkip(item: GoalItem) {
+    if (!plan || !item.fundId) return
+    await fetch(`/api/v1/monthly-plans/${plan.id}/dca-skips`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fund_id: item.fundId }),
+    })
+    onToast(isVI ? `Đã bỏ qua ${item.name}` : `Skipped ${item.name}`)
+    onRefresh()
+  }
+
+  async function handleDcaRestore(item: GoalItem) {
+    if (!plan || !item.fundId) return
+    await fetch(`/api/v1/monthly-plans/${plan.id}/dca-skips/${item.fundId}`, { method: 'DELETE' })
+    onToast(isVI ? `Đã khôi phục ${item.name}` : `Restored ${item.name}`)
+    onRefresh()
+  }
+
+  function openBuy(item: GoalItem) {
+    if (!item.transactionId) return
+    setSheet({ type: 'buy', transactionId: item.transactionId, name: item.name })
+  }
+
+  async function handleRecordBuy(transactionId: string, price: number, units: number) {
+    await fetch(`/api/v1/investment-transactions/${transactionId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ unit_price: price, units, amount_vnd: Math.round(price * units) }),
+    })
+    setSheet(null)
+    onToast(isVI ? 'Đã ghi nhận mua' : 'Buy recorded')
+    onRefresh()
   }
 
   // ─── Override sheet helpers ────────────────────────────────────────────────
@@ -1080,6 +1198,7 @@ export default function MobilePlanningView({
               totalFixed={totalFixed}
               totalInsurance={totalInsurance}
               totalOther={totalOther}
+              contributedTotal={contributedTotal}
               isVI={isVI}
             />
 
@@ -1117,6 +1236,9 @@ export default function MobilePlanningView({
                     onRecRestore={handleRestoreRec}
                     onRecOverride={openOverrideRec}
                     onRecEdit={() => setSheet({ type: 'manage-recurring' })}
+                    onRecordBuy={openBuy}
+                    onDcaSkip={handleDcaSkip}
+                    onDcaRestore={handleDcaRestore}
                   />
                 ))
               )}
@@ -1330,7 +1452,58 @@ export default function MobilePlanningView({
           <RecurringSavingManager goals={goals} onChange={onRefresh} onToast={onToast} variant="sheet" />
         )}
       </Sheet>
+
+      {/* ─── Record buy sheet ───────────────────────────────────────────────── */}
+      <BuySheet
+        open={sheet?.type === 'buy'}
+        onClose={() => setSheet(null)}
+        name={sheet?.type === 'buy' ? sheet.name : ''}
+        isVI={isVI}
+        onSaved={(price, units) => {
+          if (sheet?.type === 'buy') handleRecordBuy(sheet.transactionId, price, units)
+        }}
+      />
     </div>
+  )
+}
+
+// ─── BuySheet — record an actual fund purchase (price + units) ────────────────
+
+function BuySheet({ open, onClose, name, isVI, onSaved }: {
+  open: boolean; onClose: () => void; name: string; isVI: boolean
+  onSaved: (price: number, units: number) => void
+}) {
+  const [price, setPrice] = useState('')
+  const [units, setUnits] = useState('')
+  useEffect(() => { if (open) { setPrice(''); setUnits('') } }, [open])
+  if (!open) return null
+  const valid = price !== '' && units !== '' && Number(price) > 0 && Number(units) > 0
+  const total = valid ? Math.round(Number(price) * Number(units)) : 0
+  return (
+    <Sheet open={open} onClose={onClose} title={isVI ? 'Ghi nhận mua' : 'Record buy'}>
+      <div style={{ display: 'grid', gap: 14 }}>
+        <div style={{ fontSize: 13, color: 'var(--c-muted)' }}>{name}</div>
+        <div>
+          <label style={{ fontSize: 13, color: 'var(--c-muted)', display: 'block', marginBottom: 4 }}>{isVI ? 'Giá / CCQ (₫)' : 'Price / unit (₫)'}</label>
+          <input type="text" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value.replace(/[^0-9.]/g, ''))} autoFocus placeholder="0"
+            style={{ width: '100%', padding: '10px 12px', fontSize: 16, border: '1px solid var(--c-line)', borderRadius: 10, background: 'var(--c-card-2)', color: 'var(--c-ink)', boxSizing: 'border-box', fontVariantNumeric: 'tabular-nums' }} />
+        </div>
+        <div>
+          <label style={{ fontSize: 13, color: 'var(--c-muted)', display: 'block', marginBottom: 4 }}>{isVI ? 'Số CCQ' : 'Units'}</label>
+          <input type="text" inputMode="decimal" value={units} onChange={(e) => setUnits(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="0"
+            style={{ width: '100%', padding: '10px 12px', fontSize: 16, border: '1px solid var(--c-line)', borderRadius: 10, background: 'var(--c-card-2)', color: 'var(--c-ink)', boxSizing: 'border-box', fontVariantNumeric: 'tabular-nums' }} />
+        </div>
+        {valid && (
+          <div style={{ background: 'var(--c-navy-tint)', borderRadius: 10, padding: '8px 12px', fontSize: 12, color: 'var(--c-navy)', fontVariantNumeric: 'tabular-nums' }}>
+            {isVI ? 'Tổng' : 'Total'}: {fmt(total)}
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+          <button onClick={onClose} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: '1px solid var(--c-line)', background: 'var(--c-card)', color: 'var(--c-ink)', fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>{isVI ? 'Hủy' : 'Cancel'}</button>
+          <button onClick={() => onSaved(Number(price), Number(units))} disabled={!valid} style={{ flex: 2, padding: '10px 0', borderRadius: 10, border: 'none', background: 'var(--c-btn-primary)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', opacity: valid ? 1 : 0.6 }}>{isVI ? 'Lưu' : 'Save'}</button>
+        </div>
+      </div>
+    </Sheet>
   )
 }
 

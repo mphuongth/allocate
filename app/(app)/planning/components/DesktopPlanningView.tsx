@@ -13,7 +13,7 @@ import RecurringSavingManager from './RecurringSavingManager'
 import { buildByGoal, resolveRecurringSavings, type GoalItem } from '@/lib/planning'
 import type {
   MonthlyPlan, FundInvestment, DirectSaving, FixedExpense,
-  InsuranceMember, OtherExpense, RecurringSaving, RecurringSavingOverride, Fund, Goal,
+  InsuranceMember, OtherExpense, RecurringSaving, RecurringSavingOverride, DcaSkip, Fund, Goal,
 } from '../PlanningClient'
 
 // ─── Pure helpers ─────────────────────────────────────────────────────────────
@@ -186,20 +186,30 @@ function DPlanRow({ primary, secondary, amount, muted, last, isVI, onSkip, onRes
   )
 }
 
-// ─── DGoalItemRow — line item under a goal (recurring savings get a kebab) ────
+// ─── DGoalItemRow — line item under a goal ───────────────────────────────────
+// Recurring savings get a kebab (save more / edit / skip). Fund DCA lines get a
+// "Buy" pill to record the actual purchase, plus skip / restore for the month.
 
-function DGoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit }: {
+function DGoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit, onRecordBuy, onDcaSkip, onDcaRestore }: {
   item: GoalItem; isVI: boolean
   onSkip: () => void; onRestore: () => void; onOverride: () => void; onEdit: () => void
+  onRecordBuy: () => void; onDcaSkip: () => void; onDcaRestore: () => void
 }) {
   const [open, setOpen] = useState(false)
   const [menuPos, setMenuPos] = useState({ top: 0, right: 0 })
   const btnRef = useRef<HTMLButtonElement>(null)
   const skipped = !!item.skipped
+  const recorded = !!item.recorded
 
-  const typeLabel = item.type === 'fund'
-    ? 'Fund'
-    : item.isRecurring ? (isVI ? 'Tiết kiệm định kỳ' : 'Recurring saving') : (isVI ? 'Tiết kiệm' : 'Direct saving')
+  const sublabel = skipped
+    ? (isVI ? 'Bỏ qua tháng này' : 'Skipped this month')
+    : item.overridden
+      ? (isVI ? 'Đã ghi đè tháng này' : 'Overridden this month')
+      : recorded
+        ? (isVI ? 'Đã mua' : 'Recorded')
+        : item.type === 'fund'
+          ? 'Fund'
+          : item.isRecurring ? (isVI ? 'Tiết kiệm định kỳ' : 'Recurring saving') : (isVI ? 'Tiết kiệm' : 'Direct saving')
 
   function openMenu() {
     if (btnRef.current) {
@@ -213,18 +223,18 @@ function DGoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit }: {
     <tr style={{ borderBottom: '1px solid var(--c-line)', background: 'var(--c-card)', opacity: skipped ? 0.5 : 1 }}>
       <td style={{ padding: '9px 16px 9px 44px', verticalAlign: 'middle' }}>
         <div style={{ fontSize: 12, fontWeight: 500, textDecoration: skipped ? 'line-through' : 'none' }}>{item.name}</div>
-        <div style={{ fontSize: 10, color: item.overridden ? 'var(--c-navy)' : 'var(--c-muted)', marginTop: 1 }}>
-          {skipped ? (isVI ? 'Bỏ qua tháng này' : 'Skipped this month') : item.overridden ? (isVI ? 'Đã ghi đè tháng này' : 'Overridden this month') : typeLabel}
+        <div style={{ fontSize: 10, color: item.overridden ? 'var(--c-navy)' : recorded ? 'var(--c-pos)' : 'var(--c-muted)', marginTop: 1 }}>
+          {sublabel}
           {item.isDCA && <span style={{ marginLeft: 6, padding: '1px 5px', borderRadius: 4, background: 'var(--c-navy-tint)', color: 'var(--c-navy)', fontSize: 9, fontWeight: 700 }}>DCA</span>}
         </div>
       </td>
       <td style={{ padding: '9px 12px', textAlign: 'right', verticalAlign: 'middle' }}>
         <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--c-muted)', fontVariantNumeric: 'tabular-nums', textDecoration: skipped ? 'line-through' : 'none' }}>{fmt(item.amount)}</span>
       </td>
-      <td style={{ padding: '9px 8px 9px 4px', textAlign: 'right', verticalAlign: 'middle', width: 36 }}>
-        {item.isRecurring && (
+      <td style={{ padding: '9px 8px 9px 4px', textAlign: 'right', verticalAlign: 'middle', width: 96 }}>
+        {item.isRecurring ? (
           <>
-            <button ref={btnRef} onClick={() => open ? setOpen(false) : openMenu()} aria-label="Saving actions" style={{ padding: 5, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, color: 'var(--c-muted)', display: 'flex' }}>
+            <button ref={btnRef} onClick={() => open ? setOpen(false) : openMenu()} aria-label="Saving actions" style={{ padding: 5, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, color: 'var(--c-muted)', display: 'flex', marginLeft: 'auto' }}>
               <MoreHorizontal size={14} />
             </button>
             {open && (
@@ -245,7 +255,34 @@ function DGoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit }: {
               </>
             )}
           </>
-        )}
+        ) : item.isFundDca && skipped ? (
+          <button onClick={onDcaRestore} aria-label="Restore DCA" style={{ padding: '4px 9px', fontSize: 11, fontWeight: 600, color: 'var(--c-muted)', background: 'transparent', border: '1px solid var(--c-line)', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <Check size={12} />{isVI ? 'Khôi phục' : 'Restore'}
+          </button>
+        ) : item.isFundDca && recorded ? (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--c-pos)', fontSize: 11, fontWeight: 600 }}>
+            <Check size={13} />{isVI ? 'Đã mua' : 'Bought'}
+          </span>
+        ) : item.isFundDca ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 2 }}>
+            <button onClick={onRecordBuy} aria-label={isVI ? 'Ghi nhận mua' : 'Record buy'} title={isVI ? 'Ghi nhận mua — giá, số CCQ, ngày' : 'Record buy — price, units, date'}
+              style={{ padding: '4px 10px', fontSize: 11, fontWeight: 600, color: 'var(--c-pos)', background: 'var(--c-pos-tint)', border: '1px solid transparent', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
+              <Plus size={12} strokeWidth={2.4} />{isVI ? 'Mua' : 'Buy'}
+            </button>
+            <button ref={btnRef} onClick={() => open ? setOpen(false) : openMenu()} aria-label="DCA actions" style={{ padding: 5, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, color: 'var(--c-muted)', display: 'flex' }}>
+              <MoreHorizontal size={14} />
+            </button>
+            {open && (
+              <>
+                <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 5 }} />
+                <div style={{ position: 'fixed', top: menuPos.top, right: menuPos.right, zIndex: 6, background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 8, boxShadow: '0 6px 20px rgba(15,23,42,0.12)', minWidth: 200, overflow: 'hidden' }}>
+                  <MenuBtn icon={<Plus size={13} />} label={isVI ? 'Ghi nhận mua tháng này' : 'Record buy this month'} onClick={() => { onRecordBuy(); setOpen(false) }} />
+                  <MenuBtn icon={<X size={13} />} label={isVI ? 'Bỏ qua tháng này' : 'Skip this month'} onClick={() => { onDcaSkip(); setOpen(false) }} danger noBorder />
+                </div>
+              </>
+            )}
+          </div>
+        ) : null}
       </td>
     </tr>
   )
@@ -266,8 +303,8 @@ function StackedBar({ segments, total }: { segments: { color: string; value: num
 
 // ─── Allocation card (navy sidebar) ──────────────────────────────────────────
 
-function AllocationCard({ salary, totalGoalAmount, fixedTotal, insTotal, otherTotal, isVI }: {
-  salary: number; totalGoalAmount: number; fixedTotal: number; insTotal: number; otherTotal: number; isVI: boolean
+function AllocationCard({ salary, totalGoalAmount, fixedTotal, insTotal, otherTotal, contributedTotal, isVI }: {
+  salary: number; totalGoalAmount: number; fixedTotal: number; insTotal: number; otherTotal: number; contributedTotal: number; isVI: boolean
 }) {
   const totalAllocated = totalGoalAmount + fixedTotal + insTotal + otherTotal
   const remaining = salary - totalAllocated
@@ -314,6 +351,20 @@ function AllocationCard({ salary, totalGoalAmount, fixedTotal, insTotal, otherTo
           </span>
         </div>
       </div>
+
+      {totalGoalAmount > 0 && (
+        <div data-testid="planning-contributed" style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.12)' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>{isVI ? 'Đã góp tháng này' : 'Contributed this month'}</span>
+            <span style={{ fontSize: 12, fontWeight: 600, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+              {fmtCompact(contributedTotal)} <span style={{ color: 'rgba(255,255,255,0.45)' }}>/ {fmtCompact(totalGoalAmount)}</span>
+            </span>
+          </div>
+          <div style={{ marginTop: 8, height: 6, borderRadius: 999, background: 'rgba(255,255,255,0.12)', overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${Math.min(100, totalGoalAmount > 0 ? Math.round(contributedTotal / totalGoalAmount * 100) : 0)}%`, background: '#86efac', borderRadius: 999, transition: 'width 200ms' }} />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -345,6 +396,7 @@ interface Props {
   otherExpenses: OtherExpense[]
   recurringSavings: RecurringSaving[]
   recurringSavingOverrides: RecurringSavingOverride[]
+  dcaSkips: DcaSkip[]
   funds: Fund[]
   goals: Goal[]
   loading: boolean
@@ -361,7 +413,7 @@ interface Props {
 
 export default function DesktopPlanningView({
   month, year, plan, investments, savings, fixedExpenses, insuranceMembers,
-  otherExpenses, recurringSavings, recurringSavingOverrides, goals, loading,
+  otherExpenses, recurringSavings, recurringSavingOverrides, dcaSkips, funds, goals, loading,
   onPrev, onNext, onToday, onPlanCreated, onPlanDeleted, onRefresh, onToast,
 }: Props) {
   const locale = useLocale()
@@ -379,6 +431,9 @@ export default function DesktopPlanningView({
   const [otherAmt, setOtherAmt] = useState('')
   const [showFEManage, setShowFEManage] = useState(false)
   const [showRSManage, setShowRSManage] = useState(false)
+  const [buyModal, setBuyModal] = useState<{ transactionId: string; name: string; amount: number } | null>(null)
+  const [buyPrice, setBuyPrice] = useState('')
+  const [buyUnits, setBuyUnits] = useState('')
 
   // ── Derived values ──
   const goalsById = useMemo(() => new Map(goals.map(g => [g.goal_id, g.goal_name])), [goals])
@@ -386,14 +441,29 @@ export default function DesktopPlanningView({
     () => resolveRecurringSavings(recurringSavings, recurringSavingOverrides),
     [recurringSavings, recurringSavingOverrides],
   )
+  // Skipped DCA funds are no longer seeded as rows, so synthesize struck-through
+  // lines from the fund config + the plan's skip list.
+  const skippedDcaInvestments = useMemo(() => {
+    const skipped = new Set(dcaSkips.map(s => s.fund_id))
+    return funds
+      .filter(f => f.is_dca && f.dca_monthly_amount_vnd && skipped.has(f.id))
+      .map(f => ({
+        goal_id: f.dca_goal_id ?? null,
+        amount_vnd: f.dca_monthly_amount_vnd as number,
+        is_dca_seeded: true,
+        skipped: true,
+        fund_id: f.id,
+        funds: { name: f.name },
+      }))
+  }, [funds, dcaSkips])
   const byGoal = useMemo(
-    () => buildByGoal(investments, savings, resolvedRecurring, goalsById, {
+    () => buildByGoal([...investments, ...skippedDcaInvestments], savings, resolvedRecurring, goalsById, {
       unallocated: isVI ? 'Chưa phân bổ' : 'Unallocated',
-      directSaving: isVI ? 'Tiết kiệm' : 'Direct savings',
     }),
-    [investments, savings, resolvedRecurring, goalsById, isVI],
+    [investments, skippedDcaInvestments, savings, resolvedRecurring, goalsById, isVI],
   )
   const totalGoalAmount = byGoal.reduce((s, g) => s + g.totalAllocated, 0)
+  const contributedTotal = byGoal.reduce((s, g) => s + g.contributed, 0)
   const fixedTotal = useMemo(() => getFixedTotal(fixedExpenses), [fixedExpenses])
   const insTotal   = useMemo(() => getInsTotal(insuranceMembers), [insuranceMembers])
   const otherTotal = otherExpenses.reduce((s, o) => s + o.amount_vnd, 0)
@@ -506,6 +576,46 @@ export default function DesktopPlanningView({
     const match = overrides.find(o => o.recurring_saving_id === item.recurringId)
     if (match) await fetch(`/api/v1/monthly-plans/${plan.id}/recurring-saving-overrides/${match.id}`, { method: 'DELETE' })
     onRefresh(); onToast(isVI ? `Đã khôi phục ${item.name}` : `Restored ${item.name}`)
+  }
+
+  async function handleDcaSkip(item: { fundId?: string | null; name: string }) {
+    if (!plan || !item.fundId) return
+    await fetch(`/api/v1/monthly-plans/${plan.id}/dca-skips`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fund_id: item.fundId }),
+    })
+    onRefresh(); onToast(isVI ? `Đã bỏ qua ${item.name}` : `Skipped ${item.name}`)
+  }
+
+  async function handleDcaRestore(item: { fundId?: string | null; name: string }) {
+    if (!plan || !item.fundId) return
+    await fetch(`/api/v1/monthly-plans/${plan.id}/dca-skips/${item.fundId}`, { method: 'DELETE' })
+    onRefresh(); onToast(isVI ? `Đã khôi phục ${item.name}` : `Restored ${item.name}`)
+  }
+
+  function openBuy(item: { transactionId?: string; name: string; amount: number }) {
+    if (!item.transactionId) return
+    setBuyModal({ transactionId: item.transactionId, name: item.name, amount: item.amount })
+    setBuyPrice('')
+    setBuyUnits('')
+  }
+
+  async function handleRecordBuy() {
+    if (!buyModal) return
+    const price = Number(buyPrice)
+    const units = Number(buyUnits)
+    if (!buyPrice || !buyUnits || price <= 0 || units <= 0) return
+    setSaving(true)
+    try {
+      await fetch(`/api/v1/investment-transactions/${buyModal.transactionId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ unit_price: price, units, amount_vnd: Math.round(price * units) }),
+      })
+      setBuyModal(null)
+      onRefresh(); onToast(isVI ? 'Đã ghi nhận mua' : 'Buy recorded')
+    } finally { setSaving(false) }
   }
 
   async function handleSaveOverride() {
@@ -701,7 +811,10 @@ export default function DesktopPlanningView({
                 <tbody>
                   {byGoal.length === 0 ? (
                     <tr><td colSpan={3} style={{ padding: '16px', textAlign: 'center', color: 'var(--c-muted)', fontSize: 12 }}>{isVI ? 'Chưa có khoản đầu tư nào' : 'No investments yet'}</td></tr>
-                  ) : byGoal.map(g => (
+                  ) : byGoal.map(g => {
+                    const pct = g.totalAllocated > 0 ? Math.min(100, Math.round(g.contributed / g.totalAllocated * 100)) : (g.contributed > 0 ? 100 : 0)
+                    const met = g.totalAllocated > 0 && g.contributed >= g.totalAllocated
+                    return (
                     <React.Fragment key={g.goalId}>
                       <tr style={{ background: 'var(--c-card-2)', borderBottom: '1px solid var(--c-line)' }}>
                         <td style={{ padding: '10px 16px' }}>
@@ -712,9 +825,20 @@ export default function DesktopPlanningView({
                             <span style={{ fontSize: 13, fontWeight: 600 }}>{g.goalName}</span>
                             <span style={{ fontSize: 11, color: 'var(--c-muted)' }}>· {g.items.length} {isVI ? 'khoản' : g.items.length === 1 ? 'item' : 'items'}</span>
                           </div>
+                          {g.totalAllocated > 0 && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, paddingLeft: 32 }}>
+                              <div style={{ flex: 1, maxWidth: 160, height: 4, borderRadius: 999, background: 'var(--c-line)', overflow: 'hidden' }}>
+                                <div style={{ height: '100%', width: `${pct}%`, background: met ? 'var(--c-pos)' : 'var(--c-navy)', borderRadius: 999, transition: 'width 200ms' }} />
+                              </div>
+                              <span style={{ fontSize: 10, color: 'var(--c-muted)', fontVariantNumeric: 'tabular-nums' }}>{pct}%</span>
+                            </div>
+                          )}
                         </td>
-                        <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                          <span style={{ fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{fmt(g.totalAllocated)}</span>
+                        <td style={{ padding: '10px 12px', textAlign: 'right', verticalAlign: 'top' }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{fmt(g.totalAllocated)}</div>
+                          <div style={{ fontSize: 10, color: g.contributed > 0 ? 'var(--c-pos)' : 'var(--c-muted)', marginTop: 2, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                            {g.contributed > 0 ? `${fmt(g.contributed)} ${isVI ? 'đã góp' : 'in'}` : (isVI ? 'Chưa góp' : 'Nothing yet')}
+                          </div>
                         </td>
                         <td />
                       </tr>
@@ -730,10 +854,14 @@ export default function DesktopPlanningView({
                             setOverrideModal({ id: inv.recurringId!, name: inv.name, defaultAmount: inv.baseAmount ?? inv.amount, type: 'rec' })
                             setOverrideVal(String(inv.baseAmount ?? inv.amount))
                           }}
+                          onRecordBuy={() => openBuy({ transactionId: inv.transactionId, name: inv.name, amount: inv.amount })}
+                          onDcaSkip={() => handleDcaSkip(inv)}
+                          onDcaRestore={() => handleDcaRestore(inv)}
                         />
                       ))}
                     </React.Fragment>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </PlanTable>
 
@@ -846,6 +974,7 @@ export default function DesktopPlanningView({
               fixedTotal={fixedTotal}
               insTotal={insTotal}
               otherTotal={otherTotal}
+              contributedTotal={contributedTotal}
               isVI={isVI}
             />
           </div>
@@ -973,6 +1102,33 @@ export default function DesktopPlanningView({
       {showRSManage && (
         <DModal onClose={() => setShowRSManage(false)} title={isVI ? 'Tiết kiệm định kỳ' : 'Recurring savings'} width={460}>
           <RecurringSavingManager goals={goals} onChange={onRefresh} onToast={onToast} />
+        </DModal>
+      )}
+
+      {buyModal && (
+        <DModal onClose={() => setBuyModal(null)} title={isVI ? 'Ghi nhận mua' : 'Record buy'} width={360}>
+          <div style={{ display: 'grid', gap: 14 }}>
+            <div style={{ fontSize: 13, color: 'var(--c-muted)', fontWeight: 500 }}>{buyModal.name}</div>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={labelStyle}>{isVI ? 'Giá / CCQ (₫)' : 'Price / unit (₫)'}</span>
+              <input type="text" inputMode="decimal" value={buyPrice} onChange={e => setBuyPrice(e.target.value.replace(/[^0-9.]/g, ''))} autoFocus className="cn-input tabular" placeholder="0" />
+            </label>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={labelStyle}>{isVI ? 'Số CCQ' : 'Units'}</span>
+              <input type="text" inputMode="decimal" value={buyUnits} onChange={e => setBuyUnits(e.target.value.replace(/[^0-9.]/g, ''))} className="cn-input tabular" placeholder="0" />
+            </label>
+            {buyPrice && buyUnits && Number(buyPrice) > 0 && Number(buyUnits) > 0 && (
+              <div style={{ background: 'var(--c-navy-tint)', borderRadius: 8, padding: '6px 10px', fontSize: 12, color: 'var(--c-navy)', fontVariantNumeric: 'tabular-nums' }}>
+                {isVI ? 'Tổng' : 'Total'}: {fmt(Math.round(Number(buyPrice) * Number(buyUnits)))}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+              <button onClick={() => setBuyModal(null)} style={{ ...btnBase, flex: 1, padding: '10px 14px', background: 'transparent', color: 'var(--c-ink)', border: '1px solid var(--c-line)' }}>{isVI ? 'Hủy' : 'Cancel'}</button>
+              <button onClick={handleRecordBuy} disabled={saving || !buyPrice || !buyUnits || Number(buyPrice) <= 0 || Number(buyUnits) <= 0} style={{ ...btnBase, flex: 2, padding: '10px 14px', background: 'var(--c-btn-primary)', color: '#fff', opacity: saving || !buyPrice || !buyUnits ? 0.6 : 1 }}>
+                {saving ? (isVI ? 'Đang lưu...' : 'Saving...') : (isVI ? 'Lưu' : 'Save')}
+              </button>
+            </div>
+          </div>
         </DModal>
       )}
     </div>
