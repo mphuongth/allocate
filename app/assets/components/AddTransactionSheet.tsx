@@ -132,6 +132,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
   const [fundId, setFundId] = useState('')
   const [amount, setAmount] = useState('')
   const [units, setUnits] = useState('')
+  const [nav, setNav] = useState('')  // editable unit price; defaults to the fund's current NAV
 
   // bank fields
   const [bankName, setBankName] = useState('')
@@ -200,6 +201,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
       setFundId(existing.fund_id || '')
       setAmount(existing.amount_vnd != null ? String(existing.amount_vnd) : '')
       setUnits(existing.units != null ? String(existing.units) : '')
+      setNav(existing.unit_price != null ? String(existing.unit_price) : '')
       setNote(existing.notes || '')
     } else if (at === 'bank') {
       setBankAmount(existing.amount_vnd != null ? String(existing.amount_vnd) : '')
@@ -242,6 +244,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
     setFundId('')
     setAmount('')
     setUnits('')
+    setNav('')
     setBankName('')
     setDepositType('term')
     setBankAmount('')
@@ -283,10 +286,14 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
     setError('')
   }
 
-  // Auto-calculate units from amount when fund is selected
+  // Fund pricing: NAV is editable (the actual purchase price). It falls back to
+  // the fund's current NAV, and units derive from amount ÷ NAV (two-way linked).
   const selectedFund = funds.find(f => f.id === fundId)
-  const autoUnits = selectedFund && amount && !units
-    ? (Number(amount.replace(/\./g, '')) / selectedFund.nav).toFixed(2)
+  const navNum = Number(nav) || selectedFund?.nav || 0
+  const displayNav = nav !== '' ? nav : (selectedFund ? String(selectedFund.nav) : '')
+  const navIsCurrent = !!selectedFund && (nav === '' || Number(nav) === selectedFund.nav)
+  const autoUnits = navNum > 0 && amount && !units
+    ? (Number(amount.replace(/\./g, '')) / navNum).toFixed(2)
     : units
 
   // ── Sell derived state ──────────────────────────────────────────────────
@@ -348,11 +355,12 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
         const amt = Number(amount.replace(/\./g, ''))
         if (!fundId) { setError(t('fundRequired')); return }
         if (!amt) { setError(t('amountRequired')); return }
-        const u = units ? Number(units) : (selectedFund ? amt / selectedFund.nav : null)
+        const navV = Number(nav) || selectedFund?.nav || null
+        const u = units ? Number(units) : (navV ? amt / navV : null)
         payload = {
           asset_type: 'fund', fund_id: fundId, investment_date: date,
           amount_vnd: amt, units: u,
-          unit_price: u && amt ? amt / u : (selectedFund?.nav ?? null),
+          unit_price: navV,
           goal_id: goalId || null, notes: note || null,
         }
       } else if (assetType === 'bank') {
@@ -478,12 +486,13 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
       const amt = Number(amount.replace(/\./g, ''))
       if (!fundId) { setError(t('fundRequired')); return }
       if (!amt) { setError(t('amountRequired')); return }
+      const navV = Number(nav) || selectedFund?.nav || null
       body = {
         ...body,
         fund_id: fundId,
         amount_vnd: amt,
-        units: units ? Number(units) : (selectedFund ? amt / selectedFund.nav : null),
-        unit_price: selectedFund?.nav ?? null,
+        units: units ? Number(units) : (navV ? amt / navV : null),
+        unit_price: navV,
       }
     } else if (assetType === 'bank') {
       const amt = Number(bankAmount.replace(/\./g, ''))
@@ -638,7 +647,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
                 <label style={labelStyle}>{t('fund')}</label>
                 <select
                   value={fundId}
-                  onChange={(e) => { setFundId(e.target.value); setUnits('') }}
+                  onChange={(e) => { setFundId(e.target.value); setUnits(''); setNav('') }}
                   style={{ ...inputStyle }}
                 >
                   {funds.map(f => (
@@ -655,7 +664,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
                   </div>
                 )}
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr 1fr', gap: 10 }}>
                 <div>
                   <label style={labelStyle}>{t('amount')}</label>
                   <input
@@ -668,13 +677,26 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
                   />
                 </div>
                 <div>
+                  <label style={labelStyle}>{t('nav')}</label>
+                  <input
+                    data-testid="buy-fund-nav-input"
+                    type="number"
+                    step="0.01"
+                    value={displayNav}
+                    onChange={(e) => { setNav(e.target.value); setUnits('') }}
+                    placeholder={selectedFund ? String(selectedFund.nav) : '0'}
+                    style={inputStyle}
+                  />
+                  {navIsCurrent && <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 4 }}>{t('navCurrent')}</div>}
+                </div>
+                <div>
                   <label style={labelStyle}>{t('units')}</label>
                   <input
                     type="number"
                     step="0.01"
                     value={units || autoUnits || ''}
-                    onChange={(e) => setUnits(e.target.value)}
-                    placeholder="Auto"
+                    onChange={(e) => { setUnits(e.target.value); setAmount(navNum > 0 && e.target.value ? String(Math.round(Number(e.target.value) * navNum)) : amount) }}
+                    placeholder={t('unitsAuto')}
                     style={inputStyle}
                   />
                 </div>
