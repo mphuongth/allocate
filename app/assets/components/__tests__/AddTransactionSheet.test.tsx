@@ -227,6 +227,65 @@ describe('AddTransactionSheet — gold sell (quantity × price) (issue #232)', (
   })
 })
 
+describe('AddTransactionSheet — editable NAV on a fund buy', () => {
+  const fundsAndGoals = (url: string, _init?: RequestInit) => {
+    if (String(url).includes('/funds')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([{ id: 'f1', name: 'VESAF', nav: 20000, code: 'VES', fund_type: 'equity' }]) })
+    }
+    if (String(url).includes('/savings-goals')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ goals: [] }) })
+    }
+    return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
+  }
+
+  it('prefills NAV from the selected fund and derives units from amount ÷ NAV', async () => {
+    const fetchMock = vi.fn(fundsAndGoals)
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<AddTransactionSheet open onClose={vi.fn()} onSaved={vi.fn()} />)
+
+    // NAV field is present and prefilled with the fund's current NAV (20,000).
+    const navInput = await screen.findByTestId('buy-fund-nav-input') as HTMLInputElement
+    await waitFor(() => expect(navInput.value).toBe('20,000'))
+
+    // Enter amount; units derive from amount ÷ NAV.
+    fireEvent.change(screen.getByPlaceholderText('5,000,000'), { target: { value: '1000000' } })
+    fireEvent.click(screen.getByText('save'))
+
+    await waitFor(() => {
+      const post = fetchMock.mock.calls.find((c) => String(c[0]).includes('/investment-transactions') && (c[1] as RequestInit)?.method === 'POST')
+      expect(post).toBeTruthy()
+      const body = JSON.parse(String((post![1] as RequestInit).body))
+      expect(body.asset_type).toBe('fund')
+      expect(body.amount_vnd).toBe(1_000_000)
+      expect(body.unit_price).toBe(20_000)   // the (default) NAV
+      expect(body.units).toBe(50)            // 1,000,000 ÷ 20,000
+    })
+  })
+
+  it('uses an edited NAV as the unit_price and recomputes units', async () => {
+    const fetchMock = vi.fn(fundsAndGoals)
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<AddTransactionSheet open onClose={vi.fn()} onSaved={vi.fn()} />)
+
+    const navInput = await screen.findByTestId('buy-fund-nav-input') as HTMLInputElement
+    await waitFor(() => expect(navInput.value).toBe('20,000'))
+
+    fireEvent.change(screen.getByPlaceholderText('5,000,000'), { target: { value: '1000000' } })
+    fireEvent.change(navInput, { target: { value: '25000' } })   // override NAV
+    fireEvent.click(screen.getByText('save'))
+
+    await waitFor(() => {
+      const post = fetchMock.mock.calls.find((c) => String(c[0]).includes('/investment-transactions') && (c[1] as RequestInit)?.method === 'POST')
+      expect(post).toBeTruthy()
+      const body = JSON.parse(String((post![1] as RequestInit).body))
+      expect(body.unit_price).toBe(25_000)   // edited NAV wins
+      expect(body.units).toBe(40)            // 1,000,000 ÷ 25,000
+    })
+  })
+})
+
 describe('AddTransactionSheet — bank term interest receivable (issue #245)', () => {
   // The box should show the interest the user actually receives by maturity,
   // prorated over the deposit term — not the full-year interest.
