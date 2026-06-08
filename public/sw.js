@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v6'
+const CACHE_VERSION = 'v7'
 const API_CACHE = `api-v1-${CACHE_VERSION}`
 const STATIC_CACHE = `static-assets-${CACHE_VERSION}`
 const PAGE_CACHE = `pages-${CACHE_VERSION}`
@@ -39,9 +39,14 @@ self.addEventListener('fetch', (event) => {
   // Skip non-GET requests and chrome-extension / non-http(s) requests
   if (request.method !== 'GET' || !url.protocol.startsWith('http')) return
 
-  // API routes — NetworkFirst, 24 h cache, 10 s timeout
+  // API routes — NetworkFirst, 24 h cache. The timeout exists only to fall back
+  // to cache when the network is dead; a real offline fetch rejects almost
+  // immediately, so this window should be generous enough to never abort a
+  // slow-but-alive response (e.g. a cold serverless start aggregating the
+  // dashboard overview). 10 s was too tight and surfaced spurious "Offline"
+  // errors on good connections.
   if (url.pathname.startsWith('/api/v1/')) {
-    event.respondWith(networkFirst(event, request, API_CACHE, 10_000))
+    event.respondWith(networkFirst(event, request, API_CACHE, 30_000))
     return
   }
 
