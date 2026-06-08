@@ -310,18 +310,23 @@ export async function GET() {
     }
   }
 
-  // Recurring savings count toward a goal once the month they apply to has
-  // arrived (real-saved model, mirroring insurance). There is no investment_
-  // transactions row for these, so add them straight to the goal totals. Equal
-  // amounts go to currentValue and totalInvested (no growth modeled), keeping
-  // P&L neutral. These are NOT added to totalAssets/netWorth — like insurance
-  // saved progress, they reflect plan fulfilment, not a verified account balance.
+  // Recurring savings count once the month they apply to has arrived (real-saved
+  // model, mirroring insurance). There is no investment_transactions row for
+  // these, so add them straight to the running totals. Equal amounts go to value
+  // and invested (no growth modeled), keeping P&L neutral. They count toward net
+  // worth (totalAssets, the bank asset-type bucket, and global invested) and,
+  // when allocated, toward their goal. They are intentionally NOT added to the
+  // Unallocated "available to assign" card — these are plan-driven balances, not
+  // loose holdings that can be assigned or sold from there.
   const recContributions = realizedRecurringContributions(
     recSavingsRes.data ?? [],
     plans,
     recOverridesRes.data ?? [],
   )
   for (const c of recContributions) {
+    totalAssets += c.amount
+    totalInvestedGlobal += c.amount
+    nonFundByType.bank += c.amount
     if (c.goalId && goalMap.has(c.goalId)) {
       const g = goalMap.get(c.goalId)!
       g.currentValue += c.amount

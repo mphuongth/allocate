@@ -16,6 +16,12 @@ const MONTH = now.getMonth() + 1
 const YEAR = now.getFullYear()
 const MONTH_START = `${YEAR}-${String(MONTH).padStart(2, '0')}-01`
 
+async function netWorth(page: import('@playwright/test').Page): Promise<number> {
+  const res = await page.request.get('/api/v1/dashboard/overview')
+  expect(res.ok()).toBeTruthy()
+  return (await res.json()).netWorth.netWorth as number
+}
+
 test('recurring saving shows in goal history and counts toward progress', async ({ page }) => {
   const goal = await api.createGoal({ goal_name: 'E2E Recurring Goal', target_amount: 100_000_000 })
   cleanup.add(() => api.deleteGoal(goal.goal_id))
@@ -24,6 +30,10 @@ test('recurring saving shows in goal history and counts toward progress', async 
   const plan = await api.createMonthlyPlan({ month: MONTH, year: YEAR, salary_vnd: 30_000_000 })
   cleanup.add(() => api.deleteMonthlyPlan(plan.id))
 
+  // Net worth baseline before the recurring saving exists (delta is robust to
+  // whatever else lives in the test account).
+  const before = await netWorth(page)
+
   const saving = await api.createRecurringSaving({
     name: 'E2E VCB Recurring',
     goal_id: goal.goal_id,
@@ -31,6 +41,9 @@ test('recurring saving shows in goal history and counts toward progress', async 
     effective_from: MONTH_START,
   })
   cleanup.add(() => api.deleteRecurringSaving(saving.saving_id))
+
+  // Net worth: the realized recurring saving (7M) is now counted.
+  expect(await netWorth(page)).toBe(before + 7_000_000)
 
   await page.goto('/dashboard')
   await page.waitForLoadState('networkidle')
