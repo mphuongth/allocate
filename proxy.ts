@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  if (pathname === '/' || pathname.startsWith('/auth/') || pathname.startsWith('/api/cron/')) {
+  if (pathname === '/' || pathname.startsWith('/auth/')) {
     return NextResponse.next()
   }
 
@@ -43,5 +43,10 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon\\.ico|sw\\.js|manifest\\.webmanifest|~offline|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+  // Skip `/api/*`: every route handler authenticates itself (user session or
+  // CRON_SECRET) and can refresh the session cookie on its own, so running the
+  // middleware there only adds a redundant getUser() round-trip to Supabase
+  // Auth on each data fetch — and would wrongly redirect unauthenticated API
+  // calls to the login HTML instead of returning a 401.
+  matcher: ['/((?!api|_next/static|_next/image|favicon\\.ico|sw\\.js|manifest\\.webmanifest|~offline|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
 }
