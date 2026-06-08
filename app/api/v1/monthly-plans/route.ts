@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
 
   if (searchParams.get('full') === 'true') {
     const planDateForActive = `${plan.year}-${String(plan.month).padStart(2, '0')}-01`
-    const [invRes, savRes, overridesRes, expRes, insRes, exclRes, insOverridesRes, goalsRes, fundsRes, otherExpRes, recSavRes, recSavOverridesRes] = await Promise.all([
+    const [invRes, savRes, overridesRes, expRes, insRes, exclRes, insOverridesRes, goalsRes, fundsRes, otherExpRes, recSavRes, recSavOverridesRes, dcaSkipsRes] = await Promise.all([
       supabase
         .from('investment_transactions')
         .select('transaction_id, plan_id, fund_id, goal_id, amount_vnd, units, unit_price, investment_date, is_dca_seeded, funds(name, nav), savings_goals(goal_name)')
@@ -77,10 +77,16 @@ export async function GET(request: NextRequest) {
       supabase
         .from('recurring_saving_overrides')
         .select('recurring_saving_id, monthly_amount_override_vnd').eq('plan_id', plan.id),
+      supabase
+        .from('plan_dca_skips')
+        .select('fund_id').eq('plan_id', plan.id),
     ])
     // Auto-seed DCA fund entries and keep pending rows in sync with current DCA amount
     const allFunds = fundsRes.data ?? []
-    const dcaFunds = allFunds.filter((f) => f.is_dca && f.dca_monthly_amount_vnd)
+    const skippedFundIds = new Set((dcaSkipsRes.data ?? []).map((s) => s.fund_id))
+    // Skipped funds are excluded from seeding this month (the skip endpoint also
+    // removes any pending row), so they drop out of the plan until restored.
+    const dcaFunds = allFunds.filter((f) => f.is_dca && f.dca_monthly_amount_vnd && !skippedFundIds.has(f.id))
     const existingInvestments = invRes.data ?? []
 
     // Insert rows for DCA funds that have no entry yet for this plan
@@ -93,6 +99,7 @@ export async function GET(request: NextRequest) {
           user_id: user.id,
           plan_id: plan.id,
           fund_id: f.id,
+          goal_id: f.dca_goal_id ?? null,
           asset_type: 'fund',
           amount_vnd: f.dca_monthly_amount_vnd,
           units: null,
@@ -103,12 +110,12 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Update pending DCA rows whose amount no longer matches the fund's current DCA setting
-    // (happens when DCA is toggled off→on with a new amount)
+    // Keep pending DCA rows in sync with the fund's current DCA amount and goal
+    // (amount changes when DCA is re-toggled; goal changes when dca_goal_id is set).
     const staleRows = existingInvestments.filter((inv) => {
       if (!inv.is_dca_seeded || inv.units !== null) return false
       const fund = dcaFunds.find((f) => f.id === inv.fund_id)
-      return fund && fund.dca_monthly_amount_vnd !== inv.amount_vnd
+      return fund && (fund.dca_monthly_amount_vnd !== inv.amount_vnd || (fund.dca_goal_id ?? null) !== (inv.goal_id ?? null))
     })
     if (staleRows.length > 0) {
       await Promise.all(
@@ -116,7 +123,7 @@ export async function GET(request: NextRequest) {
           const fund = dcaFunds.find((f) => f.id === inv.fund_id)!
           return supabase
             .from('investment_transactions')
-            .update({ amount_vnd: fund.dca_monthly_amount_vnd })
+            .update({ amount_vnd: fund.dca_monthly_amount_vnd, goal_id: fund.dca_goal_id ?? null })
             .eq('transaction_id', inv.transaction_id)
         })
       )
@@ -144,6 +151,7 @@ export async function GET(request: NextRequest) {
       other_expenses:          otherExpRes.data ?? [],
       recurring_savings:           recSavRes.data ?? [],
       recurring_saving_overrides:  recSavOverridesRes.data ?? [],
+      dca_skips:                   dcaSkipsRes.data ?? [],
     })
   }
 

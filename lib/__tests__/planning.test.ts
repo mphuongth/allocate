@@ -62,33 +62,77 @@ describe('recurringSavingsTotal', () => {
   })
 })
 
-describe('buildByGoal', () => {
+describe('buildByGoal — planned vs contributed', () => {
   const goalsById = new Map([['g-1', 'Retirement'], ['g-2', 'House']])
 
-  it('groups fund investments, one-off savings and recurring savings under one goal', () => {
-    const investments: GoalInvestment[] = [
-      { goal_id: 'g-1', amount_vnd: 5_000_000, is_dca_seeded: true, funds: { name: 'VESAF' }, savings_goals: { goal_name: 'Retirement' } },
-    ]
-    const directSavings: GoalDirectSaving[] = [
-      { goal_id: 'g-1', amount_vnd: 1_000_000, savings_goals: { goal_name: 'Retirement' } },
-    ]
-    const recurring = resolveRecurringSavings([saving({ goal_id: 'g-1', amount_vnd: 2_000_000 })], [])
+  function dca(o: Partial<GoalInvestment> = {}): GoalInvestment {
+    return {
+      goal_id: 'g-1',
+      amount_vnd: 5_000_000,
+      is_dca_seeded: true,
+      units: null,
+      fund_id: 'f-1',
+      transaction_id: 'tx-1',
+      funds: { name: 'VESAF' },
+      savings_goals: { goal_name: 'Retirement' },
+      ...o,
+    }
+  }
 
-    const rows = buildByGoal(investments, directSavings, recurring, goalsById)
-    expect(rows).toHaveLength(1)
-    expect(rows[0].goalName).toBe('Retirement')
-    expect(rows[0].totalAllocated).toBe(8_000_000)
-    expect(rows[0].items.map(i => i.type)).toEqual(['fund', 'bank', 'bank'])
+  it('plans fund DCA + recurring savings; recorded buys count as contributed', () => {
+    const investments = [dca({ amount_vnd: 5_000_000, units: 100 })] // recorded → contributed
+    const recurring = resolveRecurringSavings([saving({ goal_id: 'g-1', amount_vnd: 2_000_000 })], [])
+    const [row] = buildByGoal(investments, [], recurring, goalsById)
+
+    expect(row.goalName).toBe('Retirement')
+    expect(row.totalAllocated).toBe(7_000_000) // planned = DCA 5M + recurring 2M
+    expect(row.contributed).toBe(5_000_000)    // recorded DCA buy
+    expect(row.items.map(i => i.type)).toEqual(['fund', 'bank'])
+    expect(row.items[0].recorded).toBe(true)
   })
 
-  it('excludes skipped recurring savings from the goal total', () => {
+  it('a pending DCA row is planned but not yet contributed', () => {
+    const [row] = buildByGoal([dca({ units: null })], [], [], goalsById)
+    expect(row.totalAllocated).toBe(5_000_000)
+    expect(row.contributed).toBe(0)
+    expect(row.items[0].recorded).toBe(false)
+  })
+
+  it('bank deposits count as contributed but are not planned line items', () => {
+    const directSavings: GoalDirectSaving[] = [
+      { goal_id: 'g-1', amount_vnd: 3_000_000, savings_goals: { goal_name: 'Retirement' } },
+    ]
+    const [row] = buildByGoal([], directSavings, [], goalsById)
+    expect(row.totalAllocated).toBe(0)        // not planned
+    expect(row.contributed).toBe(3_000_000)   // but contributed
+    expect(row.items).toHaveLength(0)
+  })
+
+  it('ad-hoc fund buys (not DCA) contribute without being planned line items', () => {
+    const adhoc = dca({ is_dca_seeded: false, units: 50, amount_vnd: 1_000_000 })
+    const [row] = buildByGoal([adhoc], [], [], goalsById)
+    expect(row.totalAllocated).toBe(0)
+    expect(row.contributed).toBe(1_000_000)
+    expect(row.items).toHaveLength(0)
+  })
+
+  it('excludes skipped recurring savings from planned', () => {
     const recurring = resolveRecurringSavings(
       [saving({ goal_id: 'g-2', amount_vnd: 4_000_000 })],
       [{ recurring_saving_id: 's-1', monthly_amount_override_vnd: 0 }],
     )
-    const rows = buildByGoal([], [], recurring, goalsById)
-    expect(rows[0].totalAllocated).toBe(0)
-    expect(rows[0].items[0].skipped).toBe(true)
+    const [row] = buildByGoal([], [], recurring, goalsById)
+    expect(row.totalAllocated).toBe(0)
+    expect(row.items[0].skipped).toBe(true)
+  })
+
+  it('renders a skipped DCA fund as a struck line with 0 planned', () => {
+    const skipped = dca({ skipped: true, amount_vnd: 5_000_000 })
+    const [row] = buildByGoal([skipped], [], [], goalsById)
+    expect(row.totalAllocated).toBe(0)
+    expect(row.items[0].skipped).toBe(true)
+    expect(row.items[0].isFundDca).toBe(true)
+    expect(row.items[0].amount).toBe(0)
   })
 
   it('places the unallocated group (null goal) last', () => {

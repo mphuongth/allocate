@@ -87,6 +87,7 @@ const defaultProps = {
   otherExpenses: [] as OtherExpense[],
   recurringSavings: [],
   recurringSavingOverrides: [],
+  dcaSkips: [],
   funds: [],
   goals: [],
   onPlanCreated: vi.fn(),
@@ -338,21 +339,34 @@ describe('MobilePlanningView — recurring savings in By goal', () => {
     },
   ]
 
-  it('renders a recurring saving under its goal and includes it in the goal total', async () => {
+  // A planned DCA fund line (seeded, not yet bought) toward Retirement.
+  const dcaInvestments: FundInvestment[] = [
+    { ...baseInvestments[0], is_dca_seeded: true, units: null },
+  ]
+
+  it('renders a recurring saving under its goal and includes it in the planned total', async () => {
     render(
       <MobilePlanningView
         {...defaultProps}
         plan={basePlan}
-        investments={baseInvestments}
+        investments={dcaInvestments}
         recurringSavings={recurringSavings}
       />,
     )
-    // Goal total = 5M fund DCA + 2M recurring saving = 7M (full-format),
+    // Planned = 5M fund DCA + 2M recurring saving = 7M (full-format),
     // shown in the section header and the goal row.
     expect(screen.getAllByText('₫ 7000000').length).toBeGreaterThan(0)
     // Expand the Retirement goal — recurring saving name becomes visible
     await userEvent.click(screen.getByText('Retirement'))
     expect(screen.getByText('VCB Savings')).toBeInTheDocument()
+  })
+
+  it('counts a recorded fund buy as contributed, not just planned', async () => {
+    const recorded: FundInvestment[] = [{ ...baseInvestments[0], is_dca_seeded: true, units: 100 }]
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} investments={recorded} />)
+    // Contributed footer reflects the recorded 5M buy (compact format)
+    expect(screen.getByTestId('planning-contributed')).toBeInTheDocument()
+    expect(screen.getAllByText(/5\.0M ₫/).length).toBeGreaterThan(0)
   })
 
   it('shows a skipped recurring saving with a zero effective amount', async () => {
@@ -372,5 +386,27 @@ describe('MobilePlanningView — recurring savings in By goal', () => {
   it('exposes a Manage savings action on the By goal section', () => {
     render(<MobilePlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} />)
     expect(screen.getByTestId('mobile-manage-savings')).toBeInTheDocument()
+  })
+
+  it('shows a Buy action on a pending DCA fund line', async () => {
+    const pending: FundInvestment[] = [{ ...baseInvestments[0], is_dca_seeded: true, units: null }]
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} investments={pending} />)
+    await userEvent.click(screen.getByText('Retirement'))
+    expect(screen.getByRole('button', { name: /Record buy/i })).toBeInTheDocument()
+  })
+
+  it('renders a skipped DCA fund with a Restore action', async () => {
+    render(
+      <MobilePlanningView
+        {...defaultProps}
+        plan={basePlan}
+        goals={[{ goal_id: 'g1', goal_name: 'Retirement' }]}
+        funds={[{ id: 'f1', name: 'VFMVF1', nav: 36120, is_dca: true, dca_monthly_amount_vnd: 5_000_000, dca_goal_id: 'g1' }]}
+        dcaSkips={[{ fund_id: 'f1' }]}
+      />,
+    )
+    await userEvent.click(screen.getByText('Retirement'))
+    expect(screen.getByText('VFMVF1')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Restore DCA/i })).toBeInTheDocument()
   })
 })
