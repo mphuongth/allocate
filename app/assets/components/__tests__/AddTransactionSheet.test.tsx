@@ -246,7 +246,7 @@ describe('AddTransactionSheet — editable NAV on a fund buy', () => {
 
     // NAV field is present and prefilled with the fund's current NAV (20,000).
     const navInput = await screen.findByTestId('buy-fund-nav-input') as HTMLInputElement
-    await waitFor(() => expect(navInput.value).toBe('20000'))
+    await waitFor(() => expect(navInput.value).toBe('20,000'))
 
     // Enter amount; units derive from amount ÷ NAV.
     fireEvent.change(screen.getByPlaceholderText('5,000,000'), { target: { value: '1000000' } })
@@ -270,7 +270,7 @@ describe('AddTransactionSheet — editable NAV on a fund buy', () => {
     render(<AddTransactionSheet open onClose={vi.fn()} onSaved={vi.fn()} />)
 
     const navInput = await screen.findByTestId('buy-fund-nav-input') as HTMLInputElement
-    await waitFor(() => expect(navInput.value).toBe('20000'))
+    await waitFor(() => expect(navInput.value).toBe('20,000'))
 
     fireEvent.change(screen.getByPlaceholderText('5,000,000'), { target: { value: '1000000' } })
     fireEvent.change(navInput, { target: { value: '25000' } })   // override NAV

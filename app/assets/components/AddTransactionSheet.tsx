@@ -113,6 +113,18 @@ type AssetType = typeof ASSET_TYPES[number]['v']
 
 const GOLD_PROVIDERS = ['PNJ', 'DOJI', 'SJC', 'Bảo Tín']
 
+// Group a numeric string's integer part with thousand separators while keeping
+// the user's exact fractional input (NAVs can carry decimals). "20000" → "20,000".
+function groupThousands(value: string): string {
+  if (value === '') return ''
+  const cleaned = value.replace(/[^0-9.]/g, '')
+  const dot = cleaned.indexOf('.')
+  const intPart = dot === -1 ? cleaned : cleaned.slice(0, dot)
+  const decPart = dot === -1 ? '' : cleaned.slice(dot + 1).replace(/\./g, '')
+  const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  return dot === -1 ? grouped : `${grouped}.${decPart}`
+}
+
 export default function AddTransactionSheet({ open, onClose, onSaved, desktop, existing }: Props) {
   const t = useTranslations('addTx')
   const tc = useTranslations('common')
@@ -680,11 +692,11 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
                   <label style={labelStyle}>{t('nav')}</label>
                   <input
                     data-testid="buy-fund-nav-input"
-                    type="number"
-                    step="0.01"
-                    value={displayNav}
-                    onChange={(e) => { setNav(e.target.value); setUnits('') }}
-                    placeholder={selectedFund ? String(selectedFund.nav) : '0'}
+                    type="text"
+                    inputMode="decimal"
+                    value={groupThousands(displayNav)}
+                    onChange={(e) => { setNav(e.target.value.replace(/,/g, '').replace(/[^0-9.]/g, '')); setUnits('') }}
+                    placeholder={selectedFund ? groupThousands(String(selectedFund.nav)) : '0'}
                     style={inputStyle}
                   />
                   {navIsCurrent && <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 4 }}>{t('navCurrent')}</div>}
