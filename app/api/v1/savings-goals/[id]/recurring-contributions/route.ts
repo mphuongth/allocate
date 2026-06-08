@@ -1,0 +1,81 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { ValidationError, validateUUID } from '@/lib/validation'
+import { realizedRecurringContributions } from '@/lib/finance'
+
+// Recurring savings are plan definitions, not logged transactions, so they never
+// appear in investment_transactions. This endpoint synthesizes read-only history
+// rows for a goal's recurring savings in months that have arrived (real-saved
+// model, mirroring insurance) — the same data the dashboard adds to goal
+// progress. Rows are shaped like the investment-transactions response so the goal
+// detail History tab can merge them directly.
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+
+  let goalId: string
+  try {
+    goalId = validateUUID(id, 'goal_id')
+  } catch (e) {
+    if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
+    throw e
+  }
+
+  const supabase = await createSupabaseServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const [savingsRes, plansRes] = await Promise.all([
+    supabase
+      .from('recurring_savings')
+      .select('saving_id, goal_id, name, amount_vnd, effective_from, effective_to')
+      .eq('user_id', user.id)
+      .eq('goal_id', goalId),
+    supabase
+      .from('monthly_plans')
+      .select('id, month, year')
+      .eq('user_id', user.id),
+  ])
+
+  if (savingsRes.error || plansRes.error) {
+    return NextResponse.json({ error: 'Failed to fetch recurring contributions' }, { status: 500 })
+  }
+
+  const plans = (plansRes.data ?? []) as { id: string; month: number; year: number }[]
+  const planIds = plans.map((p) => p.id)
+
+  const overridesRes = planIds.length > 0
+    ? await supabase
+        .from('recurring_saving_overrides')
+        .select('plan_id, recurring_saving_id, monthly_amount_override_vnd')
+        .in('plan_id', planIds)
+    : { data: [], error: null }
+
+  const contributions = realizedRecurringContributions(
+    savingsRes.data ?? [],
+    plans,
+    overridesRes.data ?? [],
+  )
+
+  // Shape as read-only history rows mirroring the investment-transactions response.
+  const rows = contributions.map((c) => ({
+    transaction_id: `recurring:${c.savingId}:${c.date}`,
+    transaction_type: 'investment',
+    asset_type: 'bank',
+    fund_id: null,
+    fund_name: null,
+    fund_code: null,
+    parent_transaction_id: null,
+    investment_date: c.date,
+    amount_vnd: c.amount,
+    units: null,
+    unit_price: null,
+    interest_rate: null,
+    expiry_date: null,
+    notes: c.name,
+    principal_withdrawn: null,
+    units_withdrawn: null,
+    is_recurring: true,
+  }))
+
+  return NextResponse.json({ contributions: rows })
+}

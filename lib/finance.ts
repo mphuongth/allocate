@@ -91,6 +91,80 @@ export function isPlanMonthRealized(year: number, month: number): boolean {
   return year < nowYear || (year === nowYear && month <= nowMonth)
 }
 
+// ─── Recurring savings — realized-saved expansion ──────────────────────────────
+// Recurring savings are plan definitions, not logged transactions. Mirroring the
+// insurance real-saved model, a recurring saving counts toward its goal once the
+// month it applies to has arrived. This expands the definitions into one
+// contribution per (realized plan-month × active saving), so the same result
+// feeds both the goal progress (dashboard) and the goal history (synthesized
+// read-only rows). A month qualifies only when a monthly plan exists for it AND
+// the month is realized — matching how insurance allocations are counted.
+
+export interface RecurringSavingDef {
+  saving_id: string
+  goal_id: string | null
+  name: string
+  amount_vnd: number
+  effective_from: string | null // 'YYYY-MM-DD' (stored as first-of-month) or null = open
+  effective_to: string | null
+}
+
+export interface RecurringPlanMonth {
+  id: string
+  year: number
+  month: number
+}
+
+export interface RecurringSavingOverrideRow {
+  plan_id: string
+  recurring_saving_id: string
+  monthly_amount_override_vnd: number
+}
+
+export interface RealizedRecurringContribution {
+  savingId: string
+  goalId: string | null
+  name: string
+  amount: number
+  date: string // 'YYYY-MM-01' — the realized month
+  planId: string
+}
+
+export function realizedRecurringContributions(
+  savings: RecurringSavingDef[],
+  plans: RecurringPlanMonth[],
+  overrides: RecurringSavingOverrideRow[],
+): RealizedRecurringContribution[] {
+  const ovMap = new Map<string, number>()
+  for (const o of overrides) {
+    ovMap.set(`${o.plan_id}::${o.recurring_saving_id}`, o.monthly_amount_override_vnd)
+  }
+
+  const out: RealizedRecurringContribution[] = []
+  for (const p of plans) {
+    if (!isPlanMonthRealized(p.year, p.month)) continue
+    const ym = `${p.year}-${String(p.month).padStart(2, '0')}`
+    for (const s of savings) {
+      // Effective window is inclusive and compared at month (YYYY-MM) granularity.
+      if (s.effective_from && s.effective_from.slice(0, 7) > ym) continue
+      if (s.effective_to && s.effective_to.slice(0, 7) < ym) continue
+      const ov = ovMap.get(`${p.id}::${s.saving_id}`)
+      // override 0 = skip this month; any other positive override replaces the base.
+      const amount = ov === 0 ? 0 : ov != null ? ov : s.amount_vnd
+      if (amount <= 0) continue
+      out.push({
+        savingId: s.saving_id,
+        goalId: s.goal_id,
+        name: s.name,
+        amount,
+        date: `${ym}-01`,
+        planId: p.id,
+      })
+    }
+  }
+  return out
+}
+
 // A contribution counts toward the CURRENT premium cycle when it was made on or
 // after the last settlement. Once a premium is marked paid, earlier savings
 // funded that (now-settled) cycle; contributions from the settlement day onward

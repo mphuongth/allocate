@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { calcProjectedInterest, isNavStale, insuranceStatus, isPlanMonthRealized, isInCurrentCycle } from '@/lib/finance'
+import { calcProjectedInterest, isNavStale, insuranceStatus, isPlanMonthRealized, isInCurrentCycle, realizedRecurringContributions } from '@/lib/finance'
 import { buildWithdrawalMaps } from '@/lib/withdrawalProgress'
 
 export const dynamic = 'force-dynamic'
@@ -10,7 +10,7 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const [plansRes, goalsRes, txRes, insuranceRes, insuranceSavingsRes, goldPriceRes] = await Promise.all([
+  const [plansRes, goalsRes, txRes, insuranceRes, insuranceSavingsRes, recSavingsRes, goldPriceRes] = await Promise.all([
     supabase.from('monthly_plans').select('id, month, year').eq('user_id', user.id),
     supabase
       .from('savings_goals')
@@ -29,6 +29,10 @@ export async function GET() {
       .select('insurance_member_id, amount_saved_vnd, saved_date, created_at')
       .eq('user_id', user.id),
     supabase
+      .from('recurring_savings')
+      .select('saving_id, goal_id, name, amount_vnd, effective_from, effective_to')
+      .eq('user_id', user.id),
+    supabase
       .from('gold_price_settings')
       .select('price_per_chi')
       .eq('user_id', user.id)
@@ -38,12 +42,15 @@ export async function GET() {
   const plans = (plansRes.data ?? []) as { id: string; month: number; year: number }[]
   const planIds = plans.map((p) => p.id)
 
-  const [insExclusionsRes, insOverridesRes] = await Promise.all([
+  const [insExclusionsRes, insOverridesRes, recOverridesRes] = await Promise.all([
     planIds.length > 0
       ? supabase.from('plan_excluded_insurance_members').select('plan_id, member_id').in('plan_id', planIds)
       : Promise.resolve({ data: [], error: null }),
     planIds.length > 0
       ? supabase.from('plan_insurance_member_overrides').select('plan_id, member_id, monthly_amount_override_vnd').in('plan_id', planIds)
+      : Promise.resolve({ data: [], error: null }),
+    planIds.length > 0
+      ? supabase.from('recurring_saving_overrides').select('plan_id, recurring_saving_id, monthly_amount_override_vnd').in('plan_id', planIds)
       : Promise.resolve({ data: [], error: null }),
   ])
 
@@ -300,6 +307,26 @@ export async function GET() {
     } else {
       unallocatedFunds.push({ ...fundItem, goalId: null })
       unallocatedFundValue += currentValue
+    }
+  }
+
+  // Recurring savings count toward a goal once the month they apply to has
+  // arrived (real-saved model, mirroring insurance). There is no investment_
+  // transactions row for these, so add them straight to the goal totals. Equal
+  // amounts go to currentValue and totalInvested (no growth modeled), keeping
+  // P&L neutral. These are NOT added to totalAssets/netWorth — like insurance
+  // saved progress, they reflect plan fulfilment, not a verified account balance.
+  const recContributions = realizedRecurringContributions(
+    recSavingsRes.data ?? [],
+    plans,
+    recOverridesRes.data ?? [],
+  )
+  for (const c of recContributions) {
+    if (c.goalId && goalMap.has(c.goalId)) {
+      const g = goalMap.get(c.goalId)!
+      g.currentValue += c.amount
+      g.totalInvested += c.amount
+      g.transactionCount += 1
     }
   }
 
