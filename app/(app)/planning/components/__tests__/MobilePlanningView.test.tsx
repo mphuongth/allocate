@@ -85,6 +85,8 @@ const defaultProps = {
   fixedExpenses: [] as FixedExpense[],
   insuranceMembers: [] as InsuranceMember[],
   otherExpenses: [] as OtherExpense[],
+  recurringSavings: [],
+  recurringSavingOverrides: [],
   funds: [],
   goals: [],
   onPlanCreated: vi.fn(),
@@ -320,5 +322,55 @@ describe('MobilePlanningView — collapsible sections', () => {
     await userEvent.click(sectionBtn)
     // Items should be hidden now
     expect(screen.queryByText('Rent')).not.toBeInTheDocument()
+  })
+})
+
+describe('MobilePlanningView — recurring savings in By goal', () => {
+  const recurringSavings = [
+    {
+      saving_id: 'rs1',
+      name: 'VCB Savings',
+      goal_id: 'g1',
+      amount_vnd: 2_000_000,
+      effective_from: null,
+      effective_to: null,
+      savings_goals: { goal_name: 'Retirement' },
+    },
+  ]
+
+  it('renders a recurring saving under its goal and includes it in the goal total', async () => {
+    render(
+      <MobilePlanningView
+        {...defaultProps}
+        plan={basePlan}
+        investments={baseInvestments}
+        recurringSavings={recurringSavings}
+      />,
+    )
+    // Goal total = 5M fund DCA + 2M recurring saving = 7M (full-format),
+    // shown in the section header and the goal row.
+    expect(screen.getAllByText('₫ 7000000').length).toBeGreaterThan(0)
+    // Expand the Retirement goal — recurring saving name becomes visible
+    await userEvent.click(screen.getByText('Retirement'))
+    expect(screen.getByText('VCB Savings')).toBeInTheDocument()
+  })
+
+  it('shows a skipped recurring saving with a zero effective amount', async () => {
+    render(
+      <MobilePlanningView
+        {...defaultProps}
+        plan={basePlan}
+        recurringSavings={recurringSavings}
+        recurringSavingOverrides={[{ recurring_saving_id: 'rs1', monthly_amount_override_vnd: 0 }]}
+      />,
+    )
+    // Expand the goal — the skipped saving is labelled and struck through
+    await userEvent.click(screen.getByText('Retirement'))
+    expect(screen.getByText(/Skipped this month/i)).toBeInTheDocument()
+  })
+
+  it('exposes a Manage savings action on the By goal section', () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} />)
+    expect(screen.getByTestId('mobile-manage-savings')).toBeInTheDocument()
   })
 })
