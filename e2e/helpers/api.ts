@@ -33,6 +33,27 @@ export async function deleteGoal(goalId: string) {
   await supabase.from('savings_goals').delete().eq('goal_id', goalId)
 }
 
+export async function createRecurringSaving(data: {
+  name: string
+  goal_id?: string | null
+  amount_vnd: number
+  effective_from?: string | null
+  effective_to?: string | null
+}) {
+  const userId = await getTestUserId()
+  const { data: saving, error } = await supabase
+    .from('recurring_savings')
+    .insert({ user_id: userId, ...data })
+    .select()
+    .single()
+  if (error) throw error
+  return saving
+}
+
+export async function deleteRecurringSaving(savingId: string) {
+  await supabase.from('recurring_savings').delete().eq('saving_id', savingId)
+}
+
 export async function createInsuranceMember(data: {
   member_name: string
   relationship: string

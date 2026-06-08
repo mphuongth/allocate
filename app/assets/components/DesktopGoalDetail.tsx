@@ -20,6 +20,7 @@ interface InvestmentTx {
   notes: string | null
   principal_withdrawn: number | null
   units_withdrawn: number | null
+  is_recurring?: boolean
 }
 
 interface Props {
@@ -64,9 +65,19 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
     setUnassignedIds([])
     // cache: 'no-store' — same reason as GoalDetailSheet: prevent the browser
     // from serving a stale list after an assign-from-Unallocated.
-    fetch(`/api/v1/investment-transactions?goal_id=${goal.goalId}&limit=200`, { cache: 'no-store' })
-      .then((r) => r.ok ? r.json() : { transactions: [] })
-      .then((res) => setTransactions(res.transactions ?? []))
+    // Recurring savings are plan-only (no investment_transactions row), so fetch
+    // their realized contributions separately and merge into the history list.
+    Promise.all([
+      fetch(`/api/v1/investment-transactions?goal_id=${goal.goalId}&limit=200`, { cache: 'no-store' })
+        .then((r) => r.ok ? r.json() : { transactions: [] }),
+      fetch(`/api/v1/savings-goals/${goal.goalId}/recurring-contributions`, { cache: 'no-store' })
+        .then((r) => r.ok ? r.json() : { contributions: [] }),
+    ])
+      .then(([txRes, recRes]) => {
+        const merged: InvestmentTx[] = [...(txRes.transactions ?? []), ...(recRes.contributions ?? [])]
+        merged.sort((a, b) => (a.investment_date < b.investment_date ? 1 : a.investment_date > b.investment_date ? -1 : 0))
+        setTransactions(merged)
+      })
       .catch(() => setTransactions([]))
       .finally(() => setTxLoading(false))
     // Gold is valued at the live market price per chỉ, not its purchase cost —
