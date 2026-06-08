@@ -42,8 +42,13 @@ test('recurring saving shows in goal history and counts toward progress', async 
   })
   cleanup.add(() => api.deleteRecurringSaving(saving.saving_id))
 
-  // Net worth: the realized recurring saving (7M) is now counted.
-  expect(await netWorth(page)).toBe(before + 7_000_000)
+  // Net worth: the realized recurring saving (7M) is now counted. Use a tolerance
+  // rather than exact equality — the account's interest-bearing deposits accrue
+  // projected interest against the wall clock, so net worth drifts by a few VND
+  // between the two reads.
+  const delta = (await netWorth(page)) - before
+  expect(delta).toBeGreaterThan(6_999_000)
+  expect(delta).toBeLessThan(7_010_000)
 
   await page.goto('/dashboard')
   await page.waitForLoadState('networkidle')
