@@ -395,6 +395,29 @@ describe('MobilePlanningView — recurring savings in By goal', () => {
     expect(screen.getByRole('button', { name: /Record buy/i })).toBeInTheDocument()
   })
 
+  it('opens the full Add-Transaction sheet (not the mini popup) when Buy is clicked', async () => {
+    // The canonical Add-Transaction sheet fetches funds + goals on open.
+    const fetchMock = vi.fn((url: string) =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(String(url).includes('savings-goals') ? { goals: [] } : []),
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      const pending: FundInvestment[] = [{ ...baseInvestments[0], is_dca_seeded: true, units: null }]
+      render(<MobilePlanningView {...defaultProps} plan={basePlan} investments={pending} />)
+      await userEvent.click(screen.getByText('Retirement'))
+      await userEvent.click(screen.getByRole('button', { name: /Record buy/i }))
+      // The full sheet exposes the asset-type picker (Fund / Bank / Gold); the
+      // old mini popup only had Price-per-unit + Units fields.
+      expect(await screen.findByText('Gold')).toBeInTheDocument()
+      expect(screen.queryByText(/Price \/ unit/i)).not.toBeInTheDocument()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('renders a skipped DCA fund with a Restore action', async () => {
     render(
       <MobilePlanningView
