@@ -163,4 +163,10 @@ test('desktop planning: a DCA fund is grouped under its goal with a Buy action a
   await expect(desktop.getByRole('button', { name: /Record buy|Ghi nhận mua/i }).first()).toBeVisible()
   // The allocation card shows the contributed-this-month footer.
   await expect(desktop.getByTestId('planning-contributed')).toBeVisible()
+
+  // Clicking Buy opens the canonical Add-Transaction sheet (pre-filled), not a
+  // mini popup — the asset-type picker (Fund / Bank / Gold) is the giveaway.
+  // The asset-type labels are hard-coded English, so they're locale-proof in CI.
+  await desktop.getByRole('button', { name: /Record buy|Ghi nhận mua/i }).first().click()
+  await expect(page.getByRole('button', { name: 'Gold', exact: true })).toBeVisible({ timeout: 5_000 })
 })

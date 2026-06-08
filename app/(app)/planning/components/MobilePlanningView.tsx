@@ -10,6 +10,7 @@ import {
 import { fmt, fmtCompact } from '@/lib/formatters'
 import FixedExpenseManager from './FixedExpenseManager'
 import RecurringSavingManager from './RecurringSavingManager'
+import AddTransactionSheet, { type EditableTransaction } from '@/app/assets/components/AddTransactionSheet'
 import { buildByGoal, resolveRecurringSavings, type GoalRow, type GoalItem } from '@/lib/planning'
 import type {
   MonthlyPlan, FundInvestment, DirectSaving, FixedExpense,
@@ -48,7 +49,6 @@ type SheetState =
   | { type: 'other-expense'; existing: OtherExpense | null }
   | { type: 'manage-fixed' }
   | { type: 'manage-recurring' }
-  | { type: 'buy'; transactionId: string; name: string }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -967,6 +967,10 @@ export default function MobilePlanningView({
   const locale = useLocale()
   const isVI = locale === 'vi'
   const [sheet, setSheet] = useState<SheetState>(null)
+  // Recording a DCA buy opens the canonical Add-Transaction sheet in edit mode,
+  // pre-filled from the planned investment, so saving completes that same
+  // planned row (PUT) rather than adding a duplicate contribution.
+  const [buyEdit, setBuyEdit] = useState<EditableTransaction | null>(null)
   const [overrideTarget, setOverrideTarget] = useState<{ type: 'fe' | 'ins' | 'rec'; id: string; name: string; defaultAmount: number } | null>(null)
 
   const monthLabel = getMonthLabel(month, year)
@@ -1098,18 +1102,21 @@ export default function MobilePlanningView({
 
   function openBuy(item: GoalItem) {
     if (!item.transactionId) return
-    setSheet({ type: 'buy', transactionId: item.transactionId, name: item.name })
-  }
-
-  async function handleRecordBuy(transactionId: string, price: number, units: number) {
-    await fetch(`/api/v1/investment-transactions/${transactionId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ unit_price: price, units, amount_vnd: Math.round(price * units) }),
+    const inv = investments.find(i => i.transaction_id === item.transactionId)
+    if (!inv) return
+    setBuyEdit({
+      transaction_id: inv.transaction_id,
+      asset_type: 'fund',
+      investment_date: inv.investment_date ?? new Date().toISOString().slice(0, 10),
+      amount_vnd: inv.amount_vnd,
+      unit_price: inv.unit_price,
+      units: inv.units,
+      interest_rate: null,
+      expiry_date: null,
+      notes: null,
+      fund_id: inv.fund_id,
+      goal_id: inv.goal_id,
     })
-    setSheet(null)
-    onToast(isVI ? 'Đã ghi nhận mua' : 'Buy recorded')
-    onRefresh()
   }
 
   // ─── Override sheet helpers ────────────────────────────────────────────────
@@ -1453,59 +1460,17 @@ export default function MobilePlanningView({
         )}
       </Sheet>
 
-      {/* ─── Record buy sheet ───────────────────────────────────────────────── */}
-      <BuySheet
-        open={sheet?.type === 'buy'}
-        onClose={() => setSheet(null)}
-        name={sheet?.type === 'buy' ? sheet.name : ''}
-        isVI={isVI}
-        onSaved={(price, units) => {
-          if (sheet?.type === 'buy') handleRecordBuy(sheet.transactionId, price, units)
-        }}
+      {/* ─── Record buy → canonical Add-Transaction sheet (edit mode) ───────── */}
+      <AddTransactionSheet
+        open={!!buyEdit}
+        existing={buyEdit}
+        onClose={() => setBuyEdit(null)}
+        onSaved={() => { setBuyEdit(null); onToast(isVI ? 'Đã ghi nhận mua' : 'Buy recorded'); onRefresh() }}
       />
     </div>
   )
 }
 
-// ─── BuySheet — record an actual fund purchase (price + units) ────────────────
-
-function BuySheet({ open, onClose, name, isVI, onSaved }: {
-  open: boolean; onClose: () => void; name: string; isVI: boolean
-  onSaved: (price: number, units: number) => void
-}) {
-  const [price, setPrice] = useState('')
-  const [units, setUnits] = useState('')
-  useEffect(() => { if (open) { setPrice(''); setUnits('') } }, [open])
-  if (!open) return null
-  const valid = price !== '' && units !== '' && Number(price) > 0 && Number(units) > 0
-  const total = valid ? Math.round(Number(price) * Number(units)) : 0
-  return (
-    <Sheet open={open} onClose={onClose} title={isVI ? 'Ghi nhận mua' : 'Record buy'}>
-      <div style={{ display: 'grid', gap: 14 }}>
-        <div style={{ fontSize: 13, color: 'var(--c-muted)' }}>{name}</div>
-        <div>
-          <label style={{ fontSize: 13, color: 'var(--c-muted)', display: 'block', marginBottom: 4 }}>{isVI ? 'Giá / CCQ (₫)' : 'Price / unit (₫)'}</label>
-          <input type="text" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value.replace(/[^0-9.]/g, ''))} autoFocus placeholder="0"
-            style={{ width: '100%', padding: '10px 12px', fontSize: 16, border: '1px solid var(--c-line)', borderRadius: 10, background: 'var(--c-card-2)', color: 'var(--c-ink)', boxSizing: 'border-box', fontVariantNumeric: 'tabular-nums' }} />
-        </div>
-        <div>
-          <label style={{ fontSize: 13, color: 'var(--c-muted)', display: 'block', marginBottom: 4 }}>{isVI ? 'Số CCQ' : 'Units'}</label>
-          <input type="text" inputMode="decimal" value={units} onChange={(e) => setUnits(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="0"
-            style={{ width: '100%', padding: '10px 12px', fontSize: 16, border: '1px solid var(--c-line)', borderRadius: 10, background: 'var(--c-card-2)', color: 'var(--c-ink)', boxSizing: 'border-box', fontVariantNumeric: 'tabular-nums' }} />
-        </div>
-        {valid && (
-          <div style={{ background: 'var(--c-navy-tint)', borderRadius: 10, padding: '8px 12px', fontSize: 12, color: 'var(--c-navy)', fontVariantNumeric: 'tabular-nums' }}>
-            {isVI ? 'Tổng' : 'Total'}: {fmt(total)}
-          </div>
-        )}
-        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-          <button onClick={onClose} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: '1px solid var(--c-line)', background: 'var(--c-card)', color: 'var(--c-ink)', fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>{isVI ? 'Hủy' : 'Cancel'}</button>
-          <button onClick={() => onSaved(Number(price), Number(units))} disabled={!valid} style={{ flex: 2, padding: '10px 0', borderRadius: 10, border: 'none', background: 'var(--c-btn-primary)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', opacity: valid ? 1 : 0.6 }}>{isVI ? 'Lưu' : 'Save'}</button>
-        </div>
-      </div>
-    </Sheet>
-  )
-}
 
 // ─── SimpleOverrideSheet (used inline — keeps handleOverrideSave in parent) ───
 

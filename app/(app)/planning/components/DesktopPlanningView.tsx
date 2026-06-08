@@ -10,6 +10,7 @@ import { useLocale } from 'next-intl'
 import { fmt, fmtCompact } from '@/lib/formatters'
 import FixedExpenseManager from './FixedExpenseManager'
 import RecurringSavingManager from './RecurringSavingManager'
+import AddTransactionSheet, { type EditableTransaction } from '@/app/assets/components/AddTransactionSheet'
 import { buildByGoal, resolveRecurringSavings, type GoalItem } from '@/lib/planning'
 import type {
   MonthlyPlan, FundInvestment, DirectSaving, FixedExpense,
@@ -431,9 +432,10 @@ export default function DesktopPlanningView({
   const [otherAmt, setOtherAmt] = useState('')
   const [showFEManage, setShowFEManage] = useState(false)
   const [showRSManage, setShowRSManage] = useState(false)
-  const [buyModal, setBuyModal] = useState<{ transactionId: string; name: string; amount: number } | null>(null)
-  const [buyPrice, setBuyPrice] = useState('')
-  const [buyUnits, setBuyUnits] = useState('')
+  // Recording a DCA buy opens the canonical Add-Transaction sheet in edit mode,
+  // pre-filled from the planned investment. Saving completes the same planned
+  // row (PUT), so it never double-counts against the goal.
+  const [buyEdit, setBuyEdit] = useState<EditableTransaction | null>(null)
 
   // ── Derived values ──
   const goalsById = useMemo(() => new Map(goals.map(g => [g.goal_id, g.goal_name])), [goals])
@@ -594,28 +596,23 @@ export default function DesktopPlanningView({
     onRefresh(); onToast(isVI ? `Đã khôi phục ${item.name}` : `Restored ${item.name}`)
   }
 
-  function openBuy(item: { transactionId?: string; name: string; amount: number }) {
-    if (!item.transactionId) return
-    setBuyModal({ transactionId: item.transactionId, name: item.name, amount: item.amount })
-    setBuyPrice('')
-    setBuyUnits('')
-  }
-
-  async function handleRecordBuy() {
-    if (!buyModal) return
-    const price = Number(buyPrice)
-    const units = Number(buyUnits)
-    if (!buyPrice || !buyUnits || price <= 0 || units <= 0) return
-    setSaving(true)
-    try {
-      await fetch(`/api/v1/investment-transactions/${buyModal.transactionId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ unit_price: price, units, amount_vnd: Math.round(price * units) }),
-      })
-      setBuyModal(null)
-      onRefresh(); onToast(isVI ? 'Đã ghi nhận mua' : 'Buy recorded')
-    } finally { setSaving(false) }
+  function openBuy(transactionId?: string) {
+    if (!transactionId) return
+    const inv = investments.find(i => i.transaction_id === transactionId)
+    if (!inv) return
+    setBuyEdit({
+      transaction_id: inv.transaction_id,
+      asset_type: 'fund',
+      investment_date: inv.investment_date ?? new Date().toISOString().slice(0, 10),
+      amount_vnd: inv.amount_vnd,
+      unit_price: inv.unit_price,
+      units: inv.units,
+      interest_rate: null,
+      expiry_date: null,
+      notes: null,
+      fund_id: inv.fund_id,
+      goal_id: inv.goal_id,
+    })
   }
 
   async function handleSaveOverride() {
@@ -854,7 +851,7 @@ export default function DesktopPlanningView({
                             setOverrideModal({ id: inv.recurringId!, name: inv.name, defaultAmount: inv.baseAmount ?? inv.amount, type: 'rec' })
                             setOverrideVal(String(inv.baseAmount ?? inv.amount))
                           }}
-                          onRecordBuy={() => openBuy({ transactionId: inv.transactionId, name: inv.name, amount: inv.amount })}
+                          onRecordBuy={() => openBuy(inv.transactionId)}
                           onDcaSkip={() => handleDcaSkip(inv)}
                           onDcaRestore={() => handleDcaRestore(inv)}
                         />
@@ -1105,32 +1102,15 @@ export default function DesktopPlanningView({
         </DModal>
       )}
 
-      {buyModal && (
-        <DModal onClose={() => setBuyModal(null)} title={isVI ? 'Ghi nhận mua' : 'Record buy'} width={360}>
-          <div style={{ display: 'grid', gap: 14 }}>
-            <div style={{ fontSize: 13, color: 'var(--c-muted)', fontWeight: 500 }}>{buyModal.name}</div>
-            <label style={{ display: 'grid', gap: 6 }}>
-              <span style={labelStyle}>{isVI ? 'Giá / CCQ (₫)' : 'Price / unit (₫)'}</span>
-              <input type="text" inputMode="decimal" value={buyPrice} onChange={e => setBuyPrice(e.target.value.replace(/[^0-9.]/g, ''))} autoFocus className="cn-input tabular" placeholder="0" />
-            </label>
-            <label style={{ display: 'grid', gap: 6 }}>
-              <span style={labelStyle}>{isVI ? 'Số CCQ' : 'Units'}</span>
-              <input type="text" inputMode="decimal" value={buyUnits} onChange={e => setBuyUnits(e.target.value.replace(/[^0-9.]/g, ''))} className="cn-input tabular" placeholder="0" />
-            </label>
-            {buyPrice && buyUnits && Number(buyPrice) > 0 && Number(buyUnits) > 0 && (
-              <div style={{ background: 'var(--c-navy-tint)', borderRadius: 8, padding: '6px 10px', fontSize: 12, color: 'var(--c-navy)', fontVariantNumeric: 'tabular-nums' }}>
-                {isVI ? 'Tổng' : 'Total'}: {fmt(Math.round(Number(buyPrice) * Number(buyUnits)))}
-              </div>
-            )}
-            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-              <button onClick={() => setBuyModal(null)} style={{ ...btnBase, flex: 1, padding: '10px 14px', background: 'transparent', color: 'var(--c-ink)', border: '1px solid var(--c-line)' }}>{isVI ? 'Hủy' : 'Cancel'}</button>
-              <button onClick={handleRecordBuy} disabled={saving || !buyPrice || !buyUnits || Number(buyPrice) <= 0 || Number(buyUnits) <= 0} style={{ ...btnBase, flex: 2, padding: '10px 14px', background: 'var(--c-btn-primary)', color: '#fff', opacity: saving || !buyPrice || !buyUnits ? 0.6 : 1 }}>
-                {saving ? (isVI ? 'Đang lưu...' : 'Saving...') : (isVI ? 'Lưu' : 'Save')}
-              </button>
-            </div>
-          </div>
-        </DModal>
-      )}
+      {/* Record buy → the canonical Add-Transaction sheet, opened in edit mode on
+          the planned DCA row so saving completes that same transaction. */}
+      <AddTransactionSheet
+        open={!!buyEdit}
+        existing={buyEdit}
+        desktop
+        onClose={() => setBuyEdit(null)}
+        onSaved={() => { setBuyEdit(null); onRefresh(); onToast(isVI ? 'Đã ghi nhận mua' : 'Buy recorded') }}
+      />
     </div>
   )
 }
