@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { calcProjectedInterest, isNavStale, insuranceStatus, isPlanMonthRealized, isInCurrentCycle, realizedRecurringContributions } from '@/lib/finance'
 import { buildWithdrawalMaps } from '@/lib/withdrawalProgress'
+import { shouldWriteSnapshot } from '@/lib/snapshots'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,7 +11,11 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const [plansRes, goalsRes, txRes, insuranceRes, insuranceSavingsRes, recSavingsRes, goldPriceRes] = await Promise.all([
+  // Today's date (server local) — used both to read the existing snapshot below
+  // and to upsert it at the end.
+  const today = new Date().toISOString().split('T')[0]
+
+  const [plansRes, goalsRes, txRes, insuranceRes, insuranceSavingsRes, recSavingsRes, goldPriceRes, snapshotRes] = await Promise.all([
     supabase.from('monthly_plans').select('id, month, year').eq('user_id', user.id),
     supabase
       .from('savings_goals')
@@ -37,6 +42,12 @@ export async function GET() {
       .select('price_per_chi')
       .eq('user_id', user.id)
       .single(),
+    supabase
+      .from('net_worth_snapshots')
+      .select('total_assets')
+      .eq('user_id', user.id)
+      .eq('snapshot_date', today)
+      .maybeSingle(),
   ])
 
   const plans = (plansRes.data ?? []) as { id: string; month: number; year: number }[]
@@ -402,12 +413,16 @@ export async function GET() {
 
   const hasGold = allTxsRaw.some((tx) => tx.asset_type === 'gold')
 
-  // Upsert today's snapshot for the history chart (fire-and-forget)
-  const today = new Date().toISOString().split('T')[0]
-  supabase.from('net_worth_snapshots').upsert(
-    { user_id: user.id, snapshot_date: today, total_assets: Math.round(totalAssets) },
-    { onConflict: 'user_id,snapshot_date' }
-  ).then(() => { /* ignore errors */ })
+  // Upsert today's snapshot for the history chart (fire-and-forget), but only
+  // when the rounded value actually changed. The dashboard is loaded many times
+  // a day; re-writing an identical row just burns disk I/O (WAL + dirtied page +
+  // autovacuum) for no benefit. See lib/snapshots.ts.
+  if (shouldWriteSnapshot(snapshotRes.data, totalAssets)) {
+    supabase.from('net_worth_snapshots').upsert(
+      { user_id: user.id, snapshot_date: today, total_assets: Math.round(totalAssets) },
+      { onConflict: 'user_id,snapshot_date' }
+    ).then(() => { /* ignore errors */ })
+  }
 
   return NextResponse.json({
     netWorth: {

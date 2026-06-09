@@ -63,6 +63,9 @@ test.describe('Desktop goal detail panel', () => {
   // shared goal (reliably rendered) — the Investments tab fetches transactions
   // no-store, so the row shows even though the overview may be cached.
   test('fully withdrawn bank deposit disappears from the Investments tab', async ({ page }) => {
+    // Heavy flow (two dashboard loads + a withdrawal round-trip). Tolerate a
+    // slow / IO-throttled backend rather than racing the default 30s cap.
+    test.slow()
     const tx = await api.createTransaction({
       asset_type: 'bank',
       amount_vnd: 10_000_000,
@@ -89,8 +92,17 @@ test.describe('Desktop goal detail panel', () => {
       await page.getByRole('button', { name: /^(All|Tất cả)$/ }).click()
       await page.getByRole('button', { name: /Confirm withdrawal|Xác nhận rút/i }).click()
 
-      // The fully-withdrawn deposit must no longer be listed.
-      await expect(panel.getByText('E2E TCB Deposit')).toHaveCount(0, { timeout: 15_000 })
+      // The withdrawal shows a ~2s success state (which itself displays the
+      // deposit name), then auto-closes and triggers the Investments-tab
+      // refetch. Wait for that confirmation first — it proves the withdrawal
+      // registered — then assert the row is gone. Asserting count(0) directly
+      // races both the success modal's own name text and a not-yet-settled
+      // refetch, which flakes whenever the backend is slow.
+      await expect(page.getByText(/Đã rút thành công|Withdrawal successful/)).toBeVisible({ timeout: 20_000 })
+
+      // The fully-withdrawn deposit must no longer be listed. Generous timeout
+      // so a slow post-withdrawal refetch can land instead of being raced.
+      await expect(panel.getByText('E2E TCB Deposit')).toHaveCount(0, { timeout: 30_000 })
     } finally {
       // Also removes the withdrawal row created during the test (parent FK is
       // ON DELETE SET NULL, so it would otherwise linger on the shared goal).
@@ -102,6 +114,9 @@ test.describe('Desktop goal detail panel', () => {
   // via the "Count toward goal progress" toggle (ported from the legacy
   // Settings view). Toggling it off must persist affects_progress=false.
   test('withdraw with progress toggle off stores affects_progress=false', async ({ page }) => {
+    // Heavy flow (two dashboard loads + a withdrawal round-trip). Tolerate a
+    // slow / IO-throttled backend rather than racing the default 30s cap.
+    test.slow()
     const tx = await api.createTransaction({
       asset_type: 'bank',
       amount_vnd: 10_000_000,
@@ -127,7 +142,10 @@ test.describe('Desktop goal detail panel', () => {
       await page.getByRole('button', { name: /^(All|Tất cả)$/ }).click()
       await page.getByRole('button', { name: /Confirm withdrawal|Xác nhận rút/i }).click()
 
-      await expect(panel.getByText('E2E Progress Toggle Deposit')).toHaveCount(0, { timeout: 15_000 })
+      // Same as the sibling test: wait for the success confirmation before
+      // asserting the row is gone, with a generous timeout for a slow refetch.
+      await expect(page.getByText(/Đã rút thành công|Withdrawal successful/)).toBeVisible({ timeout: 20_000 })
+      await expect(panel.getByText('E2E Progress Toggle Deposit')).toHaveCount(0, { timeout: 30_000 })
 
       // The withdrawal must have been stored with affects_progress=false.
       const { createClient } = await import('@supabase/supabase-js')

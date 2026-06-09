@@ -5,6 +5,27 @@ import { makeCleanupStack } from './helpers/cleanup'
 const cleanup = makeCleanupStack()
 test.afterEach(() => cleanup.run())
 
+// Shared, read-only unallocated fund fixture. The sell-sheet tests below only
+// OPEN the action / sell sheet to inspect UI (they never confirm a sale), so
+// they can reuse one fund + transaction instead of each creating and tearing
+// down their own — trimming several fund+tx create/delete cycles of DB churn
+// per run. Tests that actually mutate the holding (assign / confirm sell) keep
+// their own per-test fixtures via the cleanup stack.
+let sharedFund: Awaited<ReturnType<typeof api.createFund>>
+
+test.beforeAll(async () => {
+  sharedFund = await api.createFund({ name: 'E2E Shared Sell Fund', code: 'E2ESHSELL', fund_type: 'equity', nav: 10000 })
+  await api.createTransaction({
+    asset_type: 'fund', amount_vnd: 5_000_000, investment_date: '2026-01-01',
+    units: 500, unit_price: sharedFund.nav, fund_id: sharedFund.id,
+  })
+})
+
+test.afterAll(async () => {
+  // deleteFund also removes the fund's transactions (see helpers/api.ts).
+  if (sharedFund) await api.deleteFund(sharedFund.id)
+})
+
 async function gotoFreshDashboard(page: Page) {
   // Navigate to any other page first to fully unmount DashboardClient
   await page.goto('/settings')
@@ -79,23 +100,10 @@ test('clicking a goal card opens goal detail panel', async ({ page }) => {
 })
 
 test('tapping unallocated row opens action sheet', async ({ page }) => {
-  const fund = await api.createFund({ name: 'E2E Test Fund', code: 'E2ETESTFUND', fund_type: 'equity', nav: 10000 })
-  cleanup.add(() => api.deleteFund(fund.id))
-
-  const tx = await api.createTransaction({
-    asset_type: 'fund',
-    amount_vnd: 5_000_000,
-    investment_date: '2026-01-01',
-    units: 200,
-    unit_price: fund.nav,
-    fund_id: fund.id,
-  })
-  cleanup.add(() => api.deleteTransaction(tx.transaction_id))
-
   await gotoFreshDashboard(page)
 
   // Row is a tappable button — tap it to open action sheet
-  const row = page.getByTestId('unallocated-row').filter({ hasText: fund.name }).first()
+  const row = page.getByTestId('unallocated-row').filter({ hasText: sharedFund.name }).first()
   await expect(row).toBeVisible({ timeout: 10_000 })
   await row.click()
 
@@ -110,22 +118,9 @@ test('tapping unallocated row opens action sheet', async ({ page }) => {
 })
 
 test('tapping unallocated fund history opens TransactionHistorySheet', async ({ page }) => {
-  const fund = await api.createFund({ name: 'E2E Test Fund', code: 'E2ETESTFUND', fund_type: 'equity', nav: 10000 })
-  cleanup.add(() => api.deleteFund(fund.id))
-
-  const tx = await api.createTransaction({
-    asset_type: 'fund',
-    amount_vnd: 5_000_000,
-    investment_date: '2026-01-01',
-    units: 200,
-    unit_price: fund.nav,
-    fund_id: fund.id,
-  })
-  cleanup.add(() => api.deleteTransaction(tx.transaction_id))
-
   await gotoFreshDashboard(page)
 
-  const row = page.getByTestId('unallocated-row').filter({ hasText: fund.name }).first()
+  const row = page.getByTestId('unallocated-row').filter({ hasText: sharedFund.name }).first()
   await expect(row).toBeVisible({ timeout: 10_000 })
   await row.click()
 
@@ -134,11 +129,11 @@ test('tapping unallocated fund history opens TransactionHistorySheet', async ({ 
   await page.getByTestId('action-history').click()
 
   // TransactionHistorySheet should open — fund name is the h1
-  await expect(page.getByRole('heading', { name: fund.name })).toBeVisible({ timeout: 5_000 })
+  await expect(page.getByRole('heading', { name: sharedFund.name })).toBeVisible({ timeout: 5_000 })
 
   // Close via Back button
   await page.getByTestId('history-back-btn').click()
-  await expect(page.getByRole('heading', { name: fund.name })).not.toBeVisible()
+  await expect(page.getByRole('heading', { name: sharedFund.name })).not.toBeVisible()
 })
 
 test('assign unallocated fund to a goal via action sheet', async ({ page }) => {
@@ -210,16 +205,8 @@ test('sell unallocated fund via action sheet', async ({ page }) => {
 })
 
 test('sell fund sheet shows remaining amount in summary strip', async ({ page }) => {
-  const fund = await api.createFund({ name: 'E2E Summary Fund', code: 'E2ESUMFUND', fund_type: 'equity', nav: 10000 })
-  cleanup.add(() => api.deleteFund(fund.id))
-  const tx = await api.createTransaction({
-    asset_type: 'fund', amount_vnd: 5_000_000, investment_date: '2026-01-01',
-    units: 500, unit_price: fund.nav, fund_id: fund.id,
-  })
-  cleanup.add(() => api.deleteTransaction(tx.transaction_id))
-
   await gotoFreshDashboard(page)
-  const row = page.getByTestId('unallocated-row').filter({ hasText: fund.name }).first()
+  const row = page.getByTestId('unallocated-row').filter({ hasText: sharedFund.name }).first()
   await expect(row).toBeVisible({ timeout: 10_000 })
   await row.click()
   await page.getByTestId('action-sell').click()
@@ -230,16 +217,8 @@ test('sell fund sheet shows remaining amount in summary strip', async ({ page })
 })
 
 test('sell fund shows 0.1% tax estimate in summary strip', async ({ page }) => {
-  const fund = await api.createFund({ name: 'E2E Tax Fund', code: 'E2ETAXFUND', fund_type: 'equity', nav: 10000 })
-  cleanup.add(() => api.deleteFund(fund.id))
-  const tx = await api.createTransaction({
-    asset_type: 'fund', amount_vnd: 5_000_000, investment_date: '2026-01-01',
-    units: 500, unit_price: fund.nav, fund_id: fund.id,
-  })
-  cleanup.add(() => api.deleteTransaction(tx.transaction_id))
-
   await gotoFreshDashboard(page)
-  const row = page.getByTestId('unallocated-row').filter({ hasText: fund.name }).first()
+  const row = page.getByTestId('unallocated-row').filter({ hasText: sharedFund.name }).first()
   await expect(row).toBeVisible({ timeout: 10_000 })
   await row.click()
   await page.getByTestId('action-sell').click()
@@ -251,16 +230,8 @@ test('sell fund shows 0.1% tax estimate in summary strip', async ({ page }) => {
 })
 
 test('"All" button fills the full available amount', async ({ page }) => {
-  const fund = await api.createFund({ name: 'E2E All Fund', code: 'E2EALLFUND', fund_type: 'equity', nav: 10000 })
-  cleanup.add(() => api.deleteFund(fund.id))
-  const tx = await api.createTransaction({
-    asset_type: 'fund', amount_vnd: 5_000_000, investment_date: '2026-01-01',
-    units: 500, unit_price: fund.nav, fund_id: fund.id,
-  })
-  cleanup.add(() => api.deleteTransaction(tx.transaction_id))
-
   await gotoFreshDashboard(page)
-  const row = page.getByTestId('unallocated-row').filter({ hasText: fund.name }).first()
+  const row = page.getByTestId('unallocated-row').filter({ hasText: sharedFund.name }).first()
   await expect(row).toBeVisible({ timeout: 10_000 })
   await row.click()
   await page.getByTestId('action-sell').click()
@@ -311,19 +282,8 @@ test('sell success state appears after confirm', async ({ page }) => {
 })
 
 test('allocation bar renders when investments exist', async ({ page }) => {
-  const fund = await api.createFund({ name: 'E2E Alloc Fund', code: 'E2EALLOCFUND', fund_type: 'equity', nav: 15000 })
-  cleanup.add(() => api.deleteFund(fund.id))
-
-  const tx = await api.createTransaction({
-    asset_type: 'fund',
-    amount_vnd: 10_000_000,
-    investment_date: '2026-01-01',
-    units: 500,
-    unit_price: fund.nav,
-    fund_id: fund.id,
-  })
-  cleanup.add(() => api.deleteTransaction(tx.transaction_id))
-
+  // Uses the shared unallocated fund fixture for the "investments exist"
+  // precondition instead of creating its own.
   await gotoFreshDashboard(page)
 
   await expect(page.getByTestId('allocation-bar')).toBeVisible({ timeout: 10_000 })
