@@ -1,8 +1,14 @@
 import { createClient } from '@supabase/supabase-js'
 import path from 'path'
 import fs from 'fs'
+import { assertSafeTestTarget } from './guard'
 
 const USER_FILE = path.join(__dirname, '..', '.auth', 'user.json')
+
+// Defense in depth: every spec that touches the DB imports this module, so the
+// guard runs before any client is created — even if a spec is run directly
+// without the global setup.
+assertSafeTestTarget(process.env.E2E_SUPABASE_URL, { allow: process.env.E2E_ALLOW_PROD === '1' })
 
 const supabase = createClient(
   process.env.E2E_SUPABASE_URL!,
