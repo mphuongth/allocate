@@ -2,6 +2,7 @@ import { test as setup } from '@playwright/test'
 import { createClient } from '@supabase/supabase-js'
 import path from 'path'
 import fs from 'fs'
+import { assertSafeTestTarget } from './helpers/guard'
 
 const AUTH_FILE = path.join(__dirname, '.auth', 'session.json')
 const USER_FILE = path.join(__dirname, '.auth', 'user.json')
@@ -13,6 +14,9 @@ setup('authenticate', async ({ page }) => {
   if (!supabaseUrl || !serviceRoleKey) {
     throw new Error('E2E_SUPABASE_URL and E2E_SUPABASE_SERVICE_ROLE_KEY must be set.')
   }
+
+  // Never let the destructive E2E seed/teardown loop run against production.
+  assertSafeTestTarget(supabaseUrl, { allow: process.env.E2E_ALLOW_PROD === '1' })
 
   const admin = createClient(supabaseUrl, serviceRoleKey)
 
