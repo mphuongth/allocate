@@ -1,5 +1,11 @@
--- Add new columns to investment_transactions
+-- Add new columns to investment_transactions.
+-- fund_id links a fund transaction to its fund. It exists on the live database
+-- but no committed migration ever created it (it was added out-of-band), so a
+-- from-scratch replay (`supabase db reset` / fresh env / CI test project) failed
+-- when the INSERT below references fund_id. Add it here so the migrations
+-- faithfully reproduce production. Matches prod exactly: nullable uuid, no FK.
 ALTER TABLE investment_transactions
+  ADD COLUMN IF NOT EXISTS fund_id UUID,
   ADD COLUMN IF NOT EXISTS plan_id UUID REFERENCES monthly_plans(id) ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS expiry_date DATE;
 

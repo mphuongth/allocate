@@ -31,6 +31,11 @@ CREATE TABLE IF NOT EXISTS fund_investments (
   amount_vnd BIGINT NOT NULL CHECK (amount_vnd > 0),
   units_purchased NUMERIC NOT NULL CHECK (units_purchased > 0),
   nav_at_purchase NUMERIC NOT NULL CHECK (nav_at_purchase > 0),
+  -- investment_date existed on the live fund_investments table but this create
+  -- omitted it (out-of-band drift). The unify migration SELECTs it, so a
+  -- from-scratch replay needs it. This table is dropped by that migration, so
+  -- the column only affects replayability, not the final schema.
+  investment_date DATE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
