@@ -26,6 +26,7 @@ export default function InsuranceSection({ plan, insuranceMembers, onRefresh, on
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
   const [confirmSkip, setConfirmSkip] = useState<InsuranceMember | null>(null)
+  const [skipping, setSkipping] = useState(false)
 
   function openEdit(member: InsuranceMember) {
     setEditItem(member)
@@ -65,14 +66,19 @@ export default function InsuranceSection({ plan, insuranceMembers, onRefresh, on
   }
 
   async function handleSkip(member: InsuranceMember) {
-    await fetch(`/api/v1/monthly-plans/${plan.id}/excluded-insurance`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: member.member_id }),
-    })
-    setConfirmSkip(null)
-    onToast(t('insuranceSkipped', { name: member.member_name }))
-    onRefresh()
+    setSkipping(true)
+    try {
+      await fetch(`/api/v1/monthly-plans/${plan.id}/excluded-insurance`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ member_id: member.member_id }),
+      })
+      setConfirmSkip(null)
+      onToast(t('insuranceSkipped', { name: member.member_name }))
+      onRefresh()
+    } finally {
+      setSkipping(false)
+    }
   }
 
   async function handleRestore(member: InsuranceMember) {
@@ -215,8 +221,11 @@ export default function InsuranceSection({ plan, insuranceMembers, onRefresh, on
             )}
           </div>
           <div className="flex gap-3">
-            <Button variant="outline" className="flex-1" onClick={() => setConfirmSkip(null)}>{tc('cancel')}</Button>
-            <Button className="flex-1 bg-red-600 hover:bg-red-700" onClick={() => confirmSkip && handleSkip(confirmSkip)}>{t('skipConfirm')}</Button>
+            <Button variant="outline" className="flex-1" onClick={() => setConfirmSkip(null)} disabled={skipping}>{tc('cancel')}</Button>
+            <Button data-testid="insurance-skip-confirm" className="flex-1 bg-red-600 hover:bg-red-700" onClick={() => confirmSkip && handleSkip(confirmSkip)} disabled={skipping}>
+              {skipping && <CairnLoader size={14} variant="on-dark" />}
+              {skipping ? t('skipping') : t('skipConfirm')}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

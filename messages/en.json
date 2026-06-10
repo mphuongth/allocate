@@ -685,7 +685,8 @@
     "descLabel": "Description",
     "descPlaceholder": "e.g., Buy laptop, Car repair...",
     "descRequired": "Description is required",
-    "cannotSave": "Unable to save. Please check your connection and try again."
+    "cannotSave": "Unable to save. Please check your connection and try again.",
+    "skipping": "Skipping…"
   },
   "auth": {
     "loginTitle": "Welcome back",

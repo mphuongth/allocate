@@ -187,7 +187,8 @@ export default function OtherExpensesSection({ plan, otherExpenses, onRefresh, o
           </div>
           <div className="flex gap-3">
             <Button variant="outline" className="flex-1" onClick={() => setConfirmDelete(null)} disabled={deleting}>{tc('cancel')}</Button>
-            <Button className="flex-1 bg-red-600 hover:bg-red-700" onClick={() => confirmDelete && handleDelete(confirmDelete)} disabled={deleting}>
+            <Button data-testid="other-delete-confirm" className="flex-1 bg-red-600 hover:bg-red-700" onClick={() => confirmDelete && handleDelete(confirmDelete)} disabled={deleting}>
+              {deleting && <CairnLoader size={14} variant="on-dark" />}
               {deleting ? tc('deleting') : tc('delete')}
             </Button>
           </div>
