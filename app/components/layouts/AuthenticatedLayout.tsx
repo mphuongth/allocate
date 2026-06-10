@@ -12,7 +12,6 @@ import MobileBottomTabs from '../navigation/MobileBottomTabs'
 import MobileTopBar from '../navigation/MobileTopBar'
 import OfflineBanner from '@/app/components/OfflineBanner'
 import AddTransactionSheet from '@/app/assets/components/AddTransactionSheet'
-import { AppBootSplash } from '@/app/components/ui/AppBootSplash'
 
 function getInitials(email: string): string {
   const parts = email.split('@')[0].split(/[._-]/)
@@ -98,10 +97,6 @@ function AuthenticatedLayoutInner({ children, email, initials }: { children: Rea
       {/* Mobile bottom tab navigation */}
       <MobileBottomTabs />
       <OfflineBanner />
-
-      {/* First-app-load splash — covers the JS boot window, fades out once
-          hydrated; never shown on client-side tab navigation. */}
-      <AppBootSplash />
 
       {/* Add transaction sheet */}
       <AddTransactionSheet

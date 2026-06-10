@@ -1,26 +1,30 @@
 import { describe, it, expect } from 'vitest'
 import { render } from '@testing-library/react'
-import { NetWorthSkeleton, GoalSkeleton, InsuranceSkeleton } from '../Skeletons'
+import { DashboardSkeleton } from '../Skeletons'
 
-// The dashboard first-load skeletons must use the branded shimmer primitive
-// (.sk) rather than the old static animate-pulse gray blocks (issue #235).
-describe('dashboard skeletons', () => {
-  it('NetWorthSkeleton renders shimmer primitives', () => {
-    const { container, getByTestId } = render(<NetWorthSkeleton />)
-    expect(getByTestId('net-worth-skeleton')).toBeInTheDocument()
+// The dashboard first-load skeleton must match the design (§02 · Skeleton
+// screens → "Dashboard — first load"): net-worth card with a drawing-in
+// sparkline + time-range chips, then a goals list. No insurance cards.
+describe('DashboardSkeleton', () => {
+  it('renders branded shimmer primitives, not the old animate-pulse blocks', () => {
+    const { container, getByTestId } = render(<DashboardSkeleton />)
+    expect(getByTestId('dashboard-skeleton')).toBeInTheDocument()
     expect(container.querySelectorAll('.sk').length).toBeGreaterThan(0)
     expect(container.querySelector('.animate-pulse')).toBeNull()
   })
 
-  it('GoalSkeleton renders shimmer primitives', () => {
-    const { container, getByTestId } = render(<GoalSkeleton />)
-    expect(getByTestId('goal-skeleton')).toBeInTheDocument()
-    expect(container.querySelectorAll('.sk').length).toBeGreaterThan(0)
+  it('includes the drawing-in sparkline from the design', () => {
+    const { container } = render(<DashboardSkeleton />)
+    expect(container.querySelector('.spark-draw')).toBeInTheDocument()
   })
 
-  it('InsuranceSkeleton renders shimmer primitives', () => {
-    const { container, getByTestId } = render(<InsuranceSkeleton />)
-    expect(getByTestId('insurance-skeleton')).toBeInTheDocument()
-    expect(container.querySelectorAll('.sk').length).toBeGreaterThan(0)
+  it('renders the five time-range chips', () => {
+    const { getByTestId } = render(<DashboardSkeleton />)
+    expect(getByTestId('skeleton-range-chips').querySelectorAll('.sk')).toHaveLength(5)
+  })
+
+  it('renders two goal-card placeholders', () => {
+    const { getAllByTestId } = render(<DashboardSkeleton />)
+    expect(getAllByTestId('skeleton-goal-card')).toHaveLength(2)
   })
 })

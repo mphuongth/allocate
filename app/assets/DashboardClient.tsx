@@ -5,7 +5,7 @@ import { Plus, ArrowDownToLine, ChevronDown, Check } from 'lucide-react'
 import { useTranslations, useLocale } from 'next-intl'
 import { useNavigation } from '@/app/components/navigation/NavigationContext'
 import { CreateGoalSheet } from './components/CreateGoalSheet'
-import { NetWorthSkeleton, GoalSkeleton, InsuranceSkeleton } from './components/Skeletons'
+import { DashboardSkeleton } from './components/Skeletons'
 import NetWorthCard from './components/NetWorthCard'
 import GoalCard from './components/GoalCard'
 import UnallocatedSection from './components/UnallocatedSection'
@@ -458,20 +458,8 @@ export default function DashboardClient({ userId }: { userId: string }) {
           </div>
         )}
 
-        {/* Loading skeletons */}
-        {loading && (
-          <div className="space-y-6">
-            <NetWorthSkeleton />
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <GoalSkeleton />
-              <GoalSkeleton />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <InsuranceSkeleton />
-              <InsuranceSkeleton />
-            </div>
-          </div>
-        )}
+        {/* Loading skeleton — matches the design's "Dashboard — first load". */}
+        {loading && <DashboardSkeleton />}
 
         {/* Empty state */}
         {!loading && !error && isEmpty && (
