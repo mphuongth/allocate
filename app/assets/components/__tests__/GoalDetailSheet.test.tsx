@@ -111,6 +111,20 @@ describe('GoalDetailSheet — DCA pending row filtering', () => {
   })
 })
 
+describe('GoalDetailSheet — History date matches Recent activity (issue #300)', () => {
+  it('renders the History row date in the same "15 Jan 2024" format as the Recent activity card', async () => {
+    render(<GoalDetailSheet {...baseProps} />)
+    await waitFor(() => expect(screen.getByText('VNINDEX ETF')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: 'History' }))
+
+    // Must match fmtTxDate (day: 2-digit, month: short, year: numeric — en-GB),
+    // not the browser-default "1/15/2024" the History tab used to print.
+    await waitFor(() => expect(screen.getByText('15 Jan 2024')).toBeInTheDocument())
+    expect(screen.queryByText('1/15/2024')).not.toBeInTheDocument()
+  })
+})
+
 describe('GoalDetailSheet — transaction history integration', () => {
   it('opens TransactionHistorySheet when "Transaction history" is tapped on a fund', async () => {
     render(<GoalDetailSheet {...baseProps} />)

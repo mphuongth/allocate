@@ -139,6 +139,49 @@ describe('DesktopGoalDetail — bank withdrawal links to the goal (issue #261)',
   })
 })
 
+describe('DesktopGoalDetail — History date matches Recent activity (issue #300)', () => {
+  const mockTx = {
+    transaction_id: 'tx-1',
+    transaction_type: 'investment',
+    asset_type: 'gold',
+    fund_id: null,
+    fund_name: null,
+    investment_date: '2026-01-01',
+    amount_vnd: 9_000_000,
+    units: 1,
+    interest_rate: null,
+    notes: 'PNJ Gold',
+    principal_withdrawn: null,
+    units_withdrawn: null,
+  }
+
+  beforeEach(() => {
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('investment-transactions')) {
+        return Promise.resolve({ ok: true, json: async () => ({ transactions: [mockTx] }) })
+      }
+      if (url.includes('gold-price')) {
+        return Promise.resolve({ ok: true, json: async () => ({ price_per_chi: 9_200_000 }) })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+  })
+
+  it('renders the History row date in the same "01 Jan 2026" format as the Recent activity card', async () => {
+    render(<DesktopGoalDetail {...baseProps} />)
+    await waitFor(() => screen.getByText('PNJ Gold'))
+
+    await userEvent.click(screen.getByRole('button', { name: 'History' }))
+
+    // Must match fmtTxDate (day: 2-digit, month: short, year: numeric — en-GB),
+    // not the browser-default "1/1/2026" the History tab used to print. The raw
+    // `new Date('2026-01-01')` also parsed as UTC midnight, shifting the day in
+    // negative-offset timezones — fmtTxDate pins it to local midnight.
+    await waitFor(() => expect(screen.getByText('01 Jan 2026')).toBeInTheDocument())
+    expect(screen.queryByText('1/1/2026')).not.toBeInTheDocument()
+  })
+})
+
 describe('DesktopGoalDetail — singular month wording (issue #262)', () => {
   // 1,000,000₫ left to reach the target.
   const nearGoal: GoalData = { ...mockGoal, targetAmount: 10_000_000, currentValue: 9_000_000, targetDate: null }

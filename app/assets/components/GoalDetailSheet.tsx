@@ -11,6 +11,7 @@ import type { GoalData, FundBreakdownItem } from '../DashboardClient'
 import TransactionHistorySheet, { type PurchaseHistoryRow } from './TransactionHistorySheet'
 import { SellWithdrawSheet, type SellItem } from './SellWithdrawSheet'
 import { GD_COLORS, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, type InvRow } from './goalDetailShared'
+import { fmtTxDate } from './transactionUtils'
 
 interface InvestmentTx {
   transaction_id: string
@@ -1171,7 +1172,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--c-ink)' }}>{name}</div>
                       <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 2 }}>
-                        {new Date(tx.investment_date).toLocaleDateString(isVI ? 'vi-VN' : 'en-US')}
+                        {fmtTxDate(tx.investment_date, isVI ? 'vi' : 'en')}
                       </div>
                     </div>
                     <span style={{ fontSize: 13, fontWeight: 600, color: isWithdraw ? 'var(--c-neg)' : 'var(--c-pos)', fontVariantNumeric: 'tabular-nums' }}>
