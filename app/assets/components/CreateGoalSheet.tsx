@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useTranslations } from 'next-intl'
 import { X, Mountain, Home, Shield, ShoppingCart, Target } from 'lucide-react'
 import { fmt } from '@/lib/formatters'
+import { CairnLoader } from '@/app/components/ui/CairnLoader'
 
 interface Props {
   open: boolean
@@ -284,7 +285,7 @@ export function CreateGoalSheet({ open, onClose, onSuccess, desktop }: Props) {
                 opacity: saving ? 0.7 : 1,
               }}
             >
-              {saving && <span style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.4)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'inline-block' }} />}
+              {saving && <CairnLoader size={14} variant="on-dark" />}
               {saving ? tc('saving') : tg('createBtn')}
             </button>
           </div>

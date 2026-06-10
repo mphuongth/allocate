@@ -685,7 +685,8 @@
     "descLabel": "Mô tả",
     "descPlaceholder": "VD: Mua laptop, Sửa xe...",
     "descRequired": "Mô tả là bắt buộc",
-    "cannotSave": "Không thể lưu. Vui lòng kiểm tra kết nối và thử lại."
+    "cannotSave": "Không thể lưu. Vui lòng kiểm tra kết nối và thử lại.",
+    "skipping": "Đang bỏ qua…"
   },
   "auth": {
     "loginTitle": "Chào mừng trở lại",

@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
+import { CairnLoader } from '@/app/components/ui/CairnLoader'
 import type { MonthlyPlan, OtherExpense } from '../PlanningClient'
 import { fmt } from '@/lib/formatters'
 
@@ -163,7 +164,7 @@ export default function OtherExpensesSection({ plan, otherExpenses, onRefresh, o
             <div className="flex gap-3">
               <Button type="button" variant="outline" className="flex-1" onClick={() => setShowForm(false)}>{tc('cancel')}</Button>
               <Button type="submit" className="flex-1 bg-emerald-600 hover:bg-emerald-700" disabled={saving}>
-                {saving && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                {saving && <CairnLoader size={14} variant="on-dark" />}
                 {saving ? tc('saving') : tc('save')}
               </Button>
             </div>
@@ -186,7 +187,8 @@ export default function OtherExpensesSection({ plan, otherExpenses, onRefresh, o
           </div>
           <div className="flex gap-3">
             <Button variant="outline" className="flex-1" onClick={() => setConfirmDelete(null)} disabled={deleting}>{tc('cancel')}</Button>
-            <Button className="flex-1 bg-red-600 hover:bg-red-700" onClick={() => confirmDelete && handleDelete(confirmDelete)} disabled={deleting}>
+            <Button data-testid="other-delete-confirm" className="flex-1 bg-red-600 hover:bg-red-700" onClick={() => confirmDelete && handleDelete(confirmDelete)} disabled={deleting}>
+              {deleting && <CairnLoader size={14} variant="on-dark" />}
               {deleting ? tc('deleting') : tc('delete')}
             </Button>
           </div>

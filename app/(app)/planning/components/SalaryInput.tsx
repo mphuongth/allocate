@@ -6,6 +6,7 @@ import { AlertTriangle } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import AmountInput from '@/app/components/ui/AmountInput'
 import { Button } from '@/components/ui/button'
+import { CairnLoader } from '@/app/components/ui/CairnLoader'
 import type { MonthlyPlan } from '../PlanningClient'
 
 interface Props {
@@ -105,13 +106,10 @@ export default function SalaryInput({ plan, month, year, onPlanCreated, onPlanDe
             <button
               onClick={() => setShowConfirm(true)}
               disabled={deleting || saving}
-              className="px-3 h-9 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+              className="px-3 h-9 inline-flex items-center justify-center gap-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
             >
-              {deleting ? (
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                tc('delete')
-              )}
+              {deleting && <CairnLoader size={14} variant="on-dark" />}
+              {deleting ? tc('deleting') : tc('delete')}
             </button>
           )}
         </div>
@@ -127,9 +125,7 @@ export default function SalaryInput({ plan, month, year, onPlanCreated, onPlanDe
             placeholder={t('salaryPlaceholder')}
             className="flex-1 px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-md text-lg font-medium bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-60"
           />
-          {saving && (
-            <div className="w-5 h-5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
-          )}
+          {saving && <CairnLoader size={14} variant="muted" />}
         </div>
       </div>
 

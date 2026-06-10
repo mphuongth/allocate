@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { X, TrendingUp, Building2, Coins, ArrowUpRight, ArrowDownRight, ArrowDownToLine, Wallet, Shield } from 'lucide-react'
 import { useTranslations } from 'next-intl'
+import { CairnLoader } from '@/app/components/ui/CairnLoader'
 
 interface Fund { id: string; name: string; nav: number; code: string | null; fund_type?: string }
 interface Goal { goal_id: string; goal_name: string }
@@ -1253,8 +1254,10 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
                 color: '#fff', fontSize: 14, fontWeight: 600,
                 cursor: (saving || sellDisabled) ? 'not-allowed' : 'pointer',
                 fontFamily: 'inherit', opacity: (saving || sellDisabled) ? 0.7 : 1,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
               }}
             >
+              {saving && <CairnLoader size={14} variant="on-dark" />}
               {saving
                 ? tc('saving')
                 : dir === 'sell'

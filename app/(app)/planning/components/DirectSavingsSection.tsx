@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
+import { CairnLoader } from '@/app/components/ui/CairnLoader'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { MonthlyPlan, DirectSaving, Goal } from '../PlanningClient'
 import { fmt } from '@/lib/formatters'
@@ -31,6 +32,7 @@ export default function DirectSavingsSection({ plan, savings, goals, onRefresh, 
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<DirectSaving | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const minDate = new Date(plan.year, plan.month - 1, 1).toISOString().split('T')[0]
   const maxDate = new Date(plan.year, plan.month, 0).toISOString().split('T')[0]
@@ -103,11 +105,16 @@ export default function DirectSavingsSection({ plan, savings, goals, onRefresh, 
   }
 
   async function handleDelete(item: DirectSaving) {
-    const res = await fetch(`/api/v1/investment-transactions/${item.transaction_id}`, { method: 'DELETE' })
-    if (res.ok) {
-      setConfirmDelete(null)
-      onToast(t('savingsDeleted'))
-      onRefresh()
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/v1/investment-transactions/${item.transaction_id}`, { method: 'DELETE' })
+      if (res.ok) {
+        setConfirmDelete(null)
+        onToast(t('savingsDeleted'))
+        onRefresh()
+      }
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -152,7 +159,7 @@ export default function DirectSavingsSection({ plan, savings, goals, onRefresh, 
                     <button onClick={() => openEdit(item)} className="h-8 w-8 inline-flex items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
                       <Edit className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                     </button>
-                    <button onClick={() => setConfirmDelete(item)} className="h-8 w-8 inline-flex items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                    <button aria-label={tc('delete')} onClick={() => setConfirmDelete(item)} className="h-8 w-8 inline-flex items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
                       <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
                     </button>
                   </div>
@@ -204,7 +211,7 @@ export default function DirectSavingsSection({ plan, savings, goals, onRefresh, 
             <div className="flex gap-3">
               <Button type="button" variant="outline" className="flex-1" onClick={() => setShowForm(false)}>{tc('cancel')}</Button>
               <Button type="submit" className="flex-1 bg-emerald-600 hover:bg-emerald-700" disabled={saving}>
-                {saving && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                {saving && <CairnLoader size={14} variant="on-dark" />}
                 {saving ? tc('saving') : tc('save')}
               </Button>
             </div>
@@ -225,8 +232,11 @@ export default function DirectSavingsSection({ plan, savings, goals, onRefresh, 
             <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{t('deleteSavingsMessage')}</p>
           </div>
           <div className="flex gap-3">
-            <Button variant="outline" className="flex-1" onClick={() => setConfirmDelete(null)}>{tc('cancel')}</Button>
-            <Button className="flex-1 bg-red-600 hover:bg-red-700" onClick={() => confirmDelete && handleDelete(confirmDelete)}>{tc('delete')}</Button>
+            <Button variant="outline" className="flex-1" onClick={() => setConfirmDelete(null)} disabled={deleting}>{tc('cancel')}</Button>
+            <Button data-testid="savings-delete-confirm" className="flex-1 bg-red-600 hover:bg-red-700" onClick={() => confirmDelete && handleDelete(confirmDelete)} disabled={deleting}>
+              {deleting && <CairnLoader size={14} variant="on-dark" />}
+              {deleting ? tc('deleting') : tc('delete')}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

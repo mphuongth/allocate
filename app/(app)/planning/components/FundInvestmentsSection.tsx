@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import DecimalInput from '@/app/components/ui/DecimalInput'
+import { CairnLoader } from '@/app/components/ui/CairnLoader'
 import type { MonthlyPlan, FundInvestment, Fund, Goal } from '../PlanningClient'
 import { fmt } from '@/lib/formatters'
 
@@ -33,6 +34,7 @@ export default function FundInvestmentsSection({ plan, investments, funds, goals
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<FundInvestment | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const minDate = new Date(plan.year, plan.month - 1, 1).toISOString().split('T')[0]
   const maxDate = new Date(plan.year, plan.month, 0).toISOString().split('T')[0]
@@ -112,11 +114,16 @@ export default function FundInvestmentsSection({ plan, investments, funds, goals
   }
 
   async function handleDelete(inv: FundInvestment) {
-    const res = await fetch(`/api/v1/investment-transactions/${inv.transaction_id}`, { method: 'DELETE' })
-    if (res.ok) {
-      setConfirmDelete(null)
-      onToast(t('fundDeleted'))
-      onRefresh()
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/v1/investment-transactions/${inv.transaction_id}`, { method: 'DELETE' })
+      if (res.ok) {
+        setConfirmDelete(null)
+        onToast(t('fundDeleted'))
+        onRefresh()
+      }
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -235,7 +242,7 @@ export default function FundInvestmentsSection({ plan, investments, funds, goals
             <div className="flex gap-3">
               <Button type="button" variant="outline" className="flex-1" onClick={() => setShowForm(false)}>{tc('cancel')}</Button>
               <Button type="submit" className="flex-1 bg-emerald-600 hover:bg-emerald-700" disabled={saving}>
-                {saving && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                {saving && <CairnLoader size={14} variant="on-dark" />}
                 {saving ? tc('saving') : tc('save')}
               </Button>
             </div>
@@ -256,8 +263,11 @@ export default function FundInvestmentsSection({ plan, investments, funds, goals
             <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{t('deleteFundMessage')}</p>
           </div>
           <div className="flex gap-3">
-            <Button variant="outline" className="flex-1" onClick={() => setConfirmDelete(null)}>{tc('cancel')}</Button>
-            <Button className="flex-1 bg-red-600 hover:bg-red-700" onClick={() => confirmDelete && handleDelete(confirmDelete)}>{tc('delete')}</Button>
+            <Button variant="outline" className="flex-1" onClick={() => setConfirmDelete(null)} disabled={deleting}>{tc('cancel')}</Button>
+            <Button data-testid="fund-delete-confirm" className="flex-1 bg-red-600 hover:bg-red-700" onClick={() => confirmDelete && handleDelete(confirmDelete)} disabled={deleting}>
+              {deleting && <CairnLoader size={14} variant="on-dark" />}
+              {deleting ? tc('deleting') : tc('delete')}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
