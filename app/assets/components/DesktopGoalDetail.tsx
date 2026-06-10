@@ -5,6 +5,7 @@ import { ChevronLeft, X, MoreHorizontal, Edit2, Trash2, ChevronRight, ArrowDownR
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import type { GoalData } from '../DashboardClient'
 import { GD_COLORS, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, AffectsProgressControl, type InvRow } from './goalDetailShared'
+import { fmtTxDate } from './transactionUtils'
 
 interface InvestmentTx {
   transaction_id: string
@@ -471,7 +472,7 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--c-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</div>
                       <div style={{ fontSize: 10, color: 'var(--c-muted)', marginTop: 1 }}>
-                        {new Date(tx.investment_date).toLocaleDateString(isVi ? 'vi-VN' : 'en-US')}
+                        {fmtTxDate(tx.investment_date, locale)}
                       </div>
                     </div>
                     <span style={{ fontSize: 12, fontWeight: 600, color: isWithdraw ? 'var(--c-neg)' : 'var(--c-pos)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
