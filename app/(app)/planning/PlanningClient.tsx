@@ -293,6 +293,7 @@ export default function PlanningClient() {
         dcaSkips={dcaSkips}
         funds={funds}
         goals={goals}
+        loading={loading}
         onPlanCreated={(p) => { setPlan(p); refetch() }}
         onPlanDeleted={() => {
           bustPlanCache(month, year)

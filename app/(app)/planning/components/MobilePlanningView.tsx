@@ -12,6 +12,7 @@ import FixedExpenseManager from './FixedExpenseManager'
 import RecurringSavingManager from './RecurringSavingManager'
 import AddTransactionSheet, { type EditableTransaction, type PrefillTransaction } from '@/app/assets/components/AddTransactionSheet'
 import { buildByGoal, resolveRecurringSavings, type GoalRow, type GoalItem } from '@/lib/planning'
+import { MobilePlanningSkeleton } from './PlanningSkeleton'
 import type {
   MonthlyPlan, FundInvestment, DirectSaving, FixedExpense,
   InsuranceMember, OtherExpense, RecurringSaving, RecurringSavingOverride, DcaSkip, Fund, Goal,
@@ -33,6 +34,7 @@ interface Props {
   dcaSkips: DcaSkip[]
   funds: Fund[]
   goals: Goal[]
+  loading?: boolean
   onPlanCreated: (plan: MonthlyPlan) => void
   onPlanDeleted: () => void
   onRefresh: () => void
@@ -988,7 +990,7 @@ function MenuItem({ icon, label, onClick, danger, noBorder }: {
 
 export default function MobilePlanningView({
   month, year, plan, investments, savings, fixedExpenses, insuranceMembers, otherExpenses,
-  recurringSavings, recurringSavingOverrides, dcaSkips, funds, goals,
+  recurringSavings, recurringSavingOverrides, dcaSkips, funds, goals, loading,
   onPlanCreated, onPlanDeleted, onRefresh, onToast,
 }: Props) {
   const locale = useLocale()
@@ -1205,7 +1207,9 @@ export default function MobilePlanningView({
   return (
     <div className="md:hidden" style={{ background: 'var(--c-canvas)', minHeight: '100%' }}>
       <div style={{ padding: '4px 16px 100px', display: 'grid', gap: 10 }}>
-        {!plan ? (
+        {loading ? (
+          <MobilePlanningSkeleton />
+        ) : !plan ? (
           <NoPlanState monthLabel={monthLabel} isVI={isVI} onSetSalary={() => setSheet({ type: 'salary' })} />
         ) : (
           <>
