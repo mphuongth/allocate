@@ -167,15 +167,31 @@ export function buildByGoal(
     if (recorded) row.contributed += inv.amount_vnd
   }
 
+  // Logged bank deposits, pooled per goal by amount. They count as contributed
+  // and also let us mark the matching recurring-saving line as recorded this
+  // month (the deposit isn't linked to a specific saving, so we match greedily
+  // on goal + amount — one deposit completes one planned line).
+  const depositPool = new Map<string, number[]>()
   for (const sav of directSavings) {
-    // A bank deposit is a contribution, not a planned line.
     const row = ensure(sav.goal_id, sav.savings_goals?.goal_name)
     row.contributed += sav.amount_vnd
+    const key = sav.goal_id ?? UNALLOCATED
+    const pool = depositPool.get(key)
+    if (pool) pool.push(sav.amount_vnd)
+    else depositPool.set(key, [sav.amount_vnd])
   }
 
   for (const r of recurring) {
     const row = ensure(r.goalId, r.goalName)
     row.totalAllocated += r.amount
+    // A non-skipped recurring line is "recorded" once a deposit of the same
+    // amount toward the same goal has been logged this month.
+    let recorded = false
+    if (!r.skipped) {
+      const pool = depositPool.get(r.goalId ?? UNALLOCATED)
+      const i = pool ? pool.indexOf(r.amount) : -1
+      if (pool && i !== -1) { pool.splice(i, 1); recorded = true }
+    }
     row.items.push({
       name: r.name,
       type: 'bank',
@@ -185,6 +201,7 @@ export function buildByGoal(
       recurringId: r.id,
       skipped: r.skipped,
       overridden: r.overridden,
+      recorded,
     })
   }
 

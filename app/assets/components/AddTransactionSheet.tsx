@@ -89,6 +89,9 @@ export interface PrefillTransaction {
   amount_vnd?: number | null
   goal_id?: string | null
   investment_date?: string | null
+  // Associates the new transaction with a monthly plan so it counts toward that
+  // month's By-goal contributions (the plan queries transactions by plan_id).
+  plan_id?: string | null
 }
 
 interface Props {
@@ -520,6 +523,9 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
       investment_date: date,
       notes: note || null,
       goal_id: goalId || null,
+      // Logging from the Plan page ties the transaction to the month's plan so
+      // the By-goal view counts it as contributed.
+      plan_id: prefill?.plan_id ?? null,
     }
 
     if (assetType === 'fund') {
