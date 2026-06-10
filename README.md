@@ -72,6 +72,29 @@ Open <http://localhost:3000>.
 | `npm run test:e2e` | End-to-end tests (Playwright) |
 | `npm run test:e2e:ui` | Playwright UI mode |
 
+## Running E2E locally
+
+E2E tests (Playwright) run **locally**, not in CI — the dedicated test Supabase project is a small instance whose Disk IO budget can't sustain the suite's write load. Run them against a **local Supabase stack** (Docker) so there's no IO throttling and no risk of touching production:
+
+```bash
+supabase start            # boots local Postgres + replays all migrations
+```
+
+Then point `.env.local` at the local stack (use the keys `supabase start` prints):
+
+```
+NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key from `supabase start`>
+E2E_SUPABASE_URL=http://127.0.0.1:54321
+E2E_SUPABASE_SERVICE_ROLE_KEY=<service_role key from `supabase start`>
+```
+
+```bash
+npm run test:e2e          # or: npm run test:e2e:ui
+```
+
+The guard in `e2e/helpers/guard.ts` refuses to run against the production project, so a misconfigured `.env.local` can't churn prod.
+
 ## Tech stack
 
 | Concern | Choice |
