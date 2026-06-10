@@ -130,14 +130,33 @@ export interface RealizedRecurringContribution {
   planId: string
 }
 
+// A real bank deposit logged toward a goal for a given month (from the Plan
+// page's "Saved" action). When one matches a recurring saving's month + goal +
+// amount, it *is* that contribution — so the synthesized row is suppressed to
+// avoid double-counting it against the goal and net worth.
+export interface LoggedRecurringDeposit {
+  month: string // 'YYYY-MM'
+  goalId: string | null
+  amount: number
+}
+
 export function realizedRecurringContributions(
   savings: RecurringSavingDef[],
   plans: RecurringPlanMonth[],
   overrides: RecurringSavingOverrideRow[],
+  loggedDeposits: LoggedRecurringDeposit[] = [],
 ): RealizedRecurringContribution[] {
   const ovMap = new Map<string, number>()
   for (const o of overrides) {
     ovMap.set(`${o.plan_id}::${o.recurring_saving_id}`, o.monthly_amount_override_vnd)
+  }
+
+  // Consumable pool of logged deposits keyed by month::goal::amount. Each logged
+  // deposit cancels one synthesized contribution (greedy, one-for-one).
+  const depositPool = new Map<string, number>()
+  for (const d of loggedDeposits) {
+    const k = `${d.month}::${d.goalId ?? ''}::${d.amount}`
+    depositPool.set(k, (depositPool.get(k) ?? 0) + 1)
   }
 
   const out: RealizedRecurringContribution[] = []
@@ -152,6 +171,11 @@ export function realizedRecurringContributions(
       // override 0 = skip this month; any other positive override replaces the base.
       const amount = ov === 0 ? 0 : ov != null ? ov : s.amount_vnd
       if (amount <= 0) continue
+      // A logged deposit for the same month + goal + amount already represents
+      // this contribution — consume it and skip the synthesized duplicate.
+      const k = `${ym}::${s.goal_id ?? ''}::${amount}`
+      const pooled = depositPool.get(k)
+      if (pooled) { depositPool.set(k, pooled - 1); continue }
       out.push({
         savingId: s.saving_id,
         goalId: s.goal_id,

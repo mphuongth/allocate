@@ -354,7 +354,7 @@ describe('AddTransactionSheet — gold unit (issue #232)', () => {
 
 describe('AddTransactionSheet — prefill create mode (plan contribution)', () => {
   it('posts a new bank deposit carrying plan_id and goal_id', async () => {
-    const fetchMock = vi.fn((url: string) => {
+    const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
       if (String(url).includes('/savings-goals')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ goals: [{ goal_id: 'g1', goal_name: 'Retirement' }] }) })
       return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
     })
