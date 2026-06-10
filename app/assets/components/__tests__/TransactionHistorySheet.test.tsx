@@ -72,9 +72,9 @@ describe('TransactionHistorySheet', () => {
     expect(screen.getByText(/Jun.*2024.*40/i)).toBeInTheDocument()
   })
 
-  it('shows loading state when loading=true', () => {
+  it('shows the row skeleton when loading=true', () => {
     render(<TransactionHistorySheet {...baseProps} purchaseHistory={[]} loading={true} />)
-    expect(screen.getByText('Loading…')).toBeInTheDocument()
+    expect(screen.getByTestId('skeleton-tx-rows')).toBeInTheDocument()
   })
 
   it('shows empty state when no history and not loading', () => {

@@ -6,6 +6,7 @@ import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import type { GoalData } from '../DashboardClient'
 import { GD_COLORS, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, AffectsProgressControl, BankInfoStrip, type InvRow } from './goalDetailShared'
 import { fmtTxDate } from './transactionUtils'
+import { TxRowsSkeleton } from './Skeletons'
 
 interface InvestmentTx {
   transaction_id: string
@@ -290,11 +291,7 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
           {/* Investments tab */}
           {tab === 'investments' && (
             <>
-              {txLoading && (
-                <p style={{ color: 'var(--c-muted)', fontSize: 13, textAlign: 'center', padding: '20px 0' }}>
-                  {isVi ? 'Đang tải…' : 'Loading…'}
-                </p>
-              )}
+              {txLoading && <TxRowsSkeleton />}
               {!txLoading && visibleInvRows.length === 0 && (
                 <p style={{ color: 'var(--c-muted)', fontSize: 13, textAlign: 'center', padding: '20px 0' }}>
                   {isVi ? 'Chưa có khoản đầu tư nào' : 'No investments yet'}
@@ -440,11 +437,7 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
           {/* History tab */}
           {tab === 'history' && (
             <>
-              {txLoading && (
-                <p style={{ color: 'var(--c-muted)', fontSize: 13, textAlign: 'center', padding: '20px 0' }}>
-                  {isVi ? 'Đang tải…' : 'Loading…'}
-                </p>
-              )}
+              {txLoading && <TxRowsSkeleton />}
               {!txLoading && transactions.length === 0 && (
                 <p style={{ color: 'var(--c-muted)', fontSize: 13, textAlign: 'center', padding: '20px 0' }}>
                   {isVi ? 'Chưa có giao dịch nào' : 'No transactions yet'}

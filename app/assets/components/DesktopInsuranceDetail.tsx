@@ -6,6 +6,7 @@ import { fmt, fmtCompact } from '@/lib/formatters'
 import { STATUS_COLOR, BAR_COLOR_DETAIL, COVERAGE_OPTIONS, insurancePaidState, insuranceStatusLabel } from './insuranceShared'
 import type { InsuranceData } from '../DashboardClient'
 import LogInsurancePaymentModal from './LogInsurancePaymentModal'
+import { TxRowsSkeleton } from './Skeletons'
 
 interface Props {
   ins: InsuranceData
@@ -362,7 +363,7 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
               {isVi ? 'Lịch sử thanh toán' : 'Payment history'}
             </div>
             {historyLoading && history === null ? (
-              <div style={{ padding: '14px 16px', fontSize: 12, color: 'var(--c-muted)' }}>…</div>
+              <TxRowsSkeleton rows={3} />
             ) : !history || history.length === 0 ? (
               <div style={{ padding: '14px 16px', fontSize: 12, color: 'var(--c-muted)' }}>
                 {isVi ? 'Chưa có giao dịch' : 'No payments yet'}

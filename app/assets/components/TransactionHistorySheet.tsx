@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { ChevronLeft, ArrowUpRight, ArrowDownRight, Plus } from 'lucide-react'
 import { useLocale } from 'next-intl'
 import { fmtCompact, fmtNav, fmtPct, fmtUnits } from '@/lib/formatters'
+import { TxRowsSkeleton } from './Skeletons'
 
 export interface PurchaseHistoryRow {
   purchase_date: string
@@ -169,11 +170,7 @@ export default function TransactionHistorySheet({
             </button>
           </div>
           <div style={{ background: 'var(--c-card)', borderRadius: 16, padding: '0 14px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-            {loading && (
-              <p style={{ color: 'var(--c-muted)', fontSize: 14, textAlign: 'center', padding: '24px 0' }}>
-                {isVI ? 'Đang tải…' : 'Loading…'}
-              </p>
-            )}
+            {loading && <TxRowsSkeleton />}
             {!loading && purchaseHistory.length === 0 && (
               <p style={{ color: 'var(--c-muted)', fontSize: 14, textAlign: 'center', padding: '24px 0' }}>
                 {isVI ? 'Chưa có lịch sử giao dịch' : 'No transaction history'}
