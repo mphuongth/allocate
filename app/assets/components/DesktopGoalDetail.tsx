@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { ChevronLeft, X, MoreHorizontal, Edit2, Trash2, ChevronRight, ArrowDownRight, ArrowUpRight, Target, CalendarDays, Check, ArrowDownToLine, Wallet, Shield } from 'lucide-react'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import type { GoalData } from '../DashboardClient'
-import { GD_COLORS, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, AffectsProgressControl, type InvRow } from './goalDetailShared'
+import { GD_COLORS, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, AffectsProgressControl, BankInfoStrip, type InvRow } from './goalDetailShared'
 import { fmtTxDate } from './transactionUtils'
 
 interface InvestmentTx {
@@ -18,6 +18,7 @@ interface InvestmentTx {
   amount_vnd: number
   units: number | null
   interest_rate: number | null
+  expiry_date: string | null
   notes: string | null
   principal_withdrawn: number | null
   units_withdrawn: number | null
@@ -621,6 +622,9 @@ function InvOptionsModal({ inv, isVi, onClose, onHistory, onSell, onUnassign }: 
             </div>
           </div>
         </div>
+
+        {/* Bank info strip — interest rate + maturity + time left (issue #263) */}
+        <BankInfoStrip inv={inv} isVi={isVi} />
 
         {actions.map((a, i) => (
           <button key={i} onClick={a.onClick} style={{

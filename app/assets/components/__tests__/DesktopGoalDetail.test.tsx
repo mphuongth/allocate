@@ -182,6 +182,64 @@ describe('DesktopGoalDetail — History date matches Recent activity (issue #300
   })
 })
 
+describe('DesktopGoalDetail — bank maturity in Options modal (issue #263)', () => {
+  const mockBankTx = {
+    transaction_id: 'tx-bank-1',
+    transaction_type: 'investment',
+    asset_type: 'bank',
+    fund_id: null,
+    fund_name: null,
+    parent_transaction_id: null,
+    investment_date: '2026-01-01',
+    amount_vnd: 10_000_000,
+    units: null,
+    interest_rate: 6,
+    expiry_date: '2030-08-15',
+    notes: 'Techcombank',
+    principal_withdrawn: null,
+    units_withdrawn: null,
+  }
+
+  beforeEach(() => {
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('investment-transactions')) {
+        return Promise.resolve({ ok: true, json: async () => ({ transactions: [mockBankTx] }) })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+  })
+
+  it('shows the maturity date and time-left for a bank deposit', async () => {
+    render(<DesktopGoalDetail {...baseProps} />)
+    await waitFor(() => screen.getByText('Techcombank'))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Options' }))
+
+    // Bank info strip: interest rate + maturity date + time left.
+    await waitFor(() => expect(screen.getByText('Maturity')).toBeInTheDocument())
+    expect(screen.getByText('15 Aug 2030')).toBeInTheDocument()
+    expect(screen.getByText('Time left')).toBeInTheDocument()
+    expect(screen.getByText(/days left/)).toBeInTheDocument()
+    expect(screen.getByText('6%/yr')).toBeInTheDocument()
+  })
+
+  it('does not show a maturity row when the deposit has no expiry', async () => {
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('investment-transactions')) {
+        return Promise.resolve({ ok: true, json: async () => ({ transactions: [{ ...mockBankTx, expiry_date: null }] }) })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+
+    render(<DesktopGoalDetail {...baseProps} />)
+    await waitFor(() => screen.getByText('Techcombank'))
+    await userEvent.click(screen.getByRole('button', { name: 'Options' }))
+
+    await waitFor(() => expect(screen.getByText('6%/yr')).toBeInTheDocument())
+    expect(screen.queryByText('Maturity')).not.toBeInTheDocument()
+  })
+})
+
 describe('DesktopGoalDetail — singular month wording (issue #262)', () => {
   // 1,000,000₫ left to reach the target.
   const nearGoal: GoalData = { ...mockGoal, targetAmount: 10_000_000, currentValue: 9_000_000, targetDate: null }
