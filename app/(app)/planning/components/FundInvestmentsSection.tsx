@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import DecimalInput from '@/app/components/ui/DecimalInput'
+import { CairnLoader } from '@/app/components/ui/CairnLoader'
 import type { MonthlyPlan, FundInvestment, Fund, Goal } from '../PlanningClient'
 import { fmt } from '@/lib/formatters'
 
@@ -235,7 +236,7 @@ export default function FundInvestmentsSection({ plan, investments, funds, goals
             <div className="flex gap-3">
               <Button type="button" variant="outline" className="flex-1" onClick={() => setShowForm(false)}>{tc('cancel')}</Button>
               <Button type="submit" className="flex-1 bg-emerald-600 hover:bg-emerald-700" disabled={saving}>
-                {saving && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                {saving && <CairnLoader size={14} variant="on-dark" />}
                 {saving ? tc('saving') : tc('save')}
               </Button>
             </div>

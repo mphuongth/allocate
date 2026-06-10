@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Check, Download, X } from 'lucide-react'
 import { useLocale } from 'next-intl'
 import { fmt } from '@/lib/formatters'
+import { CairnLoader } from '@/app/components/ui/CairnLoader'
 
 interface Props {
   open: boolean
@@ -197,7 +198,7 @@ export default function DownloadReportSheet({ open, onClose, data, onExport, des
                   }}
                 >
                   {exporting ? (
-                    <span style={{ width: 14, height: 14, border: '2px solid #fff', borderTopColor: 'transparent', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.6s linear infinite' }} />
+                    <CairnLoader size={14} variant="on-dark" />
                   ) : (
                     <Download size={14} strokeWidth={2.2} />
                   )}

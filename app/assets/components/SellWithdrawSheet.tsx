@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useLocale, useTranslations } from 'next-intl'
 import { ArrowDownRight, ArrowDownToLine, Building, Check, Coins, Shield, TrendingUp, Wallet, X } from 'lucide-react'
 import { fmt } from '@/lib/formatters'
+import { CairnLoader } from '@/app/components/ui/CairnLoader'
 import { AffectsProgressControl } from './goalDetailShared'
 const fmtVND = (n: number, _locale?: string) => fmt(n)
 
@@ -628,15 +629,19 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
                 disabled={!isValid}
                 style={{
                   flex: 2, padding: '11px 14px',
-                  background: isValid ? 'var(--c-neg, #dc2626)' : 'var(--c-line)',
-                  color: isValid ? '#fff' : 'var(--c-muted)',
+                  // Keep the active (red) look while saving so the loader stays
+                  // legible and the button reads as "processing", not disabled.
+                  background: (isValid || saving) ? 'var(--c-neg, #dc2626)' : 'var(--c-line)',
+                  color: (isValid || saving) ? '#fff' : 'var(--c-muted)',
                   border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 600,
                   cursor: isValid ? 'pointer' : 'default',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                   transition: 'background 120ms, color 120ms',
                 }}
               >
-                {isBank ? <ArrowDownToLine size={15} strokeWidth={2.2} /> : <ArrowDownRight size={15} strokeWidth={2.2} />}
+                {saving
+                  ? <CairnLoader size={14} variant="on-dark" />
+                  : isBank ? <ArrowDownToLine size={15} strokeWidth={2.2} /> : <ArrowDownRight size={15} strokeWidth={2.2} />}
                 {(isGold ? numUnits <= 0 : numAmount <= 0)
                   ? (isVI
                       ? (isBank ? 'Nhập số tiền rút' : isGold ? 'Nhập số lượng bán' : 'Nhập số tiền bán')
