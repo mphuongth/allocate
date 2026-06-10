@@ -108,6 +108,37 @@ describe('buildByGoal — planned vs contributed', () => {
     expect(row.items).toHaveLength(0)
   })
 
+  it('marks a recurring saving recorded when a matching deposit was logged this month', () => {
+    const recurring = resolveRecurringSavings([saving({ goal_id: 'g-1', amount_vnd: 2_000_000 })], [])
+    const directSavings: GoalDirectSaving[] = [
+      { goal_id: 'g-1', amount_vnd: 2_000_000, savings_goals: { goal_name: 'Retirement' } },
+    ]
+    const [row] = buildByGoal([], directSavings, recurring, goalsById)
+    expect(row.totalAllocated).toBe(2_000_000)  // still planned
+    expect(row.contributed).toBe(2_000_000)     // deposit logged this month
+    expect(row.items).toHaveLength(1)
+    expect(row.items[0].isRecurring).toBe(true)
+    expect(row.items[0].recorded).toBe(true)    // line reflects the deposit
+  })
+
+  it('leaves a recurring saving unrecorded when no matching deposit exists', () => {
+    const recurring = resolveRecurringSavings([saving({ goal_id: 'g-1', amount_vnd: 2_000_000 })], [])
+    const [row] = buildByGoal([], [], recurring, goalsById)
+    expect(row.items[0].recorded).toBeFalsy()
+  })
+
+  it('matches one deposit per recurring line (greedy, by amount)', () => {
+    const recurring = resolveRecurringSavings([
+      saving({ saving_id: 's-1', goal_id: 'g-1', amount_vnd: 2_000_000 }),
+      saving({ saving_id: 's-2', goal_id: 'g-1', amount_vnd: 2_000_000 }),
+    ], [])
+    const directSavings: GoalDirectSaving[] = [
+      { goal_id: 'g-1', amount_vnd: 2_000_000, savings_goals: { goal_name: 'Retirement' } },
+    ]
+    const [row] = buildByGoal([], directSavings, recurring, goalsById)
+    expect(row.items.filter(i => i.recorded).length).toBe(1)
+  })
+
   it('ad-hoc fund buys (not DCA) contribute without being planned line items', () => {
     const adhoc = dca({ is_dca_seeded: false, units: 50, amount_vnd: 1_000_000 })
     const [row] = buildByGoal([adhoc], [], [], goalsById)

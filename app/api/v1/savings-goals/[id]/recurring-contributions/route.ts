@@ -43,17 +43,36 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const plans = (plansRes.data ?? []) as { id: string; month: number; year: number }[]
   const planIds = plans.map((p) => p.id)
 
-  const overridesRes = planIds.length > 0
-    ? await supabase
-        .from('recurring_saving_overrides')
-        .select('plan_id, recurring_saving_id, monthly_amount_override_vnd')
-        .in('plan_id', planIds)
-    : { data: [], error: null }
+  const [overridesRes, depositsRes] = await Promise.all([
+    planIds.length > 0
+      ? supabase
+          .from('recurring_saving_overrides')
+          .select('plan_id, recurring_saving_id, monthly_amount_override_vnd')
+          .in('plan_id', planIds)
+      : Promise.resolve({ data: [], error: null }),
+    // Real bank deposits logged toward this goal — used to suppress the
+    // synthesized recurring row when the user has recorded the actual deposit
+    // (otherwise the History tab would show both).
+    supabase
+      .from('investment_transactions')
+      .select('goal_id, amount_vnd, investment_date')
+      .eq('user_id', user.id)
+      .eq('goal_id', goalId)
+      .eq('asset_type', 'bank')
+      .eq('transaction_type', 'investment'),
+  ])
+
+  const loggedDeposits = (depositsRes.data ?? []).map((d) => ({
+    month: String(d.investment_date).slice(0, 7),
+    goalId: d.goal_id,
+    amount: d.amount_vnd,
+  }))
 
   const contributions = realizedRecurringContributions(
     savingsRes.data ?? [],
     plans,
     overridesRes.data ?? [],
+    loggedDeposits,
   )
 
   // Shape as read-only history rows mirroring the investment-transactions response.

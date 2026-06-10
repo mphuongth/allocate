@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { calcProjectedInterest, isNavStale, insuranceStatus, insurancePaidYear, isPlanMonthRealized, isInCurrentCycle } from '../finance'
+import { calcProjectedInterest, isNavStale, insuranceStatus, insurancePaidYear, isPlanMonthRealized, isInCurrentCycle, realizedRecurringContributions } from '../finance'
 
 describe('calcProjectedInterest', () => {
   it('returns 0 when rate is null', () => {
@@ -173,6 +173,45 @@ describe('plan allocation counting after a payment (combined gates)', () => {
     const paid = '2026-05-29'
     expect(counts(2027, 1, paid)).toBe(true)   // Jan 2027 arrived → counts
     expect(counts(2027, 3, paid)).toBe(false)  // Mar 2027 not arrived
+  })
+})
+
+describe('realizedRecurringContributions — dedup against logged deposits', () => {
+  afterEach(() => vi.useRealTimers())
+
+  const saving = { saving_id: 's1', goal_id: 'g1', name: 'Vikki', amount_vnd: 2_000_000, effective_from: null, effective_to: null }
+  const plan = { id: 'p1', year: 2026, month: 5 }
+
+  it('synthesizes a realized contribution when no deposit is logged', () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 4, 15)) // May 2026
+    const out = realizedRecurringContributions([saving], [plan], [])
+    expect(out).toHaveLength(1)
+    expect(out[0].amount).toBe(2_000_000)
+  })
+
+  it('suppresses the synthesized contribution when a matching deposit was logged', () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 4, 15))
+    const out = realizedRecurringContributions([saving], [plan], [], [
+      { month: '2026-05', goalId: 'g1', amount: 2_000_000 },
+    ])
+    expect(out).toHaveLength(0) // the real deposit represents it — no duplicate
+  })
+
+  it('does not suppress when the logged deposit differs in amount', () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 4, 15))
+    const out = realizedRecurringContributions([saving], [plan], [], [
+      { month: '2026-05', goalId: 'g1', amount: 1_000_000 },
+    ])
+    expect(out).toHaveLength(1)
+  })
+
+  it('suppresses one synthesized row per matching deposit (two savings, one deposit)', () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 4, 15))
+    const s2 = { ...saving, saving_id: 's2' }
+    const out = realizedRecurringContributions([saving, s2], [plan], [], [
+      { month: '2026-05', goalId: 'g1', amount: 2_000_000 },
+    ])
+    expect(out).toHaveLength(1) // one suppressed, one still synthesized
   })
 })
 

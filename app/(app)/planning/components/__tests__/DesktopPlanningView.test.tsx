@@ -103,6 +103,21 @@ describe('DesktopPlanningView — recurring bank "Saved" deposit', () => {
     expect(screen.queryByRole('button', { name: /Record deposit/i })).not.toBeInTheDocument()
   })
 
+  it('shows the recurring saving as done (no Record deposit button) once a matching deposit is logged, and fills the goal progress', () => {
+    const savings: DirectSaving[] = [
+      {
+        transaction_id: 'd1', plan_id: 'plan-1', goal_id: 'g1', amount_vnd: 2_000_000,
+        interest_rate: null, expiry_date: null, investment_date: '2026-05-10',
+        savings_goals: { goal_name: 'Retirement' },
+      },
+    ]
+    render(<DesktopPlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} savings={savings} />)
+    // The line is recorded → the prominent Record deposit pill is gone.
+    expect(screen.queryByRole('button', { name: /Record deposit/i })).not.toBeInTheDocument()
+    // The goal progress reflects the logged contribution (2M of 2M planned).
+    expect(screen.getByText('100%')).toBeInTheDocument()
+  })
+
   it('opens the Add-Transaction sheet when Saved is clicked', async () => {
     const fetchMock = vi.fn((url: string) =>
       Promise.resolve({

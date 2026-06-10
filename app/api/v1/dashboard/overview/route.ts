@@ -329,10 +329,21 @@ export async function GET() {
   // when allocated, toward their goal. They are intentionally NOT added to the
   // Unallocated "available to assign" card — these are plan-driven balances, not
   // loose holdings that can be assigned or sold from there.
+  // Real bank deposits already counted via the holdings aggregation above. When
+  // one matches a recurring saving (month + goal + amount), suppress the
+  // synthesized contribution so it isn't double-counted into net worth / goals.
+  const loggedRecurringDeposits = investments
+    .filter((tx) => tx.asset_type === 'bank')
+    .map((tx) => ({
+      month: String(tx.investment_date).slice(0, 7),
+      goalId: tx.goal_id,
+      amount: tx.amount_vnd,
+    }))
   const recContributions = realizedRecurringContributions(
     recSavingsRes.data ?? [],
     plans,
     recOverridesRes.data ?? [],
+    loggedRecurringDeposits,
   )
   for (const c of recContributions) {
     totalAssets += c.amount

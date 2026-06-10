@@ -351,3 +351,34 @@ describe('AddTransactionSheet — gold unit (issue #232)', () => {
     })
   })
 })
+
+describe('AddTransactionSheet — prefill create mode (plan contribution)', () => {
+  it('posts a new bank deposit carrying plan_id and goal_id', async () => {
+    const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
+      if (String(url).includes('/savings-goals')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ goals: [{ goal_id: 'g1', goal_name: 'Retirement' }] }) })
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(
+      <AddTransactionSheet
+        open
+        onClose={vi.fn()}
+        onSaved={vi.fn()}
+        prefill={{ asset_type: 'bank', goal_id: 'g1', amount_vnd: 2_000_000, plan_id: 'plan-1', investment_date: '2026-06-01' }}
+      />,
+    )
+
+    fireEvent.click(await screen.findByText('save'))
+
+    await waitFor(() => {
+      const post = fetchMock.mock.calls.find((c) => String(c[0]).includes('/investment-transactions') && (c[1] as RequestInit)?.method === 'POST')
+      expect(post).toBeTruthy()
+      const body = JSON.parse(String((post![1] as RequestInit).body))
+      expect(body.asset_type).toBe('bank')
+      expect(body.plan_id).toBe('plan-1')
+      expect(body.goal_id).toBe('g1')
+      expect(body.amount_vnd).toBe(2_000_000)
+    })
+  })
+})

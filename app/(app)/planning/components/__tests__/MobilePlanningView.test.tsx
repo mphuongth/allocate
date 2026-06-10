@@ -459,6 +459,22 @@ describe('MobilePlanningView — recurring savings in By goal', () => {
     expect(screen.queryByRole('button', { name: /Record deposit/i })).not.toBeInTheDocument()
   })
 
+  it('shows the recurring saving as done once a matching deposit is logged', async () => {
+    const savings: DirectSaving[] = [
+      {
+        transaction_id: 'd1', plan_id: 'plan-1', goal_id: 'g1', amount_vnd: 2_000_000,
+        interest_rate: null, expiry_date: null, investment_date: '2026-05-10',
+        savings_goals: { goal_name: 'Retirement' },
+      },
+    ]
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} savings={savings} />)
+    // Goal header reflects the logged contribution (2M in).
+    expect(screen.getByText(/₫ 2000000 in/)).toBeInTheDocument()
+    // Expand the goal — the line is recorded, so no Record deposit button.
+    await userEvent.click(screen.getByText('Retirement'))
+    expect(screen.queryByRole('button', { name: /Record deposit/i })).not.toBeInTheDocument()
+  })
+
   it('renders a skipped DCA fund with a Restore action', async () => {
     render(
       <MobilePlanningView

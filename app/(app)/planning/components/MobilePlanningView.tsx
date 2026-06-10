@@ -769,7 +769,7 @@ function GoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit, onReco
     : item.overridden
       ? (isVI ? 'Đã ghi đè tháng này' : 'Overridden this month')
       : recorded
-        ? (isVI ? 'Đã mua' : 'Recorded')
+        ? item.type === 'bank' ? (isVI ? 'Đã gửi tháng này' : 'Deposited this month') : (isVI ? 'Đã mua' : 'Recorded')
         : item.type === 'fund'
           ? 'Fund'
           : item.isRecurring ? (isVI ? 'Tiết kiệm định kỳ' : 'Recurring saving') : (isVI ? 'Tiết kiệm' : 'Direct saving')
@@ -803,7 +803,11 @@ function GoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit, onReco
       </span>
       {item.isRecurring ? (
         <>
-          {!skipped && (
+          {recorded ? (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--c-pos)', fontSize: 11, fontWeight: 600, flexShrink: 0 }}>
+              <Check size={13} />{isVI ? 'Đã gửi' : 'Saved'}
+            </span>
+          ) : !skipped && (
             <button onClick={onRecordDeposit} aria-label={isVI ? 'Ghi nhận đã gửi' : 'Record deposit'} style={{ padding: '4px 9px', fontSize: 11, fontWeight: 600, color: 'var(--c-pos)', background: 'var(--c-pos-tint)', border: '1px solid transparent', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0, whiteSpace: 'nowrap' }}>
               <Plus size={12} strokeWidth={2.4} />{isVI ? 'Đã gửi' : 'Saved'}
             </button>
@@ -1130,6 +1134,7 @@ export default function MobilePlanningView({
   function openContribution(entry: GoalRow, prefill?: Partial<PrefillTransaction>) {
     setPrefillTx({
       goal_id: entry.isUnallocated ? null : entry.goalId,
+      plan_id: plan?.id ?? null,
       investment_date: new Date().toISOString().slice(0, 10),
       ...prefill,
     })

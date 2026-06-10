@@ -207,7 +207,7 @@ function DGoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit, onRec
     : item.overridden
       ? (isVI ? 'Đã ghi đè tháng này' : 'Overridden this month')
       : recorded
-        ? (isVI ? 'Đã mua' : 'Recorded')
+        ? item.type === 'bank' ? (isVI ? 'Đã gửi tháng này' : 'Deposited this month') : (isVI ? 'Đã mua' : 'Recorded')
         : item.type === 'fund'
           ? 'Fund'
           : item.isRecurring ? (isVI ? 'Tiết kiệm định kỳ' : 'Recurring saving') : (isVI ? 'Tiết kiệm' : 'Direct saving')
@@ -235,7 +235,11 @@ function DGoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit, onRec
       <td style={{ padding: '9px 8px 9px 4px', textAlign: 'right', verticalAlign: 'middle', width: 96 }}>
         {item.isRecurring ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 2 }}>
-            {!skipped && (
+            {recorded ? (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--c-pos)', fontSize: 11, fontWeight: 600 }}>
+                <Check size={13} />{isVI ? 'Đã gửi' : 'Saved'}
+              </span>
+            ) : !skipped && (
               <button onClick={onRecordDeposit} aria-label={isVI ? 'Ghi nhận đã gửi' : 'Record deposit'} title={isVI ? 'Ghi nhận đã gửi — số tiền, ngày' : 'Record deposit — amount, date'}
                 style={{ padding: '4px 10px', fontSize: 11, fontWeight: 600, color: 'var(--c-pos)', background: 'var(--c-pos-tint)', border: '1px solid transparent', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
                 <Plus size={12} strokeWidth={2.4} />{isVI ? 'Đã gửi' : 'Saved'}
@@ -631,6 +635,7 @@ export default function DesktopPlanningView({
   function openContribution(g: { goalId: string; isUnallocated: boolean }, prefill?: Partial<PrefillTransaction>) {
     setPrefillTx({
       goal_id: g.isUnallocated ? null : g.goalId,
+      plan_id: plan?.id ?? null,
       investment_date: new Date().toISOString().slice(0, 10),
       ...prefill,
     })
