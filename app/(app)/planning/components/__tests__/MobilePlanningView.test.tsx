@@ -418,6 +418,47 @@ describe('MobilePlanningView — recurring savings in By goal', () => {
     }
   })
 
+  it('renders a Log contribution "+" on the goal header', () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} />)
+    expect(screen.getByRole('button', { name: /Log contribution/i })).toBeInTheDocument()
+  })
+
+  it('opens the Add-Transaction sheet when the goal "+" is clicked', async () => {
+    const fetchMock = vi.fn((url: string) =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(String(url).includes('savings-goals') ? { goals: [] } : []),
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      render(<MobilePlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} />)
+      await userEvent.click(screen.getByRole('button', { name: /Log contribution/i }))
+      expect(await screen.findByText('Gold')).toBeInTheDocument()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('shows a Saved/deposit action on a recurring bank saving', async () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} />)
+    await userEvent.click(screen.getByText('Retirement'))
+    expect(screen.getByRole('button', { name: /Record deposit/i })).toBeInTheDocument()
+  })
+
+  it('hides the Saved action on a skipped recurring saving', async () => {
+    render(
+      <MobilePlanningView
+        {...defaultProps}
+        plan={basePlan}
+        recurringSavings={recurringSavings}
+        recurringSavingOverrides={[{ recurring_saving_id: 'rs1', monthly_amount_override_vnd: 0 }]}
+      />,
+    )
+    await userEvent.click(screen.getByText('Retirement'))
+    expect(screen.queryByRole('button', { name: /Record deposit/i })).not.toBeInTheDocument()
+  })
+
   it('renders a skipped DCA fund with a Restore action', async () => {
     render(
       <MobilePlanningView

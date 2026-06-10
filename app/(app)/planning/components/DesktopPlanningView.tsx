@@ -10,7 +10,7 @@ import { useLocale } from 'next-intl'
 import { fmt, fmtCompact } from '@/lib/formatters'
 import FixedExpenseManager from './FixedExpenseManager'
 import RecurringSavingManager from './RecurringSavingManager'
-import AddTransactionSheet, { type EditableTransaction } from '@/app/assets/components/AddTransactionSheet'
+import AddTransactionSheet, { type EditableTransaction, type PrefillTransaction } from '@/app/assets/components/AddTransactionSheet'
 import { buildByGoal, resolveRecurringSavings, type GoalItem } from '@/lib/planning'
 import type {
   MonthlyPlan, FundInvestment, DirectSaving, FixedExpense,
@@ -191,10 +191,10 @@ function DPlanRow({ primary, secondary, amount, muted, last, isVI, onSkip, onRes
 // Recurring savings get a kebab (save more / edit / skip). Fund DCA lines get a
 // "Buy" pill to record the actual purchase, plus skip / restore for the month.
 
-function DGoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit, onRecordBuy, onDcaSkip, onDcaRestore }: {
+function DGoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit, onRecordBuy, onRecordDeposit, onDcaSkip, onDcaRestore }: {
   item: GoalItem; isVI: boolean
   onSkip: () => void; onRestore: () => void; onOverride: () => void; onEdit: () => void
-  onRecordBuy: () => void; onDcaSkip: () => void; onDcaRestore: () => void
+  onRecordBuy: () => void; onRecordDeposit: () => void; onDcaSkip: () => void; onDcaRestore: () => void
 }) {
   const [open, setOpen] = useState(false)
   const [menuPos, setMenuPos] = useState({ top: 0, right: 0 })
@@ -234,8 +234,14 @@ function DGoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit, onRec
       </td>
       <td style={{ padding: '9px 8px 9px 4px', textAlign: 'right', verticalAlign: 'middle', width: 96 }}>
         {item.isRecurring ? (
-          <>
-            <button ref={btnRef} onClick={() => open ? setOpen(false) : openMenu()} aria-label="Saving actions" style={{ padding: 5, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, color: 'var(--c-muted)', display: 'flex', marginLeft: 'auto' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 2 }}>
+            {!skipped && (
+              <button onClick={onRecordDeposit} aria-label={isVI ? 'Ghi nhận đã gửi' : 'Record deposit'} title={isVI ? 'Ghi nhận đã gửi — số tiền, ngày' : 'Record deposit — amount, date'}
+                style={{ padding: '4px 10px', fontSize: 11, fontWeight: 600, color: 'var(--c-pos)', background: 'var(--c-pos-tint)', border: '1px solid transparent', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
+                <Plus size={12} strokeWidth={2.4} />{isVI ? 'Đã gửi' : 'Saved'}
+              </button>
+            )}
+            <button ref={btnRef} onClick={() => open ? setOpen(false) : openMenu()} aria-label="Saving actions" style={{ padding: 5, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, color: 'var(--c-muted)', display: 'flex' }}>
               <MoreHorizontal size={14} />
             </button>
             {open && (
@@ -246,6 +252,7 @@ function DGoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit, onRec
                     <MenuBtn icon={<Check size={13} />} label={isVI ? 'Bao gồm tháng này' : 'Include this month'} onClick={() => { onRestore(); setOpen(false) }} noBorder />
                   ) : (
                     <>
+                      <MenuBtn icon={<Plus size={13} />} label={isVI ? 'Ghi nhận đã gửi tháng này' : 'Record deposit this month'} onClick={() => { onRecordDeposit(); setOpen(false) }} />
                       <MenuBtn icon={<TrendingUp size={13} />} label={isVI ? 'Tiết kiệm thêm tháng này' : 'Save more this month'} onClick={() => { onOverride(); setOpen(false) }} />
                       <MenuBtn icon={<EditIcon size={13} />} label={isVI ? 'Sửa kế hoạch định kỳ' : 'Edit recurring plan'} onClick={() => { onEdit(); setOpen(false) }} />
                       {item.overridden && <MenuBtn icon={<RefreshCw size={13} />} label={isVI ? 'Khôi phục mặc định' : 'Restore default'} onClick={() => { onRestore(); setOpen(false) }} />}
@@ -255,7 +262,7 @@ function DGoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit, onRec
                 </div>
               </>
             )}
-          </>
+          </div>
         ) : item.isFundDca && skipped ? (
           <button onClick={onDcaRestore} aria-label="Restore DCA" style={{ padding: '4px 9px', fontSize: 11, fontWeight: 600, color: 'var(--c-muted)', background: 'transparent', border: '1px solid var(--c-line)', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
             <Check size={12} />{isVI ? 'Khôi phục' : 'Restore'}
@@ -436,6 +443,9 @@ export default function DesktopPlanningView({
   // pre-filled from the planned investment. Saving completes the same planned
   // row (PUT), so it never double-counts against the goal.
   const [buyEdit, setBuyEdit] = useState<EditableTransaction | null>(null)
+  // Logging a contribution from a goal header, or recording a recurring bank
+  // deposit, opens the same sheet in create mode (POST) pre-filled with the goal.
+  const [prefillTx, setPrefillTx] = useState<PrefillTransaction | null>(null)
 
   // ── Derived values ──
   const goalsById = useMemo(() => new Map(goals.map(g => [g.goal_id, g.goal_name])), [goals])
@@ -612,6 +622,17 @@ export default function DesktopPlanningView({
       notes: null,
       fund_id: inv.fund_id,
       goal_id: inv.goal_id,
+    })
+  }
+
+  // Open the Add-Transaction sheet in create mode, pre-filled toward a goal.
+  // Used by the goal-header "+" (log any contribution) and the recurring-bank
+  // "Saved" pill (record this month's deposit at the planned amount).
+  function openContribution(g: { goalId: string; isUnallocated: boolean }, prefill?: Partial<PrefillTransaction>) {
+    setPrefillTx({
+      goal_id: g.isUnallocated ? null : g.goalId,
+      investment_date: new Date().toISOString().slice(0, 10),
+      ...prefill,
     })
   }
 
@@ -837,7 +858,16 @@ export default function DesktopPlanningView({
                             {g.contributed > 0 ? `${fmt(g.contributed)} ${isVI ? 'đã góp' : 'in'}` : (isVI ? 'Chưa góp' : 'Nothing yet')}
                           </div>
                         </td>
-                        <td />
+                        <td style={{ padding: '10px 12px 10px 4px', textAlign: 'right', verticalAlign: 'top', width: 40 }}>
+                          <button
+                            onClick={() => openContribution(g)}
+                            aria-label={isVI ? 'Ghi nhận đóng góp' : 'Log contribution'}
+                            title={isVI ? 'Ghi nhận đóng góp' : 'Log contribution'}
+                            style={{ padding: 5, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, color: 'var(--c-pos)', display: 'flex', marginLeft: 'auto' }}
+                          >
+                            <Plus size={15} strokeWidth={2.4} />
+                          </button>
+                        </td>
                       </tr>
                       {g.items.map((inv, ii) => (
                         <DGoalItemRow
@@ -852,6 +882,7 @@ export default function DesktopPlanningView({
                             setOverrideVal(String(inv.baseAmount ?? inv.amount))
                           }}
                           onRecordBuy={() => openBuy(inv.transactionId)}
+                          onRecordDeposit={() => openContribution(g, { asset_type: 'bank', amount_vnd: inv.amount })}
                           onDcaSkip={() => handleDcaSkip(inv)}
                           onDcaRestore={() => handleDcaRestore(inv)}
                         />
@@ -1105,11 +1136,16 @@ export default function DesktopPlanningView({
       {/* Record buy → the canonical Add-Transaction sheet, opened in edit mode on
           the planned DCA row so saving completes that same transaction. */}
       <AddTransactionSheet
-        open={!!buyEdit}
+        open={!!buyEdit || !!prefillTx}
         existing={buyEdit}
+        prefill={prefillTx}
         desktop
-        onClose={() => setBuyEdit(null)}
-        onSaved={() => { setBuyEdit(null); onRefresh(); onToast(isVI ? 'Đã ghi nhận mua' : 'Buy recorded') }}
+        onClose={() => { setBuyEdit(null); setPrefillTx(null) }}
+        onSaved={() => {
+          const wasBuy = !!buyEdit
+          setBuyEdit(null); setPrefillTx(null); onRefresh()
+          onToast(wasBuy ? (isVI ? 'Đã ghi nhận mua' : 'Buy recorded') : (isVI ? 'Đã ghi nhận đóng góp' : 'Contribution logged'))
+        }}
       />
     </div>
   )

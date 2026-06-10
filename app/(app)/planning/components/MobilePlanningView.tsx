@@ -10,7 +10,7 @@ import {
 import { fmt, fmtCompact } from '@/lib/formatters'
 import FixedExpenseManager from './FixedExpenseManager'
 import RecurringSavingManager from './RecurringSavingManager'
-import AddTransactionSheet, { type EditableTransaction } from '@/app/assets/components/AddTransactionSheet'
+import AddTransactionSheet, { type EditableTransaction, type PrefillTransaction } from '@/app/assets/components/AddTransactionSheet'
 import { buildByGoal, resolveRecurringSavings, type GoalRow, type GoalItem } from '@/lib/planning'
 import type {
   MonthlyPlan, FundInvestment, DirectSaving, FixedExpense,
@@ -666,13 +666,15 @@ function BudgetSection({
 
 // ─── GoalAllocationRow ────────────────────────────────────────────────────────
 
-function GoalAllocationRow({ entry, isVI, onRecSkip, onRecRestore, onRecOverride, onRecEdit, onRecordBuy, onDcaSkip, onDcaRestore }: {
+function GoalAllocationRow({ entry, isVI, onRecSkip, onRecRestore, onRecOverride, onRecEdit, onRecordBuy, onRecordDeposit, onLogContribution, onDcaSkip, onDcaRestore }: {
   entry: GoalRow; isVI: boolean
   onRecSkip: (item: GoalItem) => void
   onRecRestore: (item: GoalItem) => void
   onRecOverride: (item: GoalItem) => void
   onRecEdit: () => void
   onRecordBuy: (item: GoalItem) => void
+  onRecordDeposit: (item: GoalItem) => void
+  onLogContribution: () => void
   onDcaSkip: (item: GoalItem) => void
   onDcaRestore: (item: GoalItem) => void
 }) {
@@ -681,41 +683,55 @@ function GoalAllocationRow({ entry, isVI, onRecSkip, onRecRestore, onRecOverride
   const met = entry.totalAllocated > 0 && entry.contributed >= entry.totalAllocated
   return (
     <div>
-      <button
-        onClick={() => setOpen((o) => !o)}
-        style={{
-          width: '100%', textAlign: 'left', background: 'transparent', border: 'none', cursor: 'pointer',
-          padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10,
-          borderTop: '1px solid var(--c-line)', fontFamily: 'inherit',
-        }}
-      >
-        <div style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--c-navy-tint)', color: 'var(--c-navy)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          <Target size={14} />
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--c-ink)' }}>
-            {entry.goalName}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px', borderTop: '1px solid var(--c-line)' }}>
+        <button
+          onClick={() => setOpen((o) => !o)}
+          style={{
+            flex: 1, minWidth: 0, textAlign: 'left', background: 'transparent', border: 'none', cursor: 'pointer',
+            padding: 0, display: 'flex', alignItems: 'center', gap: 10, fontFamily: 'inherit',
+          }}
+        >
+          <div style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--c-navy-tint)', color: 'var(--c-navy)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Target size={14} />
           </div>
-          {entry.totalAllocated > 0 ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-              <div style={{ flex: 1, maxWidth: 120, height: 4, borderRadius: 999, background: 'var(--c-line)', overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${pct}%`, background: met ? 'var(--c-pos)' : 'var(--c-navy)', borderRadius: 999, transition: 'width 200ms' }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--c-ink)' }}>
+              {entry.goalName}
+            </div>
+            {entry.totalAllocated > 0 ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                <div style={{ flex: 1, maxWidth: 120, height: 4, borderRadius: 999, background: 'var(--c-line)', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${pct}%`, background: met ? 'var(--c-pos)' : 'var(--c-navy)', borderRadius: 999, transition: 'width 200ms' }} />
+                </div>
+                <span style={{ fontSize: 10, color: entry.contributed > 0 ? 'var(--c-pos)' : 'var(--c-muted)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                  {entry.contributed > 0 ? `${fmt(entry.contributed)} ${isVI ? 'đã góp' : 'in'}` : (isVI ? 'Chưa góp' : 'Nothing yet')}
+                </span>
               </div>
-              <span style={{ fontSize: 10, color: entry.contributed > 0 ? 'var(--c-pos)' : 'var(--c-muted)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                {entry.contributed > 0 ? `${fmt(entry.contributed)} ${isVI ? 'đã góp' : 'in'}` : (isVI ? 'Chưa góp' : 'Nothing yet')}
-              </span>
-            </div>
-          ) : (
-            <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 1 }}>
-              {entry.items.length} {isVI ? 'khoản' : entry.items.length === 1 ? 'allocation' : 'allocations'}
-            </div>
-          )}
-        </div>
-        <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: 'var(--c-ink)' }}>
-          {fmt(entry.totalAllocated)}
-        </span>
-        {open ? <ChevronUp size={14} color="var(--c-muted)" /> : <ChevronDown size={14} color="var(--c-muted)" />}
-      </button>
+            ) : (
+              <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 1 }}>
+                {entry.items.length} {isVI ? 'khoản' : entry.items.length === 1 ? 'allocation' : 'allocations'}
+              </div>
+            )}
+          </div>
+          <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: 'var(--c-ink)' }}>
+            {fmt(entry.totalAllocated)}
+          </span>
+        </button>
+        <button
+          onClick={onLogContribution}
+          aria-label={isVI ? 'Ghi nhận đóng góp' : 'Log contribution'}
+          style={{ padding: 4, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, color: 'var(--c-pos)', display: 'flex', flexShrink: 0 }}
+        >
+          <Plus size={16} strokeWidth={2.4} />
+        </button>
+        <button
+          onClick={() => setOpen((o) => !o)}
+          aria-label={isVI ? 'Mở/đóng mục tiêu' : 'Toggle goal'}
+          style={{ border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', color: 'var(--c-muted)', padding: 0, flexShrink: 0 }}
+        >
+          {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        </button>
+      </div>
       {open && entry.items.map((item, i) => (
         <GoalItemRow
           key={i}
@@ -726,6 +742,7 @@ function GoalAllocationRow({ entry, isVI, onRecSkip, onRecRestore, onRecOverride
           onOverride={() => onRecOverride(item)}
           onEdit={onRecEdit}
           onRecordBuy={() => onRecordBuy(item)}
+          onRecordDeposit={() => onRecordDeposit(item)}
           onDcaSkip={() => onDcaSkip(item)}
           onDcaRestore={() => onDcaRestore(item)}
         />
@@ -736,10 +753,10 @@ function GoalAllocationRow({ entry, isVI, onRecSkip, onRecRestore, onRecOverride
 
 // ─── GoalItemRow — one allocation under a goal (recurring savings get a kebab) ──
 
-function GoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit, onRecordBuy, onDcaSkip, onDcaRestore }: {
+function GoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit, onRecordBuy, onRecordDeposit, onDcaSkip, onDcaRestore }: {
   item: GoalItem; isVI: boolean
   onSkip: () => void; onRestore: () => void; onOverride: () => void; onEdit: () => void
-  onRecordBuy: () => void; onDcaSkip: () => void; onDcaRestore: () => void
+  onRecordBuy: () => void; onRecordDeposit: () => void; onDcaSkip: () => void; onDcaRestore: () => void
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPos, setMenuPos] = useState({ top: 0, right: 0 })
@@ -786,6 +803,11 @@ function GoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit, onReco
       </span>
       {item.isRecurring ? (
         <>
+          {!skipped && (
+            <button onClick={onRecordDeposit} aria-label={isVI ? 'Ghi nhận đã gửi' : 'Record deposit'} style={{ padding: '4px 9px', fontSize: 11, fontWeight: 600, color: 'var(--c-pos)', background: 'var(--c-pos-tint)', border: '1px solid transparent', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0, whiteSpace: 'nowrap' }}>
+              <Plus size={12} strokeWidth={2.4} />{isVI ? 'Đã gửi' : 'Saved'}
+            </button>
+          )}
           <button ref={btnRef} onClick={() => (menuOpen ? setMenuOpen(false) : openMenu())} aria-label="Saving actions" style={{ padding: 4, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, color: 'var(--c-muted)', display: 'flex', flexShrink: 0 }}>
             <MoreHorizontal size={14} />
           </button>
@@ -797,6 +819,7 @@ function GoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit, onReco
                   <MenuItem icon={<Check size={13} />} label={isVI ? 'Bao gồm tháng này' : 'Include this month'} onClick={() => { onRestore(); setMenuOpen(false) }} noBorder />
                 ) : (
                   <>
+                    <MenuItem icon={<Plus size={13} />} label={isVI ? 'Ghi nhận đã gửi tháng này' : 'Record deposit this month'} onClick={() => { onRecordDeposit(); setMenuOpen(false) }} />
                     <MenuItem icon={<TrendingUp size={13} />} label={isVI ? 'Tiết kiệm thêm tháng này' : 'Save more this month'} onClick={() => { onOverride(); setMenuOpen(false) }} />
                     <MenuItem icon={<EditIcon size={13} />} label={isVI ? 'Sửa kế hoạch định kỳ' : 'Edit recurring plan'} onClick={() => { onEdit(); setMenuOpen(false) }} />
                     {item.overridden && <MenuItem icon={<RefreshCw size={13} />} label={isVI ? 'Khôi phục mặc định' : 'Restore default'} onClick={() => { onRestore(); setMenuOpen(false) }} />}
@@ -971,6 +994,7 @@ export default function MobilePlanningView({
   // pre-filled from the planned investment, so saving completes that same
   // planned row (PUT) rather than adding a duplicate contribution.
   const [buyEdit, setBuyEdit] = useState<EditableTransaction | null>(null)
+  const [prefillTx, setPrefillTx] = useState<PrefillTransaction | null>(null)
   const [overrideTarget, setOverrideTarget] = useState<{ type: 'fe' | 'ins' | 'rec'; id: string; name: string; defaultAmount: number } | null>(null)
 
   const monthLabel = getMonthLabel(month, year)
@@ -1098,6 +1122,17 @@ export default function MobilePlanningView({
     await fetch(`/api/v1/monthly-plans/${plan.id}/dca-skips/${item.fundId}`, { method: 'DELETE' })
     onToast(isVI ? `Đã khôi phục ${item.name}` : `Restored ${item.name}`)
     onRefresh()
+  }
+
+  // Open the Add-Transaction sheet in create mode, pre-filled toward a goal —
+  // the goal-header "+" (log any contribution) and the recurring-bank "Saved"
+  // pill (record this month's deposit at the planned amount).
+  function openContribution(entry: GoalRow, prefill?: Partial<PrefillTransaction>) {
+    setPrefillTx({
+      goal_id: entry.isUnallocated ? null : entry.goalId,
+      investment_date: new Date().toISOString().slice(0, 10),
+      ...prefill,
+    })
   }
 
   function openBuy(item: GoalItem) {
@@ -1244,6 +1279,8 @@ export default function MobilePlanningView({
                     onRecOverride={openOverrideRec}
                     onRecEdit={() => setSheet({ type: 'manage-recurring' })}
                     onRecordBuy={openBuy}
+                    onRecordDeposit={(item) => openContribution(entry, { asset_type: 'bank', amount_vnd: item.amount })}
+                    onLogContribution={() => openContribution(entry)}
                     onDcaSkip={handleDcaSkip}
                     onDcaRestore={handleDcaRestore}
                   />
@@ -1460,12 +1497,18 @@ export default function MobilePlanningView({
         )}
       </Sheet>
 
-      {/* ─── Record buy → canonical Add-Transaction sheet (edit mode) ───────── */}
+      {/* ─── Record buy (edit) / log contribution (create) → Add-Transaction ── */}
       <AddTransactionSheet
-        open={!!buyEdit}
+        open={!!buyEdit || !!prefillTx}
         existing={buyEdit}
-        onClose={() => setBuyEdit(null)}
-        onSaved={() => { setBuyEdit(null); onToast(isVI ? 'Đã ghi nhận mua' : 'Buy recorded'); onRefresh() }}
+        prefill={prefillTx}
+        onClose={() => { setBuyEdit(null); setPrefillTx(null) }}
+        onSaved={() => {
+          const wasBuy = !!buyEdit
+          setBuyEdit(null); setPrefillTx(null)
+          onToast(wasBuy ? (isVI ? 'Đã ghi nhận mua' : 'Buy recorded') : (isVI ? 'Đã ghi nhận đóng góp' : 'Contribution logged'))
+          onRefresh()
+        }}
       />
     </div>
   )

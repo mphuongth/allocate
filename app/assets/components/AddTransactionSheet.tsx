@@ -81,12 +81,23 @@ export interface EditableTransaction {
   goal_id: string | null
 }
 
+// When set (and `existing` is not), the sheet opens in create mode with these
+// fields pre-filled — e.g. logging a contribution toward a goal, or recording a
+// recurring bank deposit. Saving still issues a POST (a brand-new transaction).
+export interface PrefillTransaction {
+  asset_type?: string | null
+  amount_vnd?: number | null
+  goal_id?: string | null
+  investment_date?: string | null
+}
+
 interface Props {
   open: boolean
   onClose: () => void
   onSaved?: () => void
   desktop?: boolean
   existing?: EditableTransaction | null
+  prefill?: PrefillTransaction | null
 }
 
 const inputStyle: React.CSSProperties = {
@@ -125,7 +136,7 @@ function groupThousands(value: string): string {
   return dot === -1 ? grouped : `${grouped}.${decPart}`
 }
 
-export default function AddTransactionSheet({ open, onClose, onSaved, desktop, existing }: Props) {
+export default function AddTransactionSheet({ open, onClose, onSaved, desktop, existing, prefill }: Props) {
   const t = useTranslations('addTx')
   const tc = useTranslations('common')
 
@@ -229,6 +240,23 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, existing])
+
+  // Create mode with prefilled defaults (e.g. logging a contribution from the
+  // Plan page). Unlike `existing`, this stays a POST — it just seeds the form.
+  useEffect(() => {
+    if (!open || existing || !prefill) return
+    const at: AssetType = prefill.asset_type === 'bank' || prefill.asset_type === 'gold' ? prefill.asset_type : 'fund'
+    setAssetType(at)
+    setDir('buy')
+    if (prefill.goal_id != null) setGoalId(prefill.goal_id)
+    if (prefill.investment_date) setDate(prefill.investment_date)
+    if (prefill.amount_vnd != null) {
+      const amt = String(prefill.amount_vnd)
+      if (at === 'bank') setBankAmount(amt)
+      else if (at === 'fund') setAmount(amt)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, existing, prefill])
 
   // Lazily load sellable holdings from the overview the first time the user
   // switches to "Sell" — most opens are buys, so we don't pay for it up front.
