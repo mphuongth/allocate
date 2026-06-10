@@ -12,6 +12,7 @@ import TransactionHistorySheet, { type PurchaseHistoryRow } from './TransactionH
 import { SellWithdrawSheet, type SellItem } from './SellWithdrawSheet'
 import { GD_COLORS, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, BankInfoStrip, type InvRow } from './goalDetailShared'
 import { fmtTxDate } from './transactionUtils'
+import { TxRowsSkeleton } from './Skeletons'
 
 interface InvestmentTx {
   transaction_id: string
@@ -940,11 +941,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
           {/* Investments tab */}
           {activeTab === 'investments' && (
             <div style={{ background: 'var(--c-card)', borderRadius: 16, padding: '0 14px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-              {txLoading && (
-                <p style={{ color: 'var(--c-muted)', fontSize: 14, textAlign: 'center', padding: '24px 0' }}>
-                  {isVI ? 'Đang tải…' : 'Loading…'}
-                </p>
-              )}
+              {txLoading && <TxRowsSkeleton />}
               {!txLoading && invRows.length === 0 && (
                 <p style={{ color: 'var(--c-muted)', fontSize: 14, textAlign: 'center', padding: '24px 0' }}>
                   {isVI ? 'Chưa có khoản đầu tư nào' : 'No investments yet'}
@@ -1139,11 +1136,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
           {/* History tab */}
           {activeTab === 'history' && (
             <div style={{ background: 'var(--c-card)', borderRadius: 16, padding: '0 14px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-              {txLoading && (
-                <p style={{ color: 'var(--c-muted)', fontSize: 14, textAlign: 'center', padding: '24px 0' }}>
-                  {isVI ? 'Đang tải…' : 'Loading…'}
-                </p>
-              )}
+              {txLoading && <TxRowsSkeleton />}
               {!txLoading && transactions.length === 0 && (
                 <p style={{ color: 'var(--c-muted)', fontSize: 14, textAlign: 'center', padding: '24px 0' }}>
                   {isVI ? 'Chưa có giao dịch nào' : 'No transactions yet'}

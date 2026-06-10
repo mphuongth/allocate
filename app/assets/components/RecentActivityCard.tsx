@@ -12,6 +12,7 @@ import {
   txPrimaryName,
   fmtTxDate,
 } from './transactionUtils'
+import { TxRowsSkeleton } from './Skeletons'
 
 // Asset-type badge colors for investment rows. Withdrawals use the negative
 // color regardless of asset.
@@ -37,6 +38,7 @@ export default function RecentActivityCard({ locale, desktop, refreshKey, onChan
   const tt = useTranslations('transactions')
   const [txs, setTxs] = useState<LedgerTransaction[]>([])
   const [total, setTotal] = useState(0)
+  const [loading, setLoading] = useState(true)
   const [showLedger, setShowLedger] = useState(false)
   const [localKey, setLocalKey] = useState(0)
 
@@ -56,6 +58,7 @@ export default function RecentActivityCard({ locale, desktop, refreshKey, onChan
         setTotal(data.total ?? 0)
       })
       .catch(() => { if (!cancelled) { setTxs([]); setTotal(0) } })
+      .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [refreshKey, localKey])
 
@@ -71,7 +74,9 @@ export default function RecentActivityCard({ locale, desktop, refreshKey, onChan
     </button>
   )
 
-  const rows = total === 0 ? (
+  const rows = loading ? (
+    <TxRowsSkeleton rows={3} />
+  ) : total === 0 ? (
     <div style={{ padding: '20px 16px', fontSize: 13, color: 'var(--c-muted)', textAlign: 'center' }}>
       {t('recentActivityEmpty')}
     </div>
@@ -148,7 +153,7 @@ export default function RecentActivityCard({ locale, desktop, refreshKey, onChan
       boxShadow: 'var(--shadow-card)',
       overflow: 'hidden',
     }}>
-      <div style={{ padding: '13px 16px', borderBottom: total > 0 ? '1px solid var(--c-line)' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+      <div style={{ padding: '13px 16px', borderBottom: (loading || total > 0) ? '1px solid var(--c-line)' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
           <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--c-card-2)', color: 'var(--c-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <Calendar size={15} />

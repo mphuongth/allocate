@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { render } from '@testing-library/react'
-import { DashboardSkeleton, DesktopDashboardSkeleton } from '../Skeletons'
+import { DashboardSkeleton, DesktopDashboardSkeleton, TxRowsSkeleton } from '../Skeletons'
 
 // The dashboard first-load skeleton must match the design (§02 · Skeleton
 // screens → "Overview — mobile first load"): net-worth card with a drawing-in
@@ -47,5 +47,32 @@ describe('DesktopDashboardSkeleton', () => {
   it('renders a two-column goal grid (4 cards)', () => {
     const { getAllByTestId } = render(<DesktopDashboardSkeleton />)
     expect(getAllByTestId('skeleton-desktop-goal-card')).toHaveLength(4)
+  })
+})
+
+// The detail panels / sheets (transaction history, goal-detail tabs, insurance
+// payment history, recent activity) are lists, so their first-load uses a shared
+// row-shimmer instead of "Loading…" text or a bare "…". Issue #235 · §04 / "PR 4".
+describe('TxRowsSkeleton', () => {
+  it('renders branded shimmer rows, not the old animate-pulse blocks', () => {
+    const { container, getByTestId } = render(<TxRowsSkeleton />)
+    expect(getByTestId('skeleton-tx-rows')).toBeInTheDocument()
+    expect(container.querySelectorAll('.sk').length).toBeGreaterThan(0)
+    expect(container.querySelector('.animate-pulse')).toBeNull()
+  })
+
+  it('is hidden from assistive tech (decorative)', () => {
+    const { getByTestId } = render(<TxRowsSkeleton />)
+    expect(getByTestId('skeleton-tx-rows')).toHaveAttribute('aria-hidden', 'true')
+  })
+
+  it('defaults to a handful of rows', () => {
+    const { getAllByTestId } = render(<TxRowsSkeleton />)
+    expect(getAllByTestId('skeleton-tx-row')).toHaveLength(4)
+  })
+
+  it('honours the rows count', () => {
+    const { getAllByTestId } = render(<TxRowsSkeleton rows={6} />)
+    expect(getAllByTestId('skeleton-tx-row')).toHaveLength(6)
   })
 })

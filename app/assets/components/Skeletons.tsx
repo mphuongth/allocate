@@ -63,6 +63,35 @@ export function DashboardSkeleton() {
   )
 }
 
+/**
+ * Row-list first-load shimmer — the shared placeholder for the detail panels and
+ * sheets that fetch a list on open (transaction history, goal-detail investments
+ * / history tabs, insurance payment history, the dashboard's Recent activity).
+ * Mirrors a transaction row: leading icon chip, two stacked text lines, a
+ * trailing amount. Replaces the legacy "Loading…" text / bare "…" so every
+ * first-load speaks the same Cairn vocabulary (issue #235 · §04).
+ */
+export function TxRowsSkeleton({ rows = 4 }: { rows?: number }) {
+  return (
+    <div data-testid="skeleton-tx-rows" aria-hidden="true">
+      {Array.from({ length: rows }, (_, i) => (
+        <div
+          key={i}
+          data-testid="skeleton-tx-row"
+          style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', borderBottom: i < rows - 1 ? '1px solid var(--c-line)' : 'none' }}
+        >
+          <Skeleton width={30} height={30} style={{ borderRadius: 8 }} />
+          <div style={{ flex: 1, display: 'grid', gap: 6 }}>
+            <Skeleton width="44%" height={11} />
+            <Skeleton width="26%" height={9} />
+          </div>
+          <Skeleton width={56} height={12} />
+        </div>
+      ))}
+    </div>
+  )
+}
+
 /** A single goal-card placeholder in the desktop goals grid. */
 function DeskGoalCardSk() {
   return (
