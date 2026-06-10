@@ -272,6 +272,26 @@ describe('MobilePlanningView — iOS zoom guard (issue #265)', () => {
   })
 })
 
+describe('MobilePlanningView — override sheet rounded corners (issue #319)', () => {
+  // The override bottom-sheet animates up with a `transform` (slide-up). On iOS
+  // WebKit that composites the layer, and the rounded top corners are only
+  // clipped when the card also sets `overflow: hidden` — otherwise the corners
+  // render square (issue #319). Assert both the radius and the clip.
+  it('gives the override sheet card rounded, clipped top corners', async () => {
+    const user = userEvent.setup()
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} fixedExpenses={baseFixedExpenses} />)
+
+    await user.click(screen.getAllByLabelText('More options')[0])
+    await user.click(screen.getByText('Override amount'))
+
+    const title = await screen.findByText('Override amount', { selector: 'p' })
+    const card = title.closest('div')!.parentElement as HTMLElement
+
+    expect(card.style.borderRadius).toBe('16px 16px 0 0')
+    expect(card.style.overflow).toBe('hidden')
+  })
+})
+
 describe('MobilePlanningView — by goal section', () => {
   it('shows investments grouped by goal', () => {
     render(<MobilePlanningView {...defaultProps} plan={basePlan} investments={baseInvestments} savings={baseSavings} />)

@@ -105,6 +105,10 @@ function Sheet({ open, onClose, title, children }: { open: boolean; onClose: () 
       <div
         style={{
           width: '100%', background: 'var(--c-card)', borderRadius: '16px 16px 0 0',
+          // overflow:hidden forces iOS WebKit to clip the rounded top corners —
+          // without it the slide-up transform composites the layer and the
+          // corners render square (issue #319).
+          overflow: 'hidden',
           paddingBottom: 'env(safe-area-inset-bottom,0)',
           animation: open ? 'slide-up 220ms cubic-bezier(0.2,0.8,0.2,1)' : 'slide-down 180ms ease forwards',
         }}
