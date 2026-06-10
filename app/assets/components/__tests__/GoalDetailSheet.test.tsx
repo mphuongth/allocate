@@ -334,6 +334,45 @@ describe('GoalDetailSheet — investment options Sell / history (issue #224)', (
   })
 })
 
+describe('GoalDetailSheet — bank maturity in Options sheet (issue #263)', () => {
+  const mockBankTx = {
+    transaction_id: 'tx-bank-1',
+    transaction_type: 'investment',
+    asset_type: 'bank',
+    fund_id: null,
+    fund_name: null,
+    fund_code: null,
+    investment_date: '2026-01-01',
+    amount_vnd: 5_000_000,
+    units: null,
+    unit_price: null,
+    interest_rate: 6,
+    expiry_date: '2030-08-15',
+    notes: 'Techcombank',
+    principal_withdrawn: null,
+    units_withdrawn: null,
+  }
+  const bankGoal: GoalData = { ...mockGoal, funds: [] }
+
+  it('shows the maturity date and time-left for a bank deposit', async () => {
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('investment-transactions')) {
+        return Promise.resolve({ ok: true, json: async () => ({ transactions: [mockBankTx] }) })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+    render(<GoalDetailSheet {...baseProps} goal={bankGoal} />)
+    await waitFor(() => screen.getByText('Techcombank'))
+    await userEvent.click(screen.getByRole('button', { name: /options/i }))
+
+    await waitFor(() => expect(screen.getByText('Maturity')).toBeInTheDocument())
+    expect(screen.getByText('15 Aug 2030')).toBeInTheDocument()
+    expect(screen.getByText('Time left')).toBeInTheDocument()
+    expect(screen.getByText(/days left/)).toBeInTheDocument()
+    expect(screen.getByText('6%/yr')).toBeInTheDocument()
+  })
+})
+
 describe('GoalDetailSheet — gold sell uses current price (issue #251)', () => {
   // Bought 1 chỉ at 9,000,000. Current market price is 9,200,000.
   const mockGoldTx = {

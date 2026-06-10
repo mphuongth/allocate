@@ -5,6 +5,7 @@
 
 import { TrendingUp, Building, Coins, BarChart2, Target } from 'lucide-react'
 import { fmtCompact } from '@/lib/formatters'
+import { fmtTxDate } from './transactionUtils'
 import type { FundBreakdownItem } from '../DashboardClient'
 
 export const GD_COLORS: Record<string, string> = {
@@ -154,6 +155,8 @@ export interface InvRow {
   units: number | null
   principal: number | null
   interestRate: number | null
+  // Bank deposit maturity (YYYY-MM-DD); null for non-bank holdings or no term.
+  expiryDate: string | null
   fund: FundBreakdownItem | null
 }
 
@@ -169,6 +172,7 @@ export interface GoalDetailTx {
   amount_vnd: number
   units: number | null
   interest_rate: number | null
+  expiry_date?: string | null
   notes: string | null
   principal_withdrawn: number | null
   units_withdrawn: number | null
@@ -257,6 +261,74 @@ export function buildInvRows(
       }
     }
 
-    return { id: tx.transaction_id, name, type: tx.asset_type, value, gainPct, units, principal, interestRate: tx.interest_rate ?? null, fund: fund ?? null }
+    return { id: tx.transaction_id, name, type: tx.asset_type, value, gainPct, units, principal, interestRate: tx.interest_rate ?? null, expiryDate: tx.expiry_date ?? null, fund: fund ?? null }
   }).filter((row): row is InvRow => row !== null)
+}
+
+// A bank-deposit maturity date, formatted for display plus a relative
+// "time left" summary. Returns null when there's no date. `tone` drives the
+// colour: 'warn' when due within 30 days (or today), 'pos' once matured,
+// 'neutral' otherwise (issue #263).
+export interface Maturity {
+  formatted: string
+  diffDays: number
+  relative: string
+  tone: 'neutral' | 'warn' | 'pos'
+}
+
+export function fmtMaturity(dateStr: string | null | undefined, isVi: boolean): Maturity | null {
+  if (!dateStr) return null
+  const d = new Date(dateStr + 'T00:00:00')
+  if (isNaN(d.getTime())) return null
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const diffDays = Math.round((d.getTime() - today.getTime()) / 86_400_000)
+  const formatted = fmtTxDate(dateStr, isVi ? 'vi' : 'en')
+
+  let relative: string
+  let tone: Maturity['tone'] = 'neutral'
+  if (diffDays < 0) {
+    relative = isVi ? 'Đã đáo hạn' : 'Matured'
+    tone = 'pos'
+  } else if (diffDays === 0) {
+    relative = isVi ? 'Đáo hạn hôm nay' : 'Matures today'
+    tone = 'warn'
+  } else if (diffDays <= 30) {
+    relative = isVi ? `Còn ${diffDays} ngày` : `${diffDays} day${diffDays === 1 ? '' : 's'} left`
+    tone = 'warn'
+  } else {
+    relative = isVi ? `Còn ${diffDays} ngày` : `${diffDays} days left`
+  }
+  return { formatted, diffDays, relative, tone }
+}
+
+// Bank-deposit info strip shown in the investment Options modal: interest rate,
+// maturity date and time-left. Renders nothing for non-bank holdings or when
+// there's no info to show (issue #263). Shared so desktop + mobile stay in sync.
+export function BankInfoStrip({ inv, isVi }: { inv: InvRow; isVi: boolean }) {
+  if (inv.type !== 'bank') return null
+  const m = fmtMaturity(inv.expiryDate, isVi)
+  const cells: { l: string; v: string; tone?: Maturity['tone'] }[] = []
+  if (inv.interestRate != null) {
+    cells.push({ l: isVi ? 'Lãi suất' : 'Interest rate', v: `${inv.interestRate}%/${isVi ? 'năm' : 'yr'}` })
+  }
+  if (m) {
+    cells.push({ l: isVi ? 'Ngày đáo hạn' : 'Maturity', v: m.formatted })
+    cells.push({ l: isVi ? 'Còn lại' : 'Time left', v: m.relative, tone: m.tone })
+  }
+  if (!cells.length) return null
+
+  return (
+    <div data-testid="bank-info-strip" style={{ display: 'grid', gridTemplateColumns: `repeat(${cells.length}, 1fr)`, gap: 1, background: 'var(--c-line)', borderRadius: 10, overflow: 'hidden', marginBottom: 4 }}>
+      {cells.map((c, i) => {
+        const color = c.tone === 'warn' ? 'var(--c-warn)' : c.tone === 'pos' ? 'var(--c-pos)' : 'var(--c-ink)'
+        return (
+          <div key={i} style={{ background: 'var(--c-card)', padding: '8px 10px' }}>
+            <div style={{ fontSize: 10, color: 'var(--c-muted)' }}>{c.l}</div>
+            <div style={{ fontSize: 12, fontWeight: 600, marginTop: 2, color, fontVariantNumeric: 'tabular-nums' }}>{c.v}</div>
+          </div>
+        )
+      })}
+    </div>
+  )
 }

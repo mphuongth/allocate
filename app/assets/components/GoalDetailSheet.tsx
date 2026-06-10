@@ -10,7 +10,7 @@ import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import type { GoalData, FundBreakdownItem } from '../DashboardClient'
 import TransactionHistorySheet, { type PurchaseHistoryRow } from './TransactionHistorySheet'
 import { SellWithdrawSheet, type SellItem } from './SellWithdrawSheet'
-import { GD_COLORS, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, type InvRow } from './goalDetailShared'
+import { GD_COLORS, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, BankInfoStrip, type InvRow } from './goalDetailShared'
 import { fmtTxDate } from './transactionUtils'
 
 interface InvestmentTx {
@@ -429,6 +429,9 @@ function InvestmentActionSheet({
               </div>
             </div>
           </div>
+
+          {/* Bank info strip — interest rate + maturity + time left (issue #263) */}
+          <BankInfoStrip inv={inv} isVi={isVI} />
 
           {/* View history */}
           <button

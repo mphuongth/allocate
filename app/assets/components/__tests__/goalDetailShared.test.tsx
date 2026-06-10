@@ -1,6 +1,14 @@
 import { describe, it, expect } from 'vitest'
-import { buildInvRows, calcDeadlineMonths, type GoalDetailTx } from '../goalDetailShared'
+import { buildInvRows, calcDeadlineMonths, fmtMaturity, type GoalDetailTx } from '../goalDetailShared'
 import type { FundBreakdownItem } from '../../DashboardClient'
+
+// A YYYY-MM-DD string `n` days from today (deterministic regardless of run date).
+function daysFromNow(n: number): string {
+  const d = new Date()
+  d.setHours(0, 0, 0, 0)
+  d.setDate(d.getDate() + n)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 const baseTx = (over: Partial<GoalDetailTx>): GoalDetailTx => ({
   transaction_id: 't', transaction_type: 'investment', asset_type: 'gold',
@@ -127,6 +135,68 @@ describe('buildInvRows', () => {
       [], 9_200_000, true,
     )
     expect(rows[0].name).toBe('Vàng')
+  })
+
+  it('carries the bank deposit maturity (expiry_date) through to the row (issue #263)', () => {
+    const rows = buildInvRows(
+      [baseTx({ transaction_id: 'b1', asset_type: 'bank', amount_vnd: 5_000_000, interest_rate: 6, expiry_date: '2026-08-15' })],
+      [], null, false,
+    )
+    expect(rows[0].expiryDate).toBe('2026-08-15')
+  })
+
+  it('leaves expiryDate null when the deposit has no maturity', () => {
+    const rows = buildInvRows(
+      [baseTx({ transaction_id: 'b1', asset_type: 'bank', amount_vnd: 5_000_000, interest_rate: 6 })],
+      [], null, false,
+    )
+    expect(rows[0].expiryDate).toBeNull()
+  })
+})
+
+describe('fmtMaturity (issue #263)', () => {
+  it('returns null for a missing date', () => {
+    expect(fmtMaturity(null, false)).toBeNull()
+    expect(fmtMaturity('', false)).toBeNull()
+  })
+
+  it('formats the maturity date as "DD Mon YYYY"', () => {
+    expect(fmtMaturity('2026-08-15', false)?.formatted).toBe('15 Aug 2026')
+  })
+
+  it('counts down the days left and stays neutral when far out', () => {
+    const m = fmtMaturity(daysFromNow(200), false)!
+    expect(m.diffDays).toBe(200)
+    expect(m.relative).toBe('200 days left')
+    expect(m.tone).toBe('neutral')
+  })
+
+  it('warns when maturity is within 30 days', () => {
+    const m = fmtMaturity(daysFromNow(10), false)!
+    expect(m.relative).toBe('10 days left')
+    expect(m.tone).toBe('warn')
+  })
+
+  it('uses the singular "1 day left"', () => {
+    expect(fmtMaturity(daysFromNow(1), false)!.relative).toBe('1 day left')
+  })
+
+  it('says "Matures today" on the maturity day', () => {
+    const m = fmtMaturity(daysFromNow(0), false)!
+    expect(m.relative).toBe('Matures today')
+    expect(m.tone).toBe('warn')
+  })
+
+  it('says "Matured" once the date has passed', () => {
+    const m = fmtMaturity(daysFromNow(-5), false)!
+    expect(m.relative).toBe('Matured')
+    expect(m.tone).toBe('pos')
+  })
+
+  it('localises the relative text in Vietnamese', () => {
+    expect(fmtMaturity(daysFromNow(10), true)!.relative).toBe('Còn 10 ngày')
+    expect(fmtMaturity(daysFromNow(-5), true)!.relative).toBe('Đã đáo hạn')
+    expect(fmtMaturity(daysFromNow(0), true)!.relative).toBe('Đáo hạn hôm nay')
   })
 })
 
