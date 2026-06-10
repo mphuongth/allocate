@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useLocale, useTranslations } from 'next-intl'
 import { TrendingUp, TrendingDown } from 'lucide-react'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
+import { CairnLoader } from '@/app/components/ui/CairnLoader'
 
 const TIME_RANGES = ['1M', '3M', '6M', '1Y', 'All'] as const
 type TimeRange = typeof TIME_RANGES[number]
@@ -126,11 +127,12 @@ interface Props {
   overallProfitLossPercentage: number
   allocationBar?: { fund: number; bank: number; gold: number; stock: number; goldUnits?: number }
   refreshKey?: number
+  refreshing?: boolean
 }
 
 export default function NetWorthCard({
   totalAssets, totalLiabilities, netWorth, totalInvested, currentValue,
-  overallProfitLoss, overallProfitLossPercentage, allocationBar, refreshKey,
+  overallProfitLoss, overallProfitLossPercentage, allocationBar, refreshKey, refreshing,
 }: Props) {
   const locale = useLocale()
   const t = useTranslations('dashboard')
@@ -168,13 +170,20 @@ export default function NetWorthCard({
         {t('netWorth')}
       </div>
 
-      {/* Hero number */}
-      <div style={{
+      {/* Hero number — pulses + shows an XS Cairn while re-fetching (value stays visible).
+          The `num-refresh` wrapper is what scopes the `.num` pulse animation. */}
+      <div className={refreshing ? 'num-refresh' : undefined} style={{
         fontSize: 32, fontWeight: 600, letterSpacing: '-0.025em',
         fontVariantNumeric: 'tabular-nums', color: 'var(--c-ink)',
-        lineHeight: 1.1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        lineHeight: 1.1, display: 'flex', alignItems: 'center', gap: 8,
       }}>
-        {fmt(netWorth)}
+        <span
+          className={refreshing ? 'num' : undefined}
+          style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}
+        >
+          {fmt(netWorth)}
+        </span>
+        {refreshing && <CairnLoader size={14} variant="muted" />}
       </div>
 
       {/* P&L row */}

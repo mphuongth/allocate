@@ -6,6 +6,7 @@ import { useTranslations, useLocale } from 'next-intl'
 import { useNavigation } from '@/app/components/navigation/NavigationContext'
 import { CreateGoalSheet } from './components/CreateGoalSheet'
 import { DashboardSkeleton, DesktopDashboardSkeleton } from './components/Skeletons'
+import { CairnLoader } from '@/app/components/ui/CairnLoader'
 import NetWorthCard from './components/NetWorthCard'
 import GoalCard from './components/GoalCard'
 import UnallocatedSection from './components/UnallocatedSection'
@@ -198,6 +199,9 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const isDesktop = useIsDesktop()
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
+  // Re-fetch while data is already on screen → number-refresh state (pulse + XS
+  // Cairn), as opposed to `loading` which drives the first-paint skeleton.
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')
   const [fundDetailId, setFundDetailId] = useState<string | null>(null)
   const [goalPickerFundId, setGoalPickerFundId] = useState<string | null>(null)
@@ -243,8 +247,10 @@ export default function DashboardClient({ userId }: { userId: string }) {
       setLoading(false)
       return
     }
-    // Only show skeleton on initial load — if data is already visible, refresh silently
+    // Only show skeleton on initial load — if data is already visible, refresh
+    // silently with the number-refresh pulse instead.
     if (!hasDataRef.current) setLoading(true)
+    else setRefreshing(true)
     setError('')
 
     // Resilient load: retries once on a transient failure (e.g. the service
@@ -267,6 +273,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
     }
     setError(overviewErrorText(result, tc('error')) ?? '')
     setLoading(false)
+    setRefreshing(false)
   }, [userId, tc])
 
   useEffect(() => { fetchDataRef.current = fetchData }, [fetchData])
@@ -447,7 +454,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
           className="md:hidden -mx-4 -mt-4 overflow-hidden flex items-center justify-center"
           style={{ height: `${pullY}px`, transition: pullY === 0 ? 'height 0.25s ease' : 'none' }}
         >
-          <div className={`w-6 h-6 rounded-full border-2 border-emerald-500 border-t-transparent ${pullY >= PULL_THRESHOLD ? 'animate-spin' : ''}`} />
+          <CairnLoader size={20} variant="pos" />
         </div>
 
         {/* Error state */}
@@ -711,6 +718,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                     goldUnits={data.goldUnits}
                     locale={locale}
                     refreshKey={historyKey}
+                    refreshing={refreshing}
                     navUpdatedAt={data.netWorth.navUpdatedAt}
                     onDownloadReport={() => setShowReportSheet(true)}
                   />
@@ -726,6 +734,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                 <NetWorthCard
                   {...data.netWorth}
                   refreshKey={historyKey}
+                  refreshing={refreshing}
                   allocationBar={allocationTotals ? {
                     fund: allocationTotals.equityTotal + allocationTotals.bondTotal + allocationTotals.balancedTotal,
                     bank: allocationTotals.bankTotal,

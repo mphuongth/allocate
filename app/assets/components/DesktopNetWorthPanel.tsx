@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { ArrowDownToLine } from 'lucide-react'
 import { fmtCompact, fmtPct } from '@/lib/formatters'
+import { CairnLoader } from '@/app/components/ui/CairnLoader'
 import type { DashboardData } from '../DashboardClient'
 
 const TIME_RANGES = ['1M', '3M', '6M', '1Y', 'All'] as const
@@ -74,11 +75,12 @@ interface Props {
   goldUnits?: number
   locale: string
   refreshKey?: number
+  refreshing?: boolean
   navUpdatedAt?: string | null
   onDownloadReport: () => void
 }
 
-export default function DesktopNetWorthPanel({ data, allocationTotals, goldUnits, locale, refreshKey, navUpdatedAt, onDownloadReport }: Props) {
+export default function DesktopNetWorthPanel({ data, allocationTotals, goldUnits, locale, refreshKey, refreshing, navUpdatedAt, onDownloadReport }: Props) {
   const { netWorth } = data
   const isPos = netWorth.overallProfitLoss >= 0
   const isVi = locale === 'vi'
@@ -127,9 +129,11 @@ export default function DesktopNetWorthPanel({ data, allocationTotals, goldUnits
           {isVi ? 'Tài sản ròng' : 'Net worth'}
         </div>
 
-        {/* Value */}
-        <div style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-0.03em', lineHeight: 1, color: 'var(--c-ink)' }}>
-          {fmtCompact(netWorth.netWorth)}
+        {/* Value — pulses + shows an XS Cairn while re-fetching (value stays visible).
+            The `num-refresh` wrapper is what scopes the `.num` pulse animation. */}
+        <div className={refreshing ? 'num-refresh' : undefined} style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-0.03em', lineHeight: 1, color: 'var(--c-ink)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span className={refreshing ? 'num' : undefined}>{fmtCompact(netWorth.netWorth)}</span>
+          {refreshing && <CairnLoader size={14} variant="muted" />}
         </div>
 
         {/* P&L chip */}

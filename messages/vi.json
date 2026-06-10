@@ -568,7 +568,8 @@
     "searchPlaceholder": "Tìm theo tên hoặc mã quỹ...",
     "fundsCount": "{count} quỹ",
     "dcaGoalLabel": "Phân bổ vào",
-    "dcaGoalUnallocated": "Chưa phân bổ"
+    "dcaGoalUnallocated": "Chưa phân bổ",
+    "syncingPrices": "Đang đồng bộ giá quỹ…"
   },
   "planning": {
     "title": "Kế hoạch Tháng",

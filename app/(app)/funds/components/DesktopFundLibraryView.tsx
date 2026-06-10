@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl'
 import { Plus, RefreshCw, Search, X } from 'lucide-react'
 import { fmtCompact } from '@/lib/formatters'
 import { Skeleton } from '@/app/components/ui/Skeleton'
+import { SyncPill } from '@/app/components/ui/SyncPill'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -562,6 +563,9 @@ export default function DesktopFundLibraryView() {
 
   return (
     <div className="hidden md:flex" style={{ flex: 1, minHeight: 0, overflow: 'hidden', flexDirection: 'column' }}>
+      {/* Background-sync pill while NAV prices refresh */}
+      <SyncPill label={t('syncingPrices')} show={refreshing} />
+
       {/* Toast notifications */}
       <div style={{ position: 'fixed', top: 16, right: 16, zIndex: 300, display: 'flex', flexDirection: 'column', gap: 8 }}>
         {toasts.map(t => (
@@ -635,7 +639,7 @@ export default function DesktopFundLibraryView() {
               className="cn-btn ghost"
               style={{ padding: '7px 10px', gap: 5, fontSize: 12, display: 'flex', alignItems: 'center' }}
             >
-              <RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} />
+              <RefreshCw size={15} />
               Refresh
             </button>
             <button
