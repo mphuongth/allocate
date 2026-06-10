@@ -1,13 +1,24 @@
+import { Skeleton } from '@/app/components/ui/Skeleton'
+
+/** Card chrome matching the real dashboard cards (GoalCard / NetWorthCard). */
+const cardStyle: React.CSSProperties = {
+  background: 'var(--c-card)',
+  border: '1px solid var(--c-line)',
+  borderRadius: 'var(--r-card)',
+  boxShadow: 'var(--shadow-card)',
+  padding: 20,
+}
+
 export function NetWorthSkeleton() {
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 animate-pulse">
-      <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-24 mb-4" />
-      <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded w-48 mb-6" />
+    <div style={cardStyle} data-testid="net-worth-skeleton">
+      <Skeleton width={96} height={16} className="mb-4" />
+      <Skeleton width={192} height={40} className="mb-6" />
       <div className="grid grid-cols-3 gap-4">
         {[0, 1, 2].map((i) => (
           <div key={i}>
-            <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-20 mb-2" />
-            <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded w-28" />
+            <Skeleton width={80} height={12} className="mb-2" />
+            <Skeleton width={112} height={20} />
           </div>
         ))}
       </div>
@@ -17,30 +28,30 @@ export function NetWorthSkeleton() {
 
 export function GoalSkeleton() {
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 animate-pulse">
+    <div style={{ ...cardStyle, padding: 20 }} data-testid="goal-skeleton">
       <div className="flex items-center justify-between mb-3">
-        <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-32" />
-        <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-16" />
+        <Skeleton width={128} height={16} />
+        <Skeleton width={64} height={16} />
       </div>
-      <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-40 mb-3" />
-      <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full w-full" />
+      <Skeleton width={160} height={24} className="mb-3" />
+      <Skeleton width="100%" height={8} round />
     </div>
   )
 }
 
 export function InsuranceSkeleton() {
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 animate-pulse">
+    <div style={cardStyle} data-testid="insurance-skeleton">
       <div className="flex items-center justify-between mb-3">
-        <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-28" />
-        <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded w-16" />
+        <Skeleton width={112} height={16} />
+        <Skeleton width={64} height={20} />
       </div>
-      <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-24 mb-4" />
+      <Skeleton width={96} height={12} className="mb-4" />
       <div className="grid grid-cols-2 gap-3">
-        <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded" />
-        <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded" />
+        <Skeleton height={16} />
+        <Skeleton height={16} />
       </div>
-      <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full w-full mt-3" />
+      <Skeleton width="100%" height={8} round className="mt-3" />
     </div>
   )
 }
