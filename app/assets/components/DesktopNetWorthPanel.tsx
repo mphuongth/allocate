@@ -129,8 +129,9 @@ export default function DesktopNetWorthPanel({ data, allocationTotals, goldUnits
           {isVi ? 'Tài sản ròng' : 'Net worth'}
         </div>
 
-        {/* Value — pulses + shows an XS Cairn while re-fetching (value stays visible) */}
-        <div style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-0.03em', lineHeight: 1, color: 'var(--c-ink)', display: 'flex', alignItems: 'center', gap: 8 }}>
+        {/* Value — pulses + shows an XS Cairn while re-fetching (value stays visible).
+            The `num-refresh` wrapper is what scopes the `.num` pulse animation. */}
+        <div className={refreshing ? 'num-refresh' : undefined} style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-0.03em', lineHeight: 1, color: 'var(--c-ink)', display: 'flex', alignItems: 'center', gap: 8 }}>
           <span className={refreshing ? 'num' : undefined}>{fmtCompact(netWorth.netWorth)}</span>
           {refreshing && <CairnLoader size={14} variant="muted" />}
         </div>

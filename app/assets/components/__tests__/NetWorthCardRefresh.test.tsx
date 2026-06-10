@@ -25,7 +25,9 @@ describe('NetWorthCard number-refresh', () => {
   it('pulses the value and shows an XS Cairn while refreshing', () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve([]) })))
     const { container } = render(<NetWorthCard {...base} refreshing />)
-    expect(container.querySelector('.num')).toBeInTheDocument()
+    // The pulse CSS is `.num-refresh .num` — the `.num` must have a `.num-refresh`
+    // ancestor or the animation never fires (descendant-selector mismatch bug).
+    expect(container.querySelector('.num-refresh .num')).toBeInTheDocument()
     expect(container.querySelector('.cairn-loader')).toBeInTheDocument()
   })
 

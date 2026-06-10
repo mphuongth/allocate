@@ -170,8 +170,9 @@ export default function NetWorthCard({
         {t('netWorth')}
       </div>
 
-      {/* Hero number — pulses + shows an XS Cairn while re-fetching (value stays visible) */}
-      <div style={{
+      {/* Hero number — pulses + shows an XS Cairn while re-fetching (value stays visible).
+          The `num-refresh` wrapper is what scopes the `.num` pulse animation. */}
+      <div className={refreshing ? 'num-refresh' : undefined} style={{
         fontSize: 32, fontWeight: 600, letterSpacing: '-0.025em',
         fontVariantNumeric: 'tabular-nums', color: 'var(--c-ink)',
         lineHeight: 1.1, display: 'flex', alignItems: 'center', gap: 8,
