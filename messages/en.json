@@ -568,7 +568,8 @@
     "searchPlaceholder": "Search by fund name or code...",
     "fundsCount": "{count, plural, one {# fund} other {# funds}}",
     "dcaGoalLabel": "Allocate to",
-    "dcaGoalUnallocated": "Unallocated"
+    "dcaGoalUnallocated": "Unallocated",
+    "syncingPrices": "Syncing fund prices…"
   },
   "planning": {
     "title": "Monthly Plan",

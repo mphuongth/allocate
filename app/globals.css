@@ -396,9 +396,43 @@
   100% { stroke-dashoffset: -300; }
 }
 
+/* Number refresh — subtle opacity pulse on a tabular figure as it re-fetches. */
+.num-refresh { display: inline-flex; align-items: center; gap: 8px; }
+.num-refresh .num { animation: num-fade 1.6s ease-in-out infinite; }
+@keyframes num-fade {
+  0%, 100% { opacity: 0.45; }
+  50%      { opacity: 1; }
+}
+
+/* Background-sync pill — floating banner while a non-blocking refresh runs. */
+.sync-bar {
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 8px 14px;
+  background: var(--c-navy-tint);
+  color: var(--c-navy);
+  border-radius: 999px;
+  font-size: 12px; font-weight: 500;
+  border: 1px solid rgba(15, 42, 74, 0.08);
+  box-shadow: var(--shadow-pop);
+}
+/* Centered, floats just below the top edge; slides in. */
+.sync-bar-float {
+  position: fixed;
+  top: 14px; left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  animation: sync-slide-in 220ms ease;
+}
+@keyframes sync-slide-in {
+  from { opacity: 0; transform: translate(-50%, -8px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
 /* Respect reduced-motion: hold steady instead of pulsing/shimmering/drawing. */
 @media (prefers-reduced-motion: reduce) {
   .cairn-loader .stone { animation: none; opacity: 0.55; }
   .sk { animation: none; }
   .spark-draw path { animation: none; stroke-dashoffset: 0; }
+  .num-refresh .num { animation: none; opacity: 1; }
+  .sync-bar-float { animation: none; }
 }

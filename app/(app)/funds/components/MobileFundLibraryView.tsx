@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl'
 import { Plus, RefreshCw, Search, X, ChevronDown, Check } from 'lucide-react'
 import { useNavigation } from '@/app/components/navigation/NavigationContext'
 import { Skeleton } from '@/app/components/ui/Skeleton'
+import { SyncPill } from '@/app/components/ui/SyncPill'
 
 function fmtCompactDca(n: number): string {
   const abs = Math.abs(n)
@@ -569,7 +570,7 @@ export default function MobileFundLibraryView() {
             aria-label="Refresh NAV"
             style={{ padding: 8, background: 'transparent', border: '1px solid var(--c-line)', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', opacity: refreshing || !funds.some((f) => f.nav_source_url) ? 0.4 : 1 }}
           >
-            <RefreshCw size={16} color="var(--c-ink)" style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
+            <RefreshCw size={16} color="var(--c-ink)" />
           </button>
           <button
             onClick={() => { setFormError(null); setAddOpen(true) }}
@@ -725,6 +726,9 @@ export default function MobileFundLibraryView() {
 
   return (
     <div data-testid="mobile-funds" className="md:hidden" style={{ minHeight: '100dvh', background: 'var(--c-canvas)' }}>
+      {/* Background-sync pill while NAV prices refresh */}
+      <SyncPill label={t('syncingPrices')} show={refreshing} />
+
       {/* Toasts */}
       <div style={{ position: 'fixed', top: 16, right: 16, zIndex: 300, display: 'flex', flexDirection: 'column', gap: 8, pointerEvents: 'none' }}>
         {toasts.map((toast) => (
