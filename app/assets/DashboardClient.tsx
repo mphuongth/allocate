@@ -5,7 +5,7 @@ import { Plus, ArrowDownToLine, ChevronDown, Check } from 'lucide-react'
 import { useTranslations, useLocale } from 'next-intl'
 import { useNavigation } from '@/app/components/navigation/NavigationContext'
 import { CreateGoalSheet } from './components/CreateGoalSheet'
-import { DashboardSkeleton } from './components/Skeletons'
+import { DashboardSkeleton, DesktopDashboardSkeleton } from './components/Skeletons'
 import NetWorthCard from './components/NetWorthCard'
 import GoalCard from './components/GoalCard'
 import UnallocatedSection from './components/UnallocatedSection'
@@ -458,8 +458,19 @@ export default function DashboardClient({ userId }: { userId: string }) {
           </div>
         )}
 
-        {/* Loading skeleton — matches the design's "Dashboard — first load". */}
-        {loading && <DashboardSkeleton />}
+        {/* Loading skeleton — each breakpoint gets its own per the design:
+            the mobile stack vs the two-column desktop Overview shell. Toggled
+            with CSS (not isDesktop) so the right one paints first, no flash. */}
+        {loading && (
+          <>
+            <div className="md:hidden">
+              <DashboardSkeleton />
+            </div>
+            <div className="hidden md:block md:flex-1 md:min-h-0">
+              <DesktopDashboardSkeleton />
+            </div>
+          </>
+        )}
 
         {/* Empty state */}
         {!loading && !error && isEmpty && (
