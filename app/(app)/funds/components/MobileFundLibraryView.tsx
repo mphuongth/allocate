@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslations } from 'next-intl'
 import { Plus, RefreshCw, Search, X, ChevronDown, Check } from 'lucide-react'
 import { useNavigation } from '@/app/components/navigation/NavigationContext'
+import { Skeleton } from '@/app/components/ui/Skeleton'
 
 function fmtCompactDca(n: number): string {
   const abs = Math.abs(n)
@@ -773,14 +774,14 @@ export default function MobileFundLibraryView() {
 
         {/* Loading skeleton */}
         {loading && (
-          <div style={{ display: 'grid', gap: 8 }}>
+          <div style={{ display: 'grid', gap: 8 }} data-testid="funds-loading-skeleton">
             {[...Array(3)].map((_, i) => (
               <div key={i} style={{ background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 16, padding: '12px 14px', display: 'grid', gap: 10 }}>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 8, background: 'var(--c-line)' }} />
+                  <Skeleton width={36} height={36} style={{ borderRadius: 8 }} />
                   <div style={{ flex: 1, display: 'grid', gap: 6 }}>
-                    <div style={{ height: 13, width: '55%', background: 'var(--c-line)', borderRadius: 4 }} />
-                    <div style={{ height: 10, width: '75%', background: 'var(--c-line)', borderRadius: 4 }} />
+                    <Skeleton width="55%" height={13} />
+                    <Skeleton width="75%" height={10} />
                   </div>
                 </div>
               </div>

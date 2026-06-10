@@ -51,6 +51,8 @@
   --c-btn-primary-hover: #1e3a63;
   /* Tab bar frosted-glass background */
   --c-tab-bg: rgba(255, 255, 255, 0.92);
+  /* Skeleton shimmer — mid-stop of the sweeping gradient over --c-card-2 */
+  --c-skeleton-mid: #ece8df;
   --r-card: 16px;
   --r-control: 10px;
   --shadow-card: 0 1px 0 rgba(15, 42, 74, 0.04), 0 1px 2px rgba(15, 42, 74, 0.05);
@@ -166,6 +168,8 @@
   --c-fund-gold: #fbbf24;     --c-fund-gold-bg: rgba(180, 83, 9, 0.22);
   /* Tab bar goes dark in dark mode */
   --c-tab-bg: rgba(22, 22, 22, 0.92);
+  /* Skeleton shimmer — lighter sweep over the dark card-2 surface */
+  --c-skeleton-mid: #2c2c2c;
   --c-pos-tint: rgba(4, 120, 87, 0.15);
   --c-neg-tint: rgba(185, 28, 28, 0.15);
   --c-warn-tint: rgba(180, 83, 9, 0.15);
@@ -321,4 +325,80 @@
 @media (max-width: 768px) {
   .cn-input { font-size: 16px; }
   input, textarea, select { font-size: 16px; }
+}
+
+/* ── Loading vocabulary (issue #235) ───────────────────────────────────────
+   One indicator language across the app: the brand cairn-stone loader for
+   spinners, and the .sk shimmer primitive for skeleton screens. */
+
+/* Cairn stone loader — three stacking pebbles. Size via --s (default 24px). */
+.cairn-loader {
+  --s: 24px;
+  --c: var(--c-navy);
+  display: inline-flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  justify-content: flex-start;
+  gap: calc(var(--s) * 0.08);
+  width: calc(var(--s) * 1.7);
+  height: calc(var(--s) * 1.6);
+  line-height: 0;
+}
+.cairn-loader .stone {
+  background: var(--c);
+  border-radius: 999px;
+  opacity: 0.2;
+  animation: cairn-pulse 1.4s ease-in-out infinite;
+  transform-origin: center;
+}
+.cairn-loader .s1 { width: 100%; height: calc(var(--s) * 0.30); animation-delay: 0s; }
+.cairn-loader .s2 { width: 70%;  height: calc(var(--s) * 0.26); animation-delay: 0.18s; }
+.cairn-loader .s3 { width: 42%;  height: calc(var(--s) * 0.22); animation-delay: 0.36s; }
+
+@keyframes cairn-pulse {
+  0%, 70%, 100% { opacity: 0.2; transform: translateY(2%) scaleX(0.94); }
+  35%           { opacity: 1;   transform: translateY(0)  scaleX(1); }
+}
+
+/* Mono colour variants */
+.cairn-loader.on-dark .stone { background: #fff; }
+.cairn-loader.muted .stone   { background: var(--c-muted-2); }
+.cairn-loader.pos .stone     { background: var(--c-pos); }
+
+/* Skeleton — shimmering surface for cards / lines / circles. */
+.sk {
+  background: linear-gradient(
+    90deg,
+    var(--c-card-2) 0%,
+    var(--c-skeleton-mid) 50%,
+    var(--c-card-2) 100%
+  );
+  background-size: 200% 100%;
+  animation: sk-shimmer 1.6s ease-in-out infinite;
+  border-radius: 6px;
+}
+@keyframes sk-shimmer {
+  0%   { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+.sk.round { border-radius: 999px; }
+.sk.card  { border-radius: var(--r-card); }
+
+/* Sparkline drawing-in — chart placeholder whose stroke draws itself, looping. */
+.spark-draw path {
+  stroke-dasharray: 300;
+  stroke-dashoffset: 300;
+  animation: spark-draw 1.8s ease-in-out infinite;
+}
+@keyframes spark-draw {
+  0%   { stroke-dashoffset: 300; }
+  55%  { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: -300; }
+}
+
+/* Respect reduced-motion: hold steady instead of pulsing/shimmering/drawing. */
+@media (prefers-reduced-motion: reduce) {
+  .cairn-loader .stone { animation: none; opacity: 0.55; }
+  .sk { animation: none; }
+  .spark-draw path { animation: none; stroke-dashoffset: 0; }
 }

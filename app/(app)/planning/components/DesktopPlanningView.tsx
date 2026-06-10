@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { useLocale } from 'next-intl'
 import { fmt, fmtCompact } from '@/lib/formatters'
+import { DesktopPlanningSkeleton } from './PlanningSkeleton'
 import FixedExpenseManager from './FixedExpenseManager'
 import RecurringSavingManager from './RecurringSavingManager'
 import AddTransactionSheet, { type EditableTransaction, type PrefillTransaction } from '@/app/assets/components/AddTransactionSheet'
@@ -744,8 +745,8 @@ export default function DesktopPlanningView({
         {/* Left — main scrollable content */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px 40px', minWidth: 0 }}>
           {loading ? (
-            <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--c-muted)' }}>
-              {isVI ? 'Đang tải...' : 'Loading...'}
+            <div data-testid="planning-loading">
+              <DesktopPlanningSkeleton />
             </div>
           ) : !plan ? (
             /* Empty state */

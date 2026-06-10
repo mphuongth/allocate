@@ -5,6 +5,7 @@ import type { ReactNode } from 'react'
 import { useTranslations } from 'next-intl'
 import { Plus, RefreshCw, Search, X } from 'lucide-react'
 import { fmtCompact } from '@/lib/formatters'
+import { Skeleton } from '@/app/components/ui/Skeleton'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -655,13 +656,13 @@ export default function DesktopFundLibraryView() {
 
         {/* Table or states */}
         {loading ? (
-          <div className="cn-card" style={{ overflow: 'hidden' }}>
+          <div className="cn-card" style={{ overflow: 'hidden' }} data-testid="funds-loading-skeleton">
             {[...Array(4)].map((_, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderBottom: i < 3 ? '1px solid var(--c-line)' : 'none', opacity: 0.6 }}>
-                <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--c-card-2)', flexShrink: 0 }} />
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderBottom: i < 3 ? '1px solid var(--c-line)' : 'none' }}>
+                <Skeleton width={32} height={32} style={{ borderRadius: 8, flexShrink: 0 }} />
                 <div style={{ flex: 1 }}>
-                  <div style={{ height: 12, background: 'var(--c-card-2)', borderRadius: 4, width: 120, marginBottom: 6 }} />
-                  <div style={{ height: 10, background: 'var(--c-card-2)', borderRadius: 4, width: 80 }} />
+                  <Skeleton width={120} height={12} style={{ marginBottom: 6 }} />
+                  <Skeleton width={80} height={10} />
                 </div>
               </div>
             ))}
