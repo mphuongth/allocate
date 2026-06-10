@@ -97,7 +97,9 @@
     "refresh": "Làm mới",
     "reset": "Đặt lại",
     "expandMenu": "Mở rộng menu",
-    "collapseMenu": "Thu gọn menu"
+    "collapseMenu": "Thu gọn menu",
+    "loadingPortfolio": "Đang tải danh mục của bạn",
+    "syncingBalances": "Đang đồng bộ số dư mới nhất…"
   },
   "nav": {
     "dashboard": "Tổng quan",

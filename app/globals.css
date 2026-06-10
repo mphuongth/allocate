@@ -384,8 +384,30 @@
 .sk.round { border-radius: 999px; }
 .sk.card  { border-radius: var(--r-card); }
 
+/* First-app-load splash — full-screen brand loader over the shell, fading out
+   once the app has booted. */
+.app-boot-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--c-canvas);
+}
+.app-boot-splash.hiding {
+  animation: boot-fade-out 320ms ease forwards;
+  pointer-events: none;
+}
+@keyframes boot-fade-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
 /* Respect reduced-motion: hold steady instead of pulsing/shimmering. */
 @media (prefers-reduced-motion: reduce) {
   .cairn-loader .stone { animation: none; opacity: 0.55; }
   .sk { animation: none; }
+  /* Still fire boot-fade-out (near-instant) so the splash unmounts. */
+  .app-boot-splash.hiding { animation-duration: 1ms; }
 }

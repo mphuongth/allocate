@@ -97,7 +97,9 @@
     "refresh": "Refresh",
     "reset": "Reset",
     "expandMenu": "Expand menu",
-    "collapseMenu": "Collapse menu"
+    "collapseMenu": "Collapse menu",
+    "loadingPortfolio": "Loading your portfolio",
+    "syncingBalances": "Syncing latest balances…"
   },
   "nav": {
     "dashboard": "Overview",
