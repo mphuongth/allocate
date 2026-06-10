@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import { useLocale } from 'next-intl'
 import { fmt, fmtCompact } from '@/lib/formatters'
-import { CairnLoader } from '@/app/components/ui/CairnLoader'
+import { PlanningSkeleton } from './PlanningSkeleton'
 import FixedExpenseManager from './FixedExpenseManager'
 import RecurringSavingManager from './RecurringSavingManager'
 import AddTransactionSheet, { type EditableTransaction, type PrefillTransaction } from '@/app/assets/components/AddTransactionSheet'
@@ -745,12 +745,8 @@ export default function DesktopPlanningView({
         {/* Left — main scrollable content */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px 40px', minWidth: 0 }}>
           {loading ? (
-            <div
-              data-testid="planning-loading"
-              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, padding: '60px 20px' }}
-            >
-              <CairnLoader size={40} label={isVI ? 'Đang tải' : 'Loading'} />
-              <span style={{ fontSize: 13, color: 'var(--c-muted)' }}>{isVI ? 'Đang tải...' : 'Loading...'}</span>
+            <div data-testid="planning-loading">
+              <PlanningSkeleton />
             </div>
           ) : !plan ? (
             /* Empty state */
