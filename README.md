@@ -80,7 +80,9 @@ E2E tests (Playwright) run **locally**, not in CI — the dedicated test Supabas
 supabase start            # boots local Postgres + replays all migrations
 ```
 
-Then point `.env.local` at the local stack (use the keys `supabase start` prints):
+Then create **`.env.e2e`** (gitignored, loaded by `playwright.config.ts` for non-CI
+runs) pointing both the app and the harness at the local stack, using the keys
+`supabase start` (or `supabase status -o env`) prints:
 
 ```
 NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
@@ -93,7 +95,22 @@ E2E_SUPABASE_SERVICE_ROLE_KEY=<service_role key from `supabase start`>
 npm run test:e2e          # or: npm run test:e2e:ui
 ```
 
-The guard in `e2e/helpers/guard.ts` refuses to run against the production project, so a misconfigured `.env.local` can't churn prod.
+The guard in `e2e/helpers/guard.ts` refuses to run against the production project, so a misconfigured env can't churn prod. The suite shares one auth user, so it runs serially (`workers: 1`).
+
+### Windows / WSL2 (no Docker Desktop)
+
+On Windows where Docker Desktop can't be installed (e.g. LTSC builds below 19045),
+run the Docker engine **inside WSL2** instead — same containers, still fully local:
+
+1. `wsl --install` (reboot), then complete Ubuntu's first-run user setup.
+2. Inside WSL: install Docker Engine (`get.docker.com`) and the Supabase CLI, then
+   run `supabase start` from this repo via `/mnt/...`. WSL2 forwards
+   `127.0.0.1:54321` to Windows localhost, so the app + Playwright run on Windows.
+3. If Playwright's bundled Chromium download stalls, add `PLAYWRIGHT_CHANNEL=msedge`
+   to `.env.e2e` to run against system-installed Edge (see `playwright.config.ts`).
+
+`supabase/config.toml` disables services the app doesn't use (studio, analytics,
+realtime, storage, edge functions, inbucket) to keep the stack light.
 
 ## Tech stack
 
