@@ -34,6 +34,7 @@ export async function GET(request: NextRequest) {
     .select('transaction_id, goal_id, asset_type, transaction_type, amount_vnd, units, unit_price, interest_rate, investment_date, funds(id, name, nav)')
     .eq('user_id', user.id)
     .not('goal_id', 'is', null)
+    .is('renewed_from_transaction_id', null) // exclude renewal history snapshots from goal stats
 
   if (txError) return NextResponse.json({ error: 'Failed to fetch transactions' }, { status: 500 })
 

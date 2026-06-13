@@ -133,6 +133,8 @@ export async function deleteTransaction(txId: string) {
 // is removed.
 export async function deleteTransactionCascade(txId: string) {
   await supabase.from('investment_transactions').delete().eq('parent_transaction_id', txId)
+  // Renewal history snapshots link back via renewed_from_transaction_id.
+  await supabase.from('investment_transactions').delete().eq('renewed_from_transaction_id', txId)
   await supabase.from('investment_transactions').delete().eq('transaction_id', txId)
 }
 

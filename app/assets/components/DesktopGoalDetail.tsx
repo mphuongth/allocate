@@ -24,6 +24,7 @@ interface InvestmentTx {
   notes: string | null
   principal_withdrawn: number | null
   units_withdrawn: number | null
+  renewed_from_transaction_id?: string | null
   is_recurring?: boolean
 }
 
@@ -73,7 +74,7 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
     // Recurring savings are plan-only (no investment_transactions row), so fetch
     // their realized contributions separately and merge into the history list.
     Promise.all([
-      fetch(`/api/v1/investment-transactions?goal_id=${goal.goalId}&limit=200`, { cache: 'no-store' })
+      fetch(`/api/v1/investment-transactions?goal_id=${goal.goalId}&limit=200&include_history=true`, { cache: 'no-store' })
         .then((r) => r.ok ? r.json() : { transactions: [] }),
       fetch(`/api/v1/savings-goals/${goal.goalId}/recurring-contributions`, { cache: 'no-store' })
         .then((r) => r.ok ? r.json() : { contributions: [] }),
@@ -447,31 +448,42 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
               )}
               {!txLoading && transactions.map((tx, i) => {
                 const isWithdraw = tx.transaction_type === 'withdrawal'
+                const isRenewed = !!tx.renewed_from_transaction_id
                 const name = tx.fund_name ?? tx.notes ?? (isVi ? 'Khoản đầu tư' : 'Investment')
                 return (
-                  <div key={tx.transaction_id} style={{
+                  <div key={tx.transaction_id} data-testid={isRenewed ? 'history-renewed-row' : undefined} style={{
                     display: 'flex', alignItems: 'center', gap: 10,
                     padding: '11px 16px',
                     borderBottom: i < transactions.length - 1 ? '1px solid var(--c-line)' : 'none',
+                    opacity: isRenewed ? 0.6 : 1,
                   }}>
                     <div style={{
                       width: 28, height: 28, borderRadius: 7, flexShrink: 0,
-                      background: isWithdraw ? 'var(--c-neg-tint)' : 'var(--c-pos-tint)',
-                      color: isWithdraw ? 'var(--c-neg)' : 'var(--c-pos)',
+                      background: isRenewed ? 'var(--c-card-2)' : isWithdraw ? 'var(--c-neg-tint)' : 'var(--c-pos-tint)',
+                      color: isRenewed ? 'var(--c-muted)' : isWithdraw ? 'var(--c-neg)' : 'var(--c-pos)',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}>
-                      {isWithdraw
-                        ? <ArrowDownRight size={13} strokeWidth={2.2} />
-                        : <ArrowUpRight size={13} strokeWidth={2.2} />
+                      {isRenewed
+                        ? <RefreshCw size={13} strokeWidth={2.2} />
+                        : isWithdraw
+                          ? <ArrowDownRight size={13} strokeWidth={2.2} />
+                          : <ArrowUpRight size={13} strokeWidth={2.2} />
                       }
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--c-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</div>
+                      <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--c-ink)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
+                        {isRenewed && (
+                          <span style={{ flexShrink: 0, fontSize: 9.5, fontWeight: 600, padding: '1px 6px', borderRadius: 999, background: 'var(--c-card-2)', color: 'var(--c-muted)' }}>
+                            {isVi ? 'Đã tái tục' : 'Renewed'}
+                          </span>
+                        )}
+                      </div>
                       <div style={{ fontSize: 10, color: 'var(--c-muted)', marginTop: 1 }}>
                         {fmtTxDate(tx.investment_date, locale)}
                       </div>
                     </div>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: isWithdraw ? 'var(--c-neg)' : 'var(--c-pos)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: isRenewed ? 'var(--c-muted)' : isWithdraw ? 'var(--c-neg)' : 'var(--c-pos)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
                       {isWithdraw ? '-' : '+'}{fmtCompact(tx.amount_vnd)}
                     </span>
                   </div>

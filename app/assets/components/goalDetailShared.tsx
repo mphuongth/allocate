@@ -180,6 +180,9 @@ export interface GoalDetailTx {
   notes: string | null
   principal_withdrawn: number | null
   units_withdrawn: number | null
+  // Set on a renewal history snapshot (a closed past cycle) — excluded from
+  // active holdings and every valuation. null/undefined for live rows.
+  renewed_from_transaction_id?: string | null
 }
 
 // Dedup to one row per fund / per non-fund tx, then value each holding:
@@ -211,7 +214,9 @@ export function buildInvRows(
     }
   }
 
-  const investmentRows = transactions.filter((tx) => tx.transaction_type !== 'withdrawal')
+  // Exclude withdrawals and renewal history snapshots — only live investment
+  // rows are active holdings.
+  const investmentRows = transactions.filter((tx) => tx.transaction_type !== 'withdrawal' && !tx.renewed_from_transaction_id)
   const deduped = new Map<string, GoalDetailTx>()
   investmentRows.forEach((tx) => {
     if (tx.fund_id) {
@@ -271,13 +276,14 @@ export function buildInvRows(
 
 // A bank-deposit maturity date, formatted for display plus a relative
 // "time left" summary. Returns null when there's no date. `tone` drives the
-// colour: 'warn' when due within 30 days (or today), 'pos' once matured,
-// 'neutral' otherwise (issue #263).
+// colour: 'neg' once matured (needs action — consistent with the maturity card
+// and resolve pill), 'warn' when due within 30 days (or today), 'neutral'
+// otherwise (issue #263).
 export interface Maturity {
   formatted: string
   diffDays: number
   relative: string
-  tone: 'neutral' | 'warn' | 'pos'
+  tone: 'neutral' | 'warn' | 'pos' | 'neg'
 }
 
 // Whether a holding is a term deposit at (or within the reminder window of) its
@@ -303,7 +309,7 @@ export function fmtMaturity(dateStr: string | null | undefined, isVi: boolean): 
   let tone: Maturity['tone'] = 'neutral'
   if (diffDays < 0) {
     relative = isVi ? 'Đã đáo hạn' : 'Matured'
-    tone = 'pos'
+    tone = 'neg'
   } else if (diffDays === 0) {
     relative = isVi ? 'Đáo hạn hôm nay' : 'Matures today'
     tone = 'warn'
@@ -335,7 +341,7 @@ export function BankInfoStrip({ inv, isVi }: { inv: InvRow; isVi: boolean }) {
   return (
     <div data-testid="bank-info-strip" style={{ display: 'grid', gridTemplateColumns: `repeat(${cells.length}, 1fr)`, gap: 1, background: 'var(--c-line)', borderRadius: 10, overflow: 'hidden', marginBottom: 4 }}>
       {cells.map((c, i) => {
-        const color = c.tone === 'warn' ? 'var(--c-warn)' : c.tone === 'pos' ? 'var(--c-pos)' : 'var(--c-ink)'
+        const color = c.tone === 'neg' ? 'var(--c-neg)' : c.tone === 'warn' ? 'var(--c-warn)' : c.tone === 'pos' ? 'var(--c-pos)' : 'var(--c-ink)'
         return (
           <div key={i} style={{ background: 'var(--c-card)', padding: '8px 10px' }}>
             <div style={{ fontSize: 10, color: 'var(--c-muted)' }}>{c.l}</div>

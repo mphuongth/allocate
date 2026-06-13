@@ -16,6 +16,9 @@ export async function GET(request: NextRequest) {
   const goal_id = searchParams.get('goal_id')
   const plan_id = searchParams.get('plan_id')
   const unassigned = searchParams.get('unassigned')
+  // Renewal history snapshots are excluded by default (so Recent Activity and
+  // any future consumer stay clean); the goal-detail History tab opts in.
+  const includeHistory = searchParams.get('include_history') === 'true'
   const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10))
   const limitParam = parseInt(searchParams.get('limit') ?? '20', 10)
   const limit = Math.min(Math.max(1, isNaN(limitParam) ? 20 : limitParam), 1000)
@@ -23,11 +26,12 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from('investment_transactions')
-    .select('transaction_id, goal_id, asset_type, transaction_type, parent_transaction_id, investment_date, amount_vnd, unit_price, units, interest_rate, expiry_date, notes, fund_id, principal_withdrawn, units_withdrawn, affects_progress, savings_goals(goal_name), funds(id, name, nav)', { count: 'exact' })
+    .select('transaction_id, goal_id, asset_type, transaction_type, parent_transaction_id, renewed_from_transaction_id, investment_date, amount_vnd, unit_price, units, interest_rate, expiry_date, notes, fund_id, principal_withdrawn, units_withdrawn, affects_progress, savings_goals(goal_name), funds(id, name, nav)', { count: 'exact' })
     .eq('user_id', user.id)
     .order('investment_date', { ascending: false })
     .range(offset, offset + limit - 1)
 
+  if (!includeHistory) query = query.is('renewed_from_transaction_id', null)
   if (asset_type && ASSET_TYPES.includes(asset_type as typeof ASSET_TYPES[number])) {
     query = query.eq('asset_type', asset_type)
   }
