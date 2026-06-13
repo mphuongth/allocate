@@ -1,4 +1,9 @@
 import { test, expect, type Page } from '@playwright/test'
+import * as api from './helpers/api'
+import { makeCleanupStack } from './helpers/cleanup'
+
+const cleanup = makeCleanupStack()
+test.afterEach(() => cleanup.run())
 
 // ─── iOS auto-zoom on text fields (issue #265) ───────────────────────────────
 // iOS Safari zooms the viewport when a focused native field has font-size < 16px
@@ -71,5 +76,26 @@ test.describe('Fund library — no field triggers iOS zoom', () => {
     // The name field's placeholder confirms the form is open.
     await expect(page.getByPlaceholder(/Vanguard|S&P/i)).toBeVisible({ timeout: 5_000 })
     await expectNoZoomFields(page)
+  })
+
+  // Regression for #321: the DCA goal <select> only renders for DCA-enabled funds,
+  // so the loads-a-fresh-page tests above never exercise it. iOS persists the
+  // focus-zoom across reloads, so a <16px select left the whole Fund page zoomed
+  // on subsequent first loads.
+  test('DCA goal select renders at >=16px', async ({ page }) => {
+    const fund = await api.createFund({
+      name: 'E2E Zoom DCA Fund', code: 'E2EZM', fund_type: 'equity', nav: 45000,
+      is_dca: true, dca_monthly_amount_vnd: 1_000_000,
+    })
+    cleanup.add(() => api.deleteFund(fund.id))
+
+    await useEnglish(page)
+    await page.goto('/funds')
+    await page.waitForLoadState('networkidle')
+
+    const select = page.getByTestId('mobile-funds').getByTestId(`dca-goal-${fund.id}`)
+    await expect(select).toBeVisible({ timeout: 10_000 })
+    const fontSize = await select.evaluate((el) => parseFloat(getComputedStyle(el).fontSize))
+    expect(fontSize).toBeGreaterThanOrEqual(16)
   })
 })
