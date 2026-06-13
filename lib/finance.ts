@@ -1,15 +1,25 @@
+// The single source of truth for a bank term deposit's accrued interest, used by
+// the dashboard/net-worth, the goals list and the goal-detail holding rows so
+// the same deposit never shows a different value across screens.
+//
+// Simple (linear) interest pro-rated over the year — `principal × rate × days/365`
+// — matching how a held-to-maturity Vietnamese term deposit pays and the
+// add-transaction preview. Accrual is capped at maturity (`min(asOf, expiry)`),
+// so an unrenewed overdue deposit stops earning at its maturity date rather than
+// running forever. Flex deposits (no rate) earn nothing here — callers keep them
+// on the `value = principal` branch. `asOf` defaults to now; pass it to value a
+// deposit as of a fixed instant (and for deterministic tests).
 export function calcProjectedInterest(
   amount: number,
   rate: number | null,
   investmentDate: string,
-  expiryDate?: string | null
+  expiryDate?: string | null,
+  asOf: number = Date.now()
 ): number {
   if (!rate || amount <= 0) return 0
-  const endMs = expiryDate
-    ? Math.min(Date.now(), new Date(expiryDate).getTime())
-    : Date.now()
+  const endMs = expiryDate ? Math.min(asOf, new Date(expiryDate).getTime()) : asOf
   const days = Math.max(0, (endMs - new Date(investmentDate).getTime()) / (1000 * 60 * 60 * 24))
-  return amount * Math.pow(1 + rate / 100, days / 365) - amount
+  return amount * (rate / 100) * (days / 365)
 }
 
 export function isNavStale(updatedAt: string): boolean {

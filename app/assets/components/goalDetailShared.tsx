@@ -5,6 +5,7 @@
 
 import { TrendingUp, Building, Coins, BarChart2, Target, RefreshCw } from 'lucide-react'
 import { fmtCompact } from '@/lib/formatters'
+import { calcProjectedInterest } from '@/lib/finance'
 import { fmtTxDate } from './transactionUtils'
 import { isTermDeposit, depositMaturityState, isMaturityActionable } from '@/lib/maturity'
 import type { FundBreakdownItem } from '../DashboardClient'
@@ -280,10 +281,8 @@ export function buildInvRows(
       } else {
         if (effectivePrincipal <= 0) return null // fully withdrawn
         if (tx.asset_type === 'bank' && tx.interest_rate) {
-          const months = Math.max(0, Math.floor(
-            (Date.now() - new Date(tx.investment_date).getTime()) / (1000 * 60 * 60 * 24 * 30.44)
-          ))
-          value = Math.round(effectivePrincipal * Math.pow(1 + tx.interest_rate / 100 / 12, months))
+          // Shared valuation: simple interest, capped at maturity (see lib/finance).
+          value = Math.round(effectivePrincipal + calcProjectedInterest(effectivePrincipal, tx.interest_rate, tx.investment_date, tx.expiry_date))
           gainPct = ((value - effectivePrincipal) / effectivePrincipal) * 100
           units = null
           principal = effectivePrincipal

@@ -44,7 +44,7 @@ describe('buildInvRows', () => {
     expect(rows[0].value).toBe(9_000_000)
   })
 
-  it('compounds bank interest monthly and reports principal', () => {
+  it('values a bank deposit at principal + accrued interest and reports principal', () => {
     const rows = buildInvRows(
       [baseTx({ transaction_id: 'b1', asset_type: 'bank', amount_vnd: 5_000_000, interest_rate: 6 })],
       [], null, false,
@@ -52,6 +52,18 @@ describe('buildInvRows', () => {
     expect(rows[0].value).toBeGreaterThanOrEqual(5_000_000)
     expect(rows[0].principal).toBe(5_000_000)
     expect(rows[0].units).toBeNull()
+  })
+
+  it('caps a matured deposit at its term interest (frozen, simple interest)', () => {
+    // Term 2025-01-01 → 2025-07-01 (181 days). Interest is capped at maturity, so
+    // the value is deterministic regardless of when the test runs (today is past
+    // the expiry): 10M + 10M × 6% × 181/365.
+    const rows = buildInvRows(
+      [baseTx({ transaction_id: 'm1', asset_type: 'bank', amount_vnd: 10_000_000, interest_rate: 6, investment_date: '2025-01-01', expiry_date: '2025-07-01' })],
+      [], null, false,
+    )
+    const expected = Math.round(10_000_000 + 10_000_000 * 0.06 * (181 / 365))
+    expect(rows[0].value).toBe(expected)
   })
 
   it('uses the fund current value and dedups multiple txs of the same fund', () => {
