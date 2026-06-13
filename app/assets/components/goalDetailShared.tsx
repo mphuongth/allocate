@@ -192,6 +192,12 @@ export interface GoalDetailTx {
 // Returns null when it has never been renewed. `complete` is false when any
 // cycle's interest wasn't recorded (null), so callers can show a "≥" rather than
 // silently understating the total.
+//
+// COUPLING: this matches snapshots by `renewed_from_transaction_id === activeTxId`,
+// which is correct only because renewal overwrites the deposit IN PLACE (the
+// active row keeps its id across cycles — see the /renew route). If renewal ever
+// switches to a new-row-per-cycle model, the snapshots would point at differing
+// ids and this lookup would silently miss earlier cycles — revisit it then.
 export interface RenewalSummary { count: number; totalInterestVnd: number; complete: boolean }
 export function buildRenewalSummary(transactions: GoalDetailTx[], activeTxId: string): RenewalSummary | null {
   const snaps = transactions.filter((tx) => tx.renewed_from_transaction_id === activeTxId)

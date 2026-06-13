@@ -34,12 +34,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (interest_rate != null && interest_rate !== '') cleanRate = validateRate(interest_rate, 'interest_rate')
     if (expiry_date) cleanExpiry = validateDate(expiry_date, 'expiry_date')
     cleanInvestmentDate = validateDate(investment_date, 'investment_date')
-    // Realized interest is user-entered money recorded permanently — keep it
-    // sane: non-negative and not absurd relative to the new principal.
+    // Realized interest is user-entered money recorded permanently — must be a
+    // non-negative finite number. The upper bound is checked after the old row
+    // is read (interest accrued on the OLD principal, not the new cycle's).
     if (interest_earned_vnd != null && interest_earned_vnd !== '') {
       const n = Number(interest_earned_vnd)
       if (!Number.isFinite(n) || n < 0) throw new ValidationError('interest_earned_vnd must be a non-negative number')
-      if (n > cleanAmount * 10) throw new ValidationError('interest_earned_vnd is unreasonably large')
       cleanInterestEarned = Math.round(n)
     }
   } catch (e) {
@@ -61,6 +61,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (fetchErr || !old) return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
   if (old.asset_type !== 'bank') {
     return NextResponse.json({ error: 'Only bank term deposits can be renewed.' }, { status: 400 })
+  }
+
+  // Sanity-bound the realized interest against the OLD principal it accrued on
+  // (not the new cycle's principal, which a "change amount" renewal may shrink).
+  if (cleanInterestEarned != null && cleanInterestEarned > old.amount_vnd * 10) {
+    return NextResponse.json({ error: 'interest_earned_vnd is unreasonably large' }, { status: 400 })
   }
 
   // Roll the active row forward to the new cycle (in place — valuation unchanged).
