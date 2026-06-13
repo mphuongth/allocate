@@ -158,6 +158,9 @@ export interface InvRow {
   interestRate: number | null
   // Bank deposit maturity (YYYY-MM-DD); null for non-bank holdings or no term.
   expiryDate: string | null
+  // When the (current) cycle was opened — used to derive the original term
+  // length on renewal. null for fund holdings.
+  investmentDate: string | null
   fund: FundBreakdownItem | null
 }
 
@@ -262,7 +265,7 @@ export function buildInvRows(
       }
     }
 
-    return { id: tx.transaction_id, name, type: tx.asset_type, value, gainPct, units, principal, interestRate: tx.interest_rate ?? null, expiryDate: tx.expiry_date ?? null, fund: fund ?? null }
+    return { id: tx.transaction_id, name, type: tx.asset_type, value, gainPct, units, principal, interestRate: tx.interest_rate ?? null, expiryDate: tx.expiry_date ?? null, investmentDate: fund ? null : (tx.investment_date ?? null), fund: fund ?? null }
   }).filter((row): row is InvRow => row !== null)
 }
 

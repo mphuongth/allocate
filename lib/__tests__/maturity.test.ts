@@ -5,6 +5,7 @@ import {
   depositMaturityState,
   isMaturityActionable,
   addMonths,
+  monthsBetween,
   renewalPrincipal,
 } from '../maturity'
 
@@ -58,6 +59,17 @@ describe('addMonths', () => {
   })
   it('handles a zero-month term as a no-op', () => {
     expect(addMonths('2026-06-13', 0)).toBe('2026-06-13')
+  })
+})
+
+describe('monthsBetween', () => {
+  it('counts whole months for a standard term', () => {
+    expect(monthsBetween('2025-08-15', '2026-08-15')).toBe(12)
+    expect(monthsBetween('2026-03-01', '2026-06-01')).toBe(3)
+    expect(monthsBetween('2026-06-14', '2026-12-14')).toBe(6)
+  })
+  it('does not count an incomplete final month', () => {
+    expect(monthsBetween('2026-01-20', '2026-04-10')).toBe(2) // not yet 3 full months
   })
 })
 

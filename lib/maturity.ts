@@ -56,6 +56,17 @@ export function addMonths(isoDate: string, n: number): string {
   return `${year}-${pad(month + 1)}-${pad(Math.min(d, lastDay))}`
 }
 
+// Whole months between two YYYY-MM-DD dates (the count of complete months from
+// `fromIso` to `toIso`). Used to derive a deposit's original term length from
+// its open date and maturity date when suggesting the renewal term.
+export function monthsBetween(fromIso: string, toIso: string): number {
+  const [fy, fm, fd] = fromIso.split('-').map(Number)
+  const [ty, tm, td] = toIso.split('-').map(Number)
+  let months = (ty - fy) * 12 + (tm - fm)
+  if (td < fd) months -= 1 // the final month hasn't fully elapsed
+  return months
+}
+
 // The principal that the next cycle starts with, per the chosen renewal mode.
 export function renewalPrincipal(
   mode: RenewMode,

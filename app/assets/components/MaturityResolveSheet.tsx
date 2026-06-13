@@ -12,13 +12,14 @@
 // is tomorrow. Withdrawal hands off to the existing Sell/Withdraw flow rather
 // than re-implementing the payout (the parent wires `onWithdraw`).
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { RefreshCw, Pencil, ArrowDownToLine, AlertTriangle, Check, Building2, X } from 'lucide-react'
 import { fmt, fmtCompact } from '@/lib/formatters'
 import { fmtMaturity, type InvRow } from './goalDetailShared'
 import {
   depositMaturityState,
   addMonths,
+  monthsBetween,
   renewalPrincipal,
   type RenewMode,
 } from '@/lib/maturity'
@@ -39,12 +40,12 @@ const moneyInput: React.CSSProperties = {
   borderRadius: 10, color: 'var(--c-ink)', outline: 'none',
 }
 
-function MoneyField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function MoneyField({ label, value, onChange, testId }: { label: string; value: string; onChange: (v: string) => void; testId?: string }) {
   return (
     <div>
       <div style={fieldLabel}>{label}</div>
       <div style={{ position: 'relative' }}>
-        <input type="number" value={value} onChange={(e) => onChange(e.target.value)} style={moneyInput} />
+        <input data-testid={testId} type="number" value={value} onChange={(e) => onChange(e.target.value)} style={moneyInput} />
         <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--c-muted)', pointerEvents: 'none' }}>₫</span>
       </div>
     </div>
@@ -73,9 +74,12 @@ export function MaturityResolveBody({
   const state = depositMaturityState(m?.diffDays ?? 0)
   const matured = state === 'matured'
 
+  // Suggest the original term length (open date → maturity), falling back to 12
+  // months when we can't derive it (no stored open date).
+  const derivedTerm = inv.investmentDate && inv.expiryDate ? monthsBetween(inv.investmentDate, inv.expiryDate) : 0
   const [mode, setMode] = useState<Mode>('principal_interest')
   const [interest, setInterest] = useState(String(estInterest))
-  const [term, setTerm] = useState('12')
+  const [term, setTerm] = useState(String(derivedTerm > 0 ? derivedTerm : 12))
   const [rate, setRate] = useState(inv.interestRate != null ? String(inv.interestRate) : '')
   const [newAmount, setNewAmount] = useState(String(principal))
   const [saving, setSaving] = useState(false)
@@ -83,16 +87,25 @@ export function MaturityResolveBody({
   const [done, setDone] = useState<null | { newPrincipal: number; newMaturity: string }>(null)
 
   const iNum = Number(interest) || 0
-  const tNum = Number(term) || 12
+  const tNum = Number(term) || 0
+  // Pass null (not 0) for an empty "new amount" so renewalPrincipal can fall
+  // back to the current principal rather than writing 0₫ to the deposit.
+  const newAmountNum = newAmount.trim() === '' ? null : Number(newAmount)
   const newPrincipal = mode === 'withdraw'
     ? principal
-    : renewalPrincipal(mode, principal, iNum, Number(newAmount) || 0)
+    : renewalPrincipal(mode, principal, iNum, newAmountNum)
   // Extend from today for an already-matured deposit (so the new maturity is
   // always in the future), otherwise from the existing maturity date.
   const baseDate = matured || !inv.expiryDate ? todayIso() : inv.expiryDate
-  const newMaturity = addMonths(baseDate, tNum)
+  const newMaturity = addMonths(baseDate, tNum > 0 ? tNum : 0)
   const newMaturityFmt = fmtMaturity(newMaturity, isVi)?.formatted ?? newMaturity
   const payout = principal + iNum
+
+  // Guard against writing a zero/empty principal, a non-positive term, or
+  // clearing the rate (which would drop the deposit out of maturity tracking).
+  const rateValid = rate.trim() !== '' && Number(rate) > 0
+  const amountValid = mode !== 'change' || (newAmount.trim() !== '' && Number(newAmount) > 0)
+  const canRenew = tNum > 0 && rateValid && amountValid && newPrincipal > 0
 
   const t = isVi ? {
     summarySuffix: 'năm', perYr: 'năm', mo: 'tháng',
@@ -133,6 +146,7 @@ export function MaturityResolveBody({
 
   async function handleConfirm() {
     if (mode === 'withdraw') { onClose(); setTimeout(onWithdraw, 60); return }
+    if (!canRenew) return
     setSaving(true); setError('')
     try {
       const res = await fetch(`/api/v1/investment-transactions/${inv.id}`, {
@@ -140,7 +154,7 @@ export function MaturityResolveBody({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           amount_vnd: Math.round(newPrincipal),
-          interest_rate: rate === '' ? null : Number(rate),
+          interest_rate: Number(rate),
           expiry_date: newMaturity,
           // Reset the accrual base so the value calc restarts from the new
           // principal and the future-date guard never trips.
@@ -244,12 +258,12 @@ export function MaturityResolveBody({
         <div style={{ display: 'grid', gap: 12 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             {mode === 'change'
-              ? <MoneyField label={t.newAmount} value={newAmount} onChange={setNewAmount} />
+              ? <MoneyField label={t.newAmount} value={newAmount} onChange={setNewAmount} testId="maturity-new-amount" />
               : <MoneyField label={t.interestReceived} value={interest} onChange={setInterest} />}
             <div>
               <div style={fieldLabel}>{t.newTerm}</div>
               <div style={{ position: 'relative' }}>
-                <input type="number" value={term} onChange={(e) => setTerm(e.target.value)} style={moneyInput} />
+                <input data-testid="maturity-term-input" type="number" value={term} onChange={(e) => setTerm(e.target.value)} style={moneyInput} />
                 <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--c-muted)', pointerEvents: 'none' }}>{t.mo}</span>
               </div>
             </div>
@@ -300,10 +314,11 @@ export function MaturityResolveBody({
       {/* Actions */}
       <div style={{ display: 'flex', gap: 8 }}>
         <button type="button" onClick={onClose} className="cn-btn ghost" style={{ flex: 1, justifyContent: 'center', border: '1px solid var(--c-line)' }}>{t.cancel}</button>
-        <button type="button" onClick={handleConfirm} disabled={saving} style={{
+        <button type="button" onClick={handleConfirm} disabled={saving || (mode !== 'withdraw' && !canRenew)} style={{
           flex: 2, justifyContent: 'center', gap: 7, padding: '10px 14px', borderRadius: 10, border: 'none',
-          fontSize: 14, fontWeight: 600, fontFamily: 'inherit', cursor: saving ? 'default' : 'pointer',
-          opacity: saving ? 0.6 : 1, color: '#fff',
+          fontSize: 14, fontWeight: 600, fontFamily: 'inherit',
+          cursor: saving || (mode !== 'withdraw' && !canRenew) ? 'default' : 'pointer',
+          opacity: saving || (mode !== 'withdraw' && !canRenew) ? 0.6 : 1, color: '#fff',
           background: mode === 'withdraw' ? 'var(--c-neg)' : 'var(--c-btn-primary)',
           display: 'flex', alignItems: 'center',
         }}>
@@ -326,6 +341,13 @@ export function MaturityResolveSheet({
   onRenewed: () => void
   onWithdraw: () => void
 }) {
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, onClose])
+
   if (!open || !inv) return null
   return (
     <div
