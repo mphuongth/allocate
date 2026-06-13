@@ -200,10 +200,10 @@ describe('fmtMaturity (issue #263)', () => {
     expect(m.tone).toBe('warn')
   })
 
-  it('says "Matured" once the date has passed', () => {
+  it('says "Matured" once the date has passed, flagged as needing action (neg)', () => {
     const m = fmtMaturity(daysFromNow(-5), false)!
     expect(m.relative).toBe('Matured')
-    expect(m.tone).toBe('pos')
+    expect(m.tone).toBe('neg') // red, consistent with the maturity card / resolve pill (not green)
   })
 
   it('localises the relative text in Vietnamese', () => {
