@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Calendar, TrendingUp, Settings } from 'lucide-react'
 import { useNavigation } from './NavigationContext'
+import { useMaturingDepositsCount } from './useMaturingDepositsCount'
 import { useTranslations } from 'next-intl'
 
 // Real Cairn logo from cairn-icon-transparent.svg (stacked rounded rectangles)
@@ -61,6 +62,7 @@ export default function Sidebar({ email, initials, onNavClick, hideLogo = false 
   const pathname = usePathname()
   const { sidebarCollapsed, setSidebarCollapsed, userName } = useNavigation()
   const t = useTranslations('nav')
+  const maturingCount = useMaturingDepositsCount()
 
   const displayInitials = userName
     .split(/\s+/)
@@ -118,6 +120,7 @@ export default function Sidebar({ email, initials, onNavClick, hideLogo = false 
       }}>
         {NAV_ITEMS.map(({ label, href, renderIcon }) => {
           const active = pathname === href
+          const badge = href === '/dashboard' && maturingCount > 0 ? maturingCount : 0
           return (
             <Link
               key={href}
@@ -162,6 +165,23 @@ export default function Sidebar({ email, initials, onNavClick, hideLogo = false 
               )}
               {renderIcon(active)}
               {!sidebarCollapsed && <span>{label}</span>}
+              {badge > 0 && (
+                <span
+                  data-testid="nav-maturity-badge"
+                  aria-label={`${badge} ${label}`}
+                  style={{
+                    position: 'absolute',
+                    ...(sidebarCollapsed
+                      ? { top: 6, right: 14 }
+                      : { right: 10, top: '50%', transform: 'translateY(-50%)' }),
+                    minWidth: 16, height: 16, padding: '0 4px', borderRadius: 999,
+                    background: 'var(--c-warn)', color: '#fff', fontSize: 9.5, fontWeight: 700,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1,
+                  }}
+                >
+                  {badge}
+                </span>
+              )}
             </Link>
           )
         })}

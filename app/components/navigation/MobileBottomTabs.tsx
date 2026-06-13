@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Calendar, TrendingUp, Settings } from 'lucide-react'
 import { useTranslations } from 'next-intl'
+import { useMaturingDepositsCount } from './useMaturingDepositsCount'
 
 function MountainsIcon({ size = 22, strokeWidth = 1.75 }: { size?: number; strokeWidth?: number }) {
   return (
@@ -48,6 +49,7 @@ const TABS: TabDef[] = [
 export default function MobileBottomTabs() {
   const pathname = usePathname()
   const t = useTranslations('nav')
+  const maturingCount = useMaturingDepositsCount()
 
   return (
     <nav
@@ -63,13 +65,28 @@ export default function MobileBottomTabs() {
       <div className="grid grid-cols-4 px-1 py-1.5">
         {TABS.map(({ href, key, renderIcon }) => {
           const isActive = pathname.startsWith(href)
+          const badge = key === 'dashboard' && maturingCount > 0 ? maturingCount : 0
           return (
             <Link
               key={href}
               href={href}
-              className="flex flex-col items-center gap-0.5 py-2 rounded-xl transition-colors"
+              className="relative flex flex-col items-center gap-0.5 py-2 rounded-xl transition-colors"
               style={{ color: isActive ? 'var(--c-navy)' : 'var(--c-muted)' }}
             >
+              {badge > 0 && (
+                <span
+                  data-testid="nav-maturity-badge"
+                  aria-label={`${badge} ${t('dashboard')}`}
+                  style={{
+                    position: 'absolute', top: 2, right: '50%', marginRight: -18,
+                    minWidth: 16, height: 16, padding: '0 4px', borderRadius: 999,
+                    background: 'var(--c-warn)', color: '#fff', fontSize: 9.5, fontWeight: 700,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1,
+                  }}
+                >
+                  {badge}
+                </span>
+              )}
               {renderIcon(isActive)}
               <span style={{ fontSize: '10.5px', fontWeight: isActive ? 600 : 500, letterSpacing: '0.01em', lineHeight: 1 }}>
                 {t(key)}

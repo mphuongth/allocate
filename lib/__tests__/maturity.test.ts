@@ -7,7 +7,17 @@ import {
   addMonths,
   monthsBetween,
   renewalPrincipal,
+  daysUntil,
+  isActionableTermDeposit,
 } from '../maturity'
+
+// A YYYY-MM-DD string `n` days from today (deterministic regardless of run date).
+function daysFromNow(n: number): string {
+  const d = new Date()
+  d.setHours(0, 0, 0, 0)
+  d.setDate(d.getDate() + n)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 describe('isTermDeposit', () => {
   it('is true for a bank holding with a rate and an expiry date', () => {
@@ -70,6 +80,28 @@ describe('monthsBetween', () => {
   })
   it('does not count an incomplete final month', () => {
     expect(monthsBetween('2026-01-20', '2026-04-10')).toBe(2) // not yet 3 full months
+  })
+})
+
+describe('daysUntil', () => {
+  it('is 0 today, positive in the future, negative in the past', () => {
+    expect(daysUntil(daysFromNow(0))).toBe(0)
+    expect(daysUntil(daysFromNow(5))).toBe(5)
+    expect(daysUntil(daysFromNow(-3))).toBe(-3)
+  })
+})
+
+describe('isActionableTermDeposit', () => {
+  it('is true for a matured or soon-maturing bank term deposit', () => {
+    expect(isActionableTermDeposit({ type: 'bank', interestRate: 6, expiryDate: daysFromNow(-1) })).toBe(true)
+    expect(isActionableTermDeposit({ type: 'bank', interestRate: 6, expiryDate: daysFromNow(1) })).toBe(true)
+  })
+  it('is false for a deposit maturing well in the future', () => {
+    expect(isActionableTermDeposit({ type: 'bank', interestRate: 6, expiryDate: daysFromNow(30) })).toBe(false)
+  })
+  it('is false for non-term and non-bank holdings', () => {
+    expect(isActionableTermDeposit({ type: 'bank', interestRate: null, expiryDate: daysFromNow(-1) })).toBe(false)
+    expect(isActionableTermDeposit({ type: 'gold', interestRate: null, expiryDate: null })).toBe(false)
   })
 })
 
