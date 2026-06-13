@@ -149,15 +149,17 @@ export function MaturityResolveBody({
     if (!canRenew) return
     setSaving(true); setError('')
     try {
-      const res = await fetch(`/api/v1/investment-transactions/${inv.id}`, {
-        method: 'PUT',
+      const res = await fetch(`/api/v1/investment-transactions/${inv.id}/renew`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           amount_vnd: Math.round(newPrincipal),
           interest_rate: Number(rate),
           expiry_date: newMaturity,
           // Reset the accrual base so the value calc restarts from the new
-          // principal and the future-date guard never trips.
+          // principal and the future-date guard never trips. The route rolls the
+          // active row forward in place and appends a history snapshot of the
+          // cycle that just closed.
           investment_date: todayIso(),
         }),
       })

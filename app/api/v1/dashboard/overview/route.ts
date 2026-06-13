@@ -23,7 +23,7 @@ export async function GET() {
       .eq('user_id', user.id),
     supabase
       .from('investment_transactions')
-      .select('transaction_id, goal_id, amount_vnd, interest_rate, investment_date, asset_type, transaction_type, units, unit_price, units_withdrawn, principal_withdrawn, fund_id, parent_transaction_id, expiry_date, notes, affects_progress, funds(id, name, nav, updated_at, fund_type)')
+      .select('transaction_id, goal_id, amount_vnd, interest_rate, investment_date, asset_type, transaction_type, units, unit_price, units_withdrawn, principal_withdrawn, fund_id, parent_transaction_id, renewed_from_transaction_id, expiry_date, notes, affects_progress, funds(id, name, nav, updated_at, fund_type)')
       .eq('user_id', user.id),
     supabase
       .from('insurance_members')
@@ -75,6 +75,7 @@ export async function GET() {
   // Separate investment vs withdrawal rows
   const investments = allTxsRaw.filter((tx) =>
     tx.transaction_type !== 'withdrawal' &&
+    !tx.renewed_from_transaction_id && // exclude renewal history snapshots (never counted)
     !(tx.asset_type === 'fund' && tx.units == null) // exclude pending DCA-seeded fund rows
   )
   const withdrawals = allTxsRaw.filter((tx) => tx.transaction_type === 'withdrawal')

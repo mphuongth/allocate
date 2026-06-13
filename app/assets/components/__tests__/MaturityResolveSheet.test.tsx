@@ -44,7 +44,7 @@ describe('MaturityResolveBody', () => {
     expect(screen.getByTestId('maturity-new-date').textContent).toContain(expectedMaturity.slice(0, 4))
   })
 
-  it('renews via a single PUT that resets the accrual date and sets the new maturity', async () => {
+  it('renews via the renew route that rolls the deposit forward from today', async () => {
     const user = userEvent.setup()
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) })
     vi.stubGlobal('fetch', fetchMock)
@@ -56,8 +56,8 @@ describe('MaturityResolveBody', () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
     const [url, opts] = fetchMock.mock.calls[0]
-    expect(url).toBe('/api/v1/investment-transactions/tx-bank-1')
-    expect(opts.method).toBe('PUT')
+    expect(url).toBe('/api/v1/investment-transactions/tx-bank-1/renew')
+    expect(opts.method).toBe('POST')
     expect(JSON.parse(opts.body)).toMatchObject({
       amount_vnd: 37_030_000,
       interest_rate: 5.8,

@@ -218,6 +218,25 @@ test.describe('Desktop goal detail panel', () => {
         .single()
       expect(renewed!.amount_vnd).toBeGreaterThan(10_000_000) // interest rolled into principal
       expect(renewed!.expiry_date > today).toBe(true)         // maturity moved into the future
+
+      // Lineage: a history snapshot of the cycle that just closed was appended,
+      // preserving the original open date + principal, and excluded from totals.
+      await expect.poll(async () => {
+        const { count } = await supabase
+          .from('investment_transactions')
+          .select('transaction_id', { count: 'exact', head: true })
+          .eq('renewed_from_transaction_id', tx.transaction_id)
+        return count
+      }, { timeout: 15_000 }).toBe(1)
+
+      const { data: snapshot } = await supabase
+        .from('investment_transactions')
+        .select('amount_vnd, investment_date, affects_progress')
+        .eq('renewed_from_transaction_id', tx.transaction_id)
+        .single()
+      expect(snapshot!.investment_date).toBe(iso(-400)) // original open date preserved
+      expect(snapshot!.amount_vnd).toBe(10_000_000)     // original principal preserved
+      expect(snapshot!.affects_progress).toBe(false)    // never counts toward progress/net worth
     } finally {
       await api.deleteTransactionCascade(tx.transaction_id)
     }

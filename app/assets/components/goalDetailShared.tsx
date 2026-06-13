@@ -180,6 +180,9 @@ export interface GoalDetailTx {
   notes: string | null
   principal_withdrawn: number | null
   units_withdrawn: number | null
+  // Set on a renewal history snapshot (a closed past cycle) — excluded from
+  // active holdings and every valuation. null/undefined for live rows.
+  renewed_from_transaction_id?: string | null
 }
 
 // Dedup to one row per fund / per non-fund tx, then value each holding:
@@ -211,7 +214,9 @@ export function buildInvRows(
     }
   }
 
-  const investmentRows = transactions.filter((tx) => tx.transaction_type !== 'withdrawal')
+  // Exclude withdrawals and renewal history snapshots — only live investment
+  // rows are active holdings.
+  const investmentRows = transactions.filter((tx) => tx.transaction_type !== 'withdrawal' && !tx.renewed_from_transaction_id)
   const deduped = new Map<string, GoalDetailTx>()
   investmentRows.forEach((tx) => {
     if (tx.fund_id) {

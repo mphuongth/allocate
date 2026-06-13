@@ -67,6 +67,19 @@ describe('buildInvRows', () => {
     expect(rows[0].fund?.fundId).toBe('f1')
   })
 
+  it('drops renewal history snapshots (renewed_from_transaction_id set) from active holdings', () => {
+    const rows = buildInvRows(
+      [
+        baseTx({ transaction_id: 'active', asset_type: 'bank', amount_vnd: 10_000_000, interest_rate: 6 }),
+        // A past-cycle snapshot of the same deposit — must not appear as a holding.
+        baseTx({ transaction_id: 'snap', asset_type: 'bank', amount_vnd: 9_000_000, interest_rate: 5.5, renewed_from_transaction_id: 'active' }),
+      ],
+      [], null, false,
+    )
+    expect(rows).toHaveLength(1)
+    expect(rows[0].id).toBe('active')
+  })
+
   it('drops withdrawal rows', () => {
     const rows = buildInvRows(
       [
