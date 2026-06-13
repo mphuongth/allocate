@@ -15,25 +15,22 @@ describe('calcProjectedInterest', () => {
     expect(calcProjectedInterest(-1000, 8, '2026-01-01')).toBe(0)
   })
   it('caps at expiry date when expiry is in the past', () => {
-    const noExpiry = calcProjectedInterest(10_000_000, 8, '2025-01-01')
-    const withExpiry = calcProjectedInterest(10_000_000, 8, '2025-01-01', '2025-06-01')
+    const asOf = new Date('2026-01-01').getTime()
+    const noExpiry = calcProjectedInterest(10_000_000, 8, '2025-01-01', null, asOf)
+    const withExpiry = calcProjectedInterest(10_000_000, 8, '2025-01-01', '2025-06-01', asOf)
     // with a past expiry, interest should be less than without expiry
     expect(withExpiry).toBeLessThan(noExpiry)
     expect(withExpiry).toBeGreaterThan(0)
   })
-  it('produces positive interest for a bank deposit', () => {
-    // 10M VND at 8%/year for exactly 1 year should yield ~800k. Pin "now" so the
-    // result doesn't drift as the calendar moves past the investment date (the
-    // function accrues interest up to Date.now()).
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2026-04-29'))
-    try {
-      const result = calcProjectedInterest(10_000_000, 8, '2025-04-29')
-      expect(result).toBeGreaterThan(700_000)
-      expect(result).toBeLessThan(900_000)
-    } finally {
-      vi.useRealTimers()
-    }
+  it('accrues simple (linear) interest pro-rated over the year', () => {
+    // 10M at 8%/yr for exactly 365 days = 10M × 0.08 × 1 = 800,000 (no compounding).
+    const asOf = new Date('2026-04-29').getTime()
+    expect(calcProjectedInterest(10_000_000, 8, '2025-04-29', null, asOf)).toBeCloseTo(800_000, 0)
+  })
+  it('freezes accrual at maturity — an overdue deposit earns no more after expiry', () => {
+    const atMaturity = calcProjectedInterest(10_000_000, 8, '2025-01-01', '2025-07-01', new Date('2025-07-01').getTime())
+    const longOverdue = calcProjectedInterest(10_000_000, 8, '2025-01-01', '2025-07-01', new Date('2026-06-01').getTime())
+    expect(longOverdue).toBe(atMaturity) // capped — no extra interest past maturity
   })
 })
 

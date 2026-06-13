@@ -1,14 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validateEnum, validateText, validateYearMonth } from '@/lib/validation'
-
-function calcProjectedInterest(amount: number, rate: number | null, investmentDate: string): number {
-  if (!rate) return 0
-  const months = Math.max(0, Math.floor(
-    (Date.now() - new Date(investmentDate).getTime()) / (1000 * 60 * 60 * 24 * 30.44)
-  ))
-  return amount * Math.pow(1 + rate / 100 / 12, months) - amount
-}
+// Shared bank-deposit valuation (simple interest, capped at maturity) so the
+// goals list matches the dashboard and goal detail.
+import { calcProjectedInterest } from '@/lib/finance'
 
 export async function GET(request: NextRequest) {
   const supabase = await createSupabaseServerClient()
@@ -31,7 +26,7 @@ export async function GET(request: NextRequest) {
   // Fetch transactions with fund NAV in parallel with goals already done
   const { data: transactions, error: txError } = await supabase
     .from('investment_transactions')
-    .select('transaction_id, goal_id, asset_type, transaction_type, amount_vnd, units, unit_price, interest_rate, investment_date, funds(id, name, nav)')
+    .select('transaction_id, goal_id, asset_type, transaction_type, amount_vnd, units, unit_price, interest_rate, investment_date, expiry_date, funds(id, name, nav)')
     .eq('user_id', user.id)
     .not('goal_id', 'is', null)
     .is('renewed_from_transaction_id', null) // exclude renewal history snapshots from goal stats
@@ -48,6 +43,7 @@ export async function GET(request: NextRequest) {
     unit_price: number | null
     interest_rate: number | null
     investment_date: string
+    expiry_date: string | null
     funds?: { id: string; name: string; nav: number } | { id: string; name: string; nav: number }[] | null
   }
 
@@ -65,7 +61,7 @@ export async function GET(request: NextRequest) {
       const currentNav = fund?.nav ?? tx.unit_price ?? 0
       gain = tx.units * currentNav - tx.amount_vnd
     } else {
-      gain = calcProjectedInterest(tx.amount_vnd, tx.interest_rate, tx.investment_date)
+      gain = calcProjectedInterest(tx.amount_vnd, tx.interest_rate, tx.investment_date, tx.expiry_date)
     }
     statsMap.set(tx.goal_id, { count: existing.count + 1, invested: existing.invested + tx.amount_vnd, interest: existing.interest + gain })
   })
