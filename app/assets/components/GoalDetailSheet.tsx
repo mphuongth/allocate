@@ -3,14 +3,15 @@
 import { useState, useEffect } from 'react'
 import {
   ChevronLeft, ChevronRight, MoreHorizontal,
-  Edit2, Trash2, Calendar, Download, ArrowDownRight, ArrowUpRight, Target,
+  Edit2, Trash2, Calendar, Download, ArrowDownRight, ArrowUpRight, Target, RefreshCw,
 } from 'lucide-react'
 import { useLocale } from 'next-intl'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import type { GoalData, FundBreakdownItem } from '../DashboardClient'
 import TransactionHistorySheet, { type PurchaseHistoryRow } from './TransactionHistorySheet'
 import { SellWithdrawSheet, type SellItem } from './SellWithdrawSheet'
-import { GD_COLORS, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, BankInfoStrip, type InvRow } from './goalDetailShared'
+import { MaturityResolveSheet } from './MaturityResolveSheet'
+import { GD_COLORS, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, BankInfoStrip, needsMaturityAction, type InvRow } from './goalDetailShared'
 import { fmtTxDate } from './transactionUtils'
 import { TxRowsSkeleton } from './Skeletons'
 
@@ -342,6 +343,7 @@ function InvestmentActionSheet({
   onViewHistory,
   onSell,
   onUnassign,
+  onResolve,
 }: {
   open: boolean
   onClose: () => void
@@ -349,6 +351,7 @@ function InvestmentActionSheet({
   onViewHistory: () => void
   onSell: () => void
   onUnassign: () => void
+  onResolve: () => void
 }) {
   const isVI = useLocale() === 'vi'
   const [mounted, setMounted] = useState(false)
@@ -361,9 +364,12 @@ function InvestmentActionSheet({
   const typeColor = GD_COLORS[inv.type] ?? 'var(--c-muted)'
   const isBank = inv.type === 'bank'
   const isPos = (inv.gainPct ?? 0) >= 0
+  const needsMaturity = needsMaturityAction(inv, isVI)
 
   const t = isVI ? {
     title: 'Tùy chọn',
+    handle: 'Xử lý đáo hạn',
+    handleSub: 'Tái tục hoặc chuyển sang chờ rút',
     history: 'Lịch sử giao dịch',
     historySub: 'Xem các lần mua / bán trước đây',
     sell: isBank ? 'Rút tiền' : 'Bán',
@@ -372,6 +378,8 @@ function InvestmentActionSheet({
     unassignSub: 'Chuyển khoản đầu tư này sang trạng thái chưa gán',
   } : {
     title: 'Options',
+    handle: 'Handle maturity',
+    handleSub: 'Renew or mark for withdrawal',
     history: 'Transaction history',
     historySub: 'View past buys & sells',
     sell: isBank ? 'Withdraw' : 'Sell',
@@ -433,6 +441,29 @@ function InvestmentActionSheet({
 
           {/* Bank info strip — interest rate + maturity + time left (issue #263) */}
           <BankInfoStrip inv={inv} isVi={isVI} />
+
+          {/* Handle maturity — only for a term deposit at/near its maturity date */}
+          {needsMaturity && (
+            <button
+              data-testid="handle-maturity-btn"
+              onClick={() => { onClose(); setTimeout(onResolve, 60) }}
+              style={{
+                width: '100%', textAlign: 'left', padding: '14px 16px',
+                background: 'var(--c-warn-tint)', border: '1px solid rgba(180,83,9,0.18)',
+                borderRadius: 14, cursor: 'pointer', fontFamily: 'inherit',
+                display: 'flex', alignItems: 'center', gap: 14,
+              }}
+            >
+              <div style={{ width: 42, height: 42, borderRadius: 12, background: 'var(--c-card)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <RefreshCw size={20} color="var(--c-warn)" />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-warn)' }}>{t.handle}</div>
+                <div style={{ fontSize: 12, color: 'var(--c-muted)', marginTop: 2 }}>{t.handleSub}</div>
+              </div>
+              <ChevronRight size={16} color="var(--c-warn)" />
+            </button>
+          )}
 
           {/* View history */}
           <button
@@ -629,6 +660,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
   const [isDeleting, setIsDeleting] = useState(false)
   const [actionInv, setActionInv] = useState<InvRow | null>(null)
   const [investActionOpen, setInvestActionOpen] = useState(false)
+  const [resolveOpen, setResolveOpen] = useState(false)
   const [sellOpen, setSellOpen] = useState(false)
   const [unassignConfirmOpen, setUnassignConfirmOpen] = useState(false)
   const [unassigning, setUnassigning] = useState(false)
@@ -1210,6 +1242,16 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
         }}
         onSell={() => setSellOpen(true)}
         onUnassign={() => setUnassignConfirmOpen(true)}
+        onResolve={() => setResolveOpen(true)}
+      />
+
+      <MaturityResolveSheet
+        open={resolveOpen}
+        inv={actionInv}
+        isVi={isVI}
+        onClose={() => setResolveOpen(false)}
+        onRenewed={() => { setResolveOpen(false); onDataChanged() }}
+        onWithdraw={() => { setResolveOpen(false); setSellOpen(true) }}
       />
 
       <SellWithdrawSheet

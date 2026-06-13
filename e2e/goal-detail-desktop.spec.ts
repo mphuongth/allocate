@@ -162,6 +162,67 @@ test.describe('Desktop goal detail panel', () => {
     }
   })
 
+  // Term-deposit maturity: a deposit past its maturity date surfaces a
+  // "Handle maturity" action; renewing it rolls the principal forward, sets a
+  // future maturity and resets the accrual date — closing the UI→DB loop.
+  test('renewing a matured term deposit rolls it forward in the DB', async ({ page }) => {
+    test.slow()
+    const iso = (offsetDays: number) => new Date(Date.now() + offsetDays * 86_400_000).toISOString().slice(0, 10)
+    const today = iso(0)
+    // Invested ~13 months ago, matured ~30 days ago → there is accrued interest
+    // to roll in, and the deposit reads as "matured".
+    const tx = await api.createTransaction({
+      asset_type: 'bank',
+      amount_vnd: 10_000_000,
+      investment_date: iso(-400),
+      interest_rate: 6,
+      expiry_date: iso(-30),
+      goal_id: goalId,
+      notes: 'E2E Maturity Deposit',
+    })
+    try {
+      await page.goto('/dashboard')
+      await page.waitForLoadState('networkidle')
+
+      await page.getByText('E2E Desktop Goal').first().click()
+      const panel = page.getByTestId('desktop-goal-detail')
+      await expect(panel).toBeVisible({ timeout: 10_000 })
+      await expect(panel.getByText('E2E Maturity Deposit')).toBeVisible({ timeout: 10_000 })
+
+      // Open the holding options → Handle maturity → confirm the default renewal
+      // (principal + interest).
+      await panel.getByRole('button', { name: 'Options', exact: true }).first().click()
+      await page.getByText(/^(Handle maturity|Xử lý đáo hạn)$/).click()
+      await page.getByRole('button', { name: /Confirm renewal|Xác nhận tái tục/i }).click()
+
+      // Success confirmation proves the PUT landed.
+      await expect(page.getByTestId('maturity-renewed')).toBeVisible({ timeout: 20_000 })
+
+      // Close the loop: the stored deposit must now have a future maturity, a
+      // larger principal (interest rolled in) and today's accrual date.
+      const { createClient } = await import('@supabase/supabase-js')
+      const supabase = createClient(process.env.E2E_SUPABASE_URL!, process.env.E2E_SUPABASE_SERVICE_ROLE_KEY!)
+      await expect.poll(async () => {
+        const { data } = await supabase
+          .from('investment_transactions')
+          .select('amount_vnd, expiry_date, investment_date')
+          .eq('transaction_id', tx.transaction_id)
+          .single()
+        return data
+      }, { timeout: 15_000 }).toMatchObject({ investment_date: today })
+
+      const { data: renewed } = await supabase
+        .from('investment_transactions')
+        .select('amount_vnd, expiry_date, investment_date')
+        .eq('transaction_id', tx.transaction_id)
+        .single()
+      expect(renewed!.amount_vnd).toBeGreaterThan(10_000_000) // interest rolled into principal
+      expect(renewed!.expiry_date > today).toBe(true)         // maturity moved into the future
+    } finally {
+      await api.deleteTransactionCascade(tx.transaction_id)
+    }
+  })
+
   test('clicking an insurance row while goal detail is open switches to insurance detail', async ({ page }) => {
     // Bug #226: with goal detail open in the right panel, clicking an insurance
     // member did nothing because the panel prioritised the still-selected goal.

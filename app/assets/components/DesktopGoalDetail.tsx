@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { ChevronLeft, X, MoreHorizontal, Edit2, Trash2, ChevronRight, ArrowDownRight, ArrowUpRight, Target, CalendarDays, Check, ArrowDownToLine, Wallet, Shield } from 'lucide-react'
+import { ChevronLeft, X, MoreHorizontal, Edit2, Trash2, ChevronRight, ArrowDownRight, ArrowUpRight, Target, CalendarDays, Check, ArrowDownToLine, Wallet, Shield, RefreshCw } from 'lucide-react'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import type { GoalData } from '../DashboardClient'
-import { GD_COLORS, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, AffectsProgressControl, BankInfoStrip, type InvRow } from './goalDetailShared'
+import { GD_COLORS, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, AffectsProgressControl, BankInfoStrip, needsMaturityAction, type InvRow } from './goalDetailShared'
+import { MaturityResolveModal } from './MaturityResolveSheet'
 import { fmtTxDate } from './transactionUtils'
 import { TxRowsSkeleton } from './Skeletons'
 
@@ -55,6 +56,7 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
   // Investment options state
   const [actionInv, setActionInv] = useState<InvRow | null>(null)
   const [showInvOptions, setShowInvOptions] = useState(false)
+  const [showResolve, setShowResolve] = useState(false)
   const [showSell, setShowSell] = useState(false)
   const [showUnassignConfirm, setShowUnassignConfirm] = useState(false)
   const [unassigning, setUnassigning] = useState(false)
@@ -519,8 +521,20 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
           isVi={isVi}
           onClose={() => { setShowInvOptions(false) }}
           onHistory={() => { setShowInvOptions(false); setTab('history') }}
+          onResolve={() => { setShowInvOptions(false); setTimeout(() => setShowResolve(true), 80) }}
           onSell={() => { setShowInvOptions(false); setTimeout(() => setShowSell(true), 80) }}
           onUnassign={() => { setShowInvOptions(false); setTimeout(() => setShowUnassignConfirm(true), 80) }}
+        />
+      )}
+
+      {/* Maturity resolve modal */}
+      {showResolve && actionInv && (
+        <MaturityResolveModal
+          inv={actionInv}
+          isVi={isVi}
+          onClose={() => setShowResolve(false)}
+          onRenewed={() => { setShowResolve(false); onDataChanged() }}
+          onWithdraw={() => { setShowResolve(false); setTimeout(() => setShowSell(true), 80) }}
         />
       )}
 
@@ -556,14 +570,22 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
 }
 
 // ─── Investment options modal ──────────────────────────────────────────────
-function InvOptionsModal({ inv, isVi, onClose, onHistory, onSell, onUnassign }: {
+function InvOptionsModal({ inv, isVi, onClose, onHistory, onResolve, onSell, onUnassign }: {
   inv: InvRow; isVi: boolean
-  onClose: () => void; onHistory: () => void; onSell: () => void; onUnassign: () => void
+  onClose: () => void; onHistory: () => void; onResolve: () => void; onSell: () => void; onUnassign: () => void
 }) {
   const isBank = inv.type === 'bank'
   const typeColor = GD_COLORS[inv.type] ?? 'var(--c-muted)'
+  const needsMaturity = needsMaturityAction(inv, isVi)
 
   const actions = [
+    ...(needsMaturity ? [{
+      icon: <RefreshCw size={18} color="var(--c-warn,#b45309)" />,
+      bg: 'var(--c-warn-tint,#fef3c7)',
+      label: isVi ? 'Xử lý đáo hạn' : 'Handle maturity',
+      sub: isVi ? 'Tái tục hoặc chuyển sang chờ rút' : 'Renew or mark for withdrawal',
+      onClick: onResolve,
+    }] : []),
     {
       icon: <CalendarDays size={18} color="var(--c-muted)" />,
       bg: 'var(--c-card-2)',
