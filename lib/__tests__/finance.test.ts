@@ -22,10 +22,18 @@ describe('calcProjectedInterest', () => {
     expect(withExpiry).toBeGreaterThan(0)
   })
   it('produces positive interest for a bank deposit', () => {
-    // 10M VND at 8%/year for ~1 year should yield ~800k
-    const result = calcProjectedInterest(10_000_000, 8, '2025-04-29')
-    expect(result).toBeGreaterThan(700_000)
-    expect(result).toBeLessThan(900_000)
+    // 10M VND at 8%/year for exactly 1 year should yield ~800k. Pin "now" so the
+    // result doesn't drift as the calendar moves past the investment date (the
+    // function accrues interest up to Date.now()).
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-04-29'))
+    try {
+      const result = calcProjectedInterest(10_000_000, 8, '2025-04-29')
+      expect(result).toBeGreaterThan(700_000)
+      expect(result).toBeLessThan(900_000)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 
