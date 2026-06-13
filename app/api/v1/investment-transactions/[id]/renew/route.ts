@@ -19,13 +19,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { amount_vnd, interest_rate, expiry_date, investment_date } = body
+  const { amount_vnd, interest_rate, expiry_date, investment_date, interest_earned_vnd } = body
 
   let txId: string
   let cleanAmount: number
   let cleanRate: number | null = null
   let cleanExpiry: string | null = null
   let cleanInvestmentDate: string
+  let cleanInterestEarned: number | null = null
   try {
     txId = validateUUID(id, 'transaction_id')
     cleanAmount = validateAmount(amount_vnd, 'amount_vnd')
@@ -33,6 +34,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (interest_rate != null && interest_rate !== '') cleanRate = validateRate(interest_rate, 'interest_rate')
     if (expiry_date) cleanExpiry = validateDate(expiry_date, 'expiry_date')
     cleanInvestmentDate = validateDate(investment_date, 'investment_date')
+    // Realized interest is user-entered money recorded permanently — must be a
+    // non-negative finite number. The upper bound is checked after the old row
+    // is read (interest accrued on the OLD principal, not the new cycle's).
+    if (interest_earned_vnd != null && interest_earned_vnd !== '') {
+      const n = Number(interest_earned_vnd)
+      if (!Number.isFinite(n) || n < 0) throw new ValidationError('interest_earned_vnd must be a non-negative number')
+      cleanInterestEarned = Math.round(n)
+    }
   } catch (e) {
     if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
     throw e
@@ -52,6 +61,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (fetchErr || !old) return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
   if (old.asset_type !== 'bank') {
     return NextResponse.json({ error: 'Only bank term deposits can be renewed.' }, { status: 400 })
+  }
+
+  // Sanity-bound the realized interest against the OLD principal it accrued on
+  // (not the new cycle's principal, which a "change amount" renewal may shrink).
+  if (cleanInterestEarned != null && cleanInterestEarned > old.amount_vnd * 10) {
+    return NextResponse.json({ error: 'interest_earned_vnd is unreasonably large' }, { status: 400 })
   }
 
   // Roll the active row forward to the new cycle (in place — valuation unchanged).
@@ -86,6 +101,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       interest_rate: old.interest_rate,
       notes: old.notes,
       renewed_from_transaction_id: txId,
+      interest_earned_vnd: cleanInterestEarned,
       affects_progress: false,
     })
   if (snapshotErr) console.error('renew: failed to write history snapshot', snapshotErr.message)

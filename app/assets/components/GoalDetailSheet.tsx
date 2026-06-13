@@ -11,7 +11,7 @@ import type { GoalData, FundBreakdownItem } from '../DashboardClient'
 import TransactionHistorySheet, { type PurchaseHistoryRow } from './TransactionHistorySheet'
 import { SellWithdrawSheet, type SellItem } from './SellWithdrawSheet'
 import { MaturityResolveSheet } from './MaturityResolveSheet'
-import { GD_COLORS, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, BankInfoStrip, needsMaturityAction, type InvRow } from './goalDetailShared'
+import { GD_COLORS, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, buildRenewalSummary, BankInfoStrip, RenewalSummaryLine, needsMaturityAction, type InvRow, type GoalDetailTx } from './goalDetailShared'
 import { fmtTxDate } from './transactionUtils'
 import { TxRowsSkeleton } from './Skeletons'
 
@@ -33,6 +33,7 @@ interface InvestmentTx {
   principal_withdrawn: number | null
   units_withdrawn: number | null
   renewed_from_transaction_id?: string | null
+  interest_earned_vnd?: number | null
   is_recurring?: boolean
 }
 
@@ -341,6 +342,7 @@ function InvestmentActionSheet({
   open,
   onClose,
   inv,
+  renewalSummary,
   onViewHistory,
   onSell,
   onUnassign,
@@ -349,6 +351,7 @@ function InvestmentActionSheet({
   open: boolean
   onClose: () => void
   inv: InvRow | null
+  renewalSummary: ReturnType<typeof buildRenewalSummary>
   onViewHistory: () => void
   onSell: () => void
   onUnassign: () => void
@@ -442,6 +445,9 @@ function InvestmentActionSheet({
 
           {/* Bank info strip — interest rate + maturity + time left (issue #263) */}
           <BankInfoStrip inv={inv} isVi={isVI} />
+
+          {/* Renewal history summary — only when this deposit has been renewed */}
+          <RenewalSummaryLine summary={renewalSummary} isVi={isVI} />
 
           {/* Handle maturity — only for a term deposit at/near its maturity date */}
           {needsMaturity && (
@@ -1249,6 +1255,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
         open={investActionOpen}
         onClose={() => setInvestActionOpen(false)}
         inv={actionInv}
+        renewalSummary={actionInv ? buildRenewalSummary(transactions as GoalDetailTx[], actionInv.id) : null}
         onViewHistory={() => {
           if (actionInv?.fund) openFundDetail(actionInv.fund)
           else setActiveTab('history')

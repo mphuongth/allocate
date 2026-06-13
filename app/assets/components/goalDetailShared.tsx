@@ -3,7 +3,7 @@
 // chrome, so the icons, colours, deadline math and — most importantly — the
 // investment-row valuation live here to stay in sync.
 
-import { TrendingUp, Building, Coins, BarChart2, Target } from 'lucide-react'
+import { TrendingUp, Building, Coins, BarChart2, Target, RefreshCw } from 'lucide-react'
 import { fmtCompact } from '@/lib/formatters'
 import { fmtTxDate } from './transactionUtils'
 import { isTermDeposit, depositMaturityState, isMaturityActionable } from '@/lib/maturity'
@@ -183,6 +183,32 @@ export interface GoalDetailTx {
   // Set on a renewal history snapshot (a closed past cycle) — excluded from
   // active holdings and every valuation. null/undefined for live rows.
   renewed_from_transaction_id?: string | null
+  // Realized interest the user recorded for a closed cycle (snapshot rows only).
+  // null = not recorded for that cycle (don't treat as 0).
+  interest_earned_vnd?: number | null
+}
+
+// Roll up a deposit's renewal history from the snapshot rows that point at it.
+// Returns null when it has never been renewed. `complete` is false when any
+// cycle's interest wasn't recorded (null), so callers can show a "≥" rather than
+// silently understating the total.
+//
+// COUPLING: this matches snapshots by `renewed_from_transaction_id === activeTxId`,
+// which is correct only because renewal overwrites the deposit IN PLACE (the
+// active row keeps its id across cycles — see the /renew route). If renewal ever
+// switches to a new-row-per-cycle model, the snapshots would point at differing
+// ids and this lookup would silently miss earlier cycles — revisit it then.
+export interface RenewalSummary { count: number; totalInterestVnd: number; complete: boolean }
+export function buildRenewalSummary(transactions: GoalDetailTx[], activeTxId: string): RenewalSummary | null {
+  const snaps = transactions.filter((tx) => tx.renewed_from_transaction_id === activeTxId)
+  if (!snaps.length) return null
+  let totalInterestVnd = 0
+  let complete = true
+  for (const s of snaps) {
+    if (s.interest_earned_vnd == null) complete = false
+    else totalInterestVnd += s.interest_earned_vnd
+  }
+  return { count: snaps.length, totalInterestVnd, complete }
 }
 
 // Dedup to one row per fund / per non-fund tx, then value each holding:
@@ -349,6 +375,26 @@ export function BankInfoStrip({ inv, isVi }: { inv: InvRow; isVi: boolean }) {
           </div>
         )
       })}
+    </div>
+  )
+}
+
+// "Renewed N× · total interest received X" line for a deposit that has renewal
+// history. Shown in the holding Options modal (mobile + desktop). When a cycle's
+// interest wasn't recorded the total is prefixed with ≥ rather than understated;
+// the interest clause is dropped entirely when nothing is recorded.
+export function RenewalSummaryLine({ summary, isVi }: { summary: RenewalSummary | null; isVi: boolean }) {
+  if (!summary) return null
+  const count = isVi ? `Đã tái tục ${summary.count} lần` : `Renewed ${summary.count}×`
+  let interest = ''
+  if (summary.totalInterestVnd > 0) {
+    const v = `${summary.complete ? '' : '≥ '}${fmtCompact(summary.totalInterestVnd)}`
+    interest = isVi ? ` · tổng lãi đã nhận ${v}` : ` · total interest ${v}`
+  }
+  return (
+    <div data-testid="renewal-summary" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', background: 'var(--c-card-2)', borderRadius: 10, fontSize: 12, color: 'var(--c-muted)', marginBottom: 4 }}>
+      <RefreshCw size={13} style={{ flexShrink: 0 }} />
+      <span style={{ fontVariantNumeric: 'tabular-nums' }}>{count}{interest}</span>
     </div>
   )
 }

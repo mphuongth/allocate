@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildInvRows, calcDeadlineMonths, fmtMaturity, type GoalDetailTx } from '../goalDetailShared'
+import { buildInvRows, buildRenewalSummary, calcDeadlineMonths, fmtMaturity, type GoalDetailTx } from '../goalDetailShared'
 import type { FundBreakdownItem } from '../../DashboardClient'
 
 // A YYYY-MM-DD string `n` days from today (deterministic regardless of run date).
@@ -65,6 +65,29 @@ describe('buildInvRows', () => {
     expect(rows).toHaveLength(1)               // one row per fund
     expect(rows[0].value).toBe(2_500_000)      // fund.currentValue
     expect(rows[0].fund?.fundId).toBe('f1')
+  })
+
+  it('summarises a deposit\'s renewal history (count + total interest received)', () => {
+    const txs = [
+      baseTx({ transaction_id: 'active', asset_type: 'bank', amount_vnd: 12_000_000 }),
+      baseTx({ transaction_id: 's1', asset_type: 'bank', amount_vnd: 10_000_000, renewed_from_transaction_id: 'active', interest_earned_vnd: 600_000 }),
+      baseTx({ transaction_id: 's2', asset_type: 'bank', amount_vnd: 11_000_000, renewed_from_transaction_id: 'active', interest_earned_vnd: 660_000 }),
+    ]
+    const summary = buildRenewalSummary(txs, 'active')
+    expect(summary).toEqual({ count: 2, totalInterestVnd: 1_260_000, complete: true })
+  })
+
+  it('marks the renewal total incomplete when a cycle has no recorded interest (null != 0)', () => {
+    const txs = [
+      baseTx({ transaction_id: 's1', asset_type: 'bank', renewed_from_transaction_id: 'active', interest_earned_vnd: 600_000 }),
+      baseTx({ transaction_id: 's2', asset_type: 'bank', renewed_from_transaction_id: 'active', interest_earned_vnd: null }),
+    ]
+    const summary = buildRenewalSummary(txs, 'active')
+    expect(summary).toEqual({ count: 2, totalInterestVnd: 600_000, complete: false })
+  })
+
+  it('returns null when a deposit has never been renewed', () => {
+    expect(buildRenewalSummary([baseTx({ transaction_id: 'active', asset_type: 'bank' })], 'active')).toBeNull()
   })
 
   it('drops renewal history snapshots (renewed_from_transaction_id set) from active holdings', () => {

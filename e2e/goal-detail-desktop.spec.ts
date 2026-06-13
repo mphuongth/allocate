@@ -231,12 +231,22 @@ test.describe('Desktop goal detail panel', () => {
 
       const { data: snapshot } = await supabase
         .from('investment_transactions')
-        .select('amount_vnd, investment_date, affects_progress')
+        .select('amount_vnd, investment_date, affects_progress, interest_earned_vnd')
         .eq('renewed_from_transaction_id', tx.transaction_id)
         .single()
       expect(snapshot!.investment_date).toBe(iso(-400)) // original open date preserved
       expect(snapshot!.amount_vnd).toBe(10_000_000)     // original principal preserved
       expect(snapshot!.affects_progress).toBe(false)    // never counts toward progress/net worth
+      expect(snapshot!.interest_earned_vnd).toBeGreaterThan(0) // realized interest captured
+
+      // UI loop: reopening the (still-active) deposit's options now shows the
+      // renewal-history summary. The panel stays open and refetches after the
+      // renewal, so the holding's Options button is the still-active deposit.
+      await expect(panel.getByText('E2E Maturity Deposit')).toBeVisible({ timeout: 15_000 })
+      await panel.getByRole('button', { name: 'Options', exact: true }).first().click()
+      const summary = page.getByTestId('renewal-summary')
+      await expect(summary).toBeVisible({ timeout: 10_000 })
+      await expect(summary).toContainText(/Renewed 1|Đã tái tục 1/)
     } finally {
       await api.deleteTransactionCascade(tx.transaction_id)
     }
