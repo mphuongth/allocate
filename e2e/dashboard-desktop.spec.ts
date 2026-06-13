@@ -138,6 +138,42 @@ test.describe('Desktop overview layout', () => {
     await row.click()
     await expect(page.getByTestId('insurance-remove-btn')).toBeVisible({ timeout: 5_000 })
   })
+
+  // PR2: a matured term deposit surfaces the dashboard "Needs attention" card
+  // and the sidebar nav badge; renewing it from the card rolls it forward so it
+  // leaves the card (closing the UI loop).
+  test('matured deposit shows the Needs attention card + nav badge, and renewing clears it', async ({ page }) => {
+    test.slow()
+    const iso = (d: number) => new Date(Date.now() + d * 86_400_000).toISOString().slice(0, 10)
+    const tx = await api.createTransaction({
+      asset_type: 'bank',
+      amount_vnd: 12_000_000,
+      investment_date: iso(-400),
+      interest_rate: 6,
+      expiry_date: iso(-20), // matured
+      notes: 'E2E Maturing Deposit',
+    })
+    try {
+      await page.goto('/dashboard')
+      await page.waitForLoadState('networkidle')
+
+      const card = page.getByTestId('maturity-action-card')
+      await expect(card).toBeVisible({ timeout: 10_000 })
+      await expect(card.getByText('E2E Maturing Deposit')).toBeVisible({ timeout: 10_000 })
+      // Sidebar badge (scope to the sidebar — the hidden mobile tabs also render one).
+      await expect(page.getByTestId('desktop-sidebar').getByTestId('nav-maturity-badge')).toBeVisible({ timeout: 10_000 })
+
+      // Renew via the card → desktop resolve modal → confirm the default renewal.
+      await card.getByRole('button', { name: /Handle|Xử lý/i }).first().click()
+      await page.getByRole('button', { name: /Confirm renewal|Xác nhận tái tục/i }).click()
+      await expect(page.getByTestId('maturity-renewed')).toBeVisible({ timeout: 20_000 })
+
+      // After it rolls forward (future maturity), the deposit leaves the card.
+      await expect(card.getByText('E2E Maturing Deposit')).toHaveCount(0, { timeout: 30_000 })
+    } finally {
+      await api.deleteTransactionCascade(tx.transaction_id)
+    }
+  })
 })
 
 test.describe('Desktop insurance — mark as paid (issue #227)', () => {

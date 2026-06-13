@@ -18,6 +18,10 @@ import AssignGoalSheet from './components/AssignGoalSheet'
 import DownloadReportSheet from './components/DownloadReportSheet'
 import AddTransactionSheet from './components/AddTransactionSheet'
 import RecentActivityCard from './components/RecentActivityCard'
+import MaturityActionCard from './components/MaturityActionCard'
+import { MaturityResolveSheet, MaturityResolveModal } from './components/MaturityResolveSheet'
+import { isActionableTermDeposit } from '@/lib/maturity'
+import type { InvRow } from './components/goalDetailShared'
 import { loadOverview, overviewErrorText, getCachedOverview, setCachedOverview } from './overviewData'
 
 import TransactionHistorySheet from './components/TransactionHistorySheet'
@@ -180,6 +184,28 @@ function fmtTimeAgo(isoString: string, locale: string): string {
   return isVi ? `${mins} phút trước` : `${mins}m ago`
 }
 
+// Map a dashboard overview non-fund holding to the InvRow shape the maturity
+// resolve flow expects.
+function nonFundToInvRow(it: NonFundUnallocatedItem, isVi: boolean): InvRow {
+  return {
+    id: it.transactionId,
+    name: it.notes ?? (it.type === 'bank' ? (isVi ? 'Tiền gửi' : 'Bank deposit') : it.type),
+    type: it.type,
+    value: it.currentValue,
+    gainPct: it.amount > 0 ? ((it.currentValue - it.amount) / it.amount) * 100 : null,
+    units: it.units,
+    principal: it.amount,
+    interestRate: it.interestRate,
+    expiryDate: it.expiryDate,
+    investmentDate: it.investmentDate,
+    fund: null,
+  }
+}
+
+// A maturing deposit plus the context needed to act on it: the goal it belongs
+// to (null when unassigned) and the raw item for the unallocated withdraw flow.
+interface MaturingDep { inv: InvRow; goalId: string | null; raw: NonFundUnallocatedItem }
+
 function useIsDesktop(): boolean {
   const [isDesktop, setIsDesktop] = useState(false)
   useEffect(() => {
@@ -224,6 +250,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
   // page reload.
   const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null)
   const [goalDetailOpen, setGoalDetailOpen] = useState(false)
+  const [resolveDep, setResolveDep] = useState<MaturingDep | null>(null)
   const [showReportSheet, setShowReportSheet] = useState(false)
   const [selectedInsuranceId, setSelectedInsuranceId] = useState<string | null>(null)
   const [desktopAddTxOpen, setDesktopAddTxOpen] = useState(false)
@@ -447,6 +474,32 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const allFunds = data ? [...data.unallocated.funds, ...data.goals.flatMap((g) => g.funds)] : []
   const detailFund = fundDetailId ? allFunds.find((f) => f.fundId === fundDetailId) : null
 
+  const isVi = locale === 'vi'
+
+  // Term deposits (assigned + unassigned) that need a renew/withdraw decision,
+  // carrying the context needed to act on each.
+  const maturingDeposits: MaturingDep[] = data ? [
+    ...data.goals.flatMap((g) => (g.nonFunds ?? []).filter(isActionableTermDeposit)
+      .map((it) => ({ inv: nonFundToInvRow(it, isVi), goalId: g.goalId, raw: it }))),
+    ...data.unallocated.nonFunds.filter(isActionableTermDeposit)
+      .map((it) => ({ inv: nonFundToInvRow(it, isVi), goalId: null, raw: it })),
+  ] : []
+
+  // Withdraw from the maturity card: route to the correct existing flow. A
+  // goal-assigned deposit must withdraw in its goal context (so the withdrawal
+  // links to the goal — issue #261); an unassigned one uses the unallocated
+  // sell sheet directly. Takes the dep explicitly because the resolve sheet
+  // clears `resolveDep` before invoking onWithdraw.
+  function withdrawMaturingDeposit(dep: MaturingDep | null) {
+    if (!dep) return
+    if (dep.goalId) {
+      setSelectedGoalId(dep.goalId)
+      if (!isDesktop) setGoalDetailOpen(true)
+    } else {
+      openSellNonFund(dep.raw)
+    }
+  }
+
   return (
     <div className="space-y-4 md:space-y-0 md:flex md:flex-col md:flex-1 md:min-h-0">
         {/* Pull-to-refresh indicator (mobile PWA only) */}
@@ -582,6 +635,13 @@ export default function DashboardClient({ userId }: { userId: string }) {
               <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
               {/* Left column: goals, unallocated, insurance */}
               <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', padding: '20px 20px 40px 28px' }}>
+                {/* Term deposits needing a maturity decision */}
+                <MaturityActionCard
+                  items={maturingDeposits.map((d) => d.inv)}
+                  isVi={isVi}
+                  onResolve={(inv) => setResolveDep(maturingDeposits.find((d) => d.inv.id === inv.id) ?? null)}
+                  style={{ marginBottom: 24 }}
+                />
                 {/* Goals */}
                 {sortedGoals.length > 0 && (
                   <section style={{ marginBottom: 24 }}>
@@ -744,6 +804,13 @@ export default function DashboardClient({ userId }: { userId: string }) {
                   } : undefined}
                 />
               </div>
+
+              {/* Term deposits needing a maturity decision */}
+              <MaturityActionCard
+                items={maturingDeposits.map((d) => d.inv)}
+                isVi={isVi}
+                onResolve={(inv) => setResolveDep(maturingDeposits.find((d) => d.inv.id === inv.id) ?? null)}
+              />
 
               {/* Goals */}
               {sortedGoals.length > 0 && (
@@ -948,6 +1015,27 @@ export default function DashboardClient({ userId }: { userId: string }) {
         onClose={() => setSellSheetOpen(false)}
         onSuccess={() => fetchData({ force: true })}
       />
+
+      {/* Maturity resolve — mobile sheet / desktop modal */}
+      {!isDesktop && (
+        <MaturityResolveSheet
+          open={!!resolveDep}
+          inv={resolveDep?.inv ?? null}
+          isVi={isVi}
+          onClose={() => setResolveDep(null)}
+          onRenewed={() => { setResolveDep(null); fetchData({ force: true }) }}
+          onWithdraw={() => withdrawMaturingDeposit(resolveDep)}
+        />
+      )}
+      {isDesktop && resolveDep && (
+        <MaturityResolveModal
+          inv={resolveDep.inv}
+          isVi={isVi}
+          onClose={() => setResolveDep(null)}
+          onRenewed={() => { setResolveDep(null); fetchData({ force: true }) }}
+          onWithdraw={() => withdrawMaturingDeposit(resolveDep)}
+        />
+      )}
 
       {/* Goal Detail Sheet */}
       <GoalDetailSheet

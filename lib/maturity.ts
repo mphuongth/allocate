@@ -41,6 +41,27 @@ export function isMaturityActionable(state: MaturityState): boolean {
   return state === 'matured' || state === 'maturing'
 }
 
+// Whole days from today until the given YYYY-MM-DD date (negative once past).
+// Mirrors the diffDays computation in fmtMaturity so the two never diverge.
+export function daysUntil(isoDate: string): number {
+  const d = new Date(isoDate + 'T00:00:00')
+  if (isNaN(d.getTime())) return NaN
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return Math.round((d.getTime() - today.getTime()) / 86_400_000)
+}
+
+// Whether a non-fund holding is a term deposit that needs a decision right now
+// (matured, or within the reminder window). Generic over the minimal shape so
+// both dashboard overview items and InvRows qualify — the single source of
+// truth for the "needs attention" card and the nav badge count.
+export function isActionableTermDeposit(
+  it: { type: string; interestRate: number | null; expiryDate: string | null },
+): boolean {
+  if (!isTermDeposit(it)) return false
+  return isMaturityActionable(depositMaturityState(daysUntil(it.expiryDate!)))
+}
+
 const pad = (n: number) => String(n).padStart(2, '0')
 
 // Add `n` whole months to a YYYY-MM-DD date, keeping the day of month but
