@@ -41,4 +41,12 @@ describe('MaturityActionCard', () => {
     expect(onResolve).toHaveBeenCalledTimes(1)
     expect(onResolve).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }))
   })
+
+  it('renders a row without a status pill (no crash) when the expiry date is missing', () => {
+    render(<MaturityActionCard items={[mk({ name: 'No Expiry', expiryDate: null })]} isVi={false} onResolve={() => {}} />)
+    // The row still renders (name + Handle), just with no maturity pill.
+    expect(screen.getByText('No Expiry')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Handle/i })).toBeInTheDocument()
+    expect(screen.queryByText(/overdue|Matured|Matures/i)).not.toBeInTheDocument()
+  })
 })

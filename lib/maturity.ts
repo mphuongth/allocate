@@ -12,6 +12,11 @@
 // maturity (in addition to already-matured ones).
 export const MATURITY_REMINDER_DAYS = 1
 
+// Window event the dashboard dispatches (detail = number) with the live count of
+// maturing deposits, so the nav badge updates the instant the dashboard's data
+// changes — e.g. right after a renewal — instead of waiting for its own fetch.
+export const MATURING_COUNT_EVENT = 'cairn:maturing-count'
+
 export type MaturityState = 'active' | 'maturing' | 'matured'
 
 export type RenewMode = 'principal_interest' | 'principal_only' | 'change'

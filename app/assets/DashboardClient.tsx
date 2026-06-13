@@ -20,7 +20,7 @@ import AddTransactionSheet from './components/AddTransactionSheet'
 import RecentActivityCard from './components/RecentActivityCard'
 import MaturityActionCard from './components/MaturityActionCard'
 import { MaturityResolveSheet, MaturityResolveModal } from './components/MaturityResolveSheet'
-import { isActionableTermDeposit } from '@/lib/maturity'
+import { isActionableTermDeposit, MATURING_COUNT_EVENT } from '@/lib/maturity'
 import type { InvRow } from './components/goalDetailShared'
 import { loadOverview, overviewErrorText, getCachedOverview, setCachedOverview } from './overviewData'
 
@@ -419,6 +419,17 @@ export default function DashboardClient({ userId }: { userId: string }) {
     return () => setMobileTopBar({ title: '' })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userName, data, isDesktop])
+
+  // Publish the live count of maturing deposits so the nav badge stays in sync
+  // with this view — e.g. after renewing on the dashboard, the card drops the
+  // item and the badge must drop with it (not wait for its own cache TTL).
+  // Same filter as the card and the badge hook, so they can't disagree.
+  useEffect(() => {
+    if (!data) return
+    const items = [...data.goals.flatMap((g) => g.nonFunds ?? []), ...data.unallocated.nonFunds]
+    const count = items.filter(isActionableTermDeposit).length
+    window.dispatchEvent(new CustomEvent(MATURING_COUNT_EVENT, { detail: count }))
+  }, [data])
 
   function openSellFund(fund: FundBreakdownItem) {
     setSellItem({
