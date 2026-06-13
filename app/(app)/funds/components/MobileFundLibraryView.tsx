@@ -444,7 +444,9 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
               aria-label={goalLabel}
               onChange={(e) => onGoalChange(e.target.value || null)}
               style={{
-                fontSize: 13, fontWeight: 500, padding: '3px 6px', maxWidth: 130,
+                // 16px (not 13) so iOS Safari doesn't zoom the viewport on focus
+                // and persist that zoom across reloads (#321).
+                fontSize: 16, fontWeight: 500, padding: '3px 6px', maxWidth: 130,
                 border: '1px solid var(--c-line)', borderRadius: 6,
                 background: 'var(--c-card)', color: 'var(--c-muted)',
                 fontFamily: 'inherit', cursor: 'pointer', appearance: 'none', outline: 'none',
