@@ -63,6 +63,7 @@ describe('MaturityResolveBody', () => {
       interest_rate: 5.8,
       expiry_date: addMonths(today(), 12), // new maturity from today (matured)
       investment_date: today(),            // accrual reset, never future-dated
+      interest_earned_vnd: 2_030_000,      // realized interest (value − principal) recorded permanently
     })
   })
 

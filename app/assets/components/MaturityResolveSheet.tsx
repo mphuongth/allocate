@@ -115,6 +115,7 @@ export function MaturityResolveBody({
     prompt: 'Bạn muốn làm gì?',
     newAmount: 'Số tiền kỳ mới', interestReceived: 'Lãi thực nhận',
     interestPaidOut: 'Lãi thực nhận (rút ra)',
+    interestSavedHint: 'Số lãi này được lưu vĩnh viễn vào lịch sử tái tục.',
     newTerm: 'Kỳ hạn mới', newRate: 'Lãi suất kỳ mới',
     newCycle: 'Kỳ mới', newMaturityLabel: 'Ngày đáo hạn mới',
     interestIn: 'Lãi nhập gốc', interestOut: 'Lãi rút ra',
@@ -129,6 +130,7 @@ export function MaturityResolveBody({
     prompt: 'What do you want to do?',
     newAmount: 'New amount', interestReceived: 'Interest received',
     interestPaidOut: 'Interest received (paid out)',
+    interestSavedHint: 'This interest is saved permanently to the renewal history.',
     newTerm: 'New term', newRate: 'New interest rate',
     newCycle: 'New cycle', newMaturityLabel: 'New maturity',
     interestIn: 'Interest added', interestOut: 'Interest out',
@@ -161,6 +163,9 @@ export function MaturityResolveBody({
           // active row forward in place and appends a history snapshot of the
           // cycle that just closed.
           investment_date: todayIso(),
+          // Realized interest for the cycle that just closed — recorded
+          // permanently on the snapshot for the renewal-history summary.
+          interest_earned_vnd: iNum,
         }),
       })
       if (!res.ok) {
@@ -301,6 +306,8 @@ export function MaturityResolveBody({
               </div>
             </div>
           </div>
+
+          <p style={{ margin: 0, fontSize: 11, color: 'var(--c-muted)', lineHeight: 1.4 }}>{t.interestSavedHint}</p>
         </div>
       )}
 
