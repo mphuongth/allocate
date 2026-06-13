@@ -6,6 +6,7 @@
 import { TrendingUp, Building, Coins, BarChart2, Target } from 'lucide-react'
 import { fmtCompact } from '@/lib/formatters'
 import { fmtTxDate } from './transactionUtils'
+import { isTermDeposit, depositMaturityState, isMaturityActionable } from '@/lib/maturity'
 import type { FundBreakdownItem } from '../DashboardClient'
 
 export const GD_COLORS: Record<string, string> = {
@@ -157,6 +158,9 @@ export interface InvRow {
   interestRate: number | null
   // Bank deposit maturity (YYYY-MM-DD); null for non-bank holdings or no term.
   expiryDate: string | null
+  // When the (current) cycle was opened — used to derive the original term
+  // length on renewal. null for fund holdings.
+  investmentDate: string | null
   fund: FundBreakdownItem | null
 }
 
@@ -261,7 +265,7 @@ export function buildInvRows(
       }
     }
 
-    return { id: tx.transaction_id, name, type: tx.asset_type, value, gainPct, units, principal, interestRate: tx.interest_rate ?? null, expiryDate: tx.expiry_date ?? null, fund: fund ?? null }
+    return { id: tx.transaction_id, name, type: tx.asset_type, value, gainPct, units, principal, interestRate: tx.interest_rate ?? null, expiryDate: tx.expiry_date ?? null, investmentDate: fund ? null : (tx.investment_date ?? null), fund: fund ?? null }
   }).filter((row): row is InvRow => row !== null)
 }
 
@@ -274,6 +278,16 @@ export interface Maturity {
   diffDays: number
   relative: string
   tone: 'neutral' | 'warn' | 'pos'
+}
+
+// Whether a holding is a term deposit at (or within the reminder window of) its
+// maturity date — i.e. it needs a renew/withdraw decision. Shared so the mobile
+// sheet and desktop panel surface the "Handle maturity" action identically.
+export function needsMaturityAction(inv: InvRow, isVi: boolean): boolean {
+  if (!isTermDeposit({ type: inv.type, interestRate: inv.interestRate, expiryDate: inv.expiryDate })) return false
+  const m = fmtMaturity(inv.expiryDate, isVi)
+  if (!m) return false
+  return isMaturityActionable(depositMaturityState(m.diffDays))
 }
 
 export function fmtMaturity(dateStr: string | null | undefined, isVi: boolean): Maturity | null {
