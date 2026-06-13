@@ -203,8 +203,22 @@ function nonFundToInvRow(it: NonFundUnallocatedItem, isVi: boolean): InvRow {
 }
 
 // A maturing deposit plus the context needed to act on it: the goal it belongs
-// to (null when unassigned) and the raw item for the unallocated withdraw flow.
+// to (null when unassigned) and the raw item for the withdraw flow.
 interface MaturingDep { inv: InvRow; goalId: string | null; raw: NonFundUnallocatedItem }
+
+// Build the SellWithdrawSheet payload for a non-fund holding (bank/gold/stock).
+function nonFundToSellItem(item: NonFundUnallocatedItem): SellItem {
+  return {
+    type: item.type as 'bank' | 'gold' | 'stock',
+    name: item.notes ?? (item.type === 'bank' ? 'Bank deposit' : item.type === 'gold' ? 'Gold' : item.type),
+    currentValue: item.currentValue,
+    units: item.units ?? undefined,
+    navPerUnit: item.units && item.units > 0 ? item.currentValue / item.units : undefined,
+    interestRate: item.interestRate ?? undefined,
+    transactionId: item.transactionId,
+    purchasePrice: item.amount,
+  }
+}
 
 function useIsDesktop(): boolean {
   const [isDesktop, setIsDesktop] = useState(false)
@@ -251,6 +265,12 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null)
   const [goalDetailOpen, setGoalDetailOpen] = useState(false)
   const [resolveDep, setResolveDep] = useState<MaturingDep | null>(null)
+  // Goal-context withdraw triggered from the maturity flow — a dedicated
+  // SellWithdrawSheet so a goal-assigned deposit withdraws in one tap (linked to
+  // its goal, issue #261) instead of bouncing through the goal detail panel.
+  const [maturityWithdraw, setMaturityWithdraw] = useState<
+    { item: SellItem; goalId: string; goalCurrentValue: number; goalTargetAmount: number | null } | null
+  >(null)
   const [showReportSheet, setShowReportSheet] = useState(false)
   const [selectedInsuranceId, setSelectedInsuranceId] = useState<string | null>(null)
   const [desktopAddTxOpen, setDesktopAddTxOpen] = useState(false)
@@ -446,17 +466,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
   }
 
   function openSellNonFund(item: NonFundUnallocatedItem) {
-    const navPerUnit = item.units && item.units > 0 ? item.currentValue / item.units : undefined
-    setSellItem({
-      type: item.type as 'bank' | 'gold' | 'stock',
-      name: item.notes ?? (item.type === 'bank' ? 'Bank deposit' : item.type === 'gold' ? 'Gold' : item.type),
-      currentValue: item.currentValue,
-      units: item.units ?? undefined,
-      navPerUnit,
-      interestRate: item.interestRate ?? undefined,
-      transactionId: item.transactionId,
-      purchasePrice: item.amount,
-    })
+    setSellItem(nonFundToSellItem(item))
     setSellSheetOpen(true)
   }
 
@@ -496,16 +506,21 @@ export default function DashboardClient({ userId }: { userId: string }) {
       .map((it) => ({ inv: nonFundToInvRow(it, isVi), goalId: null, raw: it })),
   ] : []
 
-  // Withdraw from the maturity card: route to the correct existing flow. A
-  // goal-assigned deposit must withdraw in its goal context (so the withdrawal
-  // links to the goal — issue #261); an unassigned one uses the unallocated
-  // sell sheet directly. Takes the dep explicitly because the resolve sheet
+  // Withdraw from the maturity card: open the withdraw sheet pre-targeted at the
+  // deposit in one tap. A goal-assigned deposit withdraws in its goal context so
+  // the withdrawal links to the goal (issue #261); an unassigned one uses the
+  // unallocated sell flow. Takes the dep explicitly because the resolve sheet
   // clears `resolveDep` before invoking onWithdraw.
   function withdrawMaturingDeposit(dep: MaturingDep | null) {
     if (!dep) return
     if (dep.goalId) {
-      setSelectedGoalId(dep.goalId)
-      if (!isDesktop) setGoalDetailOpen(true)
+      const goal = data?.goals.find((g) => g.goalId === dep.goalId)
+      setMaturityWithdraw({
+        item: nonFundToSellItem(dep.raw),
+        goalId: dep.goalId,
+        goalCurrentValue: goal?.currentValue ?? dep.raw.currentValue,
+        goalTargetAmount: goal?.targetAmount ?? null,
+      })
     } else {
       openSellNonFund(dep.raw)
     }
@@ -1026,6 +1041,21 @@ export default function DashboardClient({ userId }: { userId: string }) {
         onClose={() => setSellSheetOpen(false)}
         onSuccess={() => fetchData({ force: true })}
       />
+
+      {/* Goal-context withdraw deep-linked from the maturity flow */}
+      {maturityWithdraw && (
+        <SellWithdrawSheet
+          item={maturityWithdraw.item}
+          open
+          context="goal"
+          goalId={maturityWithdraw.goalId}
+          goalCurrentValue={maturityWithdraw.goalCurrentValue}
+          goalTargetAmount={maturityWithdraw.goalTargetAmount}
+          desktop={isDesktop}
+          onClose={() => setMaturityWithdraw(null)}
+          onSuccess={() => { setMaturityWithdraw(null); fetchData({ force: true }) }}
+        />
+      )}
 
       {/* Maturity resolve — mobile sheet / desktop modal */}
       {!isDesktop && (
