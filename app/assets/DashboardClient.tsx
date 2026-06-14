@@ -788,6 +788,9 @@ export default function DashboardClient({ userId }: { userId: string }) {
                     locale={locale}
                     onClose={() => setSelectedGoalId(null)}
                     onDataChanged={() => { setSelectedGoalId(null); fetchData({ force: true }) }}
+                    // A renewal keeps the deposit in this goal — refresh in place
+                    // so the panel stays open and the renewal summary is visible.
+                    onRenewed={() => fetchData({ force: true })}
                     refreshKey={historyKey}
                   />
                 ) : selectedInsurance ? (
