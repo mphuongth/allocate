@@ -202,7 +202,7 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
               {goal.progressPercentage !== null && (
-                <span style={{
+                <span data-testid="desktop-goal-detail-progress" style={{
                   fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 999,
                   background: isComplete ? 'var(--c-pos-tint)' : 'var(--c-navy-tint)',
                   color: isComplete ? 'var(--c-pos)' : 'var(--c-navy)',

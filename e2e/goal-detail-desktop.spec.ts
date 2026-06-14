@@ -123,11 +123,15 @@ test.describe('Desktop goal detail panel', () => {
     }
   })
 
-  // Withdrawing from the goal detail can opt out of affecting goal progress
-  // via the "Count toward goal progress" toggle (ported from the legacy
-  // Settings view). Toggling it off must persist affects_progress=false.
-  test('withdraw with progress toggle off stores affects_progress=false', async ({ page }) => {
-    // Heavy flow (two dashboard loads + a withdrawal round-trip). Tolerate a
+  // Withdrawing from the goal detail can opt out of affecting goal progress via
+  // the "Count toward goal progress" toggle. affects_progress is a PROGRESS axis,
+  // not a valuation one: the money still leaves, so net worth / the goal's
+  // current value must fall, while the progress bar holds steady. This closes the
+  // loop on both — the stored flag AND the two rendered numbers (a regression
+  // here once overstated net worth by reusing the progress-filtered withdrawal
+  // map for valuation; only the bar-steady half was ever visible).
+  test('withdraw with progress toggle off stores affects_progress=false and lowers value while holding the bar', async ({ page }) => {
+    // Heavy flow (multiple dashboard loads + a withdrawal round-trip). Tolerate a
     // slow / IO-throttled backend rather than racing the default 30s cap.
     test.slow()
     const tx = await api.createTransaction({
@@ -138,14 +142,21 @@ test.describe('Desktop goal detail panel', () => {
       goal_id: goalId,
       notes: 'E2E Progress Toggle Deposit',
     })
+    const digits = (s: string | null) => Number((s ?? '').replace(/\D/g, ''))
     try {
-      await page.goto('/dashboard')
-      await page.waitForLoadState('networkidle')
+      // Fresh load so the header value (from the overview API) reflects the
+      // just-created deposit, not a stale cached overview.
+      await gotoFreshDashboard(page)
 
       await page.getByText('E2E Desktop Goal').first().click()
       const panel = page.getByTestId('desktop-goal-detail')
       await expect(panel).toBeVisible({ timeout: 10_000 })
       await expect(panel.getByText('E2E Progress Toggle Deposit')).toBeVisible({ timeout: 10_000 })
+
+      // Capture the rendered value + progress BEFORE the withdrawal.
+      const valueBefore = digits(await panel.getByTestId('desktop-goal-detail-value').textContent())
+      const progressBefore = (await panel.getByTestId('desktop-goal-detail-progress').textContent())?.trim()
+      expect(valueBefore).toBeGreaterThan(0)
 
       await panel.getByRole('button', { name: 'Options', exact: true }).first().click()
       await page.getByText(/^(Withdraw|Rút tiền)$/).click()
@@ -170,6 +181,17 @@ test.describe('Desktop goal detail panel', () => {
         .eq('transaction_type', 'withdrawal')
       expect(withdrawals).toHaveLength(1)
       expect(withdrawals![0].affects_progress).toBe(false)
+
+      // Rendered outcome (the regression guard). Reload past the overview cache,
+      // reopen the goal, and assert the two numbers moved on independent axes:
+      // current value fell (the money left) but the progress bar is unchanged.
+      await gotoFreshDashboard(page)
+      await page.getByText('E2E Desktop Goal').first().click()
+      await expect(panel).toBeVisible({ timeout: 10_000 })
+      await expect
+        .poll(async () => digits(await panel.getByTestId('desktop-goal-detail-value').textContent()), { timeout: 15_000 })
+        .toBeLessThan(valueBefore)
+      await expect(panel.getByTestId('desktop-goal-detail-progress')).toHaveText(progressBefore!, { timeout: 10_000 })
     } finally {
       await api.deleteTransactionCascade(tx.transaction_id)
     }
