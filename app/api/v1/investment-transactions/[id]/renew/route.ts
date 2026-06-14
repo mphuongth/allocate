@@ -88,7 +88,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // Best-effort: append a history snapshot of the cycle that just closed. A
   // failure here doesn't undo the renewal — it only loses a history row, never
   // affects totals (the snapshot is excluded from valuation by its link).
-  const { error: snapshotErr } = await supabase
+  const { data: snapshot, error: snapshotErr } = await supabase
     .from('investment_transactions')
     .insert({
       user_id: user.id,
@@ -104,7 +104,27 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       interest_earned_vnd: cleanInterestEarned,
       affects_progress: false,
     })
+    .select('transaction_id')
+    .single()
   if (snapshotErr) console.error('renew: failed to write history snapshot', snapshotErr.message)
+
+  // Re-home any partial-withdrawal rows of the cycle that just closed. They link
+  // to this deposit via parent_transaction_id, and the new cycle's principal was
+  // chosen to ALREADY exclude them (the renewal form defaults to the net, post-
+  // withdrawal balance). Leaving them attached would make every later overview
+  // load subtract the withdrawn amount a SECOND time from the new principal,
+  // shorting net worth and goal value by exactly what was withdrawn. Move them
+  // onto the closed-cycle snapshot (excluded from all totals) so the active row
+  // starts clean and the withdrawals stay in history. If the snapshot write
+  // failed, orphan them (null parent) instead — losing the history link is the
+  // accepted best-effort failure mode; double-counting net worth is not.
+  const { error: reparentErr } = await supabase
+    .from('investment_transactions')
+    .update({ parent_transaction_id: snapshot?.transaction_id ?? null })
+    .eq('parent_transaction_id', txId)
+    .eq('transaction_type', 'withdrawal')
+    .eq('user_id', user.id)
+  if (reparentErr) console.error('renew: failed to re-parent withdrawal rows', reparentErr.message)
 
   return NextResponse.json(renewed)
 }

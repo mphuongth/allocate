@@ -127,6 +127,33 @@ export async function deleteTransaction(txId: string) {
   await supabase.from('investment_transactions').delete().eq('transaction_id', txId)
 }
 
+// Insert a withdrawal row against an existing deposit, mirroring what the
+// SellWithdraw flow POSTs (transaction_type='withdrawal', linked by
+// parent_transaction_id, asset_type null). Returns the created row.
+export async function createWithdrawal(data: {
+  parent_transaction_id: string
+  amount_vnd: number
+  principal_withdrawn: number
+  goal_id?: string | null
+  investment_date: string
+  affects_progress?: boolean
+}) {
+  const userId = await getTestUserId()
+  const { data: wd, error } = await supabase
+    .from('investment_transactions')
+    .insert({
+      user_id: userId,
+      transaction_type: 'withdrawal',
+      asset_type: null,
+      affects_progress: data.affects_progress ?? true,
+      ...data,
+    })
+    .select()
+    .single()
+  if (error) throw error
+  return wd
+}
+
 // Delete a transaction together with any withdrawal rows that reference it.
 // The parent_transaction_id FK is ON DELETE SET NULL, so withdrawals would
 // otherwise be orphaned (and stay attached to their goal) after the parent
