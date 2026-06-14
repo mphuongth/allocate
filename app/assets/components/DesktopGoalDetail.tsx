@@ -35,6 +35,13 @@ interface Props {
   onClose: () => void
   onDataChanged: () => void
   /**
+   * Like onDataChanged, but for actions that leave the deposit IN this goal (a
+   * renewal): refresh the dashboard data WITHOUT closing the panel, so the user
+   * stays on the goal and can see the rolled-forward deposit / renewal-history
+   * summary. Falls back to onDataChanged when not provided.
+   */
+  onRenewed?: () => void
+  /**
    * Monotonically increases each time the parent's dashboard data refreshes
    * (e.g. after assigning an investment from Unallocated). Including it in
    * the transactions-fetching useEffect keeps this panel in sync without
@@ -43,7 +50,7 @@ interface Props {
   refreshKey?: number
 }
 
-export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged, refreshKey }: Props) {
+export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged, onRenewed, refreshKey }: Props) {
   const isVi = locale === 'vi'
   const [tab, setTab] = useState<'investments' | 'calculator' | 'history'>('investments')
   const [transactions, setTransactions] = useState<InvestmentTx[]>([])
@@ -547,7 +554,7 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
           inv={actionInv}
           isVi={isVi}
           onClose={() => setShowResolve(false)}
-          onRenewed={() => { setShowResolve(false); onDataChanged() }}
+          onRenewed={() => { setShowResolve(false); (onRenewed ?? onDataChanged)() }}
           onWithdraw={() => { setShowResolve(false); setTimeout(() => setShowSell(true), 80) }}
         />
       )}
