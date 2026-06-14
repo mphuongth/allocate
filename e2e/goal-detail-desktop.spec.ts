@@ -1,7 +1,20 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
 import * as api from './helpers/api'
 
 // Desktop viewport (Desktop Chrome default) — all tests run in 1280×800+
+
+// Force a fresh dashboard load that bypasses the localStorage overview cache, so
+// data created via the API since the last navigation is guaranteed to render.
+async function gotoFreshDashboard(page: Page) {
+  await page.goto('/settings') // unmount DashboardClient
+  await page.evaluate(() => {
+    Object.keys(localStorage).filter((k) => k.startsWith('dashboardOverviewCache')).forEach((k) => localStorage.removeItem(k))
+  })
+  await Promise.all([
+    page.waitForResponse((r) => r.url().includes('/api/v1/dashboard/overview') && r.status() === 200, { timeout: 20_000 }),
+    page.goto('/dashboard'),
+  ])
+}
 
 test.describe('Desktop goal detail panel', () => {
   let goalId: string
@@ -287,8 +300,11 @@ test.describe('Desktop goal detail panel', () => {
       investment_date: today,
     })
     try {
-      await page.goto('/dashboard')
-      await page.waitForLoadState('networkidle')
+      // The dashboard caches its overview in localStorage (2-min TTL), and the
+      // beforeEach navigation cached the snapshot from BEFORE this goal existed.
+      // Bust that cache so the fresh mount fetches the new goal — otherwise the
+      // goal card never renders and there is nothing to click.
+      await gotoFreshDashboard(page)
 
       await page.getByText('E2E Renew Withdraw Goal').first().click()
       const panel = page.getByTestId('desktop-goal-detail')
