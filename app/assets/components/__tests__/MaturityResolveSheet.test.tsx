@@ -13,7 +13,10 @@ function daysFromNow(n: number): string {
   d.setDate(d.getDate() + n)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
-const today = () => daysFromNow(0)
+// Match the component's todayIso() (UTC) so the assertion is timezone-robust —
+// a local-date `today` flakes near the UTC midnight boundary on dev machines
+// behind/ahead of UTC (CI runners are UTC, so it only bit locally).
+const today = () => new Date().toISOString().slice(0, 10)
 
 // A matured term deposit: value (compounded) > principal, expiry in the past.
 const maturedDeposit: InvRow = {

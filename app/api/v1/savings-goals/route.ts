@@ -25,11 +25,12 @@ export async function GET(request: NextRequest) {
 
   // Fetch transactions with fund NAV in parallel with goals already done
   const { data: transactions, error: txError } = await supabase
-    .from('investment_transactions')
+    // Snapshot-free view so renewal history rows can't reach per-goal stats.
+    .from('active_investment_transactions')
     .select('transaction_id, goal_id, asset_type, transaction_type, amount_vnd, units, unit_price, interest_rate, investment_date, expiry_date, funds(id, name, nav)')
     .eq('user_id', user.id)
     .not('goal_id', 'is', null)
-    .is('renewed_from_transaction_id', null) // exclude renewal history snapshots from goal stats
+    .is('renewed_from_transaction_id', null) // defence; the active_* view already excludes snapshots
 
   if (txError) return NextResponse.json({ error: 'Failed to fetch transactions' }, { status: 500 })
 
