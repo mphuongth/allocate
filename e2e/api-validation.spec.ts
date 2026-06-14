@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import * as api from './helpers/api'
 
 // API-level validator rejection tests. These hit the route handlers directly
 // using Playwright's authenticated request context (storageState from setup).
@@ -76,5 +77,35 @@ test.describe('API input validation', () => {
       },
     })
     expect(res.status()).toBe(400)
+  })
+
+  // Only bank TERM deposits (interest rate + maturity date) can be renewed. A
+  // flexible bank deposit — asset_type='bank' but no rate and no expiry — has no
+  // cycle to roll forward; renewing it would mint a maturity/interest it never
+  // had. The route's asset_type==='bank' check alone passed it through, so guard
+  // on the term-deposit shape too. (Body is otherwise valid: the 400 is the
+  // flex-deposit guard, not payload validation.)
+  test('POST /api/v1/investment-transactions/<id>/renew rejects a flex bank deposit (400)', async ({ request }) => {
+    const today = new Date().toISOString().slice(0, 10)
+    // A flexible deposit: bank, but no interest_rate and no expiry_date.
+    const flex = await api.createTransaction({
+      asset_type: 'bank',
+      amount_vnd: 5_000_000,
+      investment_date: today,
+      notes: 'E2E flex renew guard',
+    })
+    try {
+      const res = await request.post(`/api/v1/investment-transactions/${flex.transaction_id}/renew`, {
+        data: {
+          amount_vnd: 5_000_000,
+          interest_rate: 6,
+          expiry_date: new Date(Date.now() + 90 * 86_400_000).toISOString().slice(0, 10),
+          investment_date: today,
+        },
+      })
+      expect(res.status()).toBe(400)
+    } finally {
+      await api.deleteTransaction(flex.transaction_id)
+    }
   })
 })
