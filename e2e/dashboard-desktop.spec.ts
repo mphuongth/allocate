@@ -1,8 +1,22 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
 import * as api from './helpers/api'
 
 // All tests run on Desktop Chrome (1280×800) by default from playwright config.
 // These verify the two-column desktop layout for the Overview page.
+
+// Force a fresh dashboard load that bypasses the localStorage overview cache
+// (2-min TTL), so data created via the API after the beforeEach navigation is
+// guaranteed to render rather than being masked by a stale snapshot.
+async function gotoFreshDashboard(page: Page) {
+  await page.goto('/settings') // unmount DashboardClient
+  await page.evaluate(() => {
+    Object.keys(localStorage).filter((k) => k.startsWith('dashboardOverviewCache')).forEach((k) => localStorage.removeItem(k))
+  })
+  await Promise.all([
+    page.waitForResponse((r) => r.url().includes('/api/v1/dashboard/overview') && r.status() === 200, { timeout: 20_000 }),
+    page.goto('/dashboard'),
+  ])
+}
 
 test.describe('Desktop overview layout', () => {
   test.beforeEach(async ({ page }) => {
@@ -161,8 +175,9 @@ test.describe('Desktop overview layout', () => {
       notes: 'E2E Maturing Deposit',
     })
     try {
-      await page.goto('/dashboard')
-      await page.waitForLoadState('networkidle')
+      // The beforeEach already cached an overview snapshot taken before this
+      // deposit existed; bust it so the matured deposit's card actually renders.
+      await gotoFreshDashboard(page)
 
       const card = page.getByTestId('maturity-action-card')
       await expect(card).toBeVisible({ timeout: 10_000 })
