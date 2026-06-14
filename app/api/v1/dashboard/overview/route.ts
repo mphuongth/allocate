@@ -6,6 +6,41 @@ import { shouldWriteSnapshot } from '@/lib/snapshots'
 
 export const dynamic = 'force-dynamic'
 
+// A non-fund holding (bank / gold / stock) as the dashboard exposes it, for both
+// goal-assigned and unallocated buckets. Built only via `buildNonFund` so the two
+// buckets can never drift — omitting a field in one branch (e.g. expiryDate,
+// which the maturity card needs) is exactly the bug this factory prevents.
+type NonFundEntry = {
+  transactionId: string
+  type: string
+  amount: number
+  currentValue: number
+  interestRate: number | null
+  expiryDate: string | null
+  investmentDate: string
+  units: number | null
+  notes: string | null
+}
+
+function buildNonFund(
+  tx: { transaction_id: string; asset_type: string; interest_rate: number | null; expiry_date: string | null; investment_date: string; notes: string | null },
+  amount: number,
+  currentValue: number,
+  units: number | null,
+): NonFundEntry {
+  return {
+    transactionId: tx.transaction_id,
+    type: tx.asset_type,
+    amount,
+    currentValue,
+    interestRate: tx.interest_rate ?? null,
+    expiryDate: tx.expiry_date ?? null,
+    investmentDate: tx.investment_date,
+    units,
+    notes: tx.notes ?? null,
+  }
+}
+
 export async function GET() {
   const supabase = await createSupabaseServerClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -130,15 +165,7 @@ export async function GET() {
       profitLossPercentage: number
       goalId: string
     }>
-    nonFunds: Array<{
-      transactionId: string
-      type: string
-      amount: number
-      currentValue: number
-      interestRate: number | null
-      units: number | null
-      notes: string | null
-    }>
+    nonFunds: NonFundEntry[]
   }>()
 
   for (const goal of goals) {
@@ -176,9 +203,7 @@ export async function GET() {
   const nonFundByType: Record<string, number> = { bank: 0, gold: 0, stock: 0 }
   let goldUnits = 0  // total gold holdings in chỉ (after withdrawals)
 
-  const unallocatedNonFunds: {
-    transactionId: string; type: string; amount: number; currentValue: number; interestRate: number | null; expiryDate: string | null; investmentDate: string; notes: string | null; units: number | null
-  }[] = []
+  const unallocatedNonFunds: NonFundEntry[] = []
 
   for (const tx of investments) {
     if (tx.asset_type === 'fund' && tx.units) {
@@ -247,28 +272,10 @@ export async function GET() {
         goalEntry.totalInvested += effectiveAmount
         goalEntry.currentValue += currentValue
         goalEntry.transactionCount += 1
-        goalEntry.nonFunds.push({
-          transactionId: tx.transaction_id,
-          type: tx.asset_type,
-          amount: effectiveAmount,
-          currentValue,
-          interestRate: tx.interest_rate ?? null,
-          units: effectiveUnits,
-          notes: tx.notes ?? null,
-        })
+        goalEntry.nonFunds.push(buildNonFund(tx, effectiveAmount, currentValue, effectiveUnits))
       } else {
         unallocatedNonFundValue += currentValue
-        unallocatedNonFunds.push({
-          transactionId: tx.transaction_id,
-          type: tx.asset_type,
-          amount: effectiveAmount,
-          currentValue,
-          interestRate: tx.interest_rate ?? null,
-          expiryDate: tx.expiry_date ?? null,
-          investmentDate: tx.investment_date,
-          notes: tx.notes ?? null,
-          units: effectiveUnits,
-        })
+        unallocatedNonFunds.push(buildNonFund(tx, effectiveAmount, currentValue, effectiveUnits))
       }
     }
   }

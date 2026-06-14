@@ -142,15 +142,22 @@ test.describe('Desktop overview layout', () => {
   // PR2: a matured term deposit surfaces the dashboard "Needs attention" card
   // and the sidebar nav badge; renewing it from the card rolls it forward so it
   // leaves the card (closing the UI loop).
+  //
+  // Uses a GOAL-ASSIGNED deposit on purpose — the overview API built goal-assigned
+  // nonFunds without expiryDate, so isTermDeposit returned false and the card
+  // never showed for a deposit attached to a goal (the common case). Regression
+  // guard for that fix.
   test('matured deposit shows the Needs attention card + nav badge, and renewing clears it', async ({ page }) => {
     test.slow()
     const iso = (d: number) => new Date(Date.now() + d * 86_400_000).toISOString().slice(0, 10)
+    const goal = await api.createGoal({ goal_name: 'E2E Maturity Goal', target_amount: 50_000_000 })
     const tx = await api.createTransaction({
       asset_type: 'bank',
       amount_vnd: 12_000_000,
       investment_date: iso(-400),
       interest_rate: 6,
       expiry_date: iso(-20), // matured
+      goal_id: goal.goal_id, // assigned to a goal — the case the card used to miss
       notes: 'E2E Maturing Deposit',
     })
     try {
@@ -172,6 +179,7 @@ test.describe('Desktop overview layout', () => {
       await expect(card.getByText('E2E Maturing Deposit')).toHaveCount(0, { timeout: 30_000 })
     } finally {
       await api.deleteTransactionCascade(tx.transaction_id)
+      await api.deleteGoal(goal.goal_id)
     }
   })
 })
