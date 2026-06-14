@@ -136,6 +136,8 @@ export async function GET() {
       amount: number
       currentValue: number
       interestRate: number | null
+      expiryDate: string | null
+      investmentDate: string
       units: number | null
       notes: string | null
     }>
@@ -253,6 +255,11 @@ export async function GET() {
           amount: effectiveAmount,
           currentValue,
           interestRate: tx.interest_rate ?? null,
+          // expiryDate + investmentDate are required for the dashboard maturity
+          // card / nav badge to recognise a goal-assigned term deposit (without
+          // expiryDate, isTermDeposit returns false and it never surfaces).
+          expiryDate: tx.expiry_date ?? null,
+          investmentDate: tx.investment_date,
           units: effectiveUnits,
           notes: tx.notes ?? null,
         })
