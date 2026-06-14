@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { calcProjectedInterest, isNavStale, insuranceStatus, isPlanMonthRealized, isInCurrentCycle, realizedRecurringContributions } from '@/lib/finance'
+import { isNavStale, insuranceStatus, isPlanMonthRealized, isInCurrentCycle, realizedRecurringContributions } from '@/lib/finance'
 import { buildWithdrawalMaps } from '@/lib/withdrawalProgress'
+import { valueNonFundHolding } from '@/lib/depositValuation'
 import { shouldWriteSnapshot } from '@/lib/snapshots'
 
 export const dynamic = 'force-dynamic'
@@ -239,26 +240,11 @@ export async function GET() {
         })
       }
     } else {
-      // bank / stock / gold — apply any partial withdrawals
-      const wd = parentWdMap.get(tx.transaction_id)
-      const withdrawnPrincipal = wd?.principal ?? 0
-      const withdrawnUnits = wd?.units ?? 0
-
-      let currentValue: number
-      let effectiveAmount: number
-      let effectiveUnits: number | null = tx.units ?? null
-
-      if (tx.asset_type === 'gold' && goldPricePerChi && tx.units) {
-        effectiveUnits = tx.units - withdrawnUnits
-        if (effectiveUnits <= 0) continue // fully sold
-        currentValue = effectiveUnits * goldPricePerChi
-        effectiveAmount = tx.amount_vnd - withdrawnPrincipal
-      } else {
-        effectiveAmount = tx.amount_vnd - withdrawnPrincipal
-        if (effectiveAmount <= 0) continue // fully withdrawn
-        const interest = calcProjectedInterest(effectiveAmount, tx.interest_rate, tx.investment_date, tx.expiry_date)
-        currentValue = effectiveAmount + interest
-      }
+      // bank / stock / gold — apply any partial withdrawals. Shared, unit-tested
+      // valuation so renewal re-parenting can't double-count a withdrawal here.
+      const valued = valueNonFundHolding(tx, parentWdMap, goldPricePerChi)
+      if (!valued) continue // fully withdrawn / sold
+      const { effectiveAmount, currentValue, effectiveUnits } = valued
 
       totalAssets += currentValue
       totalInvestedGlobal += effectiveAmount
