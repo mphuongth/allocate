@@ -118,7 +118,13 @@ export async function GET() {
   )
   const withdrawals = allTxsRaw.filter((tx) => tx.transaction_type === 'withdrawal')
 
-  const { parentWdMap, fundWdMap } = buildWithdrawalMaps(withdrawals)
+  // Two axes (see lib/withdrawalProgress): the …All maps drive VALUATION /
+  // net worth (every withdrawal counts — the money left the holding); the
+  // progress-filtered maps drive the goal bar (affects_progress=false held
+  // steady). currentValue and progressValue below are computed independently
+  // so a "doesn't count toward progress" withdrawal lowers net worth without
+  // moving the bar — and the dashboard agrees with the goal-detail tab.
+  const { parentWdMap, fundWdMap, parentWdMapAll, fundWdMapAll } = buildWithdrawalMaps(withdrawals)
 
   const insuranceMembers = insuranceRes.data ?? []
   const goldPricePerChi: number | null = goldPriceRes.data?.price_per_chi ?? null
@@ -152,6 +158,9 @@ export async function GET() {
     targetAmount: number | null
     targetDate: string | null
     currentValue: number
+    // Progress numerator — equals currentValue except that affects_progress=false
+    // withdrawals are added back, so the bar holds steady while net worth falls.
+    progressValue: number
     totalInvested: number
     transactionCount: number
     funds: Array<{
@@ -176,6 +185,7 @@ export async function GET() {
       targetAmount: goal.target_amount ?? null,
       targetDate: goal.target_date ?? null,
       currentValue: 0,
+      progressValue: 0,
       totalInvested: 0,
       transactionCount: 0,
       funds: [],
@@ -242,8 +252,20 @@ export async function GET() {
     } else {
       // bank / stock / gold — apply any partial withdrawals. Shared, unit-tested
       // valuation so renewal re-parenting can't double-count a withdrawal here.
-      const valued = valueNonFundHolding(tx, parentWdMap, goldPricePerChi)
-      if (!valued) continue // fully withdrawn / sold
+      // Value twice: parentWdMapAll (every withdrawal → net worth) and parentWdMap
+      // (progress-affecting only → goal bar). They differ only when the holding
+      // has an affects_progress=false withdrawal, which net worth must subtract
+      // but the bar must not.
+      const valued = valueNonFundHolding(tx, parentWdMapAll, goldPricePerChi)
+      const progValued = valueNonFundHolding(tx, parentWdMap, goldPricePerChi)
+      // The bar holds the value any affects_progress=false withdrawal removed,
+      // even after the holding is fully gone from net worth.
+      const progressContribution = progValued?.currentValue ?? 0
+      if (tx.goal_id && goalMap.has(tx.goal_id)) {
+        goalMap.get(tx.goal_id)!.progressValue += progressContribution
+      }
+
+      if (!valued) continue // fully withdrawn / sold (net worth)
       const { effectiveAmount, currentValue, effectiveUnits } = valued
 
       totalAssets += currentValue
@@ -266,8 +288,19 @@ export async function GET() {
     }
   }
 
-  // Subtract fund sell withdrawals from fund accumulators
-  for (const [key, wd] of fundWdMap) {
+  // Fund progress contribution (goal bar): value the units left after only the
+  // progress-affecting sells. Computed from the gross accumulators BEFORE the
+  // net-worth subtraction below, and added even when the fund is fully sold for
+  // net worth — an affects_progress=false sell holds the bar steady.
+  for (const [key, acc] of fundAccumMap) {
+    if (!acc.goalId || !goalMap.has(acc.goalId)) continue
+    const progUnits = acc.totalUnits - (fundWdMap.get(key)?.units ?? 0)
+    if (progUnits > 0) goalMap.get(acc.goalId)!.progressValue += acc.currentNAV * progUnits
+  }
+
+  // Subtract ALL fund sell withdrawals from fund accumulators for valuation /
+  // net worth — the units are gone regardless of affects_progress.
+  for (const [key, wd] of fundWdMapAll) {
     const acc = fundAccumMap.get(key)
     if (!acc || wd.units <= 0) continue
     const totalUnitsBefore = acc.totalUnits
@@ -348,6 +381,7 @@ export async function GET() {
     if (c.goalId && goalMap.has(c.goalId)) {
       const g = goalMap.get(c.goalId)!
       g.currentValue += c.amount
+      g.progressValue += c.amount // no withdrawals involved — counts toward the bar too
       g.totalInvested += c.amount
       g.transactionCount += 1
     }
@@ -356,8 +390,11 @@ export async function GET() {
   const goalsOutput = Array.from(goalMap.values()).map((g) => {
     const profitLoss = g.currentValue - g.totalInvested
     const profitLossPercentage = g.totalInvested > 0 ? (profitLoss / g.totalInvested) * 100 : 0
+    // Progress runs off progressValue, not currentValue: affects_progress=false
+    // withdrawals lower net worth (currentValue) but are added back here so the
+    // bar holds steady (see the withdrawal-map split above).
     const progressPercentage = g.targetAmount && g.targetAmount > 0
-      ? Math.min((g.currentValue / g.targetAmount) * 100, 100)
+      ? Math.min((g.progressValue / g.targetAmount) * 100, 100)
       : null
 
     return {

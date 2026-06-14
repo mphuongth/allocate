@@ -64,6 +64,25 @@ describe('valueNonFundHolding', () => {
     expect(valueNonFundHolding(bank({ amount_vnd: 10_000_000 }), parentWdMap, null, ASOF)).toBeNull()
   })
 
+  // Valuation must NOT bend to affects_progress — the money left the holding, so
+  // its book value falls whether or not the withdrawal counts toward the goal
+  // bar. The overview feeds the VALUATION map (parentWdMapAll) here; it used to
+  // (wrongly) feed the progress-filtered map, overstating net worth and making
+  // the same deposit show two different values vs the goal-detail tab (which
+  // always counts every withdrawal). See lib/withdrawalProgress + the decoupled
+  // currentValue/progressValue split in the overview route.
+  it('subtracts an affects_progress=false withdrawal when valued (uses the …All map)', () => {
+    const maps = buildWithdrawalMaps([
+      withdrawal({ principal_withdrawn: 4_000_000, affects_progress: false }),
+    ])
+    // Progress map drops it (bar held steady) → would keep full principal.
+    const progress = valueNonFundHolding(bank({ amount_vnd: 10_000_000 }), maps.parentWdMap, null, ASOF)!
+    expect(progress.effectiveAmount).toBe(10_000_000)
+    // Valuation map counts it (net worth falls) → principal net of the withdrawal.
+    const valuation = valueNonFundHolding(bank({ amount_vnd: 10_000_000 }), maps.parentWdMapAll, null, ASOF)!
+    expect(valuation.effectiveAmount).toBe(6_000_000)
+  })
+
   // Regression (review point 3 / E2E goal-detail-desktop.spec.ts:276): after a
   // renewal the closed cycle's withdrawal is re-parented onto the history
   // snapshot, so parentWdMap is keyed by the SNAPSHOT id — not the active row.
