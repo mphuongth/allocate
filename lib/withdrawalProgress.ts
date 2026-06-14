@@ -16,7 +16,8 @@ export type FundWdMap = Map<string, { units: number; cost: number }>
 // conflated:
 //   • parentWdMap / fundWdMap   — PROGRESS accounting. Drop affects_progress=false
 //     rows so a "doesn't count toward progress" withdrawal leaves the goal bar
-//     steady (the rebalance-within-a-goal case).
+//     steady. (This holds the bar; it is not a within-goal transfer — re-buying
+//     the proceeds back into the same goal double-counts the bar, see issue #342.)
 //   • parentWdMapAll / fundWdMapAll — VALUATION. Count every withdrawal: the money
 //     actually left the holding, so book value / net worth must fall regardless of
 //     the progress flag. Sharing the progress maps for valuation overstated net

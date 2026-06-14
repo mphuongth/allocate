@@ -259,7 +259,10 @@ export async function GET() {
       const valued = valueNonFundHolding(tx, parentWdMapAll, goldPricePerChi)
       const progValued = valueNonFundHolding(tx, parentWdMap, goldPricePerChi)
       // The bar holds the value any affects_progress=false withdrawal removed,
-      // even after the holding is fully gone from net worth.
+      // even after the holding is fully gone from net worth. Known limitation:
+      // if those proceeds are re-bought into the SAME goal, the bar double-counts
+      // (this add-back + the re-buy's own progress). Needs a withdrawal→destination
+      // link to fix — tracked in issue #342.
       const progressContribution = progValued?.currentValue ?? 0
       if (tx.goal_id && goalMap.has(tx.goal_id)) {
         goalMap.get(tx.goal_id)!.progressValue += progressContribution

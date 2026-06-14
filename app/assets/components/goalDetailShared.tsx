@@ -70,10 +70,18 @@ function Switch({ checked, onChange }: { checked: boolean; onChange: (v: boolean
 
 // "Count toward goal progress" toggle + a live progress-impact preview, shown
 // only when withdrawing from within a goal. Default ON: the withdrawal lowers
-// the goal's tracked progress. OFF (affects_progress=false) is for rebalancing
-// or moving money within the goal — the holding still leaves, but progress is
-// held steady. The preview animates current% → resulting% so the consequence
-// is visible before confirming.
+// the goal's tracked progress. OFF (affects_progress=false) holds the bar steady
+// for a withdrawal that doesn't reduce your commitment to the goal — the holding
+// still leaves (net worth falls), the bar just doesn't move.
+//
+// NB: this is NOT a within-goal transfer. Proceeds route to Unallocated; the
+// flow does not move money between holdings in the goal. If you withdraw OFF and
+// then re-buy into the same goal, the bar double-counts (the source is still
+// credited via add-back AND the re-buy adds its own progress) — see issue #342.
+// The OFF copy below deliberately avoids promising a transfer.
+//
+// The preview animates current% → resulting% so the consequence is visible
+// before confirming.
 export function AffectsProgressControl({
   checked, onChange, isVi, currentValue, targetAmount, withdrawnValue = 0,
 }: {
@@ -87,12 +95,12 @@ export function AffectsProgressControl({
   const t = isVi ? {
     label: 'Tính vào tiến độ mục tiêu',
     on: 'Khoản rút này sẽ làm giảm tiến độ của mục tiêu.',
-    off: 'Tiến độ giữ nguyên — dùng khi cân đối lại hoặc luân chuyển trong mục tiêu.',
+    off: 'Tiến độ giữ nguyên — dùng cho khoản rút không làm giảm cam kết với mục tiêu này.',
     title: 'Tiến độ mục tiêu', unchanged: 'Giữ nguyên', offGoalValue: 'khỏi giá trị mục tiêu',
   } : {
     label: 'Count toward goal progress',
     on: 'This withdrawal lowers your tracked progress for this goal.',
-    off: 'Progress stays the same — for rebalancing or moving money within the goal.',
+    off: 'Progress stays the same — for a withdrawal that doesn’t reduce your commitment to this goal.',
     title: 'Goal progress', unchanged: 'Unchanged', offGoalValue: 'off goal value',
   }
 
