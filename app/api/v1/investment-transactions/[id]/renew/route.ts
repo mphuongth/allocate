@@ -4,14 +4,15 @@ import { ValidationError, validateAmount, validateDate, validateRate, validateUU
 
 // Renew a bank term deposit.
 //
-// The active deposit row is updated in place to the new cycle (new principal /
-// rate / maturity, accrual date reset to today) — its valuation is unchanged
-// from a plain edit. To preserve the history the overwrite would erase, we then
-// append a history-only "snapshot" of the cycle that just closed, linked via
-// `renewed_from_transaction_id`. The snapshot is never counted anywhere it is
-// excluded by that link, so the two writes don't need to be atomic: the
-// snapshot is best-effort and a failure there only drops a history row, never
-// double-counts.
+// The renewal performs three coupled writes — roll the active row forward to
+// the new cycle (in place), append a history snapshot of the cycle that just
+// closed, and re-parent that cycle's partial-withdrawal rows onto the snapshot.
+// The re-parent is correctness-critical: leaving a withdrawal attached to the
+// now-renewed active row subtracts it from net worth a second time (the exact
+// double-count this guards against). So all three run inside the
+// `renew_term_deposit` Postgres function as a single transaction — they commit
+// together or roll back together, leaving no intermediate double-count state and
+// never returning 200 on a partial write.
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createSupabaseServerClient()
@@ -51,10 +52,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: 'Investment date cannot be in the future.' }, { status: 400 })
   }
 
-  // Read the current cycle (owned by this user) before overwriting it.
+  // Validate against the current cycle (owned by this user) for friendly 4xx
+  // messages. The renewal itself re-reads and locks the row inside
+  // renew_term_deposit, which builds the snapshot from that authoritative read.
   const { data: old, error: fetchErr } = await supabase
     .from('investment_transactions')
-    .select('transaction_id, user_id, goal_id, asset_type, amount_vnd, investment_date, expiry_date, interest_rate, notes')
+    .select('asset_type, amount_vnd')
     .eq('transaction_id', txId)
     .eq('user_id', user.id)
     .single()
@@ -69,42 +72,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: 'interest_earned_vnd is unreasonably large' }, { status: 400 })
   }
 
-  // Roll the active row forward to the new cycle (in place — valuation unchanged).
-  const { data: renewed, error: updateErr } = await supabase
-    .from('investment_transactions')
-    .update({
-      amount_vnd: Math.round(cleanAmount),
-      interest_rate: cleanRate,
-      expiry_date: cleanExpiry,
-      investment_date: cleanInvestmentDate,
-      updated_at: new Date().toISOString(),
+  // Perform the three coupled writes (roll forward, snapshot, re-parent
+  // withdrawals) atomically. The re-parent is correctness-critical — a partial
+  // success that skipped it would silently double-count the withdrawn amount —
+  // so a failure here aborts the whole renewal rather than returning 200.
+  const { data: renewed, error: renewErr } = await supabase
+    .rpc('renew_term_deposit', {
+      p_tx_id: txId,
+      p_amount_vnd: Math.round(cleanAmount),
+      p_interest_rate: cleanRate,
+      p_expiry_date: cleanExpiry,
+      p_investment_date: cleanInvestmentDate,
+      p_interest_earned_vnd: cleanInterestEarned,
     })
-    .eq('transaction_id', txId)
-    .eq('user_id', user.id)
-    .select()
     .single()
-  if (updateErr || !renewed) return NextResponse.json({ error: 'Failed to renew deposit' }, { status: 500 })
-
-  // Best-effort: append a history snapshot of the cycle that just closed. A
-  // failure here doesn't undo the renewal — it only loses a history row, never
-  // affects totals (the snapshot is excluded from valuation by its link).
-  const { error: snapshotErr } = await supabase
-    .from('investment_transactions')
-    .insert({
-      user_id: user.id,
-      goal_id: old.goal_id,
-      asset_type: 'bank',
-      transaction_type: 'investment',
-      amount_vnd: old.amount_vnd,
-      investment_date: old.investment_date,
-      expiry_date: old.expiry_date,
-      interest_rate: old.interest_rate,
-      notes: old.notes,
-      renewed_from_transaction_id: txId,
-      interest_earned_vnd: cleanInterestEarned,
-      affects_progress: false,
-    })
-  if (snapshotErr) console.error('renew: failed to write history snapshot', snapshotErr.message)
+  if (renewErr || !renewed) {
+    console.error('renew: atomic renewal failed', renewErr?.message)
+    return NextResponse.json({ error: 'Failed to renew deposit' }, { status: 500 })
+  }
 
   return NextResponse.json(renewed)
 }

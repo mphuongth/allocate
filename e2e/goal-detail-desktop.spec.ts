@@ -1,7 +1,20 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
 import * as api from './helpers/api'
 
 // Desktop viewport (Desktop Chrome default) — all tests run in 1280×800+
+
+// Force a fresh dashboard load that bypasses the localStorage overview cache, so
+// data created via the API since the last navigation is guaranteed to render.
+async function gotoFreshDashboard(page: Page) {
+  await page.goto('/settings') // unmount DashboardClient
+  await page.evaluate(() => {
+    Object.keys(localStorage).filter((k) => k.startsWith('dashboardOverviewCache')).forEach((k) => localStorage.removeItem(k))
+  })
+  await Promise.all([
+    page.waitForResponse((r) => r.url().includes('/api/v1/dashboard/overview') && r.status() === 200, { timeout: 20_000 }),
+    page.goto('/dashboard'),
+  ])
+}
 
 test.describe('Desktop goal detail panel', () => {
   let goalId: string
@@ -249,6 +262,109 @@ test.describe('Desktop goal detail panel', () => {
       await expect(summary).toContainText(/Renewed 1|Đã tái tục 1/)
     } finally {
       await api.deleteTransactionCascade(tx.transaction_id)
+    }
+  })
+
+  // Regression: renewing a deposit that was PARTIALLY withdrawn must not
+  // subtract the withdrawn amount a second time. The withdrawal row links to the
+  // deposit via parent_transaction_id; the renewal rolls the row forward in
+  // place (txId unchanged) to a new principal that already excludes the
+  // withdrawal. If the withdrawal stays parented to the active row, the next
+  // overview load subtracts it again → net worth / goal value short by the
+  // withdrawn amount. The fix re-parents the closed cycle's withdrawals onto the
+  // history snapshot so the active row starts clean.
+  test('renewing a partially-withdrawn deposit does not double-count the withdrawal', async ({ page }) => {
+    test.slow()
+    const iso = (offsetDays: number) => new Date(Date.now() + offsetDays * 86_400_000).toISOString().slice(0, 10)
+    const today = iso(0)
+    const { createClient } = await import('@supabase/supabase-js')
+    const supabase = createClient(process.env.E2E_SUPABASE_URL!, process.env.E2E_SUPABASE_SERVICE_ROLE_KEY!)
+
+    // Dedicated goal so its totalInvested reflects only this one deposit.
+    const goal = await api.createGoal({ goal_name: 'E2E Renew Withdraw Goal', target_amount: 100_000_000 })
+    // Matured deposit (so it renews) with a 4M partial withdrawal already taken.
+    const tx = await api.createTransaction({
+      asset_type: 'bank',
+      amount_vnd: 10_000_000,
+      investment_date: iso(-400),
+      interest_rate: 6,
+      expiry_date: iso(-30),
+      goal_id: goal.goal_id,
+      notes: 'E2E Renew Withdraw Deposit',
+    })
+    const wd = await api.createWithdrawal({
+      parent_transaction_id: tx.transaction_id,
+      amount_vnd: 4_000_000,
+      principal_withdrawn: 4_000_000,
+      goal_id: goal.goal_id,
+      investment_date: today,
+    })
+    try {
+      // The dashboard caches its overview in localStorage (2-min TTL), and the
+      // beforeEach navigation cached the snapshot from BEFORE this goal existed.
+      // Bust that cache so the fresh mount fetches the new goal — otherwise the
+      // goal card never renders and there is nothing to click.
+      await gotoFreshDashboard(page)
+
+      await page.getByText('E2E Renew Withdraw Goal').first().click()
+      const panel = page.getByTestId('desktop-goal-detail')
+      await expect(panel).toBeVisible({ timeout: 10_000 })
+      await expect(panel.getByText('E2E Renew Withdraw Deposit')).toBeVisible({ timeout: 10_000 })
+
+      // Renew through the UI (principal + interest — the default).
+      await panel.getByRole('button', { name: 'Options', exact: true }).first().click()
+      await page.getByText(/^(Handle maturity|Xử lý đáo hạn)$/).click()
+      await page.getByRole('button', { name: /Confirm renewal|Xác nhận tái tục/i }).click()
+      await expect(page.getByTestId('maturity-renewed')).toBeVisible({ timeout: 20_000 })
+
+      // The active row rolled forward to a fresh principal (net + interest).
+      await expect.poll(async () => {
+        const { data } = await supabase
+          .from('investment_transactions')
+          .select('amount_vnd, investment_date')
+          .eq('transaction_id', tx.transaction_id)
+          .single()
+        return data?.investment_date
+      }, { timeout: 15_000 }).toBe(today)
+      const { data: renewed } = await supabase
+        .from('investment_transactions')
+        .select('amount_vnd')
+        .eq('transaction_id', tx.transaction_id)
+        .single()
+      const renewedAmount = renewed!.amount_vnd
+
+      // The closed cycle's withdrawal must no longer parent the active row — it
+      // was re-parented onto the history snapshot.
+      await expect.poll(async () => {
+        const { count } = await supabase
+          .from('investment_transactions')
+          .select('transaction_id', { count: 'exact', head: true })
+          .eq('parent_transaction_id', tx.transaction_id)
+          .eq('transaction_type', 'withdrawal')
+        return count
+      }, { timeout: 15_000 }).toBe(0)
+      const { data: snapshot } = await supabase
+        .from('investment_transactions')
+        .select('transaction_id')
+        .eq('renewed_from_transaction_id', tx.transaction_id)
+        .single()
+      const { data: movedWd } = await supabase
+        .from('investment_transactions')
+        .select('parent_transaction_id')
+        .eq('transaction_id', wd.transaction_id)
+        .single()
+      expect(movedWd!.parent_transaction_id).toBe(snapshot!.transaction_id)
+
+      // Close the loop on the render-feeding computation: the overview values
+      // the active deposit at its full renewed principal — the 4M withdrawal is
+      // NOT subtracted again. (totalInvested = effectiveAmount = amount_vnd.)
+      const overview = await (await page.request.get('/api/v1/dashboard/overview')).json()
+      const goalOut = overview.goals.find((g: { goalId: string }) => g.goalId === goal.goal_id)
+      expect(goalOut.totalInvested).toBe(renewedAmount)
+    } finally {
+      await supabase.from('investment_transactions').delete().eq('transaction_id', wd.transaction_id)
+      await api.deleteTransactionCascade(tx.transaction_id)
+      await api.deleteGoal(goal.goal_id)
     }
   })
 
