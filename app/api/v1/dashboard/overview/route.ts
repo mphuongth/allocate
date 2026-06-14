@@ -22,7 +22,9 @@ export async function GET() {
       .select('goal_id, goal_name, target_amount, target_date')
       .eq('user_id', user.id),
     supabase
-      .from('investment_transactions')
+      // Snapshot-free view — renewal history rows can't reach the net-worth /
+      // goal / allocation totals (defence on top of the app-side filter below).
+      .from('active_investment_transactions')
       .select('transaction_id, goal_id, amount_vnd, interest_rate, investment_date, asset_type, transaction_type, units, unit_price, units_withdrawn, principal_withdrawn, fund_id, parent_transaction_id, renewed_from_transaction_id, expiry_date, notes, affects_progress, funds(id, name, nav, updated_at, fund_type)')
       .eq('user_id', user.id),
     supabase
@@ -75,7 +77,7 @@ export async function GET() {
   // Separate investment vs withdrawal rows
   const investments = allTxsRaw.filter((tx) =>
     tx.transaction_type !== 'withdrawal' &&
-    !tx.renewed_from_transaction_id && // exclude renewal history snapshots (never counted)
+    !tx.renewed_from_transaction_id && // exclude renewal snapshots (defence; the active_* view already does)
     !(tx.asset_type === 'fund' && tx.units == null) // exclude pending DCA-seeded fund rows
   )
   const withdrawals = allTxsRaw.filter((tx) => tx.transaction_type === 'withdrawal')

@@ -41,7 +41,10 @@ export async function GET(request: Request) {
   // Withdrawals are intentionally excluded: they are recorded at market value which can exceed
   // original cost, driving the cumulative negative and causing a visual cliff.
   const { data: txData } = await supabase
-    .from('investment_transactions')
+    // Snapshot-free view: a renewal history row is an `investment` carrying the
+    // OLD principal, so summing it here would double-count it into the cumulative
+    // invested chart. The view keeps it out.
+    .from('active_investment_transactions')
     .select('investment_date, amount_vnd')
     .eq('user_id', user.id)
     .eq('transaction_type', 'investment')
