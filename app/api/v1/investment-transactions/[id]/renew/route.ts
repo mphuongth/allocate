@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validateDate, validateRate, validateUUID } from '@/lib/validation'
+import { isTermDeposit } from '@/lib/maturity'
 
 // Renew a bank term deposit.
 //
@@ -57,12 +58,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // renew_term_deposit, which builds the snapshot from that authoritative read.
   const { data: old, error: fetchErr } = await supabase
     .from('investment_transactions')
-    .select('asset_type, amount_vnd')
+    .select('asset_type, amount_vnd, interest_rate, expiry_date')
     .eq('transaction_id', txId)
     .eq('user_id', user.id)
     .single()
   if (fetchErr || !old) return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
-  if (old.asset_type !== 'bank') {
+  // Only a bank TERM deposit can be renewed: it must carry both an interest rate
+  // and a maturity date. A flexible bank deposit (rate/expiry null) has no cycle
+  // to roll forward — renewing it would invent a maturity and interest it never
+  // had. The asset_type==='bank' check alone let flex deposits through, so guard
+  // on the full term-deposit shape (mirrored in renew_term_deposit for callers
+  // hitting the RPC directly).
+  if (!isTermDeposit({ type: old.asset_type, interestRate: old.interest_rate, expiryDate: old.expiry_date })) {
     return NextResponse.json({ error: 'Only bank term deposits can be renewed.' }, { status: 400 })
   }
 
