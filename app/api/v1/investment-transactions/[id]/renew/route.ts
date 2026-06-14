@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validateDate, validateRate, validateUUID } from '@/lib/validation'
+import { isFutureInvestmentDate } from '@/lib/dates'
 import { isTermDeposit } from '@/lib/maturity'
 
 // Renew a bank term deposit.
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     throw e
   }
 
-  if (new Date(cleanInvestmentDate) > new Date()) {
+  if (isFutureInvestmentDate(cleanInvestmentDate)) {
     return NextResponse.json({ error: 'Investment date cannot be in the future.' }, { status: 400 })
   }
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validateDate, validateEnum, validateNotes, validateRate, validateUUID } from '@/lib/validation'
+import { isFutureInvestmentDate } from '@/lib/dates'
 
 const ASSET_TYPES = ['fund', 'bank', 'stock', 'gold'] as const
 
@@ -106,7 +107,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Allow future dates within the plan month (plan_id provided); otherwise reject future dates
-  if (!cleanPlanId && new Date(cleanInvestmentDate) > new Date()) {
+  if (!cleanPlanId && isFutureInvestmentDate(cleanInvestmentDate)) {
     return NextResponse.json({ error: 'Investment date cannot be in the future.' }, { status: 400 })
   }
 

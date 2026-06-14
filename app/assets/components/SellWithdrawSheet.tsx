@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useLocale, useTranslations } from 'next-intl'
 import { ArrowDownRight, ArrowDownToLine, Building, Check, Coins, Shield, TrendingUp, Wallet, X } from 'lucide-react'
 import { fmt } from '@/lib/formatters'
+import { todayIso } from '@/lib/dates'
 import { CairnLoader } from '@/app/components/ui/CairnLoader'
 import { AffectsProgressControl } from './goalDetailShared'
 const fmtVND = (n: number, _locale?: string) => fmt(n)
@@ -184,7 +185,7 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
     setSaving(true)
     setError('')
     try {
-      const today = new Date().toISOString().slice(0, 10)
+      const today = todayIso()
       // Withdrawals from a goal carry that goal's id so the goal-detail view
       // (which fetches by goal_id) sees them; from the unallocated list there
       // is no goal to link to (issue #261).
