@@ -1,6 +1,8 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { todayIso, isFutureInvestmentDate } from '../dates'
 import { daysUntil } from '../maturity'
+
+afterEach(() => vi.useRealTimers())
 
 describe('todayIso', () => {
   // The contract that ties todayIso to the maturity code: "today" must be 0 days
@@ -13,6 +15,9 @@ describe('todayIso', () => {
   })
 
   it('formats from local date parts', () => {
+    // Pin the clock so both new Date() reads see the same instant (no midnight-
+    // rollover flake between todayIso()'s read and the expectation's).
+    vi.setSystemTime(new Date('2026-06-14T08:30:00'))
     const now = new Date()
     const p = (n: number) => String(n).padStart(2, '0')
     expect(todayIso()).toBe(`${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}`)
