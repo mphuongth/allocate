@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { X, TrendingUp, Building2, Coins, ArrowUpRight, ArrowDownRight, ArrowDownToLine, Wallet, Shield } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { CairnLoader } from '@/app/components/ui/CairnLoader'
+import { todayIso } from '@/lib/dates'
 
 interface Fund { id: string; name: string; nav: number; code: string | null; fund_type?: string }
 interface Goal { goal_id: string; goal_name: string }
@@ -152,7 +153,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
   const [assetType, setAssetType] = useState<AssetType>('fund')
   const [dir, setDir] = useState<'buy' | 'sell'>('buy')
   const [goalId, setGoalId] = useState('')
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
+  const [date, setDate] = useState(todayIso())
   const [note, setNote] = useState('')
 
   // fund fields
@@ -223,7 +224,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
     setAssetType(at)
     setDir('buy')
     setGoalId(existing.goal_id || '')
-    setDate(existing.investment_date || new Date().toISOString().slice(0, 10))
+    setDate(existing.investment_date || todayIso())
     if (at === 'fund') {
       setFundId(existing.fund_id || '')
       setAmount(existing.amount_vnd != null ? String(existing.amount_vnd) : '')
@@ -283,7 +284,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
     setAssetType('fund')
     setDir('buy')
     setGoalId('')
-    setDate(new Date().toISOString().slice(0, 10))
+    setDate(todayIso())
     setNote('')
     setFundId('')
     setAmount('')

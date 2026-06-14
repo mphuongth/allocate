@@ -23,10 +23,9 @@ import {
   renewalPrincipal,
   type RenewMode,
 } from '@/lib/maturity'
+import { todayIso } from '@/lib/dates'
 
 type Mode = RenewMode | 'withdraw'
-
-const todayIso = () => new Date().toISOString().slice(0, 10)
 
 const fieldLabel: React.CSSProperties = {
   fontSize: 11, fontWeight: 600, letterSpacing: '0.05em',

@@ -8,6 +8,7 @@ import { GD_COLORS, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, build
 import { MaturityResolveModal } from './MaturityResolveSheet'
 import { fmtTxDate } from './transactionUtils'
 import { TxRowsSkeleton } from './Skeletons'
+import { todayIso } from '@/lib/dates'
 
 interface InvestmentTx {
   transaction_id: string
@@ -819,7 +820,7 @@ function SellModal({ inv, isVi, goalId, goalCurrentValue, goalTargetAmount, onCl
     if (!isValid) return
     setSaving(true); setError('')
     try {
-      const today = new Date().toISOString().slice(0, 10)
+      const today = todayIso()
       if (isFund && inv.fund) {
         const unitsWithdrawn = navPerUnit ? numAmount / navPerUnit : (inv.units ?? 0)
         const principalWithdrawn = inv.fund.purchasePrice
