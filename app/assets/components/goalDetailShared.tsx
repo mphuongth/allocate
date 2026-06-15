@@ -71,10 +71,11 @@ function Switch({ checked, onChange }: { checked: boolean; onChange: (v: boolean
 
 // "Count toward goal progress" toggle + a live progress-impact preview, shown
 // only when withdrawing from within a goal. Default ON: the withdrawal lowers
-// the goal's tracked progress. OFF (affects_progress=false) is for rebalancing
-// or moving money within the goal — the holding still leaves, but progress is
-// held steady. The preview animates current% → resulting% so the consequence
-// is visible before confirming.
+// the goal's tracked progress. OFF (affects_progress=false) is for rebalancing —
+// the holding still leaves (net worth falls), but progress is held steady. It is
+// NOT a within-goal transfer: proceeds route to Unallocated, so re-buying them
+// into the same goal double-counts the bar (issue #342). The preview animates
+// current% → resulting% so the consequence is visible before confirming.
 export function AffectsProgressControl({
   checked, onChange, isVi, currentValue, targetAmount, withdrawnValue = 0,
 }: {
@@ -88,12 +89,12 @@ export function AffectsProgressControl({
   const t = isVi ? {
     label: 'Tính vào tiến độ mục tiêu',
     on: 'Khoản rút này sẽ làm giảm tiến độ của mục tiêu.',
-    off: 'Tiến độ giữ nguyên — dùng khi cân đối lại hoặc luân chuyển trong mục tiêu.',
+    off: 'Tiến độ giữ nguyên — khoản tiền vẫn rời mục tiêu nhưng vẫn được tính vào tiến độ.',
     title: 'Tiến độ mục tiêu', unchanged: 'Giữ nguyên', offGoalValue: 'khỏi giá trị mục tiêu',
   } : {
     label: 'Count toward goal progress',
     on: 'This withdrawal lowers your tracked progress for this goal.',
-    off: 'Progress stays the same — for rebalancing or moving money within the goal.',
+    off: 'Progress stays the same — the money still leaves, but it keeps counting toward this goal.',
     title: 'Goal progress', unchanged: 'Unchanged', offGoalValue: 'off goal value',
   }
 
