@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MaturityResolveBody } from '../MaturityResolveSheet'
 import { addMonths, monthsBetween } from '@/lib/maturity'
@@ -13,14 +13,6 @@ function daysFromNow(n: number): string {
   d.setDate(d.getDate() + n)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
-// Match the component's todayIso() (lib/dates), which is the LOCAL calendar day
-// — same parse style as `daysFromNow` above and as daysUntil/fmtMaturity, so the
-// predicted investment_date / new maturity stays in lock-step with the component.
-const today = () => {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
 // A matured term deposit: value (compounded) > principal, expiry in the past.
 const maturedDeposit: InvRow = {
   id: 'tx-bank-1',
@@ -39,18 +31,20 @@ const maturedDeposit: InvRow = {
 afterEach(() => vi.restoreAllMocks())
 
 describe('MaturityResolveBody', () => {
-  it('previews the rolled-up principal and a future maturity for principal + interest', () => {
+  it('previews the rolled-up principal and a maturity measured from the OLD maturity date', () => {
     render(
       <MaturityResolveBody inv={maturedDeposit} isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
     )
     // Default mode is principal + interest: 35,000,000 + (37,030,000 − 35,000,000) = 37,030,000
     expect(screen.getByTestId('maturity-new-principal').textContent).toContain(fmt(37_030_000))
-    // Matured → new term extends from today (12 months default), always in the future.
-    const expectedMaturity = addMonths(today(), 12)
+    // New term extends from the OLD maturity date (not today), even when overdue,
+    // so an overdue book's next cycle lands at old-maturity + term — not today + term.
+    const expectedMaturity = addMonths(maturedDeposit.expiryDate!, 12)
+    expect((screen.getByTestId('maturity-date-input') as HTMLInputElement).value).toBe(expectedMaturity)
     expect(screen.getByTestId('maturity-new-date').textContent).toContain(expectedMaturity.slice(0, 4))
   })
 
-  it('renews via the renew route that rolls the deposit forward from today', async () => {
+  it('renews via the renew route, anchoring the new cycle to the old maturity date', async () => {
     const user = userEvent.setup()
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) })
     vi.stubGlobal('fetch', fetchMock)
@@ -67,10 +61,68 @@ describe('MaturityResolveBody', () => {
     expect(JSON.parse(opts.body)).toMatchObject({
       amount_vnd: 37_030_000,
       interest_rate: 5.8,
-      expiry_date: addMonths(today(), 12), // new maturity from today (matured)
-      investment_date: today(),            // accrual reset, never future-dated
-      interest_earned_vnd: 2_030_000,      // realized interest (value − principal) recorded permanently
+      // New maturity = old maturity + term (overdue days are NOT skipped forward).
+      expiry_date: addMonths(maturedDeposit.expiryDate!, 12),
+      // Accrual base = the OLD maturity date, so the new cycle's interest does not
+      // lose the days the book sat overdue. (≤ tomorrow, so never future-rejected.)
+      investment_date: maturedDeposit.expiryDate,
+      interest_earned_vnd: 2_030_000, // realized interest (value − principal) recorded permanently
     })
+  })
+
+  it('lets the user override the new maturity date and freezes it from the term', async () => {
+    const user = userEvent.setup()
+    render(
+      <MaturityResolveBody inv={maturedDeposit} isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
+    )
+    const dateInput = screen.getByTestId('maturity-date-input') as HTMLInputElement
+    // Defaults to old maturity + the (12-month fallback) term.
+    expect(dateInput.value).toBe(addMonths(maturedDeposit.expiryDate!, 12))
+
+    // Manual edit freezes the date — changing the term no longer moves it.
+    fireEvent.change(dateInput, { target: { value: '2027-03-15' } })
+    expect(dateInput.value).toBe('2027-03-15')
+    fireEvent.change(screen.getByTestId('maturity-term-input'), { target: { value: '6' } })
+    expect(dateInput.value).toBe('2027-03-15')
+
+    // Reset re-couples the date to the term (now 6 months from the old maturity).
+    await user.click(screen.getByRole('button', { name: /Reset|Đặt lại/i }))
+    expect(dateInput.value).toBe(addMonths(maturedDeposit.expiryDate!, 6))
+  })
+
+  it('sends the manually edited maturity date through to the renew route', async () => {
+    const user = userEvent.setup()
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(
+      <MaturityResolveBody inv={maturedDeposit} isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
+    )
+    fireEvent.change(screen.getByTestId('maturity-date-input'), { target: { value: '2027-03-15' } })
+    await user.click(screen.getByRole('button', { name: /Confirm renewal/i }))
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({
+      expiry_date: '2027-03-15',
+      investment_date: maturedDeposit.expiryDate, // still anchored to the old maturity
+    })
+  })
+
+  it('blocks confirm when the new maturity is not after the old maturity date', async () => {
+    const user = userEvent.setup()
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(
+      <MaturityResolveBody inv={maturedDeposit} isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
+    )
+    // Equal to the old maturity → zero-length cycle, must be rejected.
+    fireEvent.change(screen.getByTestId('maturity-date-input'), { target: { value: maturedDeposit.expiryDate! } })
+
+    const confirm = screen.getByRole('button', { name: /Confirm renewal/i })
+    expect(confirm).toBeDisabled()
+    await user.click(confirm)
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('suggests the original term length derived from the open + maturity dates', () => {

@@ -108,4 +108,35 @@ test.describe('API input validation', () => {
       await api.deleteTransaction(flex.transaction_id)
     }
   })
+
+  // The renewed cycle must have positive length: its new maturity has to fall
+  // strictly after its start (investment) date. The client anchors the start to
+  // the old maturity, so a hand-edited maturity on or before it must be rejected.
+  test('POST /api/v1/investment-transactions/<id>/renew rejects a non-positive cycle length (400)', async ({ request }) => {
+    const opened = '2026-03-04'
+    const maturity = '2026-06-04'
+    // A real bank TERM deposit: carries both an interest rate and a maturity.
+    const term = await api.createTransaction({
+      asset_type: 'bank',
+      amount_vnd: 20_000_000,
+      investment_date: opened,
+      interest_rate: 5.5,
+      expiry_date: maturity,
+      notes: 'E2E renew date-order guard',
+    })
+    try {
+      const res = await request.post(`/api/v1/investment-transactions/${term.transaction_id}/renew`, {
+        data: {
+          amount_vnd: 20_000_000,
+          interest_rate: 5.5,
+          // New maturity equals the investment date → zero-length cycle.
+          expiry_date: maturity,
+          investment_date: maturity,
+        },
+      })
+      expect(res.status()).toBe(400)
+    } finally {
+      await api.deleteTransactionCascade(term.transaction_id)
+    }
+  })
 })

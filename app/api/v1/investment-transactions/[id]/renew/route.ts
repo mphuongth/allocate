@@ -54,6 +54,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: 'Investment date cannot be in the future.' }, { status: 400 })
   }
 
+  // The new cycle must have positive length: its maturity has to fall strictly
+  // after its start (investment) date. The client anchors the start to the old
+  // maturity, so a hand-edited new maturity on or before it would mint a
+  // zero/negative-length cycle. ISO date strings sort chronologically.
+  if (cleanExpiry && cleanExpiry <= cleanInvestmentDate) {
+    return NextResponse.json({ error: 'New maturity must be after the investment date.' }, { status: 400 })
+  }
+
   // Validate against the current cycle (owned by this user) for friendly 4xx
   // messages. The renewal itself re-reads and locks the row inside
   // renew_term_deposit, which builds the snapshot from that authoritative read.
