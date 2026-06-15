@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { ChevronLeft, X, MoreHorizontal, Edit2, Trash2, ChevronRight, ArrowDownRight, ArrowUpRight, Target, CalendarDays, Check, ArrowDownToLine, Wallet, Shield, RefreshCw } from 'lucide-react'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import type { GoalData } from '../DashboardClient'
-import { GD_COLORS, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, buildRenewalSummary, AffectsProgressControl, BankInfoStrip, RenewalSummaryLine, needsMaturityAction, type InvRow, type GoalDetailTx } from './goalDetailShared'
+import { GD_COLORS, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, buildRenewalSummary, AffectsProgressControl, BankInfoStrip, RenewalSummaryLine, needsMaturityAction, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
 import { MaturityResolveModal } from './MaturityResolveSheet'
 import { fmtTxDate } from './transactionUtils'
 import { TxRowsSkeleton } from './Skeletons'
@@ -153,6 +153,9 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
   const isPos = goal.profitLoss >= 0
   const isComplete = (goal.progressPercentage ?? 0) >= 100
   const progress = Math.min(goal.progressPercentage ?? 0, 100)
+  // Bar (progress) vs the big value (net worth) diverge by any affects_progress=false
+  // withdrawal added back to progress — surfaced as a reconciling caption.
+  const creditedWithdrawn = progressCredit(goal.currentValue, goal.progressValue)
 
   // Build investment rows (shared with the mobile sheet's valuation logic).
   const invRows: InvRow[] = buildInvRows(transactions, goal.funds, goldPricePerChi, isVi)
@@ -240,6 +243,10 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
                 transition: 'width 400ms ease',
               }} />
             </div>
+          )}
+
+          {goal.progressPercentage !== null && creditedWithdrawn > 0 && (
+            <ProgressCreditNote amount={creditedWithdrawn} isVi={isVi} style={{ marginTop: 8 }} />
           )}
 
           {/* P/L grid */}
@@ -433,6 +440,10 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
                     </div>
                   ))}
                 </div>
+              )}
+
+              {calcInput > 0 && goal.targetAmount && creditedWithdrawn > 0 && remaining > 0 && (
+                <ProgressGatherNote amount={creditedWithdrawn} isVi={isVi} />
               )}
 
               {calcInput <= 0 && (

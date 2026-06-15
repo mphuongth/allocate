@@ -472,6 +472,60 @@ describe('GoalDetailSheet — singular month wording (issue #262)', () => {
   })
 })
 
+describe('GoalDetailSheet — progress credit note (decoupled progress vs net worth)', () => {
+  // Net worth held = 90.9M (after a 31M off-progress withdrawal); the bar still
+  // counts the 31M, so progressValue = 121.9M against a 120M target → 100%.
+  const creditedGoal: GoalData = {
+    ...mockGoal,
+    funds: [],
+    currentValue: 90_900_000,
+    progressValue: 121_900_000,
+    targetAmount: 120_000_000,
+    progressPercentage: 100,
+  }
+
+  beforeEach(() => {
+    global.fetch = vi.fn().mockImplementation(() =>
+      Promise.resolve({ ok: true, json: async () => ({ transactions: [] }) }),
+    )
+  })
+
+  it('keeps net worth as the big number but runs the bar fraction off progressValue so it matches the bar', () => {
+    render(<GoalDetailSheet {...baseProps} goal={creditedGoal} />)
+    // Big "current value" stays net worth.
+    expect(screen.getByText('₫ 90.900.000')).toBeInTheDocument()
+    // Fraction next to the bar uses progressValue (matches the 100% bar), not net worth.
+    expect(screen.getByText(/121\.9M ₫ \/ 120\.0M ₫ target/)).toBeInTheDocument()
+    expect(screen.queryByText(/90\.9M ₫ \/ 120\.0M ₫ target/)).not.toBeInTheDocument()
+  })
+
+  it('explains the gap with a reconciling caption naming the credited amount', () => {
+    render(<GoalDetailSheet {...baseProps} goal={creditedGoal} />)
+    expect(screen.getByTestId('progress-credit-note')).toHaveTextContent('31.0M ₫')
+  })
+
+  it('omits the caption and keeps the fraction on net worth when progress equals net worth', () => {
+    render(<GoalDetailSheet {...baseProps} goal={{ ...creditedGoal, progressValue: 90_900_000, progressPercentage: 76 }} />)
+    expect(screen.queryByTestId('progress-credit-note')).not.toBeInTheDocument()
+    expect(screen.getByText(/90\.9M ₫ \/ 120\.0M ₫ target/)).toBeInTheDocument()
+  })
+
+  it('explains the shortfall in the Calculator tab (net worth based) while the bar reads complete', async () => {
+    render(<GoalDetailSheet {...baseProps} goal={creditedGoal} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Calculator' }))
+    await userEvent.type(screen.getByPlaceholderText('0'), '1000000')
+    await waitFor(() => expect(screen.getByTestId('progress-gather-note')).toHaveTextContent('31.0M ₫'))
+  })
+
+  it('omits the calculator gather note when progress equals net worth', async () => {
+    render(<GoalDetailSheet {...baseProps} goal={{ ...creditedGoal, progressValue: 90_900_000, progressPercentage: 76 }} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Calculator' }))
+    await userEvent.type(screen.getByPlaceholderText('0'), '1000000')
+    await waitFor(() => expect(screen.getByText('Still needed')).toBeInTheDocument())
+    expect(screen.queryByTestId('progress-gather-note')).not.toBeInTheDocument()
+  })
+})
+
 describe('GoalDetailSheet — refreshKey triggers refetch', () => {
   it('refetches /investment-transactions when refreshKey changes', async () => {
     const fetchMock = vi.fn().mockImplementation((url: string) => {

@@ -9,6 +9,8 @@ const baseProps = {
   goalName: 'Emergency Fund',
   targetAmount: 100_000_000,
   currentValue: 60_000_000,
+  progressValue: 60_000_000,
+  locale: 'en',
   profitLoss: 5_000_000,
   profitLossPercentage: 9.09,
   progressPercentage: 60,
@@ -70,5 +72,18 @@ describe('GoalCard', () => {
   it('passes plural transactionCount to the transactions label', () => {
     render(<GoalCard {...baseProps} transactionCount={5} />)
     expect(screen.getByText('transactions:{"count":5}')).toBeInTheDocument()
+  })
+
+  // When a withdrawal was taken with "count toward progress" OFF, the bar (which
+  // runs off progressValue) sits higher than the net-worth currentValue. A
+  // reconciling caption explains why the bar is fuller than the value held.
+  it('shows a reconciling caption when progressValue exceeds the net-worth currentValue', () => {
+    render(<GoalCard {...baseProps} currentValue={90_900_000} progressValue={121_900_000} />)
+    expect(screen.getByTestId('progress-credit-note')).toHaveTextContent('31.0M ₫')
+  })
+
+  it('omits the caption when progressValue equals currentValue (no off-progress withdrawal)', () => {
+    render(<GoalCard {...baseProps} currentValue={60_000_000} progressValue={60_000_000} />)
+    expect(screen.queryByTestId('progress-credit-note')).not.toBeInTheDocument()
   })
 })
