@@ -202,7 +202,8 @@ test.describe('Desktop goal detail panel', () => {
 
   // Term-deposit maturity: a deposit past its maturity date surfaces a
   // "Handle maturity" action; renewing it rolls the principal forward, sets a
-  // future maturity and resets the accrual date — closing the UI→DB loop.
+  // future maturity and anchors the accrual date to the OLD maturity (so an
+  // overdue book's next cycle doesn't lose the overdue days) — closing the loop.
   test('renewing a matured term deposit rolls it forward in the DB', async ({ page }) => {
     test.slow()
     const iso = (offsetDays: number) => new Date(Date.now() + offsetDays * 86_400_000).toISOString().slice(0, 10)
@@ -237,7 +238,8 @@ test.describe('Desktop goal detail panel', () => {
       await expect(page.getByTestId('maturity-renewed')).toBeVisible({ timeout: 20_000 })
 
       // Close the loop: the stored deposit must now have a future maturity, a
-      // larger principal (interest rolled in) and today's accrual date.
+      // larger principal (interest rolled in) and an accrual date anchored to the
+      // OLD maturity (iso(-30)) — NOT today — so the new cycle keeps the overdue days.
       const { createClient } = await import('@supabase/supabase-js')
       const supabase = createClient(process.env.E2E_SUPABASE_URL!, process.env.E2E_SUPABASE_SERVICE_ROLE_KEY!)
       await expect.poll(async () => {
@@ -247,7 +249,7 @@ test.describe('Desktop goal detail panel', () => {
           .eq('transaction_id', tx.transaction_id)
           .single()
         return data
-      }, { timeout: 15_000 }).toMatchObject({ investment_date: today })
+      }, { timeout: 15_000 }).toMatchObject({ investment_date: iso(-30) })
 
       const { data: renewed } = await supabase
         .from('investment_transactions')
@@ -350,7 +352,7 @@ test.describe('Desktop goal detail panel', () => {
           .eq('transaction_id', tx.transaction_id)
           .single()
         return data?.investment_date
-      }, { timeout: 15_000 }).toBe(today)
+      }, { timeout: 15_000 }).toBe(iso(-30)) // accrual anchored to the old maturity, not today
       const { data: renewed } = await supabase
         .from('investment_transactions')
         .select('amount_vnd')

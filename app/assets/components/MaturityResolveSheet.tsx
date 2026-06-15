@@ -5,12 +5,16 @@
 // interest, principal only, or change amount/term) or withdraw. This is the
 // shared form plus a mobile bottom-sheet and a desktop modal wrapper.
 //
-// Renewal is a single PUT to the existing transaction: it updates the deposit
-// in place (new principal / rate / maturity) and resets `investment_date` to
-// today so the compound-interest valuation in buildInvRows restarts from the
-// new principal — and so the PUT's future-date guard never trips when maturity
-// is tomorrow. Withdrawal hands off to the existing Sell/Withdraw flow rather
-// than re-implementing the payout (the parent wires `onWithdraw`).
+// Renewal is a single POST to the renew route: it rolls the deposit forward in
+// place (new principal / rate / maturity) and sets `investment_date` to the OLD
+// maturity date, so the new cycle's compound-interest valuation in buildInvRows
+// picks up exactly where the closed cycle ended — an overdue book does not lose
+// the days it sat past maturity, nor does its next maturity skip forward by them.
+// (An actionable deposit's old maturity is at most "tomorrow", so this never
+// trips the route's future-date guard.) The new maturity defaults to old-maturity
+// + term and follows the term until the user edits it by hand. Withdrawal hands
+// off to the existing Sell/Withdraw flow rather than re-implementing the payout
+// (the parent wires `onWithdraw`).
 
 import { useState, useEffect } from 'react'
 import { RefreshCw, Pencil, ArrowDownToLine, AlertTriangle, Check, Building2, X } from 'lucide-react'
@@ -81,6 +85,9 @@ export function MaturityResolveBody({
   const [term, setTerm] = useState(String(derivedTerm > 0 ? derivedTerm : 12))
   const [rate, setRate] = useState(inv.interestRate != null ? String(inv.interestRate) : '')
   const [newAmount, setNewAmount] = useState(String(principal))
+  // The new maturity follows old-maturity + term until the user edits it by hand,
+  // at which point we freeze their value (null = "follow the term").
+  const [maturityOverride, setMaturityOverride] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState<null | { newPrincipal: number; newMaturity: string }>(null)
@@ -93,18 +100,25 @@ export function MaturityResolveBody({
   const newPrincipal = mode === 'withdraw'
     ? principal
     : renewalPrincipal(mode, principal, iNum, newAmountNum)
-  // Extend from today for an already-matured deposit (so the new maturity is
-  // always in the future), otherwise from the existing maturity date.
-  const baseDate = matured || !inv.expiryDate ? todayIso() : inv.expiryDate
-  const newMaturity = addMonths(baseDate, tNum > 0 ? tNum : 0)
+  // The new cycle is anchored to the OLD maturity date (the closed cycle's end),
+  // not today — so an overdue book's next maturity is old-maturity + term, and
+  // its accrual restarts from old maturity without skipping the overdue days.
+  const baseDate = inv.expiryDate || todayIso()
+  // New maturity defaults to old-maturity + term and tracks the term, until the
+  // user edits the date field by hand (then we honour their pick).
+  const derivedMaturity = addMonths(baseDate, tNum > 0 ? tNum : 0)
+  const dateTouched = maturityOverride !== null
+  const newMaturity = dateTouched ? maturityOverride : derivedMaturity
   const newMaturityFmt = fmtMaturity(newMaturity, isVi)?.formatted ?? newMaturity
   const payout = principal + iNum
 
-  // Guard against writing a zero/empty principal, a non-positive term, or
-  // clearing the rate (which would drop the deposit out of maturity tracking).
+  // Guard against writing a zero/empty principal, a non-positive term, clearing
+  // the rate (which would drop the deposit out of maturity tracking), or a new
+  // maturity that isn't strictly after the old one (a zero/negative-length cycle).
   const rateValid = rate.trim() !== '' && Number(rate) > 0
   const amountValid = mode !== 'change' || (newAmount.trim() !== '' && Number(newAmount) > 0)
-  const canRenew = tNum > 0 && rateValid && amountValid && newPrincipal > 0
+  const maturityValid = newMaturity > baseDate
+  const canRenew = tNum > 0 && rateValid && amountValid && newPrincipal > 0 && maturityValid
 
   const t = isVi ? {
     summarySuffix: 'năm', perYr: 'năm', mo: 'tháng',
@@ -117,6 +131,8 @@ export function MaturityResolveBody({
     interestSavedHint: 'Số lãi này được lưu vĩnh viễn vào lịch sử tái tục.',
     newTerm: 'Kỳ hạn mới', newRate: 'Lãi suất kỳ mới',
     newCycle: 'Kỳ mới', newMaturityLabel: 'Ngày đáo hạn mới',
+    maturityHint: 'Tự tính theo kỳ hạn, tính từ ngày đáo hạn cũ. Sửa nếu ngân hàng chốt ngày khác.',
+    resetDate: 'Đặt lại', maturityTooEarly: 'Ngày đáo hạn mới phải sau ngày đáo hạn cũ.',
     interestIn: 'Lãi nhập gốc', interestOut: 'Lãi rút ra',
     totalPayout: 'Tổng nhận về',
     cancel: 'Hủy', confirmRenew: 'Xác nhận tái tục', confirmWithdraw: 'Đánh dấu chờ rút',
@@ -132,6 +148,8 @@ export function MaturityResolveBody({
     interestSavedHint: 'This interest is saved permanently to the renewal history.',
     newTerm: 'New term', newRate: 'New interest rate',
     newCycle: 'New cycle', newMaturityLabel: 'New maturity',
+    maturityHint: 'Auto-calculated from the term, starting at the old maturity date. Edit if your bank set a different date.',
+    resetDate: 'Reset', maturityTooEarly: 'New maturity must be after the old maturity date.',
     interestIn: 'Interest added', interestOut: 'Interest out',
     totalPayout: 'Total payout',
     cancel: 'Cancel', confirmRenew: 'Confirm renewal', confirmWithdraw: 'Mark for withdrawal',
@@ -157,11 +175,13 @@ export function MaturityResolveBody({
           amount_vnd: Math.round(newPrincipal),
           interest_rate: Number(rate),
           expiry_date: newMaturity,
-          // Reset the accrual base so the value calc restarts from the new
-          // principal and the future-date guard never trips. The route rolls the
-          // active row forward in place and appends a history snapshot of the
+          // Anchor the new cycle's accrual to the OLD maturity date (baseDate) so
+          // the value calc restarts where the closed cycle ended — overdue days
+          // are not lost. An actionable deposit's old maturity is ≤ tomorrow, so
+          // this stays within the route's future-date tolerance. The route rolls
+          // the active row forward in place and appends a history snapshot of the
           // cycle that just closed.
-          investment_date: todayIso(),
+          investment_date: baseDate,
           // Realized interest for the cycle that just closed — recorded
           // permanently on the snapshot for the renewal-history summary.
           interest_earned_vnd: iNum,
@@ -283,6 +303,35 @@ export function MaturityResolveBody({
               </div>
             </div>
             {mode === 'change' && <MoneyField label={t.interestPaidOut} value={interest} onChange={setInterest} />}
+          </div>
+
+          {/* New maturity date — defaults to old-maturity + term, follows the term
+              until the user edits it, with a reset back to the auto value. */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 }}>
+              <span style={{ ...fieldLabel, marginBottom: 0 }}>{t.newMaturityLabel}</span>
+              {dateTouched && (
+                <button
+                  type="button"
+                  data-testid="maturity-date-reset"
+                  onClick={() => setMaturityOverride(null)}
+                  style={{ fontSize: 11, fontWeight: 600, color: 'var(--c-navy)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}
+                >
+                  {t.resetDate}
+                </button>
+              )}
+            </div>
+            <input
+              data-testid="maturity-date-input"
+              type="date"
+              value={newMaturity}
+              min={baseDate}
+              onChange={(e) => setMaturityOverride(e.target.value)}
+              style={moneyInput}
+            />
+            {maturityValid
+              ? <p style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--c-muted)', lineHeight: 1.4 }}>{t.maturityHint}</p>
+              : <p style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--c-neg)', lineHeight: 1.4 }}>{t.maturityTooEarly}</p>}
           </div>
 
           {/* Preview */}
