@@ -509,6 +509,21 @@ describe('GoalDetailSheet — progress credit note (decoupled progress vs net wo
     expect(screen.queryByTestId('progress-credit-note')).not.toBeInTheDocument()
     expect(screen.getByText(/90\.9M ₫ \/ 120\.0M ₫ target/)).toBeInTheDocument()
   })
+
+  it('explains the shortfall in the Calculator tab (net worth based) while the bar reads complete', async () => {
+    render(<GoalDetailSheet {...baseProps} goal={creditedGoal} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Calculator' }))
+    await userEvent.type(screen.getByPlaceholderText('0'), '1000000')
+    await waitFor(() => expect(screen.getByTestId('progress-gather-note')).toHaveTextContent('31.0M ₫'))
+  })
+
+  it('omits the calculator gather note when progress equals net worth', async () => {
+    render(<GoalDetailSheet {...baseProps} goal={{ ...creditedGoal, progressValue: 90_900_000, progressPercentage: 76 }} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Calculator' }))
+    await userEvent.type(screen.getByPlaceholderText('0'), '1000000')
+    await waitFor(() => expect(screen.getByText('Still needed')).toBeInTheDocument())
+    expect(screen.queryByTestId('progress-gather-note')).not.toBeInTheDocument()
+  })
 })
 
 describe('GoalDetailSheet — refreshKey triggers refetch', () => {

@@ -11,7 +11,7 @@ import type { GoalData, FundBreakdownItem } from '../DashboardClient'
 import TransactionHistorySheet, { type PurchaseHistoryRow } from './TransactionHistorySheet'
 import { SellWithdrawSheet, type SellItem } from './SellWithdrawSheet'
 import { MaturityResolveSheet } from './MaturityResolveSheet'
-import { GD_COLORS, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, buildRenewalSummary, BankInfoStrip, RenewalSummaryLine, needsMaturityAction, ProgressCreditNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
+import { GD_COLORS, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, buildRenewalSummary, BankInfoStrip, RenewalSummaryLine, needsMaturityAction, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
 import { fmtTxDate } from './transactionUtils'
 import { TxRowsSkeleton } from './Skeletons'
 
@@ -1160,6 +1160,10 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
                     </div>
                   ))}
                 </div>
+              )}
+
+              {monthly > 0 && goal.targetAmount && creditedWithdrawn > 0 && remaining > 0 && (
+                <ProgressGatherNote amount={creditedWithdrawn} isVi={isVI} />
               )}
 
               {/* Empty state */}

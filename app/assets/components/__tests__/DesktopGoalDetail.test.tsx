@@ -266,6 +266,39 @@ describe('DesktopGoalDetail — progress credit note (decoupled progress vs net 
   })
 })
 
+describe('DesktopGoalDetail — calculator reconciles its shortfall against net worth', () => {
+  beforeEach(() => {
+    global.fetch = vi.fn().mockImplementation(() =>
+      Promise.resolve({ ok: true, json: async () => ({ transactions: [] }) }),
+    )
+  })
+
+  // Bar reads complete (progressValue ≥ target) but the calculator runs off net
+  // worth, so "Still needed" stays > 0. A note explains the gap.
+  const creditedGoal: GoalData = {
+    ...mockGoal,
+    currentValue: 90_900_000,
+    progressValue: 121_900_000,
+    targetAmount: 120_000_000,
+    progressPercentage: 100,
+  }
+
+  it('explains why the calculator shows a shortfall while the bar reads complete', async () => {
+    render(<DesktopGoalDetail {...baseProps} goal={creditedGoal} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Calculator' }))
+    await userEvent.type(screen.getByPlaceholderText('0'), '1000000')
+    await waitFor(() => expect(screen.getByTestId('progress-gather-note')).toHaveTextContent('31.0M ₫'))
+  })
+
+  it('omits the gather note when progress equals net worth', async () => {
+    render(<DesktopGoalDetail {...baseProps} goal={{ ...creditedGoal, progressValue: 90_900_000, progressPercentage: 76 }} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Calculator' }))
+    await userEvent.type(screen.getByPlaceholderText('0'), '1000000')
+    await waitFor(() => expect(screen.getByText('Still needed')).toBeInTheDocument())
+    expect(screen.queryByTestId('progress-gather-note')).not.toBeInTheDocument()
+  })
+})
+
 describe('DesktopGoalDetail — singular month wording (issue #262)', () => {
   // 1,000,000₫ left to reach the target.
   const nearGoal: GoalData = { ...mockGoal, targetAmount: 10_000_000, currentValue: 9_000_000, targetDate: null }

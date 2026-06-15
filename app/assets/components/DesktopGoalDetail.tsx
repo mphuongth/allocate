@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { ChevronLeft, X, MoreHorizontal, Edit2, Trash2, ChevronRight, ArrowDownRight, ArrowUpRight, Target, CalendarDays, Check, ArrowDownToLine, Wallet, Shield, RefreshCw } from 'lucide-react'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import type { GoalData } from '../DashboardClient'
-import { GD_COLORS, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, buildRenewalSummary, AffectsProgressControl, BankInfoStrip, RenewalSummaryLine, needsMaturityAction, ProgressCreditNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
+import { GD_COLORS, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, buildRenewalSummary, AffectsProgressControl, BankInfoStrip, RenewalSummaryLine, needsMaturityAction, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
 import { MaturityResolveModal } from './MaturityResolveSheet'
 import { fmtTxDate } from './transactionUtils'
 import { TxRowsSkeleton } from './Skeletons'
@@ -440,6 +440,10 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
                     </div>
                   ))}
                 </div>
+              )}
+
+              {calcInput > 0 && goal.targetAmount && creditedWithdrawn > 0 && remaining > 0 && (
+                <ProgressGatherNote amount={creditedWithdrawn} isVi={isVi} />
               )}
 
               {calcInput <= 0 && (

@@ -176,6 +176,24 @@ export function ProgressCreditNote({ amount, isVi, style }: { amount: number; is
   )
 }
 
+// Calculator counterpart to ProgressCreditNote. The savings calculator's "still
+// needed" runs off net worth (you have to gather money you actually hold), while
+// the bar runs off progressValue. So the bar can read "complete" while the
+// calculator still shows a shortfall — this note explains that the shortfall
+// reflects the already-withdrawn amount the progress bar still counts. Renders
+// nothing when the two axes agree.
+export function ProgressGatherNote({ amount, isVi, style }: { amount: number; isVi: boolean; style?: CSSProperties }) {
+  if (!(amount > 0)) return null
+  const text = isVi
+    ? `Tiến độ đã gồm ${fmtCompact(amount)} bạn đã rút; ước tính này tính trên tiền đang giữ nên vẫn còn thiếu.`
+    : `Progress counts ${fmtCompact(amount)} you withdrew; this estimate is based on what you still hold, so a gap remains.`
+  return (
+    <p data-testid="progress-gather-note" style={{ fontSize: 11, color: 'var(--c-muted)', lineHeight: 1.4, margin: 0, ...style }}>
+      {text}
+    </p>
+  )
+}
+
 export interface InvRow {
   id: string
   name: string
