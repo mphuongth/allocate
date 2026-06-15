@@ -11,7 +11,7 @@ import type { GoalData, FundBreakdownItem } from '../DashboardClient'
 import TransactionHistorySheet, { type PurchaseHistoryRow } from './TransactionHistorySheet'
 import { SellWithdrawSheet, type SellItem } from './SellWithdrawSheet'
 import { MaturityResolveSheet } from './MaturityResolveSheet'
-import { GD_COLORS, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, buildRenewalSummary, BankInfoStrip, RenewalSummaryLine, needsMaturityAction, type InvRow, type GoalDetailTx } from './goalDetailShared'
+import { GD_COLORS, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, buildRenewalSummary, BankInfoStrip, RenewalSummaryLine, needsMaturityAction, ProgressCreditNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
 import { fmtTxDate } from './transactionUtils'
 import { TxRowsSkeleton } from './Skeletons'
 
@@ -790,6 +790,11 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
   const progress = Math.min(goal.progressPercentage ?? 0, 100)
   const exceededTarget = goal.progressPercentage !== null && goal.progressPercentage >= 100
   const isPositive = goal.profitLoss >= 0
+  // The bar runs off progressValue (affects_progress=false withdrawals added
+  // back), so the fraction beside it uses the same numerator to stay coherent;
+  // the big "current value" above stays net worth. creditedWithdrawn is the gap.
+  const progValue = goal.progressValue ?? goal.currentValue
+  const creditedWithdrawn = progressCredit(goal.currentValue, goal.progressValue)
 
   const fundMap = new Map(goal.funds.map((f) => [f.fundId, f]))
 
@@ -875,7 +880,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
             </p>
             {goal.targetAmount && (
               <p style={{ fontSize: 12, color: 'var(--c-muted)', marginBottom: 12, fontVariantNumeric: 'tabular-nums' }}>
-                {fmtCompact(goal.currentValue)} / {fmtCompact(goal.targetAmount)} {isVI ? 'mục tiêu' : 'target'}
+                {fmtCompact(progValue)} / {fmtCompact(goal.targetAmount)} {isVI ? 'mục tiêu' : 'target'}
               </p>
             )}
             {goal.targetAmount && (
@@ -896,6 +901,10 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
                   </span>
                 </div>
               </>
+            )}
+
+            {goal.targetAmount && creditedWithdrawn > 0 && (
+              <ProgressCreditNote amount={creditedWithdrawn} isVi={isVI} style={{ marginTop: 8 }} />
             )}
 
             {/* P/L strip — grid with separator lines */}

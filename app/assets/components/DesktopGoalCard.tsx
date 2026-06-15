@@ -1,6 +1,7 @@
 'use client'
 
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
+import { ProgressCreditNote, progressCredit } from './goalDetailShared'
 import type { GoalData } from '../DashboardClient'
 
 interface Props {
@@ -14,6 +15,7 @@ export default function DesktopGoalCard({ goal, locale, onClick }: Props) {
   const progress = goal.progressPercentage ?? 0
   const isComplete = progress >= 100
   const isVi = locale === 'vi'
+  const creditedWithdrawn = progressCredit(goal.currentValue, goal.progressValue)
 
   return (
     <button
@@ -69,6 +71,10 @@ export default function DesktopGoalCard({ goal, locale, onClick }: Props) {
             transition: 'width 400ms ease',
           }} />
         </div>
+      )}
+
+      {goal.progressPercentage !== null && creditedWithdrawn > 0 && (
+        <ProgressCreditNote amount={creditedWithdrawn} isVi={isVi} style={{ marginTop: 6 }} />
       )}
 
       {/* P&L row + transaction count */}

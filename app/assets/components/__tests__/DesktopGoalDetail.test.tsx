@@ -240,6 +240,32 @@ describe('DesktopGoalDetail — bank maturity in Options modal (issue #263)', ()
   })
 })
 
+describe('DesktopGoalDetail — progress credit note (decoupled progress vs net worth)', () => {
+  beforeEach(() => {
+    global.fetch = vi.fn().mockImplementation(() =>
+      Promise.resolve({ ok: true, json: async () => ({ transactions: [] }) }),
+    )
+  })
+
+  const creditedGoal: GoalData = {
+    ...mockGoal,
+    currentValue: 90_900_000,
+    progressValue: 121_900_000,
+    targetAmount: 120_000_000,
+    progressPercentage: 100,
+  }
+
+  it('shows a reconciling caption when the bar (progressValue) exceeds net worth', () => {
+    render(<DesktopGoalDetail {...baseProps} goal={creditedGoal} />)
+    expect(screen.getByTestId('progress-credit-note')).toHaveTextContent('31.0M ₫')
+  })
+
+  it('omits the caption when there is no off-progress withdrawal credited', () => {
+    render(<DesktopGoalDetail {...baseProps} goal={{ ...mockGoal, progressValue: mockGoal.currentValue }} />)
+    expect(screen.queryByTestId('progress-credit-note')).not.toBeInTheDocument()
+  })
+})
+
 describe('DesktopGoalDetail — singular month wording (issue #262)', () => {
   // 1,000,000₫ left to reach the target.
   const nearGoal: GoalData = { ...mockGoal, targetAmount: 10_000_000, currentValue: 9_000_000, targetDate: null }

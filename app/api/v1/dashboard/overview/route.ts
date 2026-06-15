@@ -403,6 +403,10 @@ export async function GET() {
       targetAmount: g.targetAmount,
       targetDate: g.targetDate,
       currentValue: g.currentValue,
+      // Surfaced so the goal card/hero can reconcile the bar (progress) against
+      // net worth (currentValue) when an affects_progress=false withdrawal makes
+      // them diverge — see ProgressCreditNote.
+      progressValue: g.progressValue,
       totalInvested: g.totalInvested,
       profitLoss,
       profitLossPercentage,

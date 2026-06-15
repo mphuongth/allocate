@@ -192,6 +192,9 @@ test.describe('Desktop goal detail panel', () => {
         .poll(async () => digits(await panel.getByTestId('desktop-goal-detail-value').textContent()), { timeout: 15_000 })
         .toBeLessThan(valueBefore)
       await expect(panel.getByTestId('desktop-goal-detail-progress')).toHaveText(progressBefore!, { timeout: 10_000 })
+      // The reconciling caption now appears, explaining why the bar held full
+      // while the value fell: the withdrawn money still counts toward progress.
+      await expect(panel.getByTestId('progress-credit-note')).toBeVisible({ timeout: 10_000 })
     } finally {
       await api.deleteTransactionCascade(tx.transaction_id)
     }

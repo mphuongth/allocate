@@ -3,6 +3,7 @@
 // chrome, so the icons, colours, deadline math and — most importantly — the
 // investment-row valuation live here to stay in sync.
 
+import type { CSSProperties } from 'react'
 import { TrendingUp, Building, Coins, BarChart2, Target, RefreshCw } from 'lucide-react'
 import { fmtCompact } from '@/lib/formatters'
 import { calcProjectedInterest } from '@/lib/finance'
@@ -145,6 +146,33 @@ export function AffectsProgressControl({
         </div>
       )}
     </div>
+  )
+}
+
+// Net worth (currentValue) and the goal bar (progressValue) decoupled once
+// affects_progress=false withdrawals were introduced: such a withdrawal lowers
+// net worth but is added back to progress, so the bar holds steady while the
+// value held drops. On a card that shows both, the bar then reads fuller than
+// the value — this caption reconciles them by naming the credited-but-withdrawn
+// amount (progressValue − currentValue). Renders nothing when they agree.
+//
+// Honest-copy note (mirrors AffectsProgressControl): the money was withdrawn and
+// is NOT still held — it just still counts toward the goal. The wording says so
+// rather than implying a transfer.
+export function progressCredit(currentValue: number, progressValue: number | undefined): number {
+  if (progressValue == null) return 0
+  return Math.max(0, Math.round(progressValue) - Math.round(currentValue))
+}
+
+export function ProgressCreditNote({ amount, isVi, style }: { amount: number; isVi: boolean; style?: CSSProperties }) {
+  if (!(amount > 0)) return null
+  const text = isVi
+    ? `Gồm ${fmtCompact(amount)} đã rút nhưng vẫn tính vào mục tiêu`
+    : `Includes ${fmtCompact(amount)} withdrawn that still counts toward this goal`
+  return (
+    <p data-testid="progress-credit-note" style={{ fontSize: 11, color: 'var(--c-muted)', lineHeight: 1.4, margin: 0, ...style }}>
+      {text}
+    </p>
   )
 }
 

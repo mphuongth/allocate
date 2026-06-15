@@ -52,6 +52,10 @@ export interface GoalData {
   targetAmount: number | null
   targetDate: string | null
   currentValue: number
+  // Progress-bar numerator: equals currentValue except that affects_progress=false
+  // withdrawals are added back, so the bar holds steady while net worth (currentValue)
+  // falls. Optional for back-compat with cached overview payloads predating the field.
+  progressValue?: number
   totalInvested: number
   profitLoss: number
   profitLossPercentage: number
@@ -881,6 +885,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                       <GoalCard
                         key={goal.goalId}
                         {...goal}
+                        locale={locale}
                         onClick={() => { setSelectedGoalId(goal.goalId); setGoalDetailOpen(true) }}
                       />
                     ))}

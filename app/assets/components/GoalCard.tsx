@@ -2,11 +2,14 @@
 
 import { useTranslations } from 'next-intl'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
+import { ProgressCreditNote, progressCredit } from './goalDetailShared'
 
 interface Props {
   goalName: string
   targetAmount: number | null
   currentValue: number
+  progressValue?: number
+  locale: string
   profitLoss: number
   profitLossPercentage: number
   progressPercentage: number | null
@@ -15,11 +18,12 @@ interface Props {
 }
 
 export default function GoalCard({
-  goalName, targetAmount, currentValue,
+  goalName, targetAmount, currentValue, progressValue, locale,
   profitLoss, profitLossPercentage, progressPercentage, transactionCount,
   onClick,
 }: Props) {
   const t = useTranslations('dashboard')
+  const creditedWithdrawn = progressCredit(currentValue, progressValue)
   const plPositive = profitLoss >= 0
   const progress = Math.min(progressPercentage ?? 0, 100)
   const isComplete = progressPercentage !== null && progressPercentage >= 100
@@ -94,6 +98,9 @@ export default function GoalCard({
               transition: 'width 400ms ease',
             }} />
           </div>
+          {targetAmount != null && creditedWithdrawn > 0 && (
+            <ProgressCreditNote amount={creditedWithdrawn} isVi={locale === 'vi'} style={{ marginTop: 6 }} />
+          )}
         </div>
       )}
 
