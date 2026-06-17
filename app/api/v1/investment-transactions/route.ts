@@ -131,6 +131,22 @@ export async function POST(request: NextRequest) {
     if (!plan) return NextResponse.json({ error: 'Plan not found' }, { status: 404 })
   }
 
+  // Withdrawals can't yet target an accumulating book: the withdrawal parents to
+  // one row, so an amount exceeding that tranche's principal wouldn't spill to
+  // the book's other tranches and net worth would under-subtract. Per-tranche
+  // withdrawal is a later phase; until then, block it rather than mis-value.
+  if (isWithdrawal && cleanParentTxId) {
+    const { data: parent } = await supabase
+      .from('investment_transactions')
+      .select('deposit_group_id')
+      .eq('transaction_id', cleanParentTxId)
+      .eq('user_id', user.id)
+      .single()
+    if (parent?.deposit_group_id) {
+      return NextResponse.json({ error: 'Cannot withdraw from an accumulating book yet.' }, { status: 400 })
+    }
+  }
+
   // Accumulating ("Loại 2") books. A top-up joins an existing book; creating one
   // makes the anchor row self-group. The book's goal + maturity are book-level,
   // so a top-up inherits them (copied down) and the tranche just carries its own
@@ -150,6 +166,12 @@ export async function POST(request: NextRequest) {
     if (!anchor) return NextResponse.json({ error: 'Deposit to top up not found.' }, { status: 404 })
     if (anchor.asset_type !== 'bank' || !anchor.deposit_group_id) {
       return NextResponse.json({ error: 'Can only top up an accumulating bank deposit.' }, { status: 400 })
+    }
+    // A matured book is closed: a new tranche dated today would sit past the
+    // book's maturity and accrue zero interest (capped at expiry) — i.e. money
+    // silently into a dead book. Block it.
+    if (anchor.expiry_date && anchor.expiry_date < new Date().toISOString().slice(0, 10)) {
+      return NextResponse.json({ error: 'Cannot top up a deposit that has already matured.' }, { status: 400 })
     }
     depositGroupId = anchor.deposit_group_id
     effectiveGoalId = anchor.goal_id            // the tranche belongs to the book's goal

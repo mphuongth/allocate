@@ -627,17 +627,17 @@ function InvOptionsModal({ inv, isVi, renewalSummary, onClose, onHistory, onReso
       sub: isVi ? 'Xem các lần mua / bán trước đây' : 'View past buys & sells',
       onClick: onHistory,
     },
-    {
-      icon: isBank
-        ? <ArrowDownRight size={18} color="var(--c-neg)" />
-        : <ArrowDownRight size={18} color="var(--c-neg)" />,
+    // Withdrawal can't yet target an accumulating book (it would parent to one
+    // tranche and under-subtract) — omit the action for books.
+    ...(inv.depositGroupId ? [] : [{
+      icon: <ArrowDownRight size={18} color="var(--c-neg)" />,
       bg: 'var(--c-neg-tint)',
       label: isBank ? (isVi ? 'Rút tiền' : 'Withdraw') : (isVi ? 'Bán' : 'Sell'),
       sub: isBank
         ? (isVi ? 'Rút tiền gửi khỏi mục tiêu' : 'Withdraw from goal')
         : (isVi ? 'Bán khoản đầu tư' : 'Liquidate investment'),
       onClick: onSell,
-    },
+    }]),
     {
       icon: <UnlinkSvg size={18} color="var(--c-warn,#b45309)" />,
       bg: 'var(--c-warn-tint,#fef3c7)',

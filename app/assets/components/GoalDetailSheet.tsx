@@ -523,7 +523,9 @@ function InvestmentActionSheet({
             <ChevronRight size={16} color="var(--c-muted)" />
           </button>
 
-          {/* Sell / Withdraw */}
+          {/* Sell / Withdraw — hidden for an accumulating book (withdrawal can't
+              yet target one tranche without under-subtracting the book) */}
+          {!inv.depositGroupId && (
           <button
             onClick={() => { onClose(); setTimeout(onSell, 60) }}
             style={{
@@ -544,6 +546,7 @@ function InvestmentActionSheet({
             </div>
             <ChevronRight size={16} color="var(--c-muted)" />
           </button>
+          )}
         </div>
       </div>
     </div>
