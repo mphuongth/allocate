@@ -115,12 +115,14 @@ export function MaturityResolveBody({
     const [y, mo] = fulfillYm.split('-')
     fetch(`/api/v1/recurring-savings?month=${Number(mo)}&year=${y}`)
       .then((r) => (r.ok ? r.json() : { savings: [] }))
-      .then((data: { savings?: Array<{ saving_id: string; name: string; goal_id: string | null; amount_vnd: number; fulfilled?: boolean }> }) => {
+      .then((data: { savings?: Array<{ saving_id: string; name: string; goal_id: string | null; amount_vnd: number; fulfilled?: boolean; linked_deposit_tx_id?: string | null }> }) => {
         if (cancelled) return
         const candidates: RecurringLinkCandidate[] = (data.savings ?? [])
           .filter((s) => (s.goal_id ?? null) === (goalId ?? null))
-          .map((s) => ({ saving_id: s.saving_id, name: s.name, amount_vnd: s.amount_vnd, fulfilled: !!s.fulfilled }))
-        const link = linkedSavingFor(inv.name, candidates)
+          .map((s) => ({ saving_id: s.saving_id, name: s.name, amount_vnd: s.amount_vnd, fulfilled: !!s.fulfilled, linkedDepositKey: s.linked_deposit_tx_id ?? null }))
+        // inv.id is the deposit's transaction_id — the stable key a recurring's
+        // linked_deposit_tx_id points at, so the EXPLICIT tier resolves the right one.
+        const link = linkedSavingFor(inv.name, candidates, inv.id)
         if (!link) return
         setCombineLink(link)
         setPickedSavingId(link.match?.saving_id ?? null)

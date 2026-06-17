@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validateText, validateUUID, validateYearMonth } from '@/lib/validation'
+import { validateLinkedDeposit } from '../linkValidation'
 
 function toDateCol(ym: string | undefined | null): string | null {
   if (!ym) return null
@@ -14,7 +15,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { name, goal_id, amount_vnd, effective_from, effective_to } = body
+  const { name, goal_id, amount_vnd, effective_from, effective_to, linked_deposit_tx_id } = body
 
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
 
@@ -39,6 +40,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if ('effective_to' in body) {
       updates.effective_to = effective_to ? toDateCol(validateYearMonth(effective_to, 'effective_to')) : null
     }
+    if ('linked_deposit_tx_id' in body) {
+      updates.linked_deposit_tx_id = linked_deposit_tx_id ? validateUUID(linked_deposit_tx_id, 'linked_deposit_tx_id') : null
+    }
   } catch (e) {
     if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
     throw e
@@ -50,12 +54,42 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: '"Active from" must be before "Active until".' }, { status: 400 })
   }
 
+  // Keep the deposit link consistent with the (possibly changed) goal. Only
+  // bother when the goal or the link itself is part of this update.
+  if ('goal_id' in body || 'linked_deposit_tx_id' in body) {
+    const { data: existing } = await supabase
+      .from('recurring_savings')
+      .select('goal_id, linked_deposit_tx_id')
+      .eq('saving_id', savingId)
+      .eq('user_id', user.id)
+      .single()
+    if (!existing) return NextResponse.json({ error: 'Recurring saving not found' }, { status: 404 })
+
+    const resultingGoal = ('goal_id' in body ? (updates.goal_id as string | null) : existing.goal_id) ?? null
+    let resultingLink: string | null
+    if ('linked_deposit_tx_id' in body) {
+      resultingLink = (updates.linked_deposit_tx_id as string | null) ?? null
+    } else if (existing.linked_deposit_tx_id && (existing.goal_id ?? null) !== resultingGoal) {
+      // The goal moved out from under an existing link → drop the now cross-goal
+      // link rather than leave a stale one that can never resolve.
+      resultingLink = null
+      updates.linked_deposit_tx_id = null
+    } else {
+      resultingLink = existing.linked_deposit_tx_id
+    }
+
+    if (resultingLink) {
+      const linkErr = await validateLinkedDeposit(supabase, user.id, resultingLink, resultingGoal)
+      if (linkErr) return NextResponse.json({ error: linkErr }, { status: 400 })
+    }
+  }
+
   const { data: saving, error } = await supabase
     .from('recurring_savings')
     .update(updates)
     .eq('saving_id', savingId)
     .eq('user_id', user.id)
-    .select('saving_id, name, goal_id, amount_vnd, effective_from, effective_to, savings_goals(goal_name)')
+    .select('saving_id, name, goal_id, amount_vnd, effective_from, effective_to, linked_deposit_tx_id, savings_goals(goal_name)')
     .single()
 
   if (error || !saving) return NextResponse.json({ error: 'Recurring saving not found' }, { status: 404 })

@@ -13,7 +13,17 @@ interface Saving {
   amount_vnd: number
   effective_from: string | null
   effective_to: string | null
+  linked_deposit_tx_id: string | null
   savings_goals?: { goal_name: string } | null
+}
+
+// A term deposit the user can hard-link a recurring saving to (so it's the one
+// folded in when that deposit matures). Only bank rows with a rate + maturity.
+interface TermDeposit {
+  transaction_id: string
+  goal_id: string | null
+  notes: string | null
+  expiry_date: string | null
 }
 
 // "2026-04-01" → "2026-04" for <input type="month">
@@ -35,7 +45,7 @@ function periodLabel(s: Saving, isVI: boolean): string {
   return `${fmtMonth(s.effective_from) || '…'} → ${fmtMonth(s.effective_to) || '∞'}`
 }
 
-const emptyForm = { name: '', goal_id: '', amount_vnd: '', effective_from: '', effective_to: '' }
+const emptyForm = { name: '', goal_id: '', amount_vnd: '', effective_from: '', effective_to: '', linked_deposit_tx_id: '' }
 
 const inputStyle: React.CSSProperties = {
   width: '100%', padding: '10px 12px', fontSize: 16,
@@ -74,6 +84,7 @@ export default function RecurringSavingManager({ goals, onChange, onToast, varia
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<Saving | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [deposits, setDeposits] = useState<TermDeposit[]>([])
 
   const unallocatedLabel = isVI ? 'Chưa phân bổ (đầu tư chung)' : 'Unallocated (general)'
 
@@ -85,6 +96,19 @@ export default function RecurringSavingManager({ goals, onChange, onToast, varia
   }, [])
 
   useEffect(() => { fetchList() }, [fetchList])
+
+  // Term deposits available to link to — bank holdings that carry a rate + a
+  // maturity (the only ones the combine flow can fold a recurring into).
+  useEffect(() => {
+    fetch('/api/v1/investment-transactions?asset_type=bank&limit=200')
+      .then((r) => (r.ok ? r.json() : { transactions: [] }))
+      .then((data: { transactions?: Array<TermDeposit & { interest_rate: number | null; transaction_type: string }> }) => {
+        setDeposits((data.transactions ?? [])
+          .filter((t) => t.transaction_type === 'investment' && t.interest_rate != null && !!t.expiry_date)
+          .map((t) => ({ transaction_id: t.transaction_id, goal_id: t.goal_id, notes: t.notes, expiry_date: t.expiry_date })))
+      })
+      .catch(() => {})
+  }, [])
 
   function openCreate() {
     setEditing(null)
@@ -101,6 +125,7 @@ export default function RecurringSavingManager({ goals, onChange, onToast, varia
       amount_vnd: String(s.amount_vnd),
       effective_from: toMonthInput(s.effective_from),
       effective_to: toMonthInput(s.effective_to),
+      linked_deposit_tx_id: s.linked_deposit_tx_id ?? '',
     })
     setFormError('')
     setMode('form')
@@ -123,6 +148,7 @@ export default function RecurringSavingManager({ goals, onChange, onToast, varia
           amount_vnd: Number(form.amount_vnd),
           effective_from: form.effective_from || null,
           effective_to: form.effective_to || null,
+          linked_deposit_tx_id: form.linked_deposit_tx_id || null,
         }),
       })
       if (!res.ok) {
@@ -180,13 +206,42 @@ export default function RecurringSavingManager({ goals, onChange, onToast, varia
             id="rs-goal"
             data-testid="rs-goal"
             value={form.goal_id}
-            onChange={(e) => setForm({ ...form, goal_id: e.target.value })}
+            onChange={(e) => setForm({ ...form, goal_id: e.target.value, linked_deposit_tx_id: '' })}
             style={{ ...inputStyle, appearance: 'none', cursor: 'pointer' }}
           >
             {goals.map((g) => <option key={g.goal_id} value={g.goal_id}>{g.goal_name}</option>)}
             <option value="">{unallocatedLabel}</option>
           </select>
         </div>
+
+        {(() => {
+          // Deposits in the same goal as this recurring — the only ones a combine
+          // renewal could fold it into. Hidden when there are none to link.
+          const linkable = deposits.filter((d) => (d.goal_id ?? null) === (form.goal_id || null))
+          if (linkable.length === 0) return null
+          return (
+            <div>
+              <label htmlFor="rs-deposit" style={labelStyle}>{isVI ? 'Gắn với sổ tiết kiệm (tuỳ chọn)' : 'Link to a deposit (optional)'}</label>
+              <select
+                id="rs-deposit"
+                data-testid="rs-deposit"
+                value={form.linked_deposit_tx_id}
+                onChange={(e) => setForm({ ...form, linked_deposit_tx_id: e.target.value })}
+                style={{ ...inputStyle, appearance: 'none', cursor: 'pointer' }}
+              >
+                <option value="">{isVI ? 'Không gắn' : 'Not linked'}</option>
+                {linkable.map((d) => (
+                  <option key={d.transaction_id} value={d.transaction_id}>
+                    {(d.notes || (isVI ? 'Sổ ngân hàng' : 'Bank deposit')) + (d.expiry_date ? ` · ${d.expiry_date}` : '')}
+                  </option>
+                ))}
+              </select>
+              <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 4 }}>
+                {isVI ? 'Khi sổ này đáo hạn, khoản định kỳ sẽ được gộp đúng vào sổ đó.' : 'When that deposit matures, this recurring is the one folded into it.'}
+              </div>
+            </div>
+          )
+        })()}
 
         <div>
           <label htmlFor="rs-name" style={labelStyle}>{isVI ? 'Ngân hàng / sản phẩm' : 'Bank / product'}</label>
