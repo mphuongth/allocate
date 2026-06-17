@@ -25,13 +25,19 @@ export interface MaturityDeposit {
   type: string
   interestRate: number | null
   expiryDate: string | null
+  // Set when the row belongs to an accumulating ("Loại 2") book. Such a book has
+  // a maturity but is NOT renewed through the single-row term flow (a renewal
+  // would roll only one tranche). Excluded here so the renew/combine path and the
+  // "needs attention" card never act on a tranche of a multi-tranche book.
+  depositGroupId?: string | null
 }
 
 // A bank holding counts as a term deposit only when it has both an interest
 // rate and a maturity date — that is what the add-transaction form records for
-// `depositType: 'term'` (a flexible deposit leaves the rate null).
+// `depositType: 'term'` (a flexible deposit leaves the rate null) — and it is
+// not part of an accumulating book (those carry a deposit_group_id).
 export function isTermDeposit(inv: MaturityDeposit): boolean {
-  return inv.type === 'bank' && inv.interestRate != null && !!inv.expiryDate
+  return inv.type === 'bank' && inv.interestRate != null && !!inv.expiryDate && inv.depositGroupId == null
 }
 
 // Classify a deposit from the number of days until its maturity (negative =
@@ -61,7 +67,7 @@ export function daysUntil(isoDate: string): number {
 // both dashboard overview items and InvRows qualify — the single source of
 // truth for the "needs attention" card and the nav badge count.
 export function isActionableTermDeposit(
-  it: { type: string; interestRate: number | null; expiryDate: string | null },
+  it: { type: string; interestRate: number | null; expiryDate: string | null; depositGroupId?: string | null },
 ): boolean {
   if (!isTermDeposit(it)) return false
   return isMaturityActionable(depositMaturityState(daysUntil(it.expiryDate!)))

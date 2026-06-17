@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { ChevronLeft, X, MoreHorizontal, Edit2, Trash2, ChevronRight, ArrowDownRight, ArrowUpRight, Target, CalendarDays, Check, ArrowDownToLine, Wallet, Shield, RefreshCw } from 'lucide-react'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import type { GoalData } from '../DashboardClient'
-import { GD_COLORS, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, buildRenewalSummary, AffectsProgressControl, BankInfoStrip, RenewalSummaryLine, needsMaturityAction, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
+import { GD_COLORS, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, buildRenewalSummary, AffectsProgressControl, BankInfoStrip, TopUpControl, RenewalSummaryLine, needsMaturityAction, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
 import { MaturityResolveModal } from './MaturityResolveSheet'
 import { fmtTxDate } from './transactionUtils'
 import { TxRowsSkeleton } from './Skeletons'
@@ -557,6 +557,7 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
           onResolve={() => { setShowInvOptions(false); setTimeout(() => setShowResolve(true), 80) }}
           onSell={() => { setShowInvOptions(false); setTimeout(() => setShowSell(true), 80) }}
           onUnassign={() => { setShowInvOptions(false); setTimeout(() => setShowUnassignConfirm(true), 80) }}
+          onChanged={onDataChanged}
         />
       )}
 
@@ -603,9 +604,9 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
 }
 
 // ─── Investment options modal ──────────────────────────────────────────────
-function InvOptionsModal({ inv, isVi, renewalSummary, onClose, onHistory, onResolve, onSell, onUnassign }: {
+function InvOptionsModal({ inv, isVi, renewalSummary, onClose, onHistory, onResolve, onSell, onUnassign, onChanged }: {
   inv: InvRow; isVi: boolean; renewalSummary: ReturnType<typeof buildRenewalSummary>
-  onClose: () => void; onHistory: () => void; onResolve: () => void; onSell: () => void; onUnassign: () => void
+  onClose: () => void; onHistory: () => void; onResolve: () => void; onSell: () => void; onUnassign: () => void; onChanged: () => void
 }) {
   const isBank = inv.type === 'bank'
   const typeColor = GD_COLORS[inv.type] ?? 'var(--c-muted)'
@@ -671,8 +672,12 @@ function InvOptionsModal({ inv, isVi, renewalSummary, onClose, onHistory, onReso
           </div>
         </div>
 
-        {/* Bank info strip — interest rate + maturity + time left (issue #263) */}
+        {/* Bank info strip — interest rate + maturity + time left (issue #263);
+            avg rate + top-up history for an accumulating book. */}
         <BankInfoStrip inv={inv} isVi={isVi} />
+
+        {/* Top up — accumulating books only (renders nothing otherwise) */}
+        <TopUpControl inv={inv} isVi={isVi} onDone={() => { onClose(); onChanged() }} />
 
         {/* Renewal history summary — only when this deposit has been renewed */}
         <RenewalSummaryLine summary={renewalSummary} isVi={isVi} />

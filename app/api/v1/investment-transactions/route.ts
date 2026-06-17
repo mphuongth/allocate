@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validateDate, validateEnum, validateNotes, validateRate, validateUUID } from '@/lib/validation'
@@ -27,7 +28,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from('investment_transactions')
-    .select('transaction_id, goal_id, asset_type, transaction_type, parent_transaction_id, renewed_from_transaction_id, interest_earned_vnd, investment_date, amount_vnd, unit_price, units, interest_rate, expiry_date, notes, fund_id, principal_withdrawn, units_withdrawn, affects_progress, savings_goals(goal_name), funds(id, name, nav)', { count: 'exact' })
+    .select('transaction_id, goal_id, asset_type, transaction_type, parent_transaction_id, renewed_from_transaction_id, deposit_group_id, interest_earned_vnd, investment_date, amount_vnd, unit_price, units, interest_rate, expiry_date, notes, fund_id, principal_withdrawn, units_withdrawn, affects_progress, savings_goals(goal_name), funds(id, name, nav)', { count: 'exact' })
     .eq('user_id', user.id)
     .order('investment_date', { ascending: false })
     .range(offset, offset + limit - 1)
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { goal_id, asset_type, transaction_type = 'investment', investment_date, amount_vnd, unit_price, units, interest_rate, notes, fund_id, plan_id, expiry_date, parent_transaction_id, principal_withdrawn, units_withdrawn, affects_progress } = body
+  const { goal_id, asset_type, transaction_type = 'investment', investment_date, amount_vnd, unit_price, units, interest_rate, notes, fund_id, plan_id, expiry_date, parent_transaction_id, principal_withdrawn, units_withdrawn, affects_progress, accumulating, tops_up_deposit_id } = body
 
   const isWithdrawal = transaction_type === 'withdrawal'
 
@@ -73,6 +74,7 @@ export async function POST(request: NextRequest) {
   let cleanParentTxId: string | null = null
   let cleanPrincipalWithdrawn: number | null = null
   let cleanUnitsWithdrawn: number | null = null
+  let cleanTopsUpId: string | null = null
 
   try {
     cleanTxType = validateEnum(transaction_type, ['investment', 'withdrawal'] as const, 'transaction_type')
@@ -101,6 +103,7 @@ export async function POST(request: NextRequest) {
     if (parent_transaction_id) cleanParentTxId = validateUUID(parent_transaction_id, 'parent_transaction_id')
     if (principal_withdrawn != null && principal_withdrawn !== '') cleanPrincipalWithdrawn = validateAmount(principal_withdrawn, 'principal_withdrawn')
     if (units_withdrawn != null && units_withdrawn !== '') cleanUnitsWithdrawn = validateAmount(units_withdrawn, 'units_withdrawn')
+    if (tops_up_deposit_id) cleanTopsUpId = validateUUID(tops_up_deposit_id, 'tops_up_deposit_id')
   } catch (e) {
     if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
     throw e
@@ -128,26 +131,59 @@ export async function POST(request: NextRequest) {
     if (!plan) return NextResponse.json({ error: 'Plan not found' }, { status: 404 })
   }
 
+  // Accumulating ("Loại 2") books. A top-up joins an existing book; creating one
+  // makes the anchor row self-group. The book's goal + maturity are book-level,
+  // so a top-up inherits them (copied down) and the tranche just carries its own
+  // amount/rate/date.
+  let explicitTxId: string | undefined
+  let depositGroupId: string | null = null
+  let effectiveGoalId = cleanGoalId
+  let effectiveExpiry = cleanExpiryDate
+  let effectiveAssetType = cleanAssetType
+  if (cleanTopsUpId) {
+    const { data: anchor } = await supabase
+      .from('investment_transactions')
+      .select('asset_type, deposit_group_id, goal_id, expiry_date')
+      .eq('transaction_id', cleanTopsUpId)
+      .eq('user_id', user.id)
+      .single()
+    if (!anchor) return NextResponse.json({ error: 'Deposit to top up not found.' }, { status: 404 })
+    if (anchor.asset_type !== 'bank' || !anchor.deposit_group_id) {
+      return NextResponse.json({ error: 'Can only top up an accumulating bank deposit.' }, { status: 400 })
+    }
+    depositGroupId = anchor.deposit_group_id
+    effectiveGoalId = anchor.goal_id            // the tranche belongs to the book's goal
+    effectiveExpiry = anchor.expiry_date        // book maturity, copied down to every tranche
+    effectiveAssetType = 'bank'
+  } else if (accumulating) {
+    // New accumulating book: the anchor self-groups so deposit_group_id IS NOT
+    // NULL ⇔ accumulating, and the anchor is the row whose group = its own id.
+    explicitTxId = randomUUID()
+    depositGroupId = explicitTxId
+  }
+
   const { data: transaction, error } = await supabase
     .from('investment_transactions')
     .insert({
+      ...(explicitTxId ? { transaction_id: explicitTxId } : {}),
       user_id: user.id,
-      goal_id: cleanGoalId,
+      goal_id: effectiveGoalId,
       transaction_type: cleanTxType,
-      asset_type: cleanAssetType,
+      asset_type: effectiveAssetType,
       investment_date: cleanInvestmentDate,
       amount_vnd: cleanAmount,
       unit_price: cleanUnitPrice,
       units: cleanUnits,
       interest_rate: cleanInterestRate,
       notes: cleanNotes,
-      fund_id: cleanAssetType === 'fund' ? cleanFundId : null,
+      fund_id: effectiveAssetType === 'fund' ? cleanFundId : null,
       plan_id: cleanPlanId,
-      expiry_date: cleanExpiryDate,
+      expiry_date: effectiveExpiry,
       parent_transaction_id: cleanParentTxId,
       principal_withdrawn: cleanPrincipalWithdrawn,
       units_withdrawn: cleanUnitsWithdrawn,
       affects_progress: isWithdrawal ? (affects_progress !== false) : true,
+      deposit_group_id: depositGroupId,
     })
     .select()
     .single()

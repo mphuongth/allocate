@@ -31,6 +31,19 @@ describe('isTermDeposit', () => {
     expect(isTermDeposit({ type: 'fund', interestRate: 5.5, expiryDate: '2026-08-15' })).toBe(false)
     expect(isTermDeposit({ type: 'gold', interestRate: null, expiryDate: null })).toBe(false)
   })
+  it('is false for an accumulating book (grouped) — it is not a renewable term deposit', () => {
+    // An accumulating tranche carries a rate + the book maturity, but the whole
+    // book must not flow through the single-row term renew/combine path.
+    expect(isTermDeposit({ type: 'bank', interestRate: 5.5, expiryDate: '2026-08-15', depositGroupId: 'grp-1' })).toBe(false)
+  })
+})
+
+describe('isActionableTermDeposit excludes accumulating books', () => {
+  it('is false for a matured tranche of an accumulating book', () => {
+    expect(isActionableTermDeposit({ type: 'bank', interestRate: 5, expiryDate: daysFromNow(-3), depositGroupId: 'grp-1' })).toBe(false)
+    // sanity: the same shape without a group is actionable
+    expect(isActionableTermDeposit({ type: 'bank', interestRate: 5, expiryDate: daysFromNow(-3) })).toBe(true)
+  })
 })
 
 describe('depositMaturityState', () => {

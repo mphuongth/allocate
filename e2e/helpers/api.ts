@@ -128,6 +128,11 @@ export async function deleteTransaction(txId: string) {
   await supabase.from('investment_transactions').delete().eq('transaction_id', txId)
 }
 
+// Delete every tranche of an accumulating book (rows sharing deposit_group_id).
+export async function deleteDepositGroup(groupId: string) {
+  await supabase.from('investment_transactions').delete().eq('deposit_group_id', groupId)
+}
+
 // Insert a withdrawal row against an existing deposit, mirroring what the
 // SellWithdraw flow POSTs (transaction_type='withdrawal', linked by
 // parent_transaction_id, asset_type null). Returns the created row.
