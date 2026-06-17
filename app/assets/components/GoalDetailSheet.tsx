@@ -11,7 +11,7 @@ import type { GoalData, FundBreakdownItem } from '../DashboardClient'
 import TransactionHistorySheet, { type PurchaseHistoryRow } from './TransactionHistorySheet'
 import { SellWithdrawSheet, type SellItem } from './SellWithdrawSheet'
 import { MaturityResolveSheet } from './MaturityResolveSheet'
-import { GD_COLORS, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, buildRenewalSummary, BankInfoStrip, RenewalSummaryLine, needsMaturityAction, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
+import { GD_COLORS, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, buildRenewalSummary, BankInfoStrip, TopUpControl, RenewalSummaryLine, needsMaturityAction, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
 import { fmtTxDate } from './transactionUtils'
 import { TxRowsSkeleton } from './Skeletons'
 
@@ -347,6 +347,7 @@ function InvestmentActionSheet({
   onSell,
   onUnassign,
   onResolve,
+  onChanged,
 }: {
   open: boolean
   onClose: () => void
@@ -356,6 +357,7 @@ function InvestmentActionSheet({
   onSell: () => void
   onUnassign: () => void
   onResolve: () => void
+  onChanged: () => void
 }) {
   const isVI = useLocale() === 'vi'
   const [mounted, setMounted] = useState(false)
@@ -443,8 +445,12 @@ function InvestmentActionSheet({
             </div>
           </div>
 
-          {/* Bank info strip — interest rate + maturity + time left (issue #263) */}
+          {/* Bank info strip — interest rate + maturity + time left (issue #263);
+              avg rate + top-up history for an accumulating book. */}
           <BankInfoStrip inv={inv} isVi={isVI} />
+
+          {/* Top up — accumulating books only (renders nothing otherwise) */}
+          <TopUpControl inv={inv} isVi={isVI} onDone={() => { onClose(); onChanged() }} />
 
           {/* Renewal history summary — only when this deposit has been renewed */}
           <RenewalSummaryLine summary={renewalSummary} isVi={isVI} />
@@ -517,7 +523,9 @@ function InvestmentActionSheet({
             <ChevronRight size={16} color="var(--c-muted)" />
           </button>
 
-          {/* Sell / Withdraw */}
+          {/* Sell / Withdraw — hidden for an accumulating book (withdrawal can't
+              yet target one tranche without under-subtracting the book) */}
+          {!inv.depositGroupId && (
           <button
             onClick={() => { onClose(); setTimeout(onSell, 60) }}
             style={{
@@ -538,6 +546,7 @@ function InvestmentActionSheet({
             </div>
             <ChevronRight size={16} color="var(--c-muted)" />
           </button>
+          )}
         </div>
       </div>
     </div>
@@ -1276,6 +1285,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
         onSell={() => setSellOpen(true)}
         onUnassign={() => setUnassignConfirmOpen(true)}
         onResolve={() => setResolveOpen(true)}
+        onChanged={onDataChanged}
       />
 
       <MaturityResolveSheet

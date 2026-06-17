@@ -87,6 +87,9 @@ export interface NonFundUnallocatedItem {
   investmentDate: string
   notes: string | null
   units: number | null
+  // Set on a tranche of an accumulating book — keeps the book out of the
+  // maturity "needs attention" card (it isn't renewed via the single-row flow).
+  depositGroupId?: string | null
 }
 
 export interface DashboardData {
@@ -203,6 +206,7 @@ function nonFundToInvRow(it: NonFundUnallocatedItem, isVi: boolean): InvRow {
     expiryDate: it.expiryDate,
     investmentDate: it.investmentDate,
     fund: null,
+    depositGroupId: it.depositGroupId ?? null,
   }
 }
 

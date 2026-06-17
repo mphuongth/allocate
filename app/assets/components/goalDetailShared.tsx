@@ -3,10 +3,11 @@
 // chrome, so the icons, colours, deadline math and — most importantly — the
 // investment-row valuation live here to stay in sync.
 
-import type { CSSProperties } from 'react'
-import { TrendingUp, Building, Coins, BarChart2, Target, RefreshCw } from 'lucide-react'
+import { useState, type CSSProperties } from 'react'
+import { TrendingUp, Building, Coins, BarChart2, Target, RefreshCw, Plus } from 'lucide-react'
 import { fmtCompact } from '@/lib/formatters'
 import { calcProjectedInterest } from '@/lib/finance'
+import { blendedRate } from '@/lib/accumulating'
 import { fmtTxDate } from './transactionUtils'
 import { isTermDeposit, depositMaturityState, isMaturityActionable } from '@/lib/maturity'
 import type { FundBreakdownItem } from '../DashboardClient'
@@ -210,6 +211,23 @@ export interface InvRow {
   // length on renewal. null for fund holdings.
   investmentDate: string | null
   fund: FundBreakdownItem | null
+  // Set for an accumulating ("Loại 2") book — the deposit_group_id its tranches
+  // share. Keeps the whole book out of the single-row term renew path and tells
+  // the UI to offer a top-up. null for term / one-off holdings.
+  depositGroupId?: string | null
+  // The book's tranches (top-ups), newest first, for the detail view. Each is one
+  // underlying row; present only on an accumulating book row.
+  tranches?: InvTranche[] | null
+}
+
+// One top-up of an accumulating book: an underlying investment_transactions row,
+// already net of any withdrawal parented to it.
+export interface InvTranche {
+  id: string
+  date: string
+  amount: number
+  rate: number | null
+  value: number
 }
 
 // Minimal shape buildInvRows needs — both views' richer InvestmentTx types
@@ -234,6 +252,9 @@ export interface GoalDetailTx {
   // Realized interest the user recorded for a closed cycle (snapshot rows only).
   // null = not recorded for that cycle (don't treat as 0).
   interest_earned_vnd?: number | null
+  // Accumulating book grouping: set on every tranche of a book (anchor row's =
+  // its own transaction_id). null/undefined for term / one-off holdings.
+  deposit_group_id?: string | null
 }
 
 // Roll up a deposit's renewal history from the snapshot rows that point at it.
@@ -291,9 +312,16 @@ export function buildInvRows(
   // Exclude withdrawals and renewal history snapshots — only live investment
   // rows are active holdings.
   const investmentRows = transactions.filter((tx) => tx.transaction_type !== 'withdrawal' && !tx.renewed_from_transaction_id)
+  // Accumulating books collect their tranches by deposit_group_id; funds dedup to
+  // one row per fund; everything else is one row per transaction.
   const deduped = new Map<string, GoalDetailTx>()
+  const books = new Map<string, GoalDetailTx[]>()
   investmentRows.forEach((tx) => {
-    if (tx.fund_id) {
+    if (!tx.fund_id && tx.deposit_group_id) {
+      const arr = books.get(tx.deposit_group_id) ?? []
+      arr.push(tx)
+      books.set(tx.deposit_group_id, arr)
+    } else if (tx.fund_id) {
       if (!deduped.has(tx.fund_id)) deduped.set(tx.fund_id, tx)
     } else {
       deduped.set(tx.transaction_id, tx)
@@ -301,7 +329,7 @@ export function buildInvRows(
   })
   const fundMap = new Map(funds.map((f) => [f.fundId, f]))
 
-  return Array.from(deduped.values()).map((tx): InvRow | null => {
+  const singleRows = Array.from(deduped.values()).map((tx): InvRow | null => {
     const fund = tx.fund_id ? fundMap.get(tx.fund_id) ?? null : null
     const name = fund?.fundName ?? tx.notes ?? (
       tx.asset_type === 'bank' ? (isVi ? 'Tiền gửi' : 'Bank deposit') :
@@ -342,8 +370,45 @@ export function buildInvRows(
       }
     }
 
-    return { id: tx.transaction_id, name, type: tx.asset_type, value, gainPct, units, principal, interestRate: tx.interest_rate ?? null, expiryDate: tx.expiry_date ?? null, investmentDate: fund ? null : (tx.investment_date ?? null), fund: fund ?? null }
+    return { id: tx.transaction_id, name, type: tx.asset_type, value, gainPct, units, principal, interestRate: tx.interest_rate ?? null, expiryDate: tx.expiry_date ?? null, investmentDate: fund ? null : (tx.investment_date ?? null), fund: fund ?? null, depositGroupId: null }
   }).filter((row): row is InvRow => row !== null)
+
+  // One InvRow per accumulating book: value each tranche on its own locked rate
+  // (capped at the shared maturity), sum them, and show the amount-weighted rate.
+  const bookRows = Array.from(books.entries()).map(([groupId, rows]): InvRow | null => {
+    const tranches: InvTranche[] = []
+    for (const tx of rows) {
+      const wd = wdByParent.get(tx.transaction_id)
+      const effPrincipal = tx.amount_vnd - (wd?.principal ?? 0)
+      if (effPrincipal <= 0) continue // this tranche fully withdrawn
+      const interest = tx.interest_rate
+        ? calcProjectedInterest(effPrincipal, tx.interest_rate, tx.investment_date, tx.expiry_date)
+        : 0
+      tranches.push({ id: tx.transaction_id, date: tx.investment_date, amount: effPrincipal, rate: tx.interest_rate ?? null, value: Math.round(effPrincipal + interest) })
+    }
+    if (tranches.length === 0) return null // whole book withdrawn
+    tranches.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)) // newest first
+    const principal = tranches.reduce((s, t) => s + t.amount, 0)
+    const value = tranches.reduce((s, t) => s + t.value, 0)
+    const anchor = rows.find((r) => r.transaction_id === groupId) ?? rows[0]
+    return {
+      id: groupId,
+      name: anchor.notes ?? (isVi ? 'Tiền gửi' : 'Bank deposit'),
+      type: 'bank',
+      value,
+      gainPct: principal > 0 ? ((value - principal) / principal) * 100 : null,
+      units: null,
+      principal,
+      interestRate: blendedRate(tranches),
+      expiryDate: anchor.expiry_date ?? null,
+      investmentDate: tranches[tranches.length - 1].date, // earliest tranche opened the book
+      fund: null,
+      depositGroupId: groupId,
+      tranches,
+    }
+  }).filter((row): row is InvRow => row !== null)
+
+  return [...singleRows, ...bookRows]
 }
 
 // A bank-deposit maturity date, formatted for display plus a relative
@@ -362,7 +427,7 @@ export interface Maturity {
 // maturity date — i.e. it needs a renew/withdraw decision. Shared so the mobile
 // sheet and desktop panel surface the "Handle maturity" action identically.
 export function needsMaturityAction(inv: InvRow, isVi: boolean): boolean {
-  if (!isTermDeposit({ type: inv.type, interestRate: inv.interestRate, expiryDate: inv.expiryDate })) return false
+  if (!isTermDeposit({ type: inv.type, interestRate: inv.interestRate, expiryDate: inv.expiryDate, depositGroupId: inv.depositGroupId })) return false
   const m = fmtMaturity(inv.expiryDate, isVi)
   if (!m) return false
   return isMaturityActionable(depositMaturityState(m.diffDays))
@@ -399,29 +464,122 @@ export function fmtMaturity(dateStr: string | null | undefined, isVi: boolean): 
 // there's no info to show (issue #263). Shared so desktop + mobile stay in sync.
 export function BankInfoStrip({ inv, isVi }: { inv: InvRow; isVi: boolean }) {
   if (inv.type !== 'bank') return null
+  // An accumulating book shows the amount-weighted "Avg rate" + total accumulated
+  // and its top-up history, instead of a single rate + time-left.
+  const acc = inv.tranches && inv.tranches.length > 0 ? inv.tranches : null
   const m = fmtMaturity(inv.expiryDate, isVi)
   const cells: { l: string; v: string; tone?: Maturity['tone'] }[] = []
   if (inv.interestRate != null) {
-    cells.push({ l: isVi ? 'Lãi suất' : 'Interest rate', v: `${inv.interestRate}%/${isVi ? 'năm' : 'yr'}` })
+    const rate = Math.round(inv.interestRate * 10) / 10
+    cells.push({ l: acc ? (isVi ? 'Lãi suất TB' : 'Avg rate') : (isVi ? 'Lãi suất' : 'Interest rate'), v: `${rate}%/${isVi ? 'năm' : 'yr'}` })
   }
   if (m) {
     cells.push({ l: isVi ? 'Ngày đáo hạn' : 'Maturity', v: m.formatted })
-    cells.push({ l: isVi ? 'Còn lại' : 'Time left', v: m.relative, tone: m.tone })
+    if (!acc) cells.push({ l: isVi ? 'Còn lại' : 'Time left', v: m.relative, tone: m.tone })
   }
-  if (!cells.length) return null
+  if (acc) cells.push({ l: isVi ? 'Tổng tích luỹ' : 'Accumulated', v: fmtCompact(inv.principal ?? 0) })
+  if (!cells.length && !acc) return null
 
   return (
-    <div data-testid="bank-info-strip" style={{ display: 'grid', gridTemplateColumns: `repeat(${cells.length}, 1fr)`, gap: 1, background: 'var(--c-line)', borderRadius: 10, overflow: 'hidden', marginBottom: 4 }}>
-      {cells.map((c, i) => {
-        const color = c.tone === 'neg' ? 'var(--c-neg)' : c.tone === 'warn' ? 'var(--c-warn)' : c.tone === 'pos' ? 'var(--c-pos)' : 'var(--c-ink)'
-        return (
-          <div key={i} style={{ background: 'var(--c-card)', padding: '8px 10px' }}>
-            <div style={{ fontSize: 10, color: 'var(--c-muted)' }}>{c.l}</div>
-            <div style={{ fontSize: 12, fontWeight: 600, marginTop: 2, color, fontVariantNumeric: 'tabular-nums' }}>{c.v}</div>
+    <>
+      {cells.length > 0 && (
+        <div data-testid="bank-info-strip" style={{ display: 'grid', gridTemplateColumns: `repeat(${cells.length}, 1fr)`, gap: 1, background: 'var(--c-line)', borderRadius: 10, overflow: 'hidden', marginBottom: 4 }}>
+          {cells.map((c, i) => {
+            const color = c.tone === 'neg' ? 'var(--c-neg)' : c.tone === 'warn' ? 'var(--c-warn)' : c.tone === 'pos' ? 'var(--c-pos)' : 'var(--c-ink)'
+            return (
+              <div key={i} style={{ background: 'var(--c-card)', padding: '8px 10px' }}>
+                <div style={{ fontSize: 10, color: 'var(--c-muted)' }}>{c.l}</div>
+                <div style={{ fontSize: 12, fontWeight: 600, marginTop: 2, color, fontVariantNumeric: 'tabular-nums' }}>{c.v}</div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+      {acc && (
+        <div data-testid="tranche-history" style={{ marginBottom: 4 }}>
+          <div style={{ fontSize: 10, color: 'var(--c-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600, margin: '2px 2px 4px' }}>
+            {isVi ? 'Lịch sử nạp' : 'Top-up history'}
           </div>
-        )
-      })}
-    </div>
+          <div style={{ display: 'grid', gap: 6 }}>
+            {acc.map((tr) => (
+              <div key={tr.id} data-testid="tranche-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, padding: '6px 10px', background: 'var(--c-card-2)', borderRadius: 8 }}>
+                <span style={{ color: 'var(--c-muted)' }}>{fmtTxDate(tr.date, isVi ? 'vi' : 'en')}</span>
+                <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{fmtCompact(tr.amount)}</span>
+                  {tr.rate != null && <span style={{ fontSize: 10, color: 'var(--c-muted)' }}>{tr.rate}%/{isVi ? 'năm' : 'yr'}</span>}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+// Self-contained "Top up" control for an accumulating book: a button that opens
+// a small modal to add a tranche (amount + this slice's rate + date). Posts a new
+// investment_transactions row linked to the book via tops_up_deposit_id; the
+// route inherits the book's goal + maturity. Renders nothing for non-books.
+export function TopUpControl({ inv, isVi, onDone }: { inv: InvRow; isVi: boolean; onDone: () => void }) {
+  const [open, setOpen] = useState(false)
+  const [amount, setAmount] = useState('')
+  const [rate, setRate] = useState(inv.interestRate != null ? String(Math.round(inv.interestRate * 10) / 10) : '')
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  if (!inv.depositGroupId) return null
+
+  const amt = Number(amount)
+  async function submit() {
+    if (!(amt > 0)) { setError(isVi ? 'Cần nhập số tiền' : 'Amount is required'); return }
+    setSaving(true); setError('')
+    try {
+      const res = await fetch('/api/v1/investment-transactions', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tops_up_deposit_id: inv.id, asset_type: 'bank', investment_date: date, amount_vnd: Math.round(amt), interest_rate: rate ? Number(rate) : null }),
+      })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); setError(d.error ?? (isVi ? 'Lỗi' : 'Error')); setSaving(false); return }
+      setOpen(false); setAmount(''); onDone()
+    } catch { setError(isVi ? 'Lỗi kết nối' : 'Connection error') } finally { setSaving(false) }
+  }
+
+  const field: CSSProperties = { width: '100%', boxSizing: 'border-box', padding: '10px 12px', fontSize: 15, fontWeight: 600, background: 'var(--c-canvas,#faf9f7)', border: '1.5px solid var(--c-line)', borderRadius: 10, color: 'var(--c-ink)', outline: 'none', fontVariantNumeric: 'tabular-nums' }
+  const lbl: CSSProperties = { fontSize: 11, fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--c-muted)', marginBottom: 6, display: 'block' }
+
+  return (
+    <>
+      <button type="button" data-testid="top-up-btn" onClick={() => setOpen(true)}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, width: '100%', padding: '9px 12px', borderRadius: 10, border: '1px solid var(--c-line)', background: 'var(--c-card)', color: 'var(--c-navy)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', marginBottom: 4 }}>
+        <Plus size={14} strokeWidth={2.4} />{isVi ? 'Nạp thêm' : 'Top up'}
+      </button>
+      {open && (
+        <div onClick={() => !saving && setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 320, background: 'rgba(15,23,42,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div onClick={(e) => e.stopPropagation()} data-testid="top-up-modal" style={{ width: 380, maxWidth: '100%', background: 'var(--c-card)', borderRadius: 14, padding: 20, display: 'grid', gap: 12, boxShadow: '0 20px 50px rgba(15,23,42,0.25)' }}>
+            <div style={{ fontSize: 15, fontWeight: 700 }}>{isVi ? 'Nạp thêm vào sổ' : 'Top up deposit'}</div>
+            <div>
+              <label style={lbl}>{isVi ? 'Số tiền nạp (₫)' : 'Top-up amount (₫)'}</label>
+              <input data-testid="top-up-amount" type="text" inputMode="numeric" value={amount ? Number(amount).toLocaleString('en-US') : ''} onChange={(e) => setAmount(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))} placeholder="2,000,000" style={field} />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div>
+                <label style={lbl}>{isVi ? 'Lãi suất lần này' : 'Rate this top-up'}</label>
+                <input data-testid="top-up-rate" type="number" step="0.1" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="3.5" style={field} />
+              </div>
+              <div>
+                <label style={lbl}>{isVi ? 'Ngày nạp' : 'Date'}</label>
+                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={field} />
+              </div>
+            </div>
+            {error && <p style={{ margin: 0, fontSize: 13, color: 'var(--c-neg)' }}>{error}</p>}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button type="button" onClick={() => setOpen(false)} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: '1px solid var(--c-line)', background: 'var(--c-card)', color: 'var(--c-ink)', fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>{isVi ? 'Huỷ' : 'Cancel'}</button>
+              <button type="button" data-testid="top-up-submit" onClick={submit} disabled={saving || !(amt > 0)} style={{ flex: 2, padding: '10px 0', borderRadius: 10, border: 'none', background: 'var(--c-btn-primary)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit', opacity: saving || !(amt > 0) ? 0.6 : 1 }}>{isVi ? 'Nạp thêm' : 'Top up'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 

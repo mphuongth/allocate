@@ -164,7 +164,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
 
   // bank fields
   const [bankName, setBankName] = useState('')
-  const [depositType, setDepositType] = useState<'term' | 'flex'>('term')
+  const [depositType, setDepositType] = useState<'term' | 'flex' | 'accumulating'>('term')
   const [bankAmount, setBankAmount] = useState('')
   const [rate, setRate] = useState('')
   const [maturity, setMaturity] = useState('')
@@ -551,6 +551,9 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
         notes: bankName || note || null,
         interest_rate: rate ? Number(rate) : null,
         expiry_date: maturity || null,
+        // An accumulating book: the route self-groups this anchor row so it can
+        // be topped up later. Term/flex stay ungrouped (one-off holdings).
+        ...(depositType === 'accumulating' ? { accumulating: true } : {}),
       }
     } else {
       // gold — qty/price are in the selected unit; normalize to chỉ for storage
@@ -767,13 +770,14 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
               </div>
               <div>
                 <label style={labelStyle}>{t('depositType')}</label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                  {(['term', 'flex'] as const).map(opt => {
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+                  {(['term', 'accumulating', 'flex'] as const).map(opt => {
                     const active = depositType === opt
                     return (
                       <button
                         key={opt}
                         type="button"
+                        data-testid={`deposit-type-${opt}`}
                         onClick={() => setDepositType(opt)}
                         style={{
                           padding: '9px 6px', borderRadius: 10,
@@ -784,13 +788,13 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
                           fontSize: 12, fontWeight: 500, transition: 'all 120ms',
                         }}
                       >
-                        {opt === 'term' ? t('termDeposit') : t('flexDeposit')}
+                        {opt === 'term' ? t('termDeposit') : opt === 'accumulating' ? t('accumulatingDeposit') : t('flexDeposit')}
                       </button>
                     )
                   })}
                 </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: depositType === 'term' ? '1.2fr 1fr' : '1fr', gap: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: depositType !== 'flex' ? '1.2fr 1fr' : '1fr', gap: 10 }}>
                 <div>
                   <label style={labelStyle}>{t('principal')}</label>
                   <input
@@ -802,7 +806,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
                     style={inputStyle}
                   />
                 </div>
-                {depositType === 'term' && (
+                {depositType !== 'flex' && (
                   <div>
                     <label style={labelStyle}>{t('rate')}</label>
                     <input
@@ -816,7 +820,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
                   </div>
                 )}
               </div>
-              {depositType === 'term' && (
+              {depositType !== 'flex' && (
                 <div>
                   <label style={labelStyle}>{t('maturity')}</label>
                   <input
@@ -827,7 +831,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
                   />
                 </div>
               )}
-              {depositType === 'term' && Number(bankAmount) > 0 && Number(rate) > 0 && maturity && (() => {
+              {depositType !== 'flex' && Number(bankAmount) > 0 && Number(rate) > 0 && maturity && (() => {
                 // Interest the user actually receives by maturity, prorated over
                 // the term (deposit date → maturity) — not the full-year figure.
                 const termDays = (Date.parse(maturity) - Date.parse(date)) / 86_400_000
