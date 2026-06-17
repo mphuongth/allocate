@@ -33,7 +33,7 @@ describe('linkedSavingFor', () => {
     expect(res?.match?.saving_id).toBe('s2')
   })
 
-  it('2. a single normalized name match wins', () => {
+  it('2. a single EXACT normalized name match wins', () => {
     const res = linkedSavingFor(
       'MB Term 6M',
       [cand({ saving_id: 's1', name: 'mb term 6m' }), cand({ saving_id: 's2', name: 'ACB Savings' })],
@@ -41,6 +41,30 @@ describe('linkedSavingFor', () => {
     )
     expect(res?.reason).toBe('name')
     expect(res?.match?.saving_id).toBe('s1')
+  })
+
+  it('does NOT auto-fold on a loose substring match — a short name stays ambiguous', () => {
+    // "So" must not silently grab "Social Fund" when another candidate exists.
+    const res = linkedSavingFor(
+      'So',
+      [cand({ saving_id: 's1', name: 'Social Fund' }), cand({ saving_id: 's2', name: 'ACB' })],
+      null,
+    )
+    expect(res?.ambiguous).toBe(true)
+    expect(res?.match).toBeNull()
+  })
+
+  it('a single substring (non-exact) match among several is ambiguous, not auto-folded', () => {
+    // "MB Term 6M" recurring substring-matches the deposit, but it is not the
+    // sole candidate, so the user must confirm rather than have it auto-folded.
+    const res = linkedSavingFor(
+      'MB Term 6M Special',
+      [cand({ saving_id: 's1', name: 'MB Term 6M' }), cand({ saving_id: 's2', name: 'ACB' })],
+      null,
+    )
+    expect(res?.ambiguous).toBe(true)
+    expect(res?.match).toBeNull()
+    expect(res?.candidates.map((c) => c.saving_id)).toEqual(['s1']) // shortlist = the substring match
   })
 
   it('3. a sole candidate is matched when no name signal conflicts', () => {

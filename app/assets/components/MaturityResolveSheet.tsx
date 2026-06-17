@@ -369,8 +369,10 @@ export function MaturityResolveBody({
       {/* Combine — settle & re-deposit, folding in this month's recurring saving */}
       {mode === 'combine' && (
         <div data-testid="maturity-combine" style={{ display: 'grid', gap: 12 }}>
-          {/* Which recurring to merge — shown when more than one is foldable */}
-          {combineLink && combineLink.candidates.length > 1 && (
+          {/* Which recurring to merge — shown when more than one is foldable, or
+              when the match is ambiguous (so a loose single match stays opt-in,
+              never auto-folded). */}
+          {combineLink && (combineLink.candidates.length > 1 || combineLink.ambiguous) && (
             <div>
               <div style={fieldLabel}>{t.whichRecurring}</div>
               <div style={{ display: 'grid', gap: 7 }}>
