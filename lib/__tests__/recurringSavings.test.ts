@@ -101,4 +101,63 @@ describe('realizedRecurringContributions', () => {
     expect(rows[0].savingId).toBe('s1')
     expect(rows[0].planId).toBe('p-may')
   })
+
+  // ── Explicit fulfillments (maturity "combine" flow) ─────────────────────────
+  // When a maturing term deposit is renewed by folding in this month's recurring
+  // saving, the recurring amount becomes part of the (larger) deposit principal —
+  // so the synthesized contribution for that (saving, month) must be suppressed,
+  // exactly like a logged deposit does, but matched by id+month rather than amount
+  // (the combined re-deposit's amount no longer equals the recurring amount).
+  describe('explicit fulfillments', () => {
+    it('suppresses the contribution for a fulfilled (saving, month)', () => {
+      freezeJun2026()
+      const rows = realizedRecurringContributions(
+        [saving()],
+        [plan('p-may', 2026, 5), plan('p-jun', 2026, 6)],
+        [],
+        [],
+        [{ recurring_saving_id: 's1', ym: '2026-06' }],
+      )
+      expect(rows).toHaveLength(1)
+      expect(rows[0].date).toBe('2026-05-01')
+    })
+
+    it('only suppresses the exact month, not other months of the same saving', () => {
+      freezeJun2026()
+      const rows = realizedRecurringContributions(
+        [saving()],
+        [plan('p-may', 2026, 5), plan('p-jun', 2026, 6)],
+        [],
+        [],
+        [{ recurring_saving_id: 's1', ym: '2026-05' }],
+      )
+      expect(rows.map((r) => r.date)).toEqual(['2026-06-01'])
+    })
+
+    it('only suppresses the named saving, not a sibling saving in the same month', () => {
+      freezeJun2026()
+      const rows = realizedRecurringContributions(
+        [saving({ saving_id: 's1' }), saving({ saving_id: 's2', name: 'ACB Savings' })],
+        [plan('p-jun', 2026, 6)],
+        [],
+        [],
+        [{ recurring_saving_id: 's1', ym: '2026-06' }],
+      )
+      expect(rows.map((r) => r.savingId)).toEqual(['s2'])
+    })
+
+    it('does not double-spend a logged deposit when the month is also fulfilled', () => {
+      freezeJun2026()
+      // Fulfillment alone suppresses; the logged-deposit pool is left intact for
+      // any genuinely-separate deposit and not consumed by the fulfilled month.
+      const rows = realizedRecurringContributions(
+        [saving()],
+        [plan('p-jun', 2026, 6)],
+        [],
+        [{ month: '2026-06', goalId: 'g1', amount: 5_000_000 }],
+        [{ recurring_saving_id: 's1', ym: '2026-06' }],
+      )
+      expect(rows).toHaveLength(0)
+    })
+  })
 })

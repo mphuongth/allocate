@@ -1070,6 +1070,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
         <MaturityResolveSheet
           open={!!resolveDep}
           inv={resolveDep?.inv ?? null}
+          goalId={resolveDep?.goalId ?? null}
           isVi={isVi}
           onClose={() => setResolveDep(null)}
           onRenewed={() => { setResolveDep(null); fetchData({ force: true }) }}
@@ -1079,6 +1080,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
       {isDesktop && resolveDep && (
         <MaturityResolveModal
           inv={resolveDep.inv}
+          goalId={resolveDep.goalId ?? null}
           isVi={isVi}
           onClose={() => setResolveDep(null)}
           onRenewed={() => { setResolveDep(null); fetchData({ force: true }) }}

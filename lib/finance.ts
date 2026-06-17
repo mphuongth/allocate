@@ -150,12 +150,28 @@ export interface LoggedRecurringDeposit {
   amount: number
 }
 
+// A recurring saving explicitly marked as fulfilled for a given month — recorded
+// when a maturing term deposit is renewed by folding this month's recurring
+// saving into the (now larger) re-deposit. Unlike a logged deposit it is matched
+// by saving id + month, not amount, because the combined re-deposit's amount no
+// longer equals the recurring amount. Suppresses the synthesized contribution so
+// the folded-in amount is not counted twice (once in the deposit, once here).
+export interface RecurringFulfillmentRow {
+  recurring_saving_id: string
+  ym: string // 'YYYY-MM'
+}
+
 export function realizedRecurringContributions(
   savings: RecurringSavingDef[],
   plans: RecurringPlanMonth[],
   overrides: RecurringSavingOverrideRow[],
   loggedDeposits: LoggedRecurringDeposit[] = [],
+  fulfillments: RecurringFulfillmentRow[] = [],
 ): RealizedRecurringContribution[] {
+  // (saving, month) pairs already settled via a maturity-combine renewal.
+  const fulfilledSet = new Set<string>()
+  for (const f of fulfillments) fulfilledSet.add(`${f.recurring_saving_id}::${f.ym}`)
+
   const ovMap = new Map<string, number>()
   for (const o of overrides) {
     ovMap.set(`${o.plan_id}::${o.recurring_saving_id}`, o.monthly_amount_override_vnd)
@@ -181,6 +197,10 @@ export function realizedRecurringContributions(
       // override 0 = skip this month; any other positive override replaces the base.
       const amount = ov === 0 ? 0 : ov != null ? ov : s.amount_vnd
       if (amount <= 0) continue
+      // Explicitly fulfilled this month (folded into a renewed term deposit) —
+      // the amount already lives in that deposit's principal, so skip the
+      // synthesized duplicate without consuming a logged deposit.
+      if (fulfilledSet.has(`${s.saving_id}::${ym}`)) continue
       // A logged deposit for the same month + goal + amount already represents
       // this contribution — consume it and skip the synthesized duplicate.
       const k = `${ym}::${s.goal_id ?? ''}::${amount}`

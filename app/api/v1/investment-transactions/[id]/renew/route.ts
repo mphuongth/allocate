@@ -22,7 +22,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { amount_vnd, interest_rate, expiry_date, investment_date, interest_earned_vnd } = body
+  const { amount_vnd, interest_rate, expiry_date, investment_date, interest_earned_vnd, fulfill_recurring } = body
 
   let txId: string
   let cleanAmount: number
@@ -30,6 +30,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   let cleanExpiry: string | null = null
   let cleanInvestmentDate: string
   let cleanInterestEarned: number | null = null
+  // Combine flow only: the recurring saving folded into this re-deposit, marked
+  // fulfilled for its month inside the same atomic renewal so it isn't also
+  // counted as a separate synthesized contribution.
+  let cleanFulfillSavingId: string | null = null
+  let cleanFulfillYm: string | null = null
+  let cleanFulfillAmount: number | null = null
   try {
     txId = validateUUID(id, 'transaction_id')
     cleanAmount = validateAmount(amount_vnd, 'amount_vnd')
@@ -44,6 +50,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       const n = Number(interest_earned_vnd)
       if (!Number.isFinite(n) || n < 0) throw new ValidationError('interest_earned_vnd must be a non-negative number')
       cleanInterestEarned = Math.round(n)
+    }
+    if (fulfill_recurring != null) {
+      cleanFulfillSavingId = validateUUID(fulfill_recurring.saving_id, 'fulfill_recurring.saving_id')
+      if (typeof fulfill_recurring.ym !== 'string' || !/^\d{4}-\d{2}$/.test(fulfill_recurring.ym)) {
+        throw new ValidationError('fulfill_recurring.ym must be a YYYY-MM month')
+      }
+      cleanFulfillYm = fulfill_recurring.ym
+      const a = Number(fulfill_recurring.amount ?? 0)
+      if (!Number.isFinite(a) || a < 0) throw new ValidationError('fulfill_recurring.amount must be a non-negative number')
+      cleanFulfillAmount = Math.round(a)
     }
   } catch (e) {
     if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
@@ -100,6 +116,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       p_expiry_date: cleanExpiry,
       p_investment_date: cleanInvestmentDate,
       p_interest_earned_vnd: cleanInterestEarned,
+      // Combine flow: fold this month's recurring saving in atomically (NULL for
+      // a plain renewal — the RPC's params default to NULL).
+      p_fulfill_saving_id: cleanFulfillSavingId,
+      p_fulfill_ym: cleanFulfillYm,
+      p_fulfill_amount: cleanFulfillAmount,
+      p_fulfill_source: cleanFulfillSavingId ? 'maturity-combine' : null,
     })
     .single()
   if (renewErr || !renewed) {

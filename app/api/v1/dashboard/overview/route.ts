@@ -91,7 +91,7 @@ export async function GET() {
   const plans = (plansRes.data ?? []) as { id: string; month: number; year: number }[]
   const planIds = plans.map((p) => p.id)
 
-  const [insExclusionsRes, insOverridesRes, recOverridesRes] = await Promise.all([
+  const [insExclusionsRes, insOverridesRes, recOverridesRes, recFulfillmentsRes] = await Promise.all([
     planIds.length > 0
       ? supabase.from('plan_excluded_insurance_members').select('plan_id, member_id').in('plan_id', planIds)
       : Promise.resolve({ data: [], error: null }),
@@ -101,6 +101,9 @@ export async function GET() {
     planIds.length > 0
       ? supabase.from('recurring_saving_overrides').select('plan_id, recurring_saving_id, monthly_amount_override_vnd').in('plan_id', planIds)
       : Promise.resolve({ data: [], error: null }),
+    // Months a recurring saving was settled by a maturity-combine renewal — used
+    // to suppress its synthesized contribution (the amount lives in the deposit).
+    supabase.from('recurring_saving_fulfillments').select('recurring_saving_id, ym').eq('user_id', user.id),
   ])
 
   if (goalsRes.error || txRes.error || insuranceRes.error) {
@@ -373,6 +376,7 @@ export async function GET() {
     plans,
     recOverridesRes.data ?? [],
     loggedRecurringDeposits,
+    recFulfillmentsRes.data ?? [],
   )
   for (const c of recContributions) {
     totalAssets += c.amount
