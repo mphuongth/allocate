@@ -9,7 +9,7 @@ import { fmtCompact } from '@/lib/formatters'
 import { calcProjectedInterest } from '@/lib/finance'
 import { blendedRate } from '@/lib/accumulating'
 import { fmtTxDate } from './transactionUtils'
-import { isTermDeposit, depositMaturityState, isMaturityActionable } from '@/lib/maturity'
+import { isTermDeposit, depositMaturityState, isMaturityActionable, isActionableAccumulatingBook } from '@/lib/maturity'
 import type { FundBreakdownItem } from '../DashboardClient'
 
 export const GD_COLORS: Record<string, string> = {
@@ -431,6 +431,14 @@ export function needsMaturityAction(inv: InvRow, isVi: boolean): boolean {
   const m = fmtMaturity(inv.expiryDate, isVi)
   if (!m) return false
   return isMaturityActionable(depositMaturityState(m.diffDays))
+}
+
+// The book counterpart of needsMaturityAction: a matured/maturing accumulating
+// book needs a book-level collapse decision (the single-row path above excludes
+// grouped rows, so this is the only entry point that surfaces it). Drives the
+// same "Handle maturity" action — MaturityResolveBody branches to collapse for a book.
+export function needsBookMaturityAction(inv: InvRow): boolean {
+  return isActionableAccumulatingBook({ type: inv.type, expiryDate: inv.expiryDate, depositGroupId: inv.depositGroupId })
 }
 
 export function fmtMaturity(dateStr: string | null | undefined, isVi: boolean): Maturity | null {

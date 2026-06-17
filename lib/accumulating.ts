@@ -1,10 +1,12 @@
 // Accumulating ("Loại 2") bank deposits: one logical book topped up over time,
 // each top-up a tranche with its own locked-in rate, all sharing the book's
 // maturity. A tranche is an investment_transactions row; the book is the set of
-// rows sharing a deposit_group_id (the anchor row self-groups). These are the
-// pure pieces — grouping the rows and valuing them stays with the callers that
-// already hold the withdrawal map (buildInvRows / the overview route), so this
-// file never needs the DB or the interest formula.
+// rows sharing a deposit_group_id (the anchor row self-groups). The grouping and
+// per-row valuation helpers here are pure (no DB) — `buildCollapsePlan` is the
+// one piece that touches the interest formula, reusing lib/finance's single
+// source of truth so a book collapse never re-derives interest in SQL.
+
+import { calcProjectedInterest } from './finance'
 
 export function isAccumulating(row: { depositGroupId?: string | null }): boolean {
   return row.depositGroupId != null
@@ -23,4 +25,43 @@ export function blendedRate(tranches: { amount: number; rate: number | null }[])
   const total = tranches.reduce((s, t) => s + t.amount, 0)
   if (total <= 0) return 0
   return tranches.reduce((s, t) => s + t.amount * (t.rate ?? 0), 0) / total
+}
+
+// One live tranche of a book about to be collapsed at maturity: its effective
+// (post-withdrawal) principal plus the inputs needed to value its accrued
+// interest on its own locked rate.
+export interface CollapseTrancheInput {
+  id: string
+  principal: number
+  rate: number | null
+  investmentDate: string
+  expiryDate: string | null
+}
+
+export interface CollapsePlan {
+  // Per-tranche principal + accrued interest, one entry per input. The collapse
+  // route writes each `interest` onto that tranche's history snapshot, so the
+  // book's history records the real interest of every top-up cycle.
+  tranches: { id: string; principal: number; interest: number }[]
+  totalPrincipal: number
+  totalInterest: number
+}
+
+// Value a book at collapse time: each tranche earns interest on its own rate,
+// capped at the shared maturity (calcProjectedInterest is the single formula —
+// see lib/finance), rounded per tranche so the book total equals the sum of the
+// per-tranche figures the snapshots store (no rolled-lump vs history drift). The
+// caller passes effective (post-withdrawal) principals, so a withdrawal that
+// spanned a tranche is already netted out before it reaches here.
+export function buildCollapsePlan(tranches: CollapseTrancheInput[], asOf?: number): CollapsePlan {
+  const out = tranches.map((t) => ({
+    id: t.id,
+    principal: t.principal,
+    interest: Math.round(calcProjectedInterest(t.principal, t.rate, t.investmentDate, t.expiryDate, asOf)),
+  }))
+  return {
+    tranches: out,
+    totalPrincipal: out.reduce((s, t) => s + t.principal, 0),
+    totalInterest: out.reduce((s, t) => s + t.interest, 0),
+  }
 }

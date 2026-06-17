@@ -11,7 +11,7 @@ import type { GoalData, FundBreakdownItem } from '../DashboardClient'
 import TransactionHistorySheet, { type PurchaseHistoryRow } from './TransactionHistorySheet'
 import { SellWithdrawSheet, type SellItem } from './SellWithdrawSheet'
 import { MaturityResolveSheet } from './MaturityResolveSheet'
-import { GD_COLORS, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, buildRenewalSummary, BankInfoStrip, TopUpControl, RenewalSummaryLine, needsMaturityAction, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
+import { GD_COLORS, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, buildRenewalSummary, BankInfoStrip, TopUpControl, RenewalSummaryLine, needsMaturityAction, needsBookMaturityAction, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
 import { fmtTxDate } from './transactionUtils'
 import { TxRowsSkeleton } from './Skeletons'
 
@@ -370,12 +370,14 @@ function InvestmentActionSheet({
   const typeColor = GD_COLORS[inv.type] ?? 'var(--c-muted)'
   const isBank = inv.type === 'bank'
   const isPos = (inv.gainPct ?? 0) >= 0
-  const needsMaturity = needsMaturityAction(inv, isVI)
+  // A matured term deposit renews; a matured accumulating book collapses — both
+  // open the same "Handle maturity" sheet (it branches internally).
+  const needsMaturity = needsMaturityAction(inv, isVI) || needsBookMaturityAction(inv)
 
   const t = isVI ? {
     title: 'Tùy chọn',
     handle: 'Xử lý đáo hạn',
-    handleSub: 'Tái tục hoặc chuyển sang chờ rút',
+    handleSub: inv.depositGroupId ? 'Tất toán cả sổ & gửi lại' : 'Tái tục hoặc chuyển sang chờ rút',
     history: 'Lịch sử giao dịch',
     historySub: 'Xem các lần mua / bán trước đây',
     sell: isBank ? 'Rút tiền' : 'Bán',
@@ -385,7 +387,7 @@ function InvestmentActionSheet({
   } : {
     title: 'Options',
     handle: 'Handle maturity',
-    handleSub: 'Renew or mark for withdrawal',
+    handleSub: inv.depositGroupId ? 'Settle the book & re-deposit' : 'Renew or mark for withdrawal',
     history: 'Transaction history',
     historySub: 'View past buys & sells',
     sell: isBank ? 'Withdraw' : 'Sell',

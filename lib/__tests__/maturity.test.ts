@@ -9,6 +9,7 @@ import {
   renewalPrincipal,
   daysUntil,
   isActionableTermDeposit,
+  isActionableAccumulatingBook,
 } from '../maturity'
 
 // A YYYY-MM-DD string `n` days from today (deterministic regardless of run date).
@@ -115,6 +116,27 @@ describe('isActionableTermDeposit', () => {
   it('is false for non-term and non-bank holdings', () => {
     expect(isActionableTermDeposit({ type: 'bank', interestRate: null, expiryDate: daysFromNow(-1) })).toBe(false)
     expect(isActionableTermDeposit({ type: 'gold', interestRate: null, expiryDate: null })).toBe(false)
+  })
+})
+
+// The mirror of isActionableTermDeposit for the accumulating ("Loại 2") book
+// path: a whole book is renewed via collapse, so it surfaces a maturity decision
+// only when it CARRIES a deposit_group_id (the opposite requirement to the
+// single-row term path, which excludes grouped rows).
+describe('isActionableAccumulatingBook', () => {
+  it('is true for a matured or soon-maturing accumulating book', () => {
+    expect(isActionableAccumulatingBook({ type: 'bank', expiryDate: daysFromNow(-2), depositGroupId: 'grp-1' })).toBe(true)
+    expect(isActionableAccumulatingBook({ type: 'bank', expiryDate: daysFromNow(1), depositGroupId: 'grp-1' })).toBe(true)
+  })
+  it('is false for a book maturing well in the future', () => {
+    expect(isActionableAccumulatingBook({ type: 'bank', expiryDate: daysFromNow(30), depositGroupId: 'grp-1' })).toBe(false)
+  })
+  it('is false for an ungrouped term deposit (that goes through the single-row path)', () => {
+    expect(isActionableAccumulatingBook({ type: 'bank', expiryDate: daysFromNow(-2), depositGroupId: null })).toBe(false)
+  })
+  it('is false for a book with no maturity or a non-bank type', () => {
+    expect(isActionableAccumulatingBook({ type: 'bank', expiryDate: null, depositGroupId: 'grp-1' })).toBe(false)
+    expect(isActionableAccumulatingBook({ type: 'fund', expiryDate: daysFromNow(-2), depositGroupId: 'grp-1' })).toBe(false)
   })
 })
 

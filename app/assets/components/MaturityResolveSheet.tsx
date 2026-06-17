@@ -73,9 +73,14 @@ export function MaturityResolveBody({
   onRenewed: () => void
   onWithdraw: () => void
 }) {
+  // An accumulating ("Loại 2") book: `inv` is the rolled-up book row (principal =
+  // Σ tranche principals, value = Σ tranche valuations). It renews by COLLAPSING
+  // — settle every tranche into one fresh plain term deposit — so it posts to the
+  // collapse route, not /renew, and withdrawing the whole book isn't offered yet.
+  const isBook = !!inv.depositGroupId
   const principal = inv.principal ?? inv.value ?? 0
   // Best real-data estimate of interest earned this cycle: current (compounded)
-  // value minus the principal still held.
+  // value minus the principal still held. For a book this is Σ tranche interest.
   const estInterest = Math.max(0, Math.round((inv.value ?? 0) - principal))
   const m = fmtMaturity(inv.expiryDate, isVi)
   const state = depositMaturityState(m?.diffDays ?? 0)
@@ -87,7 +92,10 @@ export function MaturityResolveBody({
   const [mode, setMode] = useState<Mode>('principal_interest')
   const [interest, setInterest] = useState(String(estInterest))
   const [term, setTerm] = useState(String(derivedTerm > 0 ? derivedTerm : 12))
-  const [rate, setRate] = useState(inv.interestRate != null ? String(inv.interestRate) : '')
+  // For a book the rate is the blended average (often a long decimal) — round the
+  // suggested new rate to 1dp so the field starts clean; a term deposit keeps its
+  // exact stored rate.
+  const [rate, setRate] = useState(inv.interestRate != null ? String(isBook ? Math.round(inv.interestRate * 10) / 10 : inv.interestRate) : '')
   const [newAmount, setNewAmount] = useState(String(principal))
   // The new maturity follows old-maturity + term until the user edits it by hand,
   // at which point we freeze their value (null = "follow the term").
@@ -243,7 +251,9 @@ export function MaturityResolveBody({
     { id: 'principal_interest', icon: <RefreshCw size={16} />, label: isVi ? 'Tái tục gốc + lãi' : 'Renew principal + interest', sub: isVi ? 'Cộng lãi vào gốc cho kỳ mới' : 'Roll interest into the new principal' },
     { id: 'principal_only', icon: <RefreshCw size={16} />, label: isVi ? 'Tái tục chỉ gốc' : 'Renew principal only', sub: isVi ? 'Lãi chuyển ra ngoài (về ví)' : 'Interest paid out to your wallet' },
     { id: 'change', icon: <Pencil size={16} />, label: isVi ? 'Đổi số tiền / kỳ hạn' : 'Change amount / term', sub: isVi ? 'Điều chỉnh gốc hoặc kỳ hạn kỳ mới' : 'Adjust principal or term for the new cycle' },
-    { id: 'withdraw', icon: <ArrowDownToLine size={16} />, label: isVi ? 'Không tái tục — rút' : 'Don’t renew — withdraw', sub: isVi ? 'Rút toàn bộ số dư' : 'Withdraw the full balance', danger: true },
+    // Withdrawing the whole book isn't supported yet (per-tranche withdrawal is a
+    // later phase) — a book can only be re-deposited, so omit the withdraw option.
+    ...(isBook ? [] : [{ id: 'withdraw' as Mode, icon: <ArrowDownToLine size={16} />, label: isVi ? 'Không tái tục — rút' : 'Don’t renew — withdraw', sub: isVi ? 'Rút toàn bộ số dư' : 'Withdraw the full balance', danger: true }]),
   ]
 
   async function handleConfirm() {
@@ -251,7 +261,12 @@ export function MaturityResolveBody({
     if (!canRenew) return
     setSaving(true); setError('')
     try {
-      const res = await fetch(`/api/v1/investment-transactions/${inv.id}/renew`, {
+      // A book collapses (settle all tranches → one fresh deposit) via the collapse
+      // route; a single term deposit rolls forward via /renew. The collapse route
+      // values each tranche's interest itself (one TS formula → the per-tranche
+      // history snapshots), so — unlike /renew — it takes no interest_earned_vnd.
+      const endpoint = isBook ? 'collapse' : 'renew'
+      const res = await fetch(`/api/v1/investment-transactions/${inv.id}/${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -266,8 +281,9 @@ export function MaturityResolveBody({
           // cycle that just closed.
           investment_date: baseDate,
           // Realized interest for the cycle that just closed — recorded
-          // permanently on the snapshot for the renewal-history summary.
-          interest_earned_vnd: iNum,
+          // permanently on the snapshot for the renewal-history summary. A book's
+          // collapse route derives this per tranche, so only send it for /renew.
+          ...(isBook ? {} : { interest_earned_vnd: iNum }),
           // Combine flow: mark this month's recurring saving fulfilled inside the
           // same transaction, so its amount (now folded into the principal above)
           // is not also counted as a separate synthesized contribution.

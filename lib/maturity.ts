@@ -73,6 +73,18 @@ export function isActionableTermDeposit(
   return isMaturityActionable(depositMaturityState(daysUntil(it.expiryDate!)))
 }
 
+// The book-path mirror of isActionableTermDeposit: a whole accumulating book is
+// renewed by collapsing it (settle all tranches → one fresh deposit), so it
+// needs a maturity decision only when it CARRIES a deposit_group_id — the exact
+// opposite of the single-row term path, which excludes grouped rows. Drives the
+// "Handle maturity" entry the goal-detail Options modal shows for a matured book.
+export function isActionableAccumulatingBook(
+  it: { type: string; expiryDate: string | null; depositGroupId?: string | null },
+): boolean {
+  if (it.type !== 'bank' || it.depositGroupId == null || !it.expiryDate) return false
+  return isMaturityActionable(depositMaturityState(daysUntil(it.expiryDate)))
+}
+
 const pad = (n: number) => String(n).padStart(2, '0')
 
 // Add `n` whole months to a YYYY-MM-DD date, keeping the day of month but
