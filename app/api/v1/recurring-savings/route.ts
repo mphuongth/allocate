@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from('recurring_savings')
-    .select('saving_id, name, goal_id, amount_vnd, effective_from, effective_to, savings_goals(goal_name)')
+    .select('saving_id, name, goal_id, amount_vnd, effective_from, effective_to, linked_deposit_tx_id, savings_goals(goal_name)')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
 
@@ -57,13 +57,14 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { name, goal_id, amount_vnd, effective_from, effective_to } = body
+  const { name, goal_id, amount_vnd, effective_from, effective_to, linked_deposit_tx_id } = body
 
   let cleanName: string
   let cleanGoalId: string | null = null
   let cleanAmount: number
   let cleanFromYm: string | null = null
   let cleanToYm: string | null = null
+  let cleanLinkedTxId: string | null = null
 
   try {
     cleanName = validateText(name, 'name')
@@ -72,6 +73,7 @@ export async function POST(request: NextRequest) {
     if (goal_id) cleanGoalId = validateUUID(goal_id, 'goal_id')
     if (effective_from) cleanFromYm = validateYearMonth(effective_from, 'effective_from')
     if (effective_to) cleanToYm = validateYearMonth(effective_to, 'effective_to')
+    if (linked_deposit_tx_id) cleanLinkedTxId = validateUUID(linked_deposit_tx_id, 'linked_deposit_tx_id')
   } catch (e) {
     if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
     throw e
@@ -92,8 +94,9 @@ export async function POST(request: NextRequest) {
       amount_vnd: cleanAmount,
       effective_from: fromDate,
       effective_to: toDate,
+      linked_deposit_tx_id: cleanLinkedTxId,
     })
-    .select('saving_id, name, goal_id, amount_vnd, effective_from, effective_to, savings_goals(goal_name)')
+    .select('saving_id, name, goal_id, amount_vnd, effective_from, effective_to, linked_deposit_tx_id, savings_goals(goal_name)')
     .single()
 
   if (error) return NextResponse.json({ error: 'Failed to create recurring saving' }, { status: 500 })

@@ -45,6 +45,7 @@ export async function createRecurringSaving(data: {
   amount_vnd: number
   effective_from?: string | null
   effective_to?: string | null
+  linked_deposit_tx_id?: string | null
 }) {
   const userId = await getTestUserId()
   const { data: saving, error } = await supabase

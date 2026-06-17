@@ -14,7 +14,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { name, goal_id, amount_vnd, effective_from, effective_to } = body
+  const { name, goal_id, amount_vnd, effective_from, effective_to, linked_deposit_tx_id } = body
 
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
 
@@ -39,6 +39,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if ('effective_to' in body) {
       updates.effective_to = effective_to ? toDateCol(validateYearMonth(effective_to, 'effective_to')) : null
     }
+    if ('linked_deposit_tx_id' in body) {
+      updates.linked_deposit_tx_id = linked_deposit_tx_id ? validateUUID(linked_deposit_tx_id, 'linked_deposit_tx_id') : null
+    }
   } catch (e) {
     if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
     throw e
@@ -55,7 +58,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     .update(updates)
     .eq('saving_id', savingId)
     .eq('user_id', user.id)
-    .select('saving_id, name, goal_id, amount_vnd, effective_from, effective_to, savings_goals(goal_name)')
+    .select('saving_id, name, goal_id, amount_vnd, effective_from, effective_to, linked_deposit_tx_id, savings_goals(goal_name)')
     .single()
 
   if (error || !saving) return NextResponse.json({ error: 'Recurring saving not found' }, { status: 404 })
