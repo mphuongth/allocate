@@ -80,6 +80,13 @@ test.describe('Accumulating bank deposits (Loại 2)', () => {
       ])
       expect(resp.status()).toBe(201)
       expect((await resp.json()).deposit_group_id).toBe(anchor.transaction_id)
+
+      // Server guard: the renew route refuses an accumulating book even when hit
+      // directly (rolling one tranche would break the shared maturity).
+      const renewRes = await page.request.post(`/api/v1/investment-transactions/${anchor.transaction_id}/renew`, {
+        data: { amount_vnd: 50_000_000, interest_rate: 3.0, expiry_date: iso(60), investment_date: iso(-4) },
+      })
+      expect(renewRes.status()).toBe(400)
     } finally {
       await api.deleteDepositGroup(anchor.transaction_id)
       await api.deleteGoal(goal.goal_id)
