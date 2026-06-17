@@ -129,6 +129,27 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     .single()
 
   if (error || !transaction) return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
+
+  // Goal and maturity are BOOK-level for an accumulating deposit: every tranche
+  // shares them (copied down at top-up time). Editing them on any one row must
+  // fan out to the whole group, or the book splits across goals in the totals
+  // and loses its single-maturity invariant. Tranche-level fields (amount, rate,
+  // date, notes) stay per-row and are not cascaded.
+  if (transaction.deposit_group_id) {
+    const bookFields: Record<string, unknown> = {}
+    if (goal_id !== undefined) bookFields.goal_id = cleanGoalId
+    if (expiry_date !== undefined) bookFields.expiry_date = cleanExpiryDate
+    if (Object.keys(bookFields).length > 0) {
+      bookFields.updated_at = new Date().toISOString()
+      const { error: cascadeErr } = await supabase
+        .from('investment_transactions')
+        .update(bookFields)
+        .eq('deposit_group_id', transaction.deposit_group_id)
+        .eq('user_id', user.id)
+      if (cascadeErr) return NextResponse.json({ error: 'Failed to update deposit book' }, { status: 500 })
+    }
+  }
+
   return NextResponse.json(transaction)
 }
 

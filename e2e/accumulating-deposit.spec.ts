@@ -92,4 +92,34 @@ test.describe('Accumulating bank deposits (Loại 2)', () => {
       await api.deleteGoal(goal.goal_id)
     }
   })
+
+  test('editing the book goal / maturity cascades to every tranche', async ({ page }) => {
+    const goalA = await api.createGoal({ goal_name: 'E2E Book A', target_amount: 100_000_000 })
+    const goalB = await api.createGoal({ goal_name: 'E2E Book B', target_amount: 100_000_000 })
+    const anchorRes = await page.request.post('/api/v1/investment-transactions', {
+      data: { asset_type: 'bank', accumulating: true, goal_id: goalA.goal_id, notes: 'E2E Book', amount_vnd: 30_000_000, interest_rate: 3.0, investment_date: iso(-100), expiry_date: iso(40) },
+    })
+    const anchor = await anchorRes.json()
+    const topUpRes = await page.request.post('/api/v1/investment-transactions', {
+      data: { tops_up_deposit_id: anchor.transaction_id, asset_type: 'bank', amount_vnd: 2_000_000, interest_rate: 3.5, investment_date: iso(-10) },
+    })
+    const tranche = await topUpRes.json()
+    try {
+      // Move the book to goal B and change its maturity by editing the ANCHOR.
+      const newExpiry = iso(70)
+      const put = await page.request.put(`/api/v1/investment-transactions/${anchor.transaction_id}`, {
+        data: { goal_id: goalB.goal_id, expiry_date: newExpiry },
+      })
+      expect(put.ok()).toBeTruthy()
+
+      // The top-up tranche must have followed — same goal + same maturity.
+      const trancheNow = await (await page.request.get(`/api/v1/investment-transactions/${tranche.transaction_id}`)).json()
+      expect(trancheNow.goal_id).toBe(goalB.goal_id)
+      expect(trancheNow.expiry_date).toBe(newExpiry)
+    } finally {
+      await api.deleteDepositGroup(anchor.transaction_id)
+      await api.deleteGoal(goalA.goal_id)
+      await api.deleteGoal(goalB.goal_id)
+    }
+  })
 })
