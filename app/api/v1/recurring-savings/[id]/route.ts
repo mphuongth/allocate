@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validateText, validateUUID, validateYearMonth } from '@/lib/validation'
+import { validateLinkedDeposit } from '../linkValidation'
 
 function toDateCol(ym: string | undefined | null): string | null {
   if (!ym) return null
@@ -51,6 +52,36 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   const toDate = (updates.effective_to ?? null) as string | null
   if (fromDate && toDate && fromDate > toDate) {
     return NextResponse.json({ error: '"Active from" must be before "Active until".' }, { status: 400 })
+  }
+
+  // Keep the deposit link consistent with the (possibly changed) goal. Only
+  // bother when the goal or the link itself is part of this update.
+  if ('goal_id' in body || 'linked_deposit_tx_id' in body) {
+    const { data: existing } = await supabase
+      .from('recurring_savings')
+      .select('goal_id, linked_deposit_tx_id')
+      .eq('saving_id', savingId)
+      .eq('user_id', user.id)
+      .single()
+    if (!existing) return NextResponse.json({ error: 'Recurring saving not found' }, { status: 404 })
+
+    const resultingGoal = ('goal_id' in body ? (updates.goal_id as string | null) : existing.goal_id) ?? null
+    let resultingLink: string | null
+    if ('linked_deposit_tx_id' in body) {
+      resultingLink = (updates.linked_deposit_tx_id as string | null) ?? null
+    } else if (existing.linked_deposit_tx_id && (existing.goal_id ?? null) !== resultingGoal) {
+      // The goal moved out from under an existing link → drop the now cross-goal
+      // link rather than leave a stale one that can never resolve.
+      resultingLink = null
+      updates.linked_deposit_tx_id = null
+    } else {
+      resultingLink = existing.linked_deposit_tx_id
+    }
+
+    if (resultingLink) {
+      const linkErr = await validateLinkedDeposit(supabase, user.id, resultingLink, resultingGoal)
+      if (linkErr) return NextResponse.json({ error: linkErr }, { status: 400 })
+    }
   }
 
   const { data: saving, error } = await supabase

@@ -79,4 +79,42 @@ test.describe('Term-deposit maturity — explicit deposit↔recurring link', () 
       await api.deleteGoal(goal.goal_id)
     }
   })
+
+  test('the API rejects an invalid deposit link and auto-clears a cross-goal link on goal change', async ({ page }) => {
+    const goalA = await api.createGoal({ goal_name: 'E2E Link A', target_amount: 50_000_000 })
+    const goalB = await api.createGoal({ goal_name: 'E2E Link B', target_amount: 50_000_000 })
+    const termInB = await api.createTransaction({ asset_type: 'bank', amount_vnd: 5_000_000, investment_date: iso(-100), interest_rate: 6, expiry_date: iso(60), goal_id: goalB.goal_id, notes: 'E2E Term In B' })
+    // Flexible (non-term) bank deposit: no rate, no maturity.
+    const flexInA = await api.createTransaction({ asset_type: 'bank', amount_vnd: 5_000_000, investment_date: iso(-100), goal_id: goalA.goal_id, notes: 'E2E Flex In A' })
+    const termInA = await api.createTransaction({ asset_type: 'bank', amount_vnd: 5_000_000, investment_date: iso(-100), interest_rate: 6, expiry_date: iso(60), goal_id: goalA.goal_id, notes: 'E2E Term In A' })
+    const createdSavings: string[] = []
+    const post = (data: Record<string, unknown>) => page.request.post('/api/v1/recurring-savings', { data })
+    try {
+      // Cross-goal: recurring in A linked to a deposit in B → rejected.
+      expect((await post({ name: 'X', goal_id: goalA.goal_id, amount_vnd: 1_000_000, linked_deposit_tx_id: termInB.transaction_id })).status()).toBe(400)
+
+      // Non-term: flexible bank deposit (no rate/maturity) → rejected.
+      expect((await post({ name: 'X', goal_id: goalA.goal_id, amount_vnd: 1_000_000, linked_deposit_tx_id: flexInA.transaction_id })).status()).toBe(400)
+
+      // Valid: a term deposit in the same goal → accepted and persisted.
+      const okRes = await post({ name: 'X', goal_id: goalA.goal_id, amount_vnd: 1_000_000, linked_deposit_tx_id: termInA.transaction_id })
+      expect(okRes.status()).toBe(201)
+      const saving = await okRes.json()
+      createdSavings.push(saving.saving_id)
+      expect(saving.linked_deposit_tx_id).toBe(termInA.transaction_id)
+
+      // Moving the recurring to goal B (without re-sending the link) drops the
+      // now cross-goal link rather than leaving a stale one.
+      const putRes = await page.request.put(`/api/v1/recurring-savings/${saving.saving_id}`, { data: { goal_id: goalB.goal_id } })
+      expect(putRes.ok()).toBeTruthy()
+      expect((await putRes.json()).linked_deposit_tx_id).toBeNull()
+    } finally {
+      for (const id of createdSavings) await api.deleteRecurringSaving(id)
+      await api.deleteTransactionCascade(termInB.transaction_id)
+      await api.deleteTransactionCascade(flexInA.transaction_id)
+      await api.deleteTransactionCascade(termInA.transaction_id)
+      await api.deleteGoal(goalA.goal_id)
+      await api.deleteGoal(goalB.goal_id)
+    }
+  })
 })

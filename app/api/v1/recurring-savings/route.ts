@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validateText, validateUUID, validateYearMonth } from '@/lib/validation'
+import { validateLinkedDeposit } from './linkValidation'
 
 function toDateCol(ym: string | undefined | null): string | null {
   if (!ym) return null
@@ -83,6 +84,11 @@ export async function POST(request: NextRequest) {
   const toDate = toDateCol(cleanToYm)
   if (fromDate && toDate && fromDate > toDate) {
     return NextResponse.json({ error: '"Active from" must be before "Active until".' }, { status: 400 })
+  }
+
+  if (cleanLinkedTxId) {
+    const linkErr = await validateLinkedDeposit(supabase, user.id, cleanLinkedTxId, cleanGoalId)
+    if (linkErr) return NextResponse.json({ error: linkErr }, { status: 400 })
   }
 
   const { data: saving, error } = await supabase
