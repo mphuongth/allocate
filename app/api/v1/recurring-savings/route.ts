@@ -31,6 +31,23 @@ export async function GET(request: NextRequest) {
 
   const { data: savings, error } = await query
   if (error) return NextResponse.json({ error: 'Failed to fetch recurring savings' }, { status: 500 })
+
+  // When a specific month is requested, flag the ones already settled for it via
+  // a maturity-combine renewal — the maturity "combine" picker uses this to avoid
+  // offering (and double-folding) a recurring that's already been folded in.
+  if (month && year && savings && savings.length > 0) {
+    const ym = `${year}-${String(month).padStart(2, '0')}`
+    const { data: fulfilled } = await supabase
+      .from('recurring_saving_fulfillments')
+      .select('recurring_saving_id')
+      .eq('user_id', user.id)
+      .eq('ym', ym)
+    const fulfilledSet = new Set((fulfilled ?? []).map((f) => f.recurring_saving_id))
+    return NextResponse.json({
+      savings: savings.map((s) => ({ ...s, fulfilled: fulfilledSet.has(s.saving_id) })),
+    })
+  }
+
   return NextResponse.json({ savings })
 }
 

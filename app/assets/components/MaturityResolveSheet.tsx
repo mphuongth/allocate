@@ -17,7 +17,7 @@
 // (the parent wires `onWithdraw`).
 
 import { useState, useEffect } from 'react'
-import { RefreshCw, Pencil, ArrowDownToLine, AlertTriangle, Check, Building2, X } from 'lucide-react'
+import { RefreshCw, Pencil, ArrowDownToLine, AlertTriangle, Check, Building2, X, Plus, Wallet } from 'lucide-react'
 import { fmt, fmtCompact } from '@/lib/formatters'
 import { fmtMaturity, type InvRow } from './goalDetailShared'
 import {
@@ -27,9 +27,10 @@ import {
   renewalPrincipal,
   type RenewMode,
 } from '@/lib/maturity'
+import { linkedSavingFor, type RecurringLinkCandidate, type RecurringLinkResult } from '@/lib/recurringLink'
 import { todayIso } from '@/lib/dates'
 
-type Mode = RenewMode | 'withdraw'
+type Mode = RenewMode | 'withdraw' | 'combine'
 
 const fieldLabel: React.CSSProperties = {
   fontSize: 11, fontWeight: 600, letterSpacing: '0.05em',
@@ -61,9 +62,12 @@ function MoneyField({ label, value, onChange, testId }: { label: string; value: 
  * parent's existing Sell/Withdraw flow.
  */
 export function MaturityResolveBody({
-  inv, isVi, onClose, onRenewed, onWithdraw,
+  inv, goalId, isVi, onClose, onRenewed, onWithdraw,
 }: {
   inv: InvRow
+  // The goal this deposit is assigned to (null = unallocated). Used to find the
+  // recurring saving that can be folded into the re-deposit (combine flow).
+  goalId?: string | null
   isVi: boolean
   onClose: () => void
   onRenewed: () => void
@@ -92,14 +96,65 @@ export function MaturityResolveBody({
   const [error, setError] = useState('')
   const [done, setDone] = useState<null | { newPrincipal: number; newMaturity: string }>(null)
 
+  // ── Combine ("settle & re-deposit", merge recurring) ────────────────────────
+  // A recurring bank saving due for this goal this month can be folded into the
+  // re-deposit. We fetch the goal's active recurring savings on open and match
+  // one (linkedSavingFor); if found, the combine option appears (pre-selected).
+  const fulfillYm = todayIso().slice(0, 7)
+  const [combineLink, setCombineLink] = useState<RecurringLinkResult | null>(null)
+  const [pickedSavingId, setPickedSavingId] = useState<string | null>(null)
+  const [redeposit, setRedeposit] = useState(String(principal))
+  const [redepositTouched, setRedepositTouched] = useState(false)
+  const [markFulfilled, setMarkFulfilled] = useState(true)
+
+  useEffect(() => {
+    // Combine needs the deposit's goal scope. When the caller doesn't wire it
+    // (goalId omitted), stay in plain renew-only mode and skip the lookup.
+    if (goalId === undefined) return
+    let cancelled = false
+    const [y, mo] = fulfillYm.split('-')
+    fetch(`/api/v1/recurring-savings?month=${Number(mo)}&year=${y}`)
+      .then((r) => (r.ok ? r.json() : { savings: [] }))
+      .then((data: { savings?: Array<{ saving_id: string; name: string; goal_id: string | null; amount_vnd: number; fulfilled?: boolean }> }) => {
+        if (cancelled) return
+        const candidates: RecurringLinkCandidate[] = (data.savings ?? [])
+          .filter((s) => (s.goal_id ?? null) === (goalId ?? null))
+          .map((s) => ({ saving_id: s.saving_id, name: s.name, amount_vnd: s.amount_vnd, fulfilled: !!s.fulfilled }))
+        const link = linkedSavingFor(inv.name, candidates)
+        if (!link) return
+        setCombineLink(link)
+        setPickedSavingId(link.match?.saving_id ?? null)
+        setMode('combine')
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // The candidate currently chosen to fold in (explicit pick, else the match).
+  const pickedCand: RecurringLinkCandidate | null = combineLink
+    ? (pickedSavingId ? combineLink.candidates.find((c) => c.saving_id === pickedSavingId) ?? null : combineLink.match)
+    : null
+  const linkedAmt = pickedCand ? pickedCand.amount_vnd : 0
+  const canCombine = !!combineLink
+
   const iNum = Number(interest) || 0
   const tNum = Number(term) || 0
   // Pass null (not 0) for an empty "new amount" so renewalPrincipal can fall
   // back to the current principal rather than writing 0₫ to the deposit.
   const newAmountNum = newAmount.trim() === '' ? null : Number(newAmount)
+  const redepositNum = redeposit.trim() === '' ? 0 : Number(redeposit)
   const newPrincipal = mode === 'withdraw'
     ? principal
-    : renewalPrincipal(mode, principal, iNum, newAmountNum)
+    : mode === 'combine'
+      ? redepositNum
+      : renewalPrincipal(mode, principal, iNum, newAmountNum)
+
+  // Suggested re-deposit = principal + interest + this month's recurring, until
+  // the user edits it (their bank's actual figure may differ).
+  useEffect(() => {
+    if (!redepositTouched) setRedeposit(String(principal + iNum + linkedAmt))
+  }, [principal, iNum, linkedAmt, redepositTouched])
   // The new cycle is anchored to the OLD maturity date (the closed cycle's end),
   // not today — so an overdue book's next maturity is old-maturity + term, and
   // its accrual restarts from old maturity without skipping the overdue days.
@@ -137,6 +192,17 @@ export function MaturityResolveBody({
     totalPayout: 'Tổng nhận về',
     cancel: 'Hủy', confirmRenew: 'Xác nhận tái tục', confirmWithdraw: 'Đánh dấu chờ rút',
     renewed: 'Đã tái tục', renewedSub: (p: string, d: string) => `Kỳ mới ${p} · đáo hạn ${d}`,
+    combineLabel: 'Tất toán & gửi lại (gộp định kỳ)',
+    combineSubPick: 'Chọn khoản định kỳ để gộp',
+    combineSub: (amt: string) => `Cộng ${amt} định kỳ tháng này rồi gửi lại`,
+    whichRecurring: 'Gộp kèm khoản định kỳ nào?',
+    pickHint: 'Chọn một khoản để gộp, hoặc bỏ trống để chỉ tái tục gốc + lãi.',
+    toAccount: 'Về tài khoản thường', principalOut: 'Gốc tất toán',
+    recurringThisMonth: 'Gửi định kỳ tháng này',
+    redepositAmount: 'Số tiền gửi lại',
+    redepositHint: (amt: string) => `Gợi ý ${amt} (gốc + lãi + định kỳ) — sửa nếu thực tế khác.`,
+    markDeposited: (amt: string) => `Đánh dấu đã gửi định kỳ tháng này (${amt})`,
+    confirmCombine: 'Lưu sổ mới',
   } : {
     summarySuffix: 'yr', perYr: 'yr', mo: 'mo',
     why: matured
@@ -154,9 +220,24 @@ export function MaturityResolveBody({
     totalPayout: 'Total payout',
     cancel: 'Cancel', confirmRenew: 'Confirm renewal', confirmWithdraw: 'Mark for withdrawal',
     renewed: 'Deposit renewed', renewedSub: (p: string, d: string) => `New term ${p} · matures ${d}`,
+    combineLabel: 'Settle & re-deposit (merge recurring)',
+    combineSubPick: 'Pick a recurring to merge',
+    combineSub: (amt: string) => `Add ${amt} recurring, then re-deposit`,
+    whichRecurring: 'Which recurring to merge?',
+    pickHint: 'Pick one to merge, or leave none to renew principal + interest only.',
+    toAccount: 'To your account', principalOut: 'Principal out',
+    recurringThisMonth: 'Recurring this month',
+    redepositAmount: 'Re-deposit amount',
+    redepositHint: (amt: string) => `Suggested ${amt} (principal + interest + recurring) — edit if reality differs.`,
+    markDeposited: (amt: string) => `Mark this month's recurring as deposited (${amt})`,
+    confirmCombine: 'Save new deposit',
   }
 
   const POLICIES: { id: Mode; icon: React.ReactNode; label: string; sub: string; danger?: boolean }[] = [
+    ...(canCombine ? [{
+      id: 'combine' as Mode, icon: <Plus size={16} />, label: t.combineLabel,
+      sub: combineLink?.ambiguous && !pickedCand ? t.combineSubPick : t.combineSub(fmtCompact(linkedAmt)),
+    }] : []),
     { id: 'principal_interest', icon: <RefreshCw size={16} />, label: isVi ? 'Tái tục gốc + lãi' : 'Renew principal + interest', sub: isVi ? 'Cộng lãi vào gốc cho kỳ mới' : 'Roll interest into the new principal' },
     { id: 'principal_only', icon: <RefreshCw size={16} />, label: isVi ? 'Tái tục chỉ gốc' : 'Renew principal only', sub: isVi ? 'Lãi chuyển ra ngoài (về ví)' : 'Interest paid out to your wallet' },
     { id: 'change', icon: <Pencil size={16} />, label: isVi ? 'Đổi số tiền / kỳ hạn' : 'Change amount / term', sub: isVi ? 'Điều chỉnh gốc hoặc kỳ hạn kỳ mới' : 'Adjust principal or term for the new cycle' },
@@ -185,6 +266,12 @@ export function MaturityResolveBody({
           // Realized interest for the cycle that just closed — recorded
           // permanently on the snapshot for the renewal-history summary.
           interest_earned_vnd: iNum,
+          // Combine flow: mark this month's recurring saving fulfilled inside the
+          // same transaction, so its amount (now folded into the principal above)
+          // is not also counted as a separate synthesized contribution.
+          fulfill_recurring: mode === 'combine' && pickedCand && markFulfilled
+            ? { saving_id: pickedCand.saving_id, ym: fulfillYm, amount: linkedAmt }
+            : undefined,
         }),
       })
       if (!res.ok) {
@@ -279,8 +366,130 @@ export function MaturityResolveBody({
         </div>
       </div>
 
+      {/* Combine — settle & re-deposit, folding in this month's recurring saving */}
+      {mode === 'combine' && (
+        <div data-testid="maturity-combine" style={{ display: 'grid', gap: 12 }}>
+          {/* Which recurring to merge — shown when more than one is foldable, or
+              when the match is ambiguous (so a loose single match stays opt-in,
+              never auto-folded). */}
+          {combineLink && (combineLink.candidates.length > 1 || combineLink.ambiguous) && (
+            <div>
+              <div style={fieldLabel}>{t.whichRecurring}</div>
+              <div style={{ display: 'grid', gap: 7 }}>
+                {combineLink.candidates.map((c) => {
+                  const sel = pickedCand?.saving_id === c.saving_id
+                  return (
+                    <button key={c.saving_id} type="button" onClick={() => setPickedSavingId(sel ? null : c.saving_id)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, cursor: 'pointer', textAlign: 'left',
+                        border: `1.5px solid ${sel ? 'var(--c-navy)' : 'var(--c-line)'}`, background: sel ? 'var(--c-navy-tint)' : 'var(--c-card)', fontFamily: 'inherit' }}>
+                      {/* --c-btn-primary (not --c-navy) so the white check stays legible in dark mode — issue #264 */}
+                      <span style={{ width: 18, height: 18, borderRadius: 9, flexShrink: 0, border: `1.5px solid ${sel ? 'var(--c-btn-primary)' : 'var(--c-line-strong)'}`, background: sel ? 'var(--c-btn-primary)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {sel && <Check size={11} color="#fff" strokeWidth={3} />}
+                      </span>
+                      <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600 }}>{c.name}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(c.amount_vnd)}</span>
+                    </button>
+                  )
+                })}
+              </div>
+              {!pickedCand && <p style={{ margin: '7px 2px 0', fontSize: 11, color: 'var(--c-warn)', lineHeight: 1.45 }}>{t.pickHint}</p>}
+            </div>
+          )}
+
+          <MoneyField label={t.interestReceived} value={interest} onChange={setInterest} />
+
+          {/* Cash-flow recap — what lands in the account before re-depositing */}
+          <div style={{ border: '1px solid var(--c-line)', borderRadius: 12, overflow: 'hidden' }}>
+            <div style={{ padding: '8px 13px', background: 'var(--c-card-2)', display: 'flex', alignItems: 'center', gap: 7 }}>
+              <Wallet size={14} color="var(--c-muted)" />
+              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--c-muted)' }}>{t.toAccount}</span>
+            </div>
+            <div style={{ padding: '10px 13px', display: 'grid', gap: 7 }}>
+              {[
+                { l: t.principalOut, v: principal, plus: false },
+                { l: t.interestReceived, v: iNum, plus: true },
+                { l: t.recurringThisMonth, v: linkedAmt, plus: true },
+              ].map((r, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5 }}>
+                  <span style={{ color: 'var(--c-muted)' }}>{r.l}</span>
+                  <span style={{ fontWeight: 600, color: r.plus ? 'var(--c-pos)' : 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>{r.plus ? '+' : ''}{fmt(r.v)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Re-deposit amount (suggested = principal + interest + recurring) */}
+          <div>
+            <div style={fieldLabel}>{t.redepositAmount}</div>
+            <div style={{ position: 'relative' }}>
+              <input data-testid="maturity-redeposit" type="number" value={redeposit}
+                onChange={(e) => { setRedeposit(e.target.value); setRedepositTouched(true) }}
+                style={{ ...moneyInput, borderColor: 'var(--c-navy)' }} />
+              <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--c-muted)', pointerEvents: 'none' }}>₫</span>
+            </div>
+            <p style={{ margin: '7px 2px 0', fontSize: 11, color: 'var(--c-muted)', lineHeight: 1.45 }}>{t.redepositHint(fmtCompact(principal + iNum + linkedAmt))}</p>
+          </div>
+
+          {/* New term + rate */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>
+              <div style={fieldLabel}>{t.newTerm}</div>
+              <div style={{ position: 'relative' }}>
+                <input type="number" value={term} onChange={(e) => setTerm(e.target.value)} style={moneyInput} />
+                <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--c-muted)', pointerEvents: 'none' }}>{t.mo}</span>
+              </div>
+            </div>
+            <div>
+              <div style={fieldLabel}>{t.newRate}</div>
+              <div style={{ position: 'relative' }}>
+                <input type="number" step="0.1" value={rate} onChange={(e) => setRate(e.target.value)} style={moneyInput} />
+                <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--c-muted)', pointerEvents: 'none' }}>%/{t.perYr}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* New maturity date — same anchor (old maturity + term) as a renewal */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 }}>
+              <span style={{ ...fieldLabel, marginBottom: 0 }}>{t.newMaturityLabel}</span>
+              {dateTouched && (
+                <button type="button" onClick={() => setMaturityOverride(null)}
+                  style={{ fontSize: 11, fontWeight: 600, color: 'var(--c-navy)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>
+                  {t.resetDate}
+                </button>
+              )}
+            </div>
+            <input type="date" value={newMaturity} min={baseDate} onChange={(e) => setMaturityOverride(e.target.value)} style={moneyInput} />
+            {!maturityValid && <p style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--c-neg)', lineHeight: 1.4 }}>{t.maturityTooEarly}</p>}
+          </div>
+
+          {/* Mark this month's recurring as deposited (prevents double-count) */}
+          {linkedAmt > 0 && pickedCand && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '10px 12px', background: 'var(--c-pos-tint)', borderRadius: 10, fontSize: 12.5, color: 'var(--c-ink)', lineHeight: 1.4, cursor: 'pointer' }}>
+              <input data-testid="maturity-mark-fulfilled" type="checkbox" checked={markFulfilled} onChange={(e) => setMarkFulfilled(e.target.checked)} style={{ accentColor: 'var(--c-pos)', width: 16, height: 16, flexShrink: 0 }} />
+              <span>{t.markDeposited(fmtCompact(linkedAmt))}</span>
+            </label>
+          )}
+
+          {/* Preview */}
+          <div style={{ border: '1px solid var(--c-line)', borderRadius: 12, overflow: 'hidden' }}>
+            <div style={{ padding: '10px 14px', background: 'var(--c-navy-tint)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--c-navy)' }}>{t.newCycle}</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span data-testid="maturity-new-principal" style={{ fontSize: 16, fontWeight: 700, color: 'var(--c-navy)', fontVariantNumeric: 'tabular-nums' }}>{fmt(newPrincipal)}</span>
+                {rate !== '' && <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 999, background: 'var(--c-card)', color: 'var(--c-navy)' }}>{rate}%/{t.perYr}</span>}
+              </span>
+            </div>
+            <div style={{ background: 'var(--c-card)', padding: '9px 12px' }}>
+              <div style={{ fontSize: 10, color: 'var(--c-muted)' }}>{t.newMaturityLabel}</div>
+              <div data-testid="maturity-new-date" style={{ fontSize: 13, fontWeight: 600, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>{newMaturityFmt}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Inputs per mode */}
-      {mode !== 'withdraw' && (
+      {mode !== 'withdraw' && mode !== 'combine' && (
         <div style={{ display: 'grid', gap: 12 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             {mode === 'change'
@@ -379,8 +588,8 @@ export function MaturityResolveBody({
           background: mode === 'withdraw' ? 'var(--c-neg)' : 'var(--c-btn-primary)',
           display: 'flex', alignItems: 'center',
         }}>
-          {mode === 'withdraw' ? <ArrowDownToLine size={14} strokeWidth={2.2} /> : <RefreshCw size={14} strokeWidth={2.2} />}
-          {mode === 'withdraw' ? t.confirmWithdraw : t.confirmRenew}
+          {mode === 'withdraw' ? <ArrowDownToLine size={14} strokeWidth={2.2} /> : mode === 'combine' ? <Plus size={14} strokeWidth={2.2} /> : <RefreshCw size={14} strokeWidth={2.2} />}
+          {mode === 'withdraw' ? t.confirmWithdraw : mode === 'combine' ? t.confirmCombine : t.confirmRenew}
         </button>
       </div>
     </div>
@@ -389,10 +598,11 @@ export function MaturityResolveBody({
 
 // ─── Mobile bottom-sheet wrapper ───────────────────────────────────────────
 export function MaturityResolveSheet({
-  open, inv, isVi, onClose, onRenewed, onWithdraw,
+  open, inv, goalId, isVi, onClose, onRenewed, onWithdraw,
 }: {
   open: boolean
   inv: InvRow | null
+  goalId?: string | null
   isVi: boolean
   onClose: () => void
   onRenewed: () => void
@@ -425,7 +635,7 @@ export function MaturityResolveSheet({
           <h2 style={{ margin: '0 0 14px', fontSize: 17, fontWeight: 700, letterSpacing: '-0.01em' }}>
             {isVi ? 'Xử lý đáo hạn' : 'Handle maturity'}
           </h2>
-          <MaturityResolveBody inv={inv} isVi={isVi} onClose={onClose} onRenewed={onRenewed} onWithdraw={onWithdraw} />
+          <MaturityResolveBody inv={inv} goalId={goalId} isVi={isVi} onClose={onClose} onRenewed={onRenewed} onWithdraw={onWithdraw} />
         </div>
       </div>
     </div>
@@ -434,9 +644,10 @@ export function MaturityResolveSheet({
 
 // ─── Desktop modal wrapper ─────────────────────────────────────────────────
 export function MaturityResolveModal({
-  inv, isVi, onClose, onRenewed, onWithdraw,
+  inv, goalId, isVi, onClose, onRenewed, onWithdraw,
 }: {
   inv: InvRow
+  goalId?: string | null
   isVi: boolean
   onClose: () => void
   onRenewed: () => void
@@ -468,7 +679,7 @@ export function MaturityResolveModal({
           <button onClick={onClose} className="cn-btn ghost" style={{ padding: 6 }} aria-label="Close"><X size={18} /></button>
         </div>
         <div style={{ flex: 1, padding: '18px 20px', overflowY: 'auto' }}>
-          <MaturityResolveBody inv={inv} isVi={isVi} onClose={onClose} onRenewed={onRenewed} onWithdraw={onWithdraw} />
+          <MaturityResolveBody inv={inv} goalId={goalId} isVi={isVi} onClose={onClose} onRenewed={onRenewed} onWithdraw={onWithdraw} />
         </div>
       </div>
     </div>
