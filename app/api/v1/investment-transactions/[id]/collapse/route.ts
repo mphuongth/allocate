@@ -129,6 +129,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     })
     .single()
   if (rpcErr || !collapsed) {
+    // The book changed between our read and the RPC (e.g. a top-up landed) — the
+    // RPC aborted rather than drop the new tranche. Tell the client to reload.
+    if (rpcErr?.message?.includes('book changed since load')) {
+      return NextResponse.json({ error: 'This deposit changed — please reload and try again.' }, { status: 409 })
+    }
     console.error('collapse: atomic collapse failed', rpcErr?.message)
     return NextResponse.json({ error: 'Failed to collapse book' }, { status: 500 })
   }

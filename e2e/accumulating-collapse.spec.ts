@@ -106,4 +106,43 @@ test.describe('Accumulating book collapse (Loại 2 book-level renewal)', () => 
       await api.deleteGoal(goal.goal_id)
     }
   })
+
+  test('a book that changed since load (a top-up landed mid-flight) aborts the collapse, losing nothing', async ({ page }) => {
+    const goal = await api.createGoal({ goal_name: 'E2E Collapse Race Goal', target_amount: 200_000_000 })
+    const anchor = await (await page.request.post('/api/v1/investment-transactions', {
+      data: { asset_type: 'bank', accumulating: true, goal_id: goal.goal_id, notes: 'E2E Collapse Race', amount_vnd: 50_000_000, interest_rate: 3.0, investment_date: iso(-150), expiry_date: iso(30) },
+    })).json()
+    const topUp = await (await page.request.post('/api/v1/investment-transactions', {
+      data: { tops_up_deposit_id: anchor.transaction_id, asset_type: 'bank', amount_vnd: 10_000_000, interest_rate: 3.6, investment_date: iso(-20) },
+    })).json()
+    try {
+      // Reproduce the TOCTOU: the route read only the anchor (T1), then this top-up
+      // committed. Call the RPC with that STALE tranche set (omitting the top-up).
+      // The loop meets a live tranche it wasn't given → it must abort, not snapshot
+      // + delete the top-up (which would vanish, its principal never in the lump).
+      const { error } = await api.rpcCollapseBook({
+        p_group_id: anchor.transaction_id,
+        p_amount_vnd: 50_000_000,
+        p_interest_rate: 3.0,
+        p_expiry_date: iso(120),
+        p_investment_date: iso(0),
+        p_tranche_ids: [anchor.transaction_id],
+        p_tranche_interest: [0],
+      })
+      expect(error).toBeTruthy()
+      expect(error!.message).toContain('book changed since load')
+
+      // Atomic abort: both tranches still live + grouped, no stray snapshots.
+      const all = await (await page.request.get('/api/v1/investment-transactions?include_history=true&limit=1000')).json()
+      const rows = all.transactions as Array<{ transaction_id: string; deposit_group_id: string | null; renewed_from_transaction_id: string | null }>
+      const live = rows.filter((r) => r.deposit_group_id === anchor.transaction_id && !r.renewed_from_transaction_id)
+      expect(live).toHaveLength(2)
+      expect(rows.some((r) => r.transaction_id === topUp.transaction_id)).toBe(true)
+      expect(rows.filter((r) => r.renewed_from_transaction_id === anchor.transaction_id)).toHaveLength(0)
+    } finally {
+      await api.deleteDepositGroup(anchor.transaction_id)
+      await api.deleteTransactionCascade(anchor.transaction_id)
+      await api.deleteGoal(goal.goal_id)
+    }
+  })
 })
