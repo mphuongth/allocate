@@ -25,9 +25,9 @@ test.describe('Whole-book withdrawal (full close)', () => {
     const anchor = await (await page.request.post('/api/v1/investment-transactions', {
       data: { asset_type: 'bank', accumulating: true, goal_id: goal.goal_id, notes: 'E2E Withdraw Book', amount_vnd: 30_000_000, interest_rate: 3.0, investment_date: iso(-60), expiry_date: iso(60) },
     })).json()
-    await page.request.post('/api/v1/investment-transactions', {
+    const topUp = await (await page.request.post('/api/v1/investment-transactions', {
       data: { tops_up_deposit_id: anchor.transaction_id, asset_type: 'bank', amount_vnd: 20_000_000, interest_rate: 3.6, investment_date: iso(-20) },
-    })
+    })).json()
     try {
       const res = await page.request.post(`/api/v1/investment-transactions/${anchor.transaction_id}/withdraw-book`, {
         data: { withdraw_principal: 50_000_000, total_received: 50_500_000, investment_date: iso(0), affects_progress: true },
@@ -35,15 +35,15 @@ test.describe('Whole-book withdrawal (full close)', () => {
       expect(res.status()).toBe(200)
       expect((await res.json()).withdrawn_tranches).toBe(2)
 
-      // Each tranche got a full-principal withdrawal row → the book nets to zero,
-      // so the goal-detail Investments tab no longer lists it.
       const all = await (await page.request.get('/api/v1/investment-transactions?asset_type=bank&limit=1000')).json()
       const rows = all.transactions as Array<{ transaction_id: string; deposit_group_id: string | null; transaction_type: string; parent_transaction_id: string | null; principal_withdrawn: number | null }>
-      const tranches = rows.filter((r) => r.deposit_group_id === anchor.transaction_id && r.transaction_type === 'investment')
-      const withdrawals = rows.filter((r) => r.transaction_type === 'withdrawal' && tranches.some((t) => t.transaction_id === r.parent_transaction_id))
+      // Each tranche got a full-principal withdrawal row → 30M + 20M out.
+      const trancheIds = [anchor.transaction_id, topUp.transaction_id]
+      const withdrawals = rows.filter((r) => r.transaction_type === 'withdrawal' && r.parent_transaction_id != null && trancheIds.includes(r.parent_transaction_id))
       expect(withdrawals).toHaveLength(2)
-      const withdrawnPrincipal = withdrawals.reduce((s, w) => s + (w.principal_withdrawn ?? 0), 0)
-      expect(withdrawnPrincipal).toBe(50_000_000) // 30M + 20M full principal
+      expect(withdrawals.reduce((s, w) => s + (w.principal_withdrawn ?? 0), 0)).toBe(50_000_000)
+      // A full close SETTLES the book — the group is cleared so it can't be revived.
+      expect(rows.find((r) => r.transaction_id === anchor.transaction_id)!.deposit_group_id).toBeNull()
     } finally {
       await api.deleteDepositGroup(anchor.transaction_id)
       await api.deleteTransactionCascade(anchor.transaction_id)
@@ -76,14 +76,46 @@ test.describe('Whole-book withdrawal (full close)', () => {
       ])
       expect(resp.status()).toBe(200)
 
-      // The book is gone (every tranche fully withdrawn).
+      // The book is settled: full close cleared the group (no live book remains).
       const all = await (await page.request.get('/api/v1/investment-transactions?asset_type=bank&limit=1000')).json()
-      const liveTranches = (all.transactions as Array<{ deposit_group_id: string | null; transaction_type: string }>)
-        .filter((r) => r.deposit_group_id === anchor.transaction_id && r.transaction_type === 'investment')
-      const withdrawals = (all.transactions as Array<{ transaction_type: string }>).filter((r) => r.transaction_type === 'withdrawal')
-      expect(liveTranches).toHaveLength(2) // the investment rows remain (history)…
-      expect(withdrawals.length).toBeGreaterThanOrEqual(2) // …fully offset by withdrawals
+      const stillGrouped = (all.transactions as Array<{ deposit_group_id: string | null }>)
+        .filter((r) => r.deposit_group_id === anchor.transaction_id)
+      expect(stillGrouped).toHaveLength(0)
+      expect((all.transactions as Array<{ transaction_id: string; deposit_group_id: string | null }>)
+        .find((r) => r.transaction_id === anchor.transaction_id)!.deposit_group_id).toBeNull()
     } finally {
+      await api.deleteDepositGroup(anchor.transaction_id)
+      await api.deleteTransactionCascade(anchor.transaction_id)
+      await api.deleteGoal(goal.goal_id)
+    }
+  })
+
+  test('a full close settles the book — group cleared + recurring unlinked, no resurrection', async ({ page }) => {
+    const goal = await api.createGoal({ goal_name: 'E2E Close Settle Goal', target_amount: 100_000_000 })
+    // A live (non-matured) book with a recurring linked to it — the early-close vector.
+    const anchor = await (await page.request.post('/api/v1/investment-transactions', {
+      data: { asset_type: 'bank', accumulating: true, goal_id: goal.goal_id, notes: 'E2E Close Settle Book', amount_vnd: 30_000_000, interest_rate: 3.0, investment_date: iso(-30), expiry_date: iso(90) },
+    })).json()
+    const saving = await api.createRecurringSaving({ name: 'E2E Close Settle Rec', goal_id: goal.goal_id, amount_vnd: 2_000_000, linked_deposit_tx_id: anchor.transaction_id })
+    try {
+      const res = await page.request.post(`/api/v1/investment-transactions/${anchor.transaction_id}/withdraw-book`, {
+        data: { withdraw_principal: 30_000_000, total_received: 30_200_000, investment_date: iso(0), affects_progress: true },
+      })
+      expect(res.status()).toBe(200)
+
+      // The book is truly settled: the anchor is no longer a book (group cleared)…
+      const anchorNow = await (await page.request.get(`/api/v1/investment-transactions/${anchor.transaction_id}`)).json()
+      expect(anchorNow.deposit_group_id).toBeNull()
+      // …and the recurring's link was nulled (the book it fed is gone).
+      const savingNow = await api.getRecurringSaving(saving.saving_id)
+      expect(savingNow!.linked_deposit_tx_id).toBeNull()
+      // A resurrection attempt (recurring top-up) now fails cleanly, not revives it.
+      const revive = await page.request.post(`/api/v1/recurring-savings/${saving.saving_id}/topup`, {
+        data: { book_id: anchor.transaction_id, amount_vnd: 2_000_000, interest_rate: 3.0, investment_date: iso(0), ym: `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}` },
+      })
+      expect(revive.status()).toBe(400) // link no longer points at that book
+    } finally {
+      await api.deleteRecurringSaving(saving.saving_id)
       await api.deleteDepositGroup(anchor.transaction_id)
       await api.deleteTransactionCascade(anchor.transaction_id)
       await api.deleteGoal(goal.goal_id)
