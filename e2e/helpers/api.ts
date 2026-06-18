@@ -61,6 +61,11 @@ export async function deleteRecurringSaving(savingId: string) {
   await supabase.from('recurring_savings').delete().eq('saving_id', savingId)
 }
 
+export async function getRecurringSaving(savingId: string) {
+  const { data } = await supabase.from('recurring_savings').select('*').eq('saving_id', savingId).single()
+  return data
+}
+
 export async function createInsuranceMember(data: {
   member_name: string
   relationship: string

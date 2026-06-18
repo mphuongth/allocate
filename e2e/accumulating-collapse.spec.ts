@@ -38,6 +38,13 @@ test.describe('Accumulating book collapse (Loại 2 book-level renewal)', () => 
       data: { tops_up_deposit_id: anchor.transaction_id, asset_type: 'bank', amount_vnd: 10_000_000, interest_rate: 3.6, investment_date: iso(-20) },
     })).json()
     expect(topUp.deposit_group_id).toBe(anchor.transaction_id)
+    // An EXPLICIT recurring link (#348) pointing at the NON-anchor tranche — the
+    // tranche the collapse will delete. The link must survive (re-pointed to the
+    // surviving anchor), not be silently nulled by the FK's ON DELETE SET NULL.
+    const saving = await api.createRecurringSaving({
+      name: 'E2E Collapse Linked Saving', goal_id: goal.goal_id, amount_vnd: 2_000_000,
+      linked_deposit_tx_id: topUp.transaction_id,
+    })
     // Mature the whole book (PUT cascades the maturity to every tranche) so it
     // needs a book-level decision.
     const matured = await page.request.put(`/api/v1/investment-transactions/${anchor.transaction_id}`, { data: { expiry_date: iso(-2) } })
@@ -87,7 +94,13 @@ test.describe('Accumulating book collapse (Loại 2 book-level renewal)', () => 
       const snaps = rows.filter((r) => r.renewed_from_transaction_id === anchor.transaction_id)
       expect(snaps).toHaveLength(2)
       expect(snaps.every((s) => (s.interest_earned_vnd ?? 0) > 0)).toBeTruthy()
+
+      // (4) The EXPLICIT link survived: it was re-pointed from the deleted tranche
+      // onto the surviving anchor (NOT silently nulled by ON DELETE SET NULL).
+      const savingNow = await api.getRecurringSaving(saving.saving_id)
+      expect(savingNow!.linked_deposit_tx_id).toBe(anchor.transaction_id)
     } finally {
+      await api.deleteRecurringSaving(saving.saving_id)
       await api.deleteDepositGroup(anchor.transaction_id) // live tranches (if not collapsed)
       await api.deleteTransactionCascade(anchor.transaction_id) // collapsed anchor + snapshots
       await api.deleteGoal(goal.goal_id)
