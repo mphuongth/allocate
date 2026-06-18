@@ -106,6 +106,86 @@ describe('valueNonFundHolding', () => {
     expect(valueNonFundHolding(active, buggyMap, null, ASOF)!.effectiveAmount).toBe(2_000_000)
   })
 
+  // Merge-on-renew (fold a sibling bank deposit into a renewing term deposit).
+  // The combine flow settles a sibling S EARLY and adds the cash received to the
+  // renewed deposit D's principal. We replay the overview route's TWO-map
+  // accumulation (route lines 262–296): net worth sums valueNonFundHolding over
+  // parentWdMapAll (every withdrawal), progress sums it over parentWdMap (only
+  // affects_progress=true). The source-closing withdrawal must be
+  // affects_progress=TRUE so S's progress contribution → 0 while D's growth adds
+  // it back — an internal transfer, no double-count. See plans/functional-
+  // frolicking-sun.md constraints 2–3.
+  describe('merge-on-renew sibling fold', () => {
+    // No rate → interest 0 → currentValue == effectiveAmount, so the money maths
+    // is exact. D = the renewing deposit, S = the sibling settled into it.
+    const BASE = 70_000_000   // D's principal before the merge
+    const S_EFF = 8_000_000   // S's effective (remaining) principal
+
+    // Mirror the overview accumulation: net worth uses the …All map (every
+    // withdrawal lowers it), progress uses the filtered map (steady bar).
+    const netWorth = (holdings: NonFundHoldingRow[], maps: ReturnType<typeof buildWithdrawalMaps>) =>
+      holdings.reduce((s, h) => s + (valueNonFundHolding(h, maps.parentWdMapAll, null, ASOF)?.currentValue ?? 0), 0)
+    const progress = (holdings: NonFundHoldingRow[], maps: ReturnType<typeof buildWithdrawalMaps>) =>
+      holdings.reduce((s, h) => s + (valueNonFundHolding(h, maps.parentWdMap, null, ASOF)?.currentValue ?? 0), 0)
+
+    const D = (amount: number) => bank({ transaction_id: 'D', amount_vnd: amount })
+    const S = bank({ transaction_id: 'S', amount_vnd: S_EFF })
+    // The full-close withdrawal the RPC writes against S: principal_withdrawn =
+    // S's effective principal (so S's valuation nets to 0). Valuation keys off
+    // principal_withdrawn — the cash received only changes D's principal, which
+    // these fixtures model directly as BASE + received.
+    const closeS = (affectsProgress = true): WithdrawalRow =>
+      withdrawal({ transaction_id: 'wd-S', parent_transaction_id: 'S', principal_withdrawn: S_EFF, affects_progress: affectsProgress })
+
+    it('held-to-value (received == S_eff): net worth AND progress both stay steady', () => {
+      const before = [D(BASE), S]
+      const mapsBefore = buildWithdrawalMaps([])
+      const nwBefore = netWorth(before, mapsBefore)
+      const pgBefore = progress(before, mapsBefore)
+
+      // After: D grew by the received cash, S is fully closed.
+      const received = S_EFF
+      const after = [D(BASE + received), S]
+      const mapsAfter = buildWithdrawalMaps([closeS()])
+
+      expect(netWorth(after, mapsAfter)).toBe(nwBefore)   // net worth steady (no penalty)
+      expect(progress(after, mapsAfter)).toBe(pgBefore)    // the required progress invariant
+    })
+
+    it('early settlement (received < S_eff): net worth and progress both fall by exactly the penalty, never double-count', () => {
+      const before = [D(BASE), S]
+      const mapsBefore = buildWithdrawalMaps([])
+      const nwBefore = netWorth(before, mapsBefore)
+      const pgBefore = progress(before, mapsBefore)
+
+      const received = 6_000_000
+      const penalty = S_EFF - received // 2,000,000 forfeited interest/penalty
+      const after = [D(BASE + received), S]
+      const mapsAfter = buildWithdrawalMaps([closeS()])
+
+      expect(netWorth(after, mapsAfter)).toBe(nwBefore - penalty)
+      expect(progress(after, mapsAfter)).toBe(pgBefore - penalty)
+    })
+
+    it('negative control: affects_progress=FALSE double-counts S (progress bumps by the received amount)', () => {
+      const before = [D(BASE), S]
+      const pgBefore = progress(before, buildWithdrawalMaps([]))
+
+      const received = S_EFF
+      const after = [D(BASE + received), S]
+      // WRONG flag: the close is excluded from the progress map, so S keeps its
+      // full contribution while D also grew — S counted twice.
+      const mapsBad = buildWithdrawalMaps([closeS(false)])
+
+      expect(progress(after, mapsBad)).toBe(pgBefore + received) // documents why the flag MUST be true
+    })
+
+    it('drops the fully-closed source from net worth (its …All valuation is null)', () => {
+      const maps = buildWithdrawalMaps([closeS()])
+      expect(valueNonFundHolding(S, maps.parentWdMapAll, null, ASOF)).toBeNull()
+    })
+  })
+
   describe('gold', () => {
     it('values remaining units at the gold price and reduces units by the sale', () => {
       const { parentWdMap } = buildWithdrawalMaps([

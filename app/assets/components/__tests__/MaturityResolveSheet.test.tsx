@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MaturityResolveBody } from '../MaturityResolveSheet'
-import { addMonths, monthsBetween } from '@/lib/maturity'
+import { addMonths, monthsBetween, allocateCumulative } from '@/lib/maturity'
 import { fmt } from '@/lib/formatters'
 import type { InvRow } from '../goalDetailShared'
 
@@ -149,6 +149,123 @@ describe('MaturityResolveBody', () => {
     expect(confirm).toBeDisabled()
     await user.click(confirm)
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  // ── Merge-on-renew: fold sibling bank deposits into the re-deposit ──────────
+  // With goalId wired the body fetches the goal's recurring savings; we stub an
+  // empty list so combine is reached via mergeable siblings (not a recurring),
+  // which is also the inert default for the other suites that omit goalId.
+  describe('merge sibling deposits', () => {
+    function stubEmptyRecurring() {
+      const fetchMock = vi.fn().mockImplementation((url: string) => {
+        if (typeof url === 'string' && url.startsWith('/api/v1/recurring-savings')) {
+          return Promise.resolve({ ok: true, json: async () => ({ savings: [] }) })
+        }
+        return Promise.resolve({ ok: true, json: async () => ({}) })
+      })
+      vi.stubGlobal('fetch', fetchMock)
+      return fetchMock
+    }
+
+    const sibBank: InvRow = {
+      id: 'sib-bank', name: 'Vikki sibling', type: 'bank', value: 8_000_000, gainPct: null,
+      units: null, principal: 8_000_000, interestRate: 6, expiryDate: daysFromNow(40),
+      investmentDate: daysFromNow(-150), fund: null,
+    }
+    const sibBank2: InvRow = {
+      id: 'sib-bank-2', name: 'PVCombank sibling', type: 'bank', value: 4_000_000, gainPct: null,
+      units: null, principal: 4_000_000, interestRate: 5, expiryDate: daysFromNow(60),
+      investmentDate: daysFromNow(-100), fund: null,
+    }
+    const sibBook: InvRow = {
+      id: 'sib-book', name: 'Accumulating book', type: 'bank', value: 5_000_000, gainPct: null,
+      units: null, principal: 5_000_000, interestRate: 6, expiryDate: daysFromNow(30),
+      investmentDate: daysFromNow(-90), fund: null, depositGroupId: 'book-1',
+    }
+    const sibStock: InvRow = {
+      id: 'sib-stock', name: 'VNM', type: 'stock', value: 3_000_000, gainPct: 2,
+      units: 100, principal: 3_000_000, interestRate: null, expiryDate: null,
+      investmentDate: daysFromNow(-80), fund: null,
+    }
+
+    it('lists only same-goal non-book bank siblings (excludes self, books, non-bank)', async () => {
+      const user = userEvent.setup()
+      stubEmptyRecurring()
+      render(
+        <MaturityResolveBody inv={maturedDeposit} goalId="goal-1"
+          siblingDeposits={[maturedDeposit, sibBank, sibBook, sibStock]}
+          isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
+      )
+      // Enter combine (available because there is a mergeable sibling).
+      await user.click(await screen.findByRole('button', { name: /Settle & re-deposit/i }))
+
+      expect(screen.getByTestId('merge-source-sib-bank')).toBeTruthy()
+      expect(screen.queryByTestId('merge-source-tx-bank-1')).toBeNull()   // self (D) excluded
+      expect(screen.queryByTestId('merge-source-sib-book')).toBeNull()    // accumulating book excluded
+      expect(screen.queryByTestId('merge-source-sib-stock')).toBeNull()   // non-bank excluded
+    })
+
+    it('prefills each selected source with its current value and shows the penalty caption', async () => {
+      const user = userEvent.setup()
+      stubEmptyRecurring()
+      render(
+        <MaturityResolveBody inv={maturedDeposit} goalId="goal-1" siblingDeposits={[sibBank]}
+          isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
+      )
+      await user.click(await screen.findByRole('button', { name: /Settle & re-deposit/i }))
+      expect(screen.queryByTestId('merge-penalty-caption')).toBeNull() // hidden until a source is picked
+
+      await user.click(screen.getByTestId('merge-source-sib-bank'))
+      expect((screen.getByTestId('merge-received-sib-bank') as HTMLInputElement).value).toBe('8000000')
+      expect(screen.getByTestId('merge-penalty-caption')).toBeTruthy()
+    })
+
+    it('splits the editable total across selected sources via allocateCumulative', async () => {
+      const user = userEvent.setup()
+      stubEmptyRecurring()
+      render(
+        <MaturityResolveBody inv={maturedDeposit} goalId="goal-1" siblingDeposits={[sibBank, sibBank2]}
+          isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
+      )
+      await user.click(await screen.findByRole('button', { name: /Settle & re-deposit/i }))
+      // Select both (ordered by investmentDate, id → sib-bank-2 opened later? -100 > -150 → sib-bank first).
+      await user.click(screen.getByTestId('merge-source-sib-bank'))
+      await user.click(screen.getByTestId('merge-source-sib-bank-2'))
+
+      fireEvent.change(screen.getByTestId('merge-total'), { target: { value: '10000000' } })
+
+      // Weights ordered by (investmentDate, id): sib-bank (−150d) then sib-bank-2 (−100d).
+      const [a1, a2] = allocateCumulative(10_000_000, [8_000_000, 4_000_000])
+      expect((screen.getByTestId('merge-received-sib-bank') as HTMLInputElement).value).toBe(String(a1))
+      expect((screen.getByTestId('merge-received-sib-bank-2') as HTMLInputElement).value).toBe(String(a2))
+    })
+
+    it('previews base + Σreceived but submits amount_vnd == BASE plus merge_sources', async () => {
+      const user = userEvent.setup()
+      const fetchMock = stubEmptyRecurring()
+      render(
+        <MaturityResolveBody inv={maturedDeposit} goalId="goal-1" siblingDeposits={[sibBank]}
+          isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
+      )
+      await user.click(await screen.findByRole('button', { name: /Settle & re-deposit/i }))
+      await user.click(screen.getByTestId('merge-source-sib-bank'))
+
+      // BASE = principal + interest + recurring(0) = 35,000,000 + 2,030,000.
+      const BASE = 37_030_000
+      const received = 8_000_000
+      // Preview principal includes the merged cash.
+      expect(screen.getByTestId('maturity-new-principal').textContent).toContain(fmt(BASE + received))
+
+      await user.click(screen.getByRole('button', { name: /Save new deposit/i }))
+      await waitFor(() => {
+        const renewCall = fetchMock.mock.calls.find((c) => String(c[0]).endsWith('/renew'))
+        expect(renewCall).toBeTruthy()
+      })
+      const renewCall = fetchMock.mock.calls.find((c) => String(c[0]).endsWith('/renew'))!
+      const body = JSON.parse(renewCall[1].body)
+      expect(body.amount_vnd).toBe(BASE) // BASE only — the RPC adds Σreceived
+      expect(body.merge_sources).toEqual([{ tx_id: 'sib-bank', received }])
+    })
   })
 
   it('hands off to the existing withdraw flow instead of renewing', async () => {

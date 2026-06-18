@@ -22,7 +22,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { amount_vnd, interest_rate, expiry_date, investment_date, interest_earned_vnd, fulfill_recurring } = body
+  const { amount_vnd, interest_rate, expiry_date, investment_date, interest_earned_vnd, fulfill_recurring, merge_sources } = body
 
   let txId: string
   let cleanAmount: number
@@ -36,6 +36,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   let cleanFulfillSavingId: string | null = null
   let cleanFulfillYm: string | null = null
   let cleanFulfillAmount: number | null = null
+  // Merge flow only: sibling bank deposits in the same goal settled early and
+  // folded into this re-deposit. Parsed into two parallel arrays the RPC takes.
+  // When non-empty, amount_vnd is the BASE and the RPC adds Σ(received).
+  const cleanMergeSourceIds: string[] = []
+  const cleanMergeReceived: number[] = []
   try {
     txId = validateUUID(id, 'transaction_id')
     cleanAmount = validateAmount(amount_vnd, 'amount_vnd')
@@ -60,6 +65,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       const a = Number(fulfill_recurring.amount ?? 0)
       if (!Number.isFinite(a) || a < 0) throw new ValidationError('fulfill_recurring.amount must be a non-negative number')
       cleanFulfillAmount = Math.round(a)
+    }
+    if (merge_sources != null) {
+      if (!Array.isArray(merge_sources)) throw new ValidationError('merge_sources must be an array')
+      for (const s of merge_sources) {
+        const sid = validateUUID(s?.tx_id, 'merge_sources.tx_id')
+        if (sid === txId) throw new ValidationError('a deposit cannot merge into itself')
+        const r = Number(s?.received)
+        if (!Number.isFinite(r) || r < 0) throw new ValidationError('merge_sources.received must be a non-negative number')
+        cleanMergeSourceIds.push(sid)
+        cleanMergeReceived.push(Math.round(r))
+      }
     }
   } catch (e) {
     if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
@@ -109,22 +125,45 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // withdrawals) atomically. The re-parent is correctness-critical — a partial
   // success that skipped it would silently double-count the withdrawn amount —
   // so a failure here aborts the whole renewal rather than returning 200.
-  const { data: renewed, error: renewErr } = await supabase
-    .rpc('renew_term_deposit', {
-      p_tx_id: txId,
-      p_amount_vnd: Math.round(cleanAmount),
-      p_interest_rate: cleanRate,
-      p_expiry_date: cleanExpiry,
-      p_investment_date: cleanInvestmentDate,
-      p_interest_earned_vnd: cleanInterestEarned,
-      // Combine flow: fold this month's recurring saving in atomically (NULL for
-      // a plain renewal — the RPC's params default to NULL).
-      p_fulfill_saving_id: cleanFulfillSavingId,
-      p_fulfill_ym: cleanFulfillYm,
-      p_fulfill_amount: cleanFulfillAmount,
-      p_fulfill_source: cleanFulfillSavingId ? 'maturity-combine' : null,
-    })
-    .single()
+  //
+  // When sibling deposits are being merged in, route to renew_term_deposit_with_merge:
+  // it ALSO closes each source and adds Σ(received) to the principal. amount_vnd
+  // is then the BASE (principal + interest + recurring) — the RPC, not the
+  // client, sums in the received cash, so the net-worth invariant can't diverge.
+  const hasMerge = cleanMergeSourceIds.length > 0
+  const { data: renewed, error: renewErr } = hasMerge
+    ? await supabase
+        .rpc('renew_term_deposit_with_merge', {
+          p_tx_id: txId,
+          p_amount_vnd: Math.round(cleanAmount), // BASE; the RPC adds Σ(received)
+          p_interest_rate: cleanRate,
+          p_expiry_date: cleanExpiry,
+          p_investment_date: cleanInvestmentDate,
+          p_interest_earned_vnd: cleanInterestEarned,
+          p_fulfill_saving_id: cleanFulfillSavingId,
+          p_fulfill_ym: cleanFulfillYm,
+          p_fulfill_amount: cleanFulfillAmount,
+          p_fulfill_source: cleanFulfillSavingId ? 'maturity-combine' : null,
+          p_merge_source_ids: cleanMergeSourceIds,
+          p_merge_received: cleanMergeReceived,
+        })
+        .single()
+    : await supabase
+        .rpc('renew_term_deposit', {
+          p_tx_id: txId,
+          p_amount_vnd: Math.round(cleanAmount),
+          p_interest_rate: cleanRate,
+          p_expiry_date: cleanExpiry,
+          p_investment_date: cleanInvestmentDate,
+          p_interest_earned_vnd: cleanInterestEarned,
+          // Combine flow: fold this month's recurring saving in atomically (NULL for
+          // a plain renewal — the RPC's params default to NULL).
+          p_fulfill_saving_id: cleanFulfillSavingId,
+          p_fulfill_ym: cleanFulfillYm,
+          p_fulfill_amount: cleanFulfillAmount,
+          p_fulfill_source: cleanFulfillSavingId ? 'maturity-combine' : null,
+        })
+        .single()
   if (renewErr || !renewed) {
     console.error('renew: atomic renewal failed', renewErr?.message)
     return NextResponse.json({ error: 'Failed to renew deposit' }, { status: 500 })
