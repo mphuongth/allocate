@@ -12,11 +12,11 @@ import FixedExpenseManager from './FixedExpenseManager'
 import RecurringSavingManager from './RecurringSavingManager'
 import AddTransactionSheet, { type EditableTransaction, type PrefillTransaction } from '@/app/assets/components/AddTransactionSheet'
 import RecurringBookTopUpSheet, { type BookTopUpTarget } from '@/app/assets/components/RecurringBookTopUpSheet'
-import { buildByGoal, resolveRecurringSavings, type GoalRow, type GoalItem } from '@/lib/planning'
+import { buildByGoal, resolveRecurringSavings, DEPOSIT_BACKED_FULFILLMENT_SOURCES, type GoalRow, type GoalItem } from '@/lib/planning'
 import { MobilePlanningSkeleton } from './PlanningSkeleton'
 import type {
   MonthlyPlan, FundInvestment, DirectSaving, FixedExpense,
-  InsuranceMember, OtherExpense, RecurringSaving, RecurringSavingOverride, DcaSkip, Fund, Goal,
+  InsuranceMember, OtherExpense, RecurringSaving, RecurringSavingOverride, RecurringFulfillment, DcaSkip, Fund, Goal,
 } from '../PlanningClient'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -32,6 +32,7 @@ interface Props {
   otherExpenses: OtherExpense[]
   recurringSavings: RecurringSaving[]
   recurringSavingOverrides: RecurringSavingOverride[]
+  recurringFulfillments: RecurringFulfillment[]
   dcaSkips: DcaSkip[]
   funds: Fund[]
   goals: Goal[]
@@ -995,7 +996,7 @@ function MenuItem({ icon, label, onClick, danger, noBorder }: {
 
 export default function MobilePlanningView({
   month, year, plan, investments, savings, fixedExpenses, insuranceMembers, otherExpenses,
-  recurringSavings, recurringSavingOverrides, dcaSkips, funds, goals, loading,
+  recurringSavings, recurringSavingOverrides, recurringFulfillments, dcaSkips, funds, goals, loading,
   onPlanCreated, onPlanDeleted, onRefresh, onToast,
 }: Props) {
   const locale = useLocale()
@@ -1032,11 +1033,18 @@ export default function MobilePlanningView({
         funds: { name: f.name },
       }))
   }, [funds, dcaSkips])
+  const fulfillments = useMemo(
+    () => new Map(recurringFulfillments.map(f => [f.recurring_saving_id, {
+      amount: f.amount_vnd,
+      countedAsDeposit: DEPOSIT_BACKED_FULFILLMENT_SOURCES.has(f.source),
+    }])),
+    [recurringFulfillments],
+  )
   const byGoal = useMemo(
     () => buildByGoal([...investments, ...skippedDcaInvestments], savings, resolvedRecurring, goalsById, {
       unallocated: isVI ? 'Chưa phân bổ' : 'Unallocated',
-    }),
-    [investments, skippedDcaInvestments, savings, resolvedRecurring, goalsById, isVI],
+    }, fulfillments),
+    [investments, skippedDcaInvestments, savings, resolvedRecurring, goalsById, isVI, fulfillments],
   )
   const totalGoals = useMemo(() => byGoal.reduce((s, g) => s + g.totalAllocated, 0), [byGoal])
   const contributedTotal = useMemo(() => byGoal.reduce((s, g) => s + g.contributed, 0), [byGoal])

@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import MobilePlanningView from '../MobilePlanningView'
-import type { MonthlyPlan, FixedExpense, InsuranceMember, OtherExpense, FundInvestment, DirectSaving } from '../../PlanningClient'
+import type { MonthlyPlan, FixedExpense, InsuranceMember, OtherExpense, FundInvestment, DirectSaving, RecurringFulfillment } from '../../PlanningClient'
 
 vi.mock('next-intl', () => ({
   useTranslations: () => (key: string, params?: Record<string, unknown>) =>
@@ -87,6 +87,7 @@ const defaultProps = {
   otherExpenses: [] as OtherExpense[],
   recurringSavings: [],
   recurringSavingOverrides: [],
+  recurringFulfillments: [] as RecurringFulfillment[],
   dcaSkips: [],
   funds: [],
   goals: [],

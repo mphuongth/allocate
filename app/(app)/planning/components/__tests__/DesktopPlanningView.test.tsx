@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import DesktopPlanningView from '../DesktopPlanningView'
-import type { MonthlyPlan, FundInvestment, DirectSaving, RecurringSaving } from '../../PlanningClient'
+import type { MonthlyPlan, FundInvestment, DirectSaving, RecurringSaving, RecurringFulfillment } from '../../PlanningClient'
 
 vi.mock('next-intl', () => ({
   useTranslations: () => (key: string, params?: Record<string, unknown>) =>
@@ -46,6 +46,7 @@ const defaultProps = {
   otherExpenses: [],
   recurringSavings: [] as RecurringSaving[],
   recurringSavingOverrides: [],
+  recurringFulfillments: [] as RecurringFulfillment[],
   dcaSkips: [],
   funds: [],
   goals: [],
@@ -116,6 +117,53 @@ describe('DesktopPlanningView — recurring bank "Saved" deposit', () => {
     expect(screen.queryByRole('button', { name: /Record deposit/i })).not.toBeInTheDocument()
     // The goal progress reflects the logged contribution (2M of 2M planned).
     expect(screen.getByText('100%')).toBeInTheDocument()
+  })
+
+  it('combine: records the line AND fills the goal progress from a fulfillment alone — no deposit', () => {
+    // Regression: recording via maturity-combine writes a recurring_saving_fulfillments
+    // row, not a plan-scoped deposit. The Plan page used to ignore fulfillments and
+    // matched only on goal+amount, so the line stayed "Record deposit" AND the goal
+    // progress bar showed 0% / "Nothing yet" forever.
+    render(
+      <DesktopPlanningView
+        {...defaultProps}
+        plan={basePlan}
+        recurringSavings={recurringSavings}
+        recurringFulfillments={[{ recurring_saving_id: 'rs1', amount_vnd: 2_000_000, source: 'maturity-combine' }]}
+      />,
+    )
+    // The line is recorded → the prominent Record deposit pill is gone, even with
+    // zero logged deposits this month.
+    expect(screen.queryByRole('button', { name: /Record deposit/i })).not.toBeInTheDocument()
+    // And the goal progress reflects the fulfilled 2M of 2M planned → 100%.
+    expect(screen.getByText('100%')).toBeInTheDocument()
+    expect(screen.queryByText(/Nothing yet/i)).not.toBeInTheDocument()
+  })
+
+  it('book top-up: records the line without double-counting the tranche in contributed', () => {
+    // The top-up RPC logs a plan-scoped bank tranche (in `savings`) AND a
+    // fulfillment (source 'recurring-topup'). contributed must count it once.
+    const savings: DirectSaving[] = [
+      {
+        transaction_id: 'd1', plan_id: 'plan-1', goal_id: 'g1', amount_vnd: 2_000_000,
+        interest_rate: null, expiry_date: null, investment_date: '2026-05-10',
+        savings_goals: { goal_name: 'Retirement' },
+      },
+    ]
+    render(
+      <DesktopPlanningView
+        {...defaultProps}
+        plan={basePlan}
+        recurringSavings={recurringSavings}
+        savings={savings}
+        recurringFulfillments={[{ recurring_saving_id: 'rs1', amount_vnd: 2_000_000, source: 'recurring-topup' }]}
+      />,
+    )
+    expect(screen.queryByRole('button', { name: /Record deposit/i })).not.toBeInTheDocument()
+    expect(screen.getByText('100%')).toBeInTheDocument()
+    // Counted once (₫ 2000000), not doubled to ₫ 4000000.
+    expect(screen.getByText(/₫ 2000000 in/)).toBeInTheDocument()
+    expect(screen.queryByText(/₫ 4000000/)).not.toBeInTheDocument()
   })
 
   it('opens the Add-Transaction sheet when Saved is clicked', async () => {

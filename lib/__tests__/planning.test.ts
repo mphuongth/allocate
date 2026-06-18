@@ -178,3 +178,90 @@ describe('buildByGoal — planned vs contributed', () => {
     expect(rows.map(r => r.isUnallocated)).toEqual([false, true])
   })
 })
+
+describe('buildByGoal — fulfillment-based recording', () => {
+  const goalsById = new Map([['g-1', 'Retirement']])
+
+  // A recurring can be recorded without a *matchable* plan-scoped deposit — e.g.
+  // maturity-combine (its re-deposit isn't plan-scoped) or a book top-up (its
+  // tranche IS plan-scoped). The Plan page honors the fulfillment to mark the
+  // line recorded; for contributed it must NOT double-count a top-up tranche that
+  // already lands in directSavings — only inject the amount for fulfillments with
+  // no plan-scoped deposit (countedAsDeposit:false → maturity-combine).
+  it('combine: records the line AND injects contributed (no plan-scoped deposit)', () => {
+    const recurring = resolveRecurringSavings([saving({ saving_id: 's-1', goal_id: 'g-1', amount_vnd: 1_800_000 })], [])
+    const [row] = buildByGoal([], [], recurring, goalsById, undefined,
+      new Map([['s-1', { amount: 1_800_000, countedAsDeposit: false }]]))
+    expect(row.items[0].recorded).toBe(true)
+    expect(row.totalAllocated).toBe(1_800_000) // planned
+    expect(row.contributed).toBe(1_800_000)    // fulfilled → 100%, drives the progress bar
+  })
+
+  it('combine: injects the fulfillment\'s actual amount, not the planned line amount', () => {
+    // A partial maturity-combine: planned 2M, only 1.5M actually folded in.
+    const recurring = resolveRecurringSavings([saving({ saving_id: 's-1', goal_id: 'g-1', amount_vnd: 2_000_000 })], [])
+    const [row] = buildByGoal([], [], recurring, goalsById, undefined,
+      new Map([['s-1', { amount: 1_500_000, countedAsDeposit: false }]]))
+    expect(row.contributed).toBe(1_500_000)
+  })
+
+  it('book top-up: records the line but does NOT double-count (tranche already in contributed)', () => {
+    // The top-up RPC logs a plan-scoped bank tranche (in directSavings) AND a
+    // fulfillment. contributed must count the amount exactly once — via the
+    // tranche — so the fulfillment marks recorded only (countedAsDeposit:true).
+    const recurring = resolveRecurringSavings([saving({ saving_id: 's-1', goal_id: 'g-1', amount_vnd: 1_800_000 })], [])
+    const directSavings: GoalDirectSaving[] = [
+      { goal_id: 'g-1', amount_vnd: 1_800_000, savings_goals: { goal_name: 'Retirement' } },
+    ]
+    const [row] = buildByGoal([], directSavings, recurring, goalsById, undefined,
+      new Map([['s-1', { amount: 1_800_000, countedAsDeposit: true }]]))
+    expect(row.items[0].recorded).toBe(true)
+    expect(row.contributed).toBe(1_800_000) // counted once, not 3.6M
+  })
+
+  it('leaves a recurring unrecorded when its id is not fulfilled', () => {
+    const recurring = resolveRecurringSavings([saving({ saving_id: 's-1', goal_id: 'g-1', amount_vnd: 1_800_000 })], [])
+    const [row] = buildByGoal([], [], recurring, goalsById, undefined,
+      new Map([['other', { amount: 1_000_000, countedAsDeposit: false }]]))
+    expect(row.items[0].recorded).toBeFalsy()
+    expect(row.contributed).toBe(0)
+  })
+
+  it('does not consume a deposit when the line is already fulfilled, so a sibling line can still match it', () => {
+    // Two same-amount lines in one goal; one fulfilled via combine, one deposit logged.
+    // The fulfilled line must NOT eat the deposit — the other line should match it.
+    const recurring = resolveRecurringSavings([
+      saving({ saving_id: 's-1', goal_id: 'g-1', amount_vnd: 2_000_000 }),
+      saving({ saving_id: 's-2', goal_id: 'g-1', amount_vnd: 2_000_000 }),
+    ], [])
+    const directSavings: GoalDirectSaving[] = [
+      { goal_id: 'g-1', amount_vnd: 2_000_000, savings_goals: { goal_name: 'Retirement' } },
+    ]
+    const [row] = buildByGoal([], directSavings, recurring, goalsById, undefined,
+      new Map([['s-1', { amount: 2_000_000, countedAsDeposit: false }]]))
+    expect(row.items.find(i => i.recurringId === 's-1')!.recorded).toBe(true) // via fulfillment
+    expect(row.items.find(i => i.recurringId === 's-2')!.recorded).toBe(true) // via deposit
+    expect(row.contributed).toBe(4_000_000) // combine fulfillment 2M + deposit 2M
+  })
+
+  it('never marks a skipped recurring recorded even if a fulfillment exists', () => {
+    const recurring = resolveRecurringSavings(
+      [saving({ saving_id: 's-1', goal_id: 'g-1', amount_vnd: 2_000_000 })],
+      [{ recurring_saving_id: 's-1', monthly_amount_override_vnd: 0 }],
+    )
+    const [row] = buildByGoal([], [], recurring, goalsById, undefined,
+      new Map([['s-1', { amount: 2_000_000, countedAsDeposit: false }]]))
+    expect(row.items[0].skipped).toBe(true)
+    expect(row.items[0].recorded).toBeFalsy()
+    expect(row.contributed).toBe(0)
+  })
+
+  it('still matches by deposit when no fulfillments are passed (back-compat)', () => {
+    const recurring = resolveRecurringSavings([saving({ goal_id: 'g-1', amount_vnd: 2_000_000 })], [])
+    const directSavings: GoalDirectSaving[] = [
+      { goal_id: 'g-1', amount_vnd: 2_000_000, savings_goals: { goal_name: 'Retirement' } },
+    ]
+    const [row] = buildByGoal([], directSavings, recurring, goalsById)
+    expect(row.items[0].recorded).toBe(true)
+  })
+})
