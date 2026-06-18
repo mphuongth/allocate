@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { isActionableTermDeposit, MATURING_COUNT_EVENT } from '@/lib/maturity'
+import { actionableBooks } from '@/app/assets/maturityCardItems'
 import type { DashboardData } from '@/app/assets/DashboardClient'
 
 // Count of bank term deposits that currently need a renew/withdraw decision —
@@ -29,11 +30,15 @@ export function useMaturingDepositsCount(): number {
       .then((r) => (r.ok ? r.json() : null))
       .then((data: DashboardData | null) => {
         if (cancelled || liveRef.current || !data) return
-        const items = [
-          ...data.goals.flatMap((g) => g.nonFunds ?? []),
-          ...data.unallocated.nonFunds,
+        // Same tally as the dashboard: tag each tranche with its goal bucket, then
+        // term deposits one each + each accumulating book counted ONCE (grouped
+        // globally so a goal-split book can't be double-/under-counted). isVi
+        // doesn't affect the count.
+        const tagged = [
+          ...data.goals.flatMap((g) => (g.nonFunds ?? []).map((it) => ({ it, goalId: g.goalId }))),
+          ...data.unallocated.nonFunds.map((it) => ({ it, goalId: null as string | null })),
         ]
-        setCount(items.filter(isActionableTermDeposit).length)
+        setCount(tagged.filter(({ it }) => isActionableTermDeposit(it)).length + actionableBooks(tagged, false).length)
       })
       .catch(() => {})
 

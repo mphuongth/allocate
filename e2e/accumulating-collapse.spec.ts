@@ -117,6 +117,52 @@ test.describe('Accumulating book collapse (Loại 2 book-level renewal)', () => 
     }
   })
 
+  test('a matured book collapses straight from the dashboard Needs-attention card', async ({ page }) => {
+    test.slow()
+    const goal = await api.createGoal({ goal_name: 'E2E Card Collapse Goal', target_amount: 200_000_000 })
+    const anchor = await (await page.request.post('/api/v1/investment-transactions', {
+      data: { asset_type: 'bank', accumulating: true, goal_id: goal.goal_id, notes: 'E2E Card Collapse Book', amount_vnd: 40_000_000, interest_rate: 3.0, investment_date: iso(-150), expiry_date: iso(30) },
+    })).json()
+    await page.request.post('/api/v1/investment-transactions', {
+      data: { tops_up_deposit_id: anchor.transaction_id, asset_type: 'bank', amount_vnd: 8_000_000, interest_rate: 3.6, investment_date: iso(-20) },
+    })
+    await page.request.put(`/api/v1/investment-transactions/${anchor.transaction_id}`, { data: { expiry_date: iso(-2) } })
+
+    try {
+      await gotoFreshDashboard(page)
+      // The book shows as ONE grouped row in the card — open its collapse flow.
+      const card = page.getByTestId('maturity-action-card')
+      await expect(card).toBeVisible({ timeout: 10_000 })
+      await expect(card).toContainText('E2E Card Collapse Book')
+      await card.locator('div').filter({ hasText: 'E2E Card Collapse Book' })
+        .getByRole('button', { name: /Handle|Xử lý/i }).first().click()
+
+      await page.getByTestId('maturity-term-input').fill('12')
+      const [resp] = await Promise.all([
+        page.waitForResponse((r) => r.url().includes('/collapse') && r.request().method() === 'POST'),
+        page.getByRole('button', { name: /Confirm renewal|Xác nhận tái tục/i }).click(),
+      ])
+      expect(resp.status()).toBe(200)
+      await expect(page.getByTestId('maturity-renewed')).toBeVisible({ timeout: 20_000 })
+
+      // Collapsed → a plain term deposit with a future maturity, so it drops off
+      // the card. (No deposit_group_id; sibling tranche folded in.)
+      const all = await (await page.request.get('/api/v1/investment-transactions?include_history=true&limit=1000')).json()
+      const anchorNow = (all.transactions as Array<{ transaction_id: string; deposit_group_id: string | null }>)
+        .find((r) => r.transaction_id === anchor.transaction_id)
+      expect(anchorNow!.deposit_group_id).toBeNull()
+      await gotoFreshDashboard(page)
+      const cardAfter = page.getByTestId('maturity-action-card')
+      if (await cardAfter.isVisible().catch(() => false)) {
+        await expect(cardAfter).not.toContainText('E2E Card Collapse Book')
+      }
+    } finally {
+      await api.deleteDepositGroup(anchor.transaction_id)
+      await api.deleteTransactionCascade(anchor.transaction_id)
+      await api.deleteGoal(goal.goal_id)
+    }
+  })
+
   test('a book that changed since load (a top-up landed mid-flight) aborts the collapse, losing nothing', async ({ page }) => {
     const goal = await api.createGoal({ goal_name: 'E2E Collapse Race Goal', target_amount: 200_000_000 })
     const anchor = await (await page.request.post('/api/v1/investment-transactions', {

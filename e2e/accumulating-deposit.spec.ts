@@ -112,18 +112,18 @@ test.describe('Accumulating bank deposits (Loại 2)', () => {
     }
   })
 
-  test('a matured book is kept out of the maturity card and cannot be topped up', async ({ page }) => {
+  test('a matured book surfaces in the maturity card as one grouped row and still can\'t be topped up', async ({ page }) => {
     const goal = await api.createGoal({ goal_name: 'E2E Matured Book', target_amount: 100_000_000 })
-    // Matured anchor — a term deposit would surface in the "needs attention" card.
+    // Matured anchor — now surfaces in the "needs attention" card (book-level
+    // renewal exists), grouped to one row that opens the collapse flow.
     const anchor = await (await page.request.post('/api/v1/investment-transactions', {
       data: { asset_type: 'bank', accumulating: true, goal_id: goal.goal_id, notes: 'E2E Matured Flex', amount_vnd: 20_000_000, interest_rate: 3.0, investment_date: iso(-200), expiry_date: iso(-5) },
     })).json()
     try {
       await gotoFreshDashboard(page)
       const card = page.getByTestId('maturity-action-card')
-      if (await card.isVisible().catch(() => false)) {
-        await expect(card).not.toContainText('E2E Matured Flex')
-      }
+      await expect(card).toBeVisible({ timeout: 10_000 })
+      await expect(card).toContainText('E2E Matured Flex')
       // Topping up a matured book is rejected (a tranche dated today would accrue 0).
       const late = await page.request.post('/api/v1/investment-transactions', {
         data: { tops_up_deposit_id: anchor.transaction_id, asset_type: 'bank', amount_vnd: 1_000_000, interest_rate: 3.0, investment_date: iso(0) },
