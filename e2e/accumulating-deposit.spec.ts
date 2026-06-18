@@ -96,15 +96,22 @@ test.describe('Accumulating bank deposits (Loại 2)', () => {
       data: { tops_up_deposit_id: anchor.transaction_id, asset_type: 'bank', amount_vnd: 2_000_000, interest_rate: 3.5, investment_date: iso(-10) },
     })).json()
     try {
+      // Book-level edit (goal + maturity) + a tranche-level edit (the anchor's own
+      // amount) in one PUT — the atomic update_deposit_book RPC handles both.
       const newExpiry = iso(70)
       const put = await page.request.put(`/api/v1/investment-transactions/${anchor.transaction_id}`, {
-        data: { goal_id: goalB.goal_id, expiry_date: newExpiry },
+        data: { goal_id: goalB.goal_id, expiry_date: newExpiry, amount_vnd: 35_000_000 },
       })
       expect(put.ok()).toBeTruthy()
-      // The top-up tranche must have followed — same goal + same maturity.
+      // The top-up tranche followed the BOOK fields — same goal + same maturity.
       const trancheNow = await (await page.request.get(`/api/v1/investment-transactions/${tranche.transaction_id}`)).json()
       expect(trancheNow.goal_id).toBe(goalB.goal_id)
       expect(trancheNow.expiry_date).toBe(newExpiry)
+      // …but the TRANCHE-level amount edit stayed on the anchor only (not cascaded).
+      expect(trancheNow.amount_vnd).toBe(2_000_000)
+      const anchorNow = await (await page.request.get(`/api/v1/investment-transactions/${anchor.transaction_id}`)).json()
+      expect(anchorNow.amount_vnd).toBe(35_000_000)
+      expect(anchorNow.goal_id).toBe(goalB.goal_id)
     } finally {
       await api.deleteDepositGroup(anchor.transaction_id)
       await api.deleteGoal(goalA.goal_id)
