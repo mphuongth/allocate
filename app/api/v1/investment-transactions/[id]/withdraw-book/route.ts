@@ -3,9 +3,10 @@ import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validateDate, validateUUID } from '@/lib/validation'
 import { isFutureInvestmentDate } from '@/lib/dates'
 
-// Close a whole accumulating ("Loại 2") book to cash. `id` is the book anchor
-// (= deposit_group_id). One atomic RPC writes a withdrawal row per live tranche
-// (full principal each), so the book nets to zero and drops out of the holdings.
+// Withdraw from an accumulating ("Loại 2") book. `id` is the book anchor
+// (= deposit_group_id). One atomic RPC spreads `withdraw_principal` across the live
+// tranches proportionally (a full close is withdraw_principal = total principal),
+// so a partial leaves the book's blended rate intact and a full one nets it to zero.
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createSupabaseServerClient()
@@ -13,13 +14,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { total_received, investment_date, affects_progress } = body
+  const { withdraw_principal, total_received, investment_date, affects_progress } = body
 
   let bookId: string
+  let cleanPrincipal: number
   let cleanReceived: number
   let cleanDate: string
   try {
     bookId = validateUUID(id, 'book_id')
+    cleanPrincipal = validateAmount(withdraw_principal, 'withdraw_principal')
+    if (cleanPrincipal <= 0) throw new ValidationError('withdraw_principal must be positive')
     cleanReceived = validateAmount(total_received, 'total_received')
     if (cleanReceived < 0) throw new ValidationError('total_received must be non-negative')
     cleanDate = validateDate(investment_date, 'investment_date')
@@ -46,13 +50,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const { data: count, error } = await supabase
     .rpc('withdraw_accumulating_book', {
       p_book_id: bookId,
+      p_withdraw_principal: Math.round(cleanPrincipal),
       p_total_received: Math.round(cleanReceived),
       p_investment_date: cleanDate,
       p_affects_progress: affects_progress !== false,
     })
   if (error) {
-    if (error.message?.includes('nothing to withdraw')) {
-      return NextResponse.json({ error: 'This book has no balance to withdraw.' }, { status: 400 })
+    if (error.message?.includes('nothing to withdraw') || error.message?.includes('more than the book balance')) {
+      return NextResponse.json({ error: 'Withdrawal exceeds the book balance.' }, { status: 400 })
     }
     console.error('withdraw_accumulating_book failed', error.message)
     return NextResponse.json({ error: 'Failed to withdraw book' }, { status: 500 })

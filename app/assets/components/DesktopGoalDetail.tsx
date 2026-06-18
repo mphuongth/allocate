@@ -797,21 +797,16 @@ function SellModal({ inv, isVi, goalId, goalCurrentValue, goalTargetAmount, onCl
   // Bank: cash received is editable; split principal out of the withdrawn amount
   // so the summary can show an accurate gain/loss.
   const numReceived = Number(received) || 0
-  // A book is a full close: amount is the whole balance and received defaults to
-  // it (empty reads as the full balance until the user edits it down).
-  const bookBalance = Math.round(maxAmount)
-  const effAmount = isBook ? bookBalance : numAmount
-  const effReceived = isBook ? (received === '' ? bookBalance : numReceived) : numReceived
   const bankPrincipal = inv.principal ?? maxAmount
-  const bankFraction = maxAmount > 0 ? Math.min(1, effAmount / maxAmount) : 0
+  const bankFraction = maxAmount > 0 ? Math.min(1, numAmount / maxAmount) : 0
   const bankPrincipalPortion = Math.round(bankPrincipal * bankFraction)
-  const bankGain = isBank && effReceived > 0 && effAmount > 0 ? effReceived - bankPrincipalPortion : null
+  const bankGain = isBank && numReceived > 0 && numAmount > 0 ? numReceived - bankPrincipalPortion : null
 
   const isOverMax = isGold ? isOverUnits : (numAmount > maxAmount && maxAmount > 0)
   const isValid = isGold
     ? (numUnits > 0 && !isOverUnits && numSalePrice > 0 && !saving)
     : isBank
-      ? (effAmount > 0 && !isOverMax && effReceived > 0 && !saving)
+      ? (numAmount > 0 && !isOverMax && numReceived > 0 && !saving)
       : (numAmount > 0 && !isOverMax && !saving)
 
   const gainLoss = useMemo(() => {
@@ -851,11 +846,11 @@ function SellModal({ inv, isVi, goalId, goalCurrentValue, goalTargetAmount, onCl
     try {
       const today = todayIso()
       if (isBook) {
-        // Full book close: one atomic call writes a withdrawal per tranche.
+        // Book withdrawal: spread the principal across tranches (partial or full).
         const res = await fetch(`/api/v1/investment-transactions/${inv.id}/withdraw-book`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ total_received: Math.round(effReceived), investment_date: today, affects_progress: affectsProgress }),
+          body: JSON.stringify({ withdraw_principal: bankPrincipalPortion, total_received: Math.round(numReceived), investment_date: today, affects_progress: affectsProgress }),
         })
         if (!res.ok) { const { error: e } = await res.json().catch(() => ({})); setError(e ?? (isVi ? 'Không thể xử lý' : 'Could not process')); setSaving(false); return }
       } else if (isFund && inv.fund) {
@@ -895,7 +890,7 @@ function SellModal({ inv, isVi, goalId, goalCurrentValue, goalTargetAmount, onCl
         })
         if (!res.ok) { const { error: e } = await res.json(); setError(e ?? (isVi ? 'Không thể xử lý' : 'Could not process')); setSaving(false); return }
       }
-      setSoldAmount(isGold ? goldProceeds : isBank ? effReceived : numAmount); setConfirmed(true)
+      setSoldAmount(isGold ? goldProceeds : isBank ? numReceived : numAmount); setConfirmed(true)
       setTimeout(() => { setConfirmed(false); onSuccess(); onClose() }, 2000)
     } catch { setError(isVi ? 'Lỗi kết nối' : 'Connection error') }
     setSaving(false)
@@ -937,16 +932,7 @@ function SellModal({ inv, isVi, goalId, goalCurrentValue, goalTargetAmount, onCl
 
           {!isGold ? (
           <>
-          {/* Amount: a book is a full close (fixed at the balance); else editable */}
-          {isBook ? (
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--c-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{isVi ? 'Tất toán toàn bộ sổ' : 'Closing the whole book'}</div>
-              <div data-testid="sell-book-balance" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'var(--c-card-2)', borderRadius: 10, fontSize: 15, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-muted)' }}>{isVi ? 'Số dư' : 'Balance'}</span>
-                <span>{fmtCompact(maxAmount)}</span>
-              </div>
-            </div>
-          ) : (
+          {/* Amount input (a book is editable too — partial up to the balance) */}
           <div>
             <div style={{ fontSize: 11, color: 'var(--c-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
               {isBank ? (isVi ? 'Số tiền muốn rút' : 'Amount to withdraw') : (isVi ? 'Số tiền muốn bán' : 'Amount to sell')}
@@ -955,6 +941,7 @@ function SellModal({ inv, isVi, goalId, goalCurrentValue, goalTargetAmount, onCl
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'var(--c-card)', border: `1.5px solid ${isOverMax ? 'var(--c-neg)' : 'var(--c-navy)'}`, borderRadius: 10 }}>
                 <span style={{ fontSize: 14, color: 'var(--c-muted)' }}>₫</span>
                 <input
+                  data-testid="sell-amount-input"
                   autoFocus
                   type="text" inputMode="numeric"
                   value={amount ? Number(amount).toLocaleString('vi-VN') : ''}
@@ -963,7 +950,7 @@ function SellModal({ inv, isVi, goalId, goalCurrentValue, goalTargetAmount, onCl
                   style={{ flex: 1, border: 'none', outline: 'none', fontSize: 15, fontWeight: 600, fontFamily: 'inherit', background: 'transparent', color: isOverMax ? 'var(--c-neg)' : 'var(--c-ink)' }}
                 />
               </div>
-              <button onClick={handleSetAll} style={{ padding: '8px 14px', background: 'var(--c-navy-tint)', color: 'var(--c-navy)', border: '1px solid var(--c-navy-tint)', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+              <button data-testid="sell-all-btn" onClick={handleSetAll} style={{ padding: '8px 14px', background: 'var(--c-navy-tint)', color: 'var(--c-navy)', border: '1px solid var(--c-navy-tint)', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
                 {isVi ? 'Tất cả' : 'All'}
               </button>
             </div>
@@ -974,7 +961,6 @@ function SellModal({ inv, isVi, goalId, goalCurrentValue, goalTargetAmount, onCl
               </div>
             )}
           </div>
-          )}
 
           {/* Bank: editable cash received (early withdrawal can cut interest) */}
           {isBank && (
@@ -984,7 +970,7 @@ function SellModal({ inv, isVi, goalId, goalCurrentValue, goalTargetAmount, onCl
                 <span style={{ fontSize: 14, color: 'var(--c-muted)' }}>₫</span>
                 <input
                   type="text" inputMode="numeric"
-                  value={received ? Number(received).toLocaleString('vi-VN') : (isBook ? Number(bookBalance).toLocaleString('vi-VN') : '')}
+                  value={received ? Number(received).toLocaleString('vi-VN') : ''}
                   onChange={(e) => { setReceived(e.target.value.replace(/[^0-9]/g, '')); setError('') }}
                   placeholder="0"
                   style={{ flex: 1, border: 'none', outline: 'none', fontSize: 15, fontWeight: 600, fontFamily: 'inherit', background: 'transparent', color: 'var(--c-ink)' }}
@@ -1014,7 +1000,7 @@ function SellModal({ inv, isVi, goalId, goalCurrentValue, goalTargetAmount, onCl
           {/* Fund summary: remaining / gain-loss / tax */}
           {!isBank && numAmount > 0 && !isOverMax && (() => {
             const rows = [
-              { show: true, label: isVi ? 'Còn lại sau giao dịch' : 'Remaining after transaction', value: fmtCompact(Math.max(0, maxAmount - effAmount)), color: 'var(--c-ink)' },
+              { show: true, label: isVi ? 'Còn lại sau giao dịch' : 'Remaining after transaction', value: fmtCompact(Math.max(0, maxAmount - numAmount)), color: 'var(--c-ink)' },
               { show: gainLoss != null, label: isVi ? 'Lãi/Lỗ ước tính' : 'Est. gain / loss', value: `${gainLoss! >= 0 ? '+' : ''}${fmtCompact(gainLoss!)}`, color: gainLoss! >= 0 ? 'var(--c-pos)' : 'var(--c-neg)' },
               { show: taxAmount != null, label: isVi ? 'Thuế TNCN (0.1%)' : 'Personal income tax (0.1%)', value: `−${fmtCompact(taxAmount!)}`, color: 'var(--c-muted)' },
             ].filter((r) => r.show)
@@ -1031,7 +1017,7 @@ function SellModal({ inv, isVi, goalId, goalCurrentValue, goalTargetAmount, onCl
           })()}
 
           {/* Bank summary: principal portion / received / gain-loss / remaining */}
-          {isBank && effAmount > 0 && !isOverMax && effReceived > 0 && (
+          {isBank && numAmount > 0 && !isOverMax && numReceived > 0 && (
             <div style={{ background: 'var(--c-card-2)', borderRadius: 12, overflow: 'hidden' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid var(--c-line)' }}>
                 <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{isVi ? 'Tiền gốc' : 'Principal'}{bankFraction < 0.999 && <span style={{ opacity: 0.7 }}> · {Math.round(bankFraction * 100)}%</span>}</span>
@@ -1039,7 +1025,7 @@ function SellModal({ inv, isVi, goalId, goalCurrentValue, goalTargetAmount, onCl
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid var(--c-line)' }}>
                 <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{isVi ? 'Số tiền thực nhận' : "Amount you'll receive"}</span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(effReceived)}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(numReceived)}</span>
               </div>
               {bankGain != null && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 14px', borderBottom: '1px solid var(--c-line)' }}>
@@ -1049,7 +1035,7 @@ function SellModal({ inv, isVi, goalId, goalCurrentValue, goalTargetAmount, onCl
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px' }}>
                 <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{isVi ? 'Còn lại sau giao dịch' : 'Remaining after transaction'}</span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(Math.max(0, maxAmount - effAmount))}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(Math.max(0, maxAmount - numAmount))}</span>
               </div>
             </div>
           )}
@@ -1167,11 +1153,11 @@ function SellModal({ inv, isVi, goalId, goalCurrentValue, goalTargetAmount, onCl
               transition: 'background 120ms, color 120ms',
             }}>
               {isBank ? <ArrowDownToLine size={15} strokeWidth={2.2} /> : <ArrowDownRight size={15} strokeWidth={2.2} />}
-              {(isGold ? numUnits <= 0 : effAmount <= 0)
+              {(isGold ? numUnits <= 0 : numAmount <= 0)
                 ? (isVi ? (isBank ? 'Nhập số tiền rút' : isGold ? 'Nhập số lượng bán' : 'Nhập số tiền bán') : (isBank ? 'Enter withdrawal amount' : isGold ? 'Enter quantity to sell' : 'Enter sale amount'))
                 : (isGold && numSalePrice <= 0) ? (isVi ? 'Nhập giá bán' : 'Enter sale price')
                 : isOverMax ? (isVi ? (isGold ? 'Vượt quá số lượng' : 'Vượt quá số dư') : (isGold ? 'Exceeds quantity' : 'Exceeds balance'))
-                : (isBank && effReceived <= 0) ? (isVi ? 'Nhập số tiền thực nhận' : 'Enter amount received')
+                : (isBank && numReceived <= 0) ? (isVi ? 'Nhập số tiền thực nhận' : 'Enter amount received')
                 : saving ? (isVi ? 'Đang xử lý…' : 'Processing…')
                 : isBank ? (isVi ? 'Xác nhận rút' : 'Confirm withdrawal') : (isVi ? 'Xác nhận bán' : 'Confirm sale')}
             </button>
