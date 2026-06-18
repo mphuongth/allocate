@@ -58,6 +58,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: 'This recurring saving is not linked to that book.' }, { status: 400 })
   }
 
+  // Verify plan ownership before tagging the tranche with it (the tranche's plan_id
+  // drives the By-goal "contributed" total). Reads are user-scoped, but reject a
+  // foreign/stale plan id at write time — same hygiene as the link-ownership checks.
+  if (cleanPlanId) {
+    const { data: plan } = await supabase
+      .from('monthly_plans')
+      .select('id')
+      .eq('id', cleanPlanId)
+      .eq('user_id', user.id)
+      .single()
+    if (!plan) return NextResponse.json({ error: 'Plan not found' }, { status: 404 })
+  }
+
   const { data: tranche, error } = await supabase
     .rpc('record_recurring_book_topup', {
       p_book_id: bookId,

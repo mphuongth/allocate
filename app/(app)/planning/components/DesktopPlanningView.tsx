@@ -645,8 +645,9 @@ export default function DesktopPlanningView({
   }
 
   // The recurring "Saved" pill. If the recurring is linked to an accumulating
-  // book, open the prefilled top-up sheet (tranche + fulfillment); otherwise log a
-  // standalone contribution. A term-deposit link or a matured book falls through.
+  // book, open the prefilled top-up sheet (tranche + fulfillment). A MATURED book
+  // can't be topped up — steer the user to handle its maturity rather than silently
+  // logging an unrelated standalone deposit. Otherwise log a standalone contribution.
   async function recordRecurring(g: { goalId: string; isUnallocated: boolean }, item: GoalItem) {
     if (item.linkedDepositTxId && item.recurringId && plan) {
       try {
@@ -654,8 +655,12 @@ export default function DesktopPlanningView({
         if (res.ok) {
           const dep = await res.json()
           const isBookAnchor = dep.deposit_group_id && dep.deposit_group_id === dep.transaction_id
-          const matured = dep.expiry_date && dep.expiry_date < new Date().toISOString().slice(0, 10)
-          if (isBookAnchor && !matured) {
+          if (isBookAnchor) {
+            const matured = dep.expiry_date && dep.expiry_date < new Date().toISOString().slice(0, 10)
+            if (matured) {
+              onToast(isVI ? 'Sổ đã đáo hạn — hãy xử lý đáo hạn trước.' : 'This book has matured — handle its maturity first.')
+              return
+            }
             setBookTopUp({
               savingId: item.recurringId, bookId: dep.transaction_id,
               bookName: dep.notes || (isVI ? 'Sổ ngân hàng' : 'Bank deposit'),

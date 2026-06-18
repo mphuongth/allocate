@@ -81,6 +81,28 @@ test.describe('Recurring auto-top-up into an accumulating book', () => {
     }
   })
 
+  test('topping up a matured book via the recurring is rejected', async ({ page }) => {
+    const now = new Date()
+    const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    const goal = await api.createGoal({ goal_name: 'E2E Topup Matured Goal', target_amount: 100_000_000 })
+    const anchor = await (await page.request.post('/api/v1/investment-transactions', {
+      data: { asset_type: 'bank', accumulating: true, goal_id: goal.goal_id, notes: 'E2E Topup Matured', amount_vnd: 10_000_000, interest_rate: 3.0, investment_date: iso(-100), expiry_date: iso(30) },
+    })).json()
+    const saving = await api.createRecurringSaving({ name: 'E2E Topup Matured Rec', goal_id: goal.goal_id, amount_vnd: 2_000_000, linked_deposit_tx_id: anchor.transaction_id })
+    // Mature the book.
+    await page.request.put(`/api/v1/investment-transactions/${anchor.transaction_id}`, { data: { expiry_date: iso(-2) } })
+    try {
+      const res = await page.request.post(`/api/v1/recurring-savings/${saving.saving_id}/topup`, {
+        data: { book_id: anchor.transaction_id, amount_vnd: 2_000_000, interest_rate: 3.0, investment_date: iso(0), ym },
+      })
+      expect(res.status()).toBe(400)
+    } finally {
+      await api.deleteRecurringSaving(saving.saving_id)
+      await api.deleteDepositGroup(anchor.transaction_id)
+      await api.deleteGoal(goal.goal_id)
+    }
+  })
+
   test('a recurring can be linked to a book anchor but not to a non-anchor tranche', async ({ page }) => {
     const goal = await api.createGoal({ goal_name: 'E2E Link Goal', target_amount: 100_000_000 })
     const anchor = await (await page.request.post('/api/v1/investment-transactions', {
