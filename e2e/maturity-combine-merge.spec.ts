@@ -66,7 +66,15 @@ test.describe('Term-deposit maturity — merge a sibling deposit into the re-dep
       await expect(panel.getByText('E2E Merge D')).toBeVisible({ timeout: 10_000 })
 
       // D's Options → Handle maturity → choose "Settle & re-deposit" (merge).
-      await panel.getByRole('button', { name: 'Options', exact: true }).first().click()
+      // The list renders BOTH D and S, in no guaranteed order — target D's own
+      // row (the matured deposit) rather than whichever Options button is first,
+      // or we'd open S's options (no "Handle maturity" → timeout).
+      const dRow = panel
+        .locator('div')
+        .filter({ has: page.getByRole('button', { name: 'Options', exact: true }) })
+        .filter({ hasText: 'E2E Merge D' })
+        .last()
+      await dRow.getByRole('button', { name: 'Options', exact: true }).click()
       await page.getByText(/^(Handle maturity|Xử lý đáo hạn)$/).click()
       await page.getByRole('button', { name: /Settle & re-deposit|Tất toán & gửi lại/i }).click()
 
