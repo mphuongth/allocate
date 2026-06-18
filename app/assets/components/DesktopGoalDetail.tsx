@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { ChevronLeft, X, MoreHorizontal, Edit2, Trash2, ChevronRight, ArrowDownRight, ArrowUpRight, Target, CalendarDays, Check, ArrowDownToLine, Wallet, Shield, RefreshCw } from 'lucide-react'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import type { GoalData } from '../DashboardClient'
-import { GD_COLORS, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, buildRenewalSummary, AffectsProgressControl, BankInfoStrip, TopUpControl, RenewalSummaryLine, needsMaturityAction, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
+import { GD_COLORS, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, buildRenewalSummary, AffectsProgressControl, BankInfoStrip, TopUpControl, RenewalSummaryLine, needsMaturityAction, needsBookMaturityAction, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
 import { MaturityResolveModal } from './MaturityResolveSheet'
 import { fmtTxDate } from './transactionUtils'
 import { TxRowsSkeleton } from './Skeletons'
@@ -610,14 +610,18 @@ function InvOptionsModal({ inv, isVi, renewalSummary, onClose, onHistory, onReso
 }) {
   const isBank = inv.type === 'bank'
   const typeColor = GD_COLORS[inv.type] ?? 'var(--c-muted)'
-  const needsMaturity = needsMaturityAction(inv, isVi)
+  // A matured term deposit renews; a matured accumulating book collapses — both
+  // open the same "Handle maturity" sheet (it branches internally).
+  const needsMaturity = needsMaturityAction(inv, isVi) || needsBookMaturityAction(inv)
 
   const actions = [
     ...(needsMaturity ? [{
       icon: <RefreshCw size={18} color="var(--c-warn,#b45309)" />,
       bg: 'var(--c-warn-tint,#fef3c7)',
       label: isVi ? 'Xử lý đáo hạn' : 'Handle maturity',
-      sub: isVi ? 'Tái tục hoặc chuyển sang chờ rút' : 'Renew or mark for withdrawal',
+      sub: inv.depositGroupId
+        ? (isVi ? 'Tất toán cả sổ & gửi lại' : 'Settle the book & re-deposit')
+        : (isVi ? 'Tái tục hoặc chuyển sang chờ rút' : 'Renew or mark for withdrawal'),
       onClick: onResolve,
     }] : []),
     {

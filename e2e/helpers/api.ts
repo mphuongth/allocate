@@ -61,6 +61,17 @@ export async function deleteRecurringSaving(savingId: string) {
   await supabase.from('recurring_savings').delete().eq('saving_id', savingId)
 }
 
+export async function getRecurringSaving(savingId: string) {
+  const { data } = await supabase.from('recurring_savings').select('*').eq('saving_id', savingId).single()
+  return data
+}
+
+// Invoke the collapse RPC directly (service role). Lets a spec drive it with a
+// deliberately stale tranche set to exercise the mid-flight-change guard.
+export async function rpcCollapseBook(args: Record<string, unknown>) {
+  return await supabase.rpc('collapse_accumulating_book', args)
+}
+
 export async function createInsuranceMember(data: {
   member_name: string
   relationship: string
