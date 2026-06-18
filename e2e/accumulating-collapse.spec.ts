@@ -64,6 +64,16 @@ test.describe('Accumulating book collapse (Loại 2 book-level renewal)', () => 
       // books — this is the book-only entry point).
       await page.getByRole('button', { name: /Handle maturity|Xử lý đáo hạn/i }).first().click()
 
+      // The lump prefills with the PLAN TOTAL (Σ principal + accrued interest), not
+      // bare principal — both in the default roll mode and the editable change mode.
+      const PRINCIPAL = 60_000_000 // 50M anchor + 10M top-up
+      const defaultLump = Number((await page.getByTestId('maturity-new-principal').textContent() ?? '').replace(/[^0-9]/g, ''))
+      expect(defaultLump).toBeGreaterThan(PRINCIPAL)
+      await page.getByRole('button', { name: /Change amount|Đổi số tiền/i }).click()
+      const changeLump = Number((await page.getByTestId('maturity-new-amount').inputValue()).replace(/[^0-9]/g, ''))
+      expect(changeLump).toBeGreaterThan(PRINCIPAL)
+      await page.getByRole('button', { name: /Renew principal \+ interest|Tái tục gốc \+ lãi/i }).click()
+
       // Collapse form (defaults to roll principal + interest). Give it a clean term
       // and confirm — the route values each tranche's interest server-side.
       await page.getByTestId('maturity-term-input').fill('12')

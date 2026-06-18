@@ -96,7 +96,11 @@ export function MaturityResolveBody({
   // suggested new rate to 1dp so the field starts clean; a term deposit keeps its
   // exact stored rate.
   const [rate, setRate] = useState(inv.interestRate != null ? String(isBook ? Math.round(inv.interestRate * 10) / 10 : inv.interestRate) : '')
-  const [newAmount, setNewAmount] = useState(String(principal))
+  // The editable lump (change mode). For a book, seed it with the plan TOTAL
+  // (Σ principal + Σ interest) — the full payout the collapse would otherwise
+  // re-deposit — so a hand-edit starts from the book's real figure, not bare
+  // principal. A single term deposit keeps its principal-only default.
+  const [newAmount, setNewAmount] = useState(String(isBook ? principal + estInterest : principal))
   // The new maturity follows old-maturity + term until the user edits it by hand,
   // at which point we freeze their value (null = "follow the term").
   const [maturityOverride, setMaturityOverride] = useState<string | null>(null)
