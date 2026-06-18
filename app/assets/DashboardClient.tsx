@@ -22,6 +22,7 @@ import MaturityActionCard from './components/MaturityActionCard'
 import { MaturityResolveSheet, MaturityResolveModal } from './components/MaturityResolveSheet'
 import { isActionableTermDeposit, MATURING_COUNT_EVENT } from '@/lib/maturity'
 import { actionableBooks } from './maturityCardItems'
+import { collapseUnallocatedBooks } from './unallocatedBooks'
 import type { InvRow } from './components/goalDetailShared'
 import { loadOverview, overviewErrorText, getCachedOverview, setCachedOverview } from './overviewData'
 
@@ -511,6 +512,10 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const allFunds = data ? [...data.unallocated.funds, ...data.goals.flatMap((g) => g.funds)] : []
   const detailFund = fundDetailId ? allFunds.find((f) => f.fundId === fundDetailId) : null
 
+  // Roll an unallocated accumulating book's tranches into one row (the assign/sell
+  // actions then act on the whole book — /assign cascades a book's goal atomically).
+  const unallocatedNonFunds = data ? collapseUnallocatedBooks(data.unallocated.nonFunds) : []
+
   const isVi = locale === 'vi'
 
   // Term deposits (assigned + unassigned) that need a renew/withdraw decision,
@@ -736,7 +741,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                     <UnallocatedSection
                       unallocatedAmount={data.unallocated.totalValue}
                       funds={data.unallocated.funds}
-                      nonFunds={data.unallocated.nonFunds}
+                      nonFunds={unallocatedNonFunds}
                       onFundClick={handleFundClick}
                       onAssignToGoal={(fundId, name, value, type) => { setGoalPickerFundId(fundId); setGoalPickerFundItem({ name, value, type }) }}
                       onSellFund={openSellFund}
@@ -920,7 +925,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                 <UnallocatedSection
                   unallocatedAmount={data.unallocated.totalValue}
                   funds={data.unallocated.funds}
-                  nonFunds={data.unallocated.nonFunds}
+                  nonFunds={unallocatedNonFunds}
                   onFundClick={handleFundClick}
                   onAssignToGoal={(fundId, name, value, type) => { setGoalPickerFundId(fundId); setGoalPickerFundItem({ name, value, type }) }}
                   onSellFund={openSellFund}
