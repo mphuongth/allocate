@@ -333,8 +333,9 @@ function invToSellItem(inv: InvRow): SellItem {
     units: inv.units ?? undefined,
     navPerUnit,
     gainPct: inv.gainPct ?? undefined,
-    transactionId: inv.id,
+    transactionId: inv.id, // for a book this is the anchor (= deposit_group_id)
     purchasePrice: inv.principal ?? inv.value,
+    depositGroupId: inv.depositGroupId ?? null,
   }
 }
 
@@ -381,7 +382,7 @@ function InvestmentActionSheet({
     history: 'Lịch sử giao dịch',
     historySub: 'Xem các lần mua / bán trước đây',
     sell: isBank ? 'Rút tiền' : 'Bán',
-    sellSub: isBank ? 'Rút tiền gửi khỏi mục tiêu' : 'Bán khoản đầu tư',
+    sellSub: inv.depositGroupId ? 'Tất toán toàn bộ sổ' : isBank ? 'Rút tiền gửi khỏi mục tiêu' : 'Bán khoản đầu tư',
     unassign: 'Bỏ gán mục tiêu',
     unassignSub: 'Chuyển khoản đầu tư này sang trạng thái chưa gán',
   } : {
@@ -391,7 +392,7 @@ function InvestmentActionSheet({
     history: 'Transaction history',
     historySub: 'View past buys & sells',
     sell: isBank ? 'Withdraw' : 'Sell',
-    sellSub: isBank ? 'Withdraw deposit from goal' : 'Liquidate this investment',
+    sellSub: inv.depositGroupId ? 'Close the whole book' : isBank ? 'Withdraw deposit from goal' : 'Liquidate this investment',
     unassign: 'Unassign from goal',
     unassignSub: 'Move this investment to unassigned',
   }
@@ -525,9 +526,8 @@ function InvestmentActionSheet({
             <ChevronRight size={16} color="var(--c-muted)" />
           </button>
 
-          {/* Sell / Withdraw — hidden for an accumulating book (withdrawal can't
-              yet target one tranche without under-subtracting the book) */}
-          {!inv.depositGroupId && (
+          {/* Sell / Withdraw — for a book this is a FULL close (the sell sheet
+              routes it through the book-withdraw endpoint). */}
           <button
             onClick={() => { onClose(); setTimeout(onSell, 60) }}
             style={{
@@ -548,7 +548,6 @@ function InvestmentActionSheet({
             </div>
             <ChevronRight size={16} color="var(--c-muted)" />
           </button>
-          )}
         </div>
       </div>
     </div>
