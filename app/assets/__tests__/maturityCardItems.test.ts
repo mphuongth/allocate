@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { actionableBookRows, type MaturityNonFund } from '../maturityCardItems'
+import { actionableBooks, type MaturityNonFund, type TaggedTranche } from '../maturityCardItems'
 
 // A YYYY-MM-DD string `n` days from today (deterministic regardless of run date).
 function daysFromNow(n: number): string {
@@ -14,15 +14,16 @@ const tranche = (over: Partial<MaturityNonFund>): MaturityNonFund => ({
   interestRate: 3, expiryDate: daysFromNow(-2), investmentDate: '2025-01-01',
   notes: null, units: null, depositGroupId: 'grp', ...over,
 })
+const tag = (it: MaturityNonFund, goalId: string | null = 'g1'): TaggedTranche<MaturityNonFund> => ({ it, goalId })
 
-describe('actionableBookRows — group accumulating tranches into one card row', () => {
-  it('rolls a matured book\'s tranches into ONE row (summed value/principal, blended rate, book maturity)', () => {
-    const rows = actionableBookRows([
-      tranche({ transactionId: 'grp', amount: 50_000_000, currentValue: 51_000_000, interestRate: 3.0, notes: 'My book', investmentDate: '2025-01-01' }),
-      tranche({ transactionId: 't2', amount: 10_000_000, currentValue: 10_100_000, interestRate: 3.6, investmentDate: '2025-06-01' }),
+describe('actionableBooks — group accumulating tranches into one card row', () => {
+  it('rolls a matured book\'s tranches into ONE row (summed value/principal, blended rate, book maturity, anchor goal)', () => {
+    const rows = actionableBooks([
+      tag(tranche({ transactionId: 'grp', amount: 50_000_000, currentValue: 51_000_000, interestRate: 3.0, notes: 'My book', investmentDate: '2025-01-01' }), 'g1'),
+      tag(tranche({ transactionId: 't2', amount: 10_000_000, currentValue: 10_100_000, interestRate: 3.6, investmentDate: '2025-06-01' }), 'g1'),
     ], false)
     expect(rows).toHaveLength(1)
-    const { inv, anchor } = rows[0]
+    const { inv, anchor, goalId } = rows[0]
     expect(inv.id).toBe('grp')
     expect(inv.depositGroupId).toBe('grp')
     expect(inv.principal).toBe(60_000_000)
@@ -30,32 +31,46 @@ describe('actionableBookRows — group accumulating tranches into one card row',
     expect(inv.name).toBe('My book')
     expect(inv.interestRate).toBeCloseTo((50 * 3.0 + 10 * 3.6) / 60, 6)
     expect(inv.investmentDate).toBe('2025-01-01') // earliest tranche opened the book
-    expect(anchor.transactionId).toBe('grp') // the self-grouped row, for context
+    expect(anchor.transactionId).toBe('grp')
+    expect(goalId).toBe('g1')
+  })
+
+  it('groups a book to ONE row even if its tranches are split across goal buckets, using the anchor\'s goal', () => {
+    // Mid-way through #349's non-atomic goal cascade a book can momentarily span
+    // goals. Global grouping must still yield one row with the FULL principal and
+    // the anchor's goal — so the card and the badge never disagree.
+    const rows = actionableBooks([
+      tag(tranche({ transactionId: 'grp', amount: 50_000_000, currentValue: 51_000_000 }), 'gAnchor'),
+      tag(tranche({ transactionId: 't2', amount: 10_000_000, currentValue: 10_100_000 }), 'gOther'),
+    ], false)
+    expect(rows).toHaveLength(1)
+    expect(rows[0].inv.principal).toBe(60_000_000) // full, not a partial bucket sum
+    expect(rows[0].goalId).toBe('gAnchor')
   })
 
   it('excludes a book whose shared maturity is still well in the future', () => {
-    expect(actionableBookRows([
-      tranche({ transactionId: 'grp', expiryDate: daysFromNow(40) }),
-      tranche({ transactionId: 't2', expiryDate: daysFromNow(40) }),
+    expect(actionableBooks([
+      tag(tranche({ transactionId: 'grp', expiryDate: daysFromNow(40) })),
+      tag(tranche({ transactionId: 't2', expiryDate: daysFromNow(40) })),
     ], false)).toHaveLength(0)
   })
 
   it('includes a book maturing within the reminder window (tomorrow)', () => {
-    expect(actionableBookRows([
-      tranche({ transactionId: 'grp', expiryDate: daysFromNow(1) }),
+    expect(actionableBooks([
+      tag(tranche({ transactionId: 'grp', expiryDate: daysFromNow(1) })),
     ], false)).toHaveLength(1)
   })
 
   it('ignores ungrouped term deposits — it returns books only', () => {
-    expect(actionableBookRows([
-      tranche({ transactionId: 'x', depositGroupId: null, expiryDate: daysFromNow(-1) }),
+    expect(actionableBooks([
+      tag(tranche({ transactionId: 'x', depositGroupId: null, expiryDate: daysFromNow(-1) })),
     ], false)).toHaveLength(0)
   })
 
   it('keeps two separate books separate', () => {
-    const rows = actionableBookRows([
-      tranche({ transactionId: 'a', depositGroupId: 'a' }),
-      tranche({ transactionId: 'b', depositGroupId: 'b' }),
+    const rows = actionableBooks([
+      tag(tranche({ transactionId: 'a', depositGroupId: 'a' })),
+      tag(tranche({ transactionId: 'b', depositGroupId: 'b' })),
     ], false)
     expect(rows.map((r) => r.inv.id).sort()).toEqual(['a', 'b'])
   })

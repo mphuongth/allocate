@@ -21,7 +21,7 @@ import RecentActivityCard from './components/RecentActivityCard'
 import MaturityActionCard from './components/MaturityActionCard'
 import { MaturityResolveSheet, MaturityResolveModal } from './components/MaturityResolveSheet'
 import { isActionableTermDeposit, MATURING_COUNT_EVENT } from '@/lib/maturity'
-import { actionableBookRows } from './maturityCardItems'
+import { actionableBooks } from './maturityCardItems'
 import type { InvRow } from './components/goalDetailShared'
 import { loadOverview, overviewErrorText, getCachedOverview, setCachedOverview } from './overviewData'
 
@@ -455,10 +455,15 @@ export default function DashboardClient({ userId }: { userId: string }) {
   // Same filter as the card and the badge hook, so they can't disagree.
   useEffect(() => {
     if (!data) return
-    const items = [...data.goals.flatMap((g) => g.nonFunds ?? []), ...data.unallocated.nonFunds]
-    // Term deposits count one each; an accumulating book counts as ONE (grouped),
-    // not per-tranche. isVi is irrelevant to the count, so pass false.
-    const count = items.filter(isActionableTermDeposit).length + actionableBookRows(items, false).length
+    // Tag each tranche with its goal bucket, then group books GLOBALLY — same as
+    // the card below — so the badge and the card can't disagree even if a book is
+    // momentarily split across goals. Term deposits count one each; a book counts
+    // as ONE. isVi is irrelevant to the count, so pass false.
+    const tagged = [
+      ...data.goals.flatMap((g) => (g.nonFunds ?? []).map((it) => ({ it, goalId: g.goalId }))),
+      ...data.unallocated.nonFunds.map((it) => ({ it, goalId: null as string | null })),
+    ]
+    const count = tagged.filter(({ it }) => isActionableTermDeposit(it)).length + actionableBooks(tagged, false).length
     window.dispatchEvent(new CustomEvent(MATURING_COUNT_EVENT, { detail: count }))
   }, [data])
 
@@ -511,21 +516,21 @@ export default function DashboardClient({ userId }: { userId: string }) {
   // Term deposits (assigned + unassigned) that need a renew/withdraw decision,
   // carrying the context needed to act on each.
   // Single term deposits surface one row each; an accumulating book surfaces as
-  // ONE grouped row (its tranches rolled up via actionableBookRows) that opens the
-  // collapse flow. The book's `raw` is its anchor tranche — carried only for the
-  // resolve sheet's context; withdraw isn't offered for a book.
-  const maturingDeposits: MaturingDep[] = data ? [
-    ...data.goals.flatMap((g) => [
-      ...(g.nonFunds ?? []).filter(isActionableTermDeposit)
-        .map((it) => ({ inv: nonFundToInvRow(it, isVi), goalId: g.goalId, raw: it })),
-      ...actionableBookRows(g.nonFunds ?? [], isVi)
-        .map((b) => ({ inv: b.inv, goalId: g.goalId, raw: b.anchor })),
-    ]),
-    ...data.unallocated.nonFunds.filter(isActionableTermDeposit)
-      .map((it) => ({ inv: nonFundToInvRow(it, isVi), goalId: null, raw: it })),
-    ...actionableBookRows(data.unallocated.nonFunds, isVi)
-      .map((b) => ({ inv: b.inv, goalId: null, raw: b.anchor })),
+  // ONE grouped row (its tranches rolled up via actionableBooks) that opens the
+  // collapse flow. We tag every tranche with its goal bucket, then group books
+  // GLOBALLY across buckets so a momentarily goal-split book still shows one row
+  // (full principal, anchor's goal) — and matches the badge count above. A book's
+  // `raw` is its anchor tranche — context only; withdraw isn't offered for a book.
+  const taggedNonFunds = data ? [
+    ...data.goals.flatMap((g) => (g.nonFunds ?? []).map((it) => ({ it, goalId: g.goalId as string | null }))),
+    ...data.unallocated.nonFunds.map((it) => ({ it, goalId: null as string | null })),
   ] : []
+  const maturingDeposits: MaturingDep[] = [
+    ...taggedNonFunds.filter(({ it }) => isActionableTermDeposit(it))
+      .map(({ it, goalId }) => ({ inv: nonFundToInvRow(it, isVi), goalId, raw: it })),
+    ...actionableBooks(taggedNonFunds, isVi)
+      .map((b) => ({ inv: b.inv, goalId: b.goalId, raw: b.anchor })),
+  ]
 
   // Withdraw from the maturity card: open the withdraw sheet pre-targeted at the
   // deposit in one tap. A goal-assigned deposit withdraws in its goal context so
