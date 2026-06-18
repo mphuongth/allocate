@@ -12,7 +12,7 @@ import FixedExpenseManager from './FixedExpenseManager'
 import RecurringSavingManager from './RecurringSavingManager'
 import AddTransactionSheet, { type EditableTransaction, type PrefillTransaction } from '@/app/assets/components/AddTransactionSheet'
 import RecurringBookTopUpSheet, { type BookTopUpTarget } from '@/app/assets/components/RecurringBookTopUpSheet'
-import { buildByGoal, resolveRecurringSavings, type GoalRow, type GoalItem } from '@/lib/planning'
+import { buildByGoal, resolveRecurringSavings, DEPOSIT_BACKED_FULFILLMENT_SOURCES, type GoalRow, type GoalItem } from '@/lib/planning'
 import { MobilePlanningSkeleton } from './PlanningSkeleton'
 import type {
   MonthlyPlan, FundInvestment, DirectSaving, FixedExpense,
@@ -1033,15 +1033,18 @@ export default function MobilePlanningView({
         funds: { name: f.name },
       }))
   }, [funds, dcaSkips])
-  const fulfilledAmounts = useMemo(
-    () => new Map(recurringFulfillments.map(f => [f.recurring_saving_id, f.amount_vnd])),
+  const fulfillments = useMemo(
+    () => new Map(recurringFulfillments.map(f => [f.recurring_saving_id, {
+      amount: f.amount_vnd,
+      countedAsDeposit: DEPOSIT_BACKED_FULFILLMENT_SOURCES.has(f.source),
+    }])),
     [recurringFulfillments],
   )
   const byGoal = useMemo(
     () => buildByGoal([...investments, ...skippedDcaInvestments], savings, resolvedRecurring, goalsById, {
       unallocated: isVI ? 'Chưa phân bổ' : 'Unallocated',
-    }, fulfilledAmounts),
-    [investments, skippedDcaInvestments, savings, resolvedRecurring, goalsById, isVI, fulfilledAmounts],
+    }, fulfillments),
+    [investments, skippedDcaInvestments, savings, resolvedRecurring, goalsById, isVI, fulfillments],
   )
   const totalGoals = useMemo(() => byGoal.reduce((s, g) => s + g.totalAllocated, 0), [byGoal])
   const contributedTotal = useMemo(() => byGoal.reduce((s, g) => s + g.contributed, 0), [byGoal])

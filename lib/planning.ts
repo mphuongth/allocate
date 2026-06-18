@@ -9,6 +9,19 @@
 
 const UNALLOCATED = '__unallocated__'
 
+// A recurring recorded this month via a fulfillment row, and whether that path
+// ALSO logged a plan-scoped bank deposit. Book top-up writes a tranche with a
+// plan_id (so it's already in directSavings → contributed counts it); maturity-
+// combine's re-deposit isn't plan-scoped, so its fulfillment is the only record.
+export interface MonthFulfillment {
+  amount: number
+  countedAsDeposit: boolean
+}
+
+// Fulfillment `source` values whose path also logs a plan-scoped deposit — used
+// to set MonthFulfillment.countedAsDeposit so contributed isn't double-counted.
+export const DEPOSIT_BACKED_FULFILLMENT_SOURCES = new Set(['recurring-topup'])
+
 // ─── Recurring savings ─────────────────────────────────────────────────────────
 
 export interface RecurringSaving {
@@ -125,11 +138,12 @@ export function buildByGoal(
   recurring: ResolvedSaving[],
   goalsById: Map<string, string>,
   labels?: { unallocated?: string },
-  // Recurring-saving ids → amount fulfilled this month. These were recorded via a
-  // path that doesn't log a plan-scoped deposit (maturity-combine, book top-up),
-  // so the goal+amount deposit match below can't see them; we mark the line
-  // recorded and count the fulfilled amount toward the goal's contributed.
-  fulfilledAmounts?: Map<string, number>,
+  // Recurring-saving ids → this month's fulfillment. These were recorded via a
+  // path the goal+amount deposit match can't see (maturity-combine, book top-up),
+  // so we mark the line recorded. We add the amount to contributed ONLY when the
+  // path didn't also log a plan-scoped deposit (countedAsDeposit=false) — else
+  // the deposit already counts it in the directSavings loop and we'd double-count.
+  fulfillments?: Map<string, MonthFulfillment>,
 ): GoalRow[] {
   const unallocatedLabel = labels?.unallocated ?? 'Unallocated'
   const map = new Map<string, GoalRow>()
@@ -199,15 +213,16 @@ export function buildByGoal(
     // the month (maturity-combine / book top-up), or — failing that — once a
     // deposit of the same amount toward the same goal has been logged. We check
     // the fulfillment first and don't touch the pool when it hits, so a fulfilled
-    // line never eats a deposit that a sibling line should match. A fulfillment
-    // also counts toward contributed (it isn't a logged deposit, so it's the only
-    // place its money lands) — that drives the goal progress bar.
+    // line never eats a deposit that a sibling line should match. A combine
+    // fulfillment also counts toward contributed (its re-deposit isn't plan-scoped,
+    // so this is the only place its money lands → drives the progress bar); a
+    // top-up fulfillment does NOT, since its tranche already counts in directSavings.
     let recorded = false
     if (!r.skipped) {
-      const fulfilled = fulfilledAmounts?.get(r.id)
-      if (fulfilled !== undefined) {
+      const fulfilled = fulfillments?.get(r.id)
+      if (fulfilled) {
         recorded = true
-        row.contributed += fulfilled
+        if (!fulfilled.countedAsDeposit) row.contributed += fulfilled.amount
       } else {
         const pool = depositPool.get(r.goalId ?? UNALLOCATED)
         const i = pool ? pool.indexOf(r.amount) : -1

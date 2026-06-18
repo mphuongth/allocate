@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
       // (keyed by saving id, with the amount actually fulfilled this month).
       supabase
         .from('recurring_saving_fulfillments')
-        .select('recurring_saving_id, amount_vnd').eq('user_id', user.id).eq('ym', ym),
+        .select('recurring_saving_id, amount_vnd, source').eq('user_id', user.id).eq('ym', ym),
     ])
     // Auto-seed DCA fund entries and keep pending rows in sync with current DCA amount
     const allFunds = fundsRes.data ?? []

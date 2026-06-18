@@ -80,11 +80,13 @@ export interface RecurringSavingOverride {
   monthly_amount_override_vnd: number
 }
 
-// A recurring recorded this month via maturity-combine / book top-up (no
-// plan-scoped deposit). amount_vnd is what was actually fulfilled.
+// A recurring recorded this month via maturity-combine / book top-up. amount_vnd
+// is what was fulfilled; source distinguishes whether a plan-scoped deposit was
+// also logged (book top-up) so contributed isn't double-counted.
 export interface RecurringFulfillment {
   recurring_saving_id: string
   amount_vnd: number
+  source: string
 }
 
 export interface Fund {
