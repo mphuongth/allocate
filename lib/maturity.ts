@@ -111,6 +111,31 @@ export function monthsBetween(fromIso: string, toIso: string): number {
   return months
 }
 
+// Split an integer `total` across ordered `weights` with the exact cumulative-
+// window method the withdraw/collapse SQL uses (20260618000009 lines 89–95):
+//   alloc_i = round(total·cum_i/Σ) − round(total·cum_(i-1)/Σ)
+// The rounding residual falls on the slices so Σ alloc === total EXACTLY. Used by
+// the merge-on-renew combine flow to split one editable "merged in" total across
+// the selected source deposits the same way the RPC's per-source allocation
+// would — so the client preview and the server can never disagree on net worth.
+// `weights` MUST be ordered by (investmentDate, id) to match the SQL window.
+// Postgres round() rounds half away from zero; Math.round agrees with it for the
+// non-negative money values this only ever handles.
+export function allocateCumulative(total: number, weights: number[]): number[] {
+  const sum = weights.reduce((a, w) => a + w, 0)
+  if (sum <= 0) return weights.map(() => 0)
+  const out: number[] = []
+  let cum = 0
+  let prevRounded = 0
+  for (const w of weights) {
+    cum += w
+    const rounded = Math.round((total * cum) / sum)
+    out.push(rounded - prevRounded)
+    prevRounded = rounded
+  }
+  return out
+}
+
 // The principal that the next cycle starts with, per the chosen renewal mode.
 export function renewalPrincipal(
   mode: RenewMode,

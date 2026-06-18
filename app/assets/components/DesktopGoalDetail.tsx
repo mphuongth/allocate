@@ -565,6 +565,8 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
       {showResolve && actionInv && (
         <MaturityResolveModal
           inv={actionInv}
+          goalId={goal.goalId}
+          siblingDeposits={invRows}
           isVi={isVi}
           onClose={() => setShowResolve(false)}
           onRenewed={() => { setShowResolve(false); (onRenewed ?? onDataChanged)() }}
