@@ -16,6 +16,7 @@ export interface RecurringSaving {
   name: string
   goal_id: string | null
   amount_vnd: number
+  linked_deposit_tx_id?: string | null
   savings_goals?: { goal_name: string } | null
 }
 
@@ -33,6 +34,7 @@ export interface ResolvedSaving {
   amount: number // effective amount this month (0 when skipped)
   skipped: boolean
   overridden: boolean
+  linkedDepositTxId: string | null // an explicitly linked deposit/book, if any
 }
 
 // Apply per-month overrides to the active recurring savings. An override of 0
@@ -55,6 +57,7 @@ export function resolveRecurringSavings(
       amount: skipped ? 0 : hasOv ? ov! : s.amount_vnd,
       skipped,
       overridden: hasOv && ov! > 0 && ov !== s.amount_vnd,
+      linkedDepositTxId: s.linked_deposit_tx_id ?? null,
     }
   })
 }
@@ -97,6 +100,9 @@ export interface GoalItem {
   recurringId?: string
   skipped?: boolean
   overridden?: boolean
+  // An accumulating book this recurring is linked to (its anchor id), if any —
+  // the "Saved" pill tops up that book instead of logging a standalone deposit.
+  linkedDepositTxId?: string | null
 }
 
 export interface GoalRow {
@@ -202,6 +208,7 @@ export function buildByGoal(
       skipped: r.skipped,
       overridden: r.overridden,
       recorded,
+      linkedDepositTxId: r.linkedDepositTxId,
     })
   }
 

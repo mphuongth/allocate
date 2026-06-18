@@ -197,10 +197,19 @@ export function realizedRecurringContributions(
       // override 0 = skip this month; any other positive override replaces the base.
       const amount = ov === 0 ? 0 : ov != null ? ov : s.amount_vnd
       if (amount <= 0) continue
-      // Explicitly fulfilled this month (folded into a renewed term deposit) —
-      // the amount already lives in that deposit's principal, so skip the
-      // synthesized duplicate without consuming a logged deposit.
-      if (fulfilledSet.has(`${s.saving_id}::${ym}`)) continue
+      // Explicitly fulfilled this month (folded into a renewed term deposit, or
+      // materialized as a book top-up) — the amount already lives in that
+      // deposit's principal, so skip the synthesized duplicate. If a logged
+      // deposit backs this fulfillment (a book top-up is a real bank row that also
+      // lands in the pool by month+goal+amount), consume it here so it can't ALSO
+      // amount-suppress a different recurring. Combine re-deposits don't match (a
+      // folded re-deposit's amount differs), so this is a no-op for them.
+      if (fulfilledSet.has(`${s.saving_id}::${ym}`)) {
+        const fk = `${ym}::${s.goal_id ?? ''}::${amount}`
+        const backing = depositPool.get(fk)
+        if (backing) depositPool.set(fk, backing - 1)
+        continue
+      }
       // A logged deposit for the same month + goal + amount already represents
       // this contribution — consume it and skip the synthesized duplicate.
       const k = `${ym}::${s.goal_id ?? ''}::${amount}`
