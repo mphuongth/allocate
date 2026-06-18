@@ -144,6 +144,33 @@ export async function deleteDepositGroup(groupId: string) {
   await supabase.from('investment_transactions').delete().eq('deposit_group_id', groupId)
 }
 
+// Fully tear down an accumulating book: every tranche AND every withdrawal child
+// of those tranches. parent_transaction_id is ON DELETE SET NULL, so deleting the
+// tranches first (as deleteDepositGroup does) ORPHANS their withdrawal rows — they
+// linger as unassigned withdrawals that pollute later specs' global views (the
+// dashboard recent-activity card, page-wide text queries). A book partially
+// withdrawn writes a withdrawal PER tranche, so this matters whenever a book test
+// touched withdrawals.
+//
+// Discovery is the subtle part: a PARTIAL withdrawal leaves the book intact, so
+// tranches are still findable by deposit_group_id. But a FULL close SETTLES the
+// book and CLEARS deposit_group_id on every tranche — so the group query finds
+// nothing and any top-up tranche (plus its withdrawal child) would survive
+// undiscovered. Callers that create top-up tranches must therefore pass those ids
+// explicitly; we union them with whatever is still grouped. Order is load-bearing:
+// delete the children first (by parent, while the links are still valid), THEN the
+// tranches and the anchor.
+export async function deleteBookCascade(anchorId: string, extraTrancheIds: string[] = []) {
+  const { data: grouped } = await supabase
+    .from('investment_transactions')
+    .select('transaction_id')
+    .eq('deposit_group_id', anchorId)
+  const ids = [...new Set([anchorId, ...extraTrancheIds, ...(grouped ?? []).map((t) => t.transaction_id)])]
+  await supabase.from('investment_transactions').delete().in('parent_transaction_id', ids)
+  await supabase.from('investment_transactions').delete().eq('deposit_group_id', anchorId)
+  await supabase.from('investment_transactions').delete().in('transaction_id', ids)
+}
+
 // Insert a withdrawal row against an existing deposit, mirroring what the
 // SellWithdraw flow POSTs (transaction_type='withdrawal', linked by
 // parent_transaction_id, asset_type null). Returns the created row.

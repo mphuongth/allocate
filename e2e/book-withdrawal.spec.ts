@@ -45,8 +45,7 @@ test.describe('Whole-book withdrawal (full close)', () => {
       // A full close SETTLES the book — the group is cleared so it can't be revived.
       expect(rows.find((r) => r.transaction_id === anchor.transaction_id)!.deposit_group_id).toBeNull()
     } finally {
-      await api.deleteDepositGroup(anchor.transaction_id)
-      await api.deleteTransactionCascade(anchor.transaction_id)
+      await api.deleteBookCascade(anchor.transaction_id, [topUp.transaction_id])
       await api.deleteGoal(goal.goal_id)
     }
   })
@@ -57,9 +56,9 @@ test.describe('Whole-book withdrawal (full close)', () => {
     const anchor = await (await page.request.post('/api/v1/investment-transactions', {
       data: { asset_type: 'bank', accumulating: true, goal_id: goal.goal_id, notes: 'E2E Close UI Book', amount_vnd: 30_000_000, interest_rate: 3.0, investment_date: iso(-60), expiry_date: iso(60) },
     })).json()
-    await page.request.post('/api/v1/investment-transactions', {
+    const topUp = await (await page.request.post('/api/v1/investment-transactions', {
       data: { tops_up_deposit_id: anchor.transaction_id, asset_type: 'bank', amount_vnd: 20_000_000, interest_rate: 3.6, investment_date: iso(-20) },
-    })
+    })).json()
     try {
       await gotoFreshDashboard(page)
       await page.getByText('E2E Book Close UI').first().click()
@@ -84,8 +83,7 @@ test.describe('Whole-book withdrawal (full close)', () => {
       expect((all.transactions as Array<{ transaction_id: string; deposit_group_id: string | null }>)
         .find((r) => r.transaction_id === anchor.transaction_id)!.deposit_group_id).toBeNull()
     } finally {
-      await api.deleteDepositGroup(anchor.transaction_id)
-      await api.deleteTransactionCascade(anchor.transaction_id)
+      await api.deleteBookCascade(anchor.transaction_id, [topUp.transaction_id])
       await api.deleteGoal(goal.goal_id)
     }
   })
@@ -116,8 +114,7 @@ test.describe('Whole-book withdrawal (full close)', () => {
       expect(revive.status()).toBe(400) // link no longer points at that book
     } finally {
       await api.deleteRecurringSaving(saving.saving_id)
-      await api.deleteDepositGroup(anchor.transaction_id)
-      await api.deleteTransactionCascade(anchor.transaction_id)
+      await api.deleteBookCascade(anchor.transaction_id)
       await api.deleteGoal(goal.goal_id)
     }
   })
@@ -148,8 +145,7 @@ test.describe('Whole-book withdrawal (full close)', () => {
       // Total withdrawn = exactly the requested principal (no rounding drift).
       expect(wdFor(anchor.transaction_id) + wdFor(topUp.transaction_id)).toBe(10_000_000)
     } finally {
-      await api.deleteDepositGroup(anchor.transaction_id)
-      await api.deleteTransactionCascade(anchor.transaction_id)
+      await api.deleteBookCascade(anchor.transaction_id, [topUp.transaction_id])
       await api.deleteGoal(goal.goal_id)
     }
   })
