@@ -43,7 +43,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const plans = (plansRes.data ?? []) as { id: string; month: number; year: number }[]
   const planIds = plans.map((p) => p.id)
 
-  const [overridesRes, depositsRes] = await Promise.all([
+  const [overridesRes, depositsRes, fulfillmentsRes] = await Promise.all([
     planIds.length > 0
       ? supabase
           .from('recurring_saving_overrides')
@@ -60,6 +60,14 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       .eq('goal_id', goalId)
       .eq('asset_type', 'bank')
       .eq('transaction_type', 'investment'),
+    // Months already settled by folding the recurring into a renewed/topped-up
+    // deposit. The amount lives in that deposit's principal, so the synthesized
+    // row must be skipped here too — the dashboard overview already honours these,
+    // and the goal detail must agree or the goal shows the contribution twice.
+    supabase
+      .from('recurring_saving_fulfillments')
+      .select('recurring_saving_id, ym')
+      .eq('user_id', user.id),
   ])
 
   const loggedDeposits = (depositsRes.data ?? []).map((d) => ({
@@ -73,6 +81,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     plans,
     overridesRes.data ?? [],
     loggedDeposits,
+    fulfillmentsRes.data ?? [],
   )
 
   // Shape as read-only history rows mirroring the investment-transactions response.

@@ -67,3 +67,51 @@ test('recurring saving shows in goal history and counts toward progress', async 
   await panel.getByRole('button', { name: /^(History|Lịch sử)$/ }).click()
   await expect(panel.getByText('E2E VCB Recurring')).toBeVisible({ timeout: 5_000 })
 })
+
+test('a fulfilled recurring month is hidden from goal history (already folded into a deposit)', async ({ page }) => {
+  // Regression: when a recurring saving's month is folded into a renewed/topped-up
+  // deposit, a recurring_saving_fulfillments row records it and the amount lives in
+  // that deposit's principal. The goal detail must NOT also synthesize the recurring
+  // contribution row, or the goal shows it twice — once as the recurring row, once
+  // inside the deposit. The dashboard overview already honours fulfillments; the
+  // goal-detail recurring-contributions endpoint must too.
+  const goal = await api.createGoal({ goal_name: 'E2E Fulfilled Month Goal', target_amount: 100_000_000 })
+  cleanup.add(() => api.deleteGoal(goal.goal_id))
+
+  const plan = await api.createMonthlyPlan({ month: MONTH, year: YEAR, salary_vnd: 30_000_000 })
+  cleanup.add(() => api.deleteMonthlyPlan(plan.id))
+
+  // A real deposit so the goal card reliably renders and History has a concrete row.
+  const deposit = await api.createTransaction({
+    asset_type: 'bank', amount_vnd: 20_000_000, investment_date: MONTH_START,
+    interest_rate: 5, goal_id: goal.goal_id, notes: 'E2E Folded Deposit',
+  })
+  cleanup.add(() => api.deleteTransaction(deposit.transaction_id))
+
+  const saving = await api.createRecurringSaving({
+    name: 'E2E Folded Recurring', goal_id: goal.goal_id, amount_vnd: 5_000_000, effective_from: MONTH_START,
+  })
+  cleanup.add(() => api.deleteRecurringSaving(saving.saving_id))
+
+  // The month was settled by folding the recurring into the deposit.
+  const ym = `${YEAR}-${String(MONTH).padStart(2, '0')}`
+  await api.createRecurringFulfillment({ recurring_saving_id: saving.saving_id, ym, amount_vnd: 5_000_000 })
+  cleanup.add(() => api.deleteRecurringFulfillments(saving.saving_id))
+
+  // Endpoint: the fulfilled month yields no synthesized contribution.
+  const res = await page.request.get(`/api/v1/savings-goals/${goal.goal_id}/recurring-contributions`)
+  expect(res.ok()).toBeTruthy()
+  expect((await res.json()).contributions).toHaveLength(0)
+
+  // UI: History shows the real deposit but NOT the folded recurring row.
+  await page.goto('/dashboard')
+  await page.waitForLoadState('networkidle')
+  const goalCard = page.getByText('E2E Fulfilled Month Goal').first()
+  await expect(goalCard).toBeVisible({ timeout: 10_000 })
+  await goalCard.click()
+  const panel = page.getByTestId('desktop-goal-detail')
+  await expect(panel).toBeVisible({ timeout: 5_000 })
+  await panel.getByRole('button', { name: /^(History|Lịch sử)$/ }).click()
+  await expect(panel.getByText('E2E Folded Deposit')).toBeVisible({ timeout: 5_000 })
+  await expect(panel.getByText('E2E Folded Recurring')).toHaveCount(0)
+})
