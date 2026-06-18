@@ -46,6 +46,7 @@ const defaultProps = {
   otherExpenses: [],
   recurringSavings: [] as RecurringSaving[],
   recurringSavingOverrides: [],
+  recurringFulfilledIds: [] as string[],
   dcaSkips: [],
   funds: [],
   goals: [],
@@ -116,6 +117,23 @@ describe('DesktopPlanningView — recurring bank "Saved" deposit', () => {
     expect(screen.queryByRole('button', { name: /Record deposit/i })).not.toBeInTheDocument()
     // The goal progress reflects the logged contribution (2M of 2M planned).
     expect(screen.getByText('100%')).toBeInTheDocument()
+  })
+
+  it('shows the recurring as recorded from a fulfillment alone — no matching deposit (maturity-combine / book top-up)', () => {
+    // Regression: recording via maturity-combine writes a recurring_saving_fulfillments
+    // row, not a plan-scoped deposit. The Plan page used to ignore fulfillments and
+    // matched only on goal+amount, so the line stayed "Record deposit" forever.
+    render(
+      <DesktopPlanningView
+        {...defaultProps}
+        plan={basePlan}
+        recurringSavings={recurringSavings}
+        recurringFulfilledIds={['rs1']}
+      />,
+    )
+    // The line is recorded → the prominent Record deposit pill is gone, even with
+    // zero logged deposits this month.
+    expect(screen.queryByRole('button', { name: /Record deposit/i })).not.toBeInTheDocument()
   })
 
   it('opens the Add-Transaction sheet when Saved is clicked', async () => {

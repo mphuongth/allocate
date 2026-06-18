@@ -178,3 +178,58 @@ describe('buildByGoal — planned vs contributed', () => {
     expect(rows.map(r => r.isUnallocated)).toEqual([false, true])
   })
 })
+
+describe('buildByGoal — fulfillment-based recording', () => {
+  const goalsById = new Map([['g-1', 'Retirement']])
+
+  // A recurring can be recorded without a matching plan-scoped deposit — e.g.
+  // maturity-combine or a book top-up writes a recurring_saving_fulfillments row
+  // instead of a standalone deposit. The Plan page must honor that fulfillment.
+  it('marks a recurring recorded from a fulfillment even with no matching deposit', () => {
+    const recurring = resolveRecurringSavings([saving({ saving_id: 's-1', goal_id: 'g-1', amount_vnd: 1_800_000 })], [])
+    const [row] = buildByGoal([], [], recurring, goalsById, undefined, new Set(['s-1']))
+    expect(row.items[0].recorded).toBe(true)
+    expect(row.totalAllocated).toBe(1_800_000) // still planned
+    expect(row.contributed).toBe(0)            // no deposit logged → not double-counted
+  })
+
+  it('leaves a recurring unrecorded when its id is not in the fulfilled set', () => {
+    const recurring = resolveRecurringSavings([saving({ saving_id: 's-1', goal_id: 'g-1', amount_vnd: 1_800_000 })], [])
+    const [row] = buildByGoal([], [], recurring, goalsById, undefined, new Set(['other']))
+    expect(row.items[0].recorded).toBeFalsy()
+  })
+
+  it('does not consume a deposit when the line is already fulfilled, so a sibling line can still match it', () => {
+    // Two same-amount lines in one goal; one fulfilled, one deposit logged.
+    // The fulfilled line must NOT eat the deposit — the other line should match it.
+    const recurring = resolveRecurringSavings([
+      saving({ saving_id: 's-1', goal_id: 'g-1', amount_vnd: 2_000_000 }),
+      saving({ saving_id: 's-2', goal_id: 'g-1', amount_vnd: 2_000_000 }),
+    ], [])
+    const directSavings: GoalDirectSaving[] = [
+      { goal_id: 'g-1', amount_vnd: 2_000_000, savings_goals: { goal_name: 'Retirement' } },
+    ]
+    const [row] = buildByGoal([], directSavings, recurring, goalsById, undefined, new Set(['s-1']))
+    expect(row.items.find(i => i.recurringId === 's-1')!.recorded).toBe(true) // via fulfillment
+    expect(row.items.find(i => i.recurringId === 's-2')!.recorded).toBe(true) // via deposit
+  })
+
+  it('never marks a skipped recurring recorded even if a fulfillment exists', () => {
+    const recurring = resolveRecurringSavings(
+      [saving({ saving_id: 's-1', goal_id: 'g-1', amount_vnd: 2_000_000 })],
+      [{ recurring_saving_id: 's-1', monthly_amount_override_vnd: 0 }],
+    )
+    const [row] = buildByGoal([], [], recurring, goalsById, undefined, new Set(['s-1']))
+    expect(row.items[0].skipped).toBe(true)
+    expect(row.items[0].recorded).toBeFalsy()
+  })
+
+  it('still matches by deposit when no fulfilled set is passed (back-compat)', () => {
+    const recurring = resolveRecurringSavings([saving({ goal_id: 'g-1', amount_vnd: 2_000_000 })], [])
+    const directSavings: GoalDirectSaving[] = [
+      { goal_id: 'g-1', amount_vnd: 2_000_000, savings_goals: { goal_name: 'Retirement' } },
+    ]
+    const [row] = buildByGoal([], directSavings, recurring, goalsById)
+    expect(row.items[0].recorded).toBe(true)
+  })
+})

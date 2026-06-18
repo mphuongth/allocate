@@ -135,6 +135,7 @@ export default function PlanningClient() {
   const [recurringSavings, setRecurringSavings] = useState<RecurringSaving[]>(initialCache?.recurringSavings ?? [])
   const [recurringSavingOverrides, setRecurringSavingOverrides] = useState<RecurringSavingOverride[]>(initialCache?.recurringSavingOverrides ?? [])
   const [dcaSkips, setDcaSkips] = useState<DcaSkip[]>(initialCache?.dcaSkips ?? [])
+  const [recurringFulfilledIds, setRecurringFulfilledIds] = useState<string[]>(initialCache?.recurringFulfilledIds ?? [])
   const [funds, setFunds] = useState<Fund[]>(initialCache?.funds ?? [])
   const [goals, setGoals] = useState<Goal[]>(initialCache?.goals ?? [])
   const [loading, setLoading] = useState(!initialCache)
@@ -187,6 +188,9 @@ export default function PlanningClient() {
         recurringSavings: p.recurring_savings ?? [],
         recurringSavingOverrides: p.recurring_saving_overrides ?? [],
         dcaSkips: p.dca_skips ?? [],
+        recurringFulfilledIds: (p.recurring_fulfillments ?? []).map(
+          (f: { recurring_saving_id: string }) => f.recurring_saving_id,
+        ),
       }
       setPlanCache(month, year, fresh)
       setPlan(fresh.plan)
@@ -200,6 +204,7 @@ export default function PlanningClient() {
       setRecurringSavings(fresh.recurringSavings)
       setRecurringSavingOverrides(fresh.recurringSavingOverrides)
       setDcaSkips(fresh.dcaSkips)
+      setRecurringFulfilledIds(fresh.recurringFulfilledIds)
     } else {
       bustPlanCache(month, year)
       setPlan(null)
@@ -211,6 +216,7 @@ export default function PlanningClient() {
       setRecurringSavings([])
       setRecurringSavingOverrides([])
       setDcaSkips([])
+      setRecurringFulfilledIds([])
       // Still load fixed expenses and insurance even without a plan
       const [expRes, insRes] = await Promise.all([
         fetch('/api/v1/fixed-expenses'),
@@ -291,6 +297,7 @@ export default function PlanningClient() {
         otherExpenses={otherExpenses}
         recurringSavings={recurringSavings}
         recurringSavingOverrides={recurringSavingOverrides}
+        recurringFulfilledIds={recurringFulfilledIds}
         dcaSkips={dcaSkips}
         funds={funds}
         goals={goals}
@@ -320,6 +327,7 @@ export default function PlanningClient() {
         otherExpenses={otherExpenses}
         recurringSavings={recurringSavings}
         recurringSavingOverrides={recurringSavingOverrides}
+        recurringFulfilledIds={recurringFulfilledIds}
         dcaSkips={dcaSkips}
         funds={funds}
         goals={goals}

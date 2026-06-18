@@ -32,6 +32,7 @@ interface Props {
   otherExpenses: OtherExpense[]
   recurringSavings: RecurringSaving[]
   recurringSavingOverrides: RecurringSavingOverride[]
+  recurringFulfilledIds: string[]
   dcaSkips: DcaSkip[]
   funds: Fund[]
   goals: Goal[]
@@ -995,7 +996,7 @@ function MenuItem({ icon, label, onClick, danger, noBorder }: {
 
 export default function MobilePlanningView({
   month, year, plan, investments, savings, fixedExpenses, insuranceMembers, otherExpenses,
-  recurringSavings, recurringSavingOverrides, dcaSkips, funds, goals, loading,
+  recurringSavings, recurringSavingOverrides, recurringFulfilledIds, dcaSkips, funds, goals, loading,
   onPlanCreated, onPlanDeleted, onRefresh, onToast,
 }: Props) {
   const locale = useLocale()
@@ -1032,11 +1033,12 @@ export default function MobilePlanningView({
         funds: { name: f.name },
       }))
   }, [funds, dcaSkips])
+  const fulfilledSet = useMemo(() => new Set(recurringFulfilledIds), [recurringFulfilledIds])
   const byGoal = useMemo(
     () => buildByGoal([...investments, ...skippedDcaInvestments], savings, resolvedRecurring, goalsById, {
       unallocated: isVI ? 'Chưa phân bổ' : 'Unallocated',
-    }),
-    [investments, skippedDcaInvestments, savings, resolvedRecurring, goalsById, isVI],
+    }, fulfilledSet),
+    [investments, skippedDcaInvestments, savings, resolvedRecurring, goalsById, isVI, fulfilledSet],
   )
   const totalGoals = useMemo(() => byGoal.reduce((s, g) => s + g.totalAllocated, 0), [byGoal])
   const contributedTotal = useMemo(() => byGoal.reduce((s, g) => s + g.contributed, 0), [byGoal])

@@ -87,6 +87,7 @@ const defaultProps = {
   otherExpenses: [] as OtherExpense[],
   recurringSavings: [],
   recurringSavingOverrides: [],
+  recurringFulfilledIds: [] as string[],
   dcaSkips: [],
   funds: [],
   goals: [],

@@ -125,6 +125,10 @@ export function buildByGoal(
   recurring: ResolvedSaving[],
   goalsById: Map<string, string>,
   labels?: { unallocated?: string },
+  // Recurring-saving ids with a fulfillment row for this month. These were
+  // recorded via a path that doesn't log a plan-scoped deposit (maturity-combine,
+  // book top-up), so the goal+amount deposit match below can't see them.
+  fulfilledSavingIds?: Set<string>,
 ): GoalRow[] {
   const unallocatedLabel = labels?.unallocated ?? 'Unallocated'
   const map = new Map<string, GoalRow>()
@@ -190,13 +194,20 @@ export function buildByGoal(
   for (const r of recurring) {
     const row = ensure(r.goalId, r.goalName)
     row.totalAllocated += r.amount
-    // A non-skipped recurring line is "recorded" once a deposit of the same
-    // amount toward the same goal has been logged this month.
+    // A non-skipped recurring line is "recorded" if it has a fulfillment row for
+    // the month (maturity-combine / book top-up), or — failing that — once a
+    // deposit of the same amount toward the same goal has been logged. We check
+    // the fulfillment first and don't touch the pool when it hits, so a fulfilled
+    // line never eats a deposit that a sibling line should match.
     let recorded = false
     if (!r.skipped) {
-      const pool = depositPool.get(r.goalId ?? UNALLOCATED)
-      const i = pool ? pool.indexOf(r.amount) : -1
-      if (pool && i !== -1) { pool.splice(i, 1); recorded = true }
+      if (fulfilledSavingIds?.has(r.id)) {
+        recorded = true
+      } else {
+        const pool = depositPool.get(r.goalId ?? UNALLOCATED)
+        const i = pool ? pool.indexOf(r.amount) : -1
+        if (pool && i !== -1) { pool.splice(i, 1); recorded = true }
+      }
     }
     row.items.push({
       name: r.name,

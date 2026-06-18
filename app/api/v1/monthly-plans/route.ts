@@ -28,7 +28,8 @@ export async function GET(request: NextRequest) {
 
   if (searchParams.get('full') === 'true') {
     const planDateForActive = `${plan.year}-${String(plan.month).padStart(2, '0')}-01`
-    const [invRes, savRes, overridesRes, expRes, insRes, exclRes, insOverridesRes, goalsRes, fundsRes, otherExpRes, recSavRes, recSavOverridesRes, dcaSkipsRes] = await Promise.all([
+    const ym = `${plan.year}-${String(plan.month).padStart(2, '0')}`
+    const [invRes, savRes, overridesRes, expRes, insRes, exclRes, insOverridesRes, goalsRes, fundsRes, otherExpRes, recSavRes, recSavOverridesRes, dcaSkipsRes, recFulfillmentsRes] = await Promise.all([
       supabase
         .from('investment_transactions')
         .select('transaction_id, plan_id, fund_id, goal_id, amount_vnd, units, unit_price, investment_date, is_dca_seeded, funds(name, nav), savings_goals(goal_name)')
@@ -80,6 +81,12 @@ export async function GET(request: NextRequest) {
       supabase
         .from('plan_dca_skips')
         .select('fund_id').eq('plan_id', plan.id),
+      // A recurring recorded via maturity-combine / book top-up writes a
+      // fulfillment row instead of a plan-scoped deposit. The Plan page uses
+      // these to mark such lines recorded (keyed by saving id for the month).
+      supabase
+        .from('recurring_saving_fulfillments')
+        .select('recurring_saving_id').eq('user_id', user.id).eq('ym', ym),
     ])
     // Auto-seed DCA fund entries and keep pending rows in sync with current DCA amount
     const allFunds = fundsRes.data ?? []
@@ -152,6 +159,7 @@ export async function GET(request: NextRequest) {
       recurring_savings:           recSavRes.data ?? [],
       recurring_saving_overrides:  recSavOverridesRes.data ?? [],
       dca_skips:                   dcaSkipsRes.data ?? [],
+      recurring_fulfillments:      recFulfillmentsRes.data ?? [],
     })
   }
 
