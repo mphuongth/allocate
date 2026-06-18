@@ -108,6 +108,39 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (!goal) return NextResponse.json({ error: "You don't have permission to access this goal." }, { status: 403 })
   }
 
+  // An accumulating book shares goal + maturity across all tranches. Editing it
+  // must update the whole group atomically — doing the row update and the cascade
+  // as two separate statements risks a partial failure that splits the book across
+  // goals/maturities. Route a book through the single-transaction RPC, which
+  // cascades the book-level fields to every tranche and applies tranche-level
+  // fields to the edited row together. Non-book holdings use the generic path below.
+  const { data: existing } = await supabase
+    .from('investment_transactions')
+    .select('deposit_group_id')
+    .eq('transaction_id', txId)
+    .eq('user_id', user.id)
+    .single()
+  if (!existing) return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
+
+  if (existing.deposit_group_id) {
+    const { data: row, error: bookErr } = await supabase
+      .rpc('update_deposit_book', {
+        p_tx_id: txId,
+        p_set_goal: goal_id !== undefined, p_goal_id: cleanGoalId ?? null,
+        p_set_expiry: expiry_date !== undefined, p_expiry_date: cleanExpiryDate ?? null,
+        p_set_amount: cleanAmount !== undefined, p_amount_vnd: cleanAmount ?? null,
+        p_set_rate: interest_rate !== undefined, p_interest_rate: cleanInterestRate ?? null,
+        p_set_investment: cleanInvestmentDate !== undefined, p_investment_date: cleanInvestmentDate ?? null,
+        p_set_notes: notes !== undefined, p_notes: cleanNotes ?? null,
+      })
+      .single()
+    if (bookErr || !row) {
+      console.error('update_deposit_book: atomic book edit failed', bookErr?.message)
+      return NextResponse.json({ error: 'Failed to update deposit book' }, { status: 500 })
+    }
+    return NextResponse.json(row)
+  }
+
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
   if (goal_id !== undefined) updates.goal_id = cleanGoalId
   if (cleanAssetType) updates.asset_type = cleanAssetType
@@ -130,26 +163,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
   if (error || !transaction) return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
 
-  // Goal and maturity are BOOK-level for an accumulating deposit: every tranche
-  // shares them (copied down at top-up time). Editing them on any one row must
-  // fan out to the whole group, or the book splits across goals in the totals
-  // and loses its single-maturity invariant. Tranche-level fields (amount, rate,
-  // date, notes) stay per-row and are not cascaded.
-  if (transaction.deposit_group_id) {
-    const bookFields: Record<string, unknown> = {}
-    if (goal_id !== undefined) bookFields.goal_id = cleanGoalId
-    if (expiry_date !== undefined) bookFields.expiry_date = cleanExpiryDate
-    if (Object.keys(bookFields).length > 0) {
-      bookFields.updated_at = new Date().toISOString()
-      const { error: cascadeErr } = await supabase
-        .from('investment_transactions')
-        .update(bookFields)
-        .eq('deposit_group_id', transaction.deposit_group_id)
-        .eq('user_id', user.id)
-      if (cascadeErr) return NextResponse.json({ error: 'Failed to update deposit book' }, { status: 500 })
-    }
-  }
-
+  // (Accumulating books took the atomic update_deposit_book path above; only
+  // non-book holdings reach here, so there's no goal/maturity cascade to do.)
   return NextResponse.json(transaction)
 }
 
