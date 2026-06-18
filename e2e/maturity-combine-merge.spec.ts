@@ -133,4 +133,51 @@ test.describe('Term-deposit maturity — merge a sibling deposit into the re-dep
       await api.deleteGoal(goal.goal_id)
     }
   })
+
+  // Server-side guard: the route trusts the client for `received`, but the RPC
+  // must not. A received far larger than the source's own value would let D
+  // (principal = BASE + Σ received) balloon while S only closes its real
+  // principal — net worth minted from nothing. The whole renewal must abort and
+  // leave D untouched. Driven at the API layer (no UI) since the UI never sends
+  // an out-of-range value.
+  test('rejects a received far larger than the source value, leaving the deposit untouched', async ({ page }) => {
+    const goal = await api.createGoal({ goal_name: 'E2E Merge Bound', target_amount: 200_000_000 })
+    const D = await api.createTransaction({
+      asset_type: 'bank', amount_vnd: 20_000_000, investment_date: iso(-380),
+      interest_rate: 6, expiry_date: iso(-15), goal_id: goal.goal_id, notes: 'E2E Bound D',
+    })
+    const S = await api.createTransaction({
+      asset_type: 'bank', amount_vnd: 8_000_000, investment_date: iso(-120),
+      interest_rate: 6, expiry_date: iso(60), goal_id: goal.goal_id, notes: 'E2E Bound S',
+    })
+    try {
+      // Claim 100× S's principal as "received" — well past the ×10 sanity bound.
+      const res = await page.request.post(`/api/v1/investment-transactions/${D.transaction_id}/renew`, {
+        data: {
+          amount_vnd: 20_000_000, // BASE
+          interest_rate: 6,
+          investment_date: iso(-15),
+          expiry_date: iso(350),
+          merge_sources: [{ tx_id: S.transaction_id, received: 8_000_000 * 100 }],
+        },
+      })
+      expect(res.ok()).toBeFalsy() // rejected, not silently accepted
+
+      const { createClient } = await import('@supabase/supabase-js')
+      const supabase = createClient(process.env.E2E_SUPABASE_URL!, process.env.E2E_SUPABASE_SERVICE_ROLE_KEY!)
+
+      // The renewal rolled back wholesale: D is unchanged and S is still active
+      // (not closed) — no partial write, no inflation.
+      const { data: d } = await supabase
+        .from('investment_transactions').select('amount_vnd').eq('transaction_id', D.transaction_id).single()
+      expect(d?.amount_vnd).toBe(20_000_000)
+      const { data: sWds } = await supabase
+        .from('investment_transactions').select('transaction_id').eq('parent_transaction_id', S.transaction_id)
+      expect(sWds ?? []).toHaveLength(0)
+    } finally {
+      await api.deleteTransactionCascade(S.transaction_id)
+      await api.deleteTransactionCascade(D.transaction_id)
+      await api.deleteGoal(goal.goal_id)
+    }
+  })
 })

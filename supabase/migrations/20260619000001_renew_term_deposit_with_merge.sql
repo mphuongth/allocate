@@ -17,10 +17,15 @@
 --     and the per-source received amounts — the server sums them, so the
 --     net-worth invariant (Δ principal == Σ received) can never diverge.
 --
--- affects_progress = TRUE on the close is load-bearing: S's progress
--- contribution drops to 0 while D's growth adds it back, so the goal bar is
--- steady (an internal transfer). FALSE would double-count — S would keep its
--- progress weight while D also grew (proven in lib/__tests__/depositValuation).
+-- affects_progress = TRUE on the close is load-bearing: it removes S's full
+-- effective principal from the goal bar while D's growth adds the cash received
+-- back. When held to value (received == S's effective principal) the two cancel
+-- and the bar is steady — an internal transfer. When the source is settled EARLY
+-- for less (received < effective principal) the bar correctly DROPS by exactly
+-- the forfeited penalty (real money lost), it does not stay flat. What TRUE
+-- guarantees is no double-count either way; FALSE would keep S's progress weight
+-- while D also grew, counting it twice. Both cases are proven in
+-- lib/__tests__/depositValuation (held-to-value vs early-settlement penalty).
 --
 -- Body otherwise mirrors 20260617000002 (the accumulating-book-guarded renewal):
 -- the D lock + validation and the four coupled writes are identical; the merge
@@ -100,6 +105,16 @@ begin
     raise exception 'renew_term_deposit_with_merge: merge source/received length mismatch'
       using errcode = 'check_violation';
   end if;
+  -- Acquire every source row lock up front in a deterministic (sorted) order, so
+  -- two concurrent merges that share a source can't deadlock by locking it in
+  -- opposite array orders. The per-source `for update` in the loop below then
+  -- just re-reads an already-held lock. (Low-risk for a single-user app, but
+  -- cheap insurance against the ordering hazard.)
+  perform 1
+    from public.investment_transactions
+   where transaction_id = any(p_merge_source_ids)
+   order by transaction_id
+     for update;
   for v_i in 1 .. v_n loop
     v_sid := p_merge_source_ids[v_i];
     v_recv := p_merge_received[v_i];
@@ -143,6 +158,17 @@ begin
     ), 0);
     if v_src_eff <= 0 then
       raise exception 'renew_term_deposit_with_merge: merge source is already fully withdrawn'
+        using errcode = 'check_violation';
+    end if;
+    -- Sanity-bound the cash received against the source's OWN value: settling S
+    -- releases at most its effective principal plus interest, never a multiple of
+    -- it. Without this the server trusts the client's received outright, so a
+    -- buggy/malicious caller could inflate D (principal = BASE + Σ received) from
+    -- nothing while S only closes its real principal. Mirror the ×10 bound the
+    -- renewal route already applies to interest_earned_vnd — generous enough to
+    -- never reject a real held-to-maturity value, tight enough to cap abuse.
+    if v_recv > v_src_eff * 10 then
+      raise exception 'renew_term_deposit_with_merge: received amount is unreasonably large for the source'
         using errcode = 'check_violation';
     end if;
     insert into public.investment_transactions (
