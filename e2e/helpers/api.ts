@@ -144,6 +144,19 @@ export async function deleteDepositGroup(groupId: string) {
   await supabase.from('investment_transactions').delete().eq('deposit_group_id', groupId)
 }
 
+// Snapshot every tranche id of a live accumulating book (anchor + all top-ups),
+// taken WHILE the book is still grouped. A full close later CLEARS deposit_group_id
+// on every tranche, so after the close the membership is unrecoverable from the DB.
+// Capture this right after building the book and hand it to deleteBookCascade — the
+// teardown then can't silently miss a top-up the caller forgot to track by hand.
+export async function snapshotBookTranches(anchorId: string): Promise<string[]> {
+  const { data: grouped } = await supabase
+    .from('investment_transactions')
+    .select('transaction_id')
+    .eq('deposit_group_id', anchorId)
+  return [...new Set([anchorId, ...(grouped ?? []).map((t) => t.transaction_id)])]
+}
+
 // Fully tear down an accumulating book: every tranche AND every withdrawal child
 // of those tranches. parent_transaction_id is ON DELETE SET NULL, so deleting the
 // tranches first (as deleteDepositGroup does) ORPHANS their withdrawal rows — they
@@ -156,10 +169,15 @@ export async function deleteDepositGroup(groupId: string) {
 // tranches are still findable by deposit_group_id. But a FULL close SETTLES the
 // book and CLEARS deposit_group_id on every tranche — so the group query finds
 // nothing and any top-up tranche (plus its withdrawal child) would survive
-// undiscovered. Callers that create top-up tranches must therefore pass those ids
-// explicitly; we union them with whatever is still grouped. Order is load-bearing:
-// delete the children first (by parent, while the links are still valid), THEN the
-// tranches and the anchor.
+// undiscovered. Pass the pre-close snapshot from snapshotBookTranches so the full
+// set is known regardless; we union it with whatever is still grouped. Order is
+// load-bearing: delete the children first (by parent, while the links are still
+// valid), THEN the tranches and the anchor.
+//
+// Not covered: renewal-history snapshots (renewed_from_transaction_id), which
+// deleteTransactionCascade sweeps. Books settle via the collapse/withdraw path and
+// never produce those, so it's out of scope here — revisit if a book test ever
+// renews a tranche.
 export async function deleteBookCascade(anchorId: string, extraTrancheIds: string[] = []) {
   const { data: grouped } = await supabase
     .from('investment_transactions')
