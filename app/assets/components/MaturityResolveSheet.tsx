@@ -25,6 +25,7 @@ import {
   addMonths,
   monthsBetween,
   renewalPrincipal,
+  allocateCumulative,
   type RenewMode,
 } from '@/lib/maturity'
 import { linkedSavingFor, type RecurringLinkCandidate, type RecurringLinkResult } from '@/lib/recurringLink'
@@ -62,12 +63,17 @@ function MoneyField({ label, value, onChange, testId }: { label: string; value: 
  * parent's existing Sell/Withdraw flow.
  */
 export function MaturityResolveBody({
-  inv, goalId, isVi, onClose, onRenewed, onWithdraw,
+  inv, goalId, siblingDeposits, isVi, onClose, onRenewed, onWithdraw,
 }: {
   inv: InvRow
   // The goal this deposit is assigned to (null = unallocated). Used to find the
   // recurring saving that can be folded into the re-deposit (combine flow).
   goalId?: string | null
+  // The goal's other holdings. The combine flow can fold sibling bank deposits
+  // (settle each early, add the cash to this re-deposit) — an internal transfer
+  // that prevents the "inflate the principal but leave the sibling active"
+  // double-count. Omitted by callers that don't wire it (feature inert).
+  siblingDeposits?: InvRow[]
   isVi: boolean
   onClose: () => void
   onRenewed: () => void
@@ -119,6 +125,50 @@ export function MaturityResolveBody({
   const [redepositTouched, setRedepositTouched] = useState(false)
   const [markFulfilled, setMarkFulfilled] = useState(true)
 
+  // ── Merge siblings ──────────────────────────────────────────────────────────
+  // Sibling bank deposits in this goal that can be settled early and folded into
+  // the re-deposit. A book is renewed as a whole (never a tranche), so exclude
+  // grouped rows and the merge UI altogether when `inv` is itself a book.
+  const mergeable = (siblingDeposits ?? []).filter(
+    (s) => s.id !== inv.id && s.type === 'bank' && !s.depositGroupId && (s.principal ?? s.value ?? 0) > 0,
+  )
+  // Ordered the way the RPC's per-source allocation windows: (investmentDate, id).
+  const mergeableOrdered = [...mergeable].sort(
+    (a, b) => (a.investmentDate ?? '').localeCompare(b.investmentDate ?? '') || a.id.localeCompare(b.id),
+  )
+  const [mergeSel, setMergeSel] = useState<Record<string, boolean>>({})
+  const [mergeRecv, setMergeRecv] = useState<Record<string, string>>({})
+  const [mergeTotal, setMergeTotal] = useState('')
+  const [, setMergeTotalTouched] = useState(false)
+
+  const selectedSources = mergeableOrdered.filter((s) => mergeSel[s.id])
+  const mergeReceivedTotal = selectedSources.reduce((sum, s) => sum + (Number(mergeRecv[s.id]) || 0), 0)
+
+  // Toggle a source; on first select, prefill its received with the current value
+  // (the user edits it down to the real cash if the early settlement is penalised).
+  function toggleSource(s: InvRow) {
+    const on = !mergeSel[s.id]
+    setMergeSel((prev) => ({ ...prev, [s.id]: on }))
+    if (on && (mergeRecv[s.id] === undefined || mergeRecv[s.id] === '')) {
+      setMergeRecv((prev) => ({ ...prev, [s.id]: String(Math.round(s.value ?? s.principal ?? 0)) }))
+    }
+  }
+
+  // Editing the single TOTAL splits it across the selected sources with the same
+  // cumulative-window allocation the SQL uses — so Σ(received) === the total the
+  // user typed, exactly (no rounding drift between client preview and server).
+  function onMergeTotalChange(v: string) {
+    setMergeTotal(v); setMergeTotalTouched(true)
+    const total = Math.round(Number(v) || 0)
+    const sel = mergeableOrdered.filter((s) => mergeSel[s.id])
+    const alloc = allocateCumulative(total, sel.map((s) => Math.round(s.principal ?? s.value ?? 0)))
+    setMergeRecv((prev) => {
+      const next = { ...prev }
+      sel.forEach((s, i) => { next[s.id] = String(alloc[i]) })
+      return next
+    })
+  }
+
   useEffect(() => {
     // Combine needs the deposit's goal scope. When the caller doesn't wire it
     // (goalId omitted), stay in plain renew-only mode and skip the lookup.
@@ -150,7 +200,9 @@ export function MaturityResolveBody({
     ? (pickedSavingId ? combineLink.candidates.find((c) => c.saving_id === pickedSavingId) ?? null : combineLink.match)
     : null
   const linkedAmt = pickedCand ? pickedCand.amount_vnd : 0
-  const canCombine = !!combineLink
+  // Combine is offered when there's a recurring to fold in OR sibling deposits to
+  // merge — both routes settle-and-re-deposit. Inert when neither exists.
+  const canCombine = !!combineLink || mergeable.length > 0
 
   const iNum = Number(interest) || 0
   const tNum = Number(term) || 0
@@ -158,10 +210,14 @@ export function MaturityResolveBody({
   // back to the current principal rather than writing 0₫ to the deposit.
   const newAmountNum = newAmount.trim() === '' ? null : Number(newAmount)
   const redepositNum = redeposit.trim() === '' ? 0 : Number(redeposit)
+  // In combine mode the re-deposit field holds the BASE (principal + interest +
+  // recurring); the merged-in sibling cash is added ON TOP for the new principal.
+  // Submit sends the BASE and the per-source received list — the RPC re-sums
+  // Σ(received) server-side, so the net-worth invariant can't drift.
   const newPrincipal = mode === 'withdraw'
     ? principal
     : mode === 'combine'
-      ? redepositNum
+      ? redepositNum + mergeReceivedTotal
       : renewalPrincipal(mode, principal, iNum, newAmountNum)
 
   // Suggested re-deposit = principal + interest + this month's recurring, until
@@ -217,6 +273,12 @@ export function MaturityResolveBody({
     redepositHint: (amt: string) => `Gợi ý ${amt} (gốc + lãi + định kỳ) — sửa nếu thực tế khác.`,
     markDeposited: (amt: string) => `Đánh dấu đã gửi định kỳ tháng này (${amt})`,
     confirmCombine: 'Lưu sổ mới',
+    mergeSub: 'Gộp sổ tiết kiệm khác vào lần gửi lại',
+    mergeTitle: 'Gộp sổ khác',
+    mergeHint: 'Chọn các sổ để tất toán sớm và gộp vào lần gửi lại này.',
+    mergeReceivedLabel: 'Thực nhận',
+    mergeTotalLabel: 'Tổng gộp thêm',
+    mergePenalty: 'Tất toán trước hạn có thể bị phạt lãi — nhập số tiền thực nhận, không phải giá trị hiện tại.',
   } : {
     summarySuffix: 'yr', perYr: 'yr', mo: 'mo',
     why: matured
@@ -245,12 +307,20 @@ export function MaturityResolveBody({
     redepositHint: (amt: string) => `Suggested ${amt} (principal + interest + recurring) — edit if reality differs.`,
     markDeposited: (amt: string) => `Mark this month's recurring as deposited (${amt})`,
     confirmCombine: 'Save new deposit',
+    mergeSub: 'Fold other deposits into the re-deposit',
+    mergeTitle: 'Merge other deposits',
+    mergeHint: 'Pick deposits to settle early and fold into this re-deposit.',
+    mergeReceivedLabel: 'Received',
+    mergeTotalLabel: 'Total merged in',
+    mergePenalty: 'Early settlement may forfeit interest — enter the cash received, not the current value.',
   }
 
   const POLICIES: { id: Mode; icon: React.ReactNode; label: string; sub: string; danger?: boolean }[] = [
     ...(canCombine ? [{
       id: 'combine' as Mode, icon: <Plus size={16} />, label: t.combineLabel,
-      sub: combineLink?.ambiguous && !pickedCand ? t.combineSubPick : t.combineSub(fmtCompact(linkedAmt)),
+      sub: combineLink
+        ? (combineLink.ambiguous && !pickedCand ? t.combineSubPick : t.combineSub(fmtCompact(linkedAmt)))
+        : t.mergeSub,
     }] : []),
     { id: 'principal_interest', icon: <RefreshCw size={16} />, label: isVi ? 'Tái tục gốc + lãi' : 'Renew principal + interest', sub: isVi ? 'Cộng lãi vào gốc cho kỳ mới' : 'Roll interest into the new principal' },
     { id: 'principal_only', icon: <RefreshCw size={16} />, label: isVi ? 'Tái tục chỉ gốc' : 'Renew principal only', sub: isVi ? 'Lãi chuyển ra ngoài (về ví)' : 'Interest paid out to your wallet' },
@@ -274,7 +344,10 @@ export function MaturityResolveBody({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          amount_vnd: Math.round(newPrincipal),
+          // Merge combine sends the BASE (re-deposit field), NOT base + Σreceived:
+          // the RPC adds the received cash so client and server can't disagree.
+          // Every other path sends the full new principal.
+          amount_vnd: mode === 'combine' ? Math.round(redepositNum) : Math.round(newPrincipal),
           interest_rate: Number(rate),
           expiry_date: newMaturity,
           // Anchor the new cycle's accrual to the OLD maturity date (baseDate) so
@@ -293,6 +366,11 @@ export function MaturityResolveBody({
           // is not also counted as a separate synthesized contribution.
           fulfill_recurring: mode === 'combine' && pickedCand && markFulfilled
             ? { saving_id: pickedCand.saving_id, ym: fulfillYm, amount: linkedAmt }
+            : undefined,
+          // Merge combine: the sibling deposits being settled early and folded in.
+          // The route closes each (full withdrawal) and adds its received to D.
+          merge_sources: mode === 'combine' && selectedSources.length > 0
+            ? selectedSources.map((s) => ({ tx_id: s.id, received: Math.round(Number(mergeRecv[s.id]) || 0) }))
             : undefined,
         }),
       })
@@ -451,6 +529,64 @@ export function MaturityResolveBody({
             </div>
             <p style={{ margin: '7px 2px 0', fontSize: 11, color: 'var(--c-muted)', lineHeight: 1.45 }}>{t.redepositHint(fmtCompact(principal + iNum + linkedAmt))}</p>
           </div>
+
+          {/* Merge sibling deposits — settle each early, fold the cash into the
+              new principal. Hidden for a book (renewed whole) and when none qualify. */}
+          {!isBook && mergeable.length > 0 && (
+            <div style={{ border: '1px solid var(--c-line)', borderRadius: 12, padding: '11px 13px', display: 'grid', gap: 9 }}>
+              <div>
+                <div style={fieldLabel}>{t.mergeTitle}</div>
+                <p style={{ margin: '0 0 2px', fontSize: 11, color: 'var(--c-muted)', lineHeight: 1.45 }}>{t.mergeHint}</p>
+              </div>
+              <div style={{ display: 'grid', gap: 7 }}>
+                {mergeableOrdered.map((s) => {
+                  const sel = !!mergeSel[s.id]
+                  return (
+                    <div key={s.id} style={{ display: 'grid', gap: 7 }}>
+                      <button type="button" data-testid={`merge-source-${s.id}`} onClick={() => toggleSource(s)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 11px', borderRadius: 10, cursor: 'pointer', textAlign: 'left',
+                          border: `1.5px solid ${sel ? 'var(--c-navy)' : 'var(--c-line)'}`, background: sel ? 'var(--c-navy-tint)' : 'var(--c-card)', fontFamily: 'inherit' }}>
+                        <span style={{ width: 18, height: 18, borderRadius: 9, flexShrink: 0, border: `1.5px solid ${sel ? 'var(--c-btn-primary)' : 'var(--c-line-strong)'}`, background: sel ? 'var(--c-btn-primary)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {sel && <Check size={11} color="#fff" strokeWidth={3} />}
+                        </span>
+                        <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
+                        <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(s.value ?? s.principal ?? 0)}</span>
+                      </button>
+                      {sel && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 28 }}>
+                          <span style={{ fontSize: 11, color: 'var(--c-muted)', flexShrink: 0 }}>{t.mergeReceivedLabel}</span>
+                          <div style={{ position: 'relative', flex: 1 }}>
+                            <input data-testid={`merge-received-${s.id}`} type="number" value={mergeRecv[s.id] ?? ''}
+                              onChange={(e) => { setMergeRecv((prev) => ({ ...prev, [s.id]: e.target.value })); setMergeTotal(''); setMergeTotalTouched(false) }}
+                              style={{ ...moneyInput, padding: '7px 24px 7px 10px', fontSize: 13 }} />
+                            <span style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)', fontSize: 12, color: 'var(--c-muted)', pointerEvents: 'none' }}>₫</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+
+              {selectedSources.length > 0 && (
+                <>
+                  {/* One editable TOTAL that splits across the selected sources */}
+                  {selectedSources.length > 1 && (
+                    <div>
+                      <div style={fieldLabel}>{t.mergeTotalLabel}</div>
+                      <div style={{ position: 'relative' }}>
+                        <input data-testid="merge-total" type="number" value={mergeTotal === '' ? String(mergeReceivedTotal) : mergeTotal}
+                          onChange={(e) => onMergeTotalChange(e.target.value)} style={moneyInput} />
+                        <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--c-muted)', pointerEvents: 'none' }}>₫</span>
+                      </div>
+                    </div>
+                  )}
+                  {selectedSources.length === 1 && <input data-testid="merge-total" type="hidden" value={String(mergeReceivedTotal)} readOnly />}
+                  <p data-testid="merge-penalty-caption" style={{ margin: 0, fontSize: 11, color: 'var(--c-warn)', lineHeight: 1.45 }}>{t.mergePenalty}</p>
+                </>
+              )}
+            </div>
+          )}
 
           {/* New term + rate */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -620,11 +756,12 @@ export function MaturityResolveBody({
 
 // ─── Mobile bottom-sheet wrapper ───────────────────────────────────────────
 export function MaturityResolveSheet({
-  open, inv, goalId, isVi, onClose, onRenewed, onWithdraw,
+  open, inv, goalId, siblingDeposits, isVi, onClose, onRenewed, onWithdraw,
 }: {
   open: boolean
   inv: InvRow | null
   goalId?: string | null
+  siblingDeposits?: InvRow[]
   isVi: boolean
   onClose: () => void
   onRenewed: () => void
@@ -657,7 +794,7 @@ export function MaturityResolveSheet({
           <h2 style={{ margin: '0 0 14px', fontSize: 17, fontWeight: 700, letterSpacing: '-0.01em' }}>
             {isVi ? 'Xử lý đáo hạn' : 'Handle maturity'}
           </h2>
-          <MaturityResolveBody inv={inv} goalId={goalId} isVi={isVi} onClose={onClose} onRenewed={onRenewed} onWithdraw={onWithdraw} />
+          <MaturityResolveBody inv={inv} goalId={goalId} siblingDeposits={siblingDeposits} isVi={isVi} onClose={onClose} onRenewed={onRenewed} onWithdraw={onWithdraw} />
         </div>
       </div>
     </div>
@@ -666,10 +803,11 @@ export function MaturityResolveSheet({
 
 // ─── Desktop modal wrapper ─────────────────────────────────────────────────
 export function MaturityResolveModal({
-  inv, goalId, isVi, onClose, onRenewed, onWithdraw,
+  inv, goalId, siblingDeposits, isVi, onClose, onRenewed, onWithdraw,
 }: {
   inv: InvRow
   goalId?: string | null
+  siblingDeposits?: InvRow[]
   isVi: boolean
   onClose: () => void
   onRenewed: () => void
@@ -701,7 +839,7 @@ export function MaturityResolveModal({
           <button onClick={onClose} className="cn-btn ghost" style={{ padding: 6 }} aria-label="Close"><X size={18} /></button>
         </div>
         <div style={{ flex: 1, padding: '18px 20px', overflowY: 'auto' }}>
-          <MaturityResolveBody inv={inv} goalId={goalId} isVi={isVi} onClose={onClose} onRenewed={onRenewed} onWithdraw={onWithdraw} />
+          <MaturityResolveBody inv={inv} goalId={goalId} siblingDeposits={siblingDeposits} isVi={isVi} onClose={onClose} onRenewed={onRenewed} onWithdraw={onWithdraw} />
         </div>
       </div>
     </div>

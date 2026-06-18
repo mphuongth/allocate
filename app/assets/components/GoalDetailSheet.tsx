@@ -1292,6 +1292,8 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
       <MaturityResolveSheet
         open={resolveOpen}
         inv={actionInv}
+        goalId={goal.goalId}
+        siblingDeposits={invRows}
         isVi={isVI}
         onClose={() => setResolveOpen(false)}
         onRenewed={() => { setResolveOpen(false); onDataChanged() }}
