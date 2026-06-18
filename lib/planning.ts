@@ -125,10 +125,11 @@ export function buildByGoal(
   recurring: ResolvedSaving[],
   goalsById: Map<string, string>,
   labels?: { unallocated?: string },
-  // Recurring-saving ids with a fulfillment row for this month. These were
-  // recorded via a path that doesn't log a plan-scoped deposit (maturity-combine,
-  // book top-up), so the goal+amount deposit match below can't see them.
-  fulfilledSavingIds?: Set<string>,
+  // Recurring-saving ids → amount fulfilled this month. These were recorded via a
+  // path that doesn't log a plan-scoped deposit (maturity-combine, book top-up),
+  // so the goal+amount deposit match below can't see them; we mark the line
+  // recorded and count the fulfilled amount toward the goal's contributed.
+  fulfilledAmounts?: Map<string, number>,
 ): GoalRow[] {
   const unallocatedLabel = labels?.unallocated ?? 'Unallocated'
   const map = new Map<string, GoalRow>()
@@ -198,11 +199,15 @@ export function buildByGoal(
     // the month (maturity-combine / book top-up), or — failing that — once a
     // deposit of the same amount toward the same goal has been logged. We check
     // the fulfillment first and don't touch the pool when it hits, so a fulfilled
-    // line never eats a deposit that a sibling line should match.
+    // line never eats a deposit that a sibling line should match. A fulfillment
+    // also counts toward contributed (it isn't a logged deposit, so it's the only
+    // place its money lands) — that drives the goal progress bar.
     let recorded = false
     if (!r.skipped) {
-      if (fulfilledSavingIds?.has(r.id)) {
+      const fulfilled = fulfilledAmounts?.get(r.id)
+      if (fulfilled !== undefined) {
         recorded = true
+        row.contributed += fulfilled
       } else {
         const pool = depositPool.get(r.goalId ?? UNALLOCATED)
         const i = pool ? pool.indexOf(r.amount) : -1

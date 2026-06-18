@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import DesktopPlanningView from '../DesktopPlanningView'
-import type { MonthlyPlan, FundInvestment, DirectSaving, RecurringSaving } from '../../PlanningClient'
+import type { MonthlyPlan, FundInvestment, DirectSaving, RecurringSaving, RecurringFulfillment } from '../../PlanningClient'
 
 vi.mock('next-intl', () => ({
   useTranslations: () => (key: string, params?: Record<string, unknown>) =>
@@ -46,7 +46,7 @@ const defaultProps = {
   otherExpenses: [],
   recurringSavings: [] as RecurringSaving[],
   recurringSavingOverrides: [],
-  recurringFulfilledIds: [] as string[],
+  recurringFulfillments: [] as RecurringFulfillment[],
   dcaSkips: [],
   funds: [],
   goals: [],
@@ -119,21 +119,25 @@ describe('DesktopPlanningView — recurring bank "Saved" deposit', () => {
     expect(screen.getByText('100%')).toBeInTheDocument()
   })
 
-  it('shows the recurring as recorded from a fulfillment alone — no matching deposit (maturity-combine / book top-up)', () => {
+  it('records the line AND fills the goal progress from a fulfillment alone — no deposit (maturity-combine / book top-up)', () => {
     // Regression: recording via maturity-combine writes a recurring_saving_fulfillments
     // row, not a plan-scoped deposit. The Plan page used to ignore fulfillments and
-    // matched only on goal+amount, so the line stayed "Record deposit" forever.
+    // matched only on goal+amount, so the line stayed "Record deposit" AND the goal
+    // progress bar showed 0% / "Nothing yet" forever.
     render(
       <DesktopPlanningView
         {...defaultProps}
         plan={basePlan}
         recurringSavings={recurringSavings}
-        recurringFulfilledIds={['rs1']}
+        recurringFulfillments={[{ recurring_saving_id: 'rs1', amount_vnd: 2_000_000 }]}
       />,
     )
     // The line is recorded → the prominent Record deposit pill is gone, even with
     // zero logged deposits this month.
     expect(screen.queryByRole('button', { name: /Record deposit/i })).not.toBeInTheDocument()
+    // And the goal progress reflects the fulfilled 2M of 2M planned → 100%.
+    expect(screen.getByText('100%')).toBeInTheDocument()
+    expect(screen.queryByText(/Nothing yet/i)).not.toBeInTheDocument()
   })
 
   it('opens the Add-Transaction sheet when Saved is clicked', async () => {

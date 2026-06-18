@@ -16,7 +16,7 @@ import RecurringBookTopUpSheet, { type BookTopUpTarget } from '@/app/assets/comp
 import { buildByGoal, resolveRecurringSavings, type GoalItem } from '@/lib/planning'
 import type {
   MonthlyPlan, FundInvestment, DirectSaving, FixedExpense,
-  InsuranceMember, OtherExpense, RecurringSaving, RecurringSavingOverride, DcaSkip, Fund, Goal,
+  InsuranceMember, OtherExpense, RecurringSaving, RecurringSavingOverride, RecurringFulfillment, DcaSkip, Fund, Goal,
 } from '../PlanningClient'
 
 // ─── Pure helpers ─────────────────────────────────────────────────────────────
@@ -410,7 +410,7 @@ interface Props {
   otherExpenses: OtherExpense[]
   recurringSavings: RecurringSaving[]
   recurringSavingOverrides: RecurringSavingOverride[]
-  recurringFulfilledIds: string[]
+  recurringFulfillments: RecurringFulfillment[]
   dcaSkips: DcaSkip[]
   funds: Fund[]
   goals: Goal[]
@@ -428,7 +428,7 @@ interface Props {
 
 export default function DesktopPlanningView({
   month, year, plan, investments, savings, fixedExpenses, insuranceMembers,
-  otherExpenses, recurringSavings, recurringSavingOverrides, recurringFulfilledIds, dcaSkips, funds, goals, loading,
+  otherExpenses, recurringSavings, recurringSavingOverrides, recurringFulfillments, dcaSkips, funds, goals, loading,
   onPrev, onNext, onToday, onPlanCreated, onPlanDeleted, onRefresh, onToast,
 }: Props) {
   const locale = useLocale()
@@ -476,12 +476,15 @@ export default function DesktopPlanningView({
         funds: { name: f.name },
       }))
   }, [funds, dcaSkips])
-  const fulfilledSet = useMemo(() => new Set(recurringFulfilledIds), [recurringFulfilledIds])
+  const fulfilledAmounts = useMemo(
+    () => new Map(recurringFulfillments.map(f => [f.recurring_saving_id, f.amount_vnd])),
+    [recurringFulfillments],
+  )
   const byGoal = useMemo(
     () => buildByGoal([...investments, ...skippedDcaInvestments], savings, resolvedRecurring, goalsById, {
       unallocated: isVI ? 'Chưa phân bổ' : 'Unallocated',
-    }, fulfilledSet),
-    [investments, skippedDcaInvestments, savings, resolvedRecurring, goalsById, isVI, fulfilledSet],
+    }, fulfilledAmounts),
+    [investments, skippedDcaInvestments, savings, resolvedRecurring, goalsById, isVI, fulfilledAmounts],
   )
   const totalGoalAmount = byGoal.reduce((s, g) => s + g.totalAllocated, 0)
   const contributedTotal = byGoal.reduce((s, g) => s + g.contributed, 0)
