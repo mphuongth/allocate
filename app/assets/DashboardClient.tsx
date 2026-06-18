@@ -21,6 +21,7 @@ import RecentActivityCard from './components/RecentActivityCard'
 import MaturityActionCard from './components/MaturityActionCard'
 import { MaturityResolveSheet, MaturityResolveModal } from './components/MaturityResolveSheet'
 import { isActionableTermDeposit, MATURING_COUNT_EVENT } from '@/lib/maturity'
+import { actionableBookRows } from './maturityCardItems'
 import type { InvRow } from './components/goalDetailShared'
 import { loadOverview, overviewErrorText, getCachedOverview, setCachedOverview } from './overviewData'
 
@@ -455,7 +456,9 @@ export default function DashboardClient({ userId }: { userId: string }) {
   useEffect(() => {
     if (!data) return
     const items = [...data.goals.flatMap((g) => g.nonFunds ?? []), ...data.unallocated.nonFunds]
-    const count = items.filter(isActionableTermDeposit).length
+    // Term deposits count one each; an accumulating book counts as ONE (grouped),
+    // not per-tranche. isVi is irrelevant to the count, so pass false.
+    const count = items.filter(isActionableTermDeposit).length + actionableBookRows(items, false).length
     window.dispatchEvent(new CustomEvent(MATURING_COUNT_EVENT, { detail: count }))
   }, [data])
 
@@ -507,11 +510,21 @@ export default function DashboardClient({ userId }: { userId: string }) {
 
   // Term deposits (assigned + unassigned) that need a renew/withdraw decision,
   // carrying the context needed to act on each.
+  // Single term deposits surface one row each; an accumulating book surfaces as
+  // ONE grouped row (its tranches rolled up via actionableBookRows) that opens the
+  // collapse flow. The book's `raw` is its anchor tranche — carried only for the
+  // resolve sheet's context; withdraw isn't offered for a book.
   const maturingDeposits: MaturingDep[] = data ? [
-    ...data.goals.flatMap((g) => (g.nonFunds ?? []).filter(isActionableTermDeposit)
-      .map((it) => ({ inv: nonFundToInvRow(it, isVi), goalId: g.goalId, raw: it }))),
+    ...data.goals.flatMap((g) => [
+      ...(g.nonFunds ?? []).filter(isActionableTermDeposit)
+        .map((it) => ({ inv: nonFundToInvRow(it, isVi), goalId: g.goalId, raw: it })),
+      ...actionableBookRows(g.nonFunds ?? [], isVi)
+        .map((b) => ({ inv: b.inv, goalId: g.goalId, raw: b.anchor })),
+    ]),
     ...data.unallocated.nonFunds.filter(isActionableTermDeposit)
       .map((it) => ({ inv: nonFundToInvRow(it, isVi), goalId: null, raw: it })),
+    ...actionableBookRows(data.unallocated.nonFunds, isVi)
+      .map((b) => ({ inv: b.inv, goalId: null, raw: b.anchor })),
   ] : []
 
   // Withdraw from the maturity card: open the withdraw sheet pre-targeted at the

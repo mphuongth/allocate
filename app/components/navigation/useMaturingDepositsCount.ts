@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { isActionableTermDeposit, MATURING_COUNT_EVENT } from '@/lib/maturity'
+import { actionableBookRows } from '@/app/assets/maturityCardItems'
 import type { DashboardData } from '@/app/assets/DashboardClient'
 
 // Count of bank term deposits that currently need a renew/withdraw decision —
@@ -33,7 +34,9 @@ export function useMaturingDepositsCount(): number {
           ...data.goals.flatMap((g) => g.nonFunds ?? []),
           ...data.unallocated.nonFunds,
         ]
-        setCount(items.filter(isActionableTermDeposit).length)
+        // Same tally as the dashboard: term deposits one each + each accumulating
+        // book counted ONCE (grouped). isVi doesn't affect the count.
+        setCount(items.filter(isActionableTermDeposit).length + actionableBookRows(items, false).length)
       })
       .catch(() => {})
 
