@@ -225,8 +225,9 @@ function nonFundToSellItem(item: NonFundUnallocatedItem): SellItem {
     units: item.units ?? undefined,
     navPerUnit: item.units && item.units > 0 ? item.currentValue / item.units : undefined,
     interestRate: item.interestRate ?? undefined,
-    transactionId: item.transactionId,
+    transactionId: item.transactionId, // for a book this is the anchor (= deposit_group_id)
     purchasePrice: item.amount,
+    depositGroupId: item.depositGroupId ?? null,
   }
 }
 
@@ -544,16 +545,23 @@ export default function DashboardClient({ userId }: { userId: string }) {
   // clears `resolveDep` before invoking onWithdraw.
   function withdrawMaturingDeposit(dep: MaturingDep | null) {
     if (!dep) return
+    // For a book, withdraw the WHOLE book — build the sell item from the rolled-up
+    // row (book total + anchor id + depositGroupId) so the full-close sheet
+    // prefills the book balance, not just the anchor tranche's value.
+    const item: SellItem = dep.inv.depositGroupId
+      ? { type: 'bank', name: dep.inv.name, currentValue: dep.inv.value, transactionId: dep.inv.id, purchasePrice: dep.inv.principal ?? dep.inv.value, depositGroupId: dep.inv.depositGroupId, interestRate: dep.inv.interestRate ?? undefined }
+      : nonFundToSellItem(dep.raw)
     if (dep.goalId) {
       const goal = data?.goals.find((g) => g.goalId === dep.goalId)
       setMaturityWithdraw({
-        item: nonFundToSellItem(dep.raw),
+        item,
         goalId: dep.goalId,
         goalCurrentValue: goal?.currentValue ?? dep.raw.currentValue,
         goalTargetAmount: goal?.targetAmount ?? null,
       })
     } else {
-      openSellNonFund(dep.raw)
+      setSellItem(item)
+      setSellSheetOpen(true)
     }
   }
 

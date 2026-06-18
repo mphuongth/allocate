@@ -21,6 +21,9 @@ export interface SellItem {
   fundId?: string
   transactionId?: string
   purchasePrice?: number
+  // Set when this bank item is an accumulating book (its anchor id). Switches the
+  // sheet to a FULL close: every tranche is withdrawn at once (no partial amount).
+  depositGroupId?: string | null
 }
 
 interface Props {
@@ -93,10 +96,13 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
   const isFund = item?.type === 'fund'
   const isGold = item?.type === 'gold'
   const isBank = item?.type === 'bank'
+  // An accumulating book: a FULL close (all tranches at once), not a partial
+  // withdrawal — so the amount is fixed at the book balance and only the cash
+  // received is editable (handles an early-withdrawal penalty / the exact payout).
+  const isBook = isBank && !!item?.depositGroupId
 
   const maxAmount = item?.currentValue ?? 0
   const numAmount = Number(amount) || 0
-  const remaining = maxAmount - numAmount
   const navPerUnit = item?.navPerUnit
 
   // Gold: quantity (chỉ) × sale price → proceeds / cost / profit. Bounded by chỉ
@@ -113,7 +119,9 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
   const isOverUnits = isGold && item?.units != null && numUnits > item.units
 
   // Bank: cash received is editable; split principal out of the withdrawn amount
-  // so the summary can show an accurate gain/loss.
+  // so the summary can show an accurate gain/loss. A book withdraws like any bank
+  // deposit (partial up to the balance, "All" = full close) — only the confirm
+  // routes to the book endpoint, spreading the principal across tranches.
   const numReceived = Number(received) || 0
   const bankPrincipal = item?.purchasePrice ?? maxAmount
   const bankFraction = maxAmount > 0 ? Math.min(1, numAmount / maxAmount) : 0
@@ -191,7 +199,25 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
       // is no goal to link to (issue #261).
       const withdrawalGoalId = context === 'goal' ? (goalId ?? null) : null
 
-      if (isFund && item.fundId) {
+      if (isBook && item.transactionId) {
+        // Full book close: one atomic call writes a withdrawal per tranche.
+        const res = await fetch(`/api/v1/investment-transactions/${item.transactionId}/withdraw-book`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            withdraw_principal: bankPrincipalPortion,
+            total_received: Math.round(numReceived),
+            investment_date: today,
+            affects_progress: context === 'goal' ? affectsProgress : true,
+          }),
+        })
+        if (!res.ok) {
+          const { error: e } = await res.json().catch(() => ({ error: t('sellError') }))
+          setError(e ?? t('sellError'))
+          setSaving(false)
+          return
+        }
+      } else if (isFund && item.fundId) {
         const principalWithdrawn = item.purchasePrice
           ? Math.round((numAmount / item.currentValue) * (item.purchasePrice * (item.units ?? 0)))
           : Math.round(numAmount)
@@ -371,7 +397,7 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
 
             {!isGold ? (
             <>
-            {/* Amount input */}
+            {/* Amount input (a book is editable too — partial up to the balance) */}
             <div>
               <div style={{ fontSize: 11, color: 'var(--c-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{amountLabel}</div>
               <div style={{ display: 'flex', gap: 8 }}>
@@ -457,7 +483,7 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
               <div data-testid="sell-summary-strip" style={{ background: 'var(--c-card-2)', borderRadius: 12, overflow: 'hidden' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid var(--c-line)' }}>
                   <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{isVI ? 'Còn lại sau giao dịch' : 'Remaining after transaction'}</span>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)' }}>{fmtVND(Math.max(0, remaining), locale)}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)' }}>{fmtVND(Math.max(0, maxAmount - numAmount), locale)}</span>
                 </div>
                 {gainLoss != null && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: taxAmount ? '1px solid var(--c-line)' : 'none' }}>
@@ -495,7 +521,7 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
                 )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px' }}>
                   <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{isVI ? 'Còn lại sau giao dịch' : 'Remaining after transaction'}</span>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)' }}>{fmtVND(Math.max(0, remaining), locale)}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)' }}>{fmtVND(Math.max(0, maxAmount - numAmount), locale)}</span>
                 </div>
               </div>
             )}

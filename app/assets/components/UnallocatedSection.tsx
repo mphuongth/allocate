@@ -231,9 +231,6 @@ export default function UnallocatedSection({
 
   const canSell = actionTarget?.kind === 'fund' || (
     actionTarget?.kind === 'nonFund' && (actionTarget.item.type === 'bank' || actionTarget.item.type === 'gold')
-    // An accumulating book can't be withdrawn tranche-by-tranche yet — same guard
-    // as goal-detail. It can still be assigned to a goal (cascades to the group).
-    && !actionTarget.item.depositGroupId
   )
 
   const actionName = actionTarget?.kind === 'fund'
