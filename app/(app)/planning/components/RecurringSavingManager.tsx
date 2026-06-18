@@ -17,13 +17,16 @@ interface Saving {
   savings_goals?: { goal_name: string } | null
 }
 
-// A term deposit the user can hard-link a recurring saving to (so it's the one
-// folded in when that deposit matures). Only bank rows with a rate + maturity.
-interface TermDeposit {
+// A deposit a recurring saving can be hard-linked to. Either a single TERM
+// deposit (folded in when it matures — the combine flow) or an accumulating BOOK
+// (topped up each month — auto top-up). For a book the target is its anchor row
+// (deposit_group_id = transaction_id); non-anchor tranches aren't link targets.
+interface LinkTarget {
   transaction_id: string
   goal_id: string | null
   notes: string | null
   expiry_date: string | null
+  kind: 'term' | 'book'
 }
 
 // "2026-04-01" → "2026-04" for <input type="month">
@@ -84,7 +87,7 @@ export default function RecurringSavingManager({ goals, onChange, onToast, varia
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<Saving | null>(null)
   const [deleting, setDeleting] = useState(false)
-  const [deposits, setDeposits] = useState<TermDeposit[]>([])
+  const [deposits, setDeposits] = useState<LinkTarget[]>([])
 
   const unallocatedLabel = isVI ? 'Chưa phân bổ (đầu tư chung)' : 'Unallocated (general)'
 
@@ -97,15 +100,22 @@ export default function RecurringSavingManager({ goals, onChange, onToast, varia
 
   useEffect(() => { fetchList() }, [fetchList])
 
-  // Term deposits available to link to — bank holdings that carry a rate + a
-  // maturity (the only ones the combine flow can fold a recurring into).
+  // Deposits available to link to — bank holdings with a rate + maturity. A
+  // single term deposit (combine at maturity) or an accumulating book's ANCHOR
+  // (auto top-up). Non-anchor book tranches are excluded: link the book via its
+  // anchor (deposit_group_id = transaction_id).
   useEffect(() => {
     fetch('/api/v1/investment-transactions?asset_type=bank&limit=200')
       .then((r) => (r.ok ? r.json() : { transactions: [] }))
-      .then((data: { transactions?: Array<TermDeposit & { interest_rate: number | null; transaction_type: string }> }) => {
+      .then((data: { transactions?: Array<LinkTarget & { interest_rate: number | null; transaction_type: string; deposit_group_id: string | null }> }) => {
         setDeposits((data.transactions ?? [])
           .filter((t) => t.transaction_type === 'investment' && t.interest_rate != null && !!t.expiry_date)
-          .map((t) => ({ transaction_id: t.transaction_id, goal_id: t.goal_id, notes: t.notes, expiry_date: t.expiry_date })))
+          // Term deposit (ungrouped) or a book anchor (group = its own id); drop tranches.
+          .filter((t) => t.deposit_group_id == null || t.deposit_group_id === t.transaction_id)
+          .map((t) => ({
+            transaction_id: t.transaction_id, goal_id: t.goal_id, notes: t.notes, expiry_date: t.expiry_date,
+            kind: t.deposit_group_id != null ? 'book' as const : 'term' as const,
+          })))
       })
       .catch(() => {})
   }, [])
@@ -215,10 +225,18 @@ export default function RecurringSavingManager({ goals, onChange, onToast, varia
         </div>
 
         {(() => {
-          // Deposits in the same goal as this recurring — the only ones a combine
-          // renewal could fold it into. Hidden when there are none to link.
+          // Deposits in the same goal as this recurring — the only valid link
+          // targets. Hidden when there are none to link.
           const linkable = deposits.filter((d) => (d.goal_id ?? null) === (form.goal_id || null))
           if (linkable.length === 0) return null
+          const selected = linkable.find((d) => d.transaction_id === form.linked_deposit_tx_id)
+          // The link means different things per target: a term deposit folds this
+          // recurring in at maturity; a book gets topped up by it each month.
+          const hint = selected?.kind === 'book'
+            ? (isVI ? 'Mỗi tháng, nút “Đã gửi” sẽ nạp khoản này vào sổ tích luỹ đó.' : 'Each month, “Saved” tops this amount into that accumulating book.')
+            : selected?.kind === 'term'
+              ? (isVI ? 'Khi sổ này đáo hạn, khoản định kỳ sẽ được gộp đúng vào sổ đó.' : 'When that deposit matures, this recurring is the one folded into it.')
+              : (isVI ? 'Sổ kỳ hạn: gộp khi đáo hạn. Sổ tích luỹ: nạp thêm mỗi tháng.' : 'Term deposit: folded in at maturity. Accumulating book: topped up monthly.')
           return (
             <div>
               <label htmlFor="rs-deposit" style={labelStyle}>{isVI ? 'Gắn với sổ tiết kiệm (tuỳ chọn)' : 'Link to a deposit (optional)'}</label>
@@ -230,15 +248,16 @@ export default function RecurringSavingManager({ goals, onChange, onToast, varia
                 style={{ ...inputStyle, appearance: 'none', cursor: 'pointer' }}
               >
                 <option value="">{isVI ? 'Không gắn' : 'Not linked'}</option>
-                {linkable.map((d) => (
-                  <option key={d.transaction_id} value={d.transaction_id}>
-                    {(d.notes || (isVI ? 'Sổ ngân hàng' : 'Bank deposit')) + (d.expiry_date ? ` · ${d.expiry_date}` : '')}
-                  </option>
-                ))}
+                {linkable.map((d) => {
+                  const tag = d.kind === 'book' ? (isVI ? 'Tích luỹ' : 'Auto top-up') : (isVI ? 'Đáo hạn' : 'At maturity')
+                  return (
+                    <option key={d.transaction_id} value={d.transaction_id}>
+                      {(d.notes || (isVI ? 'Sổ ngân hàng' : 'Bank deposit')) + ` · ${tag}` + (d.expiry_date ? ` · ${d.expiry_date}` : '')}
+                    </option>
+                  )
+                })}
               </select>
-              <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 4 }}>
-                {isVI ? 'Khi sổ này đáo hạn, khoản định kỳ sẽ được gộp đúng vào sổ đó.' : 'When that deposit matures, this recurring is the one folded into it.'}
-              </div>
+              <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 4 }}>{hint}</div>
             </div>
           )
         })()}

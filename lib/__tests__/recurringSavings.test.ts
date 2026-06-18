@@ -148,8 +148,9 @@ describe('realizedRecurringContributions', () => {
 
     it('does not double-spend a logged deposit when the month is also fulfilled', () => {
       freezeJun2026()
-      // Fulfillment alone suppresses; the logged-deposit pool is left intact for
-      // any genuinely-separate deposit and not consumed by the fulfilled month.
+      // Fulfillment suppresses the saving; its backing deposit is consumed (not
+      // left to suppress a different recurring). With no sibling here, the result
+      // is the same either way: nothing synthesized.
       const rows = realizedRecurringContributions(
         [saving()],
         [plan('p-jun', 2026, 6)],
@@ -158,6 +159,22 @@ describe('realizedRecurringContributions', () => {
         [{ recurring_saving_id: 's1', ym: '2026-06' }],
       )
       expect(rows).toHaveLength(0)
+    })
+
+    it('a fulfilled saving consumes its backing deposit, so it cannot also suppress a sibling', () => {
+      freezeJun2026()
+      // s1 is fulfilled this month and its book top-up logged a real 5M deposit
+      // (g1, Jun). s2 is a separate same-goal/same-amount recurring with NO deposit
+      // of its own. The top-up backs s1 (via the fulfillment) and must NOT also
+      // amount-suppress s2 — else s2 silently vanishes from the goal.
+      const rows = realizedRecurringContributions(
+        [saving({ saving_id: 's1' }), saving({ saving_id: 's2', name: 'ACB Savings' })],
+        [plan('p-jun', 2026, 6)],
+        [],
+        [{ month: '2026-06', goalId: 'g1', amount: 5_000_000 }], // the s1 top-up tranche
+        [{ recurring_saving_id: 's1', ym: '2026-06' }],
+      )
+      expect(rows.map((r) => r.savingId)).toEqual(['s2'])
     })
   })
 })

@@ -12,6 +12,7 @@ import { DesktopPlanningSkeleton } from './PlanningSkeleton'
 import FixedExpenseManager from './FixedExpenseManager'
 import RecurringSavingManager from './RecurringSavingManager'
 import AddTransactionSheet, { type EditableTransaction, type PrefillTransaction } from '@/app/assets/components/AddTransactionSheet'
+import RecurringBookTopUpSheet, { type BookTopUpTarget } from '@/app/assets/components/RecurringBookTopUpSheet'
 import { buildByGoal, resolveRecurringSavings, type GoalItem } from '@/lib/planning'
 import type {
   MonthlyPlan, FundInvestment, DirectSaving, FixedExpense,
@@ -451,6 +452,7 @@ export default function DesktopPlanningView({
   // Logging a contribution from a goal header, or recording a recurring bank
   // deposit, opens the same sheet in create mode (POST) pre-filled with the goal.
   const [prefillTx, setPrefillTx] = useState<PrefillTransaction | null>(null)
+  const [bookTopUp, setBookTopUp] = useState<BookTopUpTarget | null>(null)
 
   // ── Derived values ──
   const goalsById = useMemo(() => new Map(goals.map(g => [g.goal_id, g.goal_name])), [goals])
@@ -640,6 +642,32 @@ export default function DesktopPlanningView({
       investment_date: new Date().toISOString().slice(0, 10),
       ...prefill,
     })
+  }
+
+  // The recurring "Saved" pill. If the recurring is linked to an accumulating
+  // book, open the prefilled top-up sheet (tranche + fulfillment); otherwise log a
+  // standalone contribution. A term-deposit link or a matured book falls through.
+  async function recordRecurring(g: { goalId: string; isUnallocated: boolean }, item: GoalItem) {
+    if (item.linkedDepositTxId && item.recurringId && plan) {
+      try {
+        const res = await fetch(`/api/v1/investment-transactions/${item.linkedDepositTxId}`)
+        if (res.ok) {
+          const dep = await res.json()
+          const isBookAnchor = dep.deposit_group_id && dep.deposit_group_id === dep.transaction_id
+          const matured = dep.expiry_date && dep.expiry_date < new Date().toISOString().slice(0, 10)
+          if (isBookAnchor && !matured) {
+            setBookTopUp({
+              savingId: item.recurringId, bookId: dep.transaction_id,
+              bookName: dep.notes || (isVI ? 'Sổ ngân hàng' : 'Bank deposit'),
+              ym: `${year}-${String(month).padStart(2, '0')}`, planId: plan.id,
+              amount: item.amount, rate: dep.interest_rate ?? null,
+            })
+            return
+          }
+        }
+      } catch { /* fall through to the standard contribution */ }
+    }
+    openContribution(g, { asset_type: 'bank', amount_vnd: item.amount })
   }
 
   async function handleSaveOverride() {
@@ -888,7 +916,7 @@ export default function DesktopPlanningView({
                             setOverrideVal(String(inv.baseAmount ?? inv.amount))
                           }}
                           onRecordBuy={() => openBuy(inv.transactionId)}
-                          onRecordDeposit={() => openContribution(g, { asset_type: 'bank', amount_vnd: inv.amount })}
+                          onRecordDeposit={() => recordRecurring(g, inv)}
                           onDcaSkip={() => handleDcaSkip(inv)}
                           onDcaRestore={() => handleDcaRestore(inv)}
                         />
@@ -1152,6 +1180,13 @@ export default function DesktopPlanningView({
           setBuyEdit(null); setPrefillTx(null); onRefresh()
           onToast(wasBuy ? (isVI ? 'Đã ghi nhận mua' : 'Buy recorded') : (isVI ? 'Đã ghi nhận đóng góp' : 'Contribution logged'))
         }}
+      />
+
+      <RecurringBookTopUpSheet
+        target={bookTopUp}
+        isVi={isVI}
+        onClose={() => setBookTopUp(null)}
+        onDone={() => { onRefresh(); onToast(isVI ? 'Đã nạp vào sổ' : 'Topped up book') }}
       />
     </div>
   )

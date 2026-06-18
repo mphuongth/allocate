@@ -18,7 +18,7 @@ export async function validateLinkedDeposit(
 ): Promise<string | null> {
   const { data, error } = await supabase
     .from('investment_transactions')
-    .select('asset_type, interest_rate, expiry_date, goal_id, transaction_type')
+    .select('asset_type, interest_rate, expiry_date, goal_id, transaction_type, deposit_group_id')
     .eq('transaction_id', txId)
     .eq('user_id', userId)
     .single()
@@ -30,6 +30,14 @@ export async function validateLinkedDeposit(
     !data.expiry_date
   ) {
     return 'Linked deposit must be a bank term deposit.'
+  }
+  // A link may target a single term deposit (combine at maturity) or an
+  // accumulating book (auto top-up each month). For a book, only its ANCHOR is a
+  // valid target — deposit_group_id = its own id — so the link points at the book
+  // as a whole and survives a collapse (the collapse re-points links to the
+  // surviving anchor). A non-anchor tranche is not a linkable target.
+  if (data.deposit_group_id != null && data.deposit_group_id !== txId) {
+    return 'Link an accumulating book via its anchor deposit.'
   }
   if ((data.goal_id ?? null) !== (recurringGoalId ?? null)) {
     return 'Linked deposit must belong to the same goal as the recurring saving.'
