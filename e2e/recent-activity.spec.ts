@@ -74,10 +74,19 @@ test.describe('Recent activity — mobile', () => {
       const ledger = page.getByTestId('tx-ledger')
       await expect(ledger).toBeVisible({ timeout: 5_000 })
       // The filter row (gated on having transactions) renders both date inputs…
-      await expect(ledger.locator('input[type="date"]')).toHaveCount(2)
+      const dateInputs = ledger.locator('input[type="date"]')
+      await expect(dateInputs).toHaveCount(2)
       // …each labeled, so a blank iOS date field is still identifiable.
       await expect(ledger.getByText('From', { exact: true })).toBeVisible()
       await expect(ledger.getByText('To', { exact: true })).toBeVisible()
+      // …and neither overflows the ledger to the right (the clipped 2nd field
+      // in the bug report). Chromium can't reproduce the iOS intrinsic-width
+      // overflow, but this guards the grid layout from gross breakage.
+      const ledgerBox = await ledger.boundingBox()
+      for (let i = 0; i < 2; i++) {
+        const box = await dateInputs.nth(i).boundingBox()
+        expect(box!.x + box!.width).toBeLessThanOrEqual(ledgerBox!.x + ledgerBox!.width + 1)
+      }
     } finally {
       await api.deleteTransactionCascade(tx.transaction_id)
     }

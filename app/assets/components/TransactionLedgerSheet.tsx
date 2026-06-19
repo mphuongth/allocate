@@ -27,6 +27,14 @@ const labelStyle: React.CSSProperties = {
   color: 'var(--c-muted)', marginBottom: 6,
 }
 
+// Mobile date filters (#362): WebkitAppearance:none stops iOS Safari from sizing
+// the native date control to its intrinsic width (which ignores width:100% and
+// clips on the right); maxWidth pins it to the grid cell.
+const dateFilterStyle: React.CSSProperties = {
+  width: '100%', maxWidth: '100%', minWidth: 0,
+  boxSizing: 'border-box', WebkitAppearance: 'none', appearance: 'none',
+}
+
 interface AppliedFilters { asset_type: string; goal_id: string; from_date: string; to_date: string }
 const EMPTY_FILTERS: AppliedFilters = { asset_type: '', goal_id: '', from_date: '', to_date: '' }
 
@@ -427,15 +435,18 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
                       {goals.map((g) => <option key={g.goal_id} value={g.goal_id}>{g.goal_name}</option>)}
                     </select>
                   </div>
-                  {/* iOS renders an empty <input type=date> fully blank (no
-                      placeholder), so each date field needs a visible label to
-                      stay identifiable — matches the desktop toolbar (#362). */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  {/* iOS quirks (#362): an empty <input type=date> renders fully
+                      blank (no placeholder) AND ignores width:100%, sizing to its
+                      intrinsic content so it overflows / gets clipped on the right.
+                      Fix: visible From/To labels (like desktop) + shrinkable
+                      minmax(0,1fr) columns + appearance:none/max-width so the native
+                      control is clamped to its cell. */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 8 }}>
                     <Field label={t('lblFrom')}>
-                      <input type="date" value={dateFrom} onChange={(e) => setDateFilter('from_date', e.target.value, setDateFrom)} aria-label={t('lblFrom')} className="cn-input tabular" style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} />
+                      <input type="date" value={dateFrom} onChange={(e) => setDateFilter('from_date', e.target.value, setDateFrom)} aria-label={t('lblFrom')} className="cn-input tabular" style={dateFilterStyle} />
                     </Field>
                     <Field label={t('lblTo')}>
-                      <input type="date" value={dateTo} onChange={(e) => setDateFilter('to_date', e.target.value, setDateTo)} aria-label={t('lblTo')} className="cn-input tabular" style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} />
+                      <input type="date" value={dateTo} onChange={(e) => setDateFilter('to_date', e.target.value, setDateTo)} aria-label={t('lblTo')} className="cn-input tabular" style={dateFilterStyle} />
                     </Field>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
