@@ -13,6 +13,7 @@ import RecurringSavingManager from './RecurringSavingManager'
 import AddTransactionSheet, { type EditableTransaction, type PrefillTransaction } from '@/app/assets/components/AddTransactionSheet'
 import RecurringBookTopUpSheet, { type BookTopUpTarget } from '@/app/assets/components/RecurringBookTopUpSheet'
 import { buildByGoal, resolveRecurringSavings, DEPOSIT_BACKED_FULFILLMENT_SOURCES, type GoalRow, type GoalItem } from '@/lib/planning'
+import { relationshipLabel } from '@/app/assets/components/insuranceShared'
 import { MobilePlanningSkeleton } from './PlanningSkeleton'
 import type {
   MonthlyPlan, FundInvestment, DirectSaving, FixedExpense,
@@ -1406,9 +1407,15 @@ export default function MobilePlanningView({
                   const defaultMonthly = Math.round(m.annual_payment_vnd / 12)
                   const hasOverride = m.monthlyOverride != null && m.monthlyOverride !== defaultMonthly
                   const thisMonth = m.excluded ? 0 : (m.monthlyOverride ?? defaultMonthly)
+                  // A phone has no room for Relationship/Default columns (the desktop
+                  // table carries those), so the relationship rides the subtitle line.
+                  // When overridden, append the default so the user still sees it.
+                  const rel = relationshipLabel(m.relationship, isVI)
                   const secondary = m.excluded
                     ? (isVI ? 'Bỏ qua tháng này' : 'Skipped')
-                    : hasOverride ? (isVI ? '(đã ghi đè)' : '(overridden)') : (isVI ? 'Đóng góp tháng' : 'Monthly contribution')
+                    : hasOverride
+                      ? `${rel ? rel + ' · ' : ''}${isVI ? 'mặc định ' : 'default '}${fmt(defaultMonthly)}`
+                      : (rel || (isVI ? 'Đóng góp tháng' : 'Monthly contribution'))
                   return (
                     <PlanLineItem
                       key={m.member_id}

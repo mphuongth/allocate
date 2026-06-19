@@ -17,6 +17,15 @@ export const COVERAGE_OPTIONS: { value: string; label: string; labelVi: string }
   { value: 'Other', label: 'Other', labelVi: 'Khác' },
 ]
 
+// Localized label for a stored relationship/coverage value (Self/Spouse/…),
+// reusing COVERAGE_OPTIONS as the single source of truth. Falls back to the raw
+// value for anything not in the option list, and to '' for empty.
+export function relationshipLabel(value: string | null | undefined, isVi: boolean): string {
+  if (!value) return ''
+  const opt = COVERAGE_OPTIONS.find((o) => o.value === value)
+  return opt ? (isVi ? opt.labelVi : opt.label) : value
+}
+
 // Dot / badge colour by status — identical across all insurance views.
 export const STATUS_COLOR: Record<string, string> = {
   on_track:  'var(--c-muted)',

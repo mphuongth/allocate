@@ -14,6 +14,7 @@ import RecurringSavingManager from './RecurringSavingManager'
 import AddTransactionSheet, { type EditableTransaction, type PrefillTransaction } from '@/app/assets/components/AddTransactionSheet'
 import RecurringBookTopUpSheet, { type BookTopUpTarget } from '@/app/assets/components/RecurringBookTopUpSheet'
 import { buildByGoal, resolveRecurringSavings, DEPOSIT_BACKED_FULFILLMENT_SOURCES, type GoalItem } from '@/lib/planning'
+import { relationshipLabel } from '@/app/assets/components/insuranceShared'
 import type {
   MonthlyPlan, FundInvestment, DirectSaving, FixedExpense,
   InsuranceMember, OtherExpense, RecurringSaving, RecurringSavingOverride, RecurringFulfillment, DcaSkip, Fund, Goal,
@@ -105,12 +106,15 @@ function PlanTable({ icon, iconColor, title, total, defaultOpen = true, action, 
 
 // ─── Table header row ─────────────────────────────────────────────────────────
 
-function THead({ col1, col2 }: { col1: string; col2: string }) {
+function THead({ col1, col2, colRel, colDefault }: { col1: string; col2: string; colRel?: string; colDefault?: string }) {
+  const thBase = { fontSize: 10, fontWeight: 600 as const, letterSpacing: '0.06em', textTransform: 'uppercase' as const, color: 'var(--c-muted)' }
   return (
     <thead>
       <tr style={{ background: 'var(--c-card-2)', borderBottom: '1px solid var(--c-line)' }}>
-        <th style={{ padding: '8px 16px', textAlign: 'left', fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' as const, color: 'var(--c-muted)' }}>{col1}</th>
-        <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' as const, color: 'var(--c-muted)' }}>{col2}</th>
+        <th style={{ padding: '8px 16px', textAlign: 'left', ...thBase }}>{col1}</th>
+        {colRel != null && <th style={{ padding: '8px 12px', textAlign: 'left', ...thBase }}>{colRel}</th>}
+        {colDefault != null && <th style={{ padding: '8px 12px', textAlign: 'right', ...thBase }}>{colDefault}</th>}
+        <th style={{ padding: '8px 12px', textAlign: 'right', ...thBase }}>{col2}</th>
         <th style={{ width: 40 }} />
       </tr>
     </thead>
@@ -137,8 +141,8 @@ function MenuBtn({ icon, label, onClick, danger, noBorder }: {
   )
 }
 
-function DPlanRow({ primary, secondary, amount, muted, last, isVI, onSkip, onRestore, onOverride }: {
-  primary: string; secondary?: string | null; amount: number; muted?: boolean
+function DPlanRow({ primary, secondary, amount, relationship, defaultAmount, muted, last, isVI, onSkip, onRestore, onOverride }: {
+  primary: string; secondary?: string | null; amount: number; relationship?: string; defaultAmount?: number; muted?: boolean
   last?: boolean; isVI: boolean; onSkip?: () => void; onRestore?: () => void; onOverride?: () => void
 }) {
   const [open, setOpen] = useState(false)
@@ -159,6 +163,14 @@ function DPlanRow({ primary, secondary, amount, muted, last, isVI, onSkip, onRes
         <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--c-ink)', textDecoration: muted ? 'line-through' : 'none' }}>{primary}</div>
         {secondary && <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 1 }}>{secondary}</div>}
       </td>
+      {relationship != null && (
+        <td style={{ padding: '11px 12px', verticalAlign: 'middle', fontSize: 12, color: 'var(--c-muted)' }}>{relationship}</td>
+      )}
+      {defaultAmount != null && (
+        <td style={{ padding: '11px 12px', textAlign: 'right', verticalAlign: 'middle' }}>
+          <span style={{ fontSize: 12, color: 'var(--c-muted)', fontVariantNumeric: 'tabular-nums' }}>{fmt(defaultAmount)}</span>
+        </td>
+      )}
       <td style={{ padding: '11px 12px', textAlign: 'right', verticalAlign: 'middle' }}>
         <span style={{ fontSize: 13, fontWeight: 600, color: muted ? 'var(--c-muted)' : 'var(--c-ink)', textDecoration: muted ? 'line-through' : 'none', fontVariantNumeric: 'tabular-nums' }}>
           {fmt(amount)}
@@ -985,25 +997,33 @@ export default function DesktopPlanningView({
 
               {/* Insurance */}
               <PlanTable icon={<Shield size={15} />} iconColor="var(--c-accent-insurance,#7c3aed)" title={isVI ? 'Bảo hiểm' : 'Insurance'} total={insTotal}>
-                <THead col1={isVI ? 'Thành viên' : 'Member'} col2={isVI ? 'Đóng góp' : 'Contribution'} />
+                <THead
+                  col1={isVI ? 'Thành viên' : 'Member'}
+                  colRel={isVI ? 'Quan hệ' : 'Relationship'}
+                  colDefault={isVI ? 'Mặc định' : 'Default'}
+                  col2={isVI ? 'Tháng này' : 'This month'}
+                />
                 <tbody>
                   {insuranceMembers.length === 0 ? (
-                    <tr><td colSpan={3} style={{ padding: '16px', textAlign: 'center', color: 'var(--c-muted)', fontSize: 12 }}>{isVI ? 'Chưa có bảo hiểm' : 'No insurance members'}</td></tr>
+                    <tr><td colSpan={5} style={{ padding: '16px', textAlign: 'center', color: 'var(--c-muted)', fontSize: 12 }}>{isVI ? 'Chưa có bảo hiểm' : 'No insurance members'}</td></tr>
                   ) : insuranceMembers.map((m, i) => {
-                    const monthly    = m.monthlyOverride ?? Math.round(m.annual_payment_vnd / 12)
+                    const defaultMonthly = Math.round(m.annual_payment_vnd / 12)
+                    const monthly    = m.monthlyOverride ?? defaultMonthly
                     const isOverridden = !m.excluded && m.monthlyOverride != null
                     return (
                       <DPlanRow
                         key={m.member_id}
                         primary={m.member_name}
-                        secondary={m.excluded ? (isVI ? 'Bỏ qua tháng này' : 'Skipped') : isOverridden ? (isVI ? '(đã ghi đè)' : '(overridden)') : (isVI ? 'Đóng góp tháng' : 'Monthly contribution')}
+                        relationship={relationshipLabel(m.relationship, isVI)}
+                        defaultAmount={defaultMonthly}
+                        secondary={m.excluded ? (isVI ? 'Bỏ qua tháng này' : 'Skipped') : isOverridden ? (isVI ? '(đã ghi đè)' : '(overridden)') : null}
                         amount={m.excluded ? 0 : monthly}
                         muted={m.excluded}
                         last={i === insuranceMembers.length - 1}
                         isVI={isVI}
                         onSkip={() => handleInsSkip(m)}
                         onRestore={m.excluded || m.monthlyOverride != null ? () => handleInsRestore(m) : undefined}
-                        onOverride={() => { const d = Math.round(m.annual_payment_vnd / 12); setOverrideModal({ id: m.member_id, name: m.member_name, defaultAmount: d, type: 'ins' }); setOverrideVal(String(m.monthlyOverride ?? d)) }}
+                        onOverride={() => { setOverrideModal({ id: m.member_id, name: m.member_name, defaultAmount: defaultMonthly, type: 'ins' }); setOverrideVal(String(m.monthlyOverride ?? defaultMonthly)) }}
                       />
                     )
                   })}
