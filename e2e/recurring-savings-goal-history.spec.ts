@@ -103,7 +103,8 @@ test('a fulfilled recurring month is hidden from goal history (already folded in
   expect(res.ok()).toBeTruthy()
   expect((await res.json()).contributions).toHaveLength(0)
 
-  // UI: History shows the real deposit but NOT the folded recurring row.
+  // UI: both tabs show the real deposit but NOT the folded recurring row — the
+  // bug surfaced in Investments AND History (they share one merged list).
   await page.goto('/dashboard')
   await page.waitForLoadState('networkidle')
   const goalCard = page.getByText('E2E Fulfilled Month Goal').first()
@@ -111,7 +112,54 @@ test('a fulfilled recurring month is hidden from goal history (already folded in
   await goalCard.click()
   const panel = page.getByTestId('desktop-goal-detail')
   await expect(panel).toBeVisible({ timeout: 5_000 })
+
+  // Investments tab (default): deposit present, folded recurring absent.
+  await expect(panel.getByText('E2E Folded Deposit')).toBeVisible({ timeout: 5_000 })
+  await expect(panel.getByText('E2E Folded Recurring')).toHaveCount(0)
+
+  // History tab: same.
   await panel.getByRole('button', { name: /^(History|Lịch sử)$/ }).click()
   await expect(panel.getByText('E2E Folded Deposit')).toBeVisible({ timeout: 5_000 })
   await expect(panel.getByText('E2E Folded Recurring')).toHaveCount(0)
+})
+
+test('a closed-cycle snapshot deposit does not suppress a realized recurring contribution', async ({ page }) => {
+  // Regression for the deposit-suppression pool: the goal detail suppresses a
+  // synthesized recurring row when a real logged deposit matches it on
+  // (month, goal, amount). Renewal snapshots (renewed_from set) are bank/investment
+  // rows in the same goal too, so they used to leak into that pool — and the
+  // maturity-combine flow writes BOTH a fulfillment AND a snapshot. A snapshot whose
+  // amount coincided with a recurring would then wrongly hide it. The pool must
+  // exclude snapshots, exactly as the dashboard overview already does.
+  const goal = await api.createGoal({ goal_name: 'E2E Snapshot Pool Goal', target_amount: 100_000_000 })
+  cleanup.add(() => api.deleteGoal(goal.goal_id))
+
+  const plan = await api.createMonthlyPlan({ month: MONTH, year: YEAR, salary_vnd: 30_000_000 })
+  cleanup.add(() => api.deleteMonthlyPlan(plan.id))
+
+  const AMOUNT = 6_000_000
+  // The active row the cycle renewed into (the snapshot's renewed_from target).
+  const active = await api.createTransaction({
+    asset_type: 'bank', amount_vnd: 50_000_000, investment_date: MONTH_START, interest_rate: 5,
+    goal_id: goal.goal_id, notes: 'E2E Snapshot Active',
+  })
+  cleanup.add(() => api.deleteTransaction(active.transaction_id))
+  // A closed-cycle snapshot whose amount equals the recurring amount (same month+goal).
+  const snapshot = await api.createTransaction({
+    asset_type: 'bank', amount_vnd: AMOUNT, investment_date: MONTH_START, interest_rate: 5,
+    goal_id: goal.goal_id, notes: 'E2E Snapshot Old Cycle',
+    renewed_from_transaction_id: active.transaction_id,
+  })
+  cleanup.add(() => api.deleteTransaction(snapshot.transaction_id))
+
+  // NOT fulfilled — the recurring must still surface; the snapshot must not consume it.
+  const saving = await api.createRecurringSaving({
+    name: 'E2E Snapshot Recurring', goal_id: goal.goal_id, amount_vnd: AMOUNT, effective_from: MONTH_START,
+  })
+  cleanup.add(() => api.deleteRecurringSaving(saving.saving_id))
+
+  const res = await page.request.get(`/api/v1/savings-goals/${goal.goal_id}/recurring-contributions`)
+  expect(res.ok()).toBeTruthy()
+  const notes = ((await res.json()).contributions as Array<{ notes: string }>).map((c) => c.notes)
+  expect(notes).toContain('E2E Snapshot Recurring')
 })

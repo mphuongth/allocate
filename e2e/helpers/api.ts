@@ -148,6 +148,9 @@ export async function createTransaction(data: {
   fund_id?: string
   goal_id?: string
   notes?: string
+  // Set to mark this row a renewal snapshot of a closed cycle (excluded from net
+  // worth and from the recurring deposit-suppression pool).
+  renewed_from_transaction_id?: string
 }) {
   const userId = await getTestUserId()
   const { data: tx, error } = await supabase

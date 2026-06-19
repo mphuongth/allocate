@@ -52,14 +52,20 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       : Promise.resolve({ data: [], error: null }),
     // Real bank deposits logged toward this goal — used to suppress the
     // synthesized recurring row when the user has recorded the actual deposit
-    // (otherwise the History tab would show both).
+    // (otherwise the History tab would show both). Exclude renewal snapshots
+    // (renewed_from set): a closed cycle isn't a live deposit and is already kept
+    // out of net worth, but it's still a bank/investment row in this goal, so it
+    // would leak into the pool and could wrongly suppress a recurring whose
+    // (month, goal, amount) happens to match it. The dashboard overview builds its
+    // pool from the same snapshot-excluded set — keep them consistent.
     supabase
       .from('investment_transactions')
       .select('goal_id, amount_vnd, investment_date')
       .eq('user_id', user.id)
       .eq('goal_id', goalId)
       .eq('asset_type', 'bank')
-      .eq('transaction_type', 'investment'),
+      .eq('transaction_type', 'investment')
+      .is('renewed_from_transaction_id', null),
     // Months already settled by folding the recurring into a renewed/topped-up
     // deposit. The amount lives in that deposit's principal, so the synthesized
     // row must be skipped here too — the dashboard overview already honours these,
