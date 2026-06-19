@@ -427,9 +427,16 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
                       {goals.map((g) => <option key={g.goal_id} value={g.goal_id}>{g.goal_name}</option>)}
                     </select>
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <input type="date" value={dateFrom} onChange={(e) => setDateFilter('from_date', e.target.value, setDateFrom)} aria-label={t('lblFrom')} className="cn-input tabular" style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} />
-                    <input type="date" value={dateTo} onChange={(e) => setDateFilter('to_date', e.target.value, setDateTo)} aria-label={t('lblTo')} className="cn-input tabular" style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} />
+                  {/* iOS renders an empty <input type=date> fully blank (no
+                      placeholder), so each date field needs a visible label to
+                      stay identifiable — matches the desktop toolbar (#362). */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    <Field label={t('lblFrom')}>
+                      <input type="date" value={dateFrom} onChange={(e) => setDateFilter('from_date', e.target.value, setDateFrom)} aria-label={t('lblFrom')} className="cn-input tabular" style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} />
+                    </Field>
+                    <Field label={t('lblTo')}>
+                      <input type="date" value={dateTo} onChange={(e) => setDateFilter('to_date', e.target.value, setDateTo)} aria-label={t('lblTo')} className="cn-input tabular" style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} />
+                    </Field>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{t('totalCount', { count: total })}</span>

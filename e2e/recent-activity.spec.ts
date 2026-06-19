@@ -54,6 +54,34 @@ test.describe('Recent activity — mobile', () => {
     await page.getByTestId('recent-activity-view-all').click()
     await expect(page.getByTestId('tx-ledger')).toBeVisible({ timeout: 5_000 })
   })
+
+  // Issue #362: on iOS an empty <input type="date"> renders fully blank (no
+  // "mm/dd/yyyy" placeholder like Chrome), so the date filters looked like two
+  // empty boxes "off UI". They must carry visible From/To labels like desktop.
+  test('mobile date filters show visible From/To labels', async ({ page }) => {
+    const tx = await api.createTransaction({
+      asset_type: 'bank',
+      amount_vnd: 5_000_000,
+      investment_date: new Date().toISOString().slice(0, 10),
+      interest_rate: 5,
+      notes: 'E2E 362 filter',
+    })
+    try {
+      await page.goto('/dashboard')
+      await page.waitForLoadState('networkidle')
+      await page.getByTestId('recent-activity-view-all').click()
+
+      const ledger = page.getByTestId('tx-ledger')
+      await expect(ledger).toBeVisible({ timeout: 5_000 })
+      // The filter row (gated on having transactions) renders both date inputs…
+      await expect(ledger.locator('input[type="date"]')).toHaveCount(2)
+      // …each labeled, so a blank iOS date field is still identifiable.
+      await expect(ledger.getByText('From', { exact: true })).toBeVisible()
+      await expect(ledger.getByText('To', { exact: true })).toBeVisible()
+    } finally {
+      await api.deleteTransactionCascade(tx.transaction_id)
+    }
+  })
 })
 
 // ─── Data-backed: an investment renders as a positive (+) row ────────────────
