@@ -66,6 +66,30 @@ export async function getRecurringSaving(savingId: string) {
   return data
 }
 
+// Mark a recurring saving's month as already settled (folded into a renewed/
+// topped-up deposit), mirroring what the maturity-combine/top-up RPCs write. The
+// presence of this row tells the real-saved model to skip synthesizing that
+// month's contribution, so it isn't counted twice.
+export async function createRecurringFulfillment(data: {
+  recurring_saving_id: string
+  ym: string
+  amount_vnd: number
+  source?: string
+}) {
+  const userId = await getTestUserId()
+  const { data: row, error } = await supabase
+    .from('recurring_saving_fulfillments')
+    .insert({ user_id: userId, source: 'maturity-combine', ...data })
+    .select()
+    .single()
+  if (error) throw error
+  return row
+}
+
+export async function deleteRecurringFulfillments(savingId: string) {
+  await supabase.from('recurring_saving_fulfillments').delete().eq('recurring_saving_id', savingId)
+}
+
 // Invoke the collapse RPC directly (service role). Lets a spec drive it with a
 // deliberately stale tranche set to exercise the mid-flight-change guard.
 export async function rpcCollapseBook(args: Record<string, unknown>) {
@@ -124,6 +148,9 @@ export async function createTransaction(data: {
   fund_id?: string
   goal_id?: string
   notes?: string
+  // Set to mark this row a renewal snapshot of a closed cycle (excluded from net
+  // worth and from the recurring deposit-suppression pool).
+  renewed_from_transaction_id?: string
 }) {
   const userId = await getTestUserId()
   const { data: tx, error } = await supabase

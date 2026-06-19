@@ -43,7 +43,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const plans = (plansRes.data ?? []) as { id: string; month: number; year: number }[]
   const planIds = plans.map((p) => p.id)
 
-  const [overridesRes, depositsRes] = await Promise.all([
+  const [overridesRes, depositsRes, fulfillmentsRes] = await Promise.all([
     planIds.length > 0
       ? supabase
           .from('recurring_saving_overrides')
@@ -52,14 +52,28 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       : Promise.resolve({ data: [], error: null }),
     // Real bank deposits logged toward this goal — used to suppress the
     // synthesized recurring row when the user has recorded the actual deposit
-    // (otherwise the History tab would show both).
+    // (otherwise the History tab would show both). Exclude renewal snapshots
+    // (renewed_from set): a closed cycle isn't a live deposit and is already kept
+    // out of net worth, but it's still a bank/investment row in this goal, so it
+    // would leak into the pool and could wrongly suppress a recurring whose
+    // (month, goal, amount) happens to match it. The dashboard overview builds its
+    // pool from the same snapshot-excluded set — keep them consistent.
     supabase
       .from('investment_transactions')
       .select('goal_id, amount_vnd, investment_date')
       .eq('user_id', user.id)
       .eq('goal_id', goalId)
       .eq('asset_type', 'bank')
-      .eq('transaction_type', 'investment'),
+      .eq('transaction_type', 'investment')
+      .is('renewed_from_transaction_id', null),
+    // Months already settled by folding the recurring into a renewed/topped-up
+    // deposit. The amount lives in that deposit's principal, so the synthesized
+    // row must be skipped here too — the dashboard overview already honours these,
+    // and the goal detail must agree or the goal shows the contribution twice.
+    supabase
+      .from('recurring_saving_fulfillments')
+      .select('recurring_saving_id, ym')
+      .eq('user_id', user.id),
   ])
 
   const loggedDeposits = (depositsRes.data ?? []).map((d) => ({
@@ -73,6 +87,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     plans,
     overridesRes.data ?? [],
     loggedDeposits,
+    fulfillmentsRes.data ?? [],
   )
 
   // Shape as read-only history rows mirroring the investment-transactions response.
