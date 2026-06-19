@@ -352,6 +352,73 @@ describe('AddTransactionSheet — gold unit (issue #232)', () => {
   })
 })
 
+describe('AddTransactionSheet — structured bank (bank_code)', () => {
+  // PR0 of "Gộp nhiều nguồn": a deposit's bank is now a structured reference
+  // (FK to the banks table), not parsed from the free-text name. The form loads
+  // the bank list from /api/v1/banks and sends the chosen code as bank_code.
+  const banks = [{ code: 'MB', name: 'MB Bank' }, { code: 'VCB', name: 'Vietcombank' }]
+  const withBanks = (extra?: (url: string, init?: RequestInit) => Promise<unknown> | undefined) =>
+    vi.fn((url: string, init?: RequestInit) => {
+      const r = extra?.(url, init)
+      if (r) return r
+      if (String(url).includes('/api/v1/banks')) return Promise.resolve({ ok: true, json: () => Promise.resolve(banks) })
+      if (String(url).includes('/savings-goals')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ goals: [] }) })
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
+    })
+
+  it('loads the bank list and posts the selected bank_code when creating a deposit', async () => {
+    const fetchMock = withBanks()
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<AddTransactionSheet open onClose={vi.fn()} onSaved={vi.fn()} />)
+
+    fireEvent.click(screen.getByText('Bank'))                        // asset type = bank
+    await screen.findByRole('option', { name: 'MB Bank' })           // bank list loaded
+    fireEvent.change(screen.getByTestId('bank-select'), { target: { value: 'MB' } })
+    fireEvent.change(screen.getByPlaceholderText('10,000,000'), { target: { value: '10000000' } })
+    fireEvent.click(screen.getByText('save'))
+
+    await waitFor(() => {
+      const post = fetchMock.mock.calls.find((c) => String(c[0]).includes('/investment-transactions') && (c[1] as RequestInit)?.method === 'POST')
+      expect(post).toBeTruthy()
+      const body = JSON.parse(String((post![1] as RequestInit).body))
+      expect(body.asset_type).toBe('bank')
+      expect(body.bank_code).toBe('MB')
+      expect(body.amount_vnd).toBe(10_000_000)
+    })
+  })
+
+  it('prefills bank_code in edit mode and sends it on PUT', async () => {
+    const fetchMock = withBanks()
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(
+      <AddTransactionSheet
+        open
+        onClose={vi.fn()}
+        onSaved={vi.fn()}
+        existing={{
+          transaction_id: 'tx1', asset_type: 'bank', investment_date: '2026-06-01',
+          amount_vnd: 10_000_000, unit_price: null, units: null, interest_rate: 6,
+          expiry_date: '2026-12-01', notes: 'Sổ A', fund_id: null, goal_id: null, bank_code: 'VCB',
+        }}
+      />,
+    )
+
+    const sel = await screen.findByTestId('bank-select') as HTMLSelectElement
+    await waitFor(() => expect(sel.value).toBe('VCB'))
+    fireEvent.click(screen.getByText('saveChanges'))
+
+    await waitFor(() => {
+      const put = fetchMock.mock.calls.find((c) => String(c[0]).includes('/investment-transactions/tx1') && (c[1] as RequestInit)?.method === 'PUT')
+      expect(put).toBeTruthy()
+      const body = JSON.parse(String((put![1] as RequestInit).body))
+      expect(body.asset_type).toBe('bank')
+      expect(body.bank_code).toBe('VCB')
+    })
+  })
+})
+
 describe('AddTransactionSheet — prefill create mode (plan contribution)', () => {
   it('posts a new bank deposit carrying plan_id and goal_id', async () => {
     const fetchMock = vi.fn((url: string, _init?: RequestInit) => {

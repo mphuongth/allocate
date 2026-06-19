@@ -24,10 +24,16 @@ type NonFundEntry = {
   // Accumulating-book grouping: set on every tranche (anchor's = its own id).
   // The client groups holdings by it and excludes books from the maturity card.
   depositGroupId: string | null
+  // Structured bank (FK) + currency + pledged flag — null/false on legacy
+  // deposits. Carried for the merge provenance/destination picker and the
+  // eligibility "same currency" / "not pledged" rules.
+  bankCode: string | null
+  currency: string | null
+  isPledged: boolean
 }
 
 function buildNonFund(
-  tx: { transaction_id: string; asset_type: string; interest_rate: number | null; expiry_date: string | null; investment_date: string; notes: string | null; deposit_group_id?: string | null },
+  tx: { transaction_id: string; asset_type: string; interest_rate: number | null; expiry_date: string | null; investment_date: string; notes: string | null; deposit_group_id?: string | null; bank_code?: string | null; currency?: string | null; is_pledged?: boolean | null },
   amount: number,
   currentValue: number,
   units: number | null,
@@ -43,6 +49,9 @@ function buildNonFund(
     units,
     notes: tx.notes ?? null,
     depositGroupId: tx.deposit_group_id ?? null,
+    bankCode: tx.bank_code ?? null,
+    currency: tx.currency ?? null,
+    isPledged: tx.is_pledged ?? false,
   }
 }
 
@@ -65,7 +74,7 @@ export async function GET() {
       // Snapshot-free view — renewal history rows can't reach the net-worth /
       // goal / allocation totals (defence on top of the app-side filter below).
       .from('active_investment_transactions')
-      .select('transaction_id, goal_id, amount_vnd, interest_rate, investment_date, asset_type, transaction_type, units, unit_price, units_withdrawn, principal_withdrawn, fund_id, parent_transaction_id, renewed_from_transaction_id, deposit_group_id, expiry_date, notes, affects_progress, funds(id, name, nav, updated_at, fund_type)')
+      .select('transaction_id, goal_id, amount_vnd, interest_rate, investment_date, asset_type, transaction_type, units, unit_price, units_withdrawn, principal_withdrawn, fund_id, parent_transaction_id, renewed_from_transaction_id, deposit_group_id, expiry_date, notes, affects_progress, bank_code, currency, is_pledged, funds(id, name, nav, updated_at, fund_type)')
       .eq('user_id', user.id),
     supabase
       .from('insurance_members')

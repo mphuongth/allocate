@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { ValidationError, validateAmount, validateDate, validateEnum, validateNotes, validateRate, validateUUID } from '@/lib/validation'
+import { ValidationError, validateAmount, validateBankCode, validateDate, validateEnum, validateNotes, validateRate, validateUUID } from '@/lib/validation'
 import { isFutureInvestmentDate } from '@/lib/dates'
 
 const ASSET_TYPES = ['fund', 'bank', 'stock', 'gold'] as const
@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from('investment_transactions')
-    .select('transaction_id, goal_id, asset_type, transaction_type, parent_transaction_id, renewed_from_transaction_id, deposit_group_id, interest_earned_vnd, investment_date, amount_vnd, unit_price, units, interest_rate, expiry_date, notes, fund_id, principal_withdrawn, units_withdrawn, affects_progress, savings_goals(goal_name), funds(id, name, nav)', { count: 'exact' })
+    .select('transaction_id, goal_id, asset_type, transaction_type, parent_transaction_id, renewed_from_transaction_id, deposit_group_id, interest_earned_vnd, investment_date, amount_vnd, unit_price, units, interest_rate, expiry_date, notes, fund_id, bank_code, currency, is_pledged, principal_withdrawn, units_withdrawn, affects_progress, savings_goals(goal_name), funds(id, name, nav)', { count: 'exact' })
     .eq('user_id', user.id)
     .order('investment_date', { ascending: false })
     .range(offset, offset + limit - 1)
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { goal_id, asset_type, transaction_type = 'investment', investment_date, amount_vnd, unit_price, units, interest_rate, notes, fund_id, plan_id, expiry_date, parent_transaction_id, principal_withdrawn, units_withdrawn, affects_progress, accumulating, tops_up_deposit_id } = body
+  const { goal_id, asset_type, transaction_type = 'investment', investment_date, amount_vnd, unit_price, units, interest_rate, notes, fund_id, plan_id, expiry_date, parent_transaction_id, principal_withdrawn, units_withdrawn, affects_progress, accumulating, tops_up_deposit_id, bank_code } = body
 
   const isWithdrawal = transaction_type === 'withdrawal'
 
@@ -75,6 +75,7 @@ export async function POST(request: NextRequest) {
   let cleanPrincipalWithdrawn: number | null = null
   let cleanUnitsWithdrawn: number | null = null
   let cleanTopsUpId: string | null = null
+  let cleanBankCode: string | null = null
 
   try {
     cleanTxType = validateEnum(transaction_type, ['investment', 'withdrawal'] as const, 'transaction_type')
@@ -104,6 +105,7 @@ export async function POST(request: NextRequest) {
     if (principal_withdrawn != null && principal_withdrawn !== '') cleanPrincipalWithdrawn = validateAmount(principal_withdrawn, 'principal_withdrawn')
     if (units_withdrawn != null && units_withdrawn !== '') cleanUnitsWithdrawn = validateAmount(units_withdrawn, 'units_withdrawn')
     if (tops_up_deposit_id) cleanTopsUpId = validateUUID(tops_up_deposit_id, 'tops_up_deposit_id')
+    if (bank_code != null && bank_code !== '') cleanBankCode = validateBankCode(bank_code, 'bank_code')
   } catch (e) {
     if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
     throw e
@@ -156,10 +158,11 @@ export async function POST(request: NextRequest) {
   let effectiveGoalId = cleanGoalId
   let effectiveExpiry = cleanExpiryDate
   let effectiveAssetType = cleanAssetType
+  let effectiveBankCode = cleanBankCode
   if (cleanTopsUpId) {
     const { data: anchor } = await supabase
       .from('investment_transactions')
-      .select('asset_type, deposit_group_id, goal_id, expiry_date')
+      .select('asset_type, deposit_group_id, goal_id, expiry_date, bank_code')
       .eq('transaction_id', cleanTopsUpId)
       .eq('user_id', user.id)
       .single()
@@ -177,6 +180,7 @@ export async function POST(request: NextRequest) {
     effectiveGoalId = anchor.goal_id            // the tranche belongs to the book's goal
     effectiveExpiry = anchor.expiry_date        // book maturity, copied down to every tranche
     effectiveAssetType = 'bank'
+    effectiveBankCode = anchor.bank_code ?? null // tranche inherits the book's bank
   } else if (accumulating) {
     // New accumulating book: the anchor self-groups so deposit_group_id IS NOT
     // NULL ⇔ accumulating, and the anchor is the row whose group = its own id.
@@ -206,6 +210,9 @@ export async function POST(request: NextRequest) {
       units_withdrawn: cleanUnitsWithdrawn,
       affects_progress: isWithdrawal ? (affects_progress !== false) : true,
       deposit_group_id: depositGroupId,
+      // Structured bank only applies to bank deposits; funds/gold have no bank.
+      // A top-up tranche inherits the book's bank (effectiveBankCode).
+      bank_code: effectiveAssetType === 'bank' ? effectiveBankCode : null,
     })
     .select()
     .single()

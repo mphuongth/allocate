@@ -8,6 +8,7 @@ import { todayIso } from '@/lib/dates'
 
 interface Fund { id: string; name: string; nav: number; code: string | null; fund_type?: string }
 interface Goal { goal_id: string; goal_name: string }
+interface Bank { code: string; name: string; logo_url?: string | null }
 
 // A sellable position, collected from the dashboard overview. Funds live in
 // goals or unallocated; bank/gold live in unallocated.
@@ -81,6 +82,8 @@ export interface EditableTransaction {
   notes: string | null
   fund_id: string | null
   goal_id: string | null
+  // Structured bank reference (FK to banks.code). Null on legacy deposits.
+  bank_code?: string | null
 }
 
 // When set (and `existing` is not), the sheet opens in create mode with these
@@ -148,6 +151,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
   const [mounted, setMounted] = useState(open)
   const [funds, setFunds] = useState<Fund[]>([])
   const [goals, setGoals] = useState<Goal[]>([])
+  const [banks, setBanks] = useState<Bank[]>([])
 
   // form state
   const [assetType, setAssetType] = useState<AssetType>('fund')
@@ -164,6 +168,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
 
   // bank fields
   const [bankName, setBankName] = useState('')
+  const [bankCode, setBankCode] = useState('')
   const [depositType, setDepositType] = useState<'term' | 'flex' | 'accumulating'>('term')
   const [bankAmount, setBankAmount] = useState('')
   const [rate, setRate] = useState('')
@@ -195,7 +200,8 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
       Promise.all([
         fetch('/api/v1/funds').then(r => r.json()),
         fetch('/api/v1/savings-goals').then(r => r.json()),
-      ]).then(([fundsData, goalsData]) => {
+        fetch('/api/v1/banks').then(r => r.json()).catch(() => []),
+      ]).then(([fundsData, goalsData, banksData]) => {
         const fundList: Fund[] = Array.isArray(fundsData) ? fundsData : []
         // /api/v1/savings-goals returns { goals: [...] }, not a bare array.
         const goalList: Goal[] = Array.isArray(goalsData)
@@ -203,6 +209,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
           : (Array.isArray(goalsData?.goals) ? goalsData.goals : [])
         setFunds(fundList)
         setGoals(goalList)
+        setBanks(Array.isArray(banksData) ? banksData : [])
         if (fundList.length > 0 && !fundId && !existing) setFundId(fundList[0].id)
       }).catch(() => {})
     } else {
@@ -237,6 +244,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
       setMaturity(existing.expiry_date || '')
       setDepositType(existing.interest_rate != null ? 'term' : 'flex')
       setBankName(existing.notes || '')
+      setBankCode(existing.bank_code || '')
     } else {
       setGoldProvider(existing.notes || 'PNJ')
       setGoldUnit('chi')
@@ -291,6 +299,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
     setUnits('')
     setNav('')
     setBankName('')
+    setBankCode('')
     setDepositType('term')
     setBankAmount('')
     setRate('')
@@ -415,6 +424,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
           asset_type: 'bank', fund_id: null, investment_date: date, amount_vnd: amt,
           interest_rate: rate ? Number(rate) : null, expiry_date: maturity || null,
           goal_id: goalId || null, notes: bankName || note || null,
+          bank_code: bankCode || null,
         }
       } else {
         const qty = Number(goldQty)
@@ -549,6 +559,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
         ...body,
         amount_vnd: amt,
         notes: bankName || note || null,
+        bank_code: bankCode || null,
         interest_rate: rate ? Number(rate) : null,
         expiry_date: maturity || null,
         // An accumulating book: the route self-groups this anchor row so it can
@@ -758,13 +769,30 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
           {/* Bank-specific */}
           {dir === 'buy' && assetType === 'bank' && (
             <>
+              {/* Structured bank (FK) — the deposit points at a real bank, not a
+                  parsed name. The free-text field below is just the deposit's
+                  own nickname. */}
               <div>
-                <label style={labelStyle}>{t('bankName')}</label>
+                <label style={labelStyle}>{t('bank')}</label>
+                <select
+                  data-testid="bank-select"
+                  value={bankCode}
+                  onChange={(e) => setBankCode(e.target.value)}
+                  style={inputStyle}
+                >
+                  <option value="">{t('bankNone')}</option>
+                  {banks.map((b) => (
+                    <option key={b.code} value={b.code}>{b.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={labelStyle}>{t('depositName')}</label>
                 <input
                   type="text"
                   value={bankName}
                   onChange={(e) => setBankName(e.target.value)}
-                  placeholder="Techcombank"
+                  placeholder={t('depositNamePlaceholder')}
                   style={inputStyle}
                 />
               </div>
