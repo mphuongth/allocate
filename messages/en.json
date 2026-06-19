@@ -283,6 +283,7 @@
     "lblAsset": "Asset",
     "lblFrom": "From",
     "lblTo": "To",
+    "datePlaceholder": "dd/mm/yyyy",
     "filterAllAssets": "All assets",
     "filterAllGoals": "All goals",
     "noMatch": "No transactions match the filters.",

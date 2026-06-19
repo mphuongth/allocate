@@ -27,6 +27,22 @@ const labelStyle: React.CSSProperties = {
   color: 'var(--c-muted)', marginBottom: 6,
 }
 
+// Mobile date filters (#362): WebkitAppearance:none stops iOS Safari from sizing
+// the native date control to its intrinsic width (which ignores width:100% and
+// clips on the right); maxWidth pins it to the grid cell.
+const dateFilterStyle: React.CSSProperties = {
+  width: '100%', maxWidth: '100%', minWidth: 0,
+  boxSizing: 'border-box', WebkitAppearance: 'none', appearance: 'none',
+}
+
+// iOS Safari shows NOTHING in an empty <input type=date> (no native placeholder),
+// so we overlay our own. pointerEvents:none lets taps fall through to the input;
+// the .cn-date-empty class blanks Chrome's native "mm/dd/yyyy" so they don't stack.
+const datePlaceholderStyle: React.CSSProperties = {
+  position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
+  fontSize: 16, color: 'var(--c-muted)', pointerEvents: 'none',
+}
+
 interface AppliedFilters { asset_type: string; goal_id: string; from_date: string; to_date: string }
 const EMPTY_FILTERS: AppliedFilters = { asset_type: '', goal_id: '', from_date: '', to_date: '' }
 
@@ -427,9 +443,25 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
                       {goals.map((g) => <option key={g.goal_id} value={g.goal_id}>{g.goal_name}</option>)}
                     </select>
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <input type="date" value={dateFrom} onChange={(e) => setDateFilter('from_date', e.target.value, setDateFrom)} aria-label={t('lblFrom')} className="cn-input tabular" style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} />
-                    <input type="date" value={dateTo} onChange={(e) => setDateFilter('to_date', e.target.value, setDateTo)} aria-label={t('lblTo')} className="cn-input tabular" style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} />
+                  {/* iOS quirks (#362): an empty <input type=date> renders fully
+                      blank (no placeholder) AND ignores width:100%, sizing to its
+                      intrinsic content so it overflows / gets clipped on the right.
+                      Fix: visible From/To labels + an overlaid placeholder for the
+                      blank empty state + shrinkable minmax(0,1fr) columns and
+                      appearance:none/max-width so the control is clamped to its cell. */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 8 }}>
+                    <Field label={t('lblFrom')}>
+                      <div style={{ position: 'relative' }}>
+                        <input type="date" value={dateFrom} onChange={(e) => setDateFilter('from_date', e.target.value, setDateFrom)} aria-label={t('lblFrom')} className={`cn-input tabular${dateFrom ? '' : ' cn-date-empty'}`} style={dateFilterStyle} />
+                        {!dateFrom && <span aria-hidden style={datePlaceholderStyle}>{t('datePlaceholder')}</span>}
+                      </div>
+                    </Field>
+                    <Field label={t('lblTo')}>
+                      <div style={{ position: 'relative' }}>
+                        <input type="date" value={dateTo} onChange={(e) => setDateFilter('to_date', e.target.value, setDateTo)} aria-label={t('lblTo')} className={`cn-input tabular${dateTo ? '' : ' cn-date-empty'}`} style={dateFilterStyle} />
+                        {!dateTo && <span aria-hidden style={datePlaceholderStyle}>{t('datePlaceholder')}</span>}
+                      </div>
+                    </Field>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{t('totalCount', { count: total })}</span>

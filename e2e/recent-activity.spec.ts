@@ -54,6 +54,48 @@ test.describe('Recent activity — mobile', () => {
     await page.getByTestId('recent-activity-view-all').click()
     await expect(page.getByTestId('tx-ledger')).toBeVisible({ timeout: 5_000 })
   })
+
+  // Issue #362: on iOS an empty <input type="date"> renders fully blank (no
+  // "mm/dd/yyyy" placeholder like Chrome), so the date filters looked like two
+  // empty boxes "off UI". They must carry visible From/To labels like desktop.
+  test('mobile date filters show visible From/To labels', async ({ page }) => {
+    const tx = await api.createTransaction({
+      asset_type: 'bank',
+      amount_vnd: 5_000_000,
+      investment_date: new Date().toISOString().slice(0, 10),
+      interest_rate: 5,
+      notes: 'E2E 362 filter',
+    })
+    try {
+      await page.goto('/dashboard')
+      await page.waitForLoadState('networkidle')
+      await page.getByTestId('recent-activity-view-all').click()
+
+      const ledger = page.getByTestId('tx-ledger')
+      await expect(ledger).toBeVisible({ timeout: 5_000 })
+      // The filter row (gated on having transactions) renders both date inputs…
+      const dateInputs = ledger.locator('input[type="date"]')
+      await expect(dateInputs).toHaveCount(2)
+      // …each labeled, so a blank iOS date field is still identifiable.
+      await expect(ledger.getByText('From', { exact: true })).toBeVisible()
+      await expect(ledger.getByText('To', { exact: true })).toBeVisible()
+      // …and an overlaid placeholder fills the otherwise-blank iOS empty state.
+      // Both fields start empty → two placeholders; pick one and it disappears.
+      await expect(ledger.getByText('dd/mm/yyyy')).toHaveCount(2)
+      await dateInputs.first().fill('2026-06-19')
+      await expect(ledger.getByText('dd/mm/yyyy')).toHaveCount(1)
+      // …and neither overflows the ledger to the right (the clipped 2nd field
+      // in the bug report). Chromium can't reproduce the iOS intrinsic-width
+      // overflow, but this guards the grid layout from gross breakage.
+      const ledgerBox = await ledger.boundingBox()
+      for (let i = 0; i < 2; i++) {
+        const box = await dateInputs.nth(i).boundingBox()
+        expect(box!.x + box!.width).toBeLessThanOrEqual(ledgerBox!.x + ledgerBox!.width + 1)
+      }
+    } finally {
+      await api.deleteTransactionCascade(tx.transaction_id)
+    }
+  })
 })
 
 // ─── Data-backed: an investment renders as a positive (+) row ────────────────
