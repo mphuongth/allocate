@@ -681,8 +681,7 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
         onSaved={() => { fetchTransactions(); notifyChanged() }}
       />
 
-      {/* Delete confirm — token-styled Shell so it stacks above the ledger
-          (the shared ConfirmModal is a Radix dialog at a lower z-index). */}
+      {/* Delete confirm — token-styled Shell so it stacks above the ledger. */}
       <Shell open={!!confirmTx} onClose={() => setConfirmTx(null)} title={t('deleteTitle')} desktop={desktop} width={380}>
         {confirmTx && (
           <div style={{ display: 'grid', gap: 16 }}>
