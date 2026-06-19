@@ -283,6 +283,7 @@
     "lblAsset": "Tài sản",
     "lblFrom": "Từ",
     "lblTo": "Đến",
+    "datePlaceholder": "dd/mm/yyyy",
     "filterAllAssets": "Mọi tài sản",
     "filterAllGoals": "Mọi mục tiêu",
     "noMatch": "Không có giao dịch khớp bộ lọc.",

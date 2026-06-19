@@ -327,6 +327,11 @@
   input, textarea, select { font-size: 16px; }
 }
 
+/* Empty <input type=date>: iOS shows nothing, Chrome shows a native "mm/dd/yyyy".
+   We overlay our own placeholder (#362), so blank Chrome's native text on the
+   empty state to avoid stacking two placeholders. Cleared once a value is set. */
+.cn-date-empty::-webkit-datetime-edit { color: transparent; }
+
 /* ── Loading vocabulary (issue #235) ───────────────────────────────────────
    One indicator language across the app: the brand cairn-stone loader for
    spinners, and the .sk shimmer primitive for skeleton screens. */

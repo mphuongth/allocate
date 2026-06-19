@@ -35,6 +35,14 @@ const dateFilterStyle: React.CSSProperties = {
   boxSizing: 'border-box', WebkitAppearance: 'none', appearance: 'none',
 }
 
+// iOS Safari shows NOTHING in an empty <input type=date> (no native placeholder),
+// so we overlay our own. pointerEvents:none lets taps fall through to the input;
+// the .cn-date-empty class blanks Chrome's native "mm/dd/yyyy" so they don't stack.
+const datePlaceholderStyle: React.CSSProperties = {
+  position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
+  fontSize: 16, color: 'var(--c-muted)', pointerEvents: 'none',
+}
+
 interface AppliedFilters { asset_type: string; goal_id: string; from_date: string; to_date: string }
 const EMPTY_FILTERS: AppliedFilters = { asset_type: '', goal_id: '', from_date: '', to_date: '' }
 
@@ -438,15 +446,21 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
                   {/* iOS quirks (#362): an empty <input type=date> renders fully
                       blank (no placeholder) AND ignores width:100%, sizing to its
                       intrinsic content so it overflows / gets clipped on the right.
-                      Fix: visible From/To labels (like desktop) + shrinkable
-                      minmax(0,1fr) columns + appearance:none/max-width so the native
-                      control is clamped to its cell. */}
+                      Fix: visible From/To labels + an overlaid placeholder for the
+                      blank empty state + shrinkable minmax(0,1fr) columns and
+                      appearance:none/max-width so the control is clamped to its cell. */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 8 }}>
                     <Field label={t('lblFrom')}>
-                      <input type="date" value={dateFrom} onChange={(e) => setDateFilter('from_date', e.target.value, setDateFrom)} aria-label={t('lblFrom')} className="cn-input tabular" style={dateFilterStyle} />
+                      <div style={{ position: 'relative' }}>
+                        <input type="date" value={dateFrom} onChange={(e) => setDateFilter('from_date', e.target.value, setDateFrom)} aria-label={t('lblFrom')} className={`cn-input tabular${dateFrom ? '' : ' cn-date-empty'}`} style={dateFilterStyle} />
+                        {!dateFrom && <span aria-hidden style={datePlaceholderStyle}>{t('datePlaceholder')}</span>}
+                      </div>
                     </Field>
                     <Field label={t('lblTo')}>
-                      <input type="date" value={dateTo} onChange={(e) => setDateFilter('to_date', e.target.value, setDateTo)} aria-label={t('lblTo')} className="cn-input tabular" style={dateFilterStyle} />
+                      <div style={{ position: 'relative' }}>
+                        <input type="date" value={dateTo} onChange={(e) => setDateFilter('to_date', e.target.value, setDateTo)} aria-label={t('lblTo')} className={`cn-input tabular${dateTo ? '' : ' cn-date-empty'}`} style={dateFilterStyle} />
+                        {!dateTo && <span aria-hidden style={datePlaceholderStyle}>{t('datePlaceholder')}</span>}
+                      </div>
                     </Field>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

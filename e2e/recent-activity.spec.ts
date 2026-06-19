@@ -79,6 +79,11 @@ test.describe('Recent activity — mobile', () => {
       // …each labeled, so a blank iOS date field is still identifiable.
       await expect(ledger.getByText('From', { exact: true })).toBeVisible()
       await expect(ledger.getByText('To', { exact: true })).toBeVisible()
+      // …and an overlaid placeholder fills the otherwise-blank iOS empty state.
+      // Both fields start empty → two placeholders; pick one and it disappears.
+      await expect(ledger.getByText('dd/mm/yyyy')).toHaveCount(2)
+      await dateInputs.first().fill('2026-06-19')
+      await expect(ledger.getByText('dd/mm/yyyy')).toHaveCount(1)
       // …and neither overflows the ledger to the right (the clipped 2nd field
       // in the bug report). Chromium can't reproduce the iOS intrinsic-width
       // overflow, but this guards the grid layout from gross breakage.
