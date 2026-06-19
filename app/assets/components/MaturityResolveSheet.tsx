@@ -112,7 +112,7 @@ export function MaturityResolveBody({
   const [maturityOverride, setMaturityOverride] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [done, setDone] = useState<null | { newPrincipal: number; newMaturity: string }>(null)
+  const [done, setDone] = useState<null | { newPrincipal: number; newMaturity: string; sources: string[] }>(null)
 
   // ── Combine ("settle & re-deposit", merge recurring) ────────────────────────
   // A recurring bank saving due for this goal this month can be folded into the
@@ -140,9 +140,23 @@ export function MaturityResolveBody({
   const [mergeRecv, setMergeRecv] = useState<Record<string, string>>({})
   const [mergeTotal, setMergeTotal] = useState('')
   const [, setMergeTotalTouched] = useState(false)
+  // Destination bank for the combined re-deposit (multi-source merge). Defaults to
+  // the settling deposit's bank; the user can move the money to another bank.
+  const [banks, setBanks] = useState<{ code: string; name: string }[]>([])
+  const [destBank, setDestBank] = useState<string>(inv.bankCode ?? '')
 
   const selectedSources = mergeableOrdered.filter((s) => mergeSel[s.id])
   const mergeReceivedTotal = selectedSources.reduce((sum, s) => sum + (Number(mergeRecv[s.id]) || 0), 0)
+  // Provenance for the multi-source merge: the new deposit combines the anchor (D)
+  // with every folded source, so "N nguồn" counts D + the selected sources. "M
+  // ngân hàng" is the distinct real banks among them — a NULL bank_code (a legacy
+  // deposit with no bank set) is excluded so it doesn't inflate the bank count.
+  const combinedBankCodes = new Set<string>()
+  if (inv.bankCode) combinedBankCodes.add(inv.bankCode)
+  selectedSources.forEach((s) => { if (s.bankCode) combinedBankCodes.add(s.bankCode) })
+  const mergeSourceCount = selectedSources.length + 1
+  const mergeBankCount = combinedBankCodes.size
+  const isMultiSource = selectedSources.length > 1
 
   // Toggle a source; on first select, prefill its received with the current value
   // (the user edits it down to the real cash if the early settlement is penalised).
@@ -168,6 +182,22 @@ export function MaturityResolveBody({
       return next
     })
   }
+
+  // Load the bank reference list once for the destination picker — only when
+  // there are siblings to merge (the picker is merge-only), so plain renewals
+  // make no extra request. Failure is non-fatal — the picker just shows "no bank".
+  useEffect(() => {
+    if (mergeable.length === 0) return
+    let cancelled = false
+    fetch('/api/v1/banks')
+      .then((r) => (r.ok ? r.json() : []))
+      // The route returns a bare array of { code, name, logo_url } (same as the
+      // deposit form's selector); tolerate a non-array just in case.
+      .then((d: unknown) => { if (!cancelled) setBanks(Array.isArray(d) ? d as { code: string; name: string }[] : []) })
+      .catch(() => {})
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     // Combine needs the deposit's goal scope. When the caller doesn't wire it
@@ -275,10 +305,15 @@ export function MaturityResolveBody({
     confirmCombine: 'Lưu sổ mới',
     mergeSub: 'Gộp sổ tiết kiệm khác vào lần gửi lại',
     mergeTitle: 'Gộp sổ khác',
+    mergeTitleMulti: 'Gộp nhiều nguồn',
     mergeHint: 'Chọn các sổ để tất toán sớm và gộp vào lần gửi lại này.',
     mergeReceivedLabel: 'Thực nhận',
     mergeTotalLabel: 'Tổng gộp thêm',
     mergePenalty: 'Tất toán trước hạn có thể bị phạt lãi — nhập số tiền thực nhận, không phải giá trị hiện tại.',
+    destBankLabel: 'Ngân hàng đích',
+    destBankNone: 'Không chọn',
+    provenance: (n: number, m: number) => `Gộp từ ${n} nguồn · ${m} ngân hàng`,
+    mergedSourcesLabel: 'Đã gộp',
   } : {
     summarySuffix: 'yr', perYr: 'yr', mo: 'mo',
     why: matured
@@ -309,10 +344,15 @@ export function MaturityResolveBody({
     confirmCombine: 'Save new deposit',
     mergeSub: 'Fold other deposits into the re-deposit',
     mergeTitle: 'Merge other deposits',
+    mergeTitleMulti: 'Merge multiple sources',
     mergeHint: 'Pick deposits to settle early and fold into this re-deposit.',
     mergeReceivedLabel: 'Received',
     mergeTotalLabel: 'Total merged in',
     mergePenalty: 'Early settlement may forfeit interest — enter the cash received, not the current value.',
+    destBankLabel: 'Destination bank',
+    destBankNone: 'No bank',
+    provenance: (n: number, m: number) => `Combined from ${n} sources · ${m} banks`,
+    mergedSourcesLabel: 'Merged in',
   }
 
   const POLICIES: { id: Mode; icon: React.ReactNode; label: string; sub: string; danger?: boolean }[] = [
@@ -372,6 +412,9 @@ export function MaturityResolveBody({
           merge_sources: mode === 'combine' && selectedSources.length > 0
             ? selectedSources.map((s) => ({ tx_id: s.id, received: Math.round(Number(mergeRecv[s.id]) || 0) }))
             : undefined,
+          // Destination bank for the combined re-deposit (multi-source merge only).
+          // '' (no bank picked) → null; the RPC leaves the existing bank untouched.
+          bank_code: mode === 'combine' && selectedSources.length > 0 ? (destBank || null) : undefined,
         }),
       })
       if (!res.ok) {
@@ -380,7 +423,10 @@ export function MaturityResolveBody({
         setSaving(false)
         return
       }
-      setDone({ newPrincipal: Math.round(newPrincipal), newMaturity })
+      setDone({
+        newPrincipal: Math.round(newPrincipal), newMaturity,
+        sources: mode === 'combine' ? selectedSources.map((s) => s.name) : [],
+      })
       setTimeout(() => { onRenewed(); onClose() }, 1700)
     } catch {
       setError(isVi ? 'Lỗi kết nối' : 'Connection error')
@@ -399,6 +445,11 @@ export function MaturityResolveBody({
         <div style={{ fontSize: 13, color: 'var(--c-muted)', marginTop: 6, lineHeight: 1.5 }}>
           {t.renewedSub(fmtCompact(done.newPrincipal), newMaturityFmt)}
         </div>
+        {done.sources.length > 0 && (
+          <div data-testid="maturity-renewed-sources" style={{ marginTop: 10, fontSize: 12, color: 'var(--c-muted)', lineHeight: 1.5 }}>
+            {t.mergedSourcesLabel}: {done.sources.join(', ')}
+          </div>
+        )}
       </div>
     )
   }
@@ -535,7 +586,7 @@ export function MaturityResolveBody({
           {!isBook && mergeable.length > 0 && (
             <div style={{ border: '1px solid var(--c-line)', borderRadius: 12, padding: '11px 13px', display: 'grid', gap: 9 }}>
               <div>
-                <div style={fieldLabel}>{t.mergeTitle}</div>
+                <div data-testid="merge-section-title" style={fieldLabel}>{isMultiSource ? t.mergeTitleMulti : t.mergeTitle}</div>
                 <p style={{ margin: '0 0 2px', fontSize: 11, color: 'var(--c-muted)', lineHeight: 1.45 }}>{t.mergeHint}</p>
               </div>
               <div style={{ display: 'grid', gap: 7 }}>
@@ -570,6 +621,18 @@ export function MaturityResolveBody({
 
               {selectedSources.length > 0 && (
                 <>
+                  {/* Provenance — how many sources/banks fold into the new deposit */}
+                  <p data-testid="merge-provenance" style={{ margin: 0, fontSize: 11, fontWeight: 600, color: 'var(--c-navy)', lineHeight: 1.45 }}>
+                    {t.provenance(mergeSourceCount, mergeBankCount)}
+                  </p>
+                  {/* Destination bank for the combined re-deposit (default = D's bank) */}
+                  <div>
+                    <div style={fieldLabel}>{t.destBankLabel}</div>
+                    <select data-testid="merge-dest-bank" value={destBank} onChange={(e) => setDestBank(e.target.value)} style={{ ...moneyInput, fontWeight: 600 }}>
+                      <option value="">{t.destBankNone}</option>
+                      {banks.map((b) => <option key={b.code} value={b.code}>{b.name}</option>)}
+                    </select>
+                  </div>
                   {/* One editable TOTAL that splits across the selected sources */}
                   {selectedSources.length > 1 && (
                     <div>

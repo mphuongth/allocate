@@ -215,6 +215,10 @@ export interface InvRow {
   // share. Keeps the whole book out of the single-row term renew path and tells
   // the UI to offer a top-up. null for term / one-off holdings.
   depositGroupId?: string | null
+  // Structured bank reference (FK to banks.code) for a bank deposit; null for a
+  // non-bank holding or a deposit with no bank set yet. Drives the multi-source
+  // merge destination-bank default and the "N nguồn · M ngân hàng" provenance.
+  bankCode?: string | null
   // The book's tranches (top-ups), newest first, for the detail view. Each is one
   // underlying row; present only on an accumulating book row.
   tranches?: InvTranche[] | null
@@ -255,6 +259,8 @@ export interface GoalDetailTx {
   // Accumulating book grouping: set on every tranche of a book (anchor row's =
   // its own transaction_id). null/undefined for term / one-off holdings.
   deposit_group_id?: string | null
+  // Structured bank reference (FK to banks.code); null until the user sets it.
+  bank_code?: string | null
 }
 
 // Roll up a deposit's renewal history from the snapshot rows that point at it.
@@ -370,7 +376,7 @@ export function buildInvRows(
       }
     }
 
-    return { id: tx.transaction_id, name, type: tx.asset_type, value, gainPct, units, principal, interestRate: tx.interest_rate ?? null, expiryDate: tx.expiry_date ?? null, investmentDate: fund ? null : (tx.investment_date ?? null), fund: fund ?? null, depositGroupId: null }
+    return { id: tx.transaction_id, name, type: tx.asset_type, value, gainPct, units, principal, interestRate: tx.interest_rate ?? null, expiryDate: tx.expiry_date ?? null, investmentDate: fund ? null : (tx.investment_date ?? null), fund: fund ?? null, depositGroupId: null, bankCode: tx.asset_type === 'bank' ? (tx.bank_code ?? null) : null }
   }).filter((row): row is InvRow => row !== null)
 
   // One InvRow per accumulating book: value each tranche on its own locked rate
@@ -404,6 +410,7 @@ export function buildInvRows(
       investmentDate: tranches[tranches.length - 1].date, // earliest tranche opened the book
       fund: null,
       depositGroupId: groupId,
+      bankCode: anchor.bank_code ?? null, // bank is book-level; the anchor carries it
       tranches,
     }
   }).filter((row): row is InvRow => row !== null)

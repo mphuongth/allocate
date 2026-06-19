@@ -54,6 +54,33 @@ describe('buildInvRows', () => {
     expect(rows[0].units).toBeNull()
   })
 
+  it('carries bank_code through to InvRow.bankCode for bank deposits (null for non-bank)', () => {
+    const rows = buildInvRows(
+      [
+        baseTx({ transaction_id: 'b1', asset_type: 'bank', amount_vnd: 5_000_000, interest_rate: 6, bank_code: 'VCB' }),
+        baseTx({ transaction_id: 'g1', asset_type: 'gold', amount_vnd: 9_000_000, units: 1 }),
+      ],
+      [], 9_200_000, false,
+    )
+    const bank = rows.find((r) => r.id === 'b1')!
+    const gold = rows.find((r) => r.id === 'g1')!
+    expect(bank.bankCode).toBe('VCB')
+    expect(gold.bankCode ?? null).toBeNull() // structured bank only applies to bank deposits
+  })
+
+  it('uses the anchor tranche bank_code for an accumulating book row', () => {
+    const rows = buildInvRows(
+      [
+        baseTx({ transaction_id: 'book', asset_type: 'bank', amount_vnd: 2_000_000, interest_rate: 6, deposit_group_id: 'book', bank_code: 'MB', investment_date: daysFromNow(-30) }),
+        baseTx({ transaction_id: 'tr2', asset_type: 'bank', amount_vnd: 1_000_000, interest_rate: 6, deposit_group_id: 'book', bank_code: 'MB', investment_date: daysFromNow(-10) }),
+      ],
+      [], null, false,
+    )
+    expect(rows).toHaveLength(1)
+    expect(rows[0].depositGroupId).toBe('book')
+    expect(rows[0].bankCode).toBe('MB')
+  })
+
   it('caps a matured deposit at its term interest (frozen, simple interest)', () => {
     // Term 2025-01-01 → 2025-07-01 (181 days). Interest is capped at maturity, so
     // the value is deterministic regardless of when the test runs (today is past
