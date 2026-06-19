@@ -60,3 +60,17 @@ alter table public.investment_transactions
 
 create index if not exists investment_transactions_bank_code_idx
   on public.investment_transactions (bank_code);
+
+-- active_investment_transactions is a SELECT * view (20260613000003) whose column
+-- list was frozen at creation, so it does NOT expose columns added afterwards.
+-- The dashboard overview reads bank_code/currency FROM THIS VIEW, so it must be
+-- re-expanded to include the new columns — otherwise the select errors and the
+-- whole overview 500s. CREATE OR REPLACE re-expands `*` to the current table
+-- columns (the three new ones are appended at the end, which replace allows).
+-- security_invoker = true is preserved (required — see 20260613000003).
+create or replace view public.active_investment_transactions
+  with (security_invoker = true) as
+  select * from public.investment_transactions
+  where renewed_from_transaction_id is null;
+
+grant select on public.active_investment_transactions to authenticated;

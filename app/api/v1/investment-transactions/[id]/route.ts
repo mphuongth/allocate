@@ -120,7 +120,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   // fields to the edited row together. Non-book holdings use the generic path below.
   const { data: existing } = await supabase
     .from('investment_transactions')
-    .select('deposit_group_id')
+    .select('deposit_group_id, asset_type')
     .eq('transaction_id', txId)
     .eq('user_id', user.id)
     .single()
@@ -136,6 +136,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         p_set_rate: interest_rate !== undefined, p_interest_rate: cleanInterestRate ?? null,
         p_set_investment: cleanInvestmentDate !== undefined, p_investment_date: cleanInvestmentDate ?? null,
         p_set_notes: notes !== undefined, p_notes: cleanNotes ?? null,
+        // bank_code is book-level: the RPC cascades it to every tranche.
+        p_set_bank: bank_code !== undefined, p_bank_code: cleanBankCode ?? null,
       })
       .single()
     if (bookErr || !row) {
@@ -156,7 +158,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   if (expiry_date !== undefined) updates.expiry_date = cleanExpiryDate
   if (notes !== undefined) updates.notes = cleanNotes
   if (fund_id !== undefined) updates.fund_id = cleanAssetType === 'fund' ? cleanFundId : null
-  if (bank_code !== undefined) updates.bank_code = cleanBankCode
+  // Scope bank_code to bank deposits (mirror POST): a stray bank_code on a
+  // fund/gold edit is forced to null. Effective type = the edit's asset_type if
+  // provided, else the row's existing type.
+  if (bank_code !== undefined) {
+    const effType = cleanAssetType ?? existing.asset_type
+    updates.bank_code = effType === 'bank' ? cleanBankCode : null
+  }
 
   const { data: transaction, error } = await supabase
     .from('investment_transactions')

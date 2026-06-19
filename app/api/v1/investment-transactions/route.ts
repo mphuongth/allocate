@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from('investment_transactions')
-    .select('transaction_id, goal_id, asset_type, transaction_type, parent_transaction_id, renewed_from_transaction_id, deposit_group_id, interest_earned_vnd, investment_date, amount_vnd, unit_price, units, interest_rate, expiry_date, notes, fund_id, bank_code, principal_withdrawn, units_withdrawn, affects_progress, savings_goals(goal_name), funds(id, name, nav)', { count: 'exact' })
+    .select('transaction_id, goal_id, asset_type, transaction_type, parent_transaction_id, renewed_from_transaction_id, deposit_group_id, interest_earned_vnd, investment_date, amount_vnd, unit_price, units, interest_rate, expiry_date, notes, fund_id, bank_code, currency, is_pledged, principal_withdrawn, units_withdrawn, affects_progress, savings_goals(goal_name), funds(id, name, nav)', { count: 'exact' })
     .eq('user_id', user.id)
     .order('investment_date', { ascending: false })
     .range(offset, offset + limit - 1)
@@ -158,10 +158,11 @@ export async function POST(request: NextRequest) {
   let effectiveGoalId = cleanGoalId
   let effectiveExpiry = cleanExpiryDate
   let effectiveAssetType = cleanAssetType
+  let effectiveBankCode = cleanBankCode
   if (cleanTopsUpId) {
     const { data: anchor } = await supabase
       .from('investment_transactions')
-      .select('asset_type, deposit_group_id, goal_id, expiry_date')
+      .select('asset_type, deposit_group_id, goal_id, expiry_date, bank_code')
       .eq('transaction_id', cleanTopsUpId)
       .eq('user_id', user.id)
       .single()
@@ -179,6 +180,7 @@ export async function POST(request: NextRequest) {
     effectiveGoalId = anchor.goal_id            // the tranche belongs to the book's goal
     effectiveExpiry = anchor.expiry_date        // book maturity, copied down to every tranche
     effectiveAssetType = 'bank'
+    effectiveBankCode = anchor.bank_code ?? null // tranche inherits the book's bank
   } else if (accumulating) {
     // New accumulating book: the anchor self-groups so deposit_group_id IS NOT
     // NULL ⇔ accumulating, and the anchor is the row whose group = its own id.
@@ -209,7 +211,8 @@ export async function POST(request: NextRequest) {
       affects_progress: isWithdrawal ? (affects_progress !== false) : true,
       deposit_group_id: depositGroupId,
       // Structured bank only applies to bank deposits; funds/gold have no bank.
-      bank_code: effectiveAssetType === 'bank' ? cleanBankCode : null,
+      // A top-up tranche inherits the book's bank (effectiveBankCode).
+      bank_code: effectiveAssetType === 'bank' ? effectiveBankCode : null,
     })
     .select()
     .single()
