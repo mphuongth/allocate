@@ -230,6 +230,12 @@ describe('MobilePlanningView — insurance section', () => {
     expect(screen.getByText('John')).toBeInTheDocument()
   })
 
+  it('shows the member relationship label as the row subtitle', () => {
+    // baseInsuranceMembers[0].relationship === 'Self' → en label "Self"
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} insuranceMembers={baseInsuranceMembers} />)
+    expect(screen.getByText('Self')).toBeInTheDocument()
+  })
+
   it('shows "Skipped" for an excluded insurance member', () => {
     const excludedMembers: InsuranceMember[] = [
       {

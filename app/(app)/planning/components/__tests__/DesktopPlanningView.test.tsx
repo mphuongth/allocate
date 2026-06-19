@@ -1,8 +1,8 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import DesktopPlanningView from '../DesktopPlanningView'
-import type { MonthlyPlan, FundInvestment, DirectSaving, RecurringSaving, RecurringFulfillment } from '../../PlanningClient'
+import type { MonthlyPlan, FundInvestment, DirectSaving, RecurringSaving, RecurringFulfillment, InsuranceMember } from '../../PlanningClient'
 
 vi.mock('next-intl', () => ({
   useTranslations: () => (key: string, params?: Record<string, unknown>) =>
@@ -181,5 +181,29 @@ describe('DesktopPlanningView — recurring bank "Saved" deposit', () => {
     } finally {
       vi.unstubAllGlobals()
     }
+  })
+})
+
+describe('DesktopPlanningView — insurance Relationship + Default columns', () => {
+  // 14,000,000 / 12 = 1,166,667 — the default monthly contribution.
+  const insuranceMembers: InsuranceMember[] = [
+    { member_id: 'i1', member_name: 'John', relationship: 'Spouse', annual_payment_vnd: 14_000_000, payment_date: null },
+  ]
+
+  it('renders the Relationship and Default column headers', () => {
+    render(<DesktopPlanningView {...defaultProps} plan={basePlan} insuranceMembers={insuranceMembers} />)
+    expect(screen.getByText('Relationship')).toBeInTheDocument()
+    expect(screen.getByText('Default')).toBeInTheDocument()
+  })
+
+  it('shows the member relationship label', () => {
+    render(<DesktopPlanningView {...defaultProps} plan={basePlan} insuranceMembers={insuranceMembers} />)
+    expect(screen.getByText('Spouse')).toBeInTheDocument()
+  })
+
+  it('shows the default monthly amount (annual ÷ 12) alongside this month', () => {
+    render(<DesktopPlanningView {...defaultProps} plan={basePlan} insuranceMembers={insuranceMembers} />)
+    // Default column + This-month column both show 1,166,667 when not overridden.
+    expect(screen.getAllByText('₫ 1166667').length).toBeGreaterThan(0)
   })
 })
