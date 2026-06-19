@@ -8,8 +8,24 @@ import {
   validateDate,
   validateYearMonth,
   validateEnum,
+  validateBankCode,
   ValidationError,
 } from '../validation'
+
+describe('validateBankCode', () => {
+  it('accepts a short uppercase alphanumeric code', () => {
+    expect(validateBankCode('VCB', 'bank_code')).toBe('VCB')
+    expect(validateBankCode('MB', 'bank_code')).toBe('MB')
+  })
+
+  it('rejects lowercase, punctuation, or over-long codes', () => {
+    expect(() => validateBankCode('vcb', 'bank_code')).toThrow(ValidationError)
+    expect(() => validateBankCode('MB BANK', 'bank_code')).toThrow(ValidationError)
+    expect(() => validateBankCode('A', 'bank_code')).toThrow(ValidationError)
+    expect(() => validateBankCode('TOOLONGBANKCODE', 'bank_code')).toThrow(ValidationError)
+    expect(() => validateBankCode(123, 'bank_code')).toThrow(ValidationError)
+  })
+})
 
 describe('validateAmount', () => {
   it('accepts a positive finite number', () => {

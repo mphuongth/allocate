@@ -91,6 +91,17 @@ export function validateUUID(val: unknown, field: string): string {
   return val
 }
 
+// A bank reference code (FK to banks.code): short, uppercase alphanumeric. The
+// DB foreign key is the real guard; this just rejects obvious junk before insert.
+const BANK_CODE_RE = /^[A-Z0-9]{2,12}$/
+
+export function validateBankCode(val: unknown, field: string): string {
+  if (typeof val !== 'string' || !BANK_CODE_RE.test(val)) {
+    throw new ValidationError(`${field} must be a valid bank code`)
+  }
+  return val
+}
+
 export function validateDate(val: unknown, field: string): string {
   if (typeof val !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(val)) {
     throw new ValidationError(`${field} must be in YYYY-MM-DD format`)

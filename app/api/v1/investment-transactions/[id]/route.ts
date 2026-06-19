@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { ValidationError, validateAmount, validateDate, validateEnum, validateNotes, validateRate, validateUUID } from '@/lib/validation'
+import { ValidationError, validateAmount, validateBankCode, validateDate, validateEnum, validateNotes, validateRate, validateUUID } from '@/lib/validation'
 
 const ASSET_TYPES = ['fund', 'bank', 'stock', 'gold'] as const
 
@@ -37,7 +37,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { goal_id, asset_type, investment_date, amount_vnd, unit_price, units, interest_rate, expiry_date, notes, fund_id } = body
+  const { goal_id, asset_type, investment_date, amount_vnd, unit_price, units, interest_rate, expiry_date, notes, fund_id, bank_code } = body
 
   let txId: string
   let cleanAssetType: typeof ASSET_TYPES[number] | undefined
@@ -50,6 +50,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   let cleanNotes: string | null | undefined
   let cleanGoalId: string | null | undefined
   let cleanFundId: string | null | undefined
+  let cleanBankCode: string | null | undefined
 
   try {
     txId = validateUUID(id, 'transaction_id')
@@ -88,6 +89,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
     if (fund_id !== undefined) {
       cleanFundId = fund_id === null || fund_id === '' ? null : validateUUID(fund_id, 'fund_id')
+    }
+    if (bank_code !== undefined) {
+      cleanBankCode = bank_code === null || bank_code === '' ? null : validateBankCode(bank_code, 'bank_code')
     }
   } catch (e) {
     if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
@@ -152,6 +156,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   if (expiry_date !== undefined) updates.expiry_date = cleanExpiryDate
   if (notes !== undefined) updates.notes = cleanNotes
   if (fund_id !== undefined) updates.fund_id = cleanAssetType === 'fund' ? cleanFundId : null
+  if (bank_code !== undefined) updates.bank_code = cleanBankCode
 
   const { data: transaction, error } = await supabase
     .from('investment_transactions')

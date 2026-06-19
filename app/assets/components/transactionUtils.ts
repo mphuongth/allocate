@@ -14,6 +14,7 @@ export interface LedgerTransaction {
   interest_rate: number | null
   expiry_date: string | null
   fund_id: string | null
+  bank_code?: string | null
   notes: string | null
   principal_withdrawn?: number | null
   units_withdrawn?: number | null
