@@ -6,7 +6,7 @@
 // act on. Purely presentational — the parent supplies the already-filtered rows
 // (see isActionableTermDeposit) and handles the resolve flow.
 
-import { AlertTriangle, Building2, RefreshCw } from 'lucide-react'
+import { AlertTriangle, Building2, RefreshCw, GitMerge } from 'lucide-react'
 import { fmtCompact } from '@/lib/formatters'
 import { daysUntil } from '@/lib/maturity'
 import { GD_COLORS, type InvRow } from './goalDetailShared'
@@ -27,12 +27,20 @@ function pillFor(inv: InvRow, isVi: boolean): { text: string; color: string; bg:
   }
 }
 
+// A detected group of a goal's deposits maturing close together (see
+// detectMergeClusters). The card surfaces each as a one-tap "merge them" banner
+// that opens the resolve sheet on the anchor with the siblings preselected.
+export interface MaturityCluster { anchorId: string; size: number }
+
 export default function MaturityActionCard({
-  items, isVi, onResolve, style,
+  items, isVi, onResolve, clusters, onMergeCluster, style,
 }: {
   items: InvRow[]
   isVi: boolean
   onResolve: (inv: InvRow) => void
+  // Merge clusters among `items`. Each banner opens the sheet on its anchor.
+  clusters?: MaturityCluster[]
+  onMergeCluster?: (anchorId: string) => void
   style?: React.CSSProperties
 }) {
   if (!items.length) return null
@@ -48,6 +56,28 @@ export default function MaturityActionCard({
           {items.length}
         </span>
       </div>
+      {(clusters ?? []).map((c) => (
+        <div
+          key={c.anchorId}
+          data-testid={`merge-cluster-banner-${c.anchorId}`}
+          style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10, background: 'var(--c-card-2)', borderBottom: '1px solid var(--c-line)' }}
+        >
+          <GitMerge size={15} strokeWidth={2.2} style={{ color: GD_COLORS.bank, flexShrink: 0 }} />
+          <span style={{ fontSize: 12.5, fontWeight: 600, flex: 1, minWidth: 0 }}>
+            {isVi
+              ? `${c.size} sổ đáo hạn sát nhau`
+              : `${c.size} deposits maturing close together`}
+          </span>
+          <button
+            onClick={() => onMergeCluster?.(c.anchorId)}
+            className="cn-btn"
+            style={{ padding: '6px 12px', minHeight: 44, fontSize: 12, fontWeight: 600, gap: 5, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >
+            <GitMerge size={12} strokeWidth={2.2} />
+            {isVi ? 'Gộp lại' : 'Merge'}
+          </button>
+        </div>
+      ))}
       <div style={{ padding: '4px 16px 6px' }}>
         {items.map((inv, i) => {
           const pill = pillFor(inv, isVi)

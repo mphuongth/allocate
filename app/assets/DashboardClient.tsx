@@ -21,6 +21,7 @@ import RecentActivityCard from './components/RecentActivityCard'
 import MaturityActionCard from './components/MaturityActionCard'
 import { MaturityResolveSheet, MaturityResolveModal } from './components/MaturityResolveSheet'
 import { isActionableTermDeposit, MATURING_COUNT_EVENT } from '@/lib/maturity'
+import { detectMergeClusters } from '@/lib/mergeCluster'
 import { actionableBooks } from './maturityCardItems'
 import { collapseUnallocatedBooks } from './unallocatedBooks'
 import type { InvRow } from './components/goalDetailShared'
@@ -92,6 +93,12 @@ export interface NonFundUnallocatedItem {
   // Set on a tranche of an accumulating book — keeps the book out of the
   // maturity "needs attention" card (it isn't renewed via the single-row flow).
   depositGroupId?: string | null
+  // Structured bank (FK) + currency + pledged flag — null/false on legacy
+  // deposits. Drive the merge destination-bank default and the eligibility
+  // "same currency" / "not pledged" rules (see lib/mergeEligibility).
+  bankCode?: string | null
+  currency?: string | null
+  isPledged?: boolean | null
 }
 
 export interface DashboardData {
@@ -209,12 +216,23 @@ function nonFundToInvRow(it: NonFundUnallocatedItem, isVi: boolean): InvRow {
     investmentDate: it.investmentDate,
     fund: null,
     depositGroupId: it.depositGroupId ?? null,
+    bankCode: it.type === 'bank' ? (it.bankCode ?? null) : null,
+    currency: it.currency ?? null,
+    isPledged: it.isPledged ?? false,
   }
 }
 
 // A maturing deposit plus the context needed to act on it: the goal it belongs
 // to (null when unassigned) and the raw item for the withdraw flow.
-interface MaturingDep { inv: InvRow; goalId: string | null; raw: NonFundUnallocatedItem }
+interface MaturingDep {
+  inv: InvRow
+  goalId: string | null
+  raw: NonFundUnallocatedItem
+  // The goal's other bank deposits, attached when the resolve flow opens so the
+  // merge UI can fold close-maturing siblings into this re-deposit. Computed lazily
+  // (only on open) to keep it off the hot maturingDeposits list.
+  siblings?: InvRow[]
+}
 
 // Build the SellWithdrawSheet payload for a non-fund holding (bank/gold/stock).
 function nonFundToSellItem(item: NonFundUnallocatedItem): SellItem {
@@ -538,6 +556,41 @@ export default function DashboardClient({ userId }: { userId: string }) {
       .map((b) => ({ inv: b.inv, goalId: b.goalId, raw: b.anchor })),
   ]
 
+  // Auto-detect goals whose maturing deposits fall close together, so the card can
+  // offer a one-tap "gộp lại" (merge) shortcut. The detector reuses the eligibility
+  // rules, so its count matches what the resolve sheet will preselect.
+  const mergeClusters = detectMergeClusters(
+    maturingDeposits.map((d) => ({
+      id: d.inv.id, goalId: d.goalId, type: d.inv.type, expiryDate: d.inv.expiryDate,
+      depositGroupId: d.inv.depositGroupId, principal: d.inv.principal, value: d.inv.value,
+      currency: d.inv.currency, isPledged: d.inv.isPledged,
+    })),
+  ).map((c) => ({ anchorId: c.anchorId, size: c.size }))
+
+  // A goal's OTHER bank deposits, mapped to InvRows the merge flow can fold into a
+  // re-deposit. Books are mapped too but the sheet filters them out. Empty for an
+  // unassigned deposit (merge is goal-scoped).
+  function goalSiblingInvRows(goalId: string | null, excludeId: string): InvRow[] {
+    if (!data || goalId == null) return []
+    const goal = data.goals.find((g) => g.goalId === goalId)
+    return (goal?.nonFunds ?? [])
+      .filter((it) => it.transactionId !== excludeId && it.type === 'bank')
+      .map((it) => nonFundToInvRow(it, isVi))
+  }
+
+  // Open the resolve flow for a maturing deposit, attaching the goal's siblings so
+  // the merge UI is available (and close-maturing ones preselect).
+  function openResolve(dep: MaturingDep) {
+    setResolveDep({ ...dep, siblings: goalSiblingInvRows(dep.goalId, dep.inv.id) })
+  }
+
+  // Resolve a maturing deposit by its id (used by the card's "handle" + the
+  // cluster banner, which opens on the anchor = latest maturity).
+  function resolveById(id: string) {
+    const dep = maturingDeposits.find((d) => d.inv.id === id)
+    if (dep) openResolve(dep)
+  }
+
   // Withdraw from the maturity card: open the withdraw sheet pre-targeted at the
   // deposit in one tap. A goal-assigned deposit withdraws in its goal context so
   // the withdrawal links to the goal (issue #261); an unassigned one uses the
@@ -704,7 +757,9 @@ export default function DashboardClient({ userId }: { userId: string }) {
                 <MaturityActionCard
                   items={maturingDeposits.map((d) => d.inv)}
                   isVi={isVi}
-                  onResolve={(inv) => setResolveDep(maturingDeposits.find((d) => d.inv.id === inv.id) ?? null)}
+                  onResolve={(inv) => resolveById(inv.id)}
+                  clusters={mergeClusters}
+                  onMergeCluster={resolveById}
                   style={{ marginBottom: 24 }}
                 />
                 {/* Goals */}
@@ -877,7 +932,9 @@ export default function DashboardClient({ userId }: { userId: string }) {
               <MaturityActionCard
                 items={maturingDeposits.map((d) => d.inv)}
                 isVi={isVi}
-                onResolve={(inv) => setResolveDep(maturingDeposits.find((d) => d.inv.id === inv.id) ?? null)}
+                onResolve={(inv) => resolveById(inv.id)}
+                clusters={mergeClusters}
+                onMergeCluster={resolveById}
               />
 
               {/* Goals */}
@@ -1106,6 +1163,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
           open={!!resolveDep}
           inv={resolveDep?.inv ?? null}
           goalId={resolveDep?.goalId ?? null}
+          siblingDeposits={resolveDep?.siblings}
           isVi={isVi}
           onClose={() => setResolveDep(null)}
           onRenewed={() => { setResolveDep(null); fetchData({ force: true }) }}
@@ -1116,6 +1174,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
         <MaturityResolveModal
           inv={resolveDep.inv}
           goalId={resolveDep.goalId ?? null}
+          siblingDeposits={resolveDep.siblings}
           isVi={isVi}
           onClose={() => setResolveDep(null)}
           onRenewed={() => { setResolveDep(null); fetchData({ force: true }) }}

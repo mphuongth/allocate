@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import MaturityActionCard from '../MaturityActionCard'
 import type { InvRow } from '../goalDetailShared'
@@ -48,5 +48,31 @@ describe('MaturityActionCard', () => {
     expect(screen.getByText('No Expiry')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Handle/i })).toBeInTheDocument()
     expect(screen.queryByText(/overdue|Matured|Matures/i)).not.toBeInTheDocument()
+  })
+
+  it('shows no merge banner when there are no clusters', () => {
+    render(<MaturityActionCard items={[mk({ id: 'a' }), mk({ id: 'b' })]} isVi={false} onResolve={() => {}} />)
+    expect(screen.queryByTestId(/^merge-cluster-banner-/)).not.toBeInTheDocument()
+  })
+
+  it('renders a merge-cluster banner and fires onMergeCluster with the anchor id', async () => {
+    const user = userEvent.setup()
+    const onMergeCluster = vi.fn()
+    render(
+      <MaturityActionCard
+        items={[mk({ id: 'a' }), mk({ id: 'b' })]}
+        isVi
+        onResolve={() => {}}
+        clusters={[{ anchorId: 'b', size: 2 }]}
+        onMergeCluster={onMergeCluster}
+      />,
+    )
+    const banner = screen.getByTestId('merge-cluster-banner-b')
+    expect(banner).toBeInTheDocument()
+    // The count is surfaced so the call-out reads "2 sổ ...".
+    expect(banner.textContent).toMatch(/2/)
+    await user.click(within(banner).getByRole('button'))
+    expect(onMergeCluster).toHaveBeenCalledTimes(1)
+    expect(onMergeCluster).toHaveBeenCalledWith('b')
   })
 })
