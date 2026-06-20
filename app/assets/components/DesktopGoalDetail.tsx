@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { ChevronLeft, X, MoreHorizontal, Edit2, Trash2, ChevronRight, ArrowDownRight, ArrowUpRight, Target, CalendarDays, Check, ArrowDownToLine, Wallet, Shield, RefreshCw } from 'lucide-react'
+import { ChevronLeft, X, MoreHorizontal, Edit2, Trash2, ChevronRight, ArrowDownRight, ArrowUpRight, Target, CalendarDays, Check, ArrowDownToLine, Wallet, Shield, RefreshCw, PiggyBank } from 'lucide-react'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import type { GoalData } from '../DashboardClient'
 import { GD_COLORS, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, buildRenewalSummary, AffectsProgressControl, BankInfoStrip, TopUpControl, RenewalSummaryLine, needsMaturityAction, needsBookMaturityAction, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
@@ -178,6 +178,19 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
 
   const visibleInvRows = invRows.filter((inv) => !unassignedIds.includes(inv.id))
 
+  // "Bỏ chờ gộp" — delete the held settlement row, restoring the original deposit;
+  // onDataChanged re-fetches so the chip drops and the deposit reappears.
+  const [unholdingId, setUnholdingId] = useState<string | null>(null)
+  async function handleUnhold(heldTxId: string) {
+    setUnholdingId(heldTxId)
+    try {
+      const res = await fetch(`/api/v1/investment-transactions/${heldTxId}`, { method: 'DELETE' })
+      if (res.ok) onDataChanged()
+    } finally {
+      setUnholdingId(null)
+    }
+  }
+
   return (
     <>
       <div data-testid="desktop-goal-detail" style={{ display: 'flex', flexDirection: 'column', gap: 14, animation: 'slide-right 200ms cubic-bezier(0.2,0.8,0.2,1)' }}>
@@ -310,6 +323,29 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
           {/* Investments tab */}
           {tab === 'investments' && (
             <>
+              {/* "Ví chờ gộp" — pooled settle-with-hold settlements, each with a
+                  "Bỏ chờ gộp" action that restores the original deposit. */}
+              {(goal.heldForMerge ?? []).length > 0 && (
+                <div data-testid="held-pool-section" style={{ padding: '8px 16px 12px', borderBottom: '1px solid var(--c-line)', display: 'grid', gap: 8 }}>
+                  {(goal.heldForMerge ?? []).map((h) => (
+                    <div key={h.transactionId} data-testid={`held-chip-${h.transactionId}`} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--c-card-2)', color: 'var(--c-navy)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <PiggyBank size={15} />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.name ?? (isVi ? 'Sổ chờ gộp' : 'Held deposit')}</div>
+                        <div style={{ fontSize: 11.5, color: 'var(--c-muted)', marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>
+                          {fmtCompact(h.amount)} · {isVi ? 'Đang chờ gộp' : 'Held for merge'}
+                        </div>
+                      </div>
+                      <button type="button" data-testid={`unhold-${h.transactionId}`} onClick={() => handleUnhold(h.transactionId)} disabled={unholdingId === h.transactionId}
+                        style={{ flexShrink: 0, fontSize: 12, fontWeight: 600, color: 'var(--c-navy)', background: 'none', border: '1px solid var(--c-line)', borderRadius: 8, padding: '5px 10px', cursor: unholdingId === h.transactionId ? 'default' : 'pointer', opacity: unholdingId === h.transactionId ? 0.6 : 1, fontFamily: 'inherit' }}>
+                        {isVi ? 'Bỏ chờ gộp' : 'Unhold'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
               {txLoading && <TxRowsSkeleton />}
               {!txLoading && visibleInvRows.length === 0 && (
                 <p style={{ color: 'var(--c-muted)', fontSize: 13, textAlign: 'center', padding: '20px 0' }}>
@@ -567,6 +603,7 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
           inv={actionInv}
           goalId={goal.goalId}
           siblingDeposits={invRows}
+          heldSiblings={(goal.heldForMerge ?? []).map((h) => ({ id: h.transactionId, name: h.name, amount: h.amount }))}
           isVi={isVi}
           onClose={() => setShowResolve(false)}
           onRenewed={() => { setShowResolve(false); (onRenewed ?? onDataChanged)() }}

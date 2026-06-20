@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import {
   ChevronLeft, ChevronRight, MoreHorizontal,
-  Edit2, Trash2, Calendar, Download, ArrowDownRight, ArrowUpRight, Target, RefreshCw,
+  Edit2, Trash2, Calendar, Download, ArrowDownRight, ArrowUpRight, Target, RefreshCw, PiggyBank,
 } from 'lucide-react'
 import { useLocale } from 'next-intl'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
@@ -741,6 +741,20 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
     setActionsOpen(false)
   }
 
+  // "Bỏ chờ gộp" — delete the held settlement row, which restores the original
+  // deposit (its withdrawal no longer subtracts). onDataChanged re-fetches the
+  // overview, so the chip drops and the deposit reappears in the list.
+  const [unholdingId, setUnholdingId] = useState<string | null>(null)
+  async function handleUnhold(heldTxId: string) {
+    setUnholdingId(heldTxId)
+    try {
+      const res = await fetch(`/api/v1/investment-transactions/${heldTxId}`, { method: 'DELETE' })
+      if (res.ok) onDataChanged()
+    } finally {
+      setUnholdingId(null)
+    }
+  }
+
   // Mirror of DesktopGoalDetail.handleUnassign — fund rows aggregate every
   // fund-investment under the same fund, non-fund rows correspond to a
   // single investment_transactions row.
@@ -999,6 +1013,29 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
           {/* Investments tab */}
           {activeTab === 'investments' && (
             <div style={{ background: 'var(--c-card)', borderRadius: 16, padding: '0 14px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+              {/* "Ví chờ gộp" — settle-with-hold settlements still pooled. Each shows
+                  a chip with "Bỏ chờ gộp" that restores the original deposit. */}
+              {(goal.heldForMerge ?? []).length > 0 && (
+                <div data-testid="held-pool-section" style={{ padding: '12px 0', borderBottom: '1px solid var(--c-line)', display: 'grid', gap: 8 }}>
+                  {(goal.heldForMerge ?? []).map((h) => (
+                    <div key={h.transactionId} data-testid={`held-chip-${h.transactionId}`} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--c-card-2)', color: 'var(--c-navy)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <PiggyBank size={15} />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.name ?? (isVI ? 'Sổ chờ gộp' : 'Held deposit')}</div>
+                        <div style={{ fontSize: 11.5, color: 'var(--c-muted)', marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>
+                          {fmtCompact(h.amount)} · {isVI ? 'Đang chờ gộp' : 'Held for merge'}
+                        </div>
+                      </div>
+                      <button type="button" data-testid={`unhold-${h.transactionId}`} onClick={() => handleUnhold(h.transactionId)} disabled={unholdingId === h.transactionId}
+                        style={{ flexShrink: 0, fontSize: 12, fontWeight: 600, color: 'var(--c-navy)', background: 'none', border: '1px solid var(--c-line)', borderRadius: 8, padding: '5px 10px', cursor: unholdingId === h.transactionId ? 'default' : 'pointer', opacity: unholdingId === h.transactionId ? 0.6 : 1, fontFamily: 'inherit' }}>
+                        {isVI ? 'Bỏ chờ gộp' : 'Unhold'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
               {txLoading && <TxRowsSkeleton />}
               {!txLoading && invRows.length === 0 && (
                 <p style={{ color: 'var(--c-muted)', fontSize: 14, textAlign: 'center', padding: '24px 0' }}>
@@ -1294,6 +1331,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
         inv={actionInv}
         goalId={goal.goalId}
         siblingDeposits={invRows}
+        heldSiblings={(goal.heldForMerge ?? []).map((h) => ({ id: h.transactionId, name: h.name, amount: h.amount }))}
         isVi={isVI}
         onClose={() => setResolveOpen(false)}
         onRenewed={() => { setResolveOpen(false); onDataChanged() }}
