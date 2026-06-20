@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import {
   ChevronLeft, ChevronRight, MoreHorizontal,
-  Edit2, Trash2, Calendar, Download, ArrowDownRight, ArrowUpRight, Target, RefreshCw, PiggyBank,
+  Edit2, Trash2, Calendar, Download, ArrowDownRight, ArrowUpRight, Target, RefreshCw, PiggyBank, GitMerge,
 } from 'lucide-react'
 import { useLocale } from 'next-intl'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
@@ -12,7 +12,7 @@ import TransactionHistorySheet, { type PurchaseHistoryRow } from './TransactionH
 import { SellWithdrawSheet, type SellItem } from './SellWithdrawSheet'
 import { MaturityResolveSheet } from './MaturityResolveSheet'
 import { GD_COLORS, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, buildRenewalSummary, BankInfoStrip, TopUpControl, RenewalSummaryLine, needsMaturityAction, needsBookMaturityAction, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
-import { fmtTxDate } from './transactionUtils'
+import { fmtTxDate, txKind } from './transactionUtils'
 import { TxRowsSkeleton } from './Skeletons'
 
 interface InvestmentTx {
@@ -35,6 +35,8 @@ interface InvestmentTx {
   renewed_from_transaction_id?: string | null
   interest_earned_vnd?: number | null
   is_recurring?: boolean
+  held_for_merge?: boolean | null
+  consumed_by_inv_id?: string | null
 }
 
 interface Props {
@@ -1242,8 +1244,16 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
                 </p>
               )}
               {!txLoading && transactions.map((tx, i) => {
-                const isWithdraw = tx.transaction_type === 'withdrawal'
                 const isRenewed = !!tx.renewed_from_transaction_id
+                // Held/merged settlements parked their cash — render neutral (like a
+                // snapshot), never the red "−" of a real withdrawal.
+                const kind = txKind(tx)
+                const isWithdraw = kind === 'withdrawal'
+                const neutral = isRenewed || kind === 'held' || kind === 'consumed'
+                const ink = neutral ? 'var(--c-muted)' : isWithdraw ? 'var(--c-neg)' : 'var(--c-pos)'
+                const fill = neutral ? 'var(--c-card-2)' : isWithdraw ? 'var(--c-neg-tint)' : 'var(--c-pos-tint)'
+                const DirIcon = isRenewed ? RefreshCw : kind === 'held' ? PiggyBank : kind === 'consumed' ? GitMerge : isWithdraw ? ArrowDownRight : ArrowUpRight
+                const sign = isWithdraw ? '-' : kind === 'investment' ? '+' : ''
                 const name = tx.fund_name ?? tx.notes ?? (isVI ? 'Khoản đầu tư' : 'Investment')
                 return (
                   <div
@@ -1258,16 +1268,10 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
                   >
                     <div style={{
                       width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-                      background: isRenewed ? 'var(--c-card-2)' : isWithdraw ? 'var(--c-neg-tint)' : 'var(--c-pos-tint)',
-                      color: isRenewed ? 'var(--c-muted)' : isWithdraw ? 'var(--c-neg)' : 'var(--c-pos)',
+                      background: fill, color: ink,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}>
-                      {isRenewed
-                        ? <RefreshCw size={14} strokeWidth={2.2} />
-                        : isWithdraw
-                          ? <ArrowDownRight size={14} strokeWidth={2.2} />
-                          : <ArrowUpRight size={14} strokeWidth={2.2} />
-                      }
+                      <DirIcon size={14} strokeWidth={2.2} />
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--c-ink)', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -1277,13 +1281,18 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
                             {isVI ? 'Đã tái tục' : 'Renewed'}
                           </span>
                         )}
+                        {(kind === 'held' || kind === 'consumed') && (
+                          <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 600, padding: '1px 7px', borderRadius: 999, background: 'var(--c-card-2)', color: 'var(--c-muted)' }}>
+                            {kind === 'held' ? (isVI ? 'Chờ gộp' : 'For merge') : (isVI ? 'Đã gộp' : 'Merged')}
+                          </span>
+                        )}
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 2 }}>
                         {fmtTxDate(tx.investment_date, isVI ? 'vi' : 'en')}
                       </div>
                     </div>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: isRenewed ? 'var(--c-muted)' : isWithdraw ? 'var(--c-neg)' : 'var(--c-pos)', fontVariantNumeric: 'tabular-nums' }}>
-                      {isWithdraw ? '-' : '+'}{fmtCompact(tx.amount_vnd)}
+                    <span style={{ fontSize: 13, fontWeight: 600, color: ink, fontVariantNumeric: 'tabular-nums' }}>
+                      {sign}{fmtCompact(tx.amount_vnd)}
                     </span>
                   </div>
                 )

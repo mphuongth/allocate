@@ -2,13 +2,13 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslations } from 'next-intl'
-import { Calendar, ArrowUpRight, ArrowDownRight, ArrowRight } from 'lucide-react'
+import { Calendar, ArrowUpRight, ArrowDownRight, ArrowRight, PiggyBank, GitMerge } from 'lucide-react'
 import { fmtCompact } from '@/lib/formatters'
 import TransactionLedgerSheet from './TransactionLedgerSheet'
 import {
   type LedgerTransaction,
   type AssetType,
-  isWithdrawal,
+  txDir,
   txPrimaryName,
   fmtTxDate,
 } from './transactionUtils'
@@ -82,10 +82,12 @@ export default function RecentActivityCard({ locale, desktop, refreshKey, onChan
     </div>
   ) : (
     txs.map((tx, i) => {
-      const withdrawal = isWithdrawal(tx)
-      const color = withdrawal ? 'var(--c-neg)' : 'var(--c-pos)'
-      const badgeColor = withdrawal ? 'var(--c-neg)' : (ASSET_BADGE[tx.asset_type as AssetType] ?? 'var(--c-muted)')
-      const badgeText = withdrawal ? tt('withdrawal') : assetLabel(tx)
+      // Held/merged settlements read neutrally — never the red "−" of a spend.
+      const { kind, tone, sign } = txDir(tx)
+      const color = tone === 'pos' ? 'var(--c-pos)' : tone === 'neg' ? 'var(--c-neg)' : 'var(--c-muted)'
+      const badgeColor = kind === 'investment' ? (ASSET_BADGE[tx.asset_type as AssetType] ?? 'var(--c-muted)') : color
+      const badgeText = kind === 'held' ? tt('held') : kind === 'consumed' ? tt('merged') : kind === 'withdrawal' ? tt('withdrawal') : assetLabel(tx)
+      const DirIcon = kind === 'held' ? PiggyBank : kind === 'consumed' ? GitMerge : kind === 'withdrawal' ? ArrowDownRight : ArrowUpRight
       const goalName = tx.savings_goals?.goal_name ?? tt('noGoal')
       return (
         <div
@@ -94,7 +96,7 @@ export default function RecentActivityCard({ locale, desktop, refreshKey, onChan
           style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', borderBottom: i < txs.length - 1 ? '1px solid var(--c-line)' : 'none' }}
         >
           <div style={{ width: 30, height: 30, borderRadius: 8, background: `color-mix(in srgb, ${color} 12%, transparent)`, color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            {withdrawal ? <ArrowDownRight size={14} strokeWidth={2.2} /> : <ArrowUpRight size={14} strokeWidth={2.2} />}
+            <DirIcon size={14} strokeWidth={2.2} />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -110,7 +112,7 @@ export default function RecentActivityCard({ locale, desktop, refreshKey, onChan
             </div>
           </div>
           <span className="tabular" style={{ fontSize: 12, fontWeight: 600, color, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
-            {withdrawal ? '−' : '+'}{fmtCompact(tx.amount_vnd)}
+            {sign}{fmtCompact(tx.amount_vnd)}
           </span>
         </div>
       )

@@ -2,13 +2,13 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslations } from 'next-intl'
-import { Plus, Download, Edit2, Trash, ChevronLeft, ChevronRight, X, Calendar, ArrowUpRight, ArrowDownRight } from 'lucide-react'
+import { Plus, Download, Edit2, Trash, ChevronLeft, ChevronRight, X, Calendar, ArrowUpRight, ArrowDownRight, PiggyBank, GitMerge } from 'lucide-react'
 import AmountInput from '@/app/components/ui/AmountInput'
 import DecimalInput from '@/app/components/ui/DecimalInput'
 import { fmtCompact, fmtNav, fmtUnits } from '@/lib/formatters'
 import { parseExcelPaste, type ParsedRow } from '@/lib/parseExcelPaste'
 import AddTransactionSheet from './AddTransactionSheet'
-import { ASSET_TYPES, type AssetType, type LedgerTransaction, isWithdrawal, txPrimaryName, fmtTxDate } from './transactionUtils'
+import { ASSET_TYPES, type AssetType, type LedgerTransaction, isWithdrawal, txKind, txPrimaryName, fmtTxDate } from './transactionUtils'
 
 interface Goal { goal_id: string; goal_name: string }
 interface Fund { id: string; name: string; code: string; nav: number }
@@ -336,9 +336,15 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
   const totalPages = Math.max(1, Math.ceil(total / 20))
   const hasFilters = !!(filters.asset_type || filters.goal_id || filters.from_date || filters.to_date)
 
-  const dirMeta = (tx: LedgerTransaction) => isWithdrawal(tx)
-    ? { Icon: ArrowDownRight, color: 'var(--c-neg)', label: t('withdrawal') }
-    : { Icon: ArrowUpRight, color: 'var(--c-pos)', label: t('investment') }
+  // Held/merged settlements read neutrally — parked cash, not a red "−" spend.
+  const dirMeta = (tx: LedgerTransaction) => {
+    switch (txKind(tx)) {
+      case 'held': return { Icon: PiggyBank, color: 'var(--c-muted)', label: t('held') }
+      case 'consumed': return { Icon: GitMerge, color: 'var(--c-muted)', label: t('merged') }
+      case 'withdrawal': return { Icon: ArrowDownRight, color: 'var(--c-neg)', label: t('withdrawal') }
+      default: return { Icon: ArrowUpRight, color: 'var(--c-pos)', label: t('investment') }
+    }
+  }
 
   // ── Type badge (icon chip + direction label + asset pill) ──
   const TxBadge = ({ tx }: { tx: LedgerTransaction }) => {
@@ -364,10 +370,12 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
   )
 
   const amountCell = (tx: LedgerTransaction) => {
-    const w = isWithdrawal(tx)
+    const k = txKind(tx)
+    const neg = k === 'withdrawal'
+    const held = k === 'held' || k === 'consumed'
     return (
-      <span className="tabular" style={{ fontSize: 13, fontWeight: 600, color: w ? 'var(--c-neg)' : 'var(--c-ink)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
-        {w ? '−' : ''}{fmtCompact(tx.amount_vnd)}
+      <span className="tabular" style={{ fontSize: 13, fontWeight: 600, color: neg ? 'var(--c-neg)' : held ? 'var(--c-muted)' : 'var(--c-ink)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+        {neg ? '−' : ''}{fmtCompact(tx.amount_vnd)}
       </span>
     )
   }

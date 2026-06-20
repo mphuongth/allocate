@@ -1,12 +1,12 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { ChevronLeft, X, MoreHorizontal, Edit2, Trash2, ChevronRight, ArrowDownRight, ArrowUpRight, Target, CalendarDays, Check, ArrowDownToLine, Wallet, Shield, RefreshCw, PiggyBank } from 'lucide-react'
+import { ChevronLeft, X, MoreHorizontal, Edit2, Trash2, ChevronRight, ArrowDownRight, ArrowUpRight, Target, CalendarDays, Check, ArrowDownToLine, Wallet, Shield, RefreshCw, PiggyBank, GitMerge } from 'lucide-react'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import type { GoalData } from '../DashboardClient'
 import { GD_COLORS, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, buildRenewalSummary, AffectsProgressControl, BankInfoStrip, TopUpControl, RenewalSummaryLine, needsMaturityAction, needsBookMaturityAction, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
 import { MaturityResolveModal } from './MaturityResolveSheet'
-import { fmtTxDate } from './transactionUtils'
+import { fmtTxDate, txKind } from './transactionUtils'
 import { TxRowsSkeleton } from './Skeletons'
 import { todayIso } from '@/lib/dates'
 
@@ -28,6 +28,8 @@ interface InvestmentTx {
   renewed_from_transaction_id?: string | null
   interest_earned_vnd?: number | null
   is_recurring?: boolean
+  held_for_merge?: boolean | null
+  consumed_by_inv_id?: string | null
 }
 
 interface Props {
@@ -503,8 +505,16 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
                 </p>
               )}
               {!txLoading && transactions.map((tx, i) => {
-                const isWithdraw = tx.transaction_type === 'withdrawal'
                 const isRenewed = !!tx.renewed_from_transaction_id
+                // Held/merged settlements parked their cash — render neutral (like a
+                // snapshot), never the red "−" of a real withdrawal.
+                const kind = txKind(tx)
+                const isWithdraw = kind === 'withdrawal'
+                const neutral = isRenewed || kind === 'held' || kind === 'consumed'
+                const ink = neutral ? 'var(--c-muted)' : isWithdraw ? 'var(--c-neg)' : 'var(--c-pos)'
+                const fill = neutral ? 'var(--c-card-2)' : isWithdraw ? 'var(--c-neg-tint)' : 'var(--c-pos-tint)'
+                const DirIcon = isRenewed ? RefreshCw : kind === 'held' ? PiggyBank : kind === 'consumed' ? GitMerge : isWithdraw ? ArrowDownRight : ArrowUpRight
+                const sign = isWithdraw ? '-' : kind === 'investment' ? '+' : ''
                 const name = tx.fund_name ?? tx.notes ?? (isVi ? 'Khoản đầu tư' : 'Investment')
                 return (
                   <div key={tx.transaction_id} data-testid={isRenewed ? 'history-renewed-row' : undefined} style={{
@@ -515,16 +525,10 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
                   }}>
                     <div style={{
                       width: 28, height: 28, borderRadius: 7, flexShrink: 0,
-                      background: isRenewed ? 'var(--c-card-2)' : isWithdraw ? 'var(--c-neg-tint)' : 'var(--c-pos-tint)',
-                      color: isRenewed ? 'var(--c-muted)' : isWithdraw ? 'var(--c-neg)' : 'var(--c-pos)',
+                      background: fill, color: ink,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}>
-                      {isRenewed
-                        ? <RefreshCw size={13} strokeWidth={2.2} />
-                        : isWithdraw
-                          ? <ArrowDownRight size={13} strokeWidth={2.2} />
-                          : <ArrowUpRight size={13} strokeWidth={2.2} />
-                      }
+                      <DirIcon size={13} strokeWidth={2.2} />
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--c-ink)', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -534,13 +538,18 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
                             {isVi ? 'Đã tái tục' : 'Renewed'}
                           </span>
                         )}
+                        {(kind === 'held' || kind === 'consumed') && (
+                          <span style={{ flexShrink: 0, fontSize: 9.5, fontWeight: 600, padding: '1px 6px', borderRadius: 999, background: 'var(--c-card-2)', color: 'var(--c-muted)' }}>
+                            {kind === 'held' ? (isVi ? 'Chờ gộp' : 'For merge') : (isVi ? 'Đã gộp' : 'Merged')}
+                          </span>
+                        )}
                       </div>
                       <div style={{ fontSize: 10, color: 'var(--c-muted)', marginTop: 1 }}>
                         {fmtTxDate(tx.investment_date, locale)}
                       </div>
                     </div>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: isRenewed ? 'var(--c-muted)' : isWithdraw ? 'var(--c-neg)' : 'var(--c-pos)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
-                      {isWithdraw ? '-' : '+'}{fmtCompact(tx.amount_vnd)}
+                    <span style={{ fontSize: 12, fontWeight: 600, color: ink, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+                      {sign}{fmtCompact(tx.amount_vnd)}
                     </span>
                   </div>
                 )

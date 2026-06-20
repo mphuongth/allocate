@@ -203,6 +203,51 @@ test.describe('Term-deposit maturity — "Ví chờ gộp" holding pool', () => 
       await api.deleteGoal(goal.goal_id)
     }
   })
+
+  test('a held settlement reads neutrally in the History tab — not a red withdrawal', async ({ page }) => {
+    test.slow()
+    const goal = await api.createGoal({ goal_name: 'E2E Held Label Goal', target_amount: 200_000_000 })
+    const D1 = await api.createTransaction({
+      asset_type: 'bank', amount_vnd: 10_000_000, investment_date: iso(-370),
+      interest_rate: 6, expiry_date: iso(-5), goal_id: goal.goal_id, notes: 'E2E Held Label D1',
+    })
+    const A = await api.createTransaction({
+      asset_type: 'bank', amount_vnd: 20_000_000, investment_date: iso(-380),
+      interest_rate: 6, expiry_date: iso(-1), goal_id: goal.goal_id, notes: 'E2E Held Label Anchor',
+    })
+    try {
+      // Park D1 (held withdrawal) directly — the hold UI is covered above; here the
+      // point is purely how the settlement is LABELLED downstream.
+      const holdRes = await page.request.post('/api/v1/investment-transactions', {
+        data: {
+          goal_id: goal.goal_id, transaction_type: 'withdrawal', asset_type: 'bank',
+          investment_date: iso(0), amount_vnd: 10_000_000, principal_withdrawn: 10_000_000,
+          affects_progress: true, parent_transaction_id: D1.transaction_id,
+          held_for_merge: true, merge_target_goal_id: goal.goal_id, merge_anchor_inv_id: A.transaction_id,
+        },
+      })
+      expect(holdRes.status()).toBe(201)
+
+      // Open the goal detail and its History tab (it fetches the goal's tx list).
+      await gotoFreshDashboard(page)
+      const panel = page.getByTestId('desktop-goal-detail')
+      await Promise.all([
+        page.waitForResponse((r) => r.url().includes('/api/v1/investment-transactions?goal_id=') && r.status() === 200, { timeout: 20_000 }),
+        page.getByText('E2E Held Label Goal').first().click(),
+      ])
+      await expect(panel).toBeVisible({ timeout: 10_000 })
+      await panel.getByText(/^(Lịch sử|History)$/).click()
+
+      // The parked settlement reads as "Chờ gộp" / "For merge" — a neutral badge
+      // this code path renders ONLY for a held row (before the fix it was a red
+      // down-arrow withdrawal). Its presence is the red→green proof.
+      await expect(panel.getByText(/Chờ gộp|For merge/).first()).toBeVisible({ timeout: 10_000 })
+    } finally {
+      await api.deleteTransactionCascade(A.transaction_id)
+      await api.deleteTransactionCascade(D1.transaction_id)
+      await api.deleteGoal(goal.goal_id)
+    }
+  })
 })
 
 // The dashboard side of the invariant is covered above (progressValue never dips,
