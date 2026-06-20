@@ -1,29 +1,23 @@
--- "Ví chờ gộp" consume — PR4 of "Gộp nhiều nguồn".
+-- Guard live-merge settlements from deletion — follow-up to 20260620000005.
 --
--- A held settlement (see 20260620000004) already closed its source deposit with a
--- withdrawal row and parked the cash in the pool. When the anchor (D) finally
--- matures and the user merges, we must NOT open a second withdrawal for that
--- source — it is already closed. Instead the merge CONSUMES the holding: fold its
--- cash into D's new principal and stamp consumed_by_inv_id = D so the dashboard /
--- Plan stop synthesizing it back (the cash now lives in D's principal).
+-- The DELETE route (investment-transactions/[id]) blocks deleting a withdrawal that
+-- has been folded into another deposit (consumed_by_inv_id set), because deleting it
+-- would re-open the source at full value while its cash already lives in the anchor's
+-- principal — a double-count. The HELD path stamps consumed_by_inv_id when a merge
+-- consumes a holding (step 0b above), so it was already guarded. The LIVE path —
+-- merging a sibling straight into D (step 0) — opened a plain withdrawal WITHOUT that
+-- marker, so the ledger's per-row delete could still double-count. Same hazard, the
+-- held guard merely exposed the asymmetry (predates the holding pool).
 --
--- So renew_term_deposit_with_merge gains p_held_source_ids: the ids of held
--- withdrawal rows to consume. They are additive to the live p_merge_source_ids
--- path — a single merge can fold both live siblings AND pooled holdings into D.
+-- Fix: the live-source withdrawal now also stamps consumed_by_inv_id = D, so the
+-- guard keys on that one marker for both paths.
 --
--- Net-worth invariant holds either way: a live source releases v_recv (client-
--- supplied, ×10-bounded); a held source releases its OWN stored amount_vnd, which
--- the client cannot inflate at merge time (it passes ids only — the RPC reads the
--- trusted row). Both accumulate into v_merge_total, which is exactly what D grows
--- by.
---
--- Adding a parameter changes the signature, so DROP the prior 13-arg version first
--- (a bare create-or-replace registers a second overload and makes name-resolved
--- calls ambiguous — the PR0 pitfall, see 20260620000002/0003). Body is identical
--- to 20260620000003 except the new param and the step-0b held-consume loop.
-drop function if exists public.renew_term_deposit_with_merge(
-  uuid, bigint, numeric, date, date, bigint, uuid, text, bigint, text, uuid[], bigint[], text
-);
+-- This is a SEPARATE migration (not an in-place edit of 005) on purpose: a database
+-- whose ledger already records 005 as applied would never re-run an edited 005, so
+-- the patched function would never reach it. Appending a forward migration makes
+-- every database — fresh or already-005'd — converge on the stamped function. The
+-- signature is unchanged, so a bare create-or-replace replaces the body cleanly with
+-- no DROP (and no overload ambiguity).
 
 create or replace function public.renew_term_deposit_with_merge(
   p_tx_id uuid,
@@ -164,12 +158,17 @@ begin
       raise exception 'renew_term_deposit_with_merge: received amount is unreasonably large for the source'
         using errcode = 'check_violation';
     end if;
+    -- Stamp the withdrawal as folded into D (consumed_by_inv_id = D). Its cash now
+    -- lives in D's principal, so deleting this row from the ledger would re-open the
+    -- source at full value while the cash still sits in D — a double-count. The
+    -- DELETE route guards any withdrawal carrying this marker (held OR live) with a
+    -- 409. (This is the only change from 20260620000005.)
     insert into public.investment_transactions (
       user_id, goal_id, asset_type, transaction_type, parent_transaction_id,
-      investment_date, amount_vnd, principal_withdrawn, affects_progress
+      investment_date, amount_vnd, principal_withdrawn, affects_progress, consumed_by_inv_id
     ) values (
       v_src.user_id, v_src.goal_id, 'bank', 'withdrawal', v_sid,
-      p_investment_date, v_recv, v_src_eff, true
+      p_investment_date, v_recv, v_src_eff, true, p_tx_id
     );
     -- Unlink any recurring saving that fed the now-closed source (mirror
     -- 20260618000009 lines 110–117) so nothing tries to top it up later.
