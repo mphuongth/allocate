@@ -314,6 +314,8 @@
     "assetCash": "Cash",
     "withdrawal": "Withdrawal",
     "investment": "Investment",
+    "held": "For merge",
+    "merged": "Merged",
     "gainLoss": "Gain/Loss",
     "amountReceived": "Received",
     "noGoal": "Unassigned",

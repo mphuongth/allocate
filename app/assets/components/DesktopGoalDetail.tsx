@@ -1,12 +1,12 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { ChevronLeft, X, MoreHorizontal, Edit2, Trash2, ChevronRight, ArrowDownRight, ArrowUpRight, Target, CalendarDays, Check, ArrowDownToLine, Wallet, Shield, RefreshCw } from 'lucide-react'
+import { ChevronLeft, X, MoreHorizontal, Edit2, Trash2, ChevronRight, ArrowDownRight, ArrowUpRight, Target, CalendarDays, Check, ArrowDownToLine, Wallet, Shield, RefreshCw, PiggyBank, GitMerge } from 'lucide-react'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import type { GoalData } from '../DashboardClient'
-import { GD_COLORS, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, buildRenewalSummary, AffectsProgressControl, BankInfoStrip, TopUpControl, RenewalSummaryLine, needsMaturityAction, needsBookMaturityAction, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
+import { GD_COLORS, buildCompositionSegments, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, buildRenewalSummary, AffectsProgressControl, BankInfoStrip, TopUpControl, RenewalSummaryLine, needsMaturityAction, needsBookMaturityAction, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
 import { MaturityResolveModal } from './MaturityResolveSheet'
-import { fmtTxDate } from './transactionUtils'
+import { fmtTxDate, txKind } from './transactionUtils'
 import { TxRowsSkeleton } from './Skeletons'
 import { todayIso } from '@/lib/dates'
 
@@ -28,6 +28,8 @@ interface InvestmentTx {
   renewed_from_transaction_id?: string | null
   interest_earned_vnd?: number | null
   is_recurring?: boolean
+  held_for_merge?: boolean | null
+  consumed_by_inv_id?: string | null
 }
 
 interface Props {
@@ -160,10 +162,10 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
   // Build investment rows (shared with the mobile sheet's valuation logic).
   const invRows: InvRow[] = buildInvRows(transactions, goal.funds, goldPricePerChi, isVi)
 
-  // Composition segments
-  const breakdown: Record<string, number> = {}
-  invRows.forEach((inv) => { breakdown[inv.type] = (breakdown[inv.type] ?? 0) + inv.value })
-  const segs = Object.entries(breakdown).map(([k, v]) => ({ label: k, value: v, color: GD_COLORS[k] ?? '#94a3b8' }))
+  // Composition segments — held-for-merge cash is folded back in (see helper) so the
+  // bar reconciles with the headline instead of summing short.
+  const heldCompValue = (goal.heldForMerge ?? []).reduce((a, h) => a + h.amount, 0)
+  const segs = buildCompositionSegments(invRows, heldCompValue, isVi)
   const segsTotal = segs.reduce((a, x) => a + x.value, 0)
 
   // Calculator
@@ -177,6 +179,19 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
   const gap = Math.abs(neededPerMonth - calcInput)
 
   const visibleInvRows = invRows.filter((inv) => !unassignedIds.includes(inv.id))
+
+  // "Bỏ chờ gộp" — delete the held settlement row, restoring the original deposit;
+  // onDataChanged re-fetches so the chip drops and the deposit reappears.
+  const [unholdingId, setUnholdingId] = useState<string | null>(null)
+  async function handleUnhold(heldTxId: string) {
+    setUnholdingId(heldTxId)
+    try {
+      const res = await fetch(`/api/v1/investment-transactions/${heldTxId}`, { method: 'DELETE' })
+      if (res.ok) onDataChanged()
+    } finally {
+      setUnholdingId(null)
+    }
+  }
 
   return (
     <>
@@ -266,7 +281,7 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
 
         {/* Composition */}
         {segs.length > 0 && (
-          <div className="cn-card" style={{ padding: '14px 16px' }}>
+          <div data-testid="goal-composition" className="cn-card" style={{ padding: '14px 16px' }}>
             <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--c-muted)', marginBottom: 10 }}>
               {isVi ? 'Cơ cấu' : 'Composition'}
             </div>
@@ -310,6 +325,29 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
           {/* Investments tab */}
           {tab === 'investments' && (
             <>
+              {/* "Ví chờ gộp" — pooled settle-with-hold settlements, each with a
+                  "Bỏ chờ gộp" action that restores the original deposit. */}
+              {(goal.heldForMerge ?? []).length > 0 && (
+                <div data-testid="held-pool-section" style={{ padding: '8px 16px 12px', borderBottom: '1px solid var(--c-line)', display: 'grid', gap: 8 }}>
+                  {(goal.heldForMerge ?? []).map((h) => (
+                    <div key={h.transactionId} data-testid={`held-chip-${h.transactionId}`} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--c-card-2)', color: 'var(--c-navy)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <PiggyBank size={15} />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.name ?? (isVi ? 'Sổ chờ gộp' : 'Held deposit')}</div>
+                        <div style={{ fontSize: 11.5, color: 'var(--c-muted)', marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>
+                          {fmtCompact(h.amount)} · {isVi ? 'Đang chờ gộp' : 'Held for merge'}
+                        </div>
+                      </div>
+                      <button type="button" data-testid={`unhold-${h.transactionId}`} onClick={() => handleUnhold(h.transactionId)} disabled={unholdingId === h.transactionId}
+                        style={{ flexShrink: 0, fontSize: 12, fontWeight: 600, color: 'var(--c-navy)', background: 'none', border: '1px solid var(--c-line)', borderRadius: 8, padding: '5px 10px', cursor: unholdingId === h.transactionId ? 'default' : 'pointer', opacity: unholdingId === h.transactionId ? 0.6 : 1, fontFamily: 'inherit' }}>
+                        {isVi ? 'Bỏ chờ gộp' : 'Unhold'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
               {txLoading && <TxRowsSkeleton />}
               {!txLoading && visibleInvRows.length === 0 && (
                 <p style={{ color: 'var(--c-muted)', fontSize: 13, textAlign: 'center', padding: '20px 0' }}>
@@ -467,8 +505,16 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
                 </p>
               )}
               {!txLoading && transactions.map((tx, i) => {
-                const isWithdraw = tx.transaction_type === 'withdrawal'
                 const isRenewed = !!tx.renewed_from_transaction_id
+                // Held/merged settlements parked their cash — render neutral (like a
+                // snapshot), never the red "−" of a real withdrawal.
+                const kind = txKind(tx)
+                const isWithdraw = kind === 'withdrawal'
+                const neutral = isRenewed || kind === 'held' || kind === 'consumed'
+                const ink = neutral ? 'var(--c-muted)' : isWithdraw ? 'var(--c-neg)' : 'var(--c-pos)'
+                const fill = neutral ? 'var(--c-card-2)' : isWithdraw ? 'var(--c-neg-tint)' : 'var(--c-pos-tint)'
+                const DirIcon = isRenewed ? RefreshCw : kind === 'held' ? PiggyBank : kind === 'consumed' ? GitMerge : isWithdraw ? ArrowDownRight : ArrowUpRight
+                const sign = isWithdraw ? '-' : kind === 'investment' ? '+' : ''
                 const name = tx.fund_name ?? tx.notes ?? (isVi ? 'Khoản đầu tư' : 'Investment')
                 return (
                   <div key={tx.transaction_id} data-testid={isRenewed ? 'history-renewed-row' : undefined} style={{
@@ -479,16 +525,10 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
                   }}>
                     <div style={{
                       width: 28, height: 28, borderRadius: 7, flexShrink: 0,
-                      background: isRenewed ? 'var(--c-card-2)' : isWithdraw ? 'var(--c-neg-tint)' : 'var(--c-pos-tint)',
-                      color: isRenewed ? 'var(--c-muted)' : isWithdraw ? 'var(--c-neg)' : 'var(--c-pos)',
+                      background: fill, color: ink,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}>
-                      {isRenewed
-                        ? <RefreshCw size={13} strokeWidth={2.2} />
-                        : isWithdraw
-                          ? <ArrowDownRight size={13} strokeWidth={2.2} />
-                          : <ArrowUpRight size={13} strokeWidth={2.2} />
-                      }
+                      <DirIcon size={13} strokeWidth={2.2} />
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--c-ink)', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -498,13 +538,18 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
                             {isVi ? 'Đã tái tục' : 'Renewed'}
                           </span>
                         )}
+                        {(kind === 'held' || kind === 'consumed') && (
+                          <span style={{ flexShrink: 0, fontSize: 9.5, fontWeight: 600, padding: '1px 6px', borderRadius: 999, background: 'var(--c-card-2)', color: 'var(--c-muted)' }}>
+                            {kind === 'held' ? (isVi ? 'Chờ gộp' : 'For merge') : (isVi ? 'Đã gộp' : 'Merged')}
+                          </span>
+                        )}
                       </div>
                       <div style={{ fontSize: 10, color: 'var(--c-muted)', marginTop: 1 }}>
                         {fmtTxDate(tx.investment_date, locale)}
                       </div>
                     </div>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: isRenewed ? 'var(--c-muted)' : isWithdraw ? 'var(--c-neg)' : 'var(--c-pos)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
-                      {isWithdraw ? '-' : '+'}{fmtCompact(tx.amount_vnd)}
+                    <span style={{ fontSize: 12, fontWeight: 600, color: ink, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+                      {sign}{fmtCompact(tx.amount_vnd)}
                     </span>
                   </div>
                 )
@@ -567,6 +612,7 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
           inv={actionInv}
           goalId={goal.goalId}
           siblingDeposits={invRows}
+          heldSiblings={(goal.heldForMerge ?? []).map((h) => ({ id: h.transactionId, name: h.name, amount: h.amount }))}
           isVi={isVi}
           onClose={() => setShowResolve(false)}
           onRenewed={() => { setShowResolve(false); (onRenewed ?? onDataChanged)() }}

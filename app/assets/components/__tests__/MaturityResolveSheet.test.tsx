@@ -486,6 +486,129 @@ describe('MaturityResolveBody', () => {
     })
   })
 
+  // ── "Ví chờ gộp" holding pool (PR4) ─────────────────────────────────────────
+  // A deposit maturing before a later eligible anchor in the same goal can be
+  // settled-with-hold (park the cash for that merge); the anchor's sheet then
+  // shows pooled holdings preselected and folds them in as held_sources.
+  describe('merge holding pool', () => {
+    function stubHold() {
+      const fetchMock = vi.fn().mockImplementation((url: string) => {
+        if (typeof url === 'string' && url.startsWith('/api/v1/recurring-savings')) {
+          return Promise.resolve({ ok: true, json: async () => ({ savings: [] }) })
+        }
+        return Promise.resolve({ ok: true, json: async () => ({}) })
+      })
+      vi.stubGlobal('fetch', fetchMock)
+      return fetchMock
+    }
+
+    // This deposit matured 2 days ago; a sibling in the same goal matures in 3 days
+    // (gap 5 ≤ window 7) → an eligible LATER anchor, so the hold fork appears.
+    const sourceNow: InvRow = {
+      id: 'src', name: 'VCB 3m', type: 'bank', value: 10_500_000, gainPct: null,
+      units: null, principal: 10_000_000, interestRate: 6, expiryDate: daysFromNow(-2),
+      investmentDate: daysFromNow(-90), fund: null,
+    }
+    const laterAnchor: InvRow = {
+      id: 'anc', name: 'MB 6m', type: 'bank', value: 20_000_000, gainPct: null,
+      units: null, principal: 20_000_000, interestRate: 6, expiryDate: daysFromNow(3),
+      investmentDate: daysFromNow(-180), fund: null,
+    }
+
+    it('nudges, preselects "hold", and posts a held settlement when an eligible later anchor exists', async () => {
+      const user = userEvent.setup()
+      const fetchMock = stubHold()
+      render(
+        <MaturityResolveBody inv={sourceNow} goalId="goal-1" siblingDeposits={[laterAnchor]}
+          isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
+      )
+      // Discoverability nudge names the anchor.
+      expect((await screen.findByTestId('maturity-hold-nudge')).textContent).toContain('MB 6m')
+
+      // Enter the withdraw branch → the 2-card fork appears with "hold" preselected.
+      await user.click(screen.getByRole('button', { name: /Don.t renew/i }))
+      expect(screen.getByTestId('maturity-hold-fork')).toBeTruthy()
+      // The received field (hold path) is shown, defaulted to the current value.
+      expect((screen.getByTestId('maturity-hold-received') as HTMLInputElement).value).toBe('10500000')
+
+      await user.click(screen.getByRole('button', { name: /Confirm hold/i }))
+      await waitFor(() => {
+        const post = fetchMock.mock.calls.find((c) => c[0] === '/api/v1/investment-transactions' && c[1]?.method === 'POST')
+        expect(post).toBeTruthy()
+      })
+      const post = fetchMock.mock.calls.find((c) => c[0] === '/api/v1/investment-transactions' && c[1]?.method === 'POST')!
+      expect(JSON.parse(post[1].body)).toMatchObject({
+        transaction_type: 'withdrawal',
+        parent_transaction_id: 'src',
+        amount_vnd: 10_500_000,
+        held_for_merge: true,
+        merge_target_goal_id: 'goal-1',
+        merge_anchor_inv_id: 'anc',
+        affects_progress: true,
+      })
+    })
+
+    it('shows no hold fork (plain withdraw) when the only siblings mature earlier', async () => {
+      const user = userEvent.setup()
+      const onWithdraw = vi.fn()
+      stubHold()
+      const earlierSib: InvRow = { ...laterAnchor, id: 'early', expiryDate: daysFromNow(-9) }
+      render(
+        <MaturityResolveBody inv={sourceNow} goalId="goal-1" siblingDeposits={[earlierSib]}
+          isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={onWithdraw} />,
+      )
+      expect(screen.queryByTestId('maturity-hold-nudge')).toBeNull()
+      await user.click(screen.getByRole('button', { name: /Don.t renew/i }))
+      expect(screen.queryByTestId('maturity-hold-fork')).toBeNull()
+      // Falls through to the plain withdraw hand-off.
+      await user.click(screen.getByRole('button', { name: /Mark for withdrawal/i }))
+      await waitFor(() => expect(onWithdraw).toHaveBeenCalled())
+    })
+
+    it('preselects pooled holdings on the anchor and folds them in as held_sources', async () => {
+      const user = userEvent.setup()
+      const fetchMock = stubHold()
+      render(
+        <MaturityResolveBody inv={maturedDeposit} goalId="goal-1"
+          heldSiblings={[{ id: 'held-w', name: 'VCB 3m', amount: 8_000_000 }]}
+          isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
+      )
+      // Opens straight into combine; the pooled holding is listed (preselected).
+      const held = await screen.findByTestId('merge-held-held-w')
+      expect(held.textContent).toContain('VCB 3m')
+      // Preview folds the held cash into the new principal (BASE 37.03M + 8M).
+      expect(screen.getByTestId('maturity-new-principal').textContent).toContain(fmt(37_030_000 + 8_000_000))
+
+      await user.click(screen.getByRole('button', { name: /Save new deposit/i }))
+      await waitFor(() => {
+        const renewCall = fetchMock.mock.calls.find((c) => String(c[0]).endsWith('/renew'))
+        expect(renewCall).toBeTruthy()
+      })
+      const renewCall = fetchMock.mock.calls.find((c) => String(c[0]).endsWith('/renew'))!
+      const body = JSON.parse(renewCall[1].body)
+      expect(body.amount_vnd).toBe(37_030_000) // BASE only — the RPC adds the held cash
+      expect(body.held_sources).toEqual(['held-w'])
+    })
+
+    it('deselecting a pooled holding drops it from held_sources (left in the pool)', async () => {
+      const user = userEvent.setup()
+      const fetchMock = stubHold()
+      render(
+        <MaturityResolveBody inv={maturedDeposit} goalId="goal-1"
+          heldSiblings={[{ id: 'held-w', name: 'VCB 3m', amount: 8_000_000 }]}
+          isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
+      )
+      await user.click(await screen.findByTestId('merge-held-held-w')) // deselect
+      await user.click(screen.getByRole('button', { name: /Save new deposit/i }))
+      await waitFor(() => {
+        const renewCall = fetchMock.mock.calls.find((c) => String(c[0]).endsWith('/renew'))
+        expect(renewCall).toBeTruthy()
+      })
+      const body = JSON.parse(fetchMock.mock.calls.find((c) => String(c[0]).endsWith('/renew'))![1].body)
+      expect(body.held_sources).toBeUndefined()
+    })
+  })
+
   it('hands off to the existing withdraw flow instead of renewing', async () => {
     const user = userEvent.setup()
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) })

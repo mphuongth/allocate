@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import {
   ChevronLeft, ChevronRight, MoreHorizontal,
-  Edit2, Trash2, Calendar, Download, ArrowDownRight, ArrowUpRight, Target, RefreshCw,
+  Edit2, Trash2, Calendar, Download, ArrowDownRight, ArrowUpRight, Target, RefreshCw, PiggyBank, GitMerge,
 } from 'lucide-react'
 import { useLocale } from 'next-intl'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
@@ -11,8 +11,8 @@ import type { GoalData, FundBreakdownItem } from '../DashboardClient'
 import TransactionHistorySheet, { type PurchaseHistoryRow } from './TransactionHistorySheet'
 import { SellWithdrawSheet, type SellItem } from './SellWithdrawSheet'
 import { MaturityResolveSheet } from './MaturityResolveSheet'
-import { GD_COLORS, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, buildRenewalSummary, BankInfoStrip, TopUpControl, RenewalSummaryLine, needsMaturityAction, needsBookMaturityAction, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
-import { fmtTxDate } from './transactionUtils'
+import { GD_COLORS, buildCompositionSegments, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, buildRenewalSummary, BankInfoStrip, TopUpControl, RenewalSummaryLine, needsMaturityAction, needsBookMaturityAction, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
+import { fmtTxDate, txKind } from './transactionUtils'
 import { TxRowsSkeleton } from './Skeletons'
 
 interface InvestmentTx {
@@ -35,6 +35,8 @@ interface InvestmentTx {
   renewed_from_transaction_id?: string | null
   interest_earned_vnd?: number | null
   is_recurring?: boolean
+  held_for_merge?: boolean | null
+  consumed_by_inv_id?: string | null
 }
 
 interface Props {
@@ -741,6 +743,20 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
     setActionsOpen(false)
   }
 
+  // "Bỏ chờ gộp" — delete the held settlement row, which restores the original
+  // deposit (its withdrawal no longer subtracts). onDataChanged re-fetches the
+  // overview, so the chip drops and the deposit reappears in the list.
+  const [unholdingId, setUnholdingId] = useState<string | null>(null)
+  async function handleUnhold(heldTxId: string) {
+    setUnholdingId(heldTxId)
+    try {
+      const res = await fetch(`/api/v1/investment-transactions/${heldTxId}`, { method: 'DELETE' })
+      if (res.ok) onDataChanged()
+    } finally {
+      setUnholdingId(null)
+    }
+  }
+
   // Mirror of DesktopGoalDetail.handleUnassign — fund rows aggregate every
   // fund-investment under the same fund, non-fund rows correspond to a
   // single investment_transactions row.
@@ -827,10 +843,10 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
 
   const detailFund = fundDetailId ? (fundMap.get(fundDetailId) ?? null) : null
 
-  // Composition breakdown by asset type
-  const breakdown: Record<string, number> = {}
-  invRows.forEach((inv) => { breakdown[inv.type] = (breakdown[inv.type] ?? 0) + inv.value })
-  const segs = Object.entries(breakdown).map(([k, v]) => ({ label: k, value: v, color: GD_COLORS[k] ?? 'var(--c-muted)' }))
+  // Composition breakdown by asset type — held-for-merge cash is folded back in (see
+  // helper) so the bar reconciles with the headline instead of summing short.
+  const heldCompValue = (goal.heldForMerge ?? []).reduce((a, h) => a + h.amount, 0)
+  const segs = buildCompositionSegments(invRows, heldCompValue, isVI)
 
   return (
     <>
@@ -937,7 +953,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
 
           {/* Composition bar */}
           {segs.length > 0 && (
-            <div style={{ background: 'var(--c-card)', borderRadius: 16, padding: 16, marginBottom: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+            <div data-testid="goal-composition" style={{ background: 'var(--c-card)', borderRadius: 16, padding: 16, marginBottom: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
               <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)', marginBottom: 10 }}>
                 {isVI ? 'Cơ cấu' : 'Composition'}
               </p>
@@ -999,6 +1015,29 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
           {/* Investments tab */}
           {activeTab === 'investments' && (
             <div style={{ background: 'var(--c-card)', borderRadius: 16, padding: '0 14px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+              {/* "Ví chờ gộp" — settle-with-hold settlements still pooled. Each shows
+                  a chip with "Bỏ chờ gộp" that restores the original deposit. */}
+              {(goal.heldForMerge ?? []).length > 0 && (
+                <div data-testid="held-pool-section" style={{ padding: '12px 0', borderBottom: '1px solid var(--c-line)', display: 'grid', gap: 8 }}>
+                  {(goal.heldForMerge ?? []).map((h) => (
+                    <div key={h.transactionId} data-testid={`held-chip-${h.transactionId}`} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--c-card-2)', color: 'var(--c-navy)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <PiggyBank size={15} />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.name ?? (isVI ? 'Sổ chờ gộp' : 'Held deposit')}</div>
+                        <div style={{ fontSize: 11.5, color: 'var(--c-muted)', marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>
+                          {fmtCompact(h.amount)} · {isVI ? 'Đang chờ gộp' : 'Held for merge'}
+                        </div>
+                      </div>
+                      <button type="button" data-testid={`unhold-${h.transactionId}`} onClick={() => handleUnhold(h.transactionId)} disabled={unholdingId === h.transactionId}
+                        style={{ flexShrink: 0, fontSize: 12, fontWeight: 600, color: 'var(--c-navy)', background: 'none', border: '1px solid var(--c-line)', borderRadius: 8, padding: '5px 10px', cursor: unholdingId === h.transactionId ? 'default' : 'pointer', opacity: unholdingId === h.transactionId ? 0.6 : 1, fontFamily: 'inherit' }}>
+                        {isVI ? 'Bỏ chờ gộp' : 'Unhold'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
               {txLoading && <TxRowsSkeleton />}
               {!txLoading && invRows.length === 0 && (
                 <p style={{ color: 'var(--c-muted)', fontSize: 14, textAlign: 'center', padding: '24px 0' }}>
@@ -1205,8 +1244,16 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
                 </p>
               )}
               {!txLoading && transactions.map((tx, i) => {
-                const isWithdraw = tx.transaction_type === 'withdrawal'
                 const isRenewed = !!tx.renewed_from_transaction_id
+                // Held/merged settlements parked their cash — render neutral (like a
+                // snapshot), never the red "−" of a real withdrawal.
+                const kind = txKind(tx)
+                const isWithdraw = kind === 'withdrawal'
+                const neutral = isRenewed || kind === 'held' || kind === 'consumed'
+                const ink = neutral ? 'var(--c-muted)' : isWithdraw ? 'var(--c-neg)' : 'var(--c-pos)'
+                const fill = neutral ? 'var(--c-card-2)' : isWithdraw ? 'var(--c-neg-tint)' : 'var(--c-pos-tint)'
+                const DirIcon = isRenewed ? RefreshCw : kind === 'held' ? PiggyBank : kind === 'consumed' ? GitMerge : isWithdraw ? ArrowDownRight : ArrowUpRight
+                const sign = isWithdraw ? '-' : kind === 'investment' ? '+' : ''
                 const name = tx.fund_name ?? tx.notes ?? (isVI ? 'Khoản đầu tư' : 'Investment')
                 return (
                   <div
@@ -1221,16 +1268,10 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
                   >
                     <div style={{
                       width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-                      background: isRenewed ? 'var(--c-card-2)' : isWithdraw ? 'var(--c-neg-tint)' : 'var(--c-pos-tint)',
-                      color: isRenewed ? 'var(--c-muted)' : isWithdraw ? 'var(--c-neg)' : 'var(--c-pos)',
+                      background: fill, color: ink,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}>
-                      {isRenewed
-                        ? <RefreshCw size={14} strokeWidth={2.2} />
-                        : isWithdraw
-                          ? <ArrowDownRight size={14} strokeWidth={2.2} />
-                          : <ArrowUpRight size={14} strokeWidth={2.2} />
-                      }
+                      <DirIcon size={14} strokeWidth={2.2} />
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--c-ink)', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -1240,13 +1281,18 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
                             {isVI ? 'Đã tái tục' : 'Renewed'}
                           </span>
                         )}
+                        {(kind === 'held' || kind === 'consumed') && (
+                          <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 600, padding: '1px 7px', borderRadius: 999, background: 'var(--c-card-2)', color: 'var(--c-muted)' }}>
+                            {kind === 'held' ? (isVI ? 'Chờ gộp' : 'For merge') : (isVI ? 'Đã gộp' : 'Merged')}
+                          </span>
+                        )}
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 2 }}>
                         {fmtTxDate(tx.investment_date, isVI ? 'vi' : 'en')}
                       </div>
                     </div>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: isRenewed ? 'var(--c-muted)' : isWithdraw ? 'var(--c-neg)' : 'var(--c-pos)', fontVariantNumeric: 'tabular-nums' }}>
-                      {isWithdraw ? '-' : '+'}{fmtCompact(tx.amount_vnd)}
+                    <span style={{ fontSize: 13, fontWeight: 600, color: ink, fontVariantNumeric: 'tabular-nums' }}>
+                      {sign}{fmtCompact(tx.amount_vnd)}
                     </span>
                   </div>
                 )
@@ -1294,6 +1340,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
         inv={actionInv}
         goalId={goal.goalId}
         siblingDeposits={invRows}
+        heldSiblings={(goal.heldForMerge ?? []).map((h) => ({ id: h.transactionId, name: h.name, amount: h.amount }))}
         isVi={isVI}
         onClose={() => setResolveOpen(false)}
         onRenewed={() => { setResolveOpen(false); onDataChanged() }}

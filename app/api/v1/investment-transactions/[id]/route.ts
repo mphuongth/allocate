@@ -196,6 +196,30 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  // A merge folds a source's cash into the anchor's principal and closes the source
+  // with a withdrawal stamped consumed_by_inv_id = the anchor. Deleting that
+  // withdrawal would re-open the source at full value while its cash still sits in
+  // the anchor → double-count. This applies to BOTH fold paths:
+  //   • held ("Để dành gộp"): the held withdrawal, consumed when the merge runs;
+  //   • live: the plain withdrawal the merge RPC opens for a sibling source.
+  // Both carry consumed_by_inv_id, so the guard keys on that marker alone (not on
+  // held_for_merge). The UI hides the affordances once consumed, but a stale tab or
+  // the ledger's per-row delete (shown on every row) must not get through — guard
+  // server-side with a 409 rather than trusting the UI. (One cheap SELECT.)
+  const { data: folded } = await supabase
+    .from('investment_transactions')
+    .select('consumed_by_inv_id')
+    .eq('transaction_id', txId)
+    .eq('user_id', user.id)
+    .not('consumed_by_inv_id', 'is', null)
+    .maybeSingle()
+  if (folded) {
+    return NextResponse.json(
+      { error: 'This settlement has already been merged into another deposit. Undo the merge before removing it.' },
+      { status: 409 },
+    )
+  }
+
   const { error } = await supabase
     .from('investment_transactions')
     .delete()

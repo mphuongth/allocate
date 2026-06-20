@@ -314,6 +314,8 @@
     "assetCash": "Tiền mặt",
     "withdrawal": "Rút tiền",
     "investment": "Đầu tư",
+    "held": "Chờ gộp",
+    "merged": "Đã gộp",
     "gainLoss": "Lãi/Lỗ",
     "amountReceived": "Nhận được",
     "noGoal": "Chưa gán",

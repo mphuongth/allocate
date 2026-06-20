@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from('investment_transactions')
-    .select('transaction_id, goal_id, asset_type, transaction_type, parent_transaction_id, renewed_from_transaction_id, deposit_group_id, interest_earned_vnd, investment_date, amount_vnd, unit_price, units, interest_rate, expiry_date, notes, fund_id, bank_code, currency, is_pledged, principal_withdrawn, units_withdrawn, affects_progress, savings_goals(goal_name), funds(id, name, nav)', { count: 'exact' })
+    .select('transaction_id, goal_id, asset_type, transaction_type, parent_transaction_id, renewed_from_transaction_id, deposit_group_id, interest_earned_vnd, investment_date, amount_vnd, unit_price, units, interest_rate, expiry_date, notes, fund_id, bank_code, currency, is_pledged, principal_withdrawn, units_withdrawn, affects_progress, held_for_merge, consumed_by_inv_id, merge_anchor_inv_id, savings_goals(goal_name), funds(id, name, nav)', { count: 'exact' })
     .eq('user_id', user.id)
     .order('investment_date', { ascending: false })
     .range(offset, offset + limit - 1)
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { goal_id, asset_type, transaction_type = 'investment', investment_date, amount_vnd, unit_price, units, interest_rate, notes, fund_id, plan_id, expiry_date, parent_transaction_id, principal_withdrawn, units_withdrawn, affects_progress, accumulating, tops_up_deposit_id, bank_code } = body
+  const { goal_id, asset_type, transaction_type = 'investment', investment_date, amount_vnd, unit_price, units, interest_rate, notes, fund_id, plan_id, expiry_date, parent_transaction_id, principal_withdrawn, units_withdrawn, affects_progress, accumulating, tops_up_deposit_id, bank_code, held_for_merge, merge_target_goal_id, merge_anchor_inv_id } = body
 
   const isWithdrawal = transaction_type === 'withdrawal'
 
@@ -76,6 +76,12 @@ export async function POST(request: NextRequest) {
   let cleanUnitsWithdrawn: number | null = null
   let cleanTopsUpId: string | null = null
   let cleanBankCode: string | null = null
+  // "Ví chờ gộp": a settle-with-hold parks the closed deposit's cash for a future
+  // merge. Only meaningful on a withdrawal; the target goal/anchor say where the
+  // pool synthesizes the cash back to and which deposit it's waiting on.
+  const cleanHeldForMerge = isWithdrawal && held_for_merge === true
+  let cleanMergeTargetGoalId: string | null = null
+  let cleanMergeAnchorInvId: string | null = null
 
   try {
     cleanTxType = validateEnum(transaction_type, ['investment', 'withdrawal'] as const, 'transaction_type')
@@ -106,6 +112,10 @@ export async function POST(request: NextRequest) {
     if (units_withdrawn != null && units_withdrawn !== '') cleanUnitsWithdrawn = validateAmount(units_withdrawn, 'units_withdrawn')
     if (tops_up_deposit_id) cleanTopsUpId = validateUUID(tops_up_deposit_id, 'tops_up_deposit_id')
     if (bank_code != null && bank_code !== '') cleanBankCode = validateBankCode(bank_code, 'bank_code')
+    if (cleanHeldForMerge) {
+      if (merge_target_goal_id) cleanMergeTargetGoalId = validateUUID(merge_target_goal_id, 'merge_target_goal_id')
+      if (merge_anchor_inv_id) cleanMergeAnchorInvId = validateUUID(merge_anchor_inv_id, 'merge_anchor_inv_id')
+    }
   } catch (e) {
     if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
     throw e
@@ -188,6 +198,17 @@ export async function POST(request: NextRequest) {
     depositGroupId = explicitTxId
   }
 
+  // Net-worth safety for a held settlement. A held withdrawal removes its source
+  // from net worth, and the dashboard synthesizes the parked cash back ONLY via
+  // merge_target_goal_id. If that can't be resolved — an unassigned deposit
+  // settled with no explicit target — the cash leaves net worth and is never
+  // added back: money silently lost, surfaced nowhere. The UI always supplies a
+  // goal, so reject the unguarded API path rather than mis-state total assets.
+  const resolvedHeldTargetGoalId = cleanMergeTargetGoalId ?? effectiveGoalId
+  if (cleanHeldForMerge && !resolvedHeldTargetGoalId) {
+    return NextResponse.json({ error: 'A held-for-merge settlement must resolve a target goal.' }, { status: 400 })
+  }
+
   const { data: transaction, error } = await supabase
     .from('investment_transactions')
     .insert({
@@ -213,10 +234,30 @@ export async function POST(request: NextRequest) {
       // Structured bank only applies to bank deposits; funds/gold have no bank.
       // A top-up tranche inherits the book's bank (effectiveBankCode).
       bank_code: effectiveAssetType === 'bank' ? effectiveBankCode : null,
+      // Held-for-merge pool flags (withdrawal only). The target goal defaults to
+      // the withdrawal's own goal (= the closed source's goal) when not given.
+      held_for_merge: cleanHeldForMerge,
+      merge_target_goal_id: cleanHeldForMerge ? resolvedHeldTargetGoalId : null,
+      merge_anchor_inv_id: cleanHeldForMerge ? cleanMergeAnchorInvId : null,
     })
     .select()
     .single()
 
   if (error) return NextResponse.json({ error: 'Failed to create transaction' }, { status: 500 })
+
+  // Holding a deposit for merge closes its source. If a recurring saving was
+  // linked to that source (linked_deposit_tx_id), the link now points at a closed
+  // deposit and would dangle until the merge consumes it. Clear it on hold —
+  // mirrors what the merge RPC does for its live sources (20260620000005 lines
+  // 174-178) so the recurring line never tops up a settled deposit. Scoped to the
+  // hold path; a plain withdrawal's pre-existing dangle is a separate concern.
+  if (cleanHeldForMerge && cleanParentTxId) {
+    await supabase
+      .from('recurring_savings')
+      .update({ linked_deposit_tx_id: null, updated_at: new Date().toISOString() })
+      .eq('linked_deposit_tx_id', cleanParentTxId)
+      .eq('user_id', user.id)
+  }
+
   return NextResponse.json(transaction, { status: 201 })
 }

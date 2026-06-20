@@ -17,7 +17,7 @@
 // (the parent wires `onWithdraw`).
 
 import { useState, useEffect } from 'react'
-import { RefreshCw, Pencil, ArrowDownToLine, AlertTriangle, Check, Building2, X, Plus, Wallet, Lock, SlidersHorizontal } from 'lucide-react'
+import { RefreshCw, Pencil, ArrowDownToLine, AlertTriangle, Check, Building2, X, Plus, Wallet, Lock, SlidersHorizontal, PiggyBank, GitMerge } from 'lucide-react'
 import { fmt, fmtCompact } from '@/lib/formatters'
 import { fmtMaturity, type InvRow } from './goalDetailShared'
 import {
@@ -64,7 +64,7 @@ function MoneyField({ label, value, onChange, testId }: { label: string; value: 
  * parent's existing Sell/Withdraw flow.
  */
 export function MaturityResolveBody({
-  inv, goalId, siblingDeposits, isVi, onClose, onRenewed, onWithdraw,
+  inv, goalId, siblingDeposits, heldSiblings, isVi, onClose, onRenewed, onWithdraw,
 }: {
   inv: InvRow
   // The goal this deposit is assigned to (null = unallocated). Used to find the
@@ -75,6 +75,11 @@ export function MaturityResolveBody({
   // that prevents the "inflate the principal but leave the sibling active"
   // double-count. Omitted by callers that don't wire it (feature inert).
   siblingDeposits?: InvRow[]
+  // "Ví chờ gộp" holdings in this goal — earlier-maturing deposits already settled
+  // with "Để dành gộp", their cash parked. When `inv` is the anchor they merge
+  // into, they appear preselected in the merge section and submit as held_sources
+  // (consumed in place — no second withdrawal). `id` is the held WITHDRAWAL row.
+  heldSiblings?: { id: string; name: string | null; amount: number }[]
   isVi: boolean
   onClose: () => void
   onRenewed: () => void
@@ -114,6 +119,8 @@ export function MaturityResolveBody({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState<null | { newPrincipal: number; newMaturity: string; sources: string[] }>(null)
+  // Settle-with-hold success: the deposit was parked in the pool (no re-deposit).
+  const [heldDone, setHeldDone] = useState<null | { anchorName: string }>(null)
 
   // ── Combine ("settle & re-deposit", merge recurring) ────────────────────────
   // A recurring bank saving due for this goal this month can be folded into the
@@ -156,6 +163,22 @@ export function MaturityResolveBody({
   const [banks, setBanks] = useState<{ code: string; name: string }[]>([])
   const [destBank, setDestBank] = useState<string>(inv.bankCode ?? '')
 
+  // ── Settle-with-hold ("Để dành gộp") ─────────────────────────────────────────
+  // When THIS maturing deposit has a later-maturing eligible anchor in the same
+  // goal, "Không tái tục — rút" forks into two cards: park the cash for that merge
+  // (default) vs withdraw to the wallet. holdReceived is the cash that lands (the
+  // user edits it down if early settlement is penalised).
+  const [holdChoice, setHoldChoice] = useState<'hold' | 'cash'>('hold')
+  const [holdReceived, setHoldReceived] = useState(String(Math.round(inv.value ?? principal)))
+  // ── Held-pool consume (when THIS deposit is the anchor) ───────────────────────
+  // The goal's pooled holdings, all preselected to fold in. heldSel records only
+  // explicit deselects (a deselected holding is unheld → restored to a deposit).
+  const pooledHeld = heldSiblings ?? []
+  const [heldSel, setHeldSel] = useState<Record<string, boolean>>({})
+  const isHeldSelected = (id: string) => heldSel[id] ?? true
+  const selectedHeld = pooledHeld.filter((h) => isHeldSelected(h.id))
+  const heldReceivedTotal = selectedHeld.reduce((sum, h) => sum + h.amount, 0)
+
   // Classify each mergeable sibling against the anchor (D). Same-goal is already
   // guaranteed (siblings are this goal's holdings), so we don't pass goal ids.
   const classifications = classifyMergeSources(
@@ -164,6 +187,26 @@ export function MaturityResolveBody({
     windowDays,
   )
   const classOf = new Map(classifications.map((c) => [c.source.id, c]))
+
+  // Eligible HOLD anchors: this deposit can be settled-with-hold only when a
+  // LATER-maturing sibling in the same goal is an eligible merge target for it
+  // (same window/currency/not-pledged, via the shared PR2 predicate — D as anchor,
+  // THIS deposit as the source). No anchor ⇒ plain withdraw, no hold fork (per the
+  // owner's gate). The nearest later maturity is the default anchor.
+  const holdAnchors = goalId == null || isBook
+    ? []
+    : (siblingDeposits ?? [])
+        .filter((s) => s.id !== inv.id && s.type === 'bank' && !s.depositGroupId && (s.principal ?? s.value ?? 0) > 0)
+        .filter((s) => (s.expiryDate ?? '') > (inv.expiryDate ?? '')) // anchor matures later
+        .filter((s) => classifyMergeSources(
+          { id: s.id, type: s.type, expiryDate: s.expiryDate, principal: s.principal, value: s.value, depositGroupId: s.depositGroupId, currency: s.currency, isPledged: s.isPledged },
+          [{ id: inv.id, type: inv.type, expiryDate: inv.expiryDate, principal: inv.principal, value: inv.value, depositGroupId: inv.depositGroupId, currency: inv.currency, isPledged: inv.isPledged }],
+          windowDays,
+        )[0]?.eligible)
+        .sort((a, b) => (a.expiryDate ?? '').localeCompare(b.expiryDate ?? ''))
+  const holdAnchor = holdAnchors[0] ?? null
+  const canHold = !!holdAnchor
+  const holdReceivedNum = holdReceived.trim() === '' ? 0 : Number(holdReceived)
 
   // Effective selection: an explicit toggle wins; an overridden source is on; else
   // the eligibility default.
@@ -287,14 +330,21 @@ export function MaturityResolveBody({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Open straight into combine mode when this anchor has pooled holdings waiting —
+  // the whole point of resolving it is to fold them in (mount-only).
+  useEffect(() => {
+    if (pooledHeld.length > 0) setMode('combine')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // The candidate currently chosen to fold in (explicit pick, else the match).
   const pickedCand: RecurringLinkCandidate | null = combineLink
     ? (pickedSavingId ? combineLink.candidates.find((c) => c.saving_id === pickedSavingId) ?? null : combineLink.match)
     : null
   const linkedAmt = pickedCand ? pickedCand.amount_vnd : 0
-  // Combine is offered when there's a recurring to fold in OR sibling deposits to
-  // merge — both routes settle-and-re-deposit. Inert when neither exists.
-  const canCombine = !!combineLink || mergeable.length > 0
+  // Combine is offered when there's a recurring to fold in, sibling deposits to
+  // merge, OR pooled holdings waiting to be consumed — all settle-and-re-deposit.
+  const canCombine = !!combineLink || mergeable.length > 0 || pooledHeld.length > 0
 
   const iNum = Number(interest) || 0
   const tNum = Number(term) || 0
@@ -309,7 +359,7 @@ export function MaturityResolveBody({
   const newPrincipal = mode === 'withdraw'
     ? principal
     : mode === 'combine'
-      ? redepositNum + mergeReceivedTotal
+      ? redepositNum + mergeReceivedTotal + heldReceivedTotal
       : renewalPrincipal(mode, principal, iNum, newAmountNum)
 
   // Suggested re-deposit = principal + interest + this month's recurring, until
@@ -384,6 +434,19 @@ export function MaturityResolveBody({
     reasonPledged: 'Đang thế chấp — bị phong toả',
     reasonGoal: 'Khác mục tiêu',
     reasonBlocked: 'Chưa đủ điều kiện',
+    holdNudge: (anchor: string, date: string) => `«${anchor}» đáo hạn ${date} cùng mục tiêu — để dành gộp thay vì rút?`,
+    holdForkPrompt: 'Tất toán sổ này thế nào?',
+    holdCardTitle: 'Để dành gộp',
+    holdCardSub: (anchor: string) => `Giữ tiền chờ gộp vào «${anchor}» — không rời mục tiêu`,
+    cashCardTitle: 'Rút ra ví',
+    cashCardSub: 'Tiền rời khỏi mục tiêu như rút thường',
+    holdReceivedLabel: 'Số tiền thực nhận',
+    holdConfirm: 'Xác nhận để dành',
+    holdDone: 'Đã để dành gộp',
+    holdDoneSub: (anchor: string) => `Đang chờ gộp vào «${anchor}»`,
+    heldSectionTitle: 'Ví chờ gộp',
+    heldSectionHint: 'Các sổ đã tất toán để dành — gộp vào lần gửi lại này.',
+    heldUnholdHint: 'Bỏ chọn để giữ lại trong ví chờ gộp.',
   } : {
     summarySuffix: 'yr', perYr: 'yr', mo: 'mo',
     why: matured
@@ -431,6 +494,19 @@ export function MaturityResolveBody({
     reasonPledged: 'Pledged as collateral',
     reasonGoal: 'Different goal',
     reasonBlocked: 'Not eligible yet',
+    holdNudge: (anchor: string, date: string) => `“${anchor}” matures ${date} in the same goal — hold for merge instead of withdrawing?`,
+    holdForkPrompt: 'How do you want to settle this?',
+    holdCardTitle: 'Hold for merge',
+    holdCardSub: (anchor: string) => `Keep the cash for merging into “${anchor}” — stays in the goal`,
+    cashCardTitle: 'Withdraw to wallet',
+    cashCardSub: 'Money leaves the goal, like a normal withdrawal',
+    holdReceivedLabel: 'Cash received',
+    holdConfirm: 'Confirm hold',
+    holdDone: 'Held for merge',
+    holdDoneSub: (anchor: string) => `Waiting to merge into “${anchor}”`,
+    heldSectionTitle: 'Merge holding pool',
+    heldSectionHint: 'Deposits already settled and parked — fold them into this re-deposit.',
+    heldUnholdHint: 'Deselect to leave it in the pool.',
   }
 
   // Human-readable reason for a blocked source.
@@ -459,8 +535,51 @@ export function MaturityResolveBody({
     { id: 'withdraw' as Mode, icon: <ArrowDownToLine size={16} />, label: isVi ? 'Không tái tục — rút' : 'Don’t renew — withdraw', sub: isVi ? 'Rút toàn bộ số dư' : 'Withdraw the full balance', danger: true },
   ]
 
+  // Settle this deposit with "Để dành gộp": post a held withdrawal that closes it
+  // (removing its principal from net worth + the bar) but flags the cash for a
+  // future merge into the chosen anchor — the overview synthesizes it straight
+  // back, so the goal value never dips. No re-deposit happens here.
+  async function handleHold() {
+    if (!holdAnchor || !(holdReceivedNum > 0)) return
+    setSaving(true); setError('')
+    try {
+      const res = await fetch('/api/v1/investment-transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transaction_type: 'withdrawal',
+          asset_type: 'bank',
+          goal_id: goalId,
+          parent_transaction_id: inv.id,
+          investment_date: todayIso(),
+          amount_vnd: Math.round(holdReceivedNum),
+          principal_withdrawn: Math.round(principal),
+          affects_progress: true,
+          held_for_merge: true,
+          merge_target_goal_id: goalId,
+          merge_anchor_inv_id: holdAnchor.id,
+        }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        setError(body.error ?? (isVi ? 'Không thể để dành' : 'Could not hold'))
+        setSaving(false)
+        return
+      }
+      setHeldDone({ anchorName: holdAnchor.name })
+      setTimeout(() => { onRenewed(); onClose() }, 1700)
+    } catch {
+      setError(isVi ? 'Lỗi kết nối' : 'Connection error')
+      setSaving(false)
+    }
+  }
+
   async function handleConfirm() {
-    if (mode === 'withdraw') { onClose(); setTimeout(onWithdraw, 60); return }
+    if (mode === 'withdraw') {
+      // The hold fork only exists when there's an eligible anchor; default is hold.
+      if (canHold && holdChoice === 'hold') { await handleHold(); return }
+      onClose(); setTimeout(onWithdraw, 60); return
+    }
     if (!canRenew) return
     setSaving(true); setError('')
     try {
@@ -504,6 +623,11 @@ export function MaturityResolveBody({
           // Destination bank for the combined re-deposit (multi-source merge only).
           // '' (no bank picked) → null; the RPC leaves the existing bank untouched.
           bank_code: mode === 'combine' && selectedSources.length > 0 ? (destBank || null) : undefined,
+          // "Ví chờ gộp": pooled holdings to consume. The RPC stamps each
+          // consumed and folds its parked cash into D — no second withdrawal.
+          held_sources: mode === 'combine' && selectedHeld.length > 0
+            ? selectedHeld.map((h) => h.id)
+            : undefined,
         }),
       })
       if (!res.ok) {
@@ -514,7 +638,9 @@ export function MaturityResolveBody({
       }
       setDone({
         newPrincipal: Math.round(newPrincipal), newMaturity,
-        sources: mode === 'combine' ? selectedSources.map((s) => s.name) : [],
+        sources: mode === 'combine'
+          ? [...selectedSources.map((s) => s.name), ...selectedHeld.map((h) => h.name ?? (isVi ? 'Sổ chờ gộp' : 'Held deposit'))]
+          : [],
       })
       setTimeout(() => { onRenewed(); onClose() }, 1700)
     } catch {
@@ -539,6 +665,21 @@ export function MaturityResolveBody({
             {t.mergedSourcesLabel}: {done.sources.join(', ')}
           </div>
         )}
+      </div>
+    )
+  }
+
+  // ─── Settle-with-hold success ───
+  if (heldDone) {
+    return (
+      <div data-testid="maturity-held" style={{ padding: '24px 4px 8px', textAlign: 'center' }}>
+        <div style={{ width: 56, height: 56, borderRadius: 28, background: 'var(--c-card-2)', color: 'var(--c-navy)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
+          <PiggyBank size={26} strokeWidth={2.2} />
+        </div>
+        <div style={{ fontSize: 15, fontWeight: 700 }}>{t.holdDone}</div>
+        <div style={{ fontSize: 13, color: 'var(--c-muted)', marginTop: 6, lineHeight: 1.5 }}>
+          {t.holdDoneSub(heldDone.anchorName)}
+        </div>
       </div>
     )
   }
@@ -573,6 +714,18 @@ export function MaturityResolveBody({
         <AlertTriangle size={15} color="var(--c-warn)" strokeWidth={2.2} style={{ flexShrink: 0, marginTop: 1 }} />
         <p style={{ margin: 0, fontSize: 12.5, color: 'var(--c-warn)', lineHeight: 1.5 }}>{t.why}</p>
       </div>
+
+      {/* Discoverability nudge: a later-maturing sibling in this goal makes this
+          deposit a hold-for-merge candidate. Surfaced up top so the option isn't
+          buried; the actual commit lives in the withdraw fork below. */}
+      {canHold && holdAnchor && (
+        <div data-testid="maturity-hold-nudge" style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '11px 13px', background: 'var(--c-card-2)', borderRadius: 10 }}>
+          <PiggyBank size={15} color="var(--c-navy)" strokeWidth={2.2} style={{ flexShrink: 0, marginTop: 1 }} />
+          <p style={{ margin: 0, fontSize: 12.5, color: 'var(--c-ink)', lineHeight: 1.5 }}>
+            {t.holdNudge(holdAnchor.name, fmtMaturity(holdAnchor.expiryDate, isVi)?.formatted ?? '')}
+          </p>
+        </div>
+      )}
 
       {/* Decision picker */}
       <div>
@@ -785,6 +938,38 @@ export function MaturityResolveBody({
             </div>
           )}
 
+          {/* "Ví chờ gộp" — pooled holdings to consume (preselected). Deselecting
+              one just leaves it in the pool; restoring the deposit is the holdings
+              chip's "Bỏ chờ gộp" action. Shown even with no live siblings. */}
+          {!isBook && pooledHeld.length > 0 && (
+            <div data-testid="merge-held-pool" style={{ border: '1px solid var(--c-line)', borderRadius: 12, padding: '11px 13px', display: 'grid', gap: 9 }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <GitMerge size={14} color="var(--c-navy)" style={{ flexShrink: 0 }} />
+                  <div style={{ ...fieldLabel, marginBottom: 0 }}>{t.heldSectionTitle}</div>
+                </div>
+                <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--c-muted)', lineHeight: 1.45 }}>{t.heldSectionHint}</p>
+              </div>
+              <div style={{ display: 'grid', gap: 7 }}>
+                {pooledHeld.map((h) => {
+                  const sel = isHeldSelected(h.id)
+                  return (
+                    <button key={h.id} type="button" data-testid={`merge-held-${h.id}`} onClick={() => setHeldSel((prev) => ({ ...prev, [h.id]: !sel }))}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 11px', borderRadius: 10, cursor: 'pointer', textAlign: 'left',
+                        border: `1.5px solid ${sel ? 'var(--c-navy)' : 'var(--c-line)'}`, background: sel ? 'var(--c-navy-tint)' : 'var(--c-card)', fontFamily: 'inherit' }}>
+                      <span style={{ width: 18, height: 18, borderRadius: 9, flexShrink: 0, border: `1.5px solid ${sel ? 'var(--c-btn-primary)' : 'var(--c-line-strong)'}`, background: sel ? 'var(--c-btn-primary)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {sel && <Check size={11} color="#fff" strokeWidth={3} />}
+                      </span>
+                      <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.name ?? (isVi ? 'Sổ chờ gộp' : 'Held deposit')}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(h.amount)}</span>
+                    </button>
+                  )
+                })}
+              </div>
+              <p style={{ margin: 0, fontSize: 11, color: 'var(--c-muted)', lineHeight: 1.45 }}>{t.heldUnholdHint}</p>
+            </div>
+          )}
+
           {/* New term + rate */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div>
@@ -924,9 +1109,50 @@ export function MaturityResolveBody({
       )}
 
       {mode === 'withdraw' && (
-        <div style={{ border: '1px solid var(--c-line)', borderRadius: 12, padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--c-card-2)' }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-muted)' }}>{t.totalPayout}</span>
-          <span style={{ fontSize: 16, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{fmt(payout)}</span>
+        <div style={{ display: 'grid', gap: 12 }}>
+          {/* Hold fork — only when a later-maturing eligible anchor exists. Two
+              clear cards (hold preselected), per the owner's design. */}
+          {canHold && holdAnchor && (
+            <div data-testid="maturity-hold-fork" style={{ display: 'grid', gap: 8 }}>
+              <div style={fieldLabel}>{t.holdForkPrompt}</div>
+              {([
+                { id: 'hold' as const, icon: <PiggyBank size={16} />, title: t.holdCardTitle, sub: t.holdCardSub(holdAnchor.name) },
+                { id: 'cash' as const, icon: <ArrowDownToLine size={16} />, title: t.cashCardTitle, sub: t.cashCardSub },
+              ]).map((c) => {
+                const active = holdChoice === c.id
+                const accent = c.id === 'cash' ? 'var(--c-neg)' : 'var(--c-navy)'
+                return (
+                  <button key={c.id} type="button" data-testid={`maturity-hold-card-${c.id}`} onClick={() => setHoldChoice(c.id)} style={{
+                    width: '100%', textAlign: 'left', padding: '11px 12px',
+                    background: active ? (c.id === 'cash' ? 'var(--c-neg-tint)' : 'var(--c-navy-tint)') : 'var(--c-card)',
+                    border: `1.5px solid ${active ? accent : 'var(--c-line)'}`, borderRadius: 12, cursor: 'pointer',
+                    fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 11,
+                  }}>
+                    <div style={{ width: 34, height: 34, borderRadius: 9, background: active ? 'var(--c-card)' : 'var(--c-card-2)', color: accent, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{c.icon}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13.5, fontWeight: 600, color: active ? accent : 'var(--c-ink)' }}>{c.title}</div>
+                      <div style={{ fontSize: 11.5, color: 'var(--c-muted)', marginTop: 1, lineHeight: 1.4 }}>{c.sub}</div>
+                    </div>
+                    <div style={{ width: 18, height: 18, borderRadius: 9, border: `1.5px solid ${active ? accent : 'var(--c-line-strong)'}`, background: active ? accent : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      {active && <Check size={11} strokeWidth={3} color="#fff" />}
+                    </div>
+                  </button>
+                )
+              })}
+              {/* Cash received when holding — defaults to current value; edit down
+                  if early settlement was penalised. */}
+              {holdChoice === 'hold' && (
+                <div style={{ paddingTop: 2 }}>
+                  <MoneyField label={t.holdReceivedLabel} value={holdReceived} onChange={setHoldReceived} testId="maturity-hold-received" />
+                </div>
+              )}
+            </div>
+          )}
+
+          <div style={{ border: '1px solid var(--c-line)', borderRadius: 12, padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--c-card-2)' }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-muted)' }}>{t.totalPayout}</span>
+            <span style={{ fontSize: 16, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{fmt(payout)}</span>
+          </div>
         </div>
       )}
 
@@ -935,17 +1161,24 @@ export function MaturityResolveBody({
       {/* Actions */}
       <div style={{ display: 'flex', gap: 8 }}>
         <button type="button" onClick={onClose} className="cn-btn ghost" style={{ flex: 1, justifyContent: 'center', border: '1px solid var(--c-line)' }}>{t.cancel}</button>
-        <button type="button" onClick={handleConfirm} disabled={saving || (mode !== 'withdraw' && !canRenew)} style={{
-          flex: 2, justifyContent: 'center', gap: 7, padding: '10px 14px', borderRadius: 10, border: 'none',
-          fontSize: 14, fontWeight: 600, fontFamily: 'inherit',
-          cursor: saving || (mode !== 'withdraw' && !canRenew) ? 'default' : 'pointer',
-          opacity: saving || (mode !== 'withdraw' && !canRenew) ? 0.6 : 1, color: '#fff',
-          background: mode === 'withdraw' ? 'var(--c-neg)' : 'var(--c-btn-primary)',
-          display: 'flex', alignItems: 'center',
-        }}>
-          {mode === 'withdraw' ? <ArrowDownToLine size={14} strokeWidth={2.2} /> : mode === 'combine' ? <Plus size={14} strokeWidth={2.2} /> : <RefreshCw size={14} strokeWidth={2.2} />}
-          {mode === 'withdraw' ? t.confirmWithdraw : mode === 'combine' ? t.confirmCombine : t.confirmRenew}
-        </button>
+        {(() => {
+          // Holding posts instead of withdrawing — navy CTA + piggy icon, never the
+          // red withdraw button (the money is staying in the goal).
+          const holding = mode === 'withdraw' && canHold && holdChoice === 'hold'
+          const disabled = saving || (mode !== 'withdraw' && !canRenew) || (holding && !(holdReceivedNum > 0))
+          return (
+            <button type="button" onClick={handleConfirm} disabled={disabled} style={{
+              flex: 2, justifyContent: 'center', gap: 7, padding: '10px 14px', borderRadius: 10, border: 'none',
+              fontSize: 14, fontWeight: 600, fontFamily: 'inherit',
+              cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.6 : 1, color: '#fff',
+              background: mode === 'withdraw' && !holding ? 'var(--c-neg)' : 'var(--c-btn-primary)',
+              display: 'flex', alignItems: 'center',
+            }}>
+              {holding ? <PiggyBank size={14} strokeWidth={2.2} /> : mode === 'withdraw' ? <ArrowDownToLine size={14} strokeWidth={2.2} /> : mode === 'combine' ? <Plus size={14} strokeWidth={2.2} /> : <RefreshCw size={14} strokeWidth={2.2} />}
+              {holding ? t.holdConfirm : mode === 'withdraw' ? t.confirmWithdraw : mode === 'combine' ? t.confirmCombine : t.confirmRenew}
+            </button>
+          )
+        })()}
       </div>
     </div>
   )
@@ -953,12 +1186,13 @@ export function MaturityResolveBody({
 
 // ─── Mobile bottom-sheet wrapper ───────────────────────────────────────────
 export function MaturityResolveSheet({
-  open, inv, goalId, siblingDeposits, isVi, onClose, onRenewed, onWithdraw,
+  open, inv, goalId, siblingDeposits, heldSiblings, isVi, onClose, onRenewed, onWithdraw,
 }: {
   open: boolean
   inv: InvRow | null
   goalId?: string | null
   siblingDeposits?: InvRow[]
+  heldSiblings?: { id: string; name: string | null; amount: number }[]
   isVi: boolean
   onClose: () => void
   onRenewed: () => void
@@ -991,7 +1225,7 @@ export function MaturityResolveSheet({
           <h2 style={{ margin: '0 0 14px', fontSize: 17, fontWeight: 700, letterSpacing: '-0.01em' }}>
             {isVi ? 'Xử lý đáo hạn' : 'Handle maturity'}
           </h2>
-          <MaturityResolveBody inv={inv} goalId={goalId} siblingDeposits={siblingDeposits} isVi={isVi} onClose={onClose} onRenewed={onRenewed} onWithdraw={onWithdraw} />
+          <MaturityResolveBody inv={inv} goalId={goalId} siblingDeposits={siblingDeposits} heldSiblings={heldSiblings} isVi={isVi} onClose={onClose} onRenewed={onRenewed} onWithdraw={onWithdraw} />
         </div>
       </div>
     </div>
@@ -1000,11 +1234,12 @@ export function MaturityResolveSheet({
 
 // ─── Desktop modal wrapper ─────────────────────────────────────────────────
 export function MaturityResolveModal({
-  inv, goalId, siblingDeposits, isVi, onClose, onRenewed, onWithdraw,
+  inv, goalId, siblingDeposits, heldSiblings, isVi, onClose, onRenewed, onWithdraw,
 }: {
   inv: InvRow
   goalId?: string | null
   siblingDeposits?: InvRow[]
+  heldSiblings?: { id: string; name: string | null; amount: number }[]
   isVi: boolean
   onClose: () => void
   onRenewed: () => void
@@ -1036,7 +1271,7 @@ export function MaturityResolveModal({
           <button onClick={onClose} className="cn-btn ghost" style={{ padding: 6 }} aria-label="Close"><X size={18} /></button>
         </div>
         <div style={{ flex: 1, padding: '18px 20px', overflowY: 'auto' }}>
-          <MaturityResolveBody inv={inv} goalId={goalId} siblingDeposits={siblingDeposits} isVi={isVi} onClose={onClose} onRenewed={onRenewed} onWithdraw={onWithdraw} />
+          <MaturityResolveBody inv={inv} goalId={goalId} siblingDeposits={siblingDeposits} heldSiblings={heldSiblings} isVi={isVi} onClose={onClose} onRenewed={onRenewed} onWithdraw={onWithdraw} />
         </div>
       </div>
     </div>

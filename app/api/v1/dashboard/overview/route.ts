@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { isNavStale, insuranceStatus, isPlanMonthRealized, isInCurrentCycle, realizedRecurringContributions } from '@/lib/finance'
 import { buildWithdrawalMaps } from '@/lib/withdrawalProgress'
+import { heldForMergeContributions } from '@/lib/heldForMerge'
 import { valueNonFundHolding } from '@/lib/depositValuation'
 import { shouldWriteSnapshot } from '@/lib/snapshots'
 
@@ -74,7 +75,7 @@ export async function GET() {
       // Snapshot-free view — renewal history rows can't reach the net-worth /
       // goal / allocation totals (defence on top of the app-side filter below).
       .from('active_investment_transactions')
-      .select('transaction_id, goal_id, amount_vnd, interest_rate, investment_date, asset_type, transaction_type, units, unit_price, units_withdrawn, principal_withdrawn, fund_id, parent_transaction_id, renewed_from_transaction_id, deposit_group_id, expiry_date, notes, affects_progress, bank_code, currency, is_pledged, funds(id, name, nav, updated_at, fund_type)')
+      .select('transaction_id, goal_id, amount_vnd, interest_rate, investment_date, asset_type, transaction_type, units, unit_price, units_withdrawn, principal_withdrawn, fund_id, parent_transaction_id, renewed_from_transaction_id, deposit_group_id, expiry_date, notes, affects_progress, bank_code, currency, is_pledged, held_for_merge, merge_target_goal_id, consumed_by_inv_id, funds(id, name, nav, updated_at, fund_type)')
       .eq('user_id', user.id),
     supabase
       .from('insurance_members')
@@ -192,6 +193,10 @@ export async function GET() {
       goalId: string
     }>
     nonFunds: NonFundEntry[]
+    // "Ví chờ gộp": settle-with-hold settlements still in the pool, surfaced so the
+    // goal card can show a "đang chờ gộp" chip (with unhold) and the anchor's merge
+    // sheet can preselect them. transactionId is the held WITHDRAWAL row.
+    heldForMerge: Array<{ transactionId: string; amount: number; anchorInvId: string | null; name: string | null }>
   }>()
 
   for (const goal of goals) {
@@ -206,6 +211,7 @@ export async function GET() {
       transactionCount: 0,
       funds: [],
       nonFunds: [],
+      heldForMerge: [],
     })
   }
 
@@ -404,6 +410,39 @@ export async function GET() {
     }
   }
 
+  // "Ví chờ gộp" (merge holding pool): a settle-with-hold closed an earlier-
+  // maturing deposit (its withdrawal already removed the principal from net worth
+  // AND the bar above), but the cash is parked for a future merge. Add each
+  // still-pooled holding back to its target goal so the value never dips — exactly
+  // like recurring contributions, and for the same reason there is no deposit row
+  // to count it. A consumed holding (merge done) is skipped: its cash now lives in
+  // the renewed deposit's principal, already counted in the holdings pass.
+  const heldContributions = heldForMergeContributions(withdrawals)
+  // The held WITHDRAWAL has no name of its own — its label is the source deposit
+  // it closed (parent_transaction_id). Map every active row's id → notes so the
+  // chip can read "Sổ VCB 3 th." rather than a bare amount.
+  const nameById = new Map<string, string | null>()
+  for (const tx of allTxsRaw) nameById.set(tx.transaction_id, tx.notes ?? null)
+  const wById = new Map(withdrawals.map((w) => [w.transaction_id, w]))
+  for (const h of heldContributions) {
+    totalAssets += h.amount
+    totalInvestedGlobal += h.amount
+    nonFundByType.bank += h.amount
+    if (goalMap.has(h.goalId)) {
+      const g = goalMap.get(h.goalId)!
+      g.currentValue += h.amount
+      g.progressValue += h.amount
+      g.totalInvested += h.amount
+      const parentId = wById.get(h.transactionId)?.parent_transaction_id ?? null
+      g.heldForMerge.push({
+        transactionId: h.transactionId,
+        amount: h.amount,
+        anchorInvId: h.anchorInvId,
+        name: parentId ? nameById.get(parentId) ?? null : null,
+      })
+    }
+  }
+
   const goalsOutput = Array.from(goalMap.values()).map((g) => {
     const profitLoss = g.currentValue - g.totalInvested
     const profitLossPercentage = g.totalInvested > 0 ? (profitLoss / g.totalInvested) * 100 : 0
@@ -431,6 +470,7 @@ export async function GET() {
       transactionCount: g.transactionCount,
       funds: g.funds,
       nonFunds: g.nonFunds,
+      heldForMerge: g.heldForMerge,
     }
   })
 
