@@ -11,7 +11,7 @@ import type { GoalData, FundBreakdownItem } from '../DashboardClient'
 import TransactionHistorySheet, { type PurchaseHistoryRow } from './TransactionHistorySheet'
 import { SellWithdrawSheet, type SellItem } from './SellWithdrawSheet'
 import { MaturityResolveSheet } from './MaturityResolveSheet'
-import { GD_COLORS, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, buildRenewalSummary, BankInfoStrip, TopUpControl, RenewalSummaryLine, needsMaturityAction, needsBookMaturityAction, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
+import { GD_COLORS, buildCompositionSegments, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, buildRenewalSummary, BankInfoStrip, TopUpControl, RenewalSummaryLine, needsMaturityAction, needsBookMaturityAction, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
 import { fmtTxDate, txKind } from './transactionUtils'
 import { TxRowsSkeleton } from './Skeletons'
 
@@ -843,10 +843,10 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
 
   const detailFund = fundDetailId ? (fundMap.get(fundDetailId) ?? null) : null
 
-  // Composition breakdown by asset type
-  const breakdown: Record<string, number> = {}
-  invRows.forEach((inv) => { breakdown[inv.type] = (breakdown[inv.type] ?? 0) + inv.value })
-  const segs = Object.entries(breakdown).map(([k, v]) => ({ label: k, value: v, color: GD_COLORS[k] ?? 'var(--c-muted)' }))
+  // Composition breakdown by asset type — held-for-merge cash is folded back in (see
+  // helper) so the bar reconciles with the headline instead of summing short.
+  const heldCompValue = (goal.heldForMerge ?? []).reduce((a, h) => a + h.amount, 0)
+  const segs = buildCompositionSegments(invRows, heldCompValue, isVI)
 
   return (
     <>
@@ -953,7 +953,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
 
           {/* Composition bar */}
           {segs.length > 0 && (
-            <div style={{ background: 'var(--c-card)', borderRadius: 16, padding: 16, marginBottom: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+            <div data-testid="goal-composition" style={{ background: 'var(--c-card)', borderRadius: 16, padding: 16, marginBottom: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
               <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)', marginBottom: 10 }}>
                 {isVI ? 'Cơ cấu' : 'Composition'}
               </p>

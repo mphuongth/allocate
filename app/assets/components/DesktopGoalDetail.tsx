@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { ChevronLeft, X, MoreHorizontal, Edit2, Trash2, ChevronRight, ArrowDownRight, ArrowUpRight, Target, CalendarDays, Check, ArrowDownToLine, Wallet, Shield, RefreshCw, PiggyBank, GitMerge } from 'lucide-react'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import type { GoalData } from '../DashboardClient'
-import { GD_COLORS, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, buildRenewalSummary, AffectsProgressControl, BankInfoStrip, TopUpControl, RenewalSummaryLine, needsMaturityAction, needsBookMaturityAction, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
+import { GD_COLORS, buildCompositionSegments, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, buildRenewalSummary, AffectsProgressControl, BankInfoStrip, TopUpControl, RenewalSummaryLine, needsMaturityAction, needsBookMaturityAction, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
 import { MaturityResolveModal } from './MaturityResolveSheet'
 import { fmtTxDate, txKind } from './transactionUtils'
 import { TxRowsSkeleton } from './Skeletons'
@@ -162,10 +162,10 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
   // Build investment rows (shared with the mobile sheet's valuation logic).
   const invRows: InvRow[] = buildInvRows(transactions, goal.funds, goldPricePerChi, isVi)
 
-  // Composition segments
-  const breakdown: Record<string, number> = {}
-  invRows.forEach((inv) => { breakdown[inv.type] = (breakdown[inv.type] ?? 0) + inv.value })
-  const segs = Object.entries(breakdown).map(([k, v]) => ({ label: k, value: v, color: GD_COLORS[k] ?? '#94a3b8' }))
+  // Composition segments — held-for-merge cash is folded back in (see helper) so the
+  // bar reconciles with the headline instead of summing short.
+  const heldCompValue = (goal.heldForMerge ?? []).reduce((a, h) => a + h.amount, 0)
+  const segs = buildCompositionSegments(invRows, heldCompValue, isVi)
   const segsTotal = segs.reduce((a, x) => a + x.value, 0)
 
   // Calculator
@@ -281,7 +281,7 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
 
         {/* Composition */}
         {segs.length > 0 && (
-          <div className="cn-card" style={{ padding: '14px 16px' }}>
+          <div data-testid="goal-composition" className="cn-card" style={{ padding: '14px 16px' }}>
             <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--c-muted)', marginBottom: 10 }}>
               {isVi ? 'Cơ cấu' : 'Composition'}
             </div>

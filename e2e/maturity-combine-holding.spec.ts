@@ -252,6 +252,13 @@ test.describe('Term-deposit maturity — "Ví chờ gộp" holding pool', () => 
         page.getByText('E2E Held Label Goal').first().click(),
       ])
       await expect(panel).toBeVisible({ timeout: 10_000 })
+
+      // The composition bar folds the held cash back in as its own neutral segment so
+      // it reconciles with the headline instead of summing short — held closed its
+      // source deposit, so it is absent from the asset rows. Before the fix this goal
+      // (20M anchor + 10M parked) showed only the bank segment.
+      await expect(page.getByTestId('goal-composition').getByText(/Chờ gộp|For merge/)).toBeVisible({ timeout: 10_000 })
+
       await panel.getByText(/^(Lịch sử|History)$/).click()
 
       // The parked settlement reads as "Chờ gộp" / "For merge" — a neutral badge

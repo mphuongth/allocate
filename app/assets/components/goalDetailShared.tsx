@@ -19,6 +19,29 @@ export const GD_COLORS: Record<string, string> = {
   stock: '#7c3aed',
 }
 
+export interface CompositionSeg { label: string; value: number; color: string }
+
+// Build the goal-detail "Cơ cấu / Composition" segments. The asset segments come
+// from the active investment rows; held-for-merge cash closed its source deposit so
+// it is ABSENT from those rows, yet still counts toward the goal's headline value via
+// the overview synthesis (lib/heldForMerge). Add it as its own neutral segment so the
+// bar reconciles with the headline instead of summing short. Shared by both views.
+export function buildCompositionSegments(
+  rows: { type: string; value: number }[],
+  heldValue: number,
+  isVi: boolean,
+): CompositionSeg[] {
+  const breakdown: Record<string, number> = {}
+  rows.forEach((r) => { breakdown[r.type] = (breakdown[r.type] ?? 0) + r.value })
+  const segs: CompositionSeg[] = Object.entries(breakdown).map(([label, value]) => ({
+    label, value, color: GD_COLORS[label] ?? 'var(--c-muted)',
+  }))
+  if (heldValue > 0) {
+    segs.push({ label: isVi ? 'Chờ gộp' : 'For merge', value: heldValue, color: 'var(--c-muted)' })
+  }
+  return segs
+}
+
 export function calcDeadlineMonths(targetDate: string | null): number {
   if (!targetDate) return 12
   const [ty, tm] = targetDate.split('-').map(Number)
