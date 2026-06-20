@@ -68,6 +68,25 @@ describe('buildInvRows', () => {
     expect(gold.bankCode ?? null).toBeNull() // structured bank only applies to bank deposits
   })
 
+  it('carries currency + is_pledged through to InvRow for the merge eligibility rules', () => {
+    const rows = buildInvRows(
+      [
+        baseTx({ transaction_id: 'usd', asset_type: 'bank', amount_vnd: 5_000_000, interest_rate: 6, currency: 'USD' }),
+        baseTx({ transaction_id: 'pledged', asset_type: 'bank', amount_vnd: 7_000_000, interest_rate: 6, is_pledged: true }),
+        baseTx({ transaction_id: 'legacy', asset_type: 'bank', amount_vnd: 3_000_000, interest_rate: 6 }),
+      ],
+      [], null, false,
+    )
+    const usd = rows.find((r) => r.id === 'usd')!
+    const pledged = rows.find((r) => r.id === 'pledged')!
+    const legacy = rows.find((r) => r.id === 'legacy')!
+    expect(usd.currency).toBe('USD')
+    expect(pledged.isPledged).toBe(true)
+    // Legacy deposits predate the columns — default to VND / not pledged.
+    expect(legacy.currency ?? 'VND').toBe('VND')
+    expect(legacy.isPledged ?? false).toBe(false)
+  })
+
   it('uses the anchor tranche bank_code for an accumulating book row', () => {
     const rows = buildInvRows(
       [

@@ -219,6 +219,10 @@ export interface InvRow {
   // non-bank holding or a deposit with no bank set yet. Drives the multi-source
   // merge destination-bank default and the "N nguồn · M ngân hàng" provenance.
   bankCode?: string | null
+  // Currency (default 'VND') + collateral flag. Carried for the merge eligibility
+  // rules ("same currency" / "not pledged"). null/false on legacy deposits.
+  currency?: string | null
+  isPledged?: boolean | null
   // The book's tranches (top-ups), newest first, for the detail view. Each is one
   // underlying row; present only on an accumulating book row.
   tranches?: InvTranche[] | null
@@ -261,6 +265,10 @@ export interface GoalDetailTx {
   deposit_group_id?: string | null
   // Structured bank reference (FK to banks.code); null until the user sets it.
   bank_code?: string | null
+  // Currency (default 'VND') + collateral flag for the merge eligibility rules.
+  // null/false on legacy deposits.
+  currency?: string | null
+  is_pledged?: boolean | null
 }
 
 // Roll up a deposit's renewal history from the snapshot rows that point at it.
@@ -376,7 +384,7 @@ export function buildInvRows(
       }
     }
 
-    return { id: tx.transaction_id, name, type: tx.asset_type, value, gainPct, units, principal, interestRate: tx.interest_rate ?? null, expiryDate: tx.expiry_date ?? null, investmentDate: fund ? null : (tx.investment_date ?? null), fund: fund ?? null, depositGroupId: null, bankCode: tx.asset_type === 'bank' ? (tx.bank_code ?? null) : null }
+    return { id: tx.transaction_id, name, type: tx.asset_type, value, gainPct, units, principal, interestRate: tx.interest_rate ?? null, expiryDate: tx.expiry_date ?? null, investmentDate: fund ? null : (tx.investment_date ?? null), fund: fund ?? null, depositGroupId: null, bankCode: tx.asset_type === 'bank' ? (tx.bank_code ?? null) : null, currency: tx.currency ?? null, isPledged: tx.is_pledged ?? false }
   }).filter((row): row is InvRow => row !== null)
 
   // One InvRow per accumulating book: value each tranche on its own locked rate
@@ -411,6 +419,8 @@ export function buildInvRows(
       fund: null,
       depositGroupId: groupId,
       bankCode: anchor.bank_code ?? null, // bank is book-level; the anchor carries it
+      currency: anchor.currency ?? null,
+      isPledged: anchor.is_pledged ?? false,
       tranches,
     }
   }).filter((row): row is InvRow => row !== null)

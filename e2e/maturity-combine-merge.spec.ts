@@ -78,8 +78,10 @@ test.describe('Term-deposit maturity — merge a sibling deposit into the re-dep
       await page.getByText(/^(Handle maturity|Xử lý đáo hạn)$/).click()
       await page.getByRole('button', { name: /Settle & re-deposit|Tất toán & gửi lại/i }).click()
 
-      // Select S in the merge list; its received prefills to S's current value.
-      await page.getByTestId(`merge-source-${S.transaction_id}`).click()
+      // S matures 60d out — well past D's, so it's out of the merge window and
+      // offered behind a "Gộp sớm?" override (early settlement). Fold it in; its
+      // received prefills to S's current value.
+      await page.getByTestId(`merge-override-${S.transaction_id}`).click()
       await expect(page.getByTestId('merge-penalty-caption')).toBeVisible()
 
       // Capture the renew request so we can prove the server (not the client)
@@ -134,6 +136,60 @@ test.describe('Term-deposit maturity — merge a sibling deposit into the re-dep
     }
   })
 
+  // Eligibility (PR2): a sibling maturing within the window of D is PRESELECTED
+  // (its received field shows without a click); one maturing far out is dimmed
+  // behind a "Gộp sớm?" override. Widening the window slider reclassifies the far
+  // sibling as eligible and auto-selects it. Pure rendered-outcome assertions.
+  test('preselects an in-window sibling, gates a far one behind the window slider', async ({ page }) => {
+    test.slow()
+    const goal = await api.createGoal({ goal_name: 'E2E Elig Goal', target_amount: 200_000_000 })
+    const D = await api.createTransaction({
+      asset_type: 'bank', amount_vnd: 20_000_000, investment_date: iso(-380),
+      interest_rate: 6, expiry_date: iso(-15), goal_id: goal.goal_id, notes: 'E2E Elig D',
+    })
+    const sIn = await api.createTransaction({
+      asset_type: 'bank', amount_vnd: 6_000_000, investment_date: iso(-200),
+      interest_rate: 6, expiry_date: iso(-12), goal_id: goal.goal_id, notes: 'E2E Elig In', // gap 3d
+    })
+    const sOut = await api.createTransaction({
+      asset_type: 'bank', amount_vnd: 9_000_000, investment_date: iso(-120),
+      interest_rate: 6, expiry_date: iso(60), goal_id: goal.goal_id, notes: 'E2E Elig Out', // gap 75d
+    })
+    try {
+      await gotoFreshDashboard(page)
+      await page.getByText('E2E Elig Goal').first().click()
+      const panel = page.getByTestId('desktop-goal-detail')
+      await expect(panel).toBeVisible({ timeout: 10_000 })
+      await expect(panel.getByText('E2E Elig D')).toBeVisible({ timeout: 10_000 })
+
+      const dRow = panel
+        .locator('div')
+        .filter({ has: page.getByRole('button', { name: 'Options', exact: true }) })
+        .filter({ hasText: 'E2E Elig D' })
+        .last()
+      await dRow.getByRole('button', { name: 'Options', exact: true }).click()
+      await page.getByText(/^(Handle maturity|Xử lý đáo hạn)$/).click()
+      await page.getByRole('button', { name: /Settle & re-deposit|Tất toán & gửi lại/i }).click()
+
+      // In-window sibling is preselected → its received field is already shown.
+      await expect(page.getByTestId(`merge-received-${sIn.transaction_id}`)).toBeVisible()
+      // Far sibling is gated behind the override, with no received field yet.
+      await expect(page.getByTestId(`merge-override-${sOut.transaction_id}`)).toBeVisible()
+      await expect(page.getByTestId(`merge-received-${sOut.transaction_id}`)).toBeHidden()
+
+      // Widen the window past the 75-day gap → the far sibling becomes eligible and
+      // auto-selects (override gone, received field appears).
+      await page.getByTestId('merge-window-slider').fill('90')
+      await expect(page.getByTestId(`merge-override-${sOut.transaction_id}`)).toBeHidden()
+      await expect(page.getByTestId(`merge-received-${sOut.transaction_id}`)).toBeVisible()
+    } finally {
+      await api.deleteTransactionCascade(sIn.transaction_id)
+      await api.deleteTransactionCascade(sOut.transaction_id)
+      await api.deleteTransactionCascade(D.transaction_id)
+      await api.deleteGoal(goal.goal_id)
+    }
+  })
+
   // Multi-source merge UX (PR1): the combined re-deposit lands at a chosen
   // destination bank, and the provenance reflects how many sources/banks fold in.
   // D sits at VCB, S at MB → "2 sources · 2 banks". We move the destination to
@@ -165,7 +221,8 @@ test.describe('Term-deposit maturity — merge a sibling deposit into the re-dep
       await page.getByText(/^(Handle maturity|Xử lý đáo hạn)$/).click()
       await page.getByRole('button', { name: /Settle & re-deposit|Tất toán & gửi lại/i }).click()
 
-      await page.getByTestId(`merge-source-${S.transaction_id}`).click()
+      // S matures 60d out → out of window; fold it in via the "Gộp sớm?" override.
+      await page.getByTestId(`merge-override-${S.transaction_id}`).click()
 
       // Provenance: anchor (VCB) + sibling (MB) = 2 sources across 2 banks.
       const prov = page.getByTestId('merge-provenance')

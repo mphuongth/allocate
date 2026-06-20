@@ -215,7 +215,8 @@ describe('MaturityResolveBody', () => {
       await user.click(await screen.findByRole('button', { name: /Settle & re-deposit/i }))
       expect(screen.queryByTestId('merge-penalty-caption')).toBeNull() // hidden until a source is picked
 
-      await user.click(screen.getByTestId('merge-source-sib-bank'))
+      // sibBank matures far past the anchor → out of window, folded in via override.
+      await user.click(screen.getByTestId('merge-override-sib-bank'))
       expect((screen.getByTestId('merge-received-sib-bank') as HTMLInputElement).value).toBe('8000000')
       expect(screen.getByTestId('merge-penalty-caption')).toBeTruthy()
     })
@@ -228,9 +229,10 @@ describe('MaturityResolveBody', () => {
           isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
       )
       await user.click(await screen.findByRole('button', { name: /Settle & re-deposit/i }))
-      // Select both (ordered by investmentDate, id → sib-bank-2 opened later? -100 > -150 → sib-bank first).
-      await user.click(screen.getByTestId('merge-source-sib-bank'))
-      await user.click(screen.getByTestId('merge-source-sib-bank-2'))
+      // Both mature far past the anchor → out of window, folded in via override.
+      // (Ordered by investmentDate, id → sib-bank −150d before sib-bank-2 −100d.)
+      await user.click(screen.getByTestId('merge-override-sib-bank'))
+      await user.click(screen.getByTestId('merge-override-sib-bank-2'))
 
       fireEvent.change(screen.getByTestId('merge-total'), { target: { value: '10000000' } })
 
@@ -248,7 +250,7 @@ describe('MaturityResolveBody', () => {
           isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
       )
       await user.click(await screen.findByRole('button', { name: /Settle & re-deposit/i }))
-      await user.click(screen.getByTestId('merge-source-sib-bank'))
+      await user.click(screen.getByTestId('merge-override-sib-bank'))
 
       // BASE = principal + interest + recurring(0) = 35,000,000 + 2,030,000.
       const BASE = 37_030_000
@@ -319,7 +321,7 @@ describe('MaturityResolveBody', () => {
       )
       await user.click(await screen.findByRole('button', { name: /Settle & re-deposit/i }))
       expect(screen.queryByTestId('merge-dest-bank')).toBeNull() // hidden until a source is picked
-      await user.click(screen.getByTestId('merge-source-sib-vcb'))
+      await user.click(screen.getByTestId('merge-override-sib-vcb'))
       const sel = (await screen.findByTestId('merge-dest-bank')) as HTMLSelectElement
       expect(sel.value).toBe('TCB') // defaults to the settling deposit's bank
     })
@@ -332,12 +334,12 @@ describe('MaturityResolveBody', () => {
           isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
       )
       await user.click(await screen.findByRole('button', { name: /Settle & re-deposit/i }))
-      await user.click(screen.getByTestId('merge-source-sib-vcb'))
+      await user.click(screen.getByTestId('merge-override-sib-vcb'))
       // One source folded → 2 deposits combine, but the "multiple sources" label
       // only kicks in past one selected sibling.
       expect(screen.getByTestId('merge-section-title').textContent).toMatch(/Merge other deposits/i)
 
-      await user.click(screen.getByTestId('merge-source-sib-mb'))
+      await user.click(screen.getByTestId('merge-override-sib-mb'))
       expect(screen.getByTestId('merge-section-title').textContent).toMatch(/Merge multiple sources/i)
       // Provenance counts the anchor + folded sources (3) and their distinct banks
       // (TCB, VCB, MB = 3).
@@ -354,8 +356,8 @@ describe('MaturityResolveBody', () => {
           isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
       )
       await user.click(await screen.findByRole('button', { name: /Settle & re-deposit/i }))
-      await user.click(screen.getByTestId('merge-source-sib-vcb'))
-      await user.click(screen.getByTestId('merge-source-sib-nobank'))
+      await user.click(screen.getByTestId('merge-override-sib-vcb'))
+      await user.click(screen.getByTestId('merge-override-sib-nobank'))
       // 3 sources combine (anchor + 2) but only TCB + VCB are real banks → 2 banks.
       const prov = screen.getByTestId('merge-provenance').textContent ?? ''
       expect(prov).toMatch(/3 sources/i)
@@ -380,11 +382,107 @@ describe('MaturityResolveBody', () => {
           isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
       )
       await user.click(await screen.findByRole('button', { name: /Settle & re-deposit/i }))
-      await user.click(screen.getByTestId('merge-source-sib-vcb'))
+      await user.click(screen.getByTestId('merge-override-sib-vcb'))
       await user.click(screen.getByRole('button', { name: /Save new deposit/i }))
 
       const sources = await screen.findByTestId('maturity-renewed-sources')
       expect(sources.textContent).toContain('Vikki VCB')
+    })
+  })
+
+  // ── Merge eligibility (PR2) ─────────────────────────────────────────────────
+  // The window rules: a sibling maturing within N days of the anchor is eligible
+  // and PRESELECTED; one maturing further out is blocked + dimmed but can be
+  // folded in via a "Gộp sớm?" override; a different-currency / pledged sibling is
+  // a HARD block (no override). The window slider re-runs the classification.
+  describe('merge eligibility', () => {
+    function stubEmptyRecurring() {
+      const fetchMock = vi.fn().mockImplementation((url: string) => {
+        if (typeof url === 'string' && url.startsWith('/api/v1/recurring-savings')) {
+          return Promise.resolve({ ok: true, json: async () => ({ savings: [] }) })
+        }
+        return Promise.resolve({ ok: true, json: async () => [] })
+      })
+      vi.stubGlobal('fetch', fetchMock)
+      return fetchMock
+    }
+
+    // Anchor (D) matured 12 days ago. An in-window sibling matures within 7 days of
+    // that; an out-of-window one is the existing far-future fixture.
+    const anchor: InvRow = { ...maturedDeposit, bankCode: 'TCB' }
+    const sibInWindow: InvRow = {
+      id: 'sib-in', name: 'VCB near', type: 'bank', value: 6_000_000, gainPct: null,
+      units: null, principal: 6_000_000, interestRate: 6, expiryDate: daysFromNow(-10), // gap 2d
+      investmentDate: daysFromNow(-180), fund: null, bankCode: 'VCB',
+    }
+    const sibOut: InvRow = {
+      id: 'sib-out', name: 'MB far', type: 'bank', value: 8_000_000, gainPct: null,
+      units: null, principal: 8_000_000, interestRate: 6, expiryDate: daysFromNow(40), // gap 52d
+      investmentDate: daysFromNow(-150), fund: null, bankCode: 'MB',
+    }
+
+    it('preselects an in-window sibling and dims an out-of-window one behind a "merge early" override', async () => {
+      const user = userEvent.setup()
+      stubEmptyRecurring()
+      render(
+        <MaturityResolveBody inv={anchor} goalId="goal-1" siblingDeposits={[anchor, sibInWindow, sibOut]}
+          isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
+      )
+      await user.click(await screen.findByRole('button', { name: /Settle & re-deposit/i }))
+
+      // In-window → preselected, so its received field is already shown + prefilled.
+      expect((await screen.findByTestId('merge-received-sib-in') as HTMLInputElement).value).toBe('6000000')
+      // Out-of-window → not selected; offered behind an override, no received field yet.
+      expect(screen.getByTestId('merge-override-sib-out')).toBeTruthy()
+      expect(screen.queryByTestId('merge-received-sib-out')).toBeNull()
+    })
+
+    it('widening the window via the slider reclassifies an out-of-window sibling as eligible', async () => {
+      const user = userEvent.setup()
+      stubEmptyRecurring()
+      render(
+        <MaturityResolveBody inv={anchor} goalId="goal-1" siblingDeposits={[anchor, sibOut]}
+          isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
+      )
+      await user.click(await screen.findByRole('button', { name: /Settle & re-deposit/i }))
+      expect(screen.getByTestId('merge-override-sib-out')).toBeTruthy()
+      expect(screen.queryByTestId('merge-received-sib-out')).toBeNull()
+
+      // Push the window past the 52-day gap → it becomes eligible and auto-selects.
+      fireEvent.change(screen.getByTestId('merge-window-slider'), { target: { value: '60' } })
+      expect(screen.queryByTestId('merge-override-sib-out')).toBeNull()
+      expect((screen.getByTestId('merge-received-sib-out') as HTMLInputElement).value).toBe('8000000')
+    })
+
+    it('hard-blocks a different-currency sibling with no override', async () => {
+      const user = userEvent.setup()
+      stubEmptyRecurring()
+      const sibUSD: InvRow = { ...sibInWindow, id: 'sib-usd', name: 'USD savings', currency: 'USD' }
+      render(
+        <MaturityResolveBody inv={anchor} goalId="goal-1" siblingDeposits={[anchor, sibUSD]}
+          isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
+      )
+      await user.click(await screen.findByRole('button', { name: /Settle & re-deposit/i }))
+
+      const row = await screen.findByTestId('merge-source-sib-usd')
+      expect(row.textContent).toMatch(/currency/i)              // reason shown
+      expect(screen.queryByTestId('merge-override-sib-usd')).toBeNull()   // not overridable
+      expect(screen.queryByTestId('merge-received-sib-usd')).toBeNull()   // not selectable
+    })
+
+    it('folds an out-of-window sibling in via the override, prefilling its received cash', async () => {
+      const user = userEvent.setup()
+      stubEmptyRecurring()
+      render(
+        <MaturityResolveBody inv={anchor} goalId="goal-1" siblingDeposits={[anchor, sibOut]}
+          isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
+      )
+      await user.click(await screen.findByRole('button', { name: /Settle & re-deposit/i }))
+      await user.click(screen.getByTestId('merge-override-sib-out'))
+
+      expect((screen.getByTestId('merge-received-sib-out') as HTMLInputElement).value).toBe('8000000')
+      // Anchor + the one folded source = 2 sources of provenance.
+      expect(screen.getByTestId('merge-provenance').textContent).toMatch(/2 sources/i)
     })
   })
 
