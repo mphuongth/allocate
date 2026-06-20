@@ -51,3 +51,47 @@ describe('RecentActivityCard — first-load skeleton', () => {
     expect(screen.getByText('recentActivityEmpty')).toBeInTheDocument()
   })
 })
+
+// A held-for-merge settlement is a withdrawal whose cash was PARKED for a merge, not
+// spent. It must NOT render as the red "−" loss of a real withdrawal. The txKind/txDir
+// unit tests prove the logic; this proves the CARD actually calls it at render time —
+// the gap a logic-only test can't catch if the component forgets the branch. (tt mock
+// returns the key, so badge text == the i18n key.)
+describe('RecentActivityCard — held-for-merge rows read neutrally', () => {
+  const base = {
+    asset_type: 'bank', investment_date: '2026-06-01', amount_vnd: 10_000_000,
+    savings_goals: { goal_name: 'House' },
+  }
+  const heldTx = { ...base, transaction_id: 'h1', transaction_type: 'withdrawal', held_for_merge: true, consumed_by_inv_id: null }
+  const consumedTx = { ...base, transaction_id: 'c1', transaction_type: 'withdrawal', held_for_merge: true, consumed_by_inv_id: 'anchor-1' }
+  const withdrawTx = { ...base, transaction_id: 'w1', transaction_type: 'withdrawal' }
+
+  const mockTxs = (list: unknown[]) => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ transactions: list, total: list.length }) })
+  }
+
+  it('a held settlement shows the neutral "held" badge — not "withdrawal", no "−"', async () => {
+    mockTxs([heldTx])
+    render(<RecentActivityCard locale="en" />)
+    const row = await screen.findByTestId('recent-activity-row')
+    expect(screen.getByText('held')).toBeInTheDocument()
+    expect(screen.queryByText('withdrawal')).toBeNull()
+    expect(row.textContent).not.toContain('−')
+  })
+
+  it('a consumed holding shows "merged", still neutral', async () => {
+    mockTxs([consumedTx])
+    render(<RecentActivityCard locale="en" />)
+    const row = await screen.findByTestId('recent-activity-row')
+    expect(screen.getByText('merged')).toBeInTheDocument()
+    expect(row.textContent).not.toContain('−')
+  })
+
+  it('a plain withdrawal still reads as a red "−" (the neutral assertions are not vacuous)', async () => {
+    mockTxs([withdrawTx])
+    render(<RecentActivityCard locale="en" />)
+    const row = await screen.findByTestId('recent-activity-row')
+    expect(screen.getByText('withdrawal')).toBeInTheDocument()
+    expect(row.textContent).toContain('−')
+  })
+})

@@ -125,6 +125,42 @@ describe('GoalDetailSheet — History date matches Recent activity (issue #300)'
   })
 })
 
+describe('GoalDetailSheet — held settlement reads neutrally in History', () => {
+  // Mobile mirror of the desktop History check: a parked settlement must show the
+  // neutral "For merge" pill, not a red "−" withdrawal. Locks that the mobile History
+  // tab calls txKind at render time.
+  const heldTx = {
+    transaction_id: 'tx-held-m1',
+    transaction_type: 'withdrawal',
+    held_for_merge: true,
+    consumed_by_inv_id: null,
+    asset_type: 'bank',
+    fund_id: null,
+    fund_name: null,
+    investment_date: '2026-06-01',
+    amount_vnd: 10_000_000,
+    units: null,
+    unit_price: null,
+    interest_rate: null,
+    expiry_date: null,
+    notes: 'Parked deposit',
+    principal_withdrawn: 10_000_000,
+    units_withdrawn: null,
+  }
+
+  it('shows the neutral "For merge" pill in the History tab', async () => {
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('investment-transactions')) {
+        return Promise.resolve({ ok: true, json: async () => ({ transactions: [heldTx] }) })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+    render(<GoalDetailSheet {...baseProps} />)
+    await userEvent.click(await screen.findByRole('button', { name: 'History' }))
+    expect(await screen.findByText('For merge')).toBeInTheDocument()
+  })
+})
+
 describe('GoalDetailSheet — transaction history integration', () => {
   it('opens TransactionHistorySheet when "Transaction history" is tapped on a fund', async () => {
     render(<GoalDetailSheet {...baseProps} />)

@@ -182,6 +182,45 @@ describe('DesktopGoalDetail — History date matches Recent activity (issue #300
   })
 })
 
+describe('DesktopGoalDetail — held settlement reads neutrally in History', () => {
+  // A parked ("Để dành gộp") settlement is a withdrawal whose cash is still held for
+  // a merge. In History it must carry the neutral "For merge" pill, not render as a
+  // red "−" withdrawal. Locks that the History tab calls txKind at render time.
+  const heldTx = {
+    transaction_id: 'tx-held-1',
+    transaction_type: 'withdrawal',
+    held_for_merge: true,
+    consumed_by_inv_id: null,
+    asset_type: 'bank',
+    fund_id: null,
+    fund_name: null,
+    parent_transaction_id: 'src-1',
+    investment_date: '2026-06-01',
+    amount_vnd: 10_000_000,
+    interest_rate: null,
+    notes: 'Parked deposit',
+    principal_withdrawn: 10_000_000,
+    units_withdrawn: null,
+  }
+
+  beforeEach(() => {
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('investment-transactions')) {
+        return Promise.resolve({ ok: true, json: async () => ({ transactions: [heldTx] }) })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+  })
+
+  it('shows the neutral "For merge" pill in the History tab', async () => {
+    render(<DesktopGoalDetail {...baseProps} />)
+    await userEvent.click(await screen.findByRole('button', { name: 'History' }))
+    // The pill renders ONLY for kind held/consumed — its presence proves txKind ran
+    // and the row did not fall through to the red withdrawal branch.
+    expect(await screen.findByText('For merge')).toBeInTheDocument()
+  })
+})
+
 describe('DesktopGoalDetail — bank maturity in Options modal (issue #263)', () => {
   const mockBankTx = {
     transaction_id: 'tx-bank-1',
