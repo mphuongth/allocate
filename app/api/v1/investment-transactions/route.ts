@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { goal_id, asset_type, transaction_type = 'investment', investment_date, amount_vnd, unit_price, units, interest_rate, notes, fund_id, plan_id, expiry_date, parent_transaction_id, principal_withdrawn, units_withdrawn, affects_progress, accumulating, tops_up_deposit_id, bank_code } = body
+  const { goal_id, asset_type, transaction_type = 'investment', investment_date, amount_vnd, unit_price, units, interest_rate, notes, fund_id, plan_id, expiry_date, parent_transaction_id, principal_withdrawn, units_withdrawn, affects_progress, accumulating, tops_up_deposit_id, bank_code, held_for_merge, merge_target_goal_id, merge_anchor_inv_id } = body
 
   const isWithdrawal = transaction_type === 'withdrawal'
 
@@ -76,6 +76,12 @@ export async function POST(request: NextRequest) {
   let cleanUnitsWithdrawn: number | null = null
   let cleanTopsUpId: string | null = null
   let cleanBankCode: string | null = null
+  // "Ví chờ gộp": a settle-with-hold parks the closed deposit's cash for a future
+  // merge. Only meaningful on a withdrawal; the target goal/anchor say where the
+  // pool synthesizes the cash back to and which deposit it's waiting on.
+  const cleanHeldForMerge = isWithdrawal && held_for_merge === true
+  let cleanMergeTargetGoalId: string | null = null
+  let cleanMergeAnchorInvId: string | null = null
 
   try {
     cleanTxType = validateEnum(transaction_type, ['investment', 'withdrawal'] as const, 'transaction_type')
@@ -106,6 +112,10 @@ export async function POST(request: NextRequest) {
     if (units_withdrawn != null && units_withdrawn !== '') cleanUnitsWithdrawn = validateAmount(units_withdrawn, 'units_withdrawn')
     if (tops_up_deposit_id) cleanTopsUpId = validateUUID(tops_up_deposit_id, 'tops_up_deposit_id')
     if (bank_code != null && bank_code !== '') cleanBankCode = validateBankCode(bank_code, 'bank_code')
+    if (cleanHeldForMerge) {
+      if (merge_target_goal_id) cleanMergeTargetGoalId = validateUUID(merge_target_goal_id, 'merge_target_goal_id')
+      if (merge_anchor_inv_id) cleanMergeAnchorInvId = validateUUID(merge_anchor_inv_id, 'merge_anchor_inv_id')
+    }
   } catch (e) {
     if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
     throw e
@@ -213,6 +223,11 @@ export async function POST(request: NextRequest) {
       // Structured bank only applies to bank deposits; funds/gold have no bank.
       // A top-up tranche inherits the book's bank (effectiveBankCode).
       bank_code: effectiveAssetType === 'bank' ? effectiveBankCode : null,
+      // Held-for-merge pool flags (withdrawal only). The target goal defaults to
+      // the withdrawal's own goal (= the closed source's goal) when not given.
+      held_for_merge: cleanHeldForMerge,
+      merge_target_goal_id: cleanHeldForMerge ? (cleanMergeTargetGoalId ?? effectiveGoalId) : null,
+      merge_anchor_inv_id: cleanHeldForMerge ? cleanMergeAnchorInvId : null,
     })
     .select()
     .single()

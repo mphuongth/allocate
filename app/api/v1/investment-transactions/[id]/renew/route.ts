@@ -22,7 +22,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { amount_vnd, interest_rate, expiry_date, investment_date, interest_earned_vnd, fulfill_recurring, merge_sources, bank_code } = body
+  const { amount_vnd, interest_rate, expiry_date, investment_date, interest_earned_vnd, fulfill_recurring, merge_sources, bank_code, held_sources } = body
 
   let txId: string
   let cleanAmount: number
@@ -44,6 +44,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // Multi-source merge only: destination bank for the combined re-deposit. null
   // (or omitted) leaves D's existing bank untouched (the RPC coalesces).
   let cleanBankCode: string | null = null
+  // Held-pool consume: ids of held settlement (withdrawal) rows to fold into this
+  // re-deposit. They carry their OWN cash (stored amount_vnd), so unlike live
+  // merge sources there is no client-supplied received — just the ids.
+  const cleanHeldSourceIds: string[] = []
   try {
     txId = validateUUID(id, 'transaction_id')
     cleanAmount = validateAmount(amount_vnd, 'amount_vnd')
@@ -81,6 +85,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       }
     }
     if (bank_code != null && bank_code !== '') cleanBankCode = validateBankCode(bank_code, 'bank_code')
+    if (held_sources != null) {
+      if (!Array.isArray(held_sources)) throw new ValidationError('held_sources must be an array')
+      for (const h of held_sources) {
+        // Accept either a bare id or a { tx_id } object, matching merge_sources' shape.
+        const hid = validateUUID(typeof h === 'string' ? h : h?.tx_id, 'held_sources.tx_id')
+        if (hid === txId) throw new ValidationError('a deposit cannot merge into itself')
+        cleanHeldSourceIds.push(hid)
+      }
+    }
   } catch (e) {
     if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
     throw e
@@ -134,7 +147,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // it ALSO closes each source and adds Σ(received) to the principal. amount_vnd
   // is then the BASE (principal + interest + recurring) — the RPC, not the
   // client, sums in the received cash, so the net-worth invariant can't diverge.
-  const hasMerge = cleanMergeSourceIds.length > 0
+  const hasMerge = cleanMergeSourceIds.length > 0 || cleanHeldSourceIds.length > 0
   const { data: renewed, error: renewErr } = hasMerge
     ? await supabase
         .rpc('renew_term_deposit_with_merge', {
@@ -152,6 +165,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           p_merge_received: cleanMergeReceived,
           // Destination bank for the combined deposit; null = leave D's bank as is.
           p_bank_code: cleanBankCode,
+          // Held-pool holdings to consume (fold their parked cash into D).
+          p_held_source_ids: cleanHeldSourceIds,
         })
         .single()
     : await supabase

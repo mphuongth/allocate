@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { isNavStale, insuranceStatus, isPlanMonthRealized, isInCurrentCycle, realizedRecurringContributions } from '@/lib/finance'
 import { buildWithdrawalMaps } from '@/lib/withdrawalProgress'
+import { heldForMergeContributions } from '@/lib/heldForMerge'
 import { valueNonFundHolding } from '@/lib/depositValuation'
 import { shouldWriteSnapshot } from '@/lib/snapshots'
 
@@ -74,7 +75,7 @@ export async function GET() {
       // Snapshot-free view — renewal history rows can't reach the net-worth /
       // goal / allocation totals (defence on top of the app-side filter below).
       .from('active_investment_transactions')
-      .select('transaction_id, goal_id, amount_vnd, interest_rate, investment_date, asset_type, transaction_type, units, unit_price, units_withdrawn, principal_withdrawn, fund_id, parent_transaction_id, renewed_from_transaction_id, deposit_group_id, expiry_date, notes, affects_progress, bank_code, currency, is_pledged, funds(id, name, nav, updated_at, fund_type)')
+      .select('transaction_id, goal_id, amount_vnd, interest_rate, investment_date, asset_type, transaction_type, units, unit_price, units_withdrawn, principal_withdrawn, fund_id, parent_transaction_id, renewed_from_transaction_id, deposit_group_id, expiry_date, notes, affects_progress, bank_code, currency, is_pledged, held_for_merge, merge_target_goal_id, consumed_by_inv_id, funds(id, name, nav, updated_at, fund_type)')
       .eq('user_id', user.id),
     supabase
       .from('insurance_members')
@@ -401,6 +402,26 @@ export async function GET() {
       g.progressValue += c.amount // no withdrawals involved — counts toward the bar too
       g.totalInvested += c.amount
       g.transactionCount += 1
+    }
+  }
+
+  // "Ví chờ gộp" (merge holding pool): a settle-with-hold closed an earlier-
+  // maturing deposit (its withdrawal already removed the principal from net worth
+  // AND the bar above), but the cash is parked for a future merge. Add each
+  // still-pooled holding back to its target goal so the value never dips — exactly
+  // like recurring contributions, and for the same reason there is no deposit row
+  // to count it. A consumed holding (merge done) is skipped: its cash now lives in
+  // the renewed deposit's principal, already counted in the holdings pass.
+  const heldContributions = heldForMergeContributions(withdrawals)
+  for (const h of heldContributions) {
+    totalAssets += h.amount
+    totalInvestedGlobal += h.amount
+    nonFundByType.bank += h.amount
+    if (goalMap.has(h.goalId)) {
+      const g = goalMap.get(h.goalId)!
+      g.currentValue += h.amount
+      g.progressValue += h.amount
+      g.totalInvested += h.amount
     }
   }
 
