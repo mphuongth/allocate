@@ -193,6 +193,10 @@ export async function GET() {
       goalId: string
     }>
     nonFunds: NonFundEntry[]
+    // "Ví chờ gộp": settle-with-hold settlements still in the pool, surfaced so the
+    // goal card can show a "đang chờ gộp" chip (with unhold) and the anchor's merge
+    // sheet can preselect them. transactionId is the held WITHDRAWAL row.
+    heldForMerge: Array<{ transactionId: string; amount: number; anchorInvId: string | null; name: string | null }>
   }>()
 
   for (const goal of goals) {
@@ -207,6 +211,7 @@ export async function GET() {
       transactionCount: 0,
       funds: [],
       nonFunds: [],
+      heldForMerge: [],
     })
   }
 
@@ -413,6 +418,12 @@ export async function GET() {
   // to count it. A consumed holding (merge done) is skipped: its cash now lives in
   // the renewed deposit's principal, already counted in the holdings pass.
   const heldContributions = heldForMergeContributions(withdrawals)
+  // The held WITHDRAWAL has no name of its own — its label is the source deposit
+  // it closed (parent_transaction_id). Map every active row's id → notes so the
+  // chip can read "Sổ VCB 3 th." rather than a bare amount.
+  const nameById = new Map<string, string | null>()
+  for (const tx of allTxsRaw) nameById.set(tx.transaction_id, tx.notes ?? null)
+  const wById = new Map(withdrawals.map((w) => [w.transaction_id, w]))
   for (const h of heldContributions) {
     totalAssets += h.amount
     totalInvestedGlobal += h.amount
@@ -422,6 +433,13 @@ export async function GET() {
       g.currentValue += h.amount
       g.progressValue += h.amount
       g.totalInvested += h.amount
+      const parentId = wById.get(h.transactionId)?.parent_transaction_id ?? null
+      g.heldForMerge.push({
+        transactionId: h.transactionId,
+        amount: h.amount,
+        anchorInvId: h.anchorInvId,
+        name: parentId ? nameById.get(parentId) ?? null : null,
+      })
     }
   }
 
@@ -452,6 +470,7 @@ export async function GET() {
       transactionCount: g.transactionCount,
       funds: g.funds,
       nonFunds: g.nonFunds,
+      heldForMerge: g.heldForMerge,
     }
   })
 

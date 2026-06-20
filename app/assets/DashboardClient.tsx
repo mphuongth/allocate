@@ -66,6 +66,10 @@ export interface GoalData {
   transactionCount: number
   funds: FundBreakdownItem[]
   nonFunds?: NonFundUnallocatedItem[]
+  // "Ví chờ gộp": settle-with-hold settlements still pooled in this goal. Shown as
+  // a "đang chờ gộp" chip (with unhold) and preselected in the anchor's merge sheet.
+  // transactionId is the held WITHDRAWAL row. Optional for cached payloads.
+  heldForMerge?: Array<{ transactionId: string; amount: number; anchorInvId: string | null; name: string | null }>
 }
 
 export interface InsuranceData {
@@ -232,6 +236,9 @@ interface MaturingDep {
   // merge UI can fold close-maturing siblings into this re-deposit. Computed lazily
   // (only on open) to keep it off the hot maturingDeposits list.
   siblings?: InvRow[]
+  // Pooled "Ví chờ gộp" holdings in this goal, attached on open so the merge sheet
+  // can preselect them as held_sources (consumed in place, no second withdrawal).
+  heldSiblings?: { id: string; name: string | null; amount: number }[]
 }
 
 // Build the SellWithdrawSheet payload for a non-fund holding (bank/gold/stock).
@@ -582,10 +589,23 @@ export default function DashboardClient({ userId }: { userId: string }) {
       .map((it) => nonFundToInvRow(it, isVi))
   }
 
+  // The goal's pooled "Ví chờ gộp" holdings, for preselect in the anchor's merge
+  // sheet. Empty for an unassigned deposit (the pool is goal-scoped).
+  function goalHeldSiblings(goalId: string | null): { id: string; name: string | null; amount: number }[] {
+    if (!data || goalId == null) return []
+    const goal = data.goals.find((g) => g.goalId === goalId)
+    return (goal?.heldForMerge ?? []).map((h) => ({ id: h.transactionId, name: h.name, amount: h.amount }))
+  }
+
   // Open the resolve flow for a maturing deposit, attaching the goal's siblings so
-  // the merge UI is available (and close-maturing ones preselect).
+  // the merge UI is available (and close-maturing ones preselect) plus any pooled
+  // holdings waiting to be folded into this anchor.
   function openResolve(dep: MaturingDep) {
-    setResolveDep({ ...dep, siblings: goalSiblingInvRows(dep.goalId, dep.inv.id) })
+    setResolveDep({
+      ...dep,
+      siblings: goalSiblingInvRows(dep.goalId, dep.inv.id),
+      heldSiblings: goalHeldSiblings(dep.goalId),
+    })
   }
 
   // Resolve a maturing deposit by its id (used by the card's "handle" + the
@@ -1168,6 +1188,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
           inv={resolveDep?.inv ?? null}
           goalId={resolveDep?.goalId ?? null}
           siblingDeposits={resolveDep?.siblings}
+          heldSiblings={resolveDep?.heldSiblings}
           isVi={isVi}
           onClose={() => setResolveDep(null)}
           onRenewed={() => { setResolveDep(null); fetchData({ force: true }) }}
@@ -1179,6 +1200,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
           inv={resolveDep.inv}
           goalId={resolveDep.goalId ?? null}
           siblingDeposits={resolveDep.siblings}
+          heldSiblings={resolveDep.heldSiblings}
           isVi={isVi}
           onClose={() => setResolveDep(null)}
           onRenewed={() => { setResolveDep(null); fetchData({ force: true }) }}

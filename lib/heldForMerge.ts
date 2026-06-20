@@ -13,17 +13,25 @@
 // cash then lives in the renewed deposit's principal, so we must stop adding it.
 
 export interface HeldWithdrawalRow {
+  transaction_id: string
   amount_vnd: number
   // The goal the held cash stays earmarked to. NULL = nothing to add it back to.
   merge_target_goal_id: string | null
+  // The deposit the user means to fold this into — informational (surfaced as
+  // "đang chờ gộp vào …"); may be NULL.
+  merge_anchor_inv_id?: string | null
   held_for_merge?: boolean | null
   // Set once a merge folds the holding into the renewed deposit. NULL = still pooled.
   consumed_by_inv_id?: string | null
 }
 
 export interface HeldContribution {
+  // The held WITHDRAWAL row's id — what the UI passes back as a held_source to
+  // consume, and what the unhold (Bỏ chờ gộp) action deletes to restore the deposit.
+  transactionId: string
   goalId: string
   amount: number
+  anchorInvId: string | null
 }
 
 export function heldForMergeContributions(rows: HeldWithdrawalRow[]): HeldContribution[] {
@@ -33,7 +41,12 @@ export function heldForMergeContributions(rows: HeldWithdrawalRow[]): HeldContri
     if (r.consumed_by_inv_id != null) continue // already folded into a re-deposit
     if (!r.merge_target_goal_id) continue // no goal to credit
     if (!(r.amount_vnd > 0)) continue
-    out.push({ goalId: r.merge_target_goal_id, amount: r.amount_vnd })
+    out.push({
+      transactionId: r.transaction_id,
+      goalId: r.merge_target_goal_id,
+      amount: r.amount_vnd,
+      anchorInvId: r.merge_anchor_inv_id ?? null,
+    })
   }
   return out
 }
