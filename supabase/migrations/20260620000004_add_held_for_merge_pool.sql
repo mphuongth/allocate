@@ -19,8 +19,13 @@ alter table public.investment_transactions
   -- Marks a settlement (withdrawal) whose cash is parked for a future merge.
   add column if not exists held_for_merge boolean not null default false,
   -- The goal the held cash stays earmarked to (so the synthesizer knows where to
-  -- add it back). Mirrors the source deposit's goal_id at hold time.
-  add column if not exists merge_target_goal_id uuid references public.savings_goals(goal_id),
+  -- add it back). Mirrors the source deposit's goal_id at hold time. Deliberately
+  -- NOT a FK to savings_goals: investment_transactions already has goal_id ->
+  -- savings_goals, and a SECOND FK to the same table makes every PostgREST
+  -- `savings_goals(goal_name)` embed on this table ambiguous ("more than one
+  -- relationship found" → 500). The row's own goal_id FK already enforces goal
+  -- existence + delete cascade, so this app-managed mirror needs no constraint.
+  add column if not exists merge_target_goal_id uuid,
   -- The deposit the user intends to fold this into (the anchor). Informational /
   -- for surfacing "đang chờ gộp vào …"; not a hard constraint at merge time.
   add column if not exists merge_anchor_inv_id uuid references public.investment_transactions(transaction_id),
