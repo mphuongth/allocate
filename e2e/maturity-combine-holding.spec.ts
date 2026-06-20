@@ -137,6 +137,19 @@ test.describe('Term-deposit maturity — "Ví chờ gộp" holding pool', () => 
       const { data: held } = await supabase
         .from('investment_transactions').select('consumed_by_inv_id').eq('transaction_id', heldId).single()
       expect(held?.consumed_by_inv_id).toBe(A.transaction_id)
+
+      // A stale tab still showing the "Bỏ chờ gộp" chip must NOT be able to unhold a
+      // holding the merge already consumed — deleting it would re-open D1 while its
+      // cash already lives in A's principal (double-count). The server guards with a
+      // 409 instead of trusting the UI to have hidden the chip.
+      const staleUnhold = await page.request.delete(`/api/v1/investment-transactions/${heldId}`)
+      expect(staleUnhold.status()).toBe(409)
+      // The row survives the rejected delete, and the goal value is unmoved.
+      const stillThere = await page.request.get(`/api/v1/investment-transactions/${heldId}`)
+      expect(stillThere.ok()).toBeTruthy()
+      const afterReject = await goalSnapshot(page, goal.goal_id)
+      expect(afterReject.holdingIds).not.toContain(D1.transaction_id)
+      expect(Math.abs(afterReject.progressValue - before.progressValue)).toBeLessThan(1_000_000)
     } finally {
       await api.deleteTransactionCascade(A.transaction_id)
       await api.deleteTransactionCascade(D1.transaction_id)
