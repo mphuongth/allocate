@@ -84,6 +84,42 @@ test.describe('Maturity card — merge-cluster auto-detection', () => {
     }
   })
 
+  test('surfaces the banner even when the close sibling is not itself due yet', async ({ page }) => {
+    test.slow()
+    const goal = await api.createGoal({ goal_name: 'E2E NotDue Goal', target_amount: 200_000_000 })
+    // D is matured (the only actionable deposit → the anchor). B matures in 4 days
+    // — NOT actionable (won't show its own Handle row), but within D's 7-day merge
+    // window, so it counts as a cluster sibling and the banner still fires.
+    const D = await api.createTransaction({
+      asset_type: 'bank', amount_vnd: 20_000_000, investment_date: iso(-380),
+      interest_rate: 6, expiry_date: iso(-1), goal_id: goal.goal_id, notes: 'E2E NotDue D',
+    })
+    const B = await api.createTransaction({
+      asset_type: 'bank', amount_vnd: 7_000_000, investment_date: iso(-200),
+      interest_rate: 6, expiry_date: iso(4), goal_id: goal.goal_id, notes: 'E2E NotDue B',
+    })
+    try {
+      await gotoFreshDashboard(page)
+      const card = page.getByTestId('maturity-action-card')
+      await expect(card).toBeVisible({ timeout: 10_000 })
+      // Only D is actionable → the card lists a single Handle row…
+      await expect(page.getByTestId('maturity-action-count')).toHaveText('1')
+      // …yet the banner advertises the 2-deposit cluster anchored on D.
+      const banner = page.getByTestId(`merge-cluster-banner-${D.transaction_id}`)
+      await expect(banner).toBeVisible()
+      await expect(banner).toContainText('2')
+
+      // Opening it preselects B even though B isn't due on its own.
+      await banner.getByRole('button').click()
+      await page.getByRole('button', { name: /Settle & re-deposit|Tất toán & gửi lại/i }).click()
+      await expect(page.getByTestId(`merge-received-${B.transaction_id}`)).toBeVisible()
+    } finally {
+      await api.deleteTransactionCascade(B.transaction_id)
+      await api.deleteTransactionCascade(D.transaction_id)
+      await api.deleteGoal(goal.goal_id)
+    }
+  })
+
   test('shows no merge banner when a goal has a single maturing deposit', async ({ page }) => {
     const goal = await api.createGoal({ goal_name: 'E2E Solo Goal', target_amount: 100_000_000 })
     const D = await api.createTransaction({

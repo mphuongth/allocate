@@ -89,6 +89,40 @@ describe('detectMergeClusters', () => {
     expect([...clusters[0].siblingIds].sort()).toEqual(['a', 'b'])
   })
 
+  it('anchors on an actionable deposit and folds a not-yet-actionable close sibling', () => {
+    // A is due now; B matures a few days later (not actionable) but within the
+    // window — it can settle early and fold in, so the banner still fires.
+    const a = mk({ id: 'a', expiryDate: '2026-07-01', actionable: true })
+    const b = mk({ id: 'b', expiryDate: '2026-07-05', actionable: false }) // gap 4, not due
+    const clusters = detectMergeClusters([a, b], 7)
+    expect(clusters).toHaveLength(1)
+    expect(clusters[0]).toMatchObject({ anchorId: 'a', size: 2 })
+    expect(clusters[0].siblingIds).toEqual(['b'])
+  })
+
+  it('forms no cluster when nothing in the goal is actionable yet', () => {
+    const a = mk({ id: 'a', expiryDate: '2026-07-01', actionable: false })
+    const b = mk({ id: 'b', expiryDate: '2026-07-03', actionable: false })
+    expect(detectMergeClusters([a, b], 7)).toHaveLength(0)
+  })
+
+  it('anchors on the latest ACTIONABLE deposit, not a later not-yet-due one', () => {
+    const a = mk({ id: 'a', expiryDate: '2026-07-01', actionable: true })
+    const b = mk({ id: 'b', expiryDate: '2026-07-03', actionable: true }) // latest actionable
+    const c = mk({ id: 'c', expiryDate: '2026-07-05', actionable: false }) // later, not due
+    const clusters = detectMergeClusters([a, b, c], 7)
+    expect(clusters).toHaveLength(1)
+    expect(clusters[0].anchorId).toBe('b')
+    expect(clusters[0].size).toBe(3)
+    expect([...clusters[0].siblingIds].sort()).toEqual(['a', 'c'])
+  })
+
+  it('treats an unspecified actionable flag as actionable (lib default)', () => {
+    const a = mk({ id: 'a', expiryDate: '2026-07-01' }) // no actionable field
+    const b = mk({ id: 'b', expiryDate: '2026-07-03' })
+    expect(detectMergeClusters([a, b], 7)).toHaveLength(1)
+  })
+
   it('emits a separate cluster per goal', () => {
     const a1 = mk({ id: 'a1', goalId: 'g1', expiryDate: '2026-07-01' })
     const a2 = mk({ id: 'a2', goalId: 'g1', expiryDate: '2026-07-03' })

@@ -556,14 +556,18 @@ export default function DashboardClient({ userId }: { userId: string }) {
       .map((b) => ({ inv: b.inv, goalId: b.goalId, raw: b.anchor })),
   ]
 
-  // Auto-detect goals whose maturing deposits fall close together, so the card can
-  // offer a one-tap "gộp lại" (merge) shortcut. The detector reuses the eligibility
-  // rules, so its count matches what the resolve sheet will preselect.
+  // Auto-detect goals whose deposits fall close together, so the card can offer a
+  // one-tap "gộp lại" (merge) shortcut. Fed from ALL the goal's bank deposits (not
+  // just the actionable ones) with an `actionable` flag: the anchor must be due now
+  // — that's what the card surfaces and the sheet opens on — but a close-maturing
+  // sibling counts even if it isn't due yet, exactly matching what the sheet
+  // preselects. Reuses the eligibility rules, so the banner can't over-promise.
   const mergeClusters = detectMergeClusters(
-    maturingDeposits.map((d) => ({
-      id: d.inv.id, goalId: d.goalId, type: d.inv.type, expiryDate: d.inv.expiryDate,
-      depositGroupId: d.inv.depositGroupId, principal: d.inv.principal, value: d.inv.value,
-      currency: d.inv.currency, isPledged: d.inv.isPledged,
+    taggedNonFunds.map(({ it, goalId }) => ({
+      id: it.transactionId, goalId, type: it.type, expiryDate: it.expiryDate,
+      depositGroupId: it.depositGroupId ?? null, principal: it.amount, value: it.currentValue,
+      currency: it.currency ?? null, isPledged: it.isPledged ?? false,
+      actionable: isActionableTermDeposit(it),
     })),
   ).map((c) => ({ anchorId: c.anchorId, size: c.size }))
 
