@@ -198,6 +198,17 @@ export async function POST(request: NextRequest) {
     depositGroupId = explicitTxId
   }
 
+  // Net-worth safety for a held settlement. A held withdrawal removes its source
+  // from net worth, and the dashboard synthesizes the parked cash back ONLY via
+  // merge_target_goal_id. If that can't be resolved — an unassigned deposit
+  // settled with no explicit target — the cash leaves net worth and is never
+  // added back: money silently lost, surfaced nowhere. The UI always supplies a
+  // goal, so reject the unguarded API path rather than mis-state total assets.
+  const resolvedHeldTargetGoalId = cleanMergeTargetGoalId ?? effectiveGoalId
+  if (cleanHeldForMerge && !resolvedHeldTargetGoalId) {
+    return NextResponse.json({ error: 'A held-for-merge settlement must resolve a target goal.' }, { status: 400 })
+  }
+
   const { data: transaction, error } = await supabase
     .from('investment_transactions')
     .insert({
@@ -226,7 +237,7 @@ export async function POST(request: NextRequest) {
       // Held-for-merge pool flags (withdrawal only). The target goal defaults to
       // the withdrawal's own goal (= the closed source's goal) when not given.
       held_for_merge: cleanHeldForMerge,
-      merge_target_goal_id: cleanHeldForMerge ? (cleanMergeTargetGoalId ?? effectiveGoalId) : null,
+      merge_target_goal_id: cleanHeldForMerge ? resolvedHeldTargetGoalId : null,
       merge_anchor_inv_id: cleanHeldForMerge ? cleanMergeAnchorInvId : null,
     })
     .select()

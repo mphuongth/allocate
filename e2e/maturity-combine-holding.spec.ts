@@ -204,6 +204,22 @@ test.describe('Term-deposit maturity — "Ví chờ gộp" holding pool', () => 
     }
   })
 
+  test('rejects a held settlement that resolves no target goal (would silently lose net worth)', async ({ page }) => {
+    // The held cash leaves net worth and is synthesized back ONLY via
+    // merge_target_goal_id. With no goal AND no explicit target it resolves to
+    // null → heldForMergeContributions skips it → the money vanishes from total
+    // assets, shown nowhere. The UI always supplies a goal; the raw API must not
+    // accept the unresolvable case.
+    const res = await page.request.post('/api/v1/investment-transactions', {
+      data: {
+        transaction_type: 'withdrawal', asset_type: 'bank', investment_date: iso(0),
+        amount_vnd: 5_000_000, principal_withdrawn: 5_000_000, affects_progress: true,
+        held_for_merge: true, // no goal_id, no merge_target_goal_id
+      },
+    })
+    expect(res.status()).toBe(400)
+  })
+
   test('a held settlement reads neutrally in the History tab — not a red withdrawal', async ({ page }) => {
     test.slow()
     const goal = await api.createGoal({ goal_name: 'E2E Held Label Goal', target_amount: 200_000_000 })
