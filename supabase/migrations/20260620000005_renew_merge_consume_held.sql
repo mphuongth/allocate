@@ -223,6 +223,12 @@ begin
     update public.investment_transactions
        set consumed_by_inv_id = p_tx_id, updated_at = now()
      where transaction_id = v_hid;
+    -- Backstop the hold-time unlink (POST clears it when the holding is created):
+    -- a recurring saving linked to the now-consumed source must not keep pointing
+    -- at it. The held row's parent IS that source deposit; clear any link to it.
+    update public.recurring_savings
+       set linked_deposit_tx_id = null, updated_at = now()
+     where linked_deposit_tx_id = v_src.parent_transaction_id and user_id = v_old.user_id;
     v_merge_total := v_merge_total + v_src.amount_vnd;
   end loop;
 

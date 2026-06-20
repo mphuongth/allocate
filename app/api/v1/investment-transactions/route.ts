@@ -233,5 +233,20 @@ export async function POST(request: NextRequest) {
     .single()
 
   if (error) return NextResponse.json({ error: 'Failed to create transaction' }, { status: 500 })
+
+  // Holding a deposit for merge closes its source. If a recurring saving was
+  // linked to that source (linked_deposit_tx_id), the link now points at a closed
+  // deposit and would dangle until the merge consumes it. Clear it on hold —
+  // mirrors what the merge RPC does for its live sources (20260620000005 lines
+  // 174-178) so the recurring line never tops up a settled deposit. Scoped to the
+  // hold path; a plain withdrawal's pre-existing dangle is a separate concern.
+  if (cleanHeldForMerge && cleanParentTxId) {
+    await supabase
+      .from('recurring_savings')
+      .update({ linked_deposit_tx_id: null, updated_at: new Date().toISOString() })
+      .eq('linked_deposit_tx_id', cleanParentTxId)
+      .eq('user_id', user.id)
+  }
+
   return NextResponse.json(transaction, { status: 201 })
 }

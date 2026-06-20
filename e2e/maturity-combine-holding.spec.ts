@@ -204,3 +204,126 @@ test.describe('Term-deposit maturity — "Ví chờ gộp" holding pool', () => 
     }
   })
 })
+
+// The dashboard side of the invariant is covered above (progressValue never dips,
+// never double-counts). This block closes the OTHER half on the Plan page: a goal
+// with a monthly plan + a due recurring saving must not have its CONTRIBUTED /
+// PLANNED perturbed merely by parking a deposit, and when the anchor's merge folds
+// that recurring in, the line must read "đã ghi nhận" (recorded) exactly once — no
+// double-count from the held cash ALSO landing there. Asserts the RENDERED Plan
+// (data-* on the by-goal rows), not just the stored fulfillment.
+test.describe('Term-deposit holding pool — Plan-page invariant', () => {
+  test.use({ viewport: { width: 1280, height: 800 } })
+
+  const now = new Date()
+  const PMONTH = now.getMonth() + 1
+  const PYEAR = now.getFullYear()
+  const YM = `${PYEAR}-${String(PMONTH).padStart(2, '0')}`
+
+  // Navigate to the Plan page for the current month and wait for its data.
+  async function gotoPlanning(page: Page) {
+    await page.goto('/settings') // unmount, force a fresh fetch
+    await Promise.all([
+      page.waitForResponse((r) => r.url().includes('/api/v1/monthly-plans') && r.status() === 200, { timeout: 20_000 }),
+      page.goto('/planning'),
+    ])
+    await expect(page.getByTestId('desktop-planning')).toBeVisible({ timeout: 10_000 })
+  }
+
+  // The goal's PLANNED / CONTRIBUTED as the by-goal row renders them (data-* carry
+  // the exact numbers buildByGoal computed, so we read the rendered value directly).
+  async function planGoal(page: Page, goalId: string): Promise<{ planned: number; contributed: number }> {
+    const planned = await page.getByTestId(`plan-goal-planned-${goalId}`).getAttribute('data-planned')
+    const contributed = await page.getByTestId(`plan-goal-contributed-${goalId}`).getAttribute('data-contributed')
+    return { planned: Number(planned), contributed: Number(contributed) }
+  }
+
+  test('parking a deposit leaves the plan untouched; a fold-on-consume records the recurring exactly once', async ({ page }) => {
+    test.slow()
+    const REC = 3_000_000
+    const goal = await api.createGoal({ goal_name: 'E2E Plan Hold Goal', target_amount: 200_000_000 })
+    const plan = await api.createMonthlyPlan({ month: PMONTH, year: PYEAR, salary_vnd: 30_000_000 })
+    // D1 matured 5d ago; A matured 1d ago (the anchor). A recurring saving for the
+    // goal is due this month AND is linked to D1 (it had been feeding that deposit)
+    // — so holding D1 must also unlink it (hygiene: no dangling link to a closed row).
+    const D1 = await api.createTransaction({
+      asset_type: 'bank', amount_vnd: 10_000_000, investment_date: iso(-370),
+      interest_rate: 6, expiry_date: iso(-5), goal_id: goal.goal_id, notes: 'E2E Plan Hold D1',
+    })
+    const A = await api.createTransaction({
+      asset_type: 'bank', amount_vnd: 20_000_000, investment_date: iso(-380),
+      interest_rate: 6, expiry_date: iso(-1), goal_id: goal.goal_id, notes: 'E2E Plan Hold Anchor',
+    })
+    const rec = await api.createRecurringSaving({
+      name: 'E2E Plan Recurring', goal_id: goal.goal_id, amount_vnd: REC,
+      effective_from: `${YM}-01`, linked_deposit_tx_id: D1.transaction_id,
+    })
+    const { createClient } = await import('@supabase/supabase-js')
+    const svc = createClient(process.env.E2E_SUPABASE_URL!, process.env.E2E_SUPABASE_SERVICE_ROLE_KEY!)
+    const recRow = page.getByTestId(`plan-recurring-${rec.saving_id}`)
+    try {
+      // ── Baseline: planned = the recurring; nothing contributed; line not recorded ──
+      await gotoPlanning(page)
+      const base = await planGoal(page, goal.goal_id)
+      expect(base.planned).toBe(REC)
+      expect(base.contributed).toBe(0)
+      await expect(recRow).toHaveAttribute('data-recorded', 'false')
+
+      // ── Park D1 (hold for merge into A) ──
+      const holdRes = await page.request.post('/api/v1/investment-transactions', {
+        data: {
+          goal_id: goal.goal_id, transaction_type: 'withdrawal', asset_type: 'bank',
+          investment_date: iso(0), amount_vnd: 10_000_000, principal_withdrawn: 10_000_000,
+          affects_progress: true, parent_transaction_id: D1.transaction_id,
+          held_for_merge: true, merge_target_goal_id: goal.goal_id, merge_anchor_inv_id: A.transaction_id,
+        },
+      })
+      expect(holdRes.status()).toBe(201)
+      const heldId = (await holdRes.json()).transaction_id
+
+      // Hygiene: the recurring's link to the now-closed D1 is cleared on hold.
+      const { data: afterHoldLink } = await svc
+        .from('recurring_savings').select('linked_deposit_tx_id').eq('saving_id', rec.saving_id).single()
+      expect(afterHoldLink?.linked_deposit_tx_id).toBeNull()
+
+      // ── Assert A: the plan is exactly as it was — holding touches none of it ──
+      await gotoPlanning(page)
+      const afterHold = await planGoal(page, goal.goal_id)
+      expect(afterHold.planned).toBe(REC)
+      expect(afterHold.contributed).toBe(0)
+      await expect(recRow).toHaveAttribute('data-recorded', 'false')
+
+      // ── Consume D1 into A and fold this month's recurring in the same renewal ──
+      const renewRes = await page.request.post(`/api/v1/investment-transactions/${A.transaction_id}/renew`, {
+        data: {
+          amount_vnd: 20_000_000, interest_rate: 6, expiry_date: iso(180), investment_date: iso(0),
+          interest_earned_vnd: 0, held_sources: [heldId],
+          fulfill_recurring: { saving_id: rec.saving_id, ym: YM, amount: REC },
+        },
+      })
+      expect(renewRes.ok()).toBeTruthy()
+
+      // ── Assert B: recorded EXACTLY ONCE — the line reads recorded, contributed
+      //    rose by precisely the recurring amount (not twice), and the data layer
+      //    holds a single fulfillment row. The held cash went into A's principal,
+      //    NOT into the plan's contributed. ──
+      await gotoPlanning(page)
+      const afterFold = await planGoal(page, goal.goal_id)
+      expect(afterFold.planned).toBe(REC)
+      expect(afterFold.contributed).toBe(REC)
+      await expect(recRow).toHaveAttribute('data-recorded', 'true')
+      await expect(recRow.getByText(/Đã gửi|Saved/).first()).toBeVisible()
+
+      const { data: fulfillments } = await svc
+        .from('recurring_saving_fulfillments').select('*').eq('recurring_saving_id', rec.saving_id)
+      expect(fulfillments).toHaveLength(1)
+    } finally {
+      await api.deleteRecurringFulfillments(rec.saving_id)
+      await api.deleteRecurringSaving(rec.saving_id)
+      await api.deleteMonthlyPlan(plan.id)
+      await api.deleteTransactionCascade(A.transaction_id)
+      await api.deleteTransactionCascade(D1.transaction_id)
+      await api.deleteGoal(goal.goal_id)
+    }
+  })
+})

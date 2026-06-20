@@ -235,7 +235,11 @@ function DGoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit, onRec
   }
 
   return (
-    <tr style={{ borderBottom: '1px solid var(--c-line)', background: 'var(--c-card)', opacity: skipped ? 0.5 : 1 }}>
+    <tr
+      data-testid={item.isRecurring && item.recurringId ? `plan-recurring-${item.recurringId}` : undefined}
+      data-recorded={item.isRecurring ? (recorded ? 'true' : 'false') : undefined}
+      style={{ borderBottom: '1px solid var(--c-line)', background: 'var(--c-card)', opacity: skipped ? 0.5 : 1 }}
+    >
       <td style={{ padding: '9px 16px 9px 44px', verticalAlign: 'middle' }}>
         <div style={{ fontSize: 12, fontWeight: 500, textDecoration: skipped ? 'line-through' : 'none' }}>{item.name}</div>
         <div style={{ fontSize: 10, color: item.overridden ? 'var(--c-navy)' : recorded ? 'var(--c-pos)' : 'var(--c-muted)', marginTop: 1 }}>
@@ -912,8 +916,8 @@ export default function DesktopPlanningView({
                           )}
                         </td>
                         <td style={{ padding: '10px 12px', textAlign: 'right', verticalAlign: 'top' }}>
-                          <div style={{ fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{fmt(g.totalAllocated)}</div>
-                          <div style={{ fontSize: 10, color: g.contributed > 0 ? 'var(--c-pos)' : 'var(--c-muted)', marginTop: 2, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                          <div data-testid={`plan-goal-planned-${g.goalId}`} data-planned={g.totalAllocated} style={{ fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{fmt(g.totalAllocated)}</div>
+                          <div data-testid={`plan-goal-contributed-${g.goalId}`} data-contributed={g.contributed} style={{ fontSize: 10, color: g.contributed > 0 ? 'var(--c-pos)' : 'var(--c-muted)', marginTop: 2, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
                             {g.contributed > 0 ? `${fmt(g.contributed)} ${isVI ? 'đã góp' : 'in'}` : (isVI ? 'Chưa góp' : 'Nothing yet')}
                           </div>
                         </td>
