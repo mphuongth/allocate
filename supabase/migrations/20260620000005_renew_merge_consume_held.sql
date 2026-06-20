@@ -20,7 +20,9 @@
 -- Adding a parameter changes the signature, so DROP the prior 13-arg version first
 -- (a bare create-or-replace registers a second overload and makes name-resolved
 -- calls ambiguous — the PR0 pitfall, see 20260620000002/0003). Body is identical
--- to 20260620000003 except the new param and the step-0b held-consume loop.
+-- to 20260620000003 except the new param, the step-0b held-consume loop, and the
+-- step-0 live withdrawal now stamping consumed_by_inv_id = D (so the DELETE guard
+-- blocks deleting a folded settlement on BOTH the held and live paths, not just held).
 drop function if exists public.renew_term_deposit_with_merge(
   uuid, bigint, numeric, date, date, bigint, uuid, text, bigint, text, uuid[], bigint[], text
 );
@@ -164,12 +166,16 @@ begin
       raise exception 'renew_term_deposit_with_merge: received amount is unreasonably large for the source'
         using errcode = 'check_violation';
     end if;
+    -- Stamp the withdrawal as folded into D (consumed_by_inv_id = D). Its cash now
+    -- lives in D's principal, so deleting this row from the ledger would re-open the
+    -- source at full value while the cash still sits in D — a double-count. The DELETE
+    -- route guards any withdrawal carrying this marker (held OR live) with a 409.
     insert into public.investment_transactions (
       user_id, goal_id, asset_type, transaction_type, parent_transaction_id,
-      investment_date, amount_vnd, principal_withdrawn, affects_progress
+      investment_date, amount_vnd, principal_withdrawn, affects_progress, consumed_by_inv_id
     ) values (
       v_src.user_id, v_src.goal_id, 'bank', 'withdrawal', v_sid,
-      p_investment_date, v_recv, v_src_eff, true
+      p_investment_date, v_recv, v_src_eff, true, p_tx_id
     );
     -- Unlink any recurring saving that fed the now-closed source (mirror
     -- 20260618000009 lines 110–117) so nothing tries to top it up later.

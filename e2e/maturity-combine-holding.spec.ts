@@ -204,6 +204,71 @@ test.describe('Term-deposit maturity — "Ví chờ gộp" holding pool', () => 
     }
   })
 
+  test('deleting a LIVE-merge settlement is blocked — its cash already lives in the anchor (double-count)', async ({ page }) => {
+    test.slow()
+    // The held path is guarded above; this is the OTHER fold path. Merging a sibling
+    // STRAIGHT into the anchor (no "để dành") makes the RPC open a plain withdrawal
+    // for the source and fold its cash into D's principal. The ledger's "Xem tất cả"
+    // shows a delete button on every row, including that withdrawal — deleting it
+    // re-opens the source at full value while its cash still sits in D → +source
+    // double-count, with no warning. The server must reject it the same as a consumed
+    // holding (the withdrawal carries the same consumed_by_inv_id marker now).
+    const goal = await api.createGoal({ goal_name: 'E2E LiveMerge Goal', target_amount: 200_000_000 })
+    const D = await api.createTransaction({
+      asset_type: 'bank', amount_vnd: 20_000_000, investment_date: iso(-380),
+      interest_rate: 6, expiry_date: iso(-1), goal_id: goal.goal_id, notes: 'E2E LiveMerge Anchor',
+    })
+    const B = await api.createTransaction({
+      asset_type: 'bank', amount_vnd: 10_000_000, investment_date: iso(-370),
+      interest_rate: 6, expiry_date: iso(-3), goal_id: goal.goal_id, notes: 'E2E LiveMerge Source',
+    })
+    const { createClient } = await import('@supabase/supabase-js')
+    const supabase = createClient(process.env.E2E_SUPABASE_URL!, process.env.E2E_SUPABASE_SERVICE_ROLE_KEY!)
+    try {
+      // Merge B into D as a LIVE source (renew API directly). The renewal rolls D
+      // forward to a fresh deposit, so the goal value legitimately settles to a new
+      // baseline (accrued interest resets) — capture THAT as the reference. The
+      // invariant under test is that the rejected delete doesn't move it from there.
+      const renewRes = await page.request.post(`/api/v1/investment-transactions/${D.transaction_id}/renew`, {
+        data: {
+          amount_vnd: 20_000_000, interest_rate: 6, expiry_date: iso(180), investment_date: iso(0),
+          interest_earned_vnd: 0, merge_sources: [{ tx_id: B.transaction_id, received: 10_000_000 }],
+        },
+      })
+      expect(renewRes.ok()).toBeTruthy()
+
+      // The RPC opened a plain withdrawal parented to B and folded its cash into D —
+      // and now stamps consumed_by_inv_id = D on that withdrawal (the guard's marker).
+      const { data: wd } = await supabase
+        .from('investment_transactions')
+        .select('transaction_id, consumed_by_inv_id')
+        .eq('parent_transaction_id', B.transaction_id)
+        .eq('transaction_type', 'withdrawal')
+        .single()
+      const liveWithdrawalId = wd!.transaction_id as string
+      expect(wd!.consumed_by_inv_id).toBe(D.transaction_id)
+
+      await gotoFreshDashboard(page)
+      const afterMerge = await goalSnapshot(page, goal.goal_id)
+
+      // Deleting that withdrawal would re-open B while its cash sits in D → reject 409.
+      const del = await page.request.delete(`/api/v1/investment-transactions/${liveWithdrawalId}`)
+      expect(del.status()).toBe(409)
+
+      // The withdrawal survives, so the value stays exactly where the merge left it —
+      // NOT +B (the double-count the guard prevents).
+      const stillThere = await page.request.get(`/api/v1/investment-transactions/${liveWithdrawalId}`)
+      expect(stillThere.ok()).toBeTruthy()
+      await gotoFreshDashboard(page)
+      const afterReject = await goalSnapshot(page, goal.goal_id)
+      expect(Math.abs(afterReject.progressValue - afterMerge.progressValue)).toBeLessThan(1_000_000)
+    } finally {
+      await api.deleteTransactionCascade(D.transaction_id)
+      await api.deleteTransactionCascade(B.transaction_id)
+      await api.deleteGoal(goal.goal_id)
+    }
+  })
+
   test('rejects a held settlement that resolves no target goal (would silently lose net worth)', async ({ page }) => {
     // The held cash leaves net worth and is synthesized back ONLY via
     // merge_target_goal_id. With no goal AND no explicit target it resolves to
