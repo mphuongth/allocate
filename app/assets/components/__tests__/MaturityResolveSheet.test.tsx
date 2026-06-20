@@ -268,6 +268,126 @@ describe('MaturityResolveBody', () => {
     })
   })
 
+  // ── Multi-source merge UX (PR1) ─────────────────────────────────────────────
+  // Destination bank picker, "Gộp nhiều nguồn" label + provenance when >1 source,
+  // and the success state listing what was folded in.
+  describe('multi-source merge UX', () => {
+    const BANKS = [
+      { code: 'TCB', name: 'Techcombank' },
+      { code: 'VCB', name: 'Vietcombank' },
+      { code: 'MB', name: 'MB Bank' },
+    ]
+    function stubBanksAndRecurring() {
+      const fetchMock = vi.fn().mockImplementation((url: string) => {
+        if (typeof url === 'string' && url.startsWith('/api/v1/recurring-savings')) {
+          return Promise.resolve({ ok: true, json: async () => ({ savings: [] }) })
+        }
+        if (typeof url === 'string' && url.startsWith('/api/v1/banks')) {
+          // The real route returns a bare array of { code, name, logo_url }.
+          return Promise.resolve({ ok: true, json: async () => BANKS })
+        }
+        return Promise.resolve({ ok: true, json: async () => ({}) })
+      })
+      vi.stubGlobal('fetch', fetchMock)
+      return fetchMock
+    }
+
+    // Anchor (D) sits at TCB; siblings at VCB / MB / no-bank.
+    const anchorTCB: InvRow = { ...maturedDeposit, bankCode: 'TCB' }
+    const sibVCB: InvRow = {
+      id: 'sib-vcb', name: 'Vikki VCB', type: 'bank', value: 8_000_000, gainPct: null,
+      units: null, principal: 8_000_000, interestRate: 6, expiryDate: daysFromNow(40),
+      investmentDate: daysFromNow(-150), fund: null, bankCode: 'VCB',
+    }
+    const sibMB: InvRow = {
+      id: 'sib-mb', name: 'PVCombank MB', type: 'bank', value: 4_000_000, gainPct: null,
+      units: null, principal: 4_000_000, interestRate: 5, expiryDate: daysFromNow(60),
+      investmentDate: daysFromNow(-100), fund: null, bankCode: 'MB',
+    }
+    const sibNoBank: InvRow = {
+      id: 'sib-nobank', name: 'Legacy no bank', type: 'bank', value: 3_000_000, gainPct: null,
+      units: null, principal: 3_000_000, interestRate: 5, expiryDate: daysFromNow(50),
+      investmentDate: daysFromNow(-120), fund: null, bankCode: null,
+    }
+
+    it('shows a destination bank picker defaulting to the anchor bank once a source is selected', async () => {
+      const user = userEvent.setup()
+      stubBanksAndRecurring()
+      render(
+        <MaturityResolveBody inv={anchorTCB} goalId="goal-1" siblingDeposits={[anchorTCB, sibVCB]}
+          isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
+      )
+      await user.click(await screen.findByRole('button', { name: /Settle & re-deposit/i }))
+      expect(screen.queryByTestId('merge-dest-bank')).toBeNull() // hidden until a source is picked
+      await user.click(screen.getByTestId('merge-source-sib-vcb'))
+      const sel = (await screen.findByTestId('merge-dest-bank')) as HTMLSelectElement
+      expect(sel.value).toBe('TCB') // defaults to the settling deposit's bank
+    })
+
+    it('labels the section "Merge multiple sources" and shows provenance only when >1 source is selected', async () => {
+      const user = userEvent.setup()
+      stubBanksAndRecurring()
+      render(
+        <MaturityResolveBody inv={anchorTCB} goalId="goal-1" siblingDeposits={[anchorTCB, sibVCB, sibMB]}
+          isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
+      )
+      await user.click(await screen.findByRole('button', { name: /Settle & re-deposit/i }))
+      await user.click(screen.getByTestId('merge-source-sib-vcb'))
+      // One source folded → 2 deposits combine, but the "multiple sources" label
+      // only kicks in past one selected sibling.
+      expect(screen.getByTestId('merge-section-title').textContent).toMatch(/Merge other deposits/i)
+
+      await user.click(screen.getByTestId('merge-source-sib-mb'))
+      expect(screen.getByTestId('merge-section-title').textContent).toMatch(/Merge multiple sources/i)
+      // Provenance counts the anchor + folded sources (3) and their distinct banks
+      // (TCB, VCB, MB = 3).
+      const prov = screen.getByTestId('merge-provenance').textContent ?? ''
+      expect(prov).toMatch(/3 sources/i)
+      expect(prov).toMatch(/3 banks/i)
+    })
+
+    it('excludes NULL-bank sources from the bank count and submits the chosen destination bank_code', async () => {
+      const user = userEvent.setup()
+      const fetchMock = stubBanksAndRecurring()
+      render(
+        <MaturityResolveBody inv={anchorTCB} goalId="goal-1" siblingDeposits={[anchorTCB, sibVCB, sibNoBank]}
+          isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
+      )
+      await user.click(await screen.findByRole('button', { name: /Settle & re-deposit/i }))
+      await user.click(screen.getByTestId('merge-source-sib-vcb'))
+      await user.click(screen.getByTestId('merge-source-sib-nobank'))
+      // 3 sources combine (anchor + 2) but only TCB + VCB are real banks → 2 banks.
+      const prov = screen.getByTestId('merge-provenance').textContent ?? ''
+      expect(prov).toMatch(/3 sources/i)
+      expect(prov).toMatch(/2 banks/i)
+
+      // Move the destination to MB and confirm it rides the request.
+      fireEvent.change(screen.getByTestId('merge-dest-bank'), { target: { value: 'MB' } })
+      await user.click(screen.getByRole('button', { name: /Save new deposit/i }))
+      await waitFor(() => {
+        const renewCall = fetchMock.mock.calls.find((c) => String(c[0]).endsWith('/renew'))
+        expect(renewCall).toBeTruthy()
+      })
+      const renewCall = fetchMock.mock.calls.find((c) => String(c[0]).endsWith('/renew'))!
+      expect(JSON.parse(renewCall[1].body).bank_code).toBe('MB')
+    })
+
+    it('lists the merged sources in the success state', async () => {
+      const user = userEvent.setup()
+      stubBanksAndRecurring()
+      render(
+        <MaturityResolveBody inv={anchorTCB} goalId="goal-1" siblingDeposits={[anchorTCB, sibVCB]}
+          isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
+      )
+      await user.click(await screen.findByRole('button', { name: /Settle & re-deposit/i }))
+      await user.click(screen.getByTestId('merge-source-sib-vcb'))
+      await user.click(screen.getByRole('button', { name: /Save new deposit/i }))
+
+      const sources = await screen.findByTestId('maturity-renewed-sources')
+      expect(sources.textContent).toContain('Vikki VCB')
+    })
+  })
+
   it('hands off to the existing withdraw flow instead of renewing', async () => {
     const user = userEvent.setup()
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) })

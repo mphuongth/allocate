@@ -134,6 +134,72 @@ test.describe('Term-deposit maturity — merge a sibling deposit into the re-dep
     }
   })
 
+  // Multi-source merge UX (PR1): the combined re-deposit lands at a chosen
+  // destination bank, and the provenance reflects how many sources/banks fold in.
+  // D sits at VCB, S at MB → "2 sources · 2 banks". We move the destination to
+  // TCB and assert the renewed deposit's bank_code persisted as TCB.
+  test('folds a sibling across banks and persists the chosen destination bank', async ({ page }) => {
+    test.slow()
+    const goal = await api.createGoal({ goal_name: 'E2E Dest Bank Goal', target_amount: 200_000_000 })
+    const D = await api.createTransaction({
+      asset_type: 'bank', amount_vnd: 20_000_000, investment_date: iso(-380),
+      interest_rate: 6, expiry_date: iso(-15), goal_id: goal.goal_id, notes: 'E2E Dest D', bank_code: 'VCB',
+    })
+    const S = await api.createTransaction({
+      asset_type: 'bank', amount_vnd: 8_000_000, investment_date: iso(-120),
+      interest_rate: 6, expiry_date: iso(60), goal_id: goal.goal_id, notes: 'E2E Dest S', bank_code: 'MB',
+    })
+    try {
+      await gotoFreshDashboard(page)
+      await page.getByText('E2E Dest Bank Goal').first().click()
+      const panel = page.getByTestId('desktop-goal-detail')
+      await expect(panel).toBeVisible({ timeout: 10_000 })
+      await expect(panel.getByText('E2E Dest D')).toBeVisible({ timeout: 10_000 })
+
+      const dRow = panel
+        .locator('div')
+        .filter({ has: page.getByRole('button', { name: 'Options', exact: true }) })
+        .filter({ hasText: 'E2E Dest D' })
+        .last()
+      await dRow.getByRole('button', { name: 'Options', exact: true }).click()
+      await page.getByText(/^(Handle maturity|Xử lý đáo hạn)$/).click()
+      await page.getByRole('button', { name: /Settle & re-deposit|Tất toán & gửi lại/i }).click()
+
+      await page.getByTestId(`merge-source-${S.transaction_id}`).click()
+
+      // Provenance: anchor (VCB) + sibling (MB) = 2 sources across 2 banks.
+      const prov = page.getByTestId('merge-provenance')
+      await expect(prov).toContainText(/2 (nguồn|sources)/i)
+      await expect(prov).toContainText(/2 (ngân hàng|banks)/i)
+
+      // The destination picker defaults to D's bank (VCB); move it to TCB.
+      const dest = page.getByTestId('merge-dest-bank')
+      await expect(dest).toHaveValue('VCB')
+      await dest.selectOption('TCB')
+
+      const [renewReq] = await Promise.all([
+        page.waitForRequest((r) => r.url().endsWith(`/${D.transaction_id}/renew`) && r.method() === 'POST'),
+        page.getByRole('button', { name: /Save new deposit|Lưu sổ mới/i }).click(),
+      ])
+      expect(renewReq.postDataJSON().bank_code).toBe('TCB')
+      await expect(page.getByTestId('maturity-renewed')).toBeVisible({ timeout: 20_000 })
+
+      const { createClient } = await import('@supabase/supabase-js')
+      const supabase = createClient(process.env.E2E_SUPABASE_URL!, process.env.E2E_SUPABASE_SERVICE_ROLE_KEY!)
+      // The renewed deposit moved to the chosen destination bank.
+      await expect.poll(async () => {
+        const { data } = await supabase
+          .from('investment_transactions').select('bank_code')
+          .eq('transaction_id', D.transaction_id).single()
+        return data?.bank_code
+      }, { timeout: 15_000 }).toBe('TCB')
+    } finally {
+      await api.deleteTransactionCascade(S.transaction_id)
+      await api.deleteTransactionCascade(D.transaction_id)
+      await api.deleteGoal(goal.goal_id)
+    }
+  })
+
   // Server-side guard: the route trusts the client for `received`, but the RPC
   // must not. A received far larger than the source's own value would let D
   // (principal = BASE + Σ received) balloon while S only closes its real

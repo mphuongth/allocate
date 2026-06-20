@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { ValidationError, validateAmount, validateDate, validateRate, validateUUID } from '@/lib/validation'
+import { ValidationError, validateAmount, validateBankCode, validateDate, validateRate, validateUUID } from '@/lib/validation'
 import { isFutureInvestmentDate } from '@/lib/dates'
 import { isTermDeposit } from '@/lib/maturity'
 
@@ -22,7 +22,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { amount_vnd, interest_rate, expiry_date, investment_date, interest_earned_vnd, fulfill_recurring, merge_sources } = body
+  const { amount_vnd, interest_rate, expiry_date, investment_date, interest_earned_vnd, fulfill_recurring, merge_sources, bank_code } = body
 
   let txId: string
   let cleanAmount: number
@@ -41,6 +41,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // When non-empty, amount_vnd is the BASE and the RPC adds Σ(received).
   const cleanMergeSourceIds: string[] = []
   const cleanMergeReceived: number[] = []
+  // Multi-source merge only: destination bank for the combined re-deposit. null
+  // (or omitted) leaves D's existing bank untouched (the RPC coalesces).
+  let cleanBankCode: string | null = null
   try {
     txId = validateUUID(id, 'transaction_id')
     cleanAmount = validateAmount(amount_vnd, 'amount_vnd')
@@ -77,6 +80,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         cleanMergeReceived.push(Math.round(r))
       }
     }
+    if (bank_code != null && bank_code !== '') cleanBankCode = validateBankCode(bank_code, 'bank_code')
   } catch (e) {
     if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
     throw e
@@ -146,6 +150,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           p_fulfill_source: cleanFulfillSavingId ? 'maturity-combine' : null,
           p_merge_source_ids: cleanMergeSourceIds,
           p_merge_received: cleanMergeReceived,
+          // Destination bank for the combined deposit; null = leave D's bank as is.
+          p_bank_code: cleanBankCode,
         })
         .single()
     : await supabase
