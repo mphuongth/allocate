@@ -17,7 +17,7 @@
 // (the parent wires `onWithdraw`).
 
 import { useState, useEffect } from 'react'
-import { RefreshCw, Pencil, ArrowDownToLine, AlertTriangle, Check, Building2, X, Plus, Wallet } from 'lucide-react'
+import { RefreshCw, Pencil, ArrowDownToLine, AlertTriangle, Check, Building2, X, Plus, Wallet, Lock, SlidersHorizontal } from 'lucide-react'
 import { fmt, fmtCompact } from '@/lib/formatters'
 import { fmtMaturity, type InvRow } from './goalDetailShared'
 import {
@@ -29,6 +29,7 @@ import {
   type RenewMode,
 } from '@/lib/maturity'
 import { linkedSavingFor, type RecurringLinkCandidate, type RecurringLinkResult } from '@/lib/recurringLink'
+import { classifyMergeSources, type MergeBlockReason } from '@/lib/mergeEligibility'
 import { todayIso } from '@/lib/dates'
 
 type Mode = RenewMode | 'withdraw' | 'combine'
@@ -136,16 +137,42 @@ export function MaturityResolveBody({
   const mergeableOrdered = [...mergeable].sort(
     (a, b) => (a.investmentDate ?? '').localeCompare(b.investmentDate ?? '') || a.id.localeCompare(b.id),
   )
+  // Selection is DERIVED from eligibility: an in-window sibling defaults to
+  // selected, the rest default to not. `mergeSel` records only the user's EXPLICIT
+  // overrides of that default (so widening the window can re-default an untouched
+  // source without clobbering a manual pick). `overridden` flags an out-of-window
+  // source the user chose to fold in early ("Gộp sớm?").
   const [mergeSel, setMergeSel] = useState<Record<string, boolean>>({})
+  const [overridden, setOverridden] = useState<Record<string, boolean>>({})
   const [mergeRecv, setMergeRecv] = useState<Record<string, string>>({})
   const [mergeTotal, setMergeTotal] = useState('')
   const [, setMergeTotalTouched] = useState(false)
+  // Maturity window (days): siblings maturing within this many days of the anchor
+  // are eligible. The slider widens it (folding in farther deposits = early
+  // settlement = a possible interest penalty).
+  const [windowDays, setWindowDays] = useState(7)
   // Destination bank for the combined re-deposit (multi-source merge). Defaults to
   // the settling deposit's bank; the user can move the money to another bank.
   const [banks, setBanks] = useState<{ code: string; name: string }[]>([])
   const [destBank, setDestBank] = useState<string>(inv.bankCode ?? '')
 
-  const selectedSources = mergeableOrdered.filter((s) => mergeSel[s.id])
+  // Classify each mergeable sibling against the anchor (D). Same-goal is already
+  // guaranteed (siblings are this goal's holdings), so we don't pass goal ids.
+  const classifications = classifyMergeSources(
+    { id: inv.id, type: inv.type, expiryDate: inv.expiryDate, principal: inv.principal, value: inv.value, depositGroupId: inv.depositGroupId, currency: inv.currency, isPledged: inv.isPledged },
+    mergeableOrdered.map((s) => ({ id: s.id, type: s.type, expiryDate: s.expiryDate, principal: s.principal, value: s.value, depositGroupId: s.depositGroupId, currency: s.currency, isPledged: s.isPledged })),
+    windowDays,
+  )
+  const classOf = new Map(classifications.map((c) => [c.source.id, c]))
+
+  // Effective selection: an explicit toggle wins; an overridden source is on; else
+  // the eligibility default.
+  function isSelected(id: string): boolean {
+    if (id in mergeSel) return mergeSel[id]
+    if (overridden[id]) return true
+    return !!classOf.get(id)?.eligible
+  }
+  const selectedSources = mergeableOrdered.filter((s) => isSelected(s.id))
   const mergeReceivedTotal = selectedSources.reduce((sum, s) => sum + (Number(mergeRecv[s.id]) || 0), 0)
   // Provenance for the multi-source merge: the new deposit combines the anchor (D)
   // with every folded source, so "N nguồn" counts D + the selected sources. "M
@@ -158,15 +185,50 @@ export function MaturityResolveBody({
   const mergeBankCount = combinedBankCodes.size
   const isMultiSource = selectedSources.length > 1
 
-  // Toggle a source; on first select, prefill its received with the current value
-  // (the user edits it down to the real cash if the early settlement is penalised).
-  function toggleSource(s: InvRow) {
-    const on = !mergeSel[s.id]
-    setMergeSel((prev) => ({ ...prev, [s.id]: on }))
-    if (on && (mergeRecv[s.id] === undefined || mergeRecv[s.id] === '')) {
-      setMergeRecv((prev) => ({ ...prev, [s.id]: String(Math.round(s.value ?? s.principal ?? 0)) }))
-    }
+  // Prefill a source's received with its current value (the user edits it down to
+  // the real cash if early settlement is penalised). No-op once it has a value.
+  function prefillReceived(s: InvRow) {
+    setMergeRecv((prev) =>
+      prev[s.id] === undefined || prev[s.id] === ''
+        ? { ...prev, [s.id]: String(Math.round(s.value ?? s.principal ?? 0)) }
+        : prev,
+    )
   }
+
+  // Toggle a source on/off (eligible or already-overridden). Turning an overridden
+  // source off also drops the override, so it returns to the dimmed "Gộp sớm?" row.
+  function toggleSource(s: InvRow) {
+    const on = !isSelected(s.id)
+    setMergeSel((prev) => ({ ...prev, [s.id]: on }))
+    if (on) prefillReceived(s)
+    else if (overridden[s.id]) setOverridden((prev) => { const n = { ...prev }; delete n[s.id]; return n })
+  }
+
+  // Fold an out-of-window source in early ("Gộp sớm?"): override the window block,
+  // select it, and prefill its received cash.
+  function overrideSource(s: InvRow) {
+    setOverridden((prev) => ({ ...prev, [s.id]: true }))
+    setMergeSel((prev) => ({ ...prev, [s.id]: true }))
+    prefillReceived(s)
+  }
+
+  // Keep the received map in step with the eligibility default: when the picker
+  // opens (and whenever the window widens), prefill any now-selected source that
+  // doesn't yet have a received value, so a preselected sibling never submits 0₫.
+  useEffect(() => {
+    setMergeRecv((prev) => {
+      let changed = false
+      const next = { ...prev }
+      mergeableOrdered.forEach((s) => {
+        if (isSelected(s.id) && (next[s.id] === undefined || next[s.id] === '')) {
+          next[s.id] = String(Math.round(s.value ?? s.principal ?? 0))
+          changed = true
+        }
+      })
+      return changed ? next : prev
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [windowDays])
 
   // Editing the single TOTAL splits it across the selected sources with the same
   // cumulative-window allocation the SQL uses — so Σ(received) === the total the
@@ -174,7 +236,7 @@ export function MaturityResolveBody({
   function onMergeTotalChange(v: string) {
     setMergeTotal(v); setMergeTotalTouched(true)
     const total = Math.round(Number(v) || 0)
-    const sel = mergeableOrdered.filter((s) => mergeSel[s.id])
+    const sel = mergeableOrdered.filter((s) => isSelected(s.id))
     const alloc = allocateCumulative(total, sel.map((s) => Math.round(s.principal ?? s.value ?? 0)))
     setMergeRecv((prev) => {
       const next = { ...prev }
@@ -314,6 +376,14 @@ export function MaturityResolveBody({
     destBankNone: 'Không chọn',
     provenance: (n: number, m: number) => `Gộp từ ${n} nguồn · ${m} ngân hàng`,
     mergedSourcesLabel: 'Đã gộp',
+    windowLabel: (n: number) => `Cửa sổ đáo hạn: ${n} ngày`,
+    windowHint: 'Nới cửa sổ để gộp thêm sổ — chờ lâu hơn = thiệt lãi.',
+    mergeEarly: 'Gộp sớm?',
+    reasonOutOfWindow: (n: number) => `Đáo hạn cách ${n} ngày — phá kỳ mất lãi`,
+    reasonCurrency: 'Khác loại tiền',
+    reasonPledged: 'Đang thế chấp — bị phong toả',
+    reasonGoal: 'Khác mục tiêu',
+    reasonBlocked: 'Chưa đủ điều kiện',
   } : {
     summarySuffix: 'yr', perYr: 'yr', mo: 'mo',
     why: matured
@@ -353,6 +423,25 @@ export function MaturityResolveBody({
     destBankNone: 'No bank',
     provenance: (n: number, m: number) => `Combined from ${n} sources · ${m} banks`,
     mergedSourcesLabel: 'Merged in',
+    windowLabel: (n: number) => `Maturity window: ${n} days`,
+    windowHint: 'Widen the window to fold in more deposits — waiting longer forfeits interest.',
+    mergeEarly: 'Merge early?',
+    reasonOutOfWindow: (n: number) => `Matures ${n}d apart — early settlement`,
+    reasonCurrency: 'Different currency',
+    reasonPledged: 'Pledged as collateral',
+    reasonGoal: 'Different goal',
+    reasonBlocked: 'Not eligible yet',
+  }
+
+  // Human-readable reason for a blocked source.
+  function blockReasonText(reason: MergeBlockReason | null, gapDays: number | null): string {
+    switch (reason) {
+      case 'out-of-window': return t.reasonOutOfWindow(gapDays ?? 0)
+      case 'different-currency': return t.reasonCurrency
+      case 'pledged': return t.reasonPledged
+      case 'different-goal': return t.reasonGoal
+      default: return t.reasonBlocked
+    }
   }
 
   const POLICIES: { id: Mode; icon: React.ReactNode; label: string; sub: string; danger?: boolean }[] = [
@@ -589,9 +678,51 @@ export function MaturityResolveBody({
                 <div data-testid="merge-section-title" style={fieldLabel}>{isMultiSource ? t.mergeTitleMulti : t.mergeTitle}</div>
                 <p style={{ margin: '0 0 2px', fontSize: 11, color: 'var(--c-muted)', lineHeight: 1.45 }}>{t.mergeHint}</p>
               </div>
+
+              {/* Maturity window — widen to fold in farther-dated deposits (early
+                  settlement). Re-runs the eligibility classification live. */}
+              <div style={{ display: 'grid', gap: 5 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <SlidersHorizontal size={13} color="var(--c-muted)" style={{ flexShrink: 0 }} />
+                  <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--c-ink)' }}>{t.windowLabel(windowDays)}</span>
+                </div>
+                <input data-testid="merge-window-slider" type="range" min={1} max={90} value={windowDays}
+                  onChange={(e) => setWindowDays(Number(e.target.value))}
+                  style={{ width: '100%', accentColor: 'var(--c-navy)' }} />
+                <p style={{ margin: 0, fontSize: 10.5, color: 'var(--c-muted)', lineHeight: 1.4 }}>{t.windowHint}</p>
+              </div>
+
               <div style={{ display: 'grid', gap: 7 }}>
                 {mergeableOrdered.map((s) => {
-                  const sel = !!mergeSel[s.id]
+                  const c = classOf.get(s.id)
+                  const sel = isSelected(s.id)
+                  // A blocked source the user hasn't (yet) folded in early.
+                  const blocked = !!c && !c.eligible && !overridden[s.id] && !sel
+                  if (blocked) {
+                    return (
+                      <div key={s.id} data-testid={`merge-source-${s.id}`}
+                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 11px', borderRadius: 10,
+                          border: '1.5px solid var(--c-line)', background: 'var(--c-card)', opacity: 0.7 }}>
+                        <span style={{ width: 18, height: 18, borderRadius: 9, flexShrink: 0, border: '1.5px solid var(--c-line-strong)', background: 'var(--c-card-2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Lock size={10} color="var(--c-muted)" />
+                        </span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</div>
+                          <div style={{ fontSize: 10.5, color: 'var(--c-muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {blockReasonText(c!.reason, c!.maturityGapDays)}
+                          </div>
+                        </div>
+                        {/* Out-of-window is overridable — "Gộp sớm?" folds it in despite
+                            the window; a hard block (currency/pledged) just shows ₫ + lock. */}
+                        {c!.overridable
+                          ? <button type="button" data-testid={`merge-override-${s.id}`} onClick={() => overrideSource(s)}
+                              style={{ fontSize: 11, fontWeight: 600, color: 'var(--c-warn)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0, padding: 0 }}>
+                              {t.mergeEarly}
+                            </button>
+                          : <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-muted)', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(s.value ?? s.principal ?? 0)}</span>}
+                      </div>
+                    )
+                  }
                   return (
                     <div key={s.id} style={{ display: 'grid', gap: 7 }}>
                       <button type="button" data-testid={`merge-source-${s.id}`} onClick={() => toggleSource(s)}
@@ -601,6 +732,9 @@ export function MaturityResolveBody({
                           {sel && <Check size={11} color="#fff" strokeWidth={3} />}
                         </span>
                         <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
+                        {/* Mark a source folded in past its window so the early-settlement
+                            risk stays visible after the override. */}
+                        {overridden[s.id] && <span style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--c-warn)', flexShrink: 0, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{t.mergeEarly}</span>}
                         <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(s.value ?? s.principal ?? 0)}</span>
                       </button>
                       {sel && (
