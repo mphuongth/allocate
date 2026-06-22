@@ -352,7 +352,7 @@ function AllocationCard({ salary, totalGoalAmount, fixedTotal, insTotal, otherTo
       <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.6)', marginBottom: 4 }}>
         {isVI ? 'Phân bổ tháng này' : "This month's allocation"}
       </div>
-      <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums' }}>
+      <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
         {fmtCompact(totalAllocated)}
       </div>
       <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', marginTop: 2 }}>
@@ -368,7 +368,7 @@ function AllocationCard({ salary, totalGoalAmount, fixedTotal, insTotal, otherTo
             <span style={{ width: 8, height: 8, borderRadius: 2, background: r.c, flexShrink: 0 }} />
             <span style={{ flex: 1, fontSize: 12, color: 'rgba(255,255,255,0.7)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.l}</span>
             <span style={{ fontSize: 12, fontWeight: 600, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{fmtCompact(r.v)}</span>
-            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', minWidth: 30, textAlign: 'right', flexShrink: 0 }}>{pct(r.v)}</span>
+            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', minWidth: 30, textAlign: 'right', flexShrink: 0, whiteSpace: 'nowrap' }}>{pct(r.v)}</span>
           </div>
         ))}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.12)', marginTop: 2 }}>
@@ -376,7 +376,7 @@ function AllocationCard({ salary, totalGoalAmount, fixedTotal, insTotal, otherTo
           <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: remaining >= 0 ? 'rgba(255,255,255,0.8)' : '#fca5a5' }}>
             {isVI ? 'Còn lại' : 'Remaining'}
           </span>
-          <span style={{ fontSize: 13, fontWeight: 700, color: remaining >= 0 ? '#86efac' : '#fca5a5', fontVariantNumeric: 'tabular-nums' }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: remaining >= 0 ? '#86efac' : '#fca5a5', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
             {remaining >= 0 ? '+' : ''}{fmtCompact(remaining)}
           </span>
         </div>

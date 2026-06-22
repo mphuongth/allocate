@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import MobilePlanningView from '../MobilePlanningView'
 import type { MonthlyPlan, FixedExpense, InsuranceMember, OtherExpense, FundInvestment, DirectSaving, RecurringFulfillment } from '../../PlanningClient'
@@ -155,6 +155,18 @@ describe('MobilePlanningView — with plan', () => {
   it("shows allocation summary card with \"This month's allocation\" label", () => {
     render(<MobilePlanningView {...defaultProps} plan={basePlan} />)
     expect(screen.getByText(/This month's allocation/i)).toBeInTheDocument()
+  })
+
+  it('keeps the allocation card total, remaining and per-row pct on one line so the ₫ never wraps under a fallback font', () => {
+    // Fixed expenses (8.5M + 1.2M = 9.7M) drive the card → total 9.7M ₫, remaining +35.3M ₫.
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} fixedExpenses={baseFixedExpenses} />)
+    const card = screen.getByTestId('planning-alloc-card')
+    // Both the big total and the matching category row show "9.7M ₫" — neither may wrap.
+    within(card).getAllByText('9.7M ₫').forEach((el) => expect(el).toHaveStyle({ whiteSpace: 'nowrap' }))
+    // Remaining value (+35.3M ₫).
+    expect(within(card).getByText('+35.3M ₫')).toHaveStyle({ whiteSpace: 'nowrap' })
+    // Per-row percentage chip.
+    expect(within(card).getByText('22%', { exact: true })).toHaveStyle({ whiteSpace: 'nowrap' })
   })
 
   it('shows edit (pencil) and delete (trash) buttons on salary card', () => {

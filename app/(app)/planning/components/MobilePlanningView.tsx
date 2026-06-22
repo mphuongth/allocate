@@ -536,7 +536,7 @@ function AllocationSummaryCard({
   const segments = rows.map((r) => ({ value: r.v, color: r.color }))
 
   return (
-    <div style={{
+    <div data-testid="planning-alloc-card" style={{
       background: 'var(--c-btn-primary)', color: '#fff',
       borderRadius: 16, padding: 16,
       border: '1px solid var(--c-line)', boxShadow: 'var(--shadow-card)',
@@ -544,7 +544,7 @@ function AllocationSummaryCard({
       <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600 }}>
         {isVI ? 'Phân bổ tháng này' : "This month's allocation"}
       </div>
-      <div style={{ fontSize: 26, fontWeight: 600, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.025em', marginTop: 4 }}>
+      <div style={{ fontSize: 26, fontWeight: 600, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.025em', marginTop: 4, whiteSpace: 'nowrap' }}>
         {fmtCompact(totalAllocated)}
       </div>
       <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>
@@ -568,7 +568,7 @@ function AllocationSummaryCard({
             <span style={{ width: 8, height: 8, borderRadius: 2, background: r.color, flexShrink: 0 }} />
             <span style={{ flex: 1, fontSize: 12, color: 'rgba(255,255,255,0.75)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.l}</span>
             <span style={{ fontSize: 12, fontWeight: 600, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{fmtCompact(r.v)}</span>
-            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)', minWidth: 30, textAlign: 'right', flexShrink: 0 }}>{pct(r.v)}</span>
+            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)', minWidth: 30, textAlign: 'right', flexShrink: 0, whiteSpace: 'nowrap' }}>{pct(r.v)}</span>
           </div>
         ))}
         {/* Remaining row */}
@@ -577,7 +577,7 @@ function AllocationSummaryCard({
           <span style={{ flex: 1, fontSize: 12, color: remaining >= 0 ? 'rgba(255,255,255,0.75)' : '#fca5a5', fontWeight: 600 }}>
             {isVI ? 'Còn lại' : 'Remaining'}
           </span>
-          <span style={{ fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: remaining >= 0 ? '#86efac' : '#fca5a5' }}>
+          <span style={{ fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: remaining >= 0 ? '#86efac' : '#fca5a5', whiteSpace: 'nowrap' }}>
             {remaining >= 0 ? '+' : ''}{fmtCompact(remaining)}
           </span>
         </div>
