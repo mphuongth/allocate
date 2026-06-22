@@ -609,6 +609,58 @@ describe('MaturityResolveBody', () => {
     })
   })
 
+  // ── iOS Safari autozoom guard ───────────────────────────────────────────────
+  // iOS zooms the viewport on focus of any native field sized < 16px and never
+  // resets it — jolting the bottom sheet so the save button drifts out of reach.
+  // The globals.css 16px floor (input/textarea/select) is an element-selector, so
+  // these inline-styled fields must carry >= 16px themselves to be protected.
+  describe('iOS autozoom guard (fields must be >= 16px)', () => {
+    function fontPx(el: Element): number {
+      return parseFloat((el as HTMLElement).style.fontSize || getComputedStyle(el).fontSize || '0')
+    }
+
+    function stubEmptyRecurring() {
+      const fetchMock = vi.fn().mockImplementation((url: string) => {
+        if (typeof url === 'string' && url.startsWith('/api/v1/recurring-savings')) {
+          return Promise.resolve({ ok: true, json: async () => ({ savings: [] }) })
+        }
+        return Promise.resolve({ ok: true, json: async () => [] })
+      })
+      vi.stubGlobal('fetch', fetchMock)
+      return fetchMock
+    }
+
+    it('renders the renew form fields (term, rate, maturity date) at >= 16px', async () => {
+      const user = userEvent.setup()
+      render(
+        <MaturityResolveBody inv={maturedDeposit} isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
+      )
+      expect(fontPx(screen.getByTestId('maturity-term-input'))).toBeGreaterThanOrEqual(16)
+      expect(fontPx(screen.getByTestId('maturity-date-input'))).toBeGreaterThanOrEqual(16)
+      // The "Change amount" field shares the same moneyInput style.
+      await user.click(screen.getByRole('button', { name: /Change amount/i }))
+      expect(fontPx(screen.getByTestId('maturity-new-amount'))).toBeGreaterThanOrEqual(16)
+    })
+
+    it('renders the per-source merge-received field at >= 16px', async () => {
+      const user = userEvent.setup()
+      stubEmptyRecurring()
+      const sibBank: InvRow = {
+        id: 'sib-bank', name: 'Vikki sibling', type: 'bank', value: 8_000_000, gainPct: null,
+        units: null, principal: 8_000_000, interestRate: 6, expiryDate: daysFromNow(40),
+        investmentDate: daysFromNow(-150), fund: null,
+      }
+      render(
+        <MaturityResolveBody inv={maturedDeposit} goalId="goal-1" siblingDeposits={[sibBank]}
+          isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
+      )
+      await user.click(await screen.findByRole('button', { name: /Settle & re-deposit/i }))
+      await user.click(screen.getByTestId('merge-override-sib-bank'))
+      // The compact per-source "received" field is the worst offender (was 13px).
+      expect(fontPx(screen.getByTestId('merge-received-sib-bank'))).toBeGreaterThanOrEqual(16)
+    })
+  })
+
   it('hands off to the existing withdraw flow instead of renewing', async () => {
     const user = userEvent.setup()
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) })
