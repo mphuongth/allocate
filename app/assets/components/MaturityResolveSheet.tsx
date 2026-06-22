@@ -40,7 +40,7 @@ const fieldLabel: React.CSSProperties = {
 }
 const moneyInput: React.CSSProperties = {
   display: 'block', width: '100%', boxSizing: 'border-box',
-  padding: '10px 12px', fontFamily: 'inherit', fontSize: 15,
+  padding: '10px 12px', fontFamily: 'inherit', fontSize: 16,
   fontVariantNumeric: 'tabular-nums', fontWeight: 600,
   background: 'var(--c-canvas,#faf9f7)', border: '1.5px solid var(--c-line)',
   borderRadius: 10, color: 'var(--c-ink)', outline: 'none',
@@ -896,7 +896,7 @@ export function MaturityResolveBody({
                           <div style={{ position: 'relative', flex: 1 }}>
                             <input data-testid={`merge-received-${s.id}`} type="number" value={mergeRecv[s.id] ?? ''}
                               onChange={(e) => { setMergeRecv((prev) => ({ ...prev, [s.id]: e.target.value })); setMergeTotal(''); setMergeTotalTouched(false) }}
-                              style={{ ...moneyInput, padding: '7px 24px 7px 10px', fontSize: 13 }} />
+                              style={{ ...moneyInput, padding: '7px 24px 7px 10px', fontSize: 16 }} />
                             <span style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)', fontSize: 12, color: 'var(--c-muted)', pointerEvents: 'none' }}>₫</span>
                           </div>
                         </div>
