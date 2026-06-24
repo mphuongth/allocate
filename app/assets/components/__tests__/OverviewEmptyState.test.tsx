@@ -36,6 +36,17 @@ describe('OverviewEmptyState', () => {
     expect(fundLink).toHaveTextContent('addFund')
   })
 
+  it('lifts the action card on hover (shadow-pop) and resets on leave', () => {
+    render(<OverviewEmptyState onAddGoal={() => {}} onAddInsurance={() => {}} />)
+    const card = screen.getByText('addGoal').closest('button') as HTMLButtonElement
+    expect(card).not.toBeNull()
+    expect(card.style.boxShadow).toBe('var(--shadow-card)')
+    fireEvent.mouseEnter(card)
+    expect(card.style.boxShadow).toBe('var(--shadow-pop)')
+    fireEvent.mouseLeave(card)
+    expect(card.style.boxShadow).toBe('var(--shadow-card)')
+  })
+
   it('uses Cairn design tokens, not raw Tailwind indigo/emoji (#1)', () => {
     const { container } = render(<OverviewEmptyState onAddGoal={() => {}} onAddInsurance={() => {}} />)
     // No leftover indigo utility classes from the pre-migration markup.

@@ -25,6 +25,18 @@ const cardStyle: React.CSSProperties = {
   fontFamily: 'inherit',
   color: 'inherit',
   textDecoration: 'none',
+  transition: 'box-shadow 120ms, border-color 120ms',
+}
+
+// Inline styles can't use :hover, so lift the card imperatively on hover — same
+// pattern as DesktopGoalCard, for visual consistency with the goal cards.
+function cardHoverIn(e: React.MouseEvent<HTMLElement>) {
+  e.currentTarget.style.boxShadow = 'var(--shadow-pop)'
+  e.currentTarget.style.borderColor = 'var(--c-line-strong)'
+}
+function cardHoverOut(e: React.MouseEvent<HTMLElement>) {
+  e.currentTarget.style.boxShadow = 'var(--shadow-card)'
+  e.currentTarget.style.borderColor = 'var(--c-line)'
 }
 
 const iconBox: React.CSSProperties = {
@@ -68,13 +80,13 @@ export function OverviewEmptyState({ onAddGoal, onAddInsurance }: { onAddGoal: (
 
       {/* Action cards */}
       <div style={{ width: '100%', maxWidth: 420, display: 'grid', gap: 12, marginBottom: 32 }}>
-        <button type="button" onClick={onAddGoal} style={cardStyle}>
+        <button type="button" onClick={onAddGoal} style={cardStyle} onMouseEnter={cardHoverIn} onMouseLeave={cardHoverOut}>
           <ActionRow Icon={Target} title={t('addGoal')} desc={t('addGoalDesc')} />
         </button>
-        <a href="/funds" style={cardStyle}>
+        <a href="/funds" style={cardStyle} onMouseEnter={cardHoverIn} onMouseLeave={cardHoverOut}>
           <ActionRow Icon={Wallet} title={t('addFund')} desc={t('addFundDesc')} />
         </a>
-        <button type="button" onClick={onAddInsurance} style={cardStyle}>
+        <button type="button" onClick={onAddInsurance} style={cardStyle} onMouseEnter={cardHoverIn} onMouseLeave={cardHoverOut}>
           <ActionRow Icon={Shield} title={t('addInsurance')} desc={t('addInsuranceDesc')} />
         </button>
       </div>
