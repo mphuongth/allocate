@@ -319,6 +319,17 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const selectedInsurance = data?.insurance.find((i) => i.insuranceId === selectedInsuranceId) ?? null
   const PULL_THRESHOLD = 65
 
+  // Goal/insurance selection is rendered differently per breakpoint — desktop
+  // shows a right-side panel, mobile a sheet gated by separate state. Crossing
+  // the 768px boundary (resize/rotate) would otherwise leave a desktop goal
+  // selection set-but-invisible (then pop back open on the next resize) or
+  // unexpectedly auto-open the mobile insurance sheet. Clear selection on flip.
+  useEffect(() => {
+    setSelectedGoalId(null)
+    setSelectedInsuranceId(null)
+    setGoalDetailOpen(false)
+  }, [isDesktop])
+
   const fetchDataRef = useRef<(opts?: { force?: boolean }) => Promise<void>>(async () => {})
   const hasDataRef = useRef(false)
   const touchStartY = useRef(-1)
