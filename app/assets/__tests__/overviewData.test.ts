@@ -4,9 +4,25 @@ import {
   overviewErrorText,
   getCachedOverview,
   setCachedOverview,
+  computeAllocationTotals,
   type OverviewLoadResult,
 } from '../overviewData'
-import type { DashboardData } from '../DashboardClient'
+import type { DashboardData, FundBreakdownItem } from '../DashboardClient'
+
+function fund(fundType: string, currentValue: number): FundBreakdownItem {
+  return {
+    fundId: `f-${fundType}-${currentValue}`,
+    fundName: fundType,
+    fundType,
+    quantity: 1,
+    currentNAV: currentValue,
+    currentValue,
+    purchasePrice: currentValue,
+    profitLoss: 0,
+    profitLossPercentage: 0,
+    goalId: null,
+  }
+}
 
 const sample = (assets: number): DashboardData =>
   ({
@@ -37,6 +53,45 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 // The service worker's synthetic abort response for a slow /api/v1 request.
 const swOffline = () => jsonResponse({ error: 'Offline', cached: false }, 503)
+
+describe('computeAllocationTotals', () => {
+  const base = sample(0)
+
+  it('sums known fund types (equity/debt/balanced) into fundTotal', () => {
+    const data: DashboardData = {
+      ...base,
+      unallocated: { totalValue: 0, funds: [fund('equity', 100), fund('debt', 50), fund('balanced', 25)], nonFunds: [] },
+    }
+    expect(computeAllocationTotals(data).fundTotal).toBe(175)
+  })
+
+  it('buckets an unknown fund_type into fundTotal instead of dropping it (#3)', () => {
+    const data: DashboardData = {
+      ...base,
+      unallocated: { totalValue: 0, funds: [fund('equity', 100), fund('money_market', 40)], nonFunds: [] },
+    }
+    // The pre-fix code only summed equity+debt+balanced, so the 40 vanished
+    // from the allocation bar while still counting toward net worth.
+    expect(computeAllocationTotals(data).fundTotal).toBe(140)
+  })
+
+  it('includes funds held under goals as well as unallocated funds', () => {
+    const data: DashboardData = {
+      ...base,
+      goals: [{ ...({} as DashboardData['goals'][number]), funds: [fund('equity', 60)] }],
+      unallocated: { totalValue: 0, funds: [fund('debt', 30)], nonFunds: [] },
+    }
+    expect(computeAllocationTotals(data).fundTotal).toBe(90)
+  })
+
+  it('passes bank/gold/stock through from byType', () => {
+    const data: DashboardData = { ...base, byType: { bank: 200, gold: 80, stock: 33 } }
+    const t = computeAllocationTotals(data)
+    expect(t.bankTotal).toBe(200)
+    expect(t.goldTotal).toBe(80)
+    expect(t.stockTotal).toBe(33)
+  })
+})
 
 describe('loadOverview', () => {
   const noCache = { getCache: () => null, setCache: () => {} }

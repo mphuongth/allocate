@@ -5,6 +5,7 @@ import { ArrowDownToLine } from 'lucide-react'
 import { fmtCompact, fmtPct } from '@/lib/formatters'
 import { CairnLoader } from '@/app/components/ui/CairnLoader'
 import type { DashboardData } from '../DashboardClient'
+import type { AllocationTotals } from '../overviewData'
 
 const TIME_RANGES = ['1M', '3M', '6M', '1Y', 'All'] as const
 type TimeRange = typeof TIME_RANGES[number]
@@ -59,16 +60,6 @@ const ALLOC_COLORS: Record<string, { color: string; label: string; labelVi: stri
   stock: { color: '#7c3aed', label: 'Stock',   labelVi: 'Cổ phiếu' },
 }
 
-interface AllocationTotals {
-  equityTotal: number
-  bondTotal: number
-  balancedTotal: number
-  bankTotal: number
-  goldTotal: number
-  stockTotal: number
-  cashTotal: number
-}
-
 interface Props {
   data: DashboardData
   allocationTotals: AllocationTotals | null
@@ -96,7 +87,7 @@ export default function DesktopNetWorthPanel({ data, allocationTotals, goldUnits
 
   const segments = allocationTotals ? (() => {
     const raw: Record<string, number> = {
-      fund: allocationTotals.equityTotal + allocationTotals.bondTotal + allocationTotals.balancedTotal,
+      fund: allocationTotals.fundTotal,
       bank: allocationTotals.bankTotal,
       gold: allocationTotals.goldTotal,
       stock: allocationTotals.stockTotal,
