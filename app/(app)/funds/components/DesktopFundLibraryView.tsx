@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useTranslations, useLocale } from 'next-intl'
 import { Plus, RefreshCw, Search, X } from 'lucide-react'
@@ -8,26 +8,10 @@ import { fmtCompact, fmtNav } from '@/lib/formatters'
 import { Skeleton } from '@/app/components/ui/Skeleton'
 import { SyncPill } from '@/app/components/ui/SyncPill'
 import { FundsEmptyState } from './FundsEmptyState'
+import type { Fund, Goal, FundType, FundsData } from './useFundsData'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-
-type FundType = 'balanced' | 'equity' | 'debt' | 'gold'
-
-type Fund = {
-  id: string
-  name: string
-  code: string
-  fund_type: FundType
-  nav: number
-  nav_source_url: string | null
-  is_dca: boolean
-  dca_monthly_amount_vnd: number | null
-  dca_goal_id: string | null
-  created_at: string
-  updated_at: string
-}
-
-type Goal = { goal_id: string; goal_name: string }
+// Fund/Goal/FundType are shared with the mobile view via useFundsData.
 
 type SortKey = 'code' | 'nav' | 'name'
 type TypeFilter = 'all' | 'equity' | 'debt' | 'balanced'
@@ -51,37 +35,6 @@ const TYPE_FILTERS: { v: TypeFilter; label: string; labelVi: string }[] = [
 // Selectable fund types in the create/edit form. Gold is excluded (handled
 // separately via byType) to match MobileFundLibraryView's FORM_TYPES.
 const FORM_TYPES = (Object.keys(TYPE_META) as FundType[]).filter(ft => ft !== 'gold')
-
-// ─── Cache ────────────────────────────────────────────────────────────────────
-
-const CACHE_KEY = 'fundLibraryCache'
-const CACHE_TTL = 2 * 60 * 1000
-
-function getCache(): Fund[] | null {
-  try {
-    const raw = localStorage.getItem(CACHE_KEY)
-    if (!raw) return null
-    const { data, ts } = JSON.parse(raw)
-    if (Date.now() - ts > CACHE_TTL) return null
-    return data
-  } catch { return null }
-}
-function setCache(data: Fund[]) {
-  try { localStorage.setItem(CACHE_KEY, JSON.stringify({ data, ts: Date.now() })) } catch {}
-}
-function bustCache() {
-  try { localStorage.removeItem(CACHE_KEY) } catch {}
-}
-
-// ─── Cross-view sync ──────────────────────────────────────────────────────────
-// Both MobileFundLibraryView and DesktopFundLibraryView are always mounted.
-// When one mutates fund data it dispatches this event so the other reloads.
-let _suppressNotify = false
-function notifyFundsUpdated() {
-  _suppressNotify = true
-  window.dispatchEvent(new CustomEvent('cairn:funds-updated'))
-  _suppressNotify = false
-}
 
 // ─── Small components ─────────────────────────────────────────────────────────
 
@@ -325,18 +278,12 @@ function FormField({ label, children }: { label: string; children: ReactNode }) 
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function DesktopFundLibraryView() {
+export default function DesktopFundLibraryView({ funds, setFunds, goals, loading, error, reload }: FundsData) {
   const t = useTranslations('funds')
   const tc = useTranslations('common')
   const locale = useLocale()
 
-  // Fund data
-  const [funds, setFunds] = useState<Fund[]>(() => getCache() ?? [])
-  const [loading, setLoading] = useState(() => !getCache())
-  const [error, setError] = useState<string | null>(null)
-
-  // Savings goals (DCA target options)
-  const [goals, setGoals] = useState<Goal[]>([])
+  // funds / goals / loading / error / reload come from FundLibraryClient (#10).
 
   // Table state
   const [query, setQuery] = useState('')
@@ -373,41 +320,6 @@ export default function DesktopFundLibraryView() {
     setToasts(p => [...p, { id, msg, ok }])
     setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 3000)
   }, [])
-
-  // Data loading
-  const loadFunds = useCallback(async (force = false) => {
-    if (force) bustCache()
-    setError(null)
-    try {
-      const res = await fetch('/api/funds')
-      if (!res.ok) throw new Error()
-      const { funds: data } = await res.json()
-      setCache(data)
-      setFunds(data)
-    } catch {
-      setError(t('loadError'))
-    } finally {
-      setLoading(false)
-    }
-  }, [t])
-
-  useEffect(() => { loadFunds() }, [loadFunds])
-
-  // Load savings goals once for the DCA target dropdown.
-  useEffect(() => {
-    let cancelled = false
-    fetch('/api/v1/savings-goals')
-      .then(res => res.ok ? res.json() : { goals: [] })
-      .then(({ goals: data }) => { if (!cancelled) setGoals(data ?? []) })
-      .catch(() => {})
-    return () => { cancelled = true }
-  }, [])
-
-  useEffect(() => {
-    const handler = () => { if (!_suppressNotify) loadFunds(true) }
-    window.addEventListener('cairn:funds-updated', handler)
-    return () => window.removeEventListener('cairn:funds-updated', handler)
-  }, [loadFunds])
 
   // Relative NAV age per fund (#9) — same buckets as the mobile card.
   const relDate = (str: string) => {
@@ -449,9 +361,7 @@ export default function DesktopFundLibraryView() {
       const { results } = await res.json()
       const updated = results.filter((r: { nav?: number }) => r.nav !== undefined).length
       const failed = results.filter((r: { error?: string }) => r.error).length
-      bustCache()
-      await loadFunds(true)
-      notifyFundsUpdated()
+      await reload()
       addToast(t('navRefreshDone', { updated, failed }), failed === 0 || updated > 0)
     } catch {
       addToast(t('toastRefreshFailed'), false)
@@ -489,9 +399,7 @@ export default function DesktopFundLibraryView() {
       const data = await res.json()
       if (!res.ok) { setFormError(res.status === 409 ? t('codeExists') : data.error || t('error')); return }
       closeModal()
-      bustCache()
-      await loadFunds(true)
-      notifyFundsUpdated()
+      await reload()
       addToast(modalMode === 'edit' ? t('toastUpdated') : t('toastAdded'))
     } catch {
       setFormError(t('error'))
@@ -519,9 +427,7 @@ export default function DesktopFundLibraryView() {
         body: JSON.stringify({ name: fund.name, code: fund.code, fund_type: fund.fund_type, nav: fund.nav, nav_source_url: fund.nav_source_url, is_dca: false, dca_monthly_amount_vnd: null }),
       })
       if (!res.ok) throw new Error()
-      bustCache()
-      await loadFunds(true)
-      notifyFundsUpdated()
+      await reload()
     } catch {
       setFunds(p => p.map(f => f.id === fund.id ? { ...f, is_dca: true } : f))
       addToast(t('toastDcaFailed'), false)
@@ -547,9 +453,7 @@ export default function DesktopFundLibraryView() {
         body: JSON.stringify({ name: fund.name, code: fund.code, fund_type: fund.fund_type, nav: fund.nav, nav_source_url: fund.nav_source_url, is_dca: true, dca_monthly_amount_vnd: amount, dca_goal_id: fund.dca_goal_id }),
       })
       if (!res.ok) throw new Error()
-      bustCache()
-      await loadFunds(true)
-      notifyFundsUpdated()
+      await reload()
     } catch {
       setFunds(p => p.map(f => f.id === fund.id ? { ...f, is_dca: false, dca_monthly_amount_vnd: null } : f))
       addToast(t('toastDcaFailed'), false)
@@ -569,9 +473,7 @@ export default function DesktopFundLibraryView() {
         body: JSON.stringify({ name: fund.name, code: fund.code, fund_type: fund.fund_type, nav: fund.nav, nav_source_url: fund.nav_source_url, is_dca: true, dca_monthly_amount_vnd: fund.dca_monthly_amount_vnd, dca_goal_id: goalId }),
       })
       if (!res.ok) throw new Error()
-      bustCache()
-      await loadFunds(true)
-      notifyFundsUpdated()
+      await reload()
     } catch {
       setFunds(p => p.map(f => f.id === fund.id ? { ...f, dca_goal_id: prevGoalId } : f))
       addToast(t('toastGoalFailed'), false)
@@ -588,9 +490,7 @@ export default function DesktopFundLibraryView() {
       const res = await fetch(`/api/funds/${deleteTarget.id}`, { method: 'DELETE' })
       if (!res.ok && res.status !== 204) throw new Error()
       setDeleteTarget(null)
-      bustCache()
-      await loadFunds(true)
-      notifyFundsUpdated()
+      await reload()
       addToast(t('toastDeleted'))
     } catch {
       addToast(t('toastDeleteFailed'), false)
@@ -712,8 +612,8 @@ export default function DesktopFundLibraryView() {
           </div>
         ) : error ? (
           <div className="cn-card" style={{ padding: 48, textAlign: 'center' }}>
-            <p style={{ color: 'var(--c-neg)', marginBottom: 16, fontSize: 14 }}>{error}</p>
-            <button onClick={() => loadFunds()} className="cn-btn primary" style={{ padding: '8px 20px' }}>{tc('tryAgain')}</button>
+            <p style={{ color: 'var(--c-neg)', marginBottom: 16, fontSize: 14 }}>{t('loadError')}</p>
+            <button onClick={() => reload()} className="cn-btn primary" style={{ padding: '8px 20px' }}>{tc('tryAgain')}</button>
           </div>
         ) : funds.length === 0 ? (
           <div className="cn-card" style={{ padding: 64 }}>
