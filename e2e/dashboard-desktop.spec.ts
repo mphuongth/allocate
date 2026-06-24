@@ -54,6 +54,32 @@ test.describe('Desktop overview layout', () => {
     await expect(page.getByTestId('desktop-overview')).not.toBeVisible()
   })
 
+  test('crossing the desktop↔mobile breakpoint clears a goal selection (#4)', async ({ page }) => {
+    // Selecting a goal on desktop only shows a right-side panel; mobile gates its
+    // goal sheet on different state. Crossing 768px used to leave the selection
+    // set-but-invisible, so resizing back to desktop popped the stale goal detail
+    // open again. The fix clears selection when the breakpoint flips.
+    const goal = await api.createGoal({ goal_name: 'E2E Resize Selection Goal', target_amount: 20_000_000 })
+    try {
+      await gotoFreshDashboard(page)
+
+      // Select the goal on desktop → right panel shows its detail.
+      await page.getByText('E2E Resize Selection Goal', { exact: true }).first().click()
+      await expect(page.getByTestId('desktop-goal-detail')).toBeVisible({ timeout: 8_000 })
+      await expect(page.getByTestId('desktop-net-worth-panel')).not.toBeVisible()
+
+      // Shrink to mobile, then back to desktop. Selection should have been cleared,
+      // so the right panel reverts to net worth instead of restoring the goal detail.
+      await page.setViewportSize({ width: 390, height: 844 })
+      await page.setViewportSize({ width: 1280, height: 800 })
+
+      await expect(page.getByTestId('desktop-net-worth-panel')).toBeVisible({ timeout: 8_000 })
+      await expect(page.getByTestId('desktop-goal-detail')).not.toBeVisible()
+    } finally {
+      await api.deleteGoal(goal.goal_id)
+    }
+  })
+
   test('sidebar has light background (not dark navy)', async ({ page }) => {
     const sidebar = page.getByTestId('desktop-sidebar')
     await expect(sidebar).toBeVisible({ timeout: 10_000 })
