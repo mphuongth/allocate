@@ -36,10 +36,6 @@ yarn-error.log*
 .env.local
 .env.*.local
 
-# braingrid temp (local-only files)
-.braingrid/temp/*.local
-.braingrid/temp/*.local.md
-
 # vercel
 .vercel
 
