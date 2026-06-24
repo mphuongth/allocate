@@ -1,19 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
 import { useLocale, useTranslations } from 'next-intl'
 import { TrendingUp, TrendingDown } from 'lucide-react'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import { CairnLoader } from '@/app/components/ui/CairnLoader'
-
-const TIME_RANGES = ['1M', '3M', '6M', '1Y', 'All'] as const
-type TimeRange = typeof TIME_RANGES[number]
-
-const RANGE_PARAM: Record<TimeRange, string> = {
-  '1M': '1m', '3M': '3m', '6M': '6m', '1Y': '1y', 'All': 'all',
-}
-
-interface ChartPoint { label: string; value: number }
+import { TIME_RANGES, type TimeRange, type ChartPoint } from './netWorthHistory'
 
 // SVG sparkline — no recharts dependency
 function Sparkline({ data, positive }: { data: ChartPoint[]; positive: boolean }) {
@@ -126,26 +117,23 @@ interface Props {
   overallProfitLoss: number
   overallProfitLossPercentage: number
   allocationBar?: { fund: number; bank: number; gold: number; stock: number; goldUnits?: number }
-  refreshKey?: number
   refreshing?: boolean
+  // History + range are owned by the parent so the selected range survives a
+  // desktop↔mobile breakpoint switch (#5). Optional with safe defaults so the
+  // card still renders standalone (e.g. in unit tests).
+  history?: ChartPoint[]
+  timeRange?: TimeRange
+  onRangeChange?: (range: TimeRange) => void
 }
 
 export default function NetWorthCard({
   totalAssets, totalLiabilities, netWorth, totalInvested, currentValue,
-  overallProfitLoss, overallProfitLossPercentage, allocationBar, refreshKey, refreshing,
+  overallProfitLoss, overallProfitLossPercentage, allocationBar, refreshing,
+  history = [], timeRange = '1Y', onRangeChange,
 }: Props) {
   const locale = useLocale()
   const t = useTranslations('dashboard')
   const plPositive = overallProfitLoss >= 0
-  const [timeRange, setTimeRange] = useState<TimeRange>('1Y')
-  const [history, setHistory] = useState<ChartPoint[]>([])
-
-  useEffect(() => {
-    fetch(`/api/v1/dashboard/history?range=${RANGE_PARAM[timeRange]}`, { cache: 'no-store' })
-      .then((r) => r.ok ? r.json() : [])
-      .then((data: ChartPoint[]) => setHistory(data))
-      .catch(() => setHistory([]))
-  }, [timeRange, refreshKey])
 
   const kpis = [
     { label: t('invested'),     value: totalInvested },
@@ -155,7 +143,7 @@ export default function NetWorthCard({
   ]
 
   return (
-    <div style={{
+    <div data-testid="net-worth-card" style={{
       background: 'var(--c-card)',
       border: '1px solid var(--c-line)',
       borderRadius: 'var(--r-card)',
@@ -225,7 +213,8 @@ export default function NetWorthCard({
         {TIME_RANGES.map((r) => (
           <button
             key={r}
-            onClick={() => setTimeRange(r)}
+            onClick={() => onRangeChange?.(r)}
+            aria-pressed={timeRange === r}
             style={{
               flex: 1, padding: '5px 0',
               border: 'none', cursor: 'pointer',

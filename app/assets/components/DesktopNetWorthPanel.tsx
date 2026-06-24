@@ -1,20 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
 import { ArrowDownToLine } from 'lucide-react'
 import { fmtCompact, fmtPct } from '@/lib/formatters'
 import { CairnLoader } from '@/app/components/ui/CairnLoader'
 import type { DashboardData } from '../DashboardClient'
 import type { AllocationTotals } from '../overviewData'
-
-const TIME_RANGES = ['1M', '3M', '6M', '1Y', 'All'] as const
-type TimeRange = typeof TIME_RANGES[number]
-
-const RANGE_PARAM: Record<TimeRange, string> = {
-  '1M': '1m', '3M': '3m', '6M': '6m', '1Y': '1y', 'All': 'all',
-}
-
-interface ChartPoint { label: string; value: number }
+import { TIME_RANGES, type TimeRange, type ChartPoint } from './netWorthHistory'
 
 function fmtTimeAgo(isoString: string, locale: string): string {
   const diffMs = Date.now() - new Date(isoString).getTime()
@@ -65,25 +56,20 @@ interface Props {
   allocationTotals: AllocationTotals | null
   goldUnits?: number
   locale: string
-  refreshKey?: number
   refreshing?: boolean
   navUpdatedAt?: string | null
   onDownloadReport: () => void
+  // History + range owned by the parent so the range persists across the
+  // desktop↔mobile breakpoint switch (#5).
+  history?: ChartPoint[]
+  timeRange?: TimeRange
+  onRangeChange?: (range: TimeRange) => void
 }
 
-export default function DesktopNetWorthPanel({ data, allocationTotals, goldUnits, locale, refreshKey, refreshing, navUpdatedAt, onDownloadReport }: Props) {
+export default function DesktopNetWorthPanel({ data, allocationTotals, goldUnits, locale, refreshing, navUpdatedAt, onDownloadReport, history = [], timeRange = '1Y', onRangeChange }: Props) {
   const { netWorth } = data
   const isPos = netWorth.overallProfitLoss >= 0
   const isVi = locale === 'vi'
-  const [timeRange, setTimeRange] = useState<TimeRange>('1Y')
-  const [history, setHistory] = useState<ChartPoint[]>([])
-
-  useEffect(() => {
-    fetch(`/api/v1/dashboard/history?range=${RANGE_PARAM[timeRange]}`, { cache: 'no-store' })
-      .then((r) => r.ok ? r.json() : [])
-      .then((d: ChartPoint[]) => setHistory(d))
-      .catch(() => setHistory([]))
-  }, [timeRange, refreshKey])
 
   const segments = allocationTotals ? (() => {
     const raw: Record<string, number> = {
@@ -160,7 +146,8 @@ export default function DesktopNetWorthPanel({ data, allocationTotals, goldUnits
           {TIME_RANGES.map((r) => (
             <button
               key={r}
-              onClick={() => setTimeRange(r)}
+              onClick={() => onRangeChange?.(r)}
+              aria-pressed={timeRange === r}
               style={{
                 flex: 1, padding: '4px 0',
                 border: 'none', cursor: 'pointer',
