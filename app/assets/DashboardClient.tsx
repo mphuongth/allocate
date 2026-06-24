@@ -34,6 +34,7 @@ import DesktopInsuranceList from './components/DesktopInsuranceList'
 import DesktopInsuranceDetail from './components/DesktopInsuranceDetail'
 import InsuranceEmpty from './components/InsuranceEmpty'
 import AddInsuranceMemberModal from './components/AddInsuranceMemberModal'
+import { OverviewEmptyState } from './components/OverviewEmptyState'
 import DesktopGoalDetail from './components/DesktopGoalDetail'
 
 export interface FundBreakdownItem {
@@ -654,9 +655,12 @@ export default function DashboardClient({ userId }: { userId: string }) {
 
         {/* Error state */}
         {error && (
-          <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl flex items-center justify-between">
-            <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
-            <button onClick={() => fetchData({ force: true })} className="text-sm text-red-600 dark:text-red-400 font-medium hover:underline ml-4">{tc('tryAgain')}</button>
+          <div
+            className="mb-6 flex items-center justify-between"
+            style={{ padding: 16, background: 'var(--c-neg-tint)', border: '1px solid var(--c-neg)', borderRadius: 12 }}
+          >
+            <p className="text-sm" style={{ color: 'var(--c-neg)', margin: 0 }}>{error}</p>
+            <button onClick={() => fetchData({ force: true })} className="text-sm font-medium hover:underline ml-4" style={{ color: 'var(--c-neg)' }}>{tc('tryAgain')}</button>
           </div>
         )}
 
@@ -676,55 +680,10 @@ export default function DashboardClient({ userId }: { userId: string }) {
 
         {/* Empty state */}
         {!loading && !error && isEmpty && (
-          <div className="flex flex-col items-center py-16 px-4">
-            {/* Icon */}
-            <div className="w-20 h-20 rounded-2xl bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center mb-6">
-              <span className="text-4xl">📊</span>
-            </div>
-
-            {/* Title & description */}
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">{t('empty')}</h2>
-            <p className="text-gray-500 dark:text-gray-400 text-center max-w-sm mb-10">
-              {t('emptyDesc')}
-            </p>
-
-            {/* Action cards */}
-            <div className="w-full max-w-md space-y-3 mb-8">
-              {[
-                { icon: '🎯', title: t('addGoal'), desc: t('addGoalDesc') },
-                { icon: '💰', title: t('addFund'), desc: t('addFundDesc') },
-                { icon: '🛡️', title: t('addInsurance'), desc: t('addInsuranceDesc') },
-              ].map(({ icon, title, desc }) => (
-                <a
-                  key={title}
-                  href="/settings"
-                  className="flex items-center gap-4 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-xl px-5 py-4 shadow-sm hover:shadow-md hover:border-indigo-100 dark:hover:border-indigo-700 transition-all group"
-                >
-                  <div className="w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center flex-shrink-0 text-xl">
-                    {icon}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-900 dark:text-gray-100 text-sm">{title}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{desc}</p>
-                  </div>
-                  <span className="text-gray-300 dark:text-gray-600 group-hover:text-indigo-500 transition-colors text-lg">→</span>
-                </a>
-              ))}
-            </div>
-
-            {/* Divider + Settings button */}
-            <div className="flex items-center gap-3 w-full max-w-md mb-5">
-              <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
-              <span className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">{t('orManage')}</span>
-              <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
-            </div>
-            <a
-              href="/settings"
-              className="px-6 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
-            >
-              {t('settingsLink')}
-            </a>
-          </div>
+          <OverviewEmptyState
+            onAddGoal={() => setShowGoalForm(true)}
+            onAddInsurance={() => setShowAddInsurance(true)}
+          />
         )}
 
 
