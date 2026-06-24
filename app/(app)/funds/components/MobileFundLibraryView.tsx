@@ -278,12 +278,12 @@ function FundForm({ existing, title, onClose, onSave, saving, formError }: {
       )}
       <div style={{ display: 'grid', gap: 6 }}>
         <label style={labelStyle}>{t('nameLabel')}</label>
-        <input value={name} onChange={(e) => setName(e.target.value)} maxLength={255} placeholder="e.g., Vanguard S&P 500 ETF" style={inputStyle} />
+        <input value={name} onChange={(e) => setName(e.target.value)} maxLength={255} placeholder={t('namePlaceholder')} style={inputStyle} />
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
         <div style={{ display: 'grid', gap: 6 }}>
           <label style={labelStyle}>{t('codeLabel')}</label>
-          <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} maxLength={50} placeholder="e.g., VOO" style={{ ...inputStyle, fontFamily: 'var(--font-mono,monospace)' }} />
+          <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} maxLength={50} placeholder={t('codePlaceholder')} style={{ ...inputStyle, fontFamily: 'var(--font-mono,monospace)' }} />
         </div>
         <div style={{ display: 'grid', gap: 6 }}>
           <label style={labelStyle}>{t('typeLabel')}</label>
@@ -292,11 +292,11 @@ function FundForm({ existing, title, onClose, onSave, saving, formError }: {
       </div>
       <div style={{ display: 'grid', gap: 6 }}>
         <label style={labelStyle}>{t('navLabel')}</label>
-        <input type="number" value={nav} onChange={(e) => setNav(e.target.value)} min="0.01" step="0.01" placeholder="e.g., 450.25" style={{ ...inputStyle, fontVariantNumeric: 'tabular-nums' }} />
+        <input type="number" value={nav} onChange={(e) => setNav(e.target.value)} min="0.01" step="0.01" placeholder={t('navPlaceholder')} style={{ ...inputStyle, fontVariantNumeric: 'tabular-nums' }} />
       </div>
       <div style={{ display: 'grid', gap: 6 }}>
         <label style={labelStyle}>{t('navSourceLabel')}</label>
-        <input type="url" value={navUrl} onChange={(e) => setNavUrl(e.target.value)} placeholder="https://..." style={inputStyle} />
+        <input type="url" value={navUrl} onChange={(e) => setNavUrl(e.target.value)} placeholder={t('navUrlPlaceholder')} style={inputStyle} />
       </div>
       <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
         <button onClick={onClose} disabled={saving} style={{ flex: 1, padding: '10px 14px', fontSize: 13, fontWeight: 600, border: '1px solid var(--c-line)', borderRadius: 10, background: 'var(--c-card)', color: 'var(--c-ink)', cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -367,10 +367,10 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
         </div>
         <div style={{ display: 'flex', flexShrink: 0 }}>
           {/* ≥44px touch targets (#4): icons stay 14px but the button fills 44×44. */}
-          <button onClick={onEdit} aria-label="Edit fund" style={{ minWidth: 44, minHeight: 44, padding: 6, background: 'transparent', border: 'none', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <button onClick={onEdit} aria-label={t('editFund')} style={{ minWidth: 44, minHeight: 44, padding: 6, background: 'transparent', border: 'none', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <IconEdit size={14} color="var(--c-muted)" />
           </button>
-          <button onClick={onDelete} aria-label="Delete fund" style={{ minWidth: 44, minHeight: 44, padding: 6, background: 'transparent', border: 'none', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <button onClick={onDelete} aria-label={t('deleteBtn')} style={{ minWidth: 44, minHeight: 44, padding: 6, background: 'transparent', border: 'none', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <IconTrash size={14} color="var(--c-neg)" />
           </button>
         </div>
@@ -396,7 +396,7 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
             type="button"
             onClick={onToggleDca}
             disabled={toggling}
-            aria-label={fund.is_dca ? 'Disable DCA' : 'Enable DCA'}
+            aria-label={fund.is_dca ? t('disableDca') : t('enableDca')}
             style={{ minWidth: 44, minHeight: 44, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: 'none', cursor: toggling ? 'not-allowed' : 'pointer', flexShrink: 0, opacity: toggling ? 0.5 : 1 }}
           >
             <span style={{ display: 'block', position: 'relative', width: 36, height: 20, borderRadius: 10, background: fund.is_dca ? 'var(--c-btn-primary)' : 'var(--c-line-strong)', transition: 'background 180ms' }}>
@@ -580,7 +580,7 @@ export default function MobileFundLibraryView() {
           <button
             onClick={handleRefreshNav}
             disabled={refreshing || !funds.some((f) => f.nav_source_url)}
-            aria-label="Refresh NAV"
+            aria-label={t('refreshNav')}
             style={{ padding: 8, background: 'transparent', border: '1px solid var(--c-line)', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', opacity: refreshing || !funds.some((f) => f.nav_source_url) ? 0.4 : 1 }}
           >
             <RefreshCw size={16} color="var(--c-ink)" />
@@ -590,7 +590,7 @@ export default function MobileFundLibraryView() {
             style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', fontSize: 12, fontWeight: 600, background: 'var(--c-btn-primary)', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}
           >
             <Plus size={14} strokeWidth={2.5} />
-            Add
+            {t('add')}
           </button>
         </div>
       ),

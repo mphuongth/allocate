@@ -231,7 +231,7 @@ function DcaToggle({ fund, editId, editValue, goals, goalLabel, unallocatedLabel
     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
       <button
         data-testid="dca-toggle"
-        aria-label="DCA"
+        aria-label={fund.is_dca ? t('disableDca') : t('enableDca')}
         onClick={e => { e.stopPropagation(); onToggle() }}
         style={{
           width: 34, height: 19, borderRadius: 999,
@@ -771,7 +771,7 @@ export default function DesktopFundLibraryView() {
                             onClick={e => openEditModal(fund, e)}
                             className="cn-btn ghost"
                             style={{ padding: 6 }}
-                            aria-label="Edit"
+                            aria-label={t('editFund')}
                           >
                             <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="var(--c-muted)" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
                               <path d="M4 20h4l10-10-4-4L4 16z" />
@@ -782,7 +782,7 @@ export default function DesktopFundLibraryView() {
                             onClick={e => { e.stopPropagation(); setDeleteTarget(fund) }}
                             className="cn-btn ghost"
                             style={{ padding: 6 }}
-                            aria-label="Delete"
+                            aria-label={t('deleteBtn')}
                           >
                             <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="var(--c-neg)" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
                               <path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" />
@@ -834,7 +834,7 @@ export default function DesktopFundLibraryView() {
                 value={formName}
                 onChange={e => setFormName(e.target.value)}
                 className="cn-input"
-                placeholder="e.g., VFMVF1 Equity Fund"
+                placeholder={t('namePlaceholder')}
                 autoFocus
                 maxLength={255}
               />
@@ -845,7 +845,7 @@ export default function DesktopFundLibraryView() {
                   value={formCode}
                   onChange={e => setFormCode(e.target.value.toUpperCase())}
                   className="cn-input"
-                  placeholder="VFMVF1"
+                  placeholder={t('codePlaceholder')}
                   maxLength={50}
                   style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 13 }}
                 />
@@ -871,7 +871,7 @@ export default function DesktopFundLibraryView() {
                 onChange={e => setFormNav(e.target.value)}
                 className="cn-input"
                 style={{ fontVariantNumeric: 'tabular-nums' }}
-                placeholder="e.g. 36120"
+                placeholder={t('navPlaceholder')}
               />
             </FormField>
             <FormField label={t('navSourceLabel')}>
@@ -880,7 +880,7 @@ export default function DesktopFundLibraryView() {
                 value={formNavUrl}
                 onChange={e => setFormNavUrl(e.target.value)}
                 className="cn-input"
-                placeholder="https://..."
+                placeholder={t('navUrlPlaceholder')}
               />
             </FormField>
             <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
