@@ -210,10 +210,11 @@ const SortTh = ({ label, sortKey, active, asc, onSort, align = 'right' }: {
 
 // ─── DCA toggle (inline) ──────────────────────────────────────────────────────
 
-function DcaToggle({ fund, editId, editValue, goals, goalLabel, unallocatedLabel, onToggle, onEditStart, onEditChange, onEditCommit, onEditCancel, onGoalChange }: {
+function DcaToggle({ fund, editId, editValue, toggling, goals, goalLabel, unallocatedLabel, onToggle, onEditStart, onEditChange, onEditCommit, onEditCancel, onGoalChange }: {
   fund: Fund
   editId: string | null
   editValue: string
+  toggling: boolean
   goals: Goal[]
   goalLabel: string
   unallocatedLabel: string
@@ -232,12 +233,13 @@ function DcaToggle({ fund, editId, editValue, goals, goalLabel, unallocatedLabel
       <button
         data-testid="dca-toggle"
         aria-label={fund.is_dca ? t('disableDca') : t('enableDca')}
+        disabled={toggling}
         onClick={e => { e.stopPropagation(); onToggle() }}
         style={{
           width: 34, height: 19, borderRadius: 999,
           background: fund.is_dca ? 'var(--c-btn-primary)' : 'var(--c-line-strong)',
-          border: 'none', cursor: 'pointer', position: 'relative',
-          transition: 'background 180ms', flexShrink: 0,
+          border: 'none', cursor: toggling ? 'not-allowed' : 'pointer', position: 'relative',
+          transition: 'background 180ms', flexShrink: 0, opacity: toggling ? 0.5 : 1,
         }}
       >
         <span style={{
@@ -292,6 +294,7 @@ function DcaToggle({ fund, editId, editValue, goals, goalLabel, unallocatedLabel
           value={fund.dca_goal_id ?? ''}
           title={goalLabel}
           aria-label={goalLabel}
+          disabled={toggling}
           onClick={e => e.stopPropagation()}
           onChange={e => { e.stopPropagation(); onGoalChange(e.target.value || null) }}
           style={{
@@ -344,6 +347,9 @@ export default function DesktopFundLibraryView() {
   // DCA inline edit
   const [dcaEditId, setDcaEditId] = useState<string | null>(null)
   const [dcaEditValue, setDcaEditValue] = useState('')
+  // Funds with an in-flight DCA PUT — toggle/goal-select disabled until it lands
+  // (parity with mobile's togglingIds, prevents overlapping PUTs on fast clicks).
+  const [togglingIds, setTogglingIds] = useState<Set<string>>(new Set())
 
   // Modals
   const [modalMode, setModalMode] = useState<'add' | 'edit' | null>(null)
@@ -402,6 +408,16 @@ export default function DesktopFundLibraryView() {
     window.addEventListener('cairn:funds-updated', handler)
     return () => window.removeEventListener('cairn:funds-updated', handler)
   }, [loadFunds])
+
+  // Relative NAV age per fund (#9) — same buckets as the mobile card.
+  const relDate = (str: string) => {
+    const mins = Math.floor((Date.now() - new Date(str).getTime()) / 60000)
+    if (mins < 1) return t('relJustNow')
+    if (mins < 60) return t('relMinutes', { m: mins })
+    const h = Math.floor(mins / 60)
+    if (h < 24) return t('relHours', { h })
+    return t('relDays', { d: Math.floor(h / 24) })
+  }
 
   // Sorting
   const handleSort = (key: SortKey) => {
@@ -495,6 +511,7 @@ export default function DesktopFundLibraryView() {
       return
     }
 
+    setTogglingIds(p => new Set(p).add(fund.id))
     try {
       const res = await fetch(`/api/funds/${fund.id}`, {
         method: 'PUT',
@@ -508,6 +525,8 @@ export default function DesktopFundLibraryView() {
     } catch {
       setFunds(p => p.map(f => f.id === fund.id ? { ...f, is_dca: true } : f))
       addToast(t('toastDcaFailed'), false)
+    } finally {
+      setTogglingIds(p => { const s = new Set(p); s.delete(fund.id); return s })
     }
   }
 
@@ -520,6 +539,7 @@ export default function DesktopFundLibraryView() {
       return
     }
     setDcaEditId(null)
+    setTogglingIds(p => new Set(p).add(fund.id))
     try {
       const res = await fetch(`/api/funds/${fund.id}`, {
         method: 'PUT',
@@ -533,12 +553,15 @@ export default function DesktopFundLibraryView() {
     } catch {
       setFunds(p => p.map(f => f.id === fund.id ? { ...f, is_dca: false, dca_monthly_amount_vnd: null } : f))
       addToast(t('toastDcaFailed'), false)
+    } finally {
+      setTogglingIds(p => { const s = new Set(p); s.delete(fund.id); return s })
     }
   }
 
   async function handleSetDcaGoal(fund: Fund, goalId: string | null) {
     const prevGoalId = fund.dca_goal_id
     setFunds(p => p.map(f => f.id === fund.id ? { ...f, dca_goal_id: goalId } : f))
+    setTogglingIds(p => new Set(p).add(fund.id))
     try {
       const res = await fetch(`/api/funds/${fund.id}`, {
         method: 'PUT',
@@ -552,6 +575,8 @@ export default function DesktopFundLibraryView() {
     } catch {
       setFunds(p => p.map(f => f.id === fund.id ? { ...f, dca_goal_id: prevGoalId } : f))
       addToast(t('toastGoalFailed'), false)
+    } finally {
+      setTogglingIds(p => { const s = new Set(p); s.delete(fund.id); return s })
     }
   }
 
@@ -743,6 +768,11 @@ export default function DesktopFundLibraryView() {
                         <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
                           {fmtNav(fund.nav)}
                         </span>
+                        {fund.nav_source_url && fund.updated_at && (
+                          <div style={{ fontSize: 10, color: 'var(--c-muted)', marginTop: 2 }}>
+                            {t('updatedAgo', { time: relDate(fund.updated_at) })}
+                          </div>
+                        )}
                       </td>
 
                       {/* DCA */}
@@ -751,6 +781,7 @@ export default function DesktopFundLibraryView() {
                           fund={fund}
                           editId={dcaEditId}
                           editValue={dcaEditValue}
+                          toggling={togglingIds.has(fund.id)}
                           goals={goals}
                           goalLabel={t('dcaGoalLabel')}
                           unallocatedLabel={t('dcaGoalUnallocated')}

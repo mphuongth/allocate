@@ -59,6 +59,51 @@ test('desktop funds form placeholders + action aria-labels are localized (vi)', 
   await expect(modal.getByPlaceholder(/^vd:/i).first()).toBeVisible()
 })
 
+test('desktop funds row shows per-fund NAV age when a source URL is set (#9)', async ({ page }) => {
+  // #9: mobile cards show "Updated …" per fund; the desktop table didn't expose
+  // NAV age at all. A fund with a nav_source_url now shows the relative age
+  // under its NAV (just-created → "Cập nhật vừa xong" / "Updated just now").
+  const fund = await api.createFund({
+    name: 'E2E Desktop NAV Age', code: 'DTAGE1', fund_type: 'equity', nav: 18000,
+    nav_source_url: 'https://example.com/nav',
+  })
+  cleanup.add(() => api.deleteFund(fund.id))
+
+  await page.goto('/funds')
+  await page.waitForLoadState('networkidle')
+
+  const row = page.getByTestId('desktop-funds-table').getByTestId(`fund-row-${fund.id}`)
+  await expect(row).toBeVisible({ timeout: 10_000 })
+  await expect(row.getByText(/cập nhật|updated/i)).toBeVisible()
+})
+
+test('desktop funds DCA toggle is disabled while the update is in flight (#8)', async ({ page }) => {
+  // #8: the desktop DCA handlers had no in-flight guard (mobile dims + disables
+  // via togglingIds), so fast clicks could fire overlapping PUTs. The toggle is
+  // now disabled until the PUT resolves.
+  const fund = await api.createFund({
+    name: 'E2E Desktop DCA Guard', code: 'DTGRD1', fund_type: 'equity', nav: 15000,
+    is_dca: true, dca_monthly_amount_vnd: 2_000_000,
+  })
+  cleanup.add(() => api.deleteFund(fund.id))
+
+  await page.goto('/funds')
+  await page.waitForLoadState('networkidle')
+
+  // Delay the PUT so the in-flight window is observable.
+  await page.route(`**/api/funds/${fund.id}`, async route => {
+    if (route.request().method() === 'PUT') await new Promise(r => setTimeout(r, 1200))
+    await route.continue()
+  })
+
+  const row = page.getByTestId('desktop-funds-table').getByTestId(`fund-row-${fund.id}`)
+  const toggle = row.getByTestId('dca-toggle')
+  await expect(toggle).toBeEnabled({ timeout: 8_000 })
+  await toggle.click()
+  // While the PUT is outstanding the toggle must be disabled.
+  await expect(toggle).toBeDisabled()
+})
+
 test('desktop funds NAV uses the shared ₫ + 2-decimal format (#6)', async ({ page }) => {
   // #6: the desktop table showed a bare "55.000" (no decimals, no unit) while
   // mobile showed "55.000,00 VND". Both now render the shared fmtNav: "₫ 55.000,00".
