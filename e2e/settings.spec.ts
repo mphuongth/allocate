@@ -132,12 +132,12 @@ test('clicking Export data opens download report sheet', async ({ page }) => {
   await expect(page.locator('text=Portfolio report').first()).toBeVisible({ timeout: 8_000 })
 })
 
-test('download report sheet has format picker and export button', async ({ page }) => {
+test('download report sheet has an export button (PDF-only, no dead CSV picker)', async ({ page }) => {
   await page.getByRole('button', { name: /export data/i }).click()
   await expect(page.locator('text=Portfolio report').first()).toBeVisible({ timeout: 8_000 })
-  await expect(page.getByRole('button', { name: /^pdf$/i })).toBeVisible()
-  await expect(page.getByRole('button', { name: /^csv$/i })).toBeVisible()
   await expect(page.getByRole('button', { name: /export report/i })).toBeVisible()
+  // The CSV option was a dead control (always exported PDF) and was removed.
+  await expect(page.getByRole('button', { name: /^csv$/i })).toHaveCount(0)
 })
 
 test('download report sheet closes when X close button is clicked', async ({ page }) => {

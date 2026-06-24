@@ -2,11 +2,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import AddTransactionSheet from '../AddTransactionSheet'
 
+let mockLocale = 'en'
 vi.mock('next-intl', () => ({
   useTranslations: () => (key: string) => key,
+  useLocale: () => mockLocale,
 }))
 
 beforeEach(() => {
+  mockLocale = 'en'
   document.body.style.overflow = ''
   vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ json: () => Promise.resolve([]) })))
 })
@@ -349,6 +352,27 @@ describe('AddTransactionSheet — gold unit (issue #232)', () => {
       expect(body.unit_price).toBe(9_200_000)  // ₫ per chỉ
       expect(body.amount_vnd).toBe(92_000_000) // total unchanged
     })
+  })
+})
+
+describe('AddTransactionSheet — asset-type chips are localized', () => {
+  // Regression: ASSET_TYPES carries viLabel but the chips rendered enLabel
+  // hardcoded, so the vi locale still showed "Fund / Bank / Gold".
+  it('renders English labels in the en locale', () => {
+    render(<AddTransactionSheet open onClose={vi.fn()} />)
+    expect(screen.getByText('Fund')).toBeInTheDocument()
+    expect(screen.getByText('Bank')).toBeInTheDocument()
+    expect(screen.getByText('Gold')).toBeInTheDocument()
+  })
+
+  it('renders Vietnamese labels in the vi locale', () => {
+    mockLocale = 'vi'
+    render(<AddTransactionSheet open onClose={vi.fn()} />)
+    expect(screen.getByText('Quỹ')).toBeInTheDocument()
+    expect(screen.getByText('Ngân hàng')).toBeInTheDocument()
+    expect(screen.getByText('Vàng')).toBeInTheDocument()
+    // The English labels must no longer be present.
+    expect(screen.queryByText('Fund')).not.toBeInTheDocument()
   })
 })
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { X, TrendingUp, Building2, Coins, ArrowUpRight, ArrowDownRight, ArrowDownToLine, Wallet, Shield } from 'lucide-react'
-import { useTranslations } from 'next-intl'
+import { useLocale, useTranslations } from 'next-intl'
 import { CairnLoader } from '@/app/components/ui/CairnLoader'
 import { todayIso } from '@/lib/dates'
 
@@ -147,6 +147,7 @@ function groupThousands(value: string): string {
 export default function AddTransactionSheet({ open, onClose, onSaved, desktop, existing, prefill }: Props) {
   const t = useTranslations('addTx')
   const tc = useTranslations('common')
+  const isVI = useLocale() === 'vi'
 
   const [mounted, setMounted] = useState(open)
   const [funds, setFunds] = useState<Fund[]>([])
@@ -620,7 +621,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
           <div>
             <label style={labelStyle}>{t('assetType')}</label>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
-              {ASSET_TYPES.map(({ v, Icon, enLabel, color, bg }) => {
+              {ASSET_TYPES.map(({ v, Icon, enLabel, viLabel, color, bg }) => {
                 const active = assetType === v
                 return (
                   <button
@@ -639,7 +640,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
                     }}
                   >
                     <Icon size={16} strokeWidth={active ? 2 : 1.6} />
-                    {enLabel}
+                    {isVI ? viLabel : enLabel}
                   </button>
                 )
               })}

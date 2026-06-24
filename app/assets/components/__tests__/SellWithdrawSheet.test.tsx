@@ -182,6 +182,30 @@ describe('SellWithdrawSheet — gold sell (quantity × price) (issue #232)', () 
   })
 })
 
+describe('SellWithdrawSheet — error path shows a real message (not a raw i18n key)', () => {
+  // Regression: the catch/!res.ok paths used useTranslations('Dashboard').t('sellError'),
+  // but that namespace/key never existed → the error path leaked a raw key or threw.
+  it('renders a localized error when the withdrawal fails without a server message', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: false, json: () => Promise.resolve({}) })))
+
+    const item = {
+      type: 'bank' as const, name: 'Techcombank',
+      currentValue: 5_000_000, interestRate: 6,
+      transactionId: 't1', purchasePrice: 5_000_000,
+    }
+    render(<SellWithdrawSheet item={item} open context="unallocated" onClose={vi.fn()} onSuccess={vi.fn()} />)
+
+    fireEvent.click(screen.getByTestId('sell-all-btn'))
+    fireEvent.click(screen.getByTestId('sell-confirm-btn'))
+
+    await waitFor(() => {
+      expect(screen.getByText(/an error occurred|please try again/i)).toBeInTheDocument()
+    })
+    // Must not leak the i18n key or its (wrong) namespace.
+    expect(screen.queryByText(/sellError|Dashboard\./)).not.toBeInTheDocument()
+  })
+})
+
 describe('SellWithdrawSheet — responsive presentation (#248)', () => {
   const item = {
     type: 'fund' as const, name: 'VESAF',
