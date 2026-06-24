@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import DesktopPlanningView from '../DesktopPlanningView'
 import type { MonthlyPlan, FundInvestment, DirectSaving, RecurringSaving, RecurringFulfillment, InsuranceMember } from '../../PlanningClient'
@@ -181,6 +181,19 @@ describe('DesktopPlanningView — recurring bank "Saved" deposit', () => {
     } finally {
       vi.unstubAllGlobals()
     }
+  })
+})
+
+describe('DesktopPlanningView — allocation card amounts never wrap', () => {
+  it('keeps the total, remaining and per-row pct on one line so the ₫ never drops under a fallback font', () => {
+    render(<DesktopPlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} />)
+    const card = screen.getByTestId('planning-alloc-card')
+    // Big total (2.0M ₫) and the matching category row — "M" and "₫" must not split.
+    within(card).getAllByText('2.0M ₫').forEach((el) => expect(el).toHaveStyle({ whiteSpace: 'nowrap' }))
+    // Remaining value (+43.0M ₫).
+    expect(within(card).getByText('+43.0M ₫')).toHaveStyle({ whiteSpace: 'nowrap' })
+    // Per-row percentage chip.
+    expect(within(card).getByText('4%', { exact: true })).toHaveStyle({ whiteSpace: 'nowrap' })
   })
 })
 
