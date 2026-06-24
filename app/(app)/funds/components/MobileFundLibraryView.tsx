@@ -378,7 +378,7 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
 
       {/* Row 2: NAV + DCA */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8, borderTop: '1px solid var(--c-line)', gap: 8 }}>
-        <div>
+        <div style={{ flexShrink: 0 }}>
           <div style={{ fontSize: 10, color: 'var(--c-muted)', marginBottom: 2, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>NAV</div>
           <div style={{ fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
             {fund.nav.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} VND
@@ -388,7 +388,7 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
           )}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <span style={{ fontSize: 10, color: 'var(--c-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>DCA</span>
           <button
             type="button"
@@ -447,6 +447,10 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
                 // 16px (not 13) so iOS Safari doesn't zoom the viewport on focus
                 // and persist that zoom across reloads (#321).
                 fontSize: 16, fontWeight: 500, padding: '3px 6px', maxWidth: 130,
+                // minWidth:0 lets the select shrink below its content width so a long
+                // goal name truncates with an ellipsis instead of overflowing the card
+                // and getting hard-clipped at the right edge (#363).
+                minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                 border: '1px solid var(--c-line)', borderRadius: 6,
                 background: 'var(--c-card)', color: 'var(--c-muted)',
                 fontFamily: 'inherit', cursor: 'pointer', appearance: 'none', outline: 'none',
