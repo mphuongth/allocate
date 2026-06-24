@@ -14,8 +14,8 @@ test('mobile funds shows header with title and action buttons', async ({ page })
 
   const topBar = page.getByTestId('mobile-top-bar')
   await expect(topBar.getByText(/quỹ đầu tư|fund library/i)).toBeVisible({ timeout: 10_000 })
-  await expect(topBar.getByRole('button', { name: /add/i })).toBeVisible()
-  await expect(topBar.getByRole('button', { name: /refresh nav/i })).toBeVisible()
+  await expect(topBar.getByRole('button', { name: /add fund|thêm quỹ/i })).toBeVisible()
+  await expect(topBar.getByRole('button', { name: /refresh nav|làm mới/i })).toBeVisible()
 })
 
 test('mobile funds shows type filter chips', async ({ page }) => {
@@ -52,6 +52,65 @@ test('mobile funds renders a fund card with code, type, NAV and DCA toggle', asy
   // NAV is formatted with vi-VN locale
   await expect(card.getByText(/45.000|45,000/)).toBeVisible()
   await expect(card.getByRole('button', { name: /dca/i })).toBeVisible()
+})
+
+test('mobile funds form placeholders + action aria-labels are localized (vi)', async ({ page }) => {
+  // Review follow-up: form input placeholders and the edit/delete/toggle
+  // aria-labels were hardcoded English. The e2e session renders vi, so the
+  // accessible names + placeholders must be Vietnamese.
+  const fund = await api.createFund({ name: 'E2E i18n Labels Fund', code: 'E2EI18', fund_type: 'equity', nav: 12000 })
+  cleanup.add(() => api.deleteFund(fund.id))
+
+  await page.goto('/funds')
+  await page.waitForLoadState('networkidle')
+
+  const card = page.getByTestId('mobile-funds').getByTestId(`fund-card-${fund.id}`)
+  await expect(card).toBeVisible({ timeout: 10_000 })
+  // Action buttons expose Vietnamese accessible names.
+  await expect(card.getByRole('button', { name: /sửa quỹ/i })).toBeVisible()
+  await expect(card.getByRole('button', { name: /xóa quỹ/i })).toBeVisible()
+  await expect(card.getByRole('button', { name: /bật dca/i })).toBeVisible()
+
+  // Add sheet: the fund-name input placeholder is localized ("vd: …").
+  await page.getByTestId('mobile-top-bar').getByRole('button', { name: /add fund|thêm quỹ/i }).click()
+  const sheet = page.getByTestId('fund-sheet')
+  await expect(sheet).toBeVisible({ timeout: 5_000 })
+  await expect(sheet.getByPlaceholder(/^vd:/i).first()).toBeVisible()
+})
+
+test('mobile funds NAV uses the shared ₫ + 2-decimal format (#6)', async ({ page }) => {
+  // #6: mobile NAV diverged from desktop ("36.120,00 VND" vs "36.120"). Both now
+  // render the shared fmtNav: "₫ 45.000,00".
+  const fund = await api.createFund({ name: 'E2E NAV Format Fund', code: 'E2ENAV', fund_type: 'equity', nav: 45000 })
+  cleanup.add(() => api.deleteFund(fund.id))
+
+  await page.goto('/funds')
+  await page.waitForLoadState('networkidle')
+
+  const card = page.getByTestId('mobile-funds').getByTestId(`fund-card-${fund.id}`)
+  await expect(card).toBeVisible({ timeout: 10_000 })
+  await expect(card.getByText(/₫\s*45\.000,00/)).toBeVisible()
+})
+
+test('mobile funds card touch targets are at least 44px (#4)', async ({ page }) => {
+  // #4: the DCA toggle (36×20) and the edit/delete icon buttons (~26px) were
+  // below the 44px recommended touch target. The visual size is unchanged but
+  // the tappable area is now ≥44×44.
+  const fund = await api.createFund({ name: 'E2E Touch Target Fund', code: 'E2ETT', fund_type: 'equity', nav: 12000 })
+  cleanup.add(() => api.deleteFund(fund.id))
+
+  await page.goto('/funds')
+  await page.waitForLoadState('networkidle')
+
+  const card = page.getByTestId('mobile-funds').getByTestId(`fund-card-${fund.id}`)
+  await expect(card).toBeVisible({ timeout: 10_000 })
+
+  for (const name of [/dca/i, /edit fund|sửa quỹ/i, /delete fund|xóa quỹ/i]) {
+    const box = await card.getByRole('button', { name }).boundingBox()
+    expect(box).not.toBeNull()
+    expect(box!.width).toBeGreaterThanOrEqual(44)
+    expect(box!.height).toBeGreaterThanOrEqual(44)
+  }
 })
 
 test('mobile funds search filters by code', async ({ page }) => {
@@ -98,7 +157,7 @@ test('mobile funds add button opens add fund sheet', async ({ page }) => {
   await page.waitForLoadState('networkidle')
 
   const topBar = page.getByTestId('mobile-top-bar')
-  await topBar.getByRole('button', { name: /add/i }).click()
+  await topBar.getByRole('button', { name: /add fund|thêm quỹ/i }).click()
   await expect(page.getByTestId('fund-sheet')).toBeVisible({ timeout: 5_000 })
   await expect(page.getByTestId('fund-sheet').getByText(/add fund|thêm quỹ/i)).toBeVisible()
 })
@@ -111,7 +170,7 @@ test('mobile funds edit button opens edit sheet prefilled with fund data', async
   await page.waitForLoadState('networkidle')
 
   const mf = page.getByTestId('mobile-funds')
-  await mf.getByTestId(`fund-card-${fund.id}`).getByRole('button', { name: /edit/i }).click()
+  await mf.getByTestId(`fund-card-${fund.id}`).getByRole('button', { name: /edit fund|sửa quỹ/i }).click()
   const sheet = page.getByTestId('fund-sheet')
   await expect(sheet).toBeVisible({ timeout: 5_000 })
   await expect(sheet.locator('input').first()).toHaveValue('E2E Edit Fund')
@@ -125,7 +184,7 @@ test('mobile funds delete button opens delete confirmation sheet', async ({ page
   await page.waitForLoadState('networkidle')
 
   const mf = page.getByTestId('mobile-funds')
-  await mf.getByTestId(`fund-card-${fund.id}`).getByRole('button', { name: /delete/i }).click()
+  await mf.getByTestId(`fund-card-${fund.id}`).getByRole('button', { name: /delete fund|xóa quỹ/i }).click()
   await expect(page.getByTestId('delete-fund-sheet')).toBeVisible({ timeout: 5_000 })
   await expect(page.getByTestId('delete-fund-sheet').getByText(/^(delete|xóa) E2EDEL\?$/i)).toBeVisible()
 })

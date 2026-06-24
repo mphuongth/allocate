@@ -6,15 +6,8 @@ import { Plus, RefreshCw, Search, X, ChevronDown, Check } from 'lucide-react'
 import { useNavigation } from '@/app/components/navigation/NavigationContext'
 import { Skeleton } from '@/app/components/ui/Skeleton'
 import { SyncPill } from '@/app/components/ui/SyncPill'
-
-function fmtCompactDca(n: number): string {
-  const abs = Math.abs(n)
-  const sign = n < 0 ? '-' : ''
-  if (abs >= 1_000_000_000) return `${sign}${(abs / 1_000_000_000).toFixed(1)}B ₫`
-  if (abs >= 1_000_000) return `${sign}${(abs / 1_000_000).toFixed(1)}M ₫`
-  if (abs >= 1_000) return `${sign}${(abs / 1_000).toFixed(0)}K ₫`
-  return `${sign}${abs.toLocaleString('vi-VN')} ₫`
-}
+import { fmtNav, fmtCompact } from '@/lib/formatters'
+import { FundsEmptyState } from './FundsEmptyState'
 
 // Matches the design's exact icon paths (stroke-based, strokeWidth 1.75)
 const IconEdit = ({ size = 14, color = 'currentColor' }: { size?: number; color?: string }) => (
@@ -285,12 +278,12 @@ function FundForm({ existing, title, onClose, onSave, saving, formError }: {
       )}
       <div style={{ display: 'grid', gap: 6 }}>
         <label style={labelStyle}>{t('nameLabel')}</label>
-        <input value={name} onChange={(e) => setName(e.target.value)} maxLength={255} placeholder="e.g., Vanguard S&P 500 ETF" style={inputStyle} />
+        <input value={name} onChange={(e) => setName(e.target.value)} maxLength={255} placeholder={t('namePlaceholder')} style={inputStyle} />
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
         <div style={{ display: 'grid', gap: 6 }}>
           <label style={labelStyle}>{t('codeLabel')}</label>
-          <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} maxLength={50} placeholder="e.g., VOO" style={{ ...inputStyle, fontFamily: 'var(--font-mono,monospace)' }} />
+          <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} maxLength={50} placeholder={t('codePlaceholder')} style={{ ...inputStyle, fontFamily: 'var(--font-mono,monospace)' }} />
         </div>
         <div style={{ display: 'grid', gap: 6 }}>
           <label style={labelStyle}>{t('typeLabel')}</label>
@@ -299,11 +292,11 @@ function FundForm({ existing, title, onClose, onSave, saving, formError }: {
       </div>
       <div style={{ display: 'grid', gap: 6 }}>
         <label style={labelStyle}>{t('navLabel')}</label>
-        <input type="number" value={nav} onChange={(e) => setNav(e.target.value)} min="0.01" step="0.01" placeholder="e.g., 450.25" style={{ ...inputStyle, fontVariantNumeric: 'tabular-nums' }} />
+        <input type="number" value={nav} onChange={(e) => setNav(e.target.value)} min="0.01" step="0.01" placeholder={t('navPlaceholder')} style={{ ...inputStyle, fontVariantNumeric: 'tabular-nums' }} />
       </div>
       <div style={{ display: 'grid', gap: 6 }}>
         <label style={labelStyle}>{t('navSourceLabel')}</label>
-        <input type="url" value={navUrl} onChange={(e) => setNavUrl(e.target.value)} placeholder="https://..." style={inputStyle} />
+        <input type="url" value={navUrl} onChange={(e) => setNavUrl(e.target.value)} placeholder={t('navUrlPlaceholder')} style={inputStyle} />
       </div>
       <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
         <button onClick={onClose} disabled={saving} style={{ flex: 1, padding: '10px 14px', fontSize: 13, fontWeight: 600, border: '1px solid var(--c-line)', borderRadius: 10, background: 'var(--c-card)', color: 'var(--c-ink)', cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -372,11 +365,12 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
           </div>
           <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fund.name}</div>
         </div>
-        <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
-          <button onClick={onEdit} aria-label="Edit fund" style={{ padding: 6, background: 'transparent', border: 'none', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+        <div style={{ display: 'flex', flexShrink: 0 }}>
+          {/* ≥44px touch targets (#4): icons stay 14px but the button fills 44×44. */}
+          <button onClick={onEdit} aria-label={t('editFund')} style={{ minWidth: 44, minHeight: 44, padding: 6, background: 'transparent', border: 'none', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <IconEdit size={14} color="var(--c-muted)" />
           </button>
-          <button onClick={onDelete} aria-label="Delete fund" style={{ padding: 6, background: 'transparent', border: 'none', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+          <button onClick={onDelete} aria-label={t('deleteBtn')} style={{ minWidth: 44, minHeight: 44, padding: 6, background: 'transparent', border: 'none', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <IconTrash size={14} color="var(--c-neg)" />
           </button>
         </div>
@@ -387,7 +381,7 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
         <div style={{ flexShrink: 0 }}>
           <div style={{ fontSize: 10, color: 'var(--c-muted)', marginBottom: 2, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>NAV</div>
           <div style={{ fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-            {fund.nav.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} VND
+            {fmtNav(fund.nav)}
           </div>
           {fund.nav_source_url && fund.updated_at && (
             <div style={{ fontSize: 10, color: 'var(--c-muted)', marginTop: 1 }}>{t('updatedAgo', { time: relDate(fund.updated_at) })}</div>
@@ -396,14 +390,18 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <span style={{ fontSize: 10, color: 'var(--c-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>DCA</span>
+          {/* ≥44px touch target (#4): the 36×20 track keeps its look but the
+              tappable button fills 44×44 around it. */}
           <button
             type="button"
             onClick={onToggleDca}
             disabled={toggling}
-            aria-label={fund.is_dca ? 'Disable DCA' : 'Enable DCA'}
-            style={{ width: 36, height: 20, borderRadius: 10, background: fund.is_dca ? 'var(--c-btn-primary)' : 'var(--c-line-strong)', border: 'none', cursor: toggling ? 'not-allowed' : 'pointer', position: 'relative', transition: 'background 180ms', flexShrink: 0, opacity: toggling ? 0.5 : 1 }}
+            aria-label={fund.is_dca ? t('disableDca') : t('enableDca')}
+            style={{ minWidth: 44, minHeight: 44, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: 'none', cursor: toggling ? 'not-allowed' : 'pointer', flexShrink: 0, opacity: toggling ? 0.5 : 1 }}
           >
-            <span style={{ position: 'absolute', top: 2, left: fund.is_dca ? 18 : 2, width: 16, height: 16, borderRadius: 8, background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.2)', transition: 'left 180ms' }} />
+            <span style={{ display: 'block', position: 'relative', width: 36, height: 20, borderRadius: 10, background: fund.is_dca ? 'var(--c-btn-primary)' : 'var(--c-line-strong)', transition: 'background 180ms' }}>
+              <span style={{ position: 'absolute', top: 2, left: fund.is_dca ? 18 : 2, width: 16, height: 16, borderRadius: 8, background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.2)', transition: 'left 180ms' }} />
+            </span>
           </button>
 
           {fund.is_dca && (
@@ -430,7 +428,7 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
                 onClick={() => { setDcaEditId(fund.id); setDcaEditValue(String(fund.dca_monthly_amount_vnd)) }}
                 style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', background: 'var(--c-navy-tint)', color: 'var(--c-navy)', border: '1px solid var(--c-navy-tint)', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit' }}
               >
-                {fmtCompactDca(fund.dca_monthly_amount_vnd)}
+                {fmtCompact(fund.dca_monthly_amount_vnd)}
               </button>
             ) : (
               <button
@@ -582,7 +580,7 @@ export default function MobileFundLibraryView() {
           <button
             onClick={handleRefreshNav}
             disabled={refreshing || !funds.some((f) => f.nav_source_url)}
-            aria-label="Refresh NAV"
+            aria-label={t('refreshNav')}
             style={{ padding: 8, background: 'transparent', border: '1px solid var(--c-line)', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', opacity: refreshing || !funds.some((f) => f.nav_source_url) ? 0.4 : 1 }}
           >
             <RefreshCw size={16} color="var(--c-ink)" />
@@ -592,7 +590,7 @@ export default function MobileFundLibraryView() {
             style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', fontSize: 12, fontWeight: 600, background: 'var(--c-btn-primary)', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}
           >
             <Plus size={14} strokeWidth={2.5} />
-            Add
+            {t('add')}
           </button>
         </div>
       ),
@@ -820,14 +818,8 @@ export default function MobileFundLibraryView() {
 
         {/* Empty state */}
         {!loading && !error && funds.length === 0 && (
-          <div style={{ padding: '44px 20px', textAlign: 'center', background: 'var(--c-card)', border: '1px dashed var(--c-line-strong)', borderRadius: 16 }}>
-            <div style={{ fontSize: 32, marginBottom: 10 }}>📚</div>
-            <h3 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 600, color: 'var(--c-ink)' }}>{t('empty')}</h3>
-            <p style={{ margin: '0 0 14px', fontSize: 12, color: 'var(--c-muted)' }}>{t('emptyDesc')}</p>
-            <button onClick={() => { setFormError(null); setAddOpen(true) }} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', fontSize: 13, fontWeight: 600, background: 'var(--c-btn-primary)', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}>
-              <Plus size={14} />
-              {t('add')}
-            </button>
+          <div style={{ padding: '44px 20px', background: 'var(--c-card)', border: '1px dashed var(--c-line-strong)', borderRadius: 16 }}>
+            <FundsEmptyState onAdd={() => { setFormError(null); setAddOpen(true) }} />
           </div>
         )}
 

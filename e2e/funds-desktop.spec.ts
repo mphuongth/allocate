@@ -37,6 +37,42 @@ test('desktop funds table shows fund code, type chip, and NAV columns', async ({
   await expect(row.getByText(/55.000|55,000/)).toBeVisible()
 })
 
+test('desktop funds form placeholders + action aria-labels are localized (vi)', async ({ page }) => {
+  // Review follow-up: the desktop form placeholders and the edit/delete/DCA
+  // aria-labels were hardcoded English. The e2e session renders vi.
+  const fund = await api.createFund({ name: 'E2E Desktop i18n Labels', code: 'DTI18N', fund_type: 'equity', nav: 12000 })
+  cleanup.add(() => api.deleteFund(fund.id))
+
+  await page.goto('/funds')
+  await page.waitForLoadState('networkidle')
+
+  const row = page.getByTestId('desktop-funds-table').getByTestId(`fund-row-${fund.id}`)
+  await expect(row).toBeVisible({ timeout: 10_000 })
+  await expect(row.getByRole('button', { name: /sửa quỹ/i })).toBeVisible()
+  await expect(row.getByRole('button', { name: /xóa quỹ/i })).toBeVisible()
+  await expect(row.getByRole('button', { name: /bật dca/i })).toBeVisible()
+
+  // Add modal: the fund-name input placeholder is localized ("vd: …").
+  await page.getByTestId('desktop-funds-toolbar').getByRole('button', { name: /add fund|thêm quỹ/i }).click()
+  const modal = page.getByTestId('fund-modal')
+  await expect(modal).toBeVisible({ timeout: 5_000 })
+  await expect(modal.getByPlaceholder(/^vd:/i).first()).toBeVisible()
+})
+
+test('desktop funds NAV uses the shared ₫ + 2-decimal format (#6)', async ({ page }) => {
+  // #6: the desktop table showed a bare "55.000" (no decimals, no unit) while
+  // mobile showed "55.000,00 VND". Both now render the shared fmtNav: "₫ 55.000,00".
+  const fund = await api.createFund({ name: 'E2E Desktop NAV Format', code: 'DTNAVF', fund_type: 'equity', nav: 55000 })
+  cleanup.add(() => api.deleteFund(fund.id))
+
+  await page.goto('/funds')
+  await page.waitForLoadState('networkidle')
+
+  const row = page.getByTestId('desktop-funds-table').getByTestId(`fund-row-${fund.id}`)
+  await expect(row).toBeVisible({ timeout: 10_000 })
+  await expect(row.getByText(/₫\s*55\.000,00/)).toBeVisible()
+})
+
 test('desktop funds type filter pill filters by equity', async ({ page }) => {
   const equityFund = await api.createFund({ name: 'E2E Desktop Equity', code: 'DTEQF', fund_type: 'equity', nav: 10000 })
   const bondFund = await api.createFund({ name: 'E2E Desktop Bond', code: 'DTBDF', fund_type: 'debt', nav: 10000 })
@@ -192,7 +228,7 @@ test('DCA enabled on desktop is reflected when switching to mobile viewport', as
   // Mobile card must show DCA as active
   const card = page.getByTestId('mobile-funds').getByTestId(`fund-card-${fund.id}`)
   await expect(card).toBeVisible({ timeout: 8_000 })
-  await expect(card.getByRole('button', { name: /disable dca/i })).toBeVisible({ timeout: 5_000 })
+  await expect(card.getByRole('button', { name: /disable dca|tắt dca/i })).toBeVisible({ timeout: 5_000 })
 })
 
 test('desktop funds DCA toggle enables inline amount input', async ({ page }) => {

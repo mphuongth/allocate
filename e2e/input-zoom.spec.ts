@@ -72,9 +72,9 @@ test.describe('Fund library — no field triggers iOS zoom', () => {
     await useEnglish(page)
     await page.goto('/funds')
     await page.waitForLoadState('networkidle')
-    await page.getByTestId('mobile-top-bar').getByRole('button', { name: /add/i }).click()
-    // The name field's placeholder confirms the form is open.
-    await expect(page.getByPlaceholder(/Vanguard|S&P/i)).toBeVisible({ timeout: 5_000 })
+    await page.getByTestId('mobile-top-bar').getByRole('button', { name: /add fund|thêm quỹ/i }).click()
+    // The sheet appearing confirms the form is open (placeholder text is i18n-driven).
+    await expect(page.getByTestId('fund-sheet')).toBeVisible({ timeout: 5_000 })
     await expectNoZoomFields(page)
   })
 

@@ -605,7 +605,14 @@
     "relMinutes": "{m} phút trước",
     "relHours": "{h} giờ trước",
     "relDays": "{d} ngày trước",
-    "updatedAgo": "Cập nhật {time}"
+    "updatedAgo": "Cập nhật {time}",
+    "namePlaceholder": "vd: Quỹ cổ phiếu VFMVF1",
+    "codePlaceholder": "vd: VFMVF1",
+    "navPlaceholder": "vd: 36120",
+    "navUrlPlaceholder": "https://...",
+    "editFund": "Sửa quỹ",
+    "enableDca": "Bật DCA",
+    "disableDca": "Tắt DCA"
   },
   "planning": {
     "title": "Kế hoạch Tháng",
