@@ -56,31 +56,20 @@ describe('DownloadReportSheet — structure', () => {
   })
 })
 
-// ─── Format picker ─────────────────────────────────────────────────────────────
+// ─── Format ──────────────────────────────────────────────────────────────────────
+// The CSV option was a dead control (export always produced a PDF), so it was
+// removed — exports are PDF-only until a real CSV path exists.
 
-describe('DownloadReportSheet — format picker', () => {
-  it('renders Format label', () => {
+describe('DownloadReportSheet — format', () => {
+  it('does not render a CSV format option', () => {
     render(<DownloadReportSheet open data={null} onClose={noop} onExport={noop} />)
-    expect(screen.getByText(/^format$/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^csv$/i })).not.toBeInTheDocument()
   })
 
-  it('renders PDF and CSV buttons', () => {
+  it('does not render a PDF/CSV picker toggle', () => {
     render(<DownloadReportSheet open data={null} onClose={noop} onExport={noop} />)
-    expect(screen.getByRole('button', { name: /^pdf$/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /^csv$/i })).toBeInTheDocument()
-  })
-
-  it('PDF is selected by default', () => {
-    render(<DownloadReportSheet open data={null} onClose={noop} onExport={noop} />)
-    const pdfBtn = screen.getByRole('button', { name: /^pdf$/i })
-    expect(pdfBtn).toHaveAttribute('aria-pressed', 'true')
-  })
-
-  it('selecting CSV updates selection', async () => {
-    render(<DownloadReportSheet open data={null} onClose={noop} onExport={noop} />)
-    await userEvent.click(screen.getByRole('button', { name: /^csv$/i }))
-    expect(screen.getByRole('button', { name: /^csv$/i })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('button', { name: /^pdf$/i })).toHaveAttribute('aria-pressed', 'false')
+    // No format-picker buttons (aria-pressed toggles) remain.
+    expect(screen.queryByRole('button', { name: /^pdf$/i })).not.toBeInTheDocument()
   })
 })
 
@@ -104,15 +93,11 @@ describe('DownloadReportSheet — actions', () => {
     expect(screen.getByRole('button', { name: /^cancel$/i })).toBeInTheDocument()
   })
 
-  it('export button shows selected format', () => {
+  it('export button reads "Export report" without a format suffix', () => {
     render(<DownloadReportSheet open data={null} onClose={noop} onExport={noop} />)
-    expect(screen.getByRole('button', { name: /export report · pdf/i })).toBeInTheDocument()
-  })
-
-  it('export button updates format label when CSV is selected', async () => {
-    render(<DownloadReportSheet open data={null} onClose={noop} onExport={noop} />)
-    await userEvent.click(screen.getByRole('button', { name: /^csv$/i }))
-    expect(screen.getByRole('button', { name: /export report · csv/i })).toBeInTheDocument()
+    const btn = screen.getByRole('button', { name: /export report/i })
+    expect(btn).toBeInTheDocument()
+    expect(btn.getAttribute('aria-label')).not.toMatch(/·/)
   })
 
   it('calls onClose when Cancel is clicked', async () => {
@@ -138,6 +123,15 @@ describe('DownloadReportSheet — actions', () => {
     await userEvent.click(screen.getByRole('button', { name: /export report/i }))
     expect(screen.getByRole('button', { name: /exporting/i })).toBeDisabled()
     resolve()
+  })
+
+  it('surfaces an error and re-enables the button when export fails', async () => {
+    const onExport = vi.fn().mockRejectedValue(new Error('boom'))
+    render(<DownloadReportSheet open data={null} onClose={noop} onExport={onExport} />)
+    await userEvent.click(screen.getByRole('button', { name: /export report/i }))
+    await waitFor(() => expect(screen.getByText(/couldn’t export|could not export|failed/i)).toBeInTheDocument())
+    // Not stuck in the exporting state.
+    expect(screen.getByRole('button', { name: /export report/i })).not.toBeDisabled()
   })
 })
 

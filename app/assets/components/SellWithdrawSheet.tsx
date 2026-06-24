@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { useLocale, useTranslations } from 'next-intl'
+import { useLocale } from 'next-intl'
 import { ArrowDownRight, ArrowDownToLine, Building, Check, Coins, Shield, TrendingUp, Wallet, X } from 'lucide-react'
 import { fmt } from '@/lib/formatters'
 import { todayIso } from '@/lib/dates'
@@ -60,7 +60,11 @@ const TYPE_COLOR = {
 
 export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValue, goalTargetAmount, onClose, onSuccess, desktop }: Props) {
   const locale = useLocale()
-  const t = useTranslations('Dashboard')
+  // Generic fallback shown when the API fails without a message. Inline-localized
+  // to match the rest of this file (no next-intl t() here).
+  const sellError = locale === 'vi'
+    ? 'Đã xảy ra lỗi. Vui lòng thử lại.'
+    : 'An error occurred. Please try again.'
 
   const [amount, setAmount] = useState('')
   const [units, setUnits] = useState('')
@@ -212,8 +216,8 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
           }),
         })
         if (!res.ok) {
-          const { error: e } = await res.json().catch(() => ({ error: t('sellError') }))
-          setError(e ?? t('sellError'))
+          const { error: e } = await res.json().catch(() => ({ error: sellError }))
+          setError(e ?? sellError)
           setSaving(false)
           return
         }
@@ -239,7 +243,7 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
         })
         if (!res.ok) {
           const { error: e } = await res.json()
-          setError(e ?? t('sellError'))
+          setError(e ?? sellError)
           setSaving(false)
           return
         }
@@ -266,7 +270,7 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
         })
         if (!res.ok) {
           const { error: e } = await res.json()
-          setError(e ?? t('sellError'))
+          setError(e ?? sellError)
           setSaving(false)
           return
         }
@@ -280,7 +284,7 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
         onClose()
       }, 2000)
     } catch {
-      setError(t('sellError'))
+      setError(sellError)
     }
     setSaving(false)
   }

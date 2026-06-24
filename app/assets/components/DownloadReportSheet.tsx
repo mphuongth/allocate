@@ -19,13 +19,14 @@ export default function DownloadReportSheet({ open, onClose, data, onExport, des
   const [mounted, setMounted] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [success, setSuccess] = useState(false)
-  const [format, setFormat] = useState<'pdf' | 'csv'>('pdf')
+  const [error, setError] = useState('')
 
   useEffect(() => {
     if (open) {
       setMounted(true)
       setSuccess(false)
       setExporting(false)
+      setError('')
     } else {
       const t = setTimeout(() => setMounted(false), 220)
       return () => clearTimeout(t)
@@ -34,12 +35,13 @@ export default function DownloadReportSheet({ open, onClose, data, onExport, des
 
   async function handleExport() {
     setExporting(true)
+    setError('')
     try {
       await onExport()
       setSuccess(true)
       setTimeout(() => { onClose() }, 2000)
     } catch {
-      /* ignore */
+      setError(isVI ? 'Không thể xuất báo cáo. Vui lòng thử lại.' : 'Couldn’t export the report. Please try again.')
     }
     setExporting(false)
   }
@@ -57,7 +59,6 @@ export default function DownloadReportSheet({ open, onClose, data, onExport, des
     goals: 'Mục tiêu đang theo dõi',
     sections: 'Nội dung báo cáo',
     includes: ['Tổng quan tài sản ròng', 'Chi tiết từng mục tiêu', 'Phân bổ theo loại tài sản', 'Khoản chưa phân bổ', 'Lịch sử giao dịch'],
-    format: 'Định dạng',
     export: 'Xuất báo cáo',
     cancel: 'Hủy',
     done: 'Đã xuất báo cáo',
@@ -71,7 +72,6 @@ export default function DownloadReportSheet({ open, onClose, data, onExport, des
     goals: 'Goals tracked',
     sections: 'Report includes',
     includes: ['Net worth overview', 'Per-goal breakdown', 'Asset type allocation', 'Unallocated holdings', 'Transaction history'],
-    format: 'Format',
     export: 'Export report',
     cancel: 'Cancel',
     done: 'Report exported',
@@ -141,32 +141,10 @@ export default function DownloadReportSheet({ open, onClose, data, onExport, des
                 </div>
               </div>
 
-              {/* Format picker */}
-              <div>
-                <div style={{ fontSize: 11, color: 'var(--c-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
-                  {t.format}
-                </div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  {(['pdf', 'csv'] as const).map(f => (
-                    <button
-                      key={f}
-                      onClick={() => setFormat(f)}
-                      aria-pressed={format === f}
-                      style={{
-                        flex: 1, padding: '10px', borderRadius: 10,
-                        background: format === f ? 'var(--c-btn-primary)' : 'var(--c-card)',
-                        color: format === f ? '#fff' : 'var(--c-muted)',
-                        border: `1px solid ${format === f ? 'var(--c-btn-primary)' : 'var(--c-line)'}`,
-                        fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-                        textTransform: 'uppercase', letterSpacing: '0.04em',
-                        transition: 'all 120ms',
-                      }}
-                    >
-                      {f}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              {/* Export error */}
+              {error && (
+                <p role="alert" style={{ margin: 0, fontSize: 13, color: 'var(--c-neg, #dc2626)', textAlign: 'center' }}>{error}</p>
+              )}
 
               {/* Actions */}
               <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
@@ -186,7 +164,7 @@ export default function DownloadReportSheet({ open, onClose, data, onExport, des
                   onClick={handleExport}
                   disabled={exporting}
                   data-testid="export-report-btn"
-                  aria-label={exporting ? 'exporting' : `${t.export} · ${format.toUpperCase()}`}
+                  aria-label={exporting ? 'exporting' : t.export}
                   style={{
                     flex: 2, padding: '11px 0', fontSize: 13, fontWeight: 600,
                     background: 'var(--c-btn-primary)', border: 'none',
@@ -204,7 +182,7 @@ export default function DownloadReportSheet({ open, onClose, data, onExport, des
                   )}
                   {exporting
                     ? (isVI ? 'Đang xuất…' : 'Exporting…')
-                    : `${t.export} · ${format.toUpperCase()}`}
+                    : t.export}
                 </button>
               </div>
             </div>
