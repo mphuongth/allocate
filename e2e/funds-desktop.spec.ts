@@ -80,6 +80,24 @@ test('desktop funds add fund button opens add modal', async ({ page }) => {
   await expect(page.getByTestId('fund-modal-title')).toHaveText(/add fund|thêm quỹ/i)
 })
 
+test('desktop funds add modal Type dropdown excludes gold, matching mobile (#3)', async ({ page }) => {
+  // Parity: mobile filters gold out of the create form (gold is handled
+  // separately via byType), but the desktop <select> listed it. Gold must
+  // not be selectable when creating a fund on desktop either.
+  await page.goto('/funds')
+  await page.waitForLoadState('networkidle')
+
+  const toolbar = page.getByTestId('desktop-funds-toolbar')
+  await toolbar.getByRole('button', { name: /add fund|thêm quỹ/i }).click()
+
+  const modal = page.getByTestId('fund-modal')
+  await expect(modal).toBeVisible({ timeout: 5_000 })
+  const typeSelect = modal.locator('select')
+  // The three allowed types are present; gold is not.
+  await expect(typeSelect.locator('option')).toHaveCount(3)
+  await expect(typeSelect.locator('option[value="gold"]')).toHaveCount(0)
+})
+
 test('desktop funds edit button opens edit modal prefilled', async ({ page }) => {
   const fund = await api.createFund({ name: 'E2E Desktop Edit Fund', code: 'DTEDT1', fund_type: 'balanced', nav: 42000 })
   cleanup.add(() => api.deleteFund(fund.id))
