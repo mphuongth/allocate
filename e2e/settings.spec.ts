@@ -87,18 +87,13 @@ test('Appearance row is visible', async ({ page }) => {
   await expect(page.getByRole('button', { name: /^appearance$/i })).toBeVisible()
 })
 
-test('Currency row is visible', async ({ page }) => {
-  await expect(page.getByRole('button', { name: /^currency$/i })).toBeVisible()
+test('Currency row is removed (was a dead control)', async ({ page }) => {
+  await expect(page.getByRole('button', { name: /^currency$/i })).toHaveCount(0)
 })
 
 test('Language row shows current locale', async ({ page }) => {
   const row = page.getByRole('button', { name: /^language$/i })
   await expect(row).toContainText('English')
-})
-
-test('Currency row shows current currency', async ({ page }) => {
-  const row = page.getByRole('button', { name: /^currency$/i })
-  await expect(row).toContainText('VND')
 })
 
 // ─── Appearance sheet ──────────────────────────────────────────────────────────
@@ -120,27 +115,6 @@ test('clicking Apply closes appearance sheet', async ({ page }) => {
   await expect(page.getByRole('button', { name: /^apply$/i })).toBeVisible({ timeout: 5_000 })
   await page.getByRole('button', { name: /^apply$/i }).click()
   await expect(page.getByRole('button', { name: /^apply$/i })).not.toBeVisible({ timeout: 5_000 })
-})
-
-// ─── Currency sheet ────────────────────────────────────────────────────────────
-
-test('clicking Currency row opens currency sheet', async ({ page }) => {
-  await page.getByRole('button', { name: /^currency$/i }).click()
-  await expect(page.locator('text=Vietnamese Dong').first()).toBeVisible({ timeout: 5_000 })
-})
-
-test('currency sheet shows VND, USD, EUR options', async ({ page }) => {
-  await page.getByRole('button', { name: /^currency$/i }).click()
-  await expect(page.locator('text=Vietnamese Dong').first()).toBeVisible({ timeout: 5_000 })
-  await expect(page.locator('text=US Dollar').first()).toBeVisible({ timeout: 5_000 })
-  await expect(page.locator('text=Euro').first()).toBeVisible({ timeout: 5_000 })
-})
-
-test('clicking Apply closes currency sheet', async ({ page }) => {
-  await page.getByRole('button', { name: /^currency$/i }).click()
-  await expect(page.locator('text=Vietnamese Dong').first()).toBeVisible({ timeout: 5_000 })
-  await page.getByRole('button', { name: /^apply$/i }).click()
-  await expect(page.locator('text=Vietnamese Dong').first()).not.toBeVisible({ timeout: 5_000 })
 })
 
 // ─── Data / Export section ─────────────────────────────────────────────────────

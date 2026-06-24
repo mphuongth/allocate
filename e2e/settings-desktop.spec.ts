@@ -76,16 +76,12 @@ test('desktop: Light, Dark, System appearance pills are visible', async ({ page 
   await expect(page.getByRole('button', { name: /^system$/i })).toBeVisible()
 })
 
-// ─── Preferences — Currency ────────────────────────────────────────────────────
+// ─── Preferences — Currency (removed) ──────────────────────────────────────────
 
-test('desktop: Currency label is visible', async ({ page }) => {
-  await expect(page.locator('[data-testid="desktop-settings-view"]').locator('text=Currency')).toBeVisible()
-})
-
-test('desktop: VND, USD, EUR currency pills are visible', async ({ page }) => {
-  await expect(page.getByRole('button', { name: 'VND' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'USD' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'EUR' })).toBeVisible()
+test('desktop: Currency control is removed (was a dead control)', async ({ page }) => {
+  await expect(page.getByRole('button', { name: 'VND' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'USD' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'EUR' })).toHaveCount(0)
 })
 
 // ─── Price sync ────────────────────────────────────────────────────────────────

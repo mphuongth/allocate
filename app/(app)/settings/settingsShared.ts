@@ -27,15 +27,18 @@ export function setLocaleCookie(next: string): void {
   document.cookie = `locale=${next};path=/;max-age=31536000;SameSite=Lax`
 }
 
-// Kick both price refreshers; errors are intentionally swallowed (best-effort).
-export async function refreshPrices(): Promise<void> {
+// Kick both price refreshers. Returns true only when both endpoints responded
+// ok, so callers can surface a failure instead of always reporting success.
+// Network/parse errors resolve to false rather than throwing (best-effort).
+export async function refreshPrices(): Promise<boolean> {
   try {
-    await Promise.all([
+    const results = await Promise.all([
       fetch('/api/cron/refresh-navs'),
       fetch('/api/cron/refresh-gold'),
     ])
+    return results.every((r) => r.ok)
   } catch {
-    // ignore — sync is best-effort
+    return false
   }
 }
 
