@@ -47,6 +47,10 @@ const TYPE_FILTERS: { v: TypeFilter; label: string; labelVi: string }[] = [
   { v: 'balanced', label: 'Balanced', labelVi: 'Cân bằng' },
 ]
 
+// Selectable fund types in the create/edit form. Gold is excluded (handled
+// separately via byType) to match MobileFundLibraryView's FORM_TYPES.
+const FORM_TYPES = (Object.keys(TYPE_META) as FundType[]).filter(ft => ft !== 'gold')
+
 // ─── Cache ────────────────────────────────────────────────────────────────────
 
 const CACHE_KEY = 'fundLibraryCache'
@@ -854,8 +858,8 @@ export default function DesktopFundLibraryView() {
                   onChange={e => setFormType(e.target.value as FundType)}
                   className="cn-input"
                 >
-                  {Object.entries(TYPE_META).map(([v, m]) => (
-                    <option key={v} value={v}>{locale === 'vi' ? m.labelVi : m.label}</option>
+                  {FORM_TYPES.map(v => (
+                    <option key={v} value={v}>{locale === 'vi' ? TYPE_META[v].labelVi : TYPE_META[v].label}</option>
                   ))}
                 </select>
               </FormField>
