@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { useTranslations } from 'next-intl'
+import { useTranslations, useLocale } from 'next-intl'
 import { Plus, RefreshCw, Search, X, ChevronDown, Check } from 'lucide-react'
 import { useNavigation } from '@/app/components/navigation/NavigationContext'
 import { Skeleton } from '@/app/components/ui/Skeleton'
@@ -74,24 +74,25 @@ function bustCache() {
   try { localStorage.removeItem(CACHE_KEY) } catch {}
 }
 
-const TYPE_META: Record<FundType, { label: string; color: string; bg: string }> = {
-  equity:   { label: 'Stock',    color: 'var(--c-fund-equity)',   bg: 'var(--c-fund-equity-bg)' },
-  debt:     { label: 'Bond',     color: 'var(--c-fund-debt)',     bg: 'var(--c-fund-debt-bg)' },
-  balanced: { label: 'Balanced', color: 'var(--c-fund-balanced)', bg: 'var(--c-fund-balanced-bg)' },
-  gold:     { label: 'Gold',     color: 'var(--c-fund-gold)',     bg: 'var(--c-fund-gold-bg)' },
+const TYPE_META: Record<FundType, { label: string; labelVi: string; color: string; bg: string }> = {
+  equity:   { label: 'Stock',    labelVi: 'Cổ phiếu',   color: 'var(--c-fund-equity)',   bg: 'var(--c-fund-equity-bg)' },
+  debt:     { label: 'Bond',     labelVi: 'Trái phiếu', color: 'var(--c-fund-debt)',     bg: 'var(--c-fund-debt-bg)' },
+  balanced: { label: 'Balanced', labelVi: 'Cân bằng',   color: 'var(--c-fund-balanced)', bg: 'var(--c-fund-balanced-bg)' },
+  gold:     { label: 'Gold',     labelVi: 'Vàng',       color: 'var(--c-fund-gold)',     bg: 'var(--c-fund-gold-bg)' },
 }
 
-const TYPE_FILTERS: Array<{ v: 'all' | FundType; l: string }> = [
-  { v: 'all',      l: 'All' },
-  { v: 'equity',   l: 'Stock' },
-  { v: 'debt',     l: 'Bond' },
-  { v: 'balanced', l: 'Balanced' },
+const TYPE_FILTERS: Array<{ v: 'all' | FundType; label: string; labelVi: string }> = [
+  { v: 'all',      label: 'All',      labelVi: 'Tất cả' },
+  { v: 'equity',   label: 'Stock',    labelVi: 'Cổ phiếu' },
+  { v: 'debt',     label: 'Bond',     labelVi: 'Trái phiếu' },
+  { v: 'balanced', label: 'Balanced', labelVi: 'Cân bằng' },
 ]
 
-const SORT_OPTIONS: Array<{ v: SortKey; l: string }> = [
-  { v: 'code', l: 'Code' },
-  { v: 'nav',  l: 'NAV' },
-  { v: 'name', l: 'Name' },
+// i18n key (in the `funds` namespace) for each sort option's label.
+const SORT_OPTIONS: Array<{ v: SortKey; key: 'colCode' | 'colNav' | 'colName' }> = [
+  { v: 'code', key: 'colCode' },
+  { v: 'nav',  key: 'colNav' },
+  { v: 'name', key: 'colName' },
 ]
 
 let toastSeq = 0
@@ -119,6 +120,7 @@ function SortDropdown({ sortKey, sortAsc, onSort }: { sortKey: SortKey; sortAsc:
     return () => document.removeEventListener('mousedown', handleClick)
   }, [open])
 
+  const t = useTranslations('funds')
   const current = SORT_OPTIONS.find((s) => s.v === sortKey)
 
   return (
@@ -127,7 +129,7 @@ function SortDropdown({ sortKey, sortAsc, onSort }: { sortKey: SortKey; sortAsc:
         onClick={() => setOpen((v) => !v)}
         style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 8px', fontSize: 11, fontWeight: 500, background: 'var(--c-card)', color: 'var(--c-ink)', border: '1px solid var(--c-line)', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
       >
-        {current?.l} {sortAsc ? '↑' : '↓'}
+        {current ? t(current.key) : ''} {sortAsc ? '↑' : '↓'}
         <ChevronDown size={11} color="var(--c-muted)" />
       </button>
       {open && (
@@ -138,7 +140,7 @@ function SortDropdown({ sortKey, sortAsc, onSort }: { sortKey: SortKey; sortAsc:
               onClick={() => { onSort(s.v); setOpen(false) }}
               style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '9px 12px', fontSize: 13, fontWeight: sortKey === s.v ? 600 : 400, color: sortKey === s.v ? 'var(--c-navy)' : 'var(--c-ink)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left', gap: 8 }}
             >
-              <span>{s.l}</span>
+              <span>{t(s.key)}</span>
               {sortKey === s.v && <Check size={13} color="var(--c-navy)" />}
             </button>
           ))}
@@ -153,6 +155,7 @@ function SortDropdown({ sortKey, sortAsc, onSort }: { sortKey: SortKey; sortAsc:
 const FORM_TYPES = (Object.keys(TYPE_META) as FundType[]).filter((ft) => ft !== 'gold')
 
 function TypeDropdown({ value, onChange }: { value: FundType; onChange: (v: FundType) => void }) {
+  const locale = useLocale()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -176,7 +179,7 @@ function TypeDropdown({ value, onChange }: { value: FundType; onChange: (v: Fund
       >
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
           <span style={{ width: 8, height: 8, borderRadius: 999, background: m.color, flexShrink: 0 }} />
-          {m.label}
+          {locale === 'vi' ? m.labelVi : m.label}
         </span>
         <ChevronDown size={14} color="var(--c-muted)" />
       </button>
@@ -194,7 +197,7 @@ function TypeDropdown({ value, onChange }: { value: FundType; onChange: (v: Fund
               >
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ width: 8, height: 8, borderRadius: 999, background: fm.color, flexShrink: 0 }} />
-                  {fm.label}
+                  {locale === 'vi' ? fm.labelVi : fm.label}
                 </span>
                 {active && <Check size={13} color="var(--c-navy)" />}
               </button>
@@ -237,9 +240,10 @@ function Sheet({ open, onClose, testId, children }: { open: boolean; onClose: ()
 
 function TypeChip({ type }: { type: FundType }) {
   const m = TYPE_META[type]
+  const locale = useLocale()
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', fontSize: 10, fontWeight: 600, letterSpacing: '0.03em', padding: '2px 7px', borderRadius: 999, background: m.bg, color: m.color }}>
-      {m.label}
+      {locale === 'vi' ? m.labelVi : m.label}
     </span>
   )
 }
@@ -335,18 +339,20 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
   setDcaEditId: (id: string | null) => void
   setDcaEditValue: (v: string) => void
 }) {
+  const t = useTranslations('funds')
+  const tc = useTranslations('common')
   const m = TYPE_META[fund.fund_type]
   const isEditing = dcaEditId === fund.id
   const toggling = togglingIds.has(fund.id)
 
   function relDate(str: string) {
     const diff = Date.now() - new Date(str).getTime()
-    const m = Math.floor(diff / 60000)
-    if (m < 1) return 'just now'
-    if (m < 60) return `${m}m ago`
-    const h = Math.floor(m / 60)
-    if (h < 24) return `${h}h ago`
-    return `${Math.floor(h / 24)}d ago`
+    const mins = Math.floor(diff / 60000)
+    if (mins < 1) return t('relJustNow')
+    if (mins < 60) return t('relMinutes', { m: mins })
+    const h = Math.floor(mins / 60)
+    if (h < 24) return t('relHours', { h })
+    return t('relDays', { d: Math.floor(h / 24) })
   }
 
   return (
@@ -384,7 +390,7 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
             {fund.nav.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} VND
           </div>
           {fund.nav_source_url && fund.updated_at && (
-            <div style={{ fontSize: 10, color: 'var(--c-muted)', marginTop: 1 }}>Updated {relDate(fund.updated_at)}</div>
+            <div style={{ fontSize: 10, color: 'var(--c-muted)', marginTop: 1 }}>{t('updatedAgo', { time: relDate(fund.updated_at) })}</div>
           )}
         </div>
 
@@ -414,7 +420,7 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
                   if (e.key === 'Enter') { onSaveDcaAmount(dcaEditValue); setDcaEditId(null) }
                   if (e.key === 'Escape') setDcaEditId(null)
                 }}
-                placeholder="Amount ₫"
+                placeholder={`${tc('amount')} ₫`}
                 style={{ width: 90, padding: '3px 8px', fontSize: 16, border: '1px solid var(--c-navy)', borderRadius: 6, background: 'var(--c-card)', fontFamily: 'inherit', outline: 'none', color: 'var(--c-ink)' }}
               />
             ) : fund.dca_monthly_amount_vnd ? (
@@ -432,7 +438,7 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
                 onClick={() => { setDcaEditId(fund.id); setDcaEditValue('') }}
                 style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', background: 'var(--c-navy-tint)', color: 'var(--c-navy)', border: '1px solid var(--c-navy-tint)', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit' }}
               >
-                Set amount
+                {t('setAmount')}
               </button>
             )
           )}
@@ -473,6 +479,7 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
 export default function MobileFundLibraryView() {
   const t = useTranslations('funds')
   const tc = useTranslations('common')
+  const locale = useLocale()
   const { setMobileTopBar } = useNavigation()
 
   // ── Data ──────────────────────────────────────────────────────────────────
@@ -524,11 +531,11 @@ export default function MobileFundLibraryView() {
       setCache(data.funds)
       setFunds(data.funds)
     } catch {
-      setError('Failed to load funds. Please try again.')
+      setError(t('loadError'))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => { loadFunds() }, [loadFunds])
 
@@ -558,13 +565,13 @@ export default function MobileFundLibraryView() {
       bustCache()
       await loadFunds({ force: true })
       notifyFundsUpdated()
-      addToast(`${updated} updated${failed ? `, ${failed} failed` : ''}`, failed > 0 && updated === 0 ? 'error' : 'success')
+      addToast(t('navRefreshDone', { updated, failed }), failed > 0 && updated === 0 ? 'error' : 'success')
     } catch {
-      addToast('Failed to refresh NAV', 'error')
+      addToast(t('toastRefreshFailed'), 'error')
     } finally {
       setRefreshing(false)
     }
-  }, [loadFunds, addToast])
+  }, [loadFunds, addToast, t])
 
   useEffect(() => {
     setMobileTopBar({
@@ -636,9 +643,9 @@ export default function MobileFundLibraryView() {
       bustCache()
       await loadFunds({ force: true })
       notifyFundsUpdated()
-      addToast(existingId ? 'Fund updated' : 'Fund added')
+      addToast(existingId ? t('toastUpdated') : t('toastAdded'))
     } catch {
-      setFormError('Something went wrong. Please try again.')
+      setFormError(t('error'))
     } finally {
       setSaving(false)
     }
@@ -654,9 +661,9 @@ export default function MobileFundLibraryView() {
       bustCache()
       await loadFunds({ force: true })
       notifyFundsUpdated()
-      addToast('Fund deleted')
+      addToast(t('toastDeleted'))
     } catch {
-      addToast('Failed to delete fund', 'error')
+      addToast(t('toastDeleteFailed'), 'error')
       setDeleteFund(null)
     } finally {
       setDeleting(false)
@@ -682,7 +689,7 @@ export default function MobileFundLibraryView() {
       notifyFundsUpdated()
     } catch {
       setFunds((prev) => prev.map((f) => f.id === fund.id ? { ...f, is_dca: true } : f))
-      addToast('Failed to update DCA', 'error')
+      addToast(t('toastDcaFailed'), 'error')
     } finally {
       setTogglingIds((prev) => { const s = new Set(prev); s.delete(fund.id); return s })
     }
@@ -706,7 +713,7 @@ export default function MobileFundLibraryView() {
       notifyFundsUpdated()
     } catch {
       setFunds((prev) => prev.map((f) => f.id === fund.id ? { ...f, is_dca: false, dca_monthly_amount_vnd: null } : f))
-      addToast('Failed to update DCA', 'error')
+      addToast(t('toastDcaFailed'), 'error')
     } finally {
       setTogglingIds((prev) => { const s = new Set(prev); s.delete(fund.id); return s })
     }
@@ -724,7 +731,7 @@ export default function MobileFundLibraryView() {
       notifyFundsUpdated()
     } catch {
       setFunds((prev) => prev.map((f) => f.id === fund.id ? { ...f, dca_goal_id: prevGoalId } : f))
-      addToast('Failed to update goal', 'error')
+      addToast(t('toastGoalFailed'), 'error')
     } finally {
       setTogglingIds((prev) => { const s = new Set(prev); s.delete(fund.id); return s })
     }
@@ -772,7 +779,7 @@ export default function MobileFundLibraryView() {
                 onClick={() => setFilter(f.v)}
                 style={{ padding: '5px 10px', borderRadius: 999, fontSize: 11, fontWeight: 500, background: filter === f.v ? 'var(--c-ink)' : 'var(--c-card)', color: filter === f.v ? 'var(--c-card)' : 'var(--c-muted)', border: '1px solid ' + (filter === f.v ? 'var(--c-ink)' : 'var(--c-line)'), cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit', transition: 'background 150ms, color 150ms' }}
               >
-                {f.l}
+                {locale === 'vi' ? f.labelVi : f.label}
               </button>
             ))}
           </div>
@@ -806,7 +813,7 @@ export default function MobileFundLibraryView() {
           <div style={{ padding: '32px 20px', textAlign: 'center', background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 16 }}>
             <p style={{ color: 'var(--c-neg)', fontSize: 13, margin: '0 0 12px' }}>{error}</p>
             <button onClick={() => loadFunds()} style={{ padding: '8px 16px', fontSize: 13, fontWeight: 600, background: 'var(--c-btn-primary)', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}>
-              Retry
+              {tc('tryAgain')}
             </button>
           </div>
         )}
@@ -827,7 +834,7 @@ export default function MobileFundLibraryView() {
         {/* No search results */}
         {!loading && !error && funds.length > 0 && sortedFunds.length === 0 && (
           <div style={{ padding: '32px 20px', textAlign: 'center' }}>
-            <p style={{ fontSize: 13, color: 'var(--c-muted)', margin: 0 }}>No funds match your search</p>
+            <p style={{ fontSize: 13, color: 'var(--c-muted)', margin: 0 }}>{t('noMatch')}</p>
           </div>
         )}
 
@@ -898,7 +905,7 @@ export default function MobileFundLibraryView() {
       <Sheet open={!!deleteFund} onClose={() => { if (!deleting) setDeleteFund(null) }} testId="delete-fund-sheet">
         {deleteFund && (
           <div style={{ paddingTop: 14, display: 'grid', gap: 14 }}>
-            <p style={{ margin: 0, fontWeight: 700, fontSize: 16, color: 'var(--c-ink)' }}>Delete {deleteFund.code}?</p>
+            <p style={{ margin: 0, fontWeight: 700, fontSize: 16, color: 'var(--c-ink)' }}>{t('deleteModal', { name: deleteFund.code })}</p>
             <p style={{ margin: 0, fontSize: 13, color: 'var(--c-muted)', lineHeight: 1.5 }}>{t('deleteCannotUndo')}</p>
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => setDeleteFund(null)} disabled={deleting} style={{ flex: 1, padding: '10px 14px', fontSize: 13, fontWeight: 600, border: '1px solid var(--c-line)', borderRadius: 10, background: 'var(--c-card)', color: 'var(--c-ink)', cursor: 'pointer', fontFamily: 'inherit' }}>

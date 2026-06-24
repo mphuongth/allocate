@@ -23,10 +23,10 @@ test('mobile funds shows type filter chips', async ({ page }) => {
   await page.waitForLoadState('networkidle')
 
   const mf = page.getByTestId('mobile-funds')
-  await expect(mf.getByRole('button', { name: 'All' })).toBeVisible({ timeout: 10_000 })
-  await expect(mf.getByRole('button', { name: 'Stock' })).toBeVisible()
-  await expect(mf.getByRole('button', { name: 'Bond' })).toBeVisible()
-  await expect(mf.getByRole('button', { name: 'Balanced' })).toBeVisible()
+  await expect(mf.getByRole('button', { name: /^(all|tất cả)$/i })).toBeVisible({ timeout: 10_000 })
+  await expect(mf.getByRole('button', { name: /^(stock|cổ phiếu)$/i })).toBeVisible()
+  await expect(mf.getByRole('button', { name: /^(bond|trái phiếu)$/i })).toBeVisible()
+  await expect(mf.getByRole('button', { name: /^(balanced|cân bằng)$/i })).toBeVisible()
 })
 
 test('mobile funds shows search input', async ({ page }) => {
@@ -48,7 +48,7 @@ test('mobile funds renders a fund card with code, type, NAV and DCA toggle', asy
   const card = mf.getByTestId(`fund-card-${fund.id}`)
   await expect(card).toBeVisible({ timeout: 10_000 })
   await expect(card.getByText('E2EEQ')).toBeVisible()
-  await expect(card.getByText('Stock')).toBeVisible()
+  await expect(card.getByText(/^(stock|cổ phiếu)$/i)).toBeVisible()
   // NAV is formatted with vi-VN locale
   await expect(card.getByText(/45.000|45,000/)).toBeVisible()
   await expect(card.getByRole('button', { name: /dca/i })).toBeVisible()
@@ -76,7 +76,7 @@ test('mobile funds type filter shows only matching funds', async ({ page }) => {
   await page.waitForLoadState('networkidle')
 
   const mf = page.getByTestId('mobile-funds')
-  await mf.getByRole('button', { name: 'Stock' }).click()
+  await mf.getByRole('button', { name: /^(stock|cổ phiếu)$/i }).click()
   await expect(mf.getByTestId(`fund-card-${equityFund.id}`)).toBeVisible({ timeout: 8_000 })
   await expect(mf.getByTestId(`fund-card-${bondFund.id}`)).not.toBeVisible()
 })
@@ -90,7 +90,7 @@ test('mobile funds no-results state when search yields nothing', async ({ page }
 
   const mf = page.getByTestId('mobile-funds')
   await mf.getByPlaceholder(/search|tìm/i).fill('XNOMATCHWHATSOEVER999')
-  await expect(mf.getByText(/no funds match/i)).toBeVisible({ timeout: 5_000 })
+  await expect(mf.getByText(/no funds match|không có quỹ nào khớp/i)).toBeVisible({ timeout: 5_000 })
 })
 
 test('mobile funds add button opens add fund sheet', async ({ page }) => {
@@ -127,7 +127,7 @@ test('mobile funds delete button opens delete confirmation sheet', async ({ page
   const mf = page.getByTestId('mobile-funds')
   await mf.getByTestId(`fund-card-${fund.id}`).getByRole('button', { name: /delete/i }).click()
   await expect(page.getByTestId('delete-fund-sheet')).toBeVisible({ timeout: 5_000 })
-  await expect(page.getByTestId('delete-fund-sheet').getByText(/delete/i)).toBeVisible()
+  await expect(page.getByTestId('delete-fund-sheet').getByText(/^(delete|xóa) E2EDEL\?$/i)).toBeVisible()
 })
 
 test('mobile funds DCA toggle shows amount input when enabled', async ({ page }) => {
@@ -140,7 +140,7 @@ test('mobile funds DCA toggle shows amount input when enabled', async ({ page })
   const mf = page.getByTestId('mobile-funds')
   const card = mf.getByTestId(`fund-card-${fund.id}`)
   await card.getByRole('button', { name: /dca/i }).click()
-  await expect(card.getByPlaceholder(/amount/i)).toBeVisible({ timeout: 5_000 })
+  await expect(card.getByPlaceholder(/amount|số tiền/i)).toBeVisible({ timeout: 5_000 })
 })
 
 test('mobile funds DCA shows goal target dropdown when enabled', async ({ page }) => {
@@ -255,6 +255,24 @@ test('mobile funds: editing the DCA amount keeps the assigned goal (#1)', async 
   await page.waitForLoadState('networkidle')
   const cardAfter = page.getByTestId('mobile-funds').getByTestId(`fund-card-${fund.id}`)
   await expect(cardAfter.getByTestId(`dca-goal-${fund.id}`)).toHaveValue(goal.goal_id, { timeout: 8_000 })
+})
+
+test('mobile funds delete sheet title is localized to Vietnamese when locale=vi (#2/F)', async ({ page, context }) => {
+  // Regression #2/F: the delete-sheet title was hardcoded `Delete {code}?`
+  // instead of using the deleteModal key, so it stayed English in the vi app.
+  await context.addCookies([{ name: 'locale', value: 'vi', url: 'http://localhost:3000' }])
+  const fund = await api.createFund({ name: 'E2E VN Delete Title', code: 'E2EVDT', fund_type: 'equity', nav: 10000 })
+  cleanup.add(() => api.deleteFund(fund.id))
+
+  await page.goto('/funds')
+  await page.waitForLoadState('networkidle')
+
+  const mf = page.getByTestId('mobile-funds')
+  await mf.getByTestId(`fund-card-${fund.id}`).getByRole('button', { name: /delete fund|xóa quỹ/i }).click()
+  const sheet = page.getByTestId('delete-fund-sheet')
+  await expect(sheet).toBeVisible({ timeout: 5_000 })
+  // Title localized: "Xóa E2EVDT?" (not "Delete E2EVDT?").
+  await expect(sheet.getByText(/^Xóa E2EVDT\?$/)).toBeVisible()
 })
 
 test('mobile funds shows empty state when no funds exist', async ({ page }) => {
