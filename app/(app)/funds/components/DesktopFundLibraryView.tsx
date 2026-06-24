@@ -241,6 +241,7 @@ function DcaToggle({ fund, editId, editValue, goals, goalLabel, unallocatedLabel
         isEditing ? (
           <input
             autoFocus
+            data-testid={`dca-amount-input-${fund.id}`}
             type="text"
             inputMode="numeric"
             placeholder="Amount"
@@ -261,6 +262,7 @@ function DcaToggle({ fund, editId, editValue, goals, goalLabel, unallocatedLabel
           />
         ) : (
           <button
+            data-testid={`dca-amount-btn-${fund.id}`}
             onClick={e => { e.stopPropagation(); onEditStart() }}
             style={{
               fontSize: 11, fontWeight: 500, padding: '2px 8px',
@@ -510,7 +512,7 @@ export default function DesktopFundLibraryView() {
       const res = await fetch(`/api/funds/${fund.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: fund.name, code: fund.code, fund_type: fund.fund_type, nav: fund.nav, nav_source_url: fund.nav_source_url, is_dca: true, dca_monthly_amount_vnd: amount }),
+        body: JSON.stringify({ name: fund.name, code: fund.code, fund_type: fund.fund_type, nav: fund.nav, nav_source_url: fund.nav_source_url, is_dca: true, dca_monthly_amount_vnd: amount, dca_goal_id: fund.dca_goal_id }),
       })
       if (!res.ok) throw new Error()
       bustCache()
