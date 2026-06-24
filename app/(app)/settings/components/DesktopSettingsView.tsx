@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useTransition } from 'react'
-import { useLocale } from 'next-intl'
+import { useState, useEffect, useMemo, useTransition } from 'react'
+import { useLocale, useTranslations } from 'next-intl'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import { useTheme, type ThemeChoice } from '@/app/components/ThemeProvider'
@@ -20,6 +20,10 @@ interface Props {
   initials: string
   displayName: string
 }
+
+// How long the "Saved" success flash stays up before the modal closes.
+// Kept in sync with MobileSettingsView so both views feel identical.
+const SAVE_FLASH_MS = 1400
 
 // ─── Desktop Modal ─────────────────────────────────────────────────────────────
 
@@ -120,14 +124,18 @@ function SettingRow({ icon, label, onClick, last = false }: {
 
 export default function DesktopSettingsView({ email, initials, displayName }: Props) {
   const locale = useLocale()
+  const t = useTranslations('settings')
   const router = useRouter()
   const [, startTransition] = useTransition()
   const { theme: currentTheme, setTheme } = useTheme()
   const { setUserName } = useNavigation()
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  const supabase = useMemo(
+    () => createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    ),
+    []
   )
 
   const [localDisplayName, setLocalDisplayName] = useState(displayName)
@@ -139,9 +147,6 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
   const [showProfile, setShowProfile] = useState(false)
   const [profileSaved, setProfileSaved] = useState(false)
   const [profileName, setProfileName] = useState(displayName)
-
-  // Preferences
-  const [currency, setCurrency] = useState('VND')
 
   // Appearance — read from localStorage so it matches the actual active choice
   const storedTheme = (): ThemeChoice => {
@@ -157,6 +162,7 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
   // Price sync
   const [syncing, setSyncing] = useState(false)
   const [syncDone, setSyncDone] = useState(false)
+  const [syncFailed, setSyncFailed] = useState(false)
   // undefined = loading, null = never synced, otherwise the last-sync ISO time.
   const [lastSyncIso, setLastSyncIso] = useState<string | null | undefined>(undefined)
   useEffect(() => { fetchLastSync().then(setLastSyncIso) }, [])
@@ -164,8 +170,6 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
   // Export
   const [showReport, setShowReport] = useState(false)
   const [overviewCache, setOverviewCache] = useState<DashboardData | null>(null)
-
-  const isVI = locale === 'vi'
 
   function switchLocale(next: string) {
     setLocaleCookie(next)
@@ -180,11 +184,17 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
   async function handleSync() {
     setSyncing(true)
     setSyncDone(false)
-    await refreshPrices()
+    setSyncFailed(false)
+    const ok = await refreshPrices()
     setSyncing(false)
-    setSyncDone(true)
-    setLastSyncIso(new Date().toISOString())
-    setTimeout(() => setSyncDone(false), 3000)
+    if (ok) {
+      setSyncDone(true)
+      setLastSyncIso(new Date().toISOString())
+      setTimeout(() => setSyncDone(false), 3000)
+    } else {
+      setSyncFailed(true)
+      setTimeout(() => setSyncFailed(false), 3000)
+    }
   }
 
   function handleOpenReport() {
@@ -203,17 +213,23 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
   }
 
   async function handleSaveProfile() {
+    // Persist first; only flash "Saved" once it succeeds. A failed update
+    // surfaces a toast and keeps the modal open instead of faking success.
+    const { error } = await supabase.auth.updateUser({ data: { display_name: profileName } })
+    if (error) {
+      toast.error(t('saveFailed'))
+      return
+    }
     setLocalDisplayName(profileName)
     setUserName(profileName)
     setProfileSaved(true)
-    await supabase.auth.updateUser({ data: { display_name: profileName } })
-    setTimeout(() => { setProfileSaved(false); setShowProfile(false) }, 1400)
+    setTimeout(() => { setProfileSaved(false); setShowProfile(false) }, SAVE_FLASH_MS)
   }
 
   async function handleSignOut() {
     const { error } = await supabase.auth.signOut()
     if (error) {
-      toast.error(isVI ? 'Đăng xuất thất bại' : 'Sign out failed')
+      toast.error(t('signOutFailed'))
     } else {
       clearAppCaches()
       router.push('/auth/login')
@@ -221,16 +237,12 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
   }
 
   const themeOptions: { v: ThemeChoice; icon: React.ReactNode; label: string }[] = [
-    { v: 'light',  icon: <Sun size={13} color="currentColor" />,      label: isVI ? 'Sáng'      : 'Light'  },
-    { v: 'dark',   icon: <Moon size={13} color="currentColor" />,     label: isVI ? 'Tối'       : 'Dark'   },
-    { v: 'system', icon: <Settings size={13} color="currentColor" />, label: isVI ? 'Hệ thống'  : 'System' },
+    { v: 'light',  icon: <Sun size={13} color="currentColor" />,      label: t('appearanceLight')  },
+    { v: 'dark',   icon: <Moon size={13} color="currentColor" />,     label: t('appearanceDark')   },
+    { v: 'system', icon: <Settings size={13} color="currentColor" />, label: t('appearanceSystem') },
   ]
 
-  const currencyOptions = [
-    { v: 'VND', symbol: '₫' },
-    { v: 'USD', symbol: '$' },
-    { v: 'EUR', symbol: '€' },
-  ]
+  const syncStatusColor = syncDone ? 'var(--c-pos)' : syncFailed ? 'var(--c-neg)' : 'var(--c-muted)'
 
   return (
     <div data-testid="desktop-settings-view" className="hidden md:flex" style={{ flex: 1, flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
@@ -239,10 +251,10 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
       <div style={{ padding: '20px 28px 16px', borderBottom: '1px solid var(--c-line)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--c-canvas)' }}>
         <div>
           <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--c-muted)', marginBottom: 3 }}>
-            {isVI ? 'Cài đặt' : 'Settings'}
+            {t('eyebrow')}
           </div>
           <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.1, color: 'var(--c-ink)' }}>
-            {isVI ? 'Tùy chọn' : 'Preferences'}
+            {t('preferencesTitle')}
           </h1>
         </div>
       </div>
@@ -256,7 +268,7 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
 
             {/* Profile */}
             <Card>
-              <CardLabel>{isVI ? 'Hồ sơ' : 'Profile'}</CardLabel>
+              <CardLabel>{t('profile')}</CardLabel>
               <div data-testid="desktop-profile-card" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                 <div style={{
                   width: 52, height: 52, borderRadius: 26,
@@ -276,22 +288,22 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
                   style={{ padding: '6px 12px', fontSize: 12, gap: 5, display: 'flex', alignItems: 'center' }}
                 >
                   <Edit2 size={13} />
-                  {isVI ? 'Sửa' : 'Edit'}
+                  {t('edit')}
                 </button>
               </div>
             </Card>
 
             {/* Preferences */}
             <Card>
-              <CardLabel style={{ marginBottom: 4 }}>{isVI ? 'Tùy chỉnh' : 'Preferences'}</CardLabel>
+              <CardLabel style={{ marginBottom: 4 }}>{t('preferences')}</CardLabel>
 
               {/* Language */}
               <div style={{ padding: '13px 0', borderBottom: '1px solid var(--c-line)' }}>
                 <div style={{ fontSize: 11, color: 'var(--c-muted)', marginBottom: 8 }}>
-                  {isVI ? 'Ngôn ngữ' : 'Language'}
+                  {t('language')}
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  {[{ v: 'en', l: 'English' }, { v: 'vi', l: 'Tiếng Việt' }].map(o => (
+                  {[{ v: 'en', l: t('languageEnglish') }, { v: 'vi', l: t('languageVietnamese') }].map(o => (
                     <button
                       key={o.v}
                       onClick={() => switchLocale(o.v)}
@@ -310,9 +322,9 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
               </div>
 
               {/* Appearance */}
-              <div style={{ padding: '13px 0', borderBottom: '1px solid var(--c-line)' }}>
+              <div style={{ padding: '13px 0' }}>
                 <div style={{ fontSize: 11, color: 'var(--c-muted)', marginBottom: 8 }}>
-                  {isVI ? 'Giao diện' : 'Appearance'}
+                  {t('appearance')}
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   {themeOptions.map(o => (
@@ -334,38 +346,12 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
                   ))}
                 </div>
               </div>
-
-              {/* Currency */}
-              <div style={{ padding: '13px 0' }}>
-                <div style={{ fontSize: 11, color: 'var(--c-muted)', marginBottom: 8 }}>
-                  {isVI ? 'Tiền tệ' : 'Currency'}
-                </div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  {currencyOptions.map(o => (
-                    <button
-                      key={o.v}
-                      onClick={() => setCurrency(o.v)}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 6,
-                        padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-                        background: currency === o.v ? 'var(--c-btn-primary)' : 'var(--c-card-2)',
-                        color: currency === o.v ? '#fff' : 'var(--c-muted)',
-                        border: `1px solid ${currency === o.v ? 'var(--c-btn-primary)' : 'var(--c-line)'}`,
-                        cursor: 'pointer', fontFamily: 'inherit', transition: 'all 120ms',
-                      }}
-                    >
-                      <span style={{ fontFamily: 'monospace' }}>{o.symbol}</span>
-                      {o.v}
-                    </button>
-                  ))}
-                </div>
-              </div>
             </Card>
 
             {/* Sign out */}
             <button
               onClick={handleSignOut}
-              aria-label="sign out"
+              aria-label={t('signOut')}
               style={{
                 width: '100%', padding: '12px 16px',
                 background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 12,
@@ -377,11 +363,11 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
               onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--c-card)' }}
             >
               <LogOut size={16} color="var(--c-neg)" />
-              {isVI ? 'Đăng xuất' : 'Sign out'}
+              {t('signOut')}
             </button>
 
             <p style={{ margin: 0, fontSize: 11, color: 'var(--c-muted)', textAlign: 'center' }}>
-              Cairn v0.4 · {isVI ? 'Bản nội bộ' : 'Internal preview'}
+              Cairn v0.4 · {t('versionTag')}
             </p>
           </div>
 
@@ -390,27 +376,29 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
 
             {/* Price sync */}
             <Card>
-              <CardLabel>{isVI ? 'Đồng bộ giá' : 'Price sync'}</CardLabel>
+              <CardLabel>{t('priceSync')}</CardLabel>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
                 <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--c-navy-tint)', color: 'var(--c-navy)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   <RefreshCw size={15} style={{ animation: syncing ? 'spin 1s linear infinite' : 'none' }} />
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)' }}>
-                    {isVI ? 'Đồng bộ tất cả giá' : 'Sync all prices'}
+                    {t('syncAllPrices')}
                   </div>
-                  <div style={{ fontSize: 11, color: syncDone ? 'var(--c-pos)' : 'var(--c-muted)', marginTop: 2, transition: 'color 200ms' }}>
+                  <div style={{ fontSize: 11, color: syncStatusColor, marginTop: 2, transition: 'color 200ms' }}>
                     {syncing
-                      ? (isVI ? 'Đang tải…' : 'Updating…')
+                      ? t('syncUpdating')
                       : syncDone
-                      ? (isVI ? '✓ Đã cập nhật' : '✓ Updated')
-                      : `${isVI ? 'Lần cuối: ' : 'Last synced: '}${formatLastSync(lastSyncIso, locale)}`}
+                      ? t('syncUpdated')
+                      : syncFailed
+                      ? t('syncFailed')
+                      : `${t('lastSyncedPrefix')}${formatLastSync(lastSyncIso, locale)}`}
                   </div>
                 </div>
                 <button
                   onClick={handleSync}
                   disabled={syncing}
-                  aria-label="sync now"
+                  aria-label={t('syncNow')}
                   style={{
                     padding: '7px 14px', fontSize: 12, fontWeight: 600,
                     background: 'var(--c-btn-primary)', border: 'none', borderRadius: 8,
@@ -418,13 +406,13 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
                     fontFamily: 'inherit', opacity: syncing ? 0.6 : 1, transition: 'opacity 150ms',
                   }}
                 >
-                  {syncing ? (isVI ? 'Đang…' : 'Syncing…') : (isVI ? 'Đồng bộ' : 'Sync now')}
+                  {syncing ? t('syncingShort') : t('syncNow')}
                 </button>
               </div>
               <div style={{ display: 'grid', gap: 10, paddingTop: 12, borderTop: '1px solid var(--c-line)' }}>
                 {[
-                  { icon: <TrendingUp size={13} />, color: '#2563eb', label: isVI ? 'NAV quỹ đầu tư' : 'Fund NAV',         note: isVI ? 'Tự động đồng bộ lúc 18:00' : 'Auto-syncs daily at 6:00 PM' },
-                  { icon: <Coins size={13} />, color: 'var(--c-fund-gold)', label: isVI ? 'Giá vàng DOJI' : 'Gold price (DOJI)', note: isVI ? 'Tự động đồng bộ lúc 09:00' : 'Auto-syncs daily at 9:00 AM' },
+                  { icon: <TrendingUp size={13} />, color: '#2563eb', label: t('fundNav'),   note: t('fundNavNote') },
+                  { icon: <Coins size={13} />, color: 'var(--c-fund-gold)', label: t('goldPrice'), note: t('goldNote') },
                 ].map((row, i) => (
                   <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <div style={{ width: 28, height: 28, borderRadius: 7, background: 'var(--c-card-2)', color: row.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -441,10 +429,10 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
 
             {/* Data */}
             <Card>
-              <CardLabel style={{ marginBottom: 4 }}>{isVI ? 'Dữ liệu' : 'Data'}</CardLabel>
+              <CardLabel style={{ marginBottom: 4 }}>{t('data')}</CardLabel>
               <SettingRow
                 icon={<Download size={15} />}
-                label={isVI ? 'Xuất dữ liệu' : 'Export data'}
+                label={t('exportData')}
                 onClick={handleOpenReport}
                 last
               />
@@ -455,19 +443,19 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
       </div>
 
       {/* ─── Edit profile modal ─────────────────────────────────────────────── */}
-      <DModal open={showProfile} onClose={() => { setShowProfile(false); setProfileSaved(false) }} title={isVI ? 'Hồ sơ cá nhân' : 'Profile'}>
+      <DModal open={showProfile} onClose={() => { setShowProfile(false); setProfileSaved(false) }} title={t('profileModalTitle')}>
         {profileSaved ? (
           <div style={{ padding: '28px 0', textAlign: 'center' }}>
             <div style={{ width: 52, height: 52, borderRadius: 26, background: 'var(--c-pos-tint)', color: 'var(--c-pos)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
               <Check size={26} strokeWidth={2.5} />
             </div>
-            <div style={{ fontSize: 15, fontWeight: 600 }}>{isVI ? 'Đã lưu' : 'Saved'}</div>
+            <div style={{ fontSize: 15, fontWeight: 600 }}>{t('saved')}</div>
           </div>
         ) : (
           <div style={{ display: 'grid', gap: 14 }}>
             <div>
               <label style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--c-muted)', display: 'block', marginBottom: 6 }}>
-                {isVI ? 'Họ và tên' : 'Full name'}
+                {t('fullName')}
               </label>
               <input
                 value={profileName}
@@ -485,7 +473,7 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
             </div>
             <div>
               <label style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--c-muted)', display: 'block', marginBottom: 6 }}>
-                Email
+                {t('email')}
               </label>
               <input
                 type="email"
@@ -505,14 +493,14 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
                 className="cn-btn ghost"
                 style={{ flex: 1, justifyContent: 'center', border: '1px solid var(--c-line)' }}
               >
-                {isVI ? 'Hủy' : 'Cancel'}
+                {t('cancel')}
               </button>
               <button
                 onClick={handleSaveProfile}
                 className="cn-btn primary"
                 style={{ flex: 2, justifyContent: 'center' }}
               >
-                {isVI ? 'Lưu' : 'Save'}
+                {t('save')}
               </button>
             </div>
           </div>

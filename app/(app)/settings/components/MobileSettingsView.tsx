@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useEffect, useTransition } from 'react'
-import { useLocale } from 'next-intl'
+import { useState, useEffect, useMemo, useTransition } from 'react'
+import { useLocale, useTranslations } from 'next-intl'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import { useTheme, type ThemeChoice } from '@/app/components/ThemeProvider'
 import {
-  Globe, Sun, Wallet, Download, RefreshCw,
+  Globe, Sun, Moon, Settings, Download, RefreshCw,
   TrendingUp, Coins, LogOut, ChevronRight, Check,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -19,6 +19,19 @@ interface Props {
   email: string
   initials: string
   displayName: string
+}
+
+// How long the "Saved" success flash stays up before the sheet/modal closes.
+// Kept in sync with DesktopSettingsView so both views feel identical.
+const SAVE_FLASH_MS = 1400
+
+// Read the persisted theme *choice* (not the resolved theme) from localStorage,
+// falling back to the resolved theme during SSR. 'system' is the absence of a
+// stored value. Mirrors DesktopSettingsView's storedTheme().
+function readThemeChoice(fallback: ThemeChoice): ThemeChoice {
+  if (typeof localStorage === 'undefined') return fallback
+  const v = localStorage.getItem('theme')
+  return (v === 'light' || v === 'dark') ? v : 'system'
 }
 
 // ─── Bottom sheet wrapper ──────────────────────────────────────────────────────
@@ -83,10 +96,11 @@ function BottomSheet({ open, onClose, title, children }: {
 function ProfileSheet({ open, onClose, onSave, displayName, email }: {
   open: boolean
   onClose: () => void
-  onSave: (name: string) => void
+  onSave: (name: string) => Promise<boolean>
   displayName: string
   email: string
 }) {
+  const t = useTranslations('settings')
   const [name, setName] = useState(displayName)
   const [saved, setSaved] = useState(false)
 
@@ -94,14 +108,17 @@ function ProfileSheet({ open, onClose, onSave, displayName, email }: {
     if (open) { setName(displayName); setSaved(false) }
   }, [open, displayName])
 
-  function handleSave() {
+  async function handleSave() {
+    // Only flash "Saved" and close once the persist actually succeeded — a
+    // failed update surfaces a toast (from onSave) and keeps the form open.
+    const ok = await onSave(name)
+    if (!ok) return
     setSaved(true)
-    onSave(name)
-    setTimeout(() => { setSaved(false); onClose() }, 1200)
+    setTimeout(() => { setSaved(false); onClose() }, SAVE_FLASH_MS)
   }
 
   return (
-    <BottomSheet open={open} onClose={onClose} title="Profile">
+    <BottomSheet open={open} onClose={onClose} title={t('profileModalTitle')}>
       {saved ? (
         <div style={{ padding: '28px 0', textAlign: 'center' }}>
           <div style={{
@@ -111,13 +128,13 @@ function ProfileSheet({ open, onClose, onSave, displayName, email }: {
           }}>
             <Check size={26} strokeWidth={2.5} />
           </div>
-          <div style={{ fontSize: 15, fontWeight: 600 }}>Saved</div>
+          <div style={{ fontSize: 15, fontWeight: 600 }}>{t('saved')}</div>
         </div>
       ) : (
         <div style={{ display: 'grid', gap: 14 }}>
           <div>
             <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--c-muted)', marginBottom: 6 }}>
-              Full name
+              {t('fullName')}
             </div>
             <input
               value={name}
@@ -132,7 +149,7 @@ function ProfileSheet({ open, onClose, onSave, displayName, email }: {
           </div>
           <div>
             <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--c-muted)', marginBottom: 6 }}>
-              Email
+              {t('email')}
             </div>
             <input
               type="email"
@@ -149,7 +166,7 @@ function ProfileSheet({ open, onClose, onSave, displayName, email }: {
           <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
             <button
               onClick={onClose}
-              aria-label="cancel"
+              aria-label={t('cancel')}
               style={{
                 flex: 1, padding: '10px 0', fontSize: 13, fontWeight: 500,
                 background: 'var(--c-card)', border: '1px solid var(--c-line)',
@@ -157,7 +174,7 @@ function ProfileSheet({ open, onClose, onSave, displayName, email }: {
                 color: 'var(--c-ink)',
               }}
             >
-              Cancel
+              {t('cancel')}
             </button>
             <button
               onClick={handleSave}
@@ -168,7 +185,7 @@ function ProfileSheet({ open, onClose, onSave, displayName, email }: {
                 color: '#fff',
               }}
             >
-              Save
+              {t('save')}
             </button>
           </div>
         </div>
@@ -179,35 +196,35 @@ function ProfileSheet({ open, onClose, onSave, displayName, email }: {
 
 // ─── Appearance sheet ──────────────────────────────────────────────────────────
 
-function AppearanceSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+function AppearanceSheet({ open, onClose, onApply }: {
+  open: boolean
+  onClose: () => void
+  onApply: (choice: ThemeChoice) => void
+}) {
+  const t = useTranslations('settings')
   const { theme: currentTheme, setTheme } = useTheme()
-
-  const storedChoice = (): ThemeChoice => {
-    if (typeof localStorage === 'undefined') return currentTheme
-    const v = localStorage.getItem('theme')
-    return (v === 'light' || v === 'dark') ? v : 'system'
-  }
 
   const [selected, setSelected] = useState<ThemeChoice>(currentTheme)
 
   useEffect(() => {
-    if (open) setSelected(storedChoice())
+    if (open) setSelected(readThemeChoice(currentTheme))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
   const options: { v: ThemeChoice; icon: React.ReactNode; label: string }[] = [
-    { v: 'light',  icon: <Sun size={18} />,                               label: 'Light'  },
-    { v: 'dark',   icon: <span style={{ fontSize: 16 }}>🌙</span>,        label: 'Dark'   },
-    { v: 'system', icon: <span style={{ fontSize: 16 }}>⚙️</span>,         label: 'System' },
+    { v: 'light',  icon: <Sun size={18} />,      label: t('appearanceLight')  },
+    { v: 'dark',   icon: <Moon size={18} />,     label: t('appearanceDark')   },
+    { v: 'system', icon: <Settings size={18} />, label: t('appearanceSystem') },
   ]
 
   function handleApply() {
     setTheme(selected)
+    onApply(selected)
     onClose()
   }
 
   return (
-    <BottomSheet open={open} onClose={onClose} title="Appearance">
+    <BottomSheet open={open} onClose={onClose} title={t('appearance')}>
       <div style={{ display: 'grid', gap: 8, marginBottom: 14 }}>
         {options.map(opt => (
           <button
@@ -235,7 +252,7 @@ function AppearanceSheet({ open, onClose }: { open: boolean; onClose: () => void
       </div>
       <button
         onClick={handleApply}
-        aria-label="apply"
+        aria-label={t('apply')}
         style={{
           width: '100%', padding: '11px 0', fontSize: 13, fontWeight: 600,
           background: 'var(--c-btn-primary)', border: 'none',
@@ -243,72 +260,7 @@ function AppearanceSheet({ open, onClose }: { open: boolean; onClose: () => void
           color: '#fff',
         }}
       >
-        Apply
-      </button>
-    </BottomSheet>
-  )
-}
-
-// ─── Currency sheet ────────────────────────────────────────────────────────────
-
-function CurrencySheet({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [currency, setCurrency] = useState('VND')
-
-  const currencies = [
-    { v: 'VND', label: 'Vietnamese Dong', symbol: '₫' },
-    { v: 'USD', label: 'US Dollar',       symbol: '$' },
-    { v: 'EUR', label: 'Euro',            symbol: '€' },
-  ]
-
-  return (
-    <BottomSheet open={open} onClose={onClose} title="Currency">
-      <div style={{ display: 'grid', gap: 8, marginBottom: 14 }}>
-        {currencies.map(c => (
-          <button
-            key={c.v}
-            onClick={() => setCurrency(c.v)}
-            style={{
-              width: '100%', textAlign: 'left', padding: '14px 16px',
-              background: currency === c.v ? 'var(--c-navy-tint)' : 'var(--c-card)',
-              border: `1.5px solid ${currency === c.v ? 'var(--c-navy)' : 'var(--c-line)'}`,
-              borderRadius: 12, cursor: 'pointer', fontFamily: 'inherit',
-              display: 'flex', alignItems: 'center', gap: 12, transition: 'all 120ms',
-            }}
-          >
-            <div style={{
-              width: 36, height: 36, borderRadius: 8,
-              background: currency === c.v ? 'var(--c-btn-primary)' : 'var(--c-card-2)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-            }}>
-              <span style={{ fontSize: 14, fontWeight: 700, color: currency === c.v ? '#fff' : 'var(--c-muted)' }}>
-                {c.symbol}
-              </span>
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: currency === c.v ? 'var(--c-navy)' : 'var(--c-ink)' }}>
-                {c.v}
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 1 }}>{c.label}</div>
-            </div>
-            {currency === c.v && (
-              <div style={{ width: 20, height: 20, borderRadius: 10, background: 'var(--c-btn-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Check size={12} strokeWidth={2.5} color="#fff" />
-              </div>
-            )}
-          </button>
-        ))}
-      </div>
-      <button
-        onClick={onClose}
-        aria-label="apply"
-        style={{
-          width: '100%', padding: '11px 0', fontSize: 13, fontWeight: 600,
-          background: 'var(--c-btn-primary)', border: 'none',
-          borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit',
-          color: '#fff',
-        }}
-      >
-        Apply
+        {t('apply')}
       </button>
     </BottomSheet>
   )
@@ -354,13 +306,18 @@ function SettingsRow({ icon, label, value, onClick, last = false }: {
 
 export default function MobileSettingsView({ email, initials, displayName }: Props) {
   const locale = useLocale()
+  const t = useTranslations('settings')
   const router = useRouter()
   const [, startTransition] = useTransition()
   const { setMobileTopBar, setUserName } = useNavigation()
+  const { theme: currentTheme } = useTheme()
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  const supabase = useMemo(
+    () => createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    ),
+    []
   )
 
   const [localDisplayName, setLocalDisplayName] = useState(displayName)
@@ -373,25 +330,30 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
 
   const [showProfile, setShowProfile] = useState(false)
   const [showAppearance, setShowAppearance] = useState(false)
-  const [showCurrency, setShowCurrency] = useState(false)
   const [showReport, setShowReport] = useState(false)
   const [overviewCache, setOverviewCache] = useState<DashboardData | null>(null)
 
+  // Persisted theme choice, so the Appearance row reflects the real selection
+  // (light/dark/system) instead of a hardcoded label.
+  const [themeChoice, setThemeChoice] = useState<ThemeChoice>(currentTheme)
+  // Hydrate from the persisted choice after mount (avoids an SSR mismatch); the
+  // two lint rules below are intentional for that reason — same as DesktopSettingsView.
+  useEffect(() => { setThemeChoice(readThemeChoice(currentTheme)) }, []) // eslint-disable-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
+
   const [syncing, setSyncing] = useState(false)
   const [syncDone, setSyncDone] = useState(false)
+  const [syncFailed, setSyncFailed] = useState(false)
   // undefined = loading, null = never synced, otherwise the last-sync ISO time.
   const [lastSyncIso, setLastSyncIso] = useState<string | null | undefined>(undefined)
   useEffect(() => { fetchLastSync().then(setLastSyncIso) }, [])
 
-  const isVI = locale === 'vi'
-
   useEffect(() => {
     setMobileTopBar({
-      title: isVI ? 'Tùy chọn' : 'Preferences',
-      subtitle: isVI ? 'Cài đặt' : 'Settings',
+      title: t('preferencesTitle'),
+      subtitle: t('eyebrow'),
     })
     return () => setMobileTopBar({ title: '' })
-  }, [isVI, setMobileTopBar])
+  }, [t, setMobileTopBar])
 
   function switchLocale(next: string) {
     setLocaleCookie(next)
@@ -401,11 +363,17 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
   async function handleSync() {
     setSyncing(true)
     setSyncDone(false)
-    await refreshPrices()
+    setSyncFailed(false)
+    const ok = await refreshPrices()
     setSyncing(false)
-    setSyncDone(true)
-    setLastSyncIso(new Date().toISOString())
-    setTimeout(() => setSyncDone(false), 3000)
+    if (ok) {
+      setSyncDone(true)
+      setLastSyncIso(new Date().toISOString())
+      setTimeout(() => setSyncDone(false), 3000)
+    } else {
+      setSyncFailed(true)
+      setTimeout(() => setSyncFailed(false), 3000)
+    }
   }
 
   function handleOpenReport() {
@@ -417,18 +385,35 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
     await exportPortfolioReport(overviewCache, locale)
   }
 
+  async function handleSaveProfile(name: string): Promise<boolean> {
+    const { error } = await supabase.auth.updateUser({ data: { display_name: name } })
+    if (error) {
+      toast.error(t('saveFailed'))
+      return false
+    }
+    setLocalDisplayName(name)
+    setUserName(name)
+    return true
+  }
+
   async function handleSignOut() {
     const { error } = await supabase.auth.signOut()
     if (error) {
-      toast.error(isVI ? 'Đăng xuất thất bại' : 'Sign out failed')
+      toast.error(t('signOutFailed'))
     } else {
       clearAppCaches()
       router.push('/auth/login')
     }
   }
 
-  const localeLabel = isVI ? 'Tiếng Việt' : 'English'
-  const appearanceLabel = isVI ? 'Sáng' : 'Light'
+  const localeLabel = locale === 'vi' ? t('languageVietnamese') : t('languageEnglish')
+  const appearanceLabel = themeChoice === 'dark'
+    ? t('appearanceDark')
+    : themeChoice === 'light'
+    ? t('appearanceLight')
+    : t('appearanceSystem')
+
+  const syncStatusColor = syncDone ? 'var(--c-pos)' : syncFailed ? 'var(--c-neg)' : 'var(--c-muted)'
 
   return (
     <>
@@ -438,7 +423,7 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
         {/* Profile card */}
         <button
           onClick={() => setShowProfile(true)}
-          aria-label="profile"
+          aria-label={t('profile')}
           style={{
             width: '100%', padding: 18, display: 'flex', alignItems: 'center', gap: 14,
             textAlign: 'left', background: 'var(--c-card)', border: '1px solid var(--c-line)',
@@ -465,26 +450,20 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
         {/* Preferences section */}
         <section style={{ marginTop: 22 }}>
           <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--c-muted)', marginBottom: 8, paddingLeft: 4 }}>
-            {isVI ? 'Tùy chỉnh' : 'Preferences'}
+            {t('preferences')}
           </div>
           <div style={{ background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 16, overflow: 'hidden', boxShadow: 'var(--shadow-card)' }}>
             <SettingsRow
               icon={<Globe size={16} />}
-              label={isVI ? 'Ngôn ngữ' : 'Language'}
+              label={t('language')}
               value={localeLabel}
-              onClick={() => switchLocale(isVI ? 'en' : 'vi')}
+              onClick={() => switchLocale(locale === 'vi' ? 'en' : 'vi')}
             />
             <SettingsRow
               icon={<Sun size={16} />}
-              label={isVI ? 'Giao diện' : 'Appearance'}
+              label={t('appearance')}
               value={appearanceLabel}
               onClick={() => setShowAppearance(true)}
-            />
-            <SettingsRow
-              icon={<Wallet size={16} />}
-              label={isVI ? 'Tiền tệ' : 'Currency'}
-              value="VND"
-              onClick={() => setShowCurrency(true)}
               last
             />
           </div>
@@ -493,12 +472,12 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
         {/* Data section */}
         <section style={{ marginTop: 22 }}>
           <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--c-muted)', marginBottom: 8, paddingLeft: 4 }}>
-            {isVI ? 'Dữ liệu' : 'Data'}
+            {t('data')}
           </div>
           <div style={{ background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 16, overflow: 'hidden', boxShadow: 'var(--shadow-card)' }}>
             <SettingsRow
               icon={<Download size={16} />}
-              label={isVI ? 'Xuất dữ liệu' : 'Export data'}
+              label={t('exportData')}
               onClick={handleOpenReport}
               last
             />
@@ -508,7 +487,7 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
         {/* Price sync section */}
         <section style={{ marginTop: 22 }}>
           <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--c-muted)', marginBottom: 8, paddingLeft: 4 }}>
-            {isVI ? 'Đồng bộ giá' : 'Price sync'}
+            {t('priceSync')}
           </div>
           <div style={{ background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 16, padding: 16, boxShadow: 'var(--shadow-card)' }}>
             {/* Sync header row */}
@@ -521,20 +500,22 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)' }}>
-                  {isVI ? 'Đồng bộ tất cả giá' : 'Sync all prices'}
+                  {t('syncAllPrices')}
                 </div>
-                <div style={{ fontSize: 11, color: syncDone ? 'var(--c-pos)' : 'var(--c-muted)', marginTop: 2, transition: 'color 200ms' }}>
+                <div style={{ fontSize: 11, color: syncStatusColor, marginTop: 2, transition: 'color 200ms' }}>
                   {syncing
-                    ? (isVI ? 'Đang tải...' : 'Updating…')
+                    ? t('syncUpdating')
                     : syncDone
-                    ? (isVI ? '✓ Đã cập nhật' : '✓ Updated')
-                    : `${isVI ? 'Lần cuối: ' : 'Last synced: '}${formatLastSync(lastSyncIso, locale)}`}
+                    ? t('syncUpdated')
+                    : syncFailed
+                    ? t('syncFailed')
+                    : `${t('lastSyncedPrefix')}${formatLastSync(lastSyncIso, locale)}`}
                 </div>
               </div>
               <button
                 onClick={handleSync}
                 disabled={syncing}
-                aria-label="sync now"
+                aria-label={t('syncNow')}
                 style={{
                   padding: '7px 14px', fontSize: 12, fontWeight: 600,
                   background: 'var(--c-btn-primary)', border: 'none', borderRadius: 8,
@@ -543,9 +524,7 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
                   transition: 'opacity 150ms',
                 }}
               >
-                {syncing
-                  ? (isVI ? 'Đang...' : 'Syncing…')
-                  : (isVI ? 'Đồng bộ' : 'Sync now')}
+                {syncing ? t('syncingShort') : t('syncNow')}
               </button>
             </div>
 
@@ -555,14 +534,14 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
                 {
                   icon: <TrendingUp size={14} />,
                   color: '#2563eb',
-                  label: isVI ? 'NAV quỹ đầu tư' : 'Fund NAV',
-                  note: isVI ? 'Tự động đồng bộ lúc 18:00 mỗi ngày' : 'Auto-syncs daily at 6:00 PM',
+                  label: t('fundNav'),
+                  note: t('fundNavNote'),
                 },
                 {
                   icon: <Coins size={14} />,
                   color: 'var(--c-fund-gold)',
-                  label: isVI ? 'Giá vàng DOJI' : 'Gold price (DOJI)',
-                  note: isVI ? 'Tự động đồng bộ lúc 09:00 mỗi ngày' : 'Auto-syncs daily at 9:00 AM',
+                  label: t('goldPrice'),
+                  note: t('goldNote'),
                 },
               ].map((row, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -585,7 +564,7 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
         {/* Sign out */}
         <button
           onClick={handleSignOut}
-          aria-label="sign out"
+          aria-label={t('signOut')}
           style={{
             width: '100%', marginTop: 22, padding: '13px 14px',
             background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 10,
@@ -595,12 +574,12 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
           }}
         >
           <LogOut size={16} />
-          {isVI ? 'Đăng xuất' : 'Sign out'}
+          {t('signOut')}
         </button>
 
         {/* Version */}
         <p style={{ textAlign: 'center', fontSize: 11, color: 'var(--c-muted)', marginTop: 16 }}>
-          Cairn v0.4 · {isVI ? 'Bản nội bộ' : 'Internal preview'}
+          Cairn v0.4 · {t('versionTag')}
         </p>
       </div>
       </div>
@@ -609,21 +588,14 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
       <ProfileSheet
         open={showProfile}
         onClose={() => setShowProfile(false)}
-        onSave={async (name) => {
-          setLocalDisplayName(name)
-          setUserName(name)
-          await supabase.auth.updateUser({ data: { display_name: name } })
-        }}
+        onSave={handleSaveProfile}
         displayName={localDisplayName}
         email={email}
       />
       <AppearanceSheet
         open={showAppearance}
         onClose={() => setShowAppearance(false)}
-      />
-      <CurrencySheet
-        open={showCurrency}
-        onClose={() => setShowCurrency(false)}
+        onApply={setThemeChoice}
       />
       <DownloadReportSheet
         open={showReport}

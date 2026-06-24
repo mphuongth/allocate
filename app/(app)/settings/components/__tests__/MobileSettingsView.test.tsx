@@ -3,15 +3,31 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import MobileSettingsView from '../MobileSettingsView'
 
-const { signOutMock, updateUserMock, setUserNameMock } = vi.hoisted(() => ({
+const { signOutMock, updateUserMock, setUserNameMock, toastErrorMock } = vi.hoisted(() => ({
   signOutMock: vi.fn().mockResolvedValue({ error: null }),
   updateUserMock: vi.fn().mockResolvedValue({ data: { user: {} }, error: null }),
   setUserNameMock: vi.fn(),
+  toastErrorMock: vi.fn(),
 }))
 
-vi.mock('next-intl', () => ({
-  useTranslations: () => (key: string) => key,
-  useLocale: () => 'en',
+// Resolve real English copy from the message catalog so assertions check the
+// rendered, localized text (the view was migrated from `isVI ? …` to `t()`).
+vi.mock('next-intl', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const en = require('../../../../../messages/en.json')
+  const resolve = (ns: string | undefined, key: string) => {
+    const dict = ns ? en[ns] : en
+    return key.split('.').reduce((o: Record<string, unknown> | undefined, k: string) =>
+      (o == null ? undefined : o[k] as Record<string, unknown>), dict) ?? key
+  }
+  return {
+    useTranslations: (ns?: string) => (key: string) => resolve(ns, key),
+    useLocale: () => 'en',
+  }
+})
+
+vi.mock('sonner', () => ({
+  toast: { error: toastErrorMock, success: vi.fn() },
 }))
 
 vi.mock('next/navigation', () => ({
@@ -180,14 +196,9 @@ describe('MobileSettingsView — preferences section', () => {
     expect(screen.getByText(/appearance/i)).toBeInTheDocument()
   })
 
-  it('renders Currency row', () => {
+  it('does not render a Currency row (removed — it was a dead control)', () => {
     render(<MobileSettingsView {...defaultProps} />)
-    expect(screen.getByText(/currency/i)).toBeInTheDocument()
-  })
-
-  it('shows current currency value', () => {
-    render(<MobileSettingsView {...defaultProps} />)
-    expect(screen.getByText('VND')).toBeInTheDocument()
+    expect(screen.queryByText(/currency/i)).not.toBeInTheDocument()
   })
 })
 
@@ -211,24 +222,25 @@ describe('MobileSettingsView — appearance sheet', () => {
   })
 })
 
-// ─── Currency sheet ────────────────────────────────────────────────────────────
+// ─── Profile save failure (#5) ──────────────────────────────────────────────────
 
-describe('MobileSettingsView — currency sheet', () => {
-  it('opens currency sheet when Currency row is clicked', async () => {
+describe('MobileSettingsView — profile save failure', () => {
+  it('surfaces a toast and keeps the form open when the update fails', async () => {
+    toastErrorMock.mockClear()
+    // One failing update; the shared default (resolves error: null) is restored
+    // for the next call automatically.
+    updateUserMock.mockResolvedValueOnce({ data: { user: null }, error: { message: 'nope' } })
     render(<MobileSettingsView {...defaultProps} />)
-    await userEvent.click(screen.getByRole('button', { name: /^currency$/i }))
-    expect(screen.getByText('Vietnamese Dong')).toBeInTheDocument()
-    expect(screen.getByText('US Dollar')).toBeInTheDocument()
-    expect(screen.getByText('Euro')).toBeInTheDocument()
-  })
+    await userEvent.click(screen.getByRole('button', { name: /profile/i }))
+    const nameInput = screen.getByDisplayValue('Phuong')
+    await userEvent.clear(nameInput)
+    await userEvent.type(nameInput, 'Broken')
+    await userEvent.click(screen.getByRole('button', { name: /save/i }))
 
-  it('closes currency sheet when apply is clicked', async () => {
-    render(<MobileSettingsView {...defaultProps} />)
-    await userEvent.click(screen.getByRole('button', { name: /^currency$/i }))
-    await userEvent.click(screen.getByRole('button', { name: /apply/i }))
-    await waitFor(() =>
-      expect(screen.queryByText('Vietnamese Dong')).not.toBeInTheDocument()
-    )
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalled())
+    // No success flash, and the form is still editable (not closed).
+    expect(screen.queryByText('Saved')).not.toBeInTheDocument()
+    expect(screen.getByDisplayValue('Broken')).toBeInTheDocument()
   })
 })
 
@@ -337,6 +349,18 @@ describe('MobileSettingsView — price sync section', () => {
     await userEvent.click(btn)
     expect(btn).toBeDisabled()
     resolve()
+    fetchSpy.mockRestore()
+  })
+
+  it('shows a failure status (not "Updated") when a refresh endpoint errors', async () => {
+    // Both fetches resolve not-ok → refreshPrices returns false.
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('{}', { status: 500 })
+    )
+    render(<MobileSettingsView {...defaultProps} />)
+    await userEvent.click(screen.getByRole('button', { name: /sync now/i }))
+    await waitFor(() => expect(screen.getByText(/sync failed/i)).toBeInTheDocument())
+    expect(screen.queryByText(/updated/i)).not.toBeInTheDocument()
     fetchSpy.mockRestore()
   })
 })

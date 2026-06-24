@@ -50,17 +50,24 @@ describe('setLocaleCookie', () => {
 describe('refreshPrices', () => {
   afterEach(() => vi.restoreAllMocks())
 
-  it('calls both refresh endpoints', async () => {
+  it('calls both refresh endpoints and reports success', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true })
     vi.stubGlobal('fetch', fetchMock)
-    await refreshPrices()
+    await expect(refreshPrices()).resolves.toBe(true)
     expect(fetchMock).toHaveBeenCalledWith('/api/cron/refresh-navs')
     expect(fetchMock).toHaveBeenCalledWith('/api/cron/refresh-gold')
   })
 
-  it('swallows errors (best-effort sync)', async () => {
+  it('reports failure when an endpoint responds not-ok', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce({ ok: true })
+      .mockResolvedValueOnce({ ok: false }))
+    await expect(refreshPrices()).resolves.toBe(false)
+  })
+
+  it('reports failure (without throwing) on a network error', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network')))
-    await expect(refreshPrices()).resolves.toBeUndefined()
+    await expect(refreshPrices()).resolves.toBe(false)
   })
 })
 
