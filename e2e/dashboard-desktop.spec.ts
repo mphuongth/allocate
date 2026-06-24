@@ -80,6 +80,26 @@ test.describe('Desktop overview layout', () => {
     }
   })
 
+  test('net-worth chart range persists across the desktop↔mobile breakpoint (#5)', async ({ page }) => {
+    // The range was owned by each net-worth card, so crossing 768px remounted a
+    // fresh card that reset to 1Y. The state now lives in the parent and carries
+    // over. (Global setup seeds a bank tx, so the panel always renders.)
+    const panel = page.getByTestId('desktop-net-worth-panel')
+    await expect(panel).toBeVisible({ timeout: 10_000 })
+
+    // Pick a non-default range on desktop.
+    const desktop3M = panel.getByRole('button', { name: '3M', exact: true })
+    await desktop3M.click()
+    await expect(desktop3M).toHaveAttribute('aria-pressed', 'true')
+
+    // Shrink to mobile — the mobile card should still show 3M, not reset to 1Y.
+    await page.setViewportSize({ width: 390, height: 844 })
+    const card = page.getByTestId('net-worth-card')
+    await expect(card).toBeVisible({ timeout: 8_000 })
+    await expect(card.getByRole('button', { name: '3M', exact: true })).toHaveAttribute('aria-pressed', 'true')
+    await expect(card.getByRole('button', { name: '1Y', exact: true })).toHaveAttribute('aria-pressed', 'false')
+  })
+
   test('sidebar has light background (not dark navy)', async ({ page }) => {
     const sidebar = page.getByTestId('desktop-sidebar')
     await expect(sidebar).toBeVisible({ timeout: 10_000 })

@@ -26,6 +26,7 @@ import { actionableBooks } from './maturityCardItems'
 import { collapseUnallocatedBooks } from './unallocatedBooks'
 import type { InvRow } from './components/goalDetailShared'
 import { loadOverview, overviewErrorText, getCachedOverview, setCachedOverview, computeAllocationTotals } from './overviewData'
+import { fetchNetWorthHistory, type TimeRange, type ChartPoint } from './components/netWorthHistory'
 
 import TransactionHistorySheet from './components/TransactionHistorySheet'
 import DesktopNetWorthPanel from './components/DesktopNetWorthPanel'
@@ -329,6 +330,17 @@ export default function DashboardClient({ userId }: { userId: string }) {
     setSelectedInsuranceId(null)
     setGoalDetailOpen(false)
   }, [isDesktop])
+
+  // Net-worth history + selected range live here (not inside the two net-worth
+  // cards) so the range the user picks survives a desktop↔mobile breakpoint
+  // switch — each card used to own its own range and reset to 1Y on remount (#5).
+  const [timeRange, setTimeRange] = useState<TimeRange>('1Y')
+  const [history, setHistory] = useState<ChartPoint[]>([])
+  useEffect(() => {
+    let cancelled = false
+    fetchNetWorthHistory(timeRange).then((h) => { if (!cancelled) setHistory(h) })
+    return () => { cancelled = true }
+  }, [timeRange, historyKey])
 
   const fetchDataRef = useRef<(opts?: { force?: boolean }) => Promise<void>>(async () => {})
   const hasDataRef = useRef(false)
@@ -887,10 +899,12 @@ export default function DashboardClient({ userId }: { userId: string }) {
                     allocationTotals={allocationTotals}
                     goldUnits={data.goldUnits}
                     locale={locale}
-                    refreshKey={historyKey}
                     refreshing={refreshing}
                     navUpdatedAt={data.netWorth.navUpdatedAt}
                     onDownloadReport={() => setShowReportSheet(true)}
+                    history={history}
+                    timeRange={timeRange}
+                    onRangeChange={setTimeRange}
                   />
                 )}
               </div>
@@ -903,8 +917,10 @@ export default function DashboardClient({ userId }: { userId: string }) {
               <div className="space-y-4">
                 <NetWorthCard
                   {...data.netWorth}
-                  refreshKey={historyKey}
                   refreshing={refreshing}
+                  history={history}
+                  timeRange={timeRange}
+                  onRangeChange={setTimeRange}
                   allocationBar={allocationTotals ? {
                     fund: allocationTotals.fundTotal,
                     bank: allocationTotals.bankTotal,
