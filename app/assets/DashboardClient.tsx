@@ -25,7 +25,7 @@ import { detectMergeClusters } from '@/lib/mergeCluster'
 import { actionableBooks } from './maturityCardItems'
 import { collapseUnallocatedBooks } from './unallocatedBooks'
 import type { InvRow } from './components/goalDetailShared'
-import { loadOverview, overviewErrorText, getCachedOverview, setCachedOverview } from './overviewData'
+import { loadOverview, overviewErrorText, getCachedOverview, setCachedOverview, computeAllocationTotals } from './overviewData'
 
 import TransactionHistorySheet from './components/TransactionHistorySheet'
 import DesktopNetWorthPanel from './components/DesktopNetWorthPanel'
@@ -524,16 +524,9 @@ export default function DashboardClient({ userId }: { userId: string }) {
     return goals
   })() : []
 
-  // Compute asset allocation totals for pie chart
-  const allocationTotals = data ? (() => {
-    const allFundItems = [...data.goals.flatMap((g) => g.funds), ...data.unallocated.funds]
-    const equityTotal = allFundItems.filter((f) => f.fundType === 'equity').reduce((s, f) => s + f.currentValue, 0)
-    const bondTotal = allFundItems.filter((f) => f.fundType === 'debt').reduce((s, f) => s + f.currentValue, 0)
-    const balancedTotal = allFundItems.filter((f) => f.fundType === 'balanced').reduce((s, f) => s + f.currentValue, 0)
-    const { bank: bankTotal, gold: goldTotal, stock: stockTotal } = data.byType
-    const cashTotal = 0
-    return { equityTotal, bondTotal, balancedTotal, bankTotal, goldTotal, stockTotal, cashTotal }
-  })() : null
+  // Asset-allocation buckets for the allocation bar. fundTotal sums all fund
+  // types (incl. unexpected ones) so nothing drops out of the bar (#3).
+  const allocationTotals = data ? computeAllocationTotals(data) : null
 
   // Find fund item for detail modal
   const allFunds = data ? [...data.unallocated.funds, ...data.goals.flatMap((g) => g.funds)] : []
@@ -902,7 +895,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                   refreshKey={historyKey}
                   refreshing={refreshing}
                   allocationBar={allocationTotals ? {
-                    fund: allocationTotals.equityTotal + allocationTotals.bondTotal + allocationTotals.balancedTotal,
+                    fund: allocationTotals.fundTotal,
                     bank: allocationTotals.bankTotal,
                     gold: allocationTotals.goldTotal,
                     stock: allocationTotals.stockTotal,

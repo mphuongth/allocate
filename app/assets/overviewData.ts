@@ -36,6 +36,28 @@ export function setCachedOverview(userId: string, data: DashboardData) {
   }
 }
 
+export interface AllocationTotals {
+  /**
+   * Every fund holding's value, regardless of `fund_type`. We deliberately sum
+   * ALL fund items (not just equity/debt/balanced) so a fund with an unexpected
+   * type — e.g. money_market/cash — still lands in the "Fund" bucket of the
+   * allocation bar instead of silently disappearing from it while still
+   * counting toward net worth (#363 review #3).
+   */
+  fundTotal: number
+  bankTotal: number
+  goldTotal: number
+  stockTotal: number
+}
+
+/** Build the allocation-bar buckets from the overview payload. Pure + testable. */
+export function computeAllocationTotals(data: DashboardData): AllocationTotals {
+  const allFundItems = [...data.goals.flatMap((g) => g.funds), ...data.unallocated.funds]
+  const fundTotal = allFundItems.reduce((sum, f) => sum + f.currentValue, 0)
+  const { bank: bankTotal, gold: goldTotal, stock: stockTotal } = data.byType
+  return { fundTotal, bankTotal, goldTotal, stockTotal }
+}
+
 export interface OverviewLoadResult {
   data: DashboardData | null
   /** Raw error string from the response body, if any (untranslated). */
