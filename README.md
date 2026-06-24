@@ -29,6 +29,8 @@ Cairn is a personal-finance webapp that turns the mental gymnastics of "where do
 - **Investment tracking across every asset type** — fund NAV updates, bank deposits with interest projections, gold by chỉ at live prices, stocks. Buy and sell flows for each.
 - **Insurance you don't dread** — family policies with annual-to-monthly fee calculations and per-member payment tracking.
 - **A real desktop + mobile experience** — fully redesigned layouts for both, not just a stretched mobile view. Dark mode included.
+- **Installable & offline-ready** — Cairn is a PWA: install it to your home screen and it keeps working (with a graceful offline page) when the network drops.
+- **Exportable portfolio report** — download a PDF snapshot of your net worth and holdings.
 - **Vietnamese & English** — every label, every plural, every currency format.
 
 ## Quick start
@@ -71,6 +73,7 @@ Open <http://localhost:3000>.
 | `npm run test:coverage` | Coverage report |
 | `npm run test:e2e` | End-to-end tests (Playwright) |
 | `npm run test:e2e:ui` | Playwright UI mode |
+| `npm run test:e2e:headed` | Playwright in a headed browser |
 
 ## Running E2E locally
 
@@ -118,7 +121,9 @@ realtime, storage, edge functions, inbucket) to keep the stack light.
 |---|---|
 | Framework | Next.js 16 (App Router, Turbopack) |
 | Language | TypeScript |
-| Styling | Tailwind CSS 4, shadcn/ui |
+| Styling | Tailwind CSS 4 (custom component set, `lucide-react` icons) |
+| Toasts | Sonner |
+| PDF reports | `@react-pdf/renderer` |
 | Database & Auth | Supabase (PostgreSQL + Auth) |
 | Charts | Recharts |
 | i18n | next-intl |
@@ -132,15 +137,17 @@ realtime, storage, edge functions, inbucket) to keep the stack light.
 app/
 ├── page.tsx                  # Landing page (redirects to /dashboard if logged in)
 ├── (app)/                    # Protected routes (require auth)
-│   ├── dashboard/            # Net-worth overview, goals, unallocated, insurance
+│   ├── dashboard/            # "Overview" — net worth, goals, unallocated, insurance
 │   ├── funds/                # Fund library with NAV refresh
-│   ├── planning/             # Monthly planning with allocation summary
-│   └── settings/             # Goals, transactions, expenses, insurance tabs
+│   ├── planning/             # "Plan" — monthly planning + allocation summary
+│   └── settings/             # Preferences (profile, theme, language)
+├── assets/                   # Dashboard client + its components (goals, insurance, transactions)
 ├── auth/                     # Login / signup / OAuth callback
 ├── api/v1/                   # Authenticated REST API
-└── components/               # Layouts, navigation, theme
+├── ~offline/                 # PWA offline fallback page
+└── components/               # Layouts, navigation, theme, shared UI primitives
 
-components/                   # App-wide shared components
+components/report/            # Portfolio PDF report
 lib/                          # Supabase clients, formatters, finance helpers
 messages/                     # en.json + vi.json (next-intl)
 supabase/migrations/          # Database schema migrations
