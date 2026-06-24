@@ -4,9 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useTranslations, useLocale } from 'next-intl'
 import { Plus, RefreshCw, Search, X } from 'lucide-react'
-import { fmtCompact } from '@/lib/formatters'
+import { fmtCompact, fmtNav } from '@/lib/formatters'
 import { Skeleton } from '@/app/components/ui/Skeleton'
 import { SyncPill } from '@/app/components/ui/SyncPill'
+import { FundsEmptyState } from './FundsEmptyState'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -582,7 +583,7 @@ export default function DesktopFundLibraryView() {
       {/* Toast notifications */}
       <div style={{ position: 'fixed', top: 16, right: 16, zIndex: 300, display: 'flex', flexDirection: 'column', gap: 8 }}>
         {toasts.map(t => (
-          <div key={t.id} style={{ padding: '8px 16px', borderRadius: 10, background: t.ok ? '#047857' : '#b91c1c', color: '#fff', fontSize: 13, fontWeight: 500, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', animation: 'pop-in 200ms ease' }}>
+          <div key={t.id} style={{ padding: '8px 16px', borderRadius: 10, background: t.ok ? 'var(--c-pos)' : 'var(--c-neg)', color: '#fff', fontSize: 13, fontWeight: 500, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', animation: 'pop-in 200ms ease' }}>
             {t.msg}
           </div>
         ))}
@@ -690,11 +691,8 @@ export default function DesktopFundLibraryView() {
             <button onClick={() => loadFunds()} className="cn-btn primary" style={{ padding: '8px 20px' }}>{tc('tryAgain')}</button>
           </div>
         ) : funds.length === 0 ? (
-          <div className="cn-card" style={{ padding: 64, textAlign: 'center' }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>📚</div>
-            <h2 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 600 }}>{t('empty')}</h2>
-            <p style={{ margin: '0 0 20px', color: 'var(--c-muted)', fontSize: 13 }}>{t('emptyDesc')}</p>
-            <button onClick={openAddModal} className="cn-btn primary" style={{ padding: '8px 20px' }}>{t('add')}</button>
+          <div className="cn-card" style={{ padding: 64 }}>
+            <FundsEmptyState onAdd={openAddModal} />
           </div>
         ) : (
           <div className="cn-card" style={{ overflow: 'hidden' }} data-testid="desktop-funds-table">
@@ -743,7 +741,7 @@ export default function DesktopFundLibraryView() {
                       {/* NAV */}
                       <td style={{ padding: '13px 12px', textAlign: 'right', verticalAlign: 'middle' }}>
                         <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-                          {fund.nav.toLocaleString('vi-VN')}
+                          {fmtNav(fund.nav)}
                         </span>
                       </td>
 

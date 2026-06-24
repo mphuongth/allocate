@@ -54,6 +54,41 @@ test('mobile funds renders a fund card with code, type, NAV and DCA toggle', asy
   await expect(card.getByRole('button', { name: /dca/i })).toBeVisible()
 })
 
+test('mobile funds NAV uses the shared ₫ + 2-decimal format (#6)', async ({ page }) => {
+  // #6: mobile NAV diverged from desktop ("36.120,00 VND" vs "36.120"). Both now
+  // render the shared fmtNav: "₫ 45.000,00".
+  const fund = await api.createFund({ name: 'E2E NAV Format Fund', code: 'E2ENAV', fund_type: 'equity', nav: 45000 })
+  cleanup.add(() => api.deleteFund(fund.id))
+
+  await page.goto('/funds')
+  await page.waitForLoadState('networkidle')
+
+  const card = page.getByTestId('mobile-funds').getByTestId(`fund-card-${fund.id}`)
+  await expect(card).toBeVisible({ timeout: 10_000 })
+  await expect(card.getByText(/₫\s*45\.000,00/)).toBeVisible()
+})
+
+test('mobile funds card touch targets are at least 44px (#4)', async ({ page }) => {
+  // #4: the DCA toggle (36×20) and the edit/delete icon buttons (~26px) were
+  // below the 44px recommended touch target. The visual size is unchanged but
+  // the tappable area is now ≥44×44.
+  const fund = await api.createFund({ name: 'E2E Touch Target Fund', code: 'E2ETT', fund_type: 'equity', nav: 12000 })
+  cleanup.add(() => api.deleteFund(fund.id))
+
+  await page.goto('/funds')
+  await page.waitForLoadState('networkidle')
+
+  const card = page.getByTestId('mobile-funds').getByTestId(`fund-card-${fund.id}`)
+  await expect(card).toBeVisible({ timeout: 10_000 })
+
+  for (const name of [/dca/i, /edit fund/i, /delete fund/i]) {
+    const box = await card.getByRole('button', { name }).boundingBox()
+    expect(box).not.toBeNull()
+    expect(box!.width).toBeGreaterThanOrEqual(44)
+    expect(box!.height).toBeGreaterThanOrEqual(44)
+  }
+})
+
 test('mobile funds search filters by code', async ({ page }) => {
   const fund = await api.createFund({ name: 'E2E Bond Search Fund', code: 'E2EBD', fund_type: 'debt', nav: 30000 })
   cleanup.add(() => api.deleteFund(fund.id))

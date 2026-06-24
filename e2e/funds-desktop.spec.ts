@@ -37,6 +37,20 @@ test('desktop funds table shows fund code, type chip, and NAV columns', async ({
   await expect(row.getByText(/55.000|55,000/)).toBeVisible()
 })
 
+test('desktop funds NAV uses the shared ₫ + 2-decimal format (#6)', async ({ page }) => {
+  // #6: the desktop table showed a bare "55.000" (no decimals, no unit) while
+  // mobile showed "55.000,00 VND". Both now render the shared fmtNav: "₫ 55.000,00".
+  const fund = await api.createFund({ name: 'E2E Desktop NAV Format', code: 'DTNAVF', fund_type: 'equity', nav: 55000 })
+  cleanup.add(() => api.deleteFund(fund.id))
+
+  await page.goto('/funds')
+  await page.waitForLoadState('networkidle')
+
+  const row = page.getByTestId('desktop-funds-table').getByTestId(`fund-row-${fund.id}`)
+  await expect(row).toBeVisible({ timeout: 10_000 })
+  await expect(row.getByText(/₫\s*55\.000,00/)).toBeVisible()
+})
+
 test('desktop funds type filter pill filters by equity', async ({ page }) => {
   const equityFund = await api.createFund({ name: 'E2E Desktop Equity', code: 'DTEQF', fund_type: 'equity', nav: 10000 })
   const bondFund = await api.createFund({ name: 'E2E Desktop Bond', code: 'DTBDF', fund_type: 'debt', nav: 10000 })
