@@ -12,7 +12,7 @@ test('desktop funds toolbar shows search, type filter pills, refresh and add but
 
   const toolbar = page.getByTestId('desktop-funds-toolbar')
   await expect(toolbar).toBeVisible({ timeout: 10_000 })
-  await expect(toolbar.getByPlaceholder(/search code or name|tìm theo mã/i)).toBeVisible()
+  await expect(toolbar.getByPlaceholder(/search|tìm/i)).toBeVisible()
   await expect(toolbar.getByRole('button', { name: /all|tất cả/i })).toBeVisible()
   await expect(toolbar.getByRole('button', { name: /stock|cổ phiếu/i })).toBeVisible()
   await expect(toolbar.getByRole('button', { name: /bond|trái phiếu/i })).toBeVisible()
@@ -62,7 +62,7 @@ test('desktop funds search filters by fund code', async ({ page }) => {
   await page.waitForLoadState('networkidle')
 
   const toolbar = page.getByTestId('desktop-funds-toolbar')
-  await toolbar.getByPlaceholder(/search code or name|tìm theo mã/i).fill('DTSRCH')
+  await toolbar.getByPlaceholder(/search|tìm/i).fill('DTSRCH')
 
   const table = page.getByTestId('desktop-funds-table')
   await expect(table.getByTestId(`fund-row-${fund.id}`)).toBeVisible({ timeout: 8_000 })
@@ -108,6 +108,51 @@ test('desktop funds delete button opens delete confirmation modal', async ({ pag
   await expect(page.getByTestId('delete-fund-modal')).toBeVisible({ timeout: 5_000 })
 })
 
+test('desktop funds chrome is localized to Vietnamese when locale=vi (#2/C)', async ({ page, context }) => {
+  // Regression #2/C: the desktop view ignored locale and rendered hardcoded
+  // English (toolbar, type chips, NAV banner) even in the vi app.
+  await context.addCookies([{ name: 'locale', value: 'vi', url: 'http://localhost:3000' }])
+  const fund = await api.createFund({ name: 'E2E VN Chrome Fund', code: 'DTVNC1', fund_type: 'equity', nav: 15000 })
+  cleanup.add(() => api.deleteFund(fund.id))
+
+  await page.goto('/funds')
+  await page.waitForLoadState('networkidle')
+
+  const toolbar = page.getByTestId('desktop-funds-toolbar')
+  await expect(toolbar.getByRole('button', { name: /làm mới/i })).toBeVisible({ timeout: 10_000 })
+  await expect(toolbar.getByRole('button', { name: /thêm/i })).toBeVisible()
+  // Type chip uses the Vietnamese label.
+  const row = page.getByTestId('desktop-funds-table').getByTestId(`fund-row-${fund.id}`)
+  await expect(row.getByText(/^Cổ phiếu$/)).toBeVisible({ timeout: 8_000 })
+  // NAV info banner localized.
+  await expect(page.getByTestId('desktop-funds').getByText(/Về cập nhật NAV/i)).toBeVisible()
+})
+
+test('desktop funds add + delete modals are localized to Vietnamese when locale=vi (#2/E)', async ({ page, context }) => {
+  await context.addCookies([{ name: 'locale', value: 'vi', url: 'http://localhost:3000' }])
+  const fund = await api.createFund({ name: 'E2E VN Modal Fund', code: 'DTVNM1', fund_type: 'equity', nav: 15000 })
+  cleanup.add(() => api.deleteFund(fund.id))
+
+  await page.goto('/funds')
+  await page.waitForLoadState('networkidle')
+
+  const toolbar = page.getByTestId('desktop-funds-toolbar')
+  // Add modal: title + a form label come from i18n.
+  await toolbar.getByRole('button', { name: /thêm/i }).click()
+  const modal = page.getByTestId('fund-modal')
+  await expect(modal).toBeVisible({ timeout: 5_000 })
+  await expect(page.getByTestId('fund-modal-title')).toHaveText(/thêm quỹ/i)
+  await expect(modal.getByText('Tên Quỹ')).toBeVisible()
+  await modal.getByRole('button', { name: /^Hủy$/i }).click()
+
+  // Delete modal: title localized ("Xóa …?" not "Delete …?").
+  const row = page.getByTestId('desktop-funds-table').getByTestId(`fund-row-${fund.id}`)
+  await row.getByTestId('fund-delete-btn').click()
+  const del = page.getByTestId('delete-fund-modal')
+  await expect(del).toBeVisible({ timeout: 5_000 })
+  await expect(del.getByText(/^Xóa DTVNM1\?$/)).toBeVisible()
+})
+
 test('DCA enabled on desktop is reflected when switching to mobile viewport', async ({ page }) => {
   const fund = await api.createFund({ name: 'E2E Cross View DCA', code: 'DXVDCA', fund_type: 'equity', nav: 20000 })
   cleanup.add(() => api.deleteFund(fund.id))
@@ -118,7 +163,7 @@ test('DCA enabled on desktop is reflected when switching to mobile viewport', as
   // Enable DCA on desktop
   const row = page.getByTestId('desktop-funds-table').getByTestId(`fund-row-${fund.id}`)
   await row.getByTestId('dca-toggle').click()
-  const amountInput = row.getByPlaceholder(/amount/i)
+  const amountInput = row.getByPlaceholder(/amount|số tiền/i)
   await amountInput.fill('1500000')
   await amountInput.press('Enter')
   await page.waitForLoadState('networkidle')

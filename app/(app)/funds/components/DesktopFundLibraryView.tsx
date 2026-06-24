@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { useTranslations } from 'next-intl'
+import { useTranslations, useLocale } from 'next-intl'
 import { Plus, RefreshCw, Search, X } from 'lucide-react'
 import { fmtCompact } from '@/lib/formatters'
 import { Skeleton } from '@/app/components/ui/Skeleton'
@@ -82,6 +82,7 @@ function notifyFundsUpdated() {
 
 const TypeChip = ({ type }: { type: FundType }) => {
   const m = TYPE_META[type]
+  const locale = useLocale()
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center',
@@ -89,7 +90,7 @@ const TypeChip = ({ type }: { type: FundType }) => {
       padding: '2px 7px', borderRadius: 999,
       background: m.bg, color: m.color,
     }}>
-      {m.label}
+      {locale === 'vi' ? m.labelVi : m.label}
     </span>
   )
 }
@@ -141,6 +142,8 @@ function DModal({ open, onClose, title, width = 460, children }: {
 function DeleteModal({ open, onClose, fundCode, onConfirm, deleting }: {
   open: boolean; onClose: () => void; fundCode: string; onConfirm: () => void; deleting: boolean
 }) {
+  const t = useTranslations('funds')
+  const tc = useTranslations('common')
   if (!open) return null
   return (
     <div
@@ -155,25 +158,25 @@ function DeleteModal({ open, onClose, fundCode, onConfirm, deleting }: {
         style={{ width: 400, maxWidth: '100%', background: 'var(--c-card)', borderRadius: 'var(--r-card)', boxShadow: '0 20px 60px rgba(0,0,0,0.18)', animation: 'pop-in 180ms ease', overflow: 'hidden' }}
       >
         <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--c-line)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: 15, fontWeight: 600 }}>Delete {fundCode}?</span>
+          <span style={{ fontSize: 15, fontWeight: 600 }}>{t('deleteModal', { name: fundCode })}</span>
           <button onClick={onClose} className="cn-btn ghost" style={{ padding: 6 }}>
             <X size={16} />
           </button>
         </div>
         <div style={{ padding: '20px', display: 'grid', gap: 16 }}>
           <p style={{ margin: 0, fontSize: 13, color: 'var(--c-muted)', lineHeight: 1.5 }}>
-            This will permanently delete {fundCode}. This action cannot be undone.
+            {t('deleteWarning', { name: fundCode })} {t('deleteCannotUndo')}
           </p>
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={onClose} className="cn-btn" style={{ flex: 1, justifyContent: 'center' }} disabled={deleting}>
-              Cancel
+              {tc('cancel')}
             </button>
             <button
               onClick={onConfirm}
               disabled={deleting}
               style={{ flex: 2, padding: '10px 14px', background: 'var(--c-neg)', color: '#fff', border: 'none', borderRadius: 'var(--r-control)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, opacity: deleting ? 0.5 : 1 }}
             >
-              {deleting ? 'Deleting…' : 'Delete fund'}
+              {deleting ? tc('deleting') : t('deleteBtn')}
             </button>
           </div>
         </div>
@@ -216,6 +219,8 @@ function DcaToggle({ fund, editId, editValue, goals, goalLabel, unallocatedLabel
   onEditCancel: () => void
   onGoalChange: (goalId: string | null) => void
 }) {
+  const t = useTranslations('funds')
+  const tc = useTranslations('common')
   const isEditing = editId === fund.id
   return (
     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
@@ -244,7 +249,7 @@ function DcaToggle({ fund, editId, editValue, goals, goalLabel, unallocatedLabel
             data-testid={`dca-amount-input-${fund.id}`}
             type="text"
             inputMode="numeric"
-            placeholder="Amount"
+            placeholder={tc('amount')}
             value={editValue ? Number(editValue).toLocaleString('en-US') : ''}
             onChange={e => onEditChange(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))}
             onBlur={onEditCommit}
@@ -271,7 +276,7 @@ function DcaToggle({ fund, editId, editValue, goals, goalLabel, unallocatedLabel
               cursor: 'pointer', fontFamily: 'inherit',
             }}
           >
-            {fund.dca_monthly_amount_vnd ? fmtCompact(fund.dca_monthly_amount_vnd) : 'Set amount'}
+            {fund.dca_monthly_amount_vnd ? fmtCompact(fund.dca_monthly_amount_vnd) : t('setAmount')}
           </button>
         )
       )}
@@ -314,6 +319,8 @@ function FormField({ label, children }: { label: string; children: ReactNode }) 
 
 export default function DesktopFundLibraryView() {
   const t = useTranslations('funds')
+  const tc = useTranslations('common')
+  const locale = useLocale()
 
   // Fund data
   const [funds, setFunds] = useState<Fund[]>(() => getCache() ?? [])
@@ -367,11 +374,11 @@ export default function DesktopFundLibraryView() {
       setCache(data)
       setFunds(data)
     } catch {
-      setError('Failed to load funds. Please try again.')
+      setError(t('loadError'))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => { loadFunds() }, [loadFunds])
 
@@ -424,9 +431,9 @@ export default function DesktopFundLibraryView() {
       bustCache()
       await loadFunds(true)
       notifyFundsUpdated()
-      addToast(`${updated} updated${failed ? `, ${failed} failed` : ''}`, failed === 0 || updated > 0)
+      addToast(t('navRefreshDone', { updated, failed }), failed === 0 || updated > 0)
     } catch {
-      addToast('Failed to refresh NAV', false)
+      addToast(t('toastRefreshFailed'), false)
     } finally {
       setRefreshing(false)
     }
@@ -464,9 +471,9 @@ export default function DesktopFundLibraryView() {
       bustCache()
       await loadFunds(true)
       notifyFundsUpdated()
-      addToast(modalMode === 'edit' ? 'Fund updated' : 'Fund added')
+      addToast(modalMode === 'edit' ? t('toastUpdated') : t('toastAdded'))
     } catch {
-      setFormError('Something went wrong. Please try again.')
+      setFormError(t('error'))
     } finally {
       setSaving(false)
     }
@@ -495,7 +502,7 @@ export default function DesktopFundLibraryView() {
       notifyFundsUpdated()
     } catch {
       setFunds(p => p.map(f => f.id === fund.id ? { ...f, is_dca: true } : f))
-      addToast('Failed to update DCA', false)
+      addToast(t('toastDcaFailed'), false)
     }
   }
 
@@ -520,7 +527,7 @@ export default function DesktopFundLibraryView() {
       notifyFundsUpdated()
     } catch {
       setFunds(p => p.map(f => f.id === fund.id ? { ...f, is_dca: false, dca_monthly_amount_vnd: null } : f))
-      addToast('Failed to update DCA', false)
+      addToast(t('toastDcaFailed'), false)
     }
   }
 
@@ -539,7 +546,7 @@ export default function DesktopFundLibraryView() {
       notifyFundsUpdated()
     } catch {
       setFunds(p => p.map(f => f.id === fund.id ? { ...f, dca_goal_id: prevGoalId } : f))
-      addToast('Failed to update goal', false)
+      addToast(t('toastGoalFailed'), false)
     }
   }
 
@@ -554,9 +561,9 @@ export default function DesktopFundLibraryView() {
       bustCache()
       await loadFunds(true)
       notifyFundsUpdated()
-      addToast('Fund deleted')
+      addToast(t('toastDeleted'))
     } catch {
-      addToast('Failed to delete fund', false)
+      addToast(t('toastDeleteFailed'), false)
       setDeleteTarget(null)
     } finally {
       setDeleting(false)
@@ -564,7 +571,7 @@ export default function DesktopFundLibraryView() {
   }
 
   return (
-    <div className="hidden md:flex" style={{ flex: 1, minHeight: 0, overflow: 'hidden', flexDirection: 'column' }}>
+    <div data-testid="desktop-funds" className="hidden md:flex" style={{ flex: 1, minHeight: 0, overflow: 'hidden', flexDirection: 'column' }}>
       {/* Background-sync pill while NAV prices refresh */}
       <SyncPill label={t('syncingPrices')} show={refreshing} />
 
@@ -603,7 +610,7 @@ export default function DesktopFundLibraryView() {
             <input
               value={query}
               onChange={e => setQuery(e.target.value)}
-              placeholder="Search code or name…"
+              placeholder={t('searchPlaceholder')}
               style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 13, color: 'var(--c-ink)', fontFamily: 'inherit' }}
             />
             {query && (
@@ -628,7 +635,7 @@ export default function DesktopFundLibraryView() {
                   transition: 'all 120ms',
                 }}
               >
-                {f.label}
+                {locale === 'vi' ? f.labelVi : f.label}
               </button>
             ))}
           </div>
@@ -642,7 +649,7 @@ export default function DesktopFundLibraryView() {
               style={{ padding: '7px 10px', gap: 5, fontSize: 12, display: 'flex', alignItems: 'center' }}
             >
               <RefreshCw size={15} />
-              Refresh
+              {tc('refresh')}
             </button>
             <button
               onClick={openAddModal}
@@ -650,7 +657,7 @@ export default function DesktopFundLibraryView() {
               style={{ padding: '7px 14px', fontSize: 12, gap: 5, display: 'flex', alignItems: 'center' }}
             >
               <Plus size={13} strokeWidth={2.4} />
-              Add fund
+              {t('add')}
             </button>
           </div>
         </div>
@@ -676,7 +683,7 @@ export default function DesktopFundLibraryView() {
         ) : error ? (
           <div className="cn-card" style={{ padding: 48, textAlign: 'center' }}>
             <p style={{ color: 'var(--c-neg)', marginBottom: 16, fontSize: 14 }}>{error}</p>
-            <button onClick={() => loadFunds()} className="cn-btn primary" style={{ padding: '8px 20px' }}>Retry</button>
+            <button onClick={() => loadFunds()} className="cn-btn primary" style={{ padding: '8px 20px' }}>{tc('tryAgain')}</button>
           </div>
         ) : funds.length === 0 ? (
           <div className="cn-card" style={{ padding: 64, textAlign: 'center' }}>
@@ -690,10 +697,10 @@ export default function DesktopFundLibraryView() {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--c-line)', background: 'var(--c-card-2)' }}>
-                  <SortTh label="Fund" sortKey="code" active={sortKey === 'code'} asc={sortAsc} onSort={handleSort} align="left" />
-                  <th style={{ padding: '10px 12px', textAlign: 'left', fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--c-muted)', whiteSpace: 'nowrap' }}>Type</th>
-                  <SortTh label="NAV" sortKey="nav" active={sortKey === 'nav'} asc={sortAsc} onSort={handleSort} />
-                  <th style={{ padding: '10px 12px', fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--c-muted)', textAlign: 'center', whiteSpace: 'nowrap' }}>DCA</th>
+                  <SortTh label={t('colFund')} sortKey="code" active={sortKey === 'code'} asc={sortAsc} onSort={handleSort} align="left" />
+                  <th style={{ padding: '10px 12px', textAlign: 'left', fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--c-muted)', whiteSpace: 'nowrap' }}>{t('colType')}</th>
+                  <SortTh label={t('colNav')} sortKey="nav" active={sortKey === 'nav'} asc={sortAsc} onSort={handleSort} />
+                  <th style={{ padding: '10px 12px', fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--c-muted)', textAlign: 'center', whiteSpace: 'nowrap' }}>{t('colDca')}</th>
                   <th style={{ padding: '10px 12px', width: 64 }} />
                 </tr>
               </thead>
@@ -788,7 +795,7 @@ export default function DesktopFundLibraryView() {
 
             {displayFunds.length === 0 && (query || typeFilter !== 'all') && (
               <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--c-muted)', fontSize: 13 }}>
-                No funds match your search.
+                {t('noMatch')}
               </div>
             )}
           </div>
@@ -798,8 +805,8 @@ export default function DesktopFundLibraryView() {
         <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '12px 14px', background: 'var(--c-navy-tint)', border: '1px solid var(--c-line)', borderRadius: 10, marginTop: 16 }}>
           <div style={{ width: 18, height: 18, borderRadius: 9, background: 'var(--c-accent-fund, #2563eb)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1, fontSize: 10, fontWeight: 700 }}>i</div>
           <div style={{ fontSize: 12, color: 'var(--c-muted)', lineHeight: 1.5 }}>
-            <span style={{ fontWeight: 600, color: 'var(--c-navy)' }}>About NAV updates: </span>
-            NAV is updated daily after market close. Click Refresh to fetch the latest prices.
+            <span style={{ fontWeight: 600, color: 'var(--c-navy)' }}>{t('navInfoTitle')}: </span>
+            {t('navInfoDesc', { refreshNav: t('refreshNav') })}
           </div>
         </div>
       </div>
@@ -810,7 +817,7 @@ export default function DesktopFundLibraryView() {
       <DModal
         open={!!modalMode}
         onClose={closeModal}
-        title={modalMode === 'edit' ? 'Edit fund' : 'Add fund'}
+        title={modalMode === 'edit' ? t('editModal') : t('addModal')}
         width={460}
       >
         <form onSubmit={e => { e.preventDefault(); handleSave() }}>
@@ -820,7 +827,7 @@ export default function DesktopFundLibraryView() {
                 {formError}
               </div>
             )}
-            <FormField label="Fund name">
+            <FormField label={t('nameLabel')}>
               <input
                 value={formName}
                 onChange={e => setFormName(e.target.value)}
@@ -831,7 +838,7 @@ export default function DesktopFundLibraryView() {
               />
             </FormField>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <FormField label="Code">
+              <FormField label={t('codeLabel')}>
                 <input
                   value={formCode}
                   onChange={e => setFormCode(e.target.value.toUpperCase())}
@@ -841,19 +848,19 @@ export default function DesktopFundLibraryView() {
                   style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 13 }}
                 />
               </FormField>
-              <FormField label="Type">
+              <FormField label={t('typeLabel')}>
                 <select
                   value={formType}
                   onChange={e => setFormType(e.target.value as FundType)}
                   className="cn-input"
                 >
                   {Object.entries(TYPE_META).map(([v, m]) => (
-                    <option key={v} value={v}>{m.label}</option>
+                    <option key={v} value={v}>{locale === 'vi' ? m.labelVi : m.label}</option>
                   ))}
                 </select>
               </FormField>
             </div>
-            <FormField label="NAV">
+            <FormField label={t('navLabel')}>
               <input
                 type="number"
                 step="0.01"
@@ -865,7 +872,7 @@ export default function DesktopFundLibraryView() {
                 placeholder="e.g. 36120"
               />
             </FormField>
-            <FormField label="NAV source URL (optional)">
+            <FormField label={t('navSourceLabel')}>
               <input
                 type="url"
                 value={formNavUrl}
@@ -876,10 +883,10 @@ export default function DesktopFundLibraryView() {
             </FormField>
             <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
               <button type="button" onClick={closeModal} className="cn-btn ghost" style={{ flex: 1, justifyContent: 'center', border: '1px solid var(--c-line)' }} disabled={saving}>
-                Cancel
+                {tc('cancel')}
               </button>
               <button type="submit" className="cn-btn primary" style={{ flex: 2, justifyContent: 'center' }} disabled={saving}>
-                {saving ? 'Saving…' : modalMode === 'edit' ? 'Save' : 'Add fund'}
+                {saving ? tc('saving') : modalMode === 'edit' ? t('saveBtn') : t('add')}
               </button>
             </div>
           </div>
