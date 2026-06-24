@@ -185,3 +185,45 @@ test('desktop funds DCA goal selection persists across reload', async ({ page })
   const rowAfter = page.getByTestId('desktop-funds-table').getByTestId(`fund-row-${fund.id}`)
   await expect(rowAfter.getByTestId(`dca-goal-${fund.id}`)).toHaveValue(goal.goal_id, { timeout: 8_000 })
 })
+
+test('desktop funds: editing the DCA amount keeps the assigned goal (#1)', async ({ page }) => {
+  // Regression: handleSaveDcaAmount used to omit dca_goal_id from the PUT body,
+  // so the API reset dca_goal_id to null. Editing the amount of a DCA fund that
+  // already has a goal must NOT silently revert the goal to Unallocated.
+  const goal = await api.createGoal({ goal_name: 'E2E Desktop DCA Amount-Edit Goal' })
+  cleanup.add(() => api.deleteGoal(goal.goal_id))
+  const fund = await api.createFund({
+    name: 'E2E Desktop DCA Amount Edit',
+    code: 'DTDAE1',
+    fund_type: 'equity',
+    nav: 15000,
+    is_dca: true,
+    dca_monthly_amount_vnd: 3_000_000,
+    dca_goal_id: goal.goal_id,
+  })
+  cleanup.add(() => api.deleteFund(fund.id))
+
+  await page.goto('/funds')
+  await page.waitForLoadState('networkidle')
+
+  const table = page.getByTestId('desktop-funds-table')
+  const row = table.getByTestId(`fund-row-${fund.id}`)
+  // Goal starts assigned.
+  await expect(row.getByTestId(`dca-goal-${fund.id}`)).toHaveValue(goal.goal_id, { timeout: 8_000 })
+
+  // Re-edit just the amount.
+  await row.getByTestId(`dca-amount-btn-${fund.id}`).click()
+  const input = row.getByTestId(`dca-amount-input-${fund.id}`)
+  await expect(input).toBeVisible({ timeout: 5_000 })
+  await input.fill('5000000')
+  await Promise.all([
+    page.waitForResponse(r => r.url().includes(`/api/funds/${fund.id}`) && r.request().method() === 'PUT' && r.ok()),
+    input.press('Enter'),
+  ])
+
+  // After reload the goal must still be assigned (not reset to Unallocated).
+  await page.reload()
+  await page.waitForLoadState('networkidle')
+  const rowAfter = page.getByTestId('desktop-funds-table').getByTestId(`fund-row-${fund.id}`)
+  await expect(rowAfter.getByTestId(`dca-goal-${fund.id}`)).toHaveValue(goal.goal_id, { timeout: 8_000 })
+})
