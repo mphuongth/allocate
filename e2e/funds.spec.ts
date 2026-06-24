@@ -159,6 +159,35 @@ test('mobile funds DCA shows goal target dropdown when enabled', async ({ page }
   await expect(select).toHaveValue('')
 })
 
+test('mobile funds DCA goal select stays within the card for long goal names (#363)', async ({ page }) => {
+  // A long goal name must truncate inside the select, not overflow the card's
+  // right edge and get hard-clipped at the card border (issue #363).
+  const goal = await api.createGoal({ goal_name: 'Đại học của Trang tại Vương Quốc Anh năm 2030' })
+  cleanup.add(() => api.deleteGoal(goal.goal_id))
+  const fund = await api.createFund({ name: 'E2E Long Goal Cutoff Fund', code: 'E2ELGC', fund_type: 'equity', nav: 33353.63 })
+  cleanup.add(() => api.deleteFund(fund.id))
+
+  await page.goto('/funds')
+  await page.waitForLoadState('networkidle')
+
+  const mf = page.getByTestId('mobile-funds')
+  const card = mf.getByTestId(`fund-card-${fund.id}`)
+  await card.getByRole('button', { name: /dca/i }).click()
+  const select = card.getByTestId(`dca-goal-${fund.id}`)
+  await expect(select).toBeVisible({ timeout: 5_000 })
+  await Promise.all([
+    page.waitForResponse(r => r.url().includes(`/api/funds/${fund.id}`) && r.request().method() === 'PUT' && r.ok()),
+    select.selectOption(goal.goal_id),
+  ])
+
+  const cardBox = await card.boundingBox()
+  const selBox = await select.boundingBox()
+  expect(cardBox).not.toBeNull()
+  expect(selBox).not.toBeNull()
+  // Select's right edge must not extend past the card's right edge.
+  expect(selBox!.x + selBox!.width).toBeLessThanOrEqual(cardBox!.x + cardBox!.width + 0.5)
+})
+
 test('mobile funds DCA goal selection persists', async ({ page }) => {
   const goal = await api.createGoal({ goal_name: 'E2E Mobile DCA Goal Target' })
   cleanup.add(() => api.deleteGoal(goal.goal_id))
