@@ -4,11 +4,11 @@ import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import { toast } from 'sonner'
-import { Plus } from 'lucide-react'
 import { NavigationProvider, useNavigation } from '../navigation/NavigationContext'
 import Sidebar from '../navigation/Sidebar'
 import Header from '../navigation/Header'
 import MobileBottomTabs from '../navigation/MobileBottomTabs'
+import MobileAddTransactionFab from '../navigation/MobileAddTransactionFab'
 import MobileTopBar from '../navigation/MobileTopBar'
 import OfflineBanner from '@/app/components/OfflineBanner'
 import AddTransactionSheet from '@/app/assets/components/AddTransactionSheet'
@@ -73,26 +73,9 @@ function AuthenticatedLayoutInner({ children, email, initials }: { children: Rea
         </main>
       </div>
 
-      {/* Mobile FAB — add transaction.
-          The button's inline `display: flex` would override a `md:hidden` class
-          (inline > class specificity), so the wrapper handles md+ hiding. */}
-      <div className="md:hidden">
-        <button
-          onClick={() => setShowAddTx(true)}
-          aria-label="Add transaction"
-          style={{
-            position: 'fixed', right: 16, bottom: 80,
-            width: 52, height: 52, borderRadius: 26,
-            background: 'var(--c-btn-primary)', color: '#fff',
-            border: 'none',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 6px 16px rgba(15, 42, 74, 0.25), 0 2px 4px rgba(15, 42, 74, 0.1)',
-            cursor: 'pointer', zIndex: 35,
-          }}
-        >
-          <Plus size={22} strokeWidth={2.2} />
-        </button>
-      </div>
+      {/* Mobile FAB — add transaction. Contextual: only on Overview & Funds, and
+          it yields on Overview while term deposits need a maturity decision. */}
+      <MobileAddTransactionFab onClick={() => setShowAddTx(true)} />
 
       {/* Mobile bottom tab navigation */}
       <MobileBottomTabs />
