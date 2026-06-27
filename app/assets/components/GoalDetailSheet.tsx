@@ -133,8 +133,9 @@ function GoalActionsSheet({
             <ChevronRight size={16} color="var(--c-muted)" />
           </button>
 
-          {/* Delete */}
+          {/* Delete — opens a confirm step (does not delete on this tap) */}
           <button
+            data-testid="goal-delete-action"
             onClick={onDelete}
             disabled={isDeleting}
             style={{
@@ -168,6 +169,98 @@ function GoalActionsSheet({
           >
             {t.cancel}
           </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Destructive-action confirm for the mobile goal-detail ⋯ menu. Mirrors the
+// desktop DeleteGoalModal so deleting a goal is never a single un-undoable tap.
+function DeleteGoalConfirmSheet({
+  open,
+  goalName,
+  isDeleting,
+  onCancel,
+  onConfirm,
+}: {
+  open: boolean
+  goalName: string
+  isDeleting: boolean
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  const isVI = useLocale() === 'vi'
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    if (open) setMounted(true)
+    else { const t = setTimeout(() => setMounted(false), 220); return () => clearTimeout(t) }
+  }, [open])
+  if (!mounted) return null
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.2)',
+        zIndex: 170, pointerEvents: open ? 'auto' : 'none',
+      }}
+      onClick={() => { if (!isDeleting) onCancel() }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={isVI ? 'Xoá mục tiêu?' : 'Delete goal?'}
+        style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0,
+          background: 'var(--c-card)', borderRadius: '16px 16px 0 0',
+          padding: '0 0 env(safe-area-inset-bottom,0)',
+          animation: open
+            ? 'slide-up 220ms cubic-bezier(0.2, 0.8, 0.2, 1)'
+            : 'slide-down 180ms ease forwards',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ width: 36, height: 4, background: 'var(--c-line-strong)', borderRadius: 999, margin: '6px auto 14px' }} />
+        <div style={{ padding: '0 16px 24px', display: 'grid', gap: 16 }}>
+          <p style={{ margin: 0, fontWeight: 700, fontSize: 16, color: 'var(--c-ink)' }}>
+            {isVI ? 'Xoá mục tiêu?' : 'Delete goal?'}
+          </p>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '12px 14px', background: 'var(--c-neg-tint)', borderRadius: 10 }}>
+            <Trash2 size={15} color="var(--c-neg)" strokeWidth={2.2} style={{ flexShrink: 0, marginTop: 1 }} />
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--c-neg)', lineHeight: 1.5 }}>
+              {isVI
+                ? `Mục tiêu "${goalName}" và tất cả liên kết đầu tư sẽ bị xoá vĩnh viễn.`
+                : `"${goalName}" and all linked investments will be permanently deleted.`}
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              data-testid="goal-delete-cancel"
+              onClick={onCancel}
+              disabled={isDeleting}
+              style={{
+                flex: 1, padding: '12px 0', borderRadius: 10, border: '1px solid var(--c-line)',
+                background: 'var(--c-card)', color: 'var(--c-ink)', fontSize: 15,
+                cursor: isDeleting ? 'default' : 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              {isVI ? 'Huỷ' : 'Cancel'}
+            </button>
+            <button
+              data-testid="goal-delete-confirm"
+              onClick={onConfirm}
+              disabled={isDeleting}
+              style={{
+                flex: 2, padding: '12px 0', borderRadius: 10, border: 'none',
+                background: 'var(--c-neg)', color: '#fff', fontSize: 15, fontWeight: 600,
+                cursor: isDeleting ? 'default' : 'pointer', opacity: isDeleting ? 0.6 : 1,
+                fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              }}
+            >
+              <Trash2 size={15} />
+              {isDeleting ? (isVI ? 'Đang xoá…' : 'Deleting…') : (isVI ? 'Xoá mục tiêu' : 'Delete goal')}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -676,6 +769,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
   const [txLoading, setTxLoading] = useState(false)
   const [actionsOpen, setActionsOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [actionInv, setActionInv] = useState<InvRow | null>(null)
   const [investActionOpen, setInvestActionOpen] = useState(false)
@@ -693,6 +787,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
     if (open) {
       setMounted(true)
       setActiveTab('investments')
+      setConfirmDeleteOpen(false)
     } else {
       const t = setTimeout(() => setMounted(false), 220)
       return () => clearTimeout(t)
@@ -884,6 +979,8 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
               </h1>
             </div>
             <button
+              data-testid="goal-options-btn"
+              aria-label={isVI ? 'Tùy chọn mục tiêu' : 'Goal options'}
               onClick={() => setActionsOpen(true)}
               style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, color: 'var(--c-ink)', display: 'flex', alignItems: 'center', flexShrink: 0 }}
             >
@@ -1307,8 +1404,16 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
         open={actionsOpen}
         onClose={() => setActionsOpen(false)}
         onEdit={() => { setActionsOpen(false); setTimeout(() => setEditOpen(true), 60) }}
-        onDelete={handleDelete}
+        onDelete={() => { setActionsOpen(false); setTimeout(() => setConfirmDeleteOpen(true), 60) }}
         isDeleting={isDeleting}
+      />
+
+      <DeleteGoalConfirmSheet
+        open={confirmDeleteOpen}
+        goalName={goal.goalName}
+        isDeleting={isDeleting}
+        onCancel={() => setConfirmDeleteOpen(false)}
+        onConfirm={handleDelete}
       />
 
       {editOpen && (
