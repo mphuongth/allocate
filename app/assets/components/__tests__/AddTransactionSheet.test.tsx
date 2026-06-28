@@ -56,6 +56,43 @@ describe('AddTransactionSheet — background scroll lock (issue #219)', () => {
   })
 })
 
+describe('AddTransactionSheet — sell holdings load error vs empty', () => {
+  it('shows a retry state (not "no holdings") when the holdings fetch fails', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: false, json: () => Promise.resolve({}) })))
+
+    render(<AddTransactionSheet open onClose={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'sell' }))
+
+    await waitFor(() => expect(screen.getByTestId('load-error')).toBeInTheDocument())
+    expect(screen.queryByText('noHoldings')).not.toBeInTheDocument()
+  })
+
+  it('retry re-fetches and clears the error (genuine empty after a successful reload)', async () => {
+    // Key off the overview URL — the sheet fires other fetches on open that
+    // would otherwise consume a blind call counter.
+    let overviewCalls = 0
+    vi.stubGlobal('fetch', vi.fn((url: string) => {
+      if (String(url).includes('/dashboard/overview')) {
+        overviewCalls += 1
+        if (overviewCalls === 1) return Promise.resolve({ ok: false, json: () => Promise.resolve({}) })
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
+    }))
+
+    render(<AddTransactionSheet open onClose={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'sell' }))
+    await waitFor(() => expect(screen.getByTestId('load-error')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByTestId('load-error-retry'))
+
+    // A successful (but empty) reload clears the error and shows the genuine
+    // "no holdings" state.
+    await waitFor(() => expect(screen.getByText('noHoldings')).toBeInTheDocument())
+    expect(screen.queryByTestId('load-error')).not.toBeInTheDocument()
+  })
+})
+
 describe('AddTransactionSheet — goal selector (issue #232)', () => {
   // /api/v1/savings-goals returns { goals: [...] }, not a bare array — the goal
   // selector must read that shape or it stays empty/hidden.

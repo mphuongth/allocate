@@ -286,6 +286,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const [goalPickerFundItem, setGoalPickerFundItem] = useState<{ name: string; value: number; type: string } | null>(null)
   const [purchaseHistory, setPurchaseHistory] = useState<PurchaseHistory[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyError, setHistoryError] = useState(false)
   const [nonFundPickerTxId, setNonFundPickerTxId] = useState<string | null>(null)
   const [nonFundPickerItem, setNonFundPickerItem] = useState<{ name: string; value: number; type: string } | null>(null)
   const [goalSort, setGoalSort] = useState<SortValue>('manual')
@@ -450,18 +451,21 @@ export default function DashboardClient({ userId }: { userId: string }) {
   async function handleFundClick(fundId: string) {
     setFundDetailId(fundId)
     setPurchaseHistory([])
+    setHistoryError(false)
     setHistoryLoading(true)
     try {
       const res = await fetch(`/api/v1/fund-investments?fund_id=${fundId}`)
-      if (res.ok) {
-        const items = await res.json()
-        setPurchaseHistory(
-          (items as Array<{ nav_at_purchase: number; units_purchased: number; investment_date: string | null; created_at: string }>)
-            .map((i) => ({ purchase_date: i.investment_date ?? i.created_at, units: i.units_purchased, nav_at_purchase: i.nav_at_purchase }))
-            .sort((a, b) => new Date(b.purchase_date).getTime() - new Date(a.purchase_date).getTime())
-        )
-      }
-    } catch { /* show sheet without history */ }
+      if (!res.ok) throw new Error('load failed')
+      const items = await res.json()
+      setPurchaseHistory(
+        (items as Array<{ nav_at_purchase: number; units_purchased: number; investment_date: string | null; created_at: string }>)
+          .map((i) => ({ purchase_date: i.investment_date ?? i.created_at, units: i.units_purchased, nav_at_purchase: i.nav_at_purchase }))
+          .sort((a, b) => new Date(b.purchase_date).getTime() - new Date(a.purchase_date).getTime())
+      )
+    } catch {
+      // Distinguish a failed load from a genuinely empty history.
+      setHistoryError(true)
+    }
     setHistoryLoading(false)
   }
 
@@ -1072,7 +1076,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
       {/* Transaction History Sheet */}
       <TransactionHistorySheet
         open={!!(fundDetailId && detailFund)}
-        onClose={() => { setFundDetailId(null); setPurchaseHistory([]); setHistoryLoading(false) }}
+        onClose={() => { setFundDetailId(null); setPurchaseHistory([]); setHistoryLoading(false); setHistoryError(false) }}
         fundName={detailFund?.fundName ?? ''}
         currentNAV={detailFund?.currentNAV ?? 0}
         quantity={detailFund?.quantity ?? 0}
@@ -1082,6 +1086,8 @@ export default function DashboardClient({ userId }: { userId: string }) {
         profitLossPercentage={detailFund?.profitLossPercentage ?? 0}
         purchaseHistory={purchaseHistory}
         loading={historyLoading}
+        error={historyError}
+        onRetry={() => { if (fundDetailId) handleFundClick(fundDetailId) }}
       />
 
       {/* Assign Goal Sheet — funds */}

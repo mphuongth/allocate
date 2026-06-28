@@ -82,6 +82,19 @@ describe('TransactionHistorySheet', () => {
     expect(screen.getByText('No transaction history')).toBeInTheDocument()
   })
 
+  it('shows a retry state (not the empty copy) when error=true', () => {
+    render(<TransactionHistorySheet {...baseProps} purchaseHistory={[]} loading={false} error onRetry={vi.fn()} />)
+    expect(screen.getByTestId('load-error')).toBeInTheDocument()
+    expect(screen.queryByText('No transaction history')).not.toBeInTheDocument()
+  })
+
+  it('calls onRetry when the retry button is clicked', async () => {
+    const onRetry = vi.fn()
+    render(<TransactionHistorySheet {...baseProps} purchaseHistory={[]} loading={false} error onRetry={onRetry} />)
+    await userEvent.click(screen.getByTestId('load-error-retry'))
+    expect(onRetry).toHaveBeenCalledOnce()
+  })
+
   it('calls onClose when back button is clicked', async () => {
     const onClose = vi.fn()
     render(<TransactionHistorySheet {...baseProps} onClose={onClose} />)

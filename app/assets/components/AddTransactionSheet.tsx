@@ -5,6 +5,7 @@ import { X, TrendingUp, Building2, Coins, ArrowUpRight, ArrowDownRight, ArrowDow
 import { useLocale, useTranslations } from 'next-intl'
 import { CairnLoader } from '@/app/components/ui/CairnLoader'
 import { todayIso } from '@/lib/dates'
+import LoadError from './LoadError'
 
 interface Fund { id: string; name: string; nav: number; code: string | null; fund_type?: string }
 interface Goal { goal_id: string; goal_name: string }
@@ -184,6 +185,9 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
   // sell fields — holdings collected lazily from the overview
   const [holdings, setHoldings] = useState<Holding[]>([])
   const [holdingsLoaded, setHoldingsLoaded] = useState(false)
+  const [holdingsError, setHoldingsError] = useState(false)
+  // Bumped by the retry button to re-run the holdings fetch after a failure.
+  const [holdingsReload, setHoldingsReload] = useState(0)
   const [holdingKey, setHoldingKey] = useState('')
   const [sellAmount, setSellAmount] = useState('')        // fund / bank sell amount (₫)
   const [fundSellUnits, setFundSellUnits] = useState('')  // fund sell units (linked to amount)
@@ -276,11 +280,14 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
   // switches to "Sell" — most opens are buys, so we don't pay for it up front.
   useEffect(() => {
     if (!open || dir !== 'sell' || holdingsLoaded) return
+    setHoldingsError(false)
     fetch('/api/v1/dashboard/overview')
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error('load failed'); return r.json() })
       .then((d) => { setHoldings(collectHoldings(d ?? {})); setHoldingsLoaded(true) })
-      .catch(() => setHoldingsLoaded(true))
-  }, [open, dir, holdingsLoaded])
+      // A failed load must show a retry — not the "no holdings" empty state,
+      // which would falsely tell a user with holdings they have nothing to sell.
+      .catch(() => setHoldingsError(true))
+  }, [open, dir, holdingsLoaded, holdingsReload])
 
   // Lock background scroll while the sheet is open so the page behind it can't move.
   useEffect(() => {
@@ -981,7 +988,11 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
 
           {/* Sell / withdraw — pick a holding, then confirm the amount */}
           {dir === 'sell' && (
-            sellHoldings.length === 0 ? (
+            holdingsError ? (
+              <div style={{ padding: '8px 16px', background: 'var(--c-card-2)', borderRadius: 12, border: '1px dashed var(--c-line)' }}>
+                <LoadError isVI={isVI} onRetry={() => { setHoldingsError(false); setHoldingsReload((n) => n + 1) }} compact />
+              </div>
+            ) : sellHoldings.length === 0 ? (
               <div style={{ padding: '24px 16px', textAlign: 'center', background: 'var(--c-card-2)', borderRadius: 12, border: '1px dashed var(--c-line)' }}>
                 <div style={{ width: 40, height: 40, borderRadius: 20, background: 'var(--c-card)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'var(--c-muted)', marginBottom: 10 }}>
                   <Wallet size={18} />
