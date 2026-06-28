@@ -58,6 +58,10 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
   const [settleMode, setSettleMode] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  // Per-row reversal of an ad-hoc logged payment (kind:'logged'). Plan entries are
+  // computed, not stored, so they have no row to delete.
+  const [deleteEntryId, setDeleteEntryId] = useState<string | null>(null)
+  const [deletingEntry, setDeletingEntry] = useState(false)
 
   const [history, setHistory] = useState<HistoryEntry[] | null>(null)
   const [historyLoading, setHistoryLoading] = useState(false)
@@ -155,6 +159,23 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
       toast.error(isVi ? 'Không thể xoá thành viên' : "Couldn't remove member")
     } finally {
       setDeleting(false)
+    }
+  }
+
+  async function handleDeleteSavings() {
+    if (!deleteEntryId) return
+    setDeletingEntry(true)
+    try {
+      const res = await fetch(`/api/v1/insurance-savings/${deleteEntryId}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('delete failed')
+      setDeleteEntryId(null)
+      await loadHistory()
+      // Refresh the dashboard so the member's Saved progress drops to match.
+      onChanged?.()
+    } catch {
+      toast.error(isVi ? 'Không thể xoá khoản đã ghi nhận' : "Couldn't delete the logged payment")
+    } finally {
+      setDeletingEntry(false)
     }
   }
 
@@ -412,6 +433,22 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
                       <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>
                         {fmt(p.amount)}
                       </span>
+                      {/* Only ad-hoc logged payments are individually reversible; plan
+                          contributions are computed from the monthly plan, not stored. */}
+                      {!isPlan && (
+                        <button
+                          data-testid={`insurance-delete-savings-${p.id}`}
+                          onClick={() => setDeleteEntryId(p.id)}
+                          aria-label={isVi ? 'Xoá khoản này' : 'Delete this payment'}
+                          style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            width: 26, height: 26, borderRadius: 6, flexShrink: 0,
+                            background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--c-muted)',
+                          }}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
                     </div>
                   )
                 })}
@@ -522,6 +559,74 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
               >
                 <Trash2 size={14} />
                 {isVi ? 'Xóa' : 'Remove'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteEntryId && (
+        <div
+          onClick={() => !deletingEntry && setDeleteEntryId(null)}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.4)',
+            zIndex: 210, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 24, backdropFilter: 'blur(2px)',
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label={isVi ? 'Xoá khoản đã ghi nhận?' : 'Delete logged payment?'}
+            style={{
+              width: '100%', maxWidth: 380, background: 'var(--c-card)',
+              borderRadius: 16, padding: 20,
+              boxShadow: '0 24px 48px rgba(15,23,42,0.18), 0 8px 16px rgba(15,23,42,0.08)',
+              display: 'flex', flexDirection: 'column', gap: 12,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>
+                {isVi ? 'Xoá khoản đã ghi nhận?' : 'Delete logged payment?'}
+              </h3>
+              <button
+                onClick={() => !deletingEntry && setDeleteEntryId(null)}
+                aria-label={isVi ? 'Đóng' : 'Close'}
+                className="cn-btn ghost"
+                style={{ padding: 6 }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <p style={{ margin: 0, fontSize: 12, color: 'var(--c-muted)', lineHeight: 1.5 }}>
+              {isVi
+                ? 'Khoản này sẽ bị xoá và tiến độ tích lũy sẽ giảm tương ứng.'
+                : 'This payment will be removed and the saved progress will drop accordingly.'}
+            </p>
+            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+              <button
+                onClick={() => setDeleteEntryId(null)}
+                disabled={deletingEntry}
+                className="cn-btn ghost"
+                style={{ flex: 1, justifyContent: 'center', border: '1px solid var(--c-line)' }}
+              >
+                {isVi ? 'Hủy' : 'Cancel'}
+              </button>
+              <button
+                data-testid="insurance-delete-savings-confirm"
+                onClick={handleDeleteSavings}
+                disabled={deletingEntry}
+                style={{
+                  flex: 2, padding: '10px 0', fontSize: 13, fontWeight: 600,
+                  background: 'var(--c-neg)', color: '#fff', border: 'none',
+                  borderRadius: 10, cursor: deletingEntry ? 'not-allowed' : 'pointer',
+                  fontFamily: 'inherit', opacity: deletingEntry ? 0.6 : 1,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                }}
+              >
+                <Trash2 size={14} />
+                {isVi ? 'Xóa' : 'Delete'}
               </button>
             </div>
           </div>

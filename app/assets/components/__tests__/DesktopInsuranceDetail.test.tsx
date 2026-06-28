@@ -93,6 +93,72 @@ describe('DesktopInsuranceDetail — history load error vs empty', () => {
   })
 })
 
+describe('DesktopInsuranceDetail — delete a logged payment', () => {
+  it('deletes the logged savings row, re-fetches history and signals onChanged', async () => {
+    let deletedId: string | null = null
+    let savingsCall = 0
+    vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => {
+      if (typeof url === 'string' && url.includes('/insurance-savings/') && init?.method === 'DELETE') {
+        deletedId = url.split('/insurance-savings/')[1]
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+      }
+      if (typeof url === 'string' && url.includes('/savings')) {
+        savingsCall += 1
+        const entries = savingsCall === 1
+          ? [{ id: 's1', amount: 1_500_000, date: '2026-03-15', kind: 'logged' }]
+          : []
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ entries, totalSaved: savingsCall === 1 ? 1_500_000 : 0 }) })
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+    }))
+    const onChanged = vi.fn()
+    render(<DesktopInsuranceDetail ins={ins} locale="en" onClose={vi.fn()} onChanged={onChanged} />)
+
+    await screen.findByText('Logged payment')
+    fireEvent.click(screen.getByTestId('insurance-delete-savings-s1'))
+    fireEvent.click(screen.getByTestId('insurance-delete-savings-confirm'))
+
+    await waitFor(() => expect(deletedId).toBe('s1'))
+    await waitFor(() => expect(onChanged).toHaveBeenCalled())
+    // History re-fetched → the row is gone.
+    await waitFor(() => expect(screen.queryByText('Logged payment')).not.toBeInTheDocument())
+  })
+
+  it('shows an error toast and keeps the row when the delete fails', async () => {
+    toastErrorMock.mockClear()
+    vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => {
+      if (typeof url === 'string' && url.includes('/insurance-savings/') && init?.method === 'DELETE') {
+        return Promise.resolve({ ok: false, json: () => Promise.resolve({}) })
+      }
+      if (typeof url === 'string' && url.includes('/savings')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ entries: [{ id: 's1', amount: 1_500_000, date: '2026-03-15', kind: 'logged' }], totalSaved: 1_500_000 }) })
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+    }))
+    render(<DesktopInsuranceDetail ins={ins} locale="en" onClose={vi.fn()} onChanged={vi.fn()} />)
+
+    await screen.findByText('Logged payment')
+    fireEvent.click(screen.getByTestId('insurance-delete-savings-s1'))
+    fireEvent.click(screen.getByTestId('insurance-delete-savings-confirm'))
+
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalled())
+    expect(screen.getByText('Logged payment')).toBeInTheDocument()
+  })
+
+  it('does not offer delete on an auto monthly-plan entry (not a stored row)', async () => {
+    vi.stubGlobal('fetch', vi.fn((url: string) => {
+      if (typeof url === 'string' && url.includes('/savings')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ entries: [{ id: 'plan-p1', amount: 1_000_000, date: '2026-03-01', kind: 'plan' }], totalSaved: 1_000_000 }) })
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+    }))
+    render(<DesktopInsuranceDetail ins={ins} locale="en" onClose={vi.fn()} onChanged={vi.fn()} />)
+
+    await screen.findByText('Monthly plan')
+    expect(screen.queryByTestId('insurance-delete-savings-plan-p1')).not.toBeInTheDocument()
+  })
+})
+
 describe('DesktopInsuranceDetail — delete failure feedback', () => {
   it('shows an error toast and keeps the member (no onChanged/onClose) when the delete fails', async () => {
     toastErrorMock.mockClear()
