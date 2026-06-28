@@ -17,10 +17,18 @@ test('FAB is visible on dashboard', async ({ page }) => {
   await expect(page.getByRole('button', { name: /add transaction/i })).toBeVisible()
 })
 
-test('FAB is visible on planning page', async ({ page }) => {
+// The FAB is contextual (PR #390): it belongs only on Overview and Funds. On Plan
+// you add via the plan's own rows, so the FAB must NOT appear there.
+test('FAB is hidden on planning page', async ({ page }) => {
   await page.goto('/planning')
   await page.waitForLoadState('networkidle')
-  await expect(page.getByRole('button', { name: /add transaction/i })).toBeVisible()
+  await expect(page.getByRole('button', { name: /add transaction/i })).toHaveCount(0)
+})
+
+test('FAB is hidden on settings page', async ({ page }) => {
+  await page.goto('/settings')
+  await page.waitForLoadState('networkidle')
+  await expect(page.getByRole('button', { name: /add transaction/i })).toHaveCount(0)
 })
 
 test('FAB is visible on funds page', async ({ page }) => {
