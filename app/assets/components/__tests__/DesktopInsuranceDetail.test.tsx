@@ -185,6 +185,18 @@ describe('DesktopInsuranceDetail — delete failure feedback', () => {
   })
 })
 
+describe('DesktopInsuranceDetail — edit-form labels are accurate', () => {
+  it('labels the relationship picker "Relationship" and the date "Payment date" (not "Coverage type"/"Start date")', () => {
+    render(<DesktopInsuranceDetail ins={ins} locale="en" onClose={vi.fn()} />)
+    fireEvent.click(screen.getByTestId('insurance-edit-btn'))
+
+    expect(screen.getByText('Relationship')).toBeInTheDocument()
+    expect(screen.queryByText('Coverage type')).not.toBeInTheDocument()
+    expect(screen.getByText('Payment date')).toBeInTheDocument()
+    expect(screen.queryByText('Start date')).not.toBeInTheDocument()
+  })
+})
+
 describe('DesktopInsuranceDetail — coverage round-trips through relationship', () => {
   it('preselects the member’s coverage in the edit form and offers Parent/Other', async () => {
     const parentIns = { ...ins, coverageType: 'Parent' } as InsuranceData
