@@ -120,3 +120,42 @@ test('can delete a savings goal from the goal detail panel', async ({ page }) =>
 
   await expect.poll(async () => await api.findGoalByName('E2E Dash Delete Goal'), { timeout: 10_000 }).toBeFalsy()
 })
+
+// Mobile goal-detail is a full-screen sheet (GoalDetailSheet), distinct from the
+// desktop right panel. Deleting from its ⋯ menu must require a confirm step —
+// previously it deleted on a single tap with no undo (data-loss).
+test.describe('mobile goal-detail', () => {
+  test.use({ viewport: { width: 390, height: 844 } })
+
+  test('deleting a goal requires confirmation and does not delete on the menu tap', async ({ page }) => {
+    const goal = await api.createGoal({ goal_name: 'E2E Mobile Delete Goal' })
+    cleanup.add(() => api.deleteGoal(goal.goal_id))
+
+    await gotoDashboardFresh(page)
+    // Tap the goal card → full-screen mobile detail sheet.
+    await page.getByText('E2E Mobile Delete Goal').first().click()
+    await expect(page.getByTestId('goal-back-btn')).toBeVisible({ timeout: 10_000 })
+
+    // ⋯ → Delete goal (opens the actions sheet, then the confirm).
+    await page.getByTestId('goal-options-btn').click()
+    await page.getByTestId('goal-delete-action').click()
+
+    // A confirm dialog appears and NOTHING is deleted yet.
+    const confirmBtn = page.getByTestId('goal-delete-confirm')
+    await expect(confirmBtn).toBeVisible()
+    // Give any (buggy) immediate-delete a chance to fire before asserting survival.
+    await page.waitForTimeout(500)
+    expect(await api.findGoalByName('E2E Mobile Delete Goal')).toBeTruthy()
+
+    // Cancel keeps the goal; re-open and confirm actually deletes it.
+    await page.getByTestId('goal-delete-cancel').click()
+    await expect(confirmBtn).toBeHidden()
+    expect(await api.findGoalByName('E2E Mobile Delete Goal')).toBeTruthy()
+
+    await page.getByTestId('goal-options-btn').click()
+    await page.getByTestId('goal-delete-action').click()
+    await page.getByTestId('goal-delete-confirm').click()
+
+    await expect.poll(async () => await api.findGoalByName('E2E Mobile Delete Goal'), { timeout: 10_000 }).toBeFalsy()
+  })
+})

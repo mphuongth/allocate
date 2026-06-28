@@ -99,7 +99,7 @@ describe('GoalDetailSheet — DCA pending row filtering', () => {
 
     render(<GoalDetailSheet {...baseProps} />)
     await waitFor(() => screen.getByText('VNINDEX ETF'))
-    await userEvent.click(screen.getByRole('button', { name: /options/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'Options', exact: true }))
     await waitFor(() => screen.getAllByText('Transaction history').length > 0)
     await userEvent.click(screen.getAllByText('Transaction history')[0])
     await waitFor(() => screen.getByRole('heading', { name: 'VNINDEX ETF' }))
@@ -169,7 +169,7 @@ describe('GoalDetailSheet — transaction history integration', () => {
     await waitFor(() => expect(screen.getByText('VNINDEX ETF')).toBeInTheDocument())
 
     // Tap the ⋯ options button on the fund row
-    const optionsBtn = screen.getByRole('button', { name: /options/i })
+    const optionsBtn = screen.getByRole('button', { name: 'Options', exact: true })
     await userEvent.click(optionsBtn)
 
     // InvestmentActionSheet appears — tap "Transaction history" action
@@ -186,7 +186,7 @@ describe('GoalDetailSheet — transaction history integration', () => {
     render(<GoalDetailSheet {...baseProps} />)
 
     await waitFor(() => screen.getByText('VNINDEX ETF'))
-    await userEvent.click(screen.getByRole('button', { name: /options/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'Options', exact: true }))
     await waitFor(() => screen.getAllByText('Transaction history').length > 0)
     await userEvent.click(screen.getAllByText('Transaction history')[0])
 
@@ -199,7 +199,7 @@ describe('GoalDetailSheet — transaction history integration', () => {
     render(<GoalDetailSheet {...baseProps} />)
 
     await waitFor(() => screen.getByText('VNINDEX ETF'))
-    await userEvent.click(screen.getByRole('button', { name: /options/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'Options', exact: true }))
     await waitFor(() => screen.getAllByText('Transaction history').length > 0)
     await userEvent.click(screen.getAllByText('Transaction history')[0])
     await waitFor(() => screen.getByRole('heading', { name: 'VNINDEX ETF' }))
@@ -218,7 +218,7 @@ describe('GoalDetailSheet — unassign from goal', () => {
   it('InvestmentActionSheet exposes an "Unassign from goal" option', async () => {
     render(<GoalDetailSheet {...baseProps} />)
     await waitFor(() => screen.getByText('VNINDEX ETF'))
-    await userEvent.click(screen.getByRole('button', { name: /options/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'Options', exact: true }))
     await waitFor(() =>
       expect(screen.getAllByText(/unassign from goal/i).length).toBeGreaterThan(0)
     )
@@ -227,7 +227,7 @@ describe('GoalDetailSheet — unassign from goal', () => {
   it('opens the confirmation sheet when Unassign is tapped', async () => {
     render(<GoalDetailSheet {...baseProps} />)
     await waitFor(() => screen.getByText('VNINDEX ETF'))
-    await userEvent.click(screen.getByRole('button', { name: /options/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'Options', exact: true }))
     await waitFor(() => screen.getAllByText(/unassign from goal/i).length > 0)
     // Click the action-sheet row labeled "Unassign from goal"
     await userEvent.click(screen.getAllByText(/unassign from goal/i)[0])
@@ -255,7 +255,7 @@ describe('GoalDetailSheet — unassign from goal', () => {
     const onDataChanged = vi.fn()
     render(<GoalDetailSheet {...baseProps} onDataChanged={onDataChanged} />)
     await waitFor(() => screen.getByText('VNINDEX ETF'))
-    await userEvent.click(screen.getByRole('button', { name: /options/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'Options', exact: true }))
     await waitFor(() => screen.getAllByText(/unassign from goal/i).length > 0)
     await userEvent.click(screen.getAllByText(/unassign from goal/i)[0])
     await waitFor(() => screen.getByText(/unassign from goal\?/i))
@@ -288,7 +288,7 @@ describe('GoalDetailSheet — unassign from goal', () => {
 
     render(<GoalDetailSheet {...baseProps} />)
     await waitFor(() => screen.getByText('VNINDEX ETF'))
-    await userEvent.click(screen.getByRole('button', { name: /options/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'Options', exact: true }))
     await waitFor(() => screen.getAllByText(/unassign from goal/i).length > 0)
     await userEvent.click(screen.getAllByText(/unassign from goal/i)[0])
     await waitFor(() => screen.getByText(/unassign from goal\?/i))
@@ -327,7 +327,7 @@ describe('GoalDetailSheet — investment options Sell / history (issue #224)', (
   it('opens the Sell sheet when "Sell" is tapped on a fund investment', async () => {
     render(<GoalDetailSheet {...baseProps} />)
     await waitFor(() => screen.getByText('VNINDEX ETF'))
-    await userEvent.click(screen.getByRole('button', { name: /options/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'Options', exact: true }))
     await waitFor(() => expect(screen.getByText('Sell')).toBeInTheDocument())
     await userEvent.click(screen.getByText('Sell'))
     await waitFor(() => expect(screen.getByTestId('sell-sheet')).toBeInTheDocument())
@@ -342,7 +342,7 @@ describe('GoalDetailSheet — investment options Sell / history (issue #224)', (
     })
     render(<GoalDetailSheet {...baseProps} goal={bankGoal} />)
     await waitFor(() => screen.getByText('Techcombank'))
-    await userEvent.click(screen.getByRole('button', { name: /options/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'Options', exact: true }))
     await waitFor(() => expect(screen.getByText('Withdraw')).toBeInTheDocument())
     await userEvent.click(screen.getByText('Withdraw'))
     await waitFor(() => expect(screen.getByTestId('sell-sheet')).toBeInTheDocument())
@@ -357,7 +357,7 @@ describe('GoalDetailSheet — investment options Sell / history (issue #224)', (
     })
     render(<GoalDetailSheet {...baseProps} goal={bankGoal} />)
     await waitFor(() => screen.getByText('Techcombank'))
-    await userEvent.click(screen.getByRole('button', { name: /options/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'Options', exact: true }))
     await waitFor(() => expect(screen.getByText('Transaction history')).toBeInTheDocument())
     await userEvent.click(screen.getByText('Transaction history'))
 
@@ -399,7 +399,7 @@ describe('GoalDetailSheet — bank maturity in Options sheet (issue #263)', () =
     })
     render(<GoalDetailSheet {...baseProps} goal={bankGoal} />)
     await waitFor(() => screen.getByText('Techcombank'))
-    await userEvent.click(screen.getByRole('button', { name: /options/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'Options', exact: true }))
 
     await waitFor(() => expect(screen.getByText('Maturity')).toBeInTheDocument())
     expect(screen.getByText('15 Aug 2030')).toBeInTheDocument()
@@ -443,7 +443,7 @@ describe('GoalDetailSheet — gold sell uses current price (issue #251)', () => 
 
     render(<GoalDetailSheet {...baseProps} goal={goldGoal} />)
     await waitFor(() => screen.getByText('PNJ Gold'))
-    await userEvent.click(screen.getByRole('button', { name: /options/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'Options', exact: true }))
     await waitFor(() => expect(screen.getByText('Sell')).toBeInTheDocument())
     await userEvent.click(screen.getByText('Sell'))
 
@@ -622,7 +622,7 @@ describe('GoalDetailSheet — refreshKey triggers refetch', () => {
     await waitFor(() => screen.getByText('VNINDEX ETF'))
 
     // 1) Unassign the tx
-    await userEvent.click(screen.getByRole('button', { name: /options/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'Options', exact: true }))
     await waitFor(() => screen.getAllByText(/unassign from goal/i).length > 0)
     await userEvent.click(screen.getAllByText(/unassign from goal/i)[0])
     await waitFor(() => screen.getByText(/unassign from goal\?/i))
