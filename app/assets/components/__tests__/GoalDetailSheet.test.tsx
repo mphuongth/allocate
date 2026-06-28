@@ -9,6 +9,9 @@ vi.mock('next-intl', () => ({
   useTranslations: () => (k: string) => k,
 }))
 
+const { toastErrorMock } = vi.hoisted(() => ({ toastErrorMock: vi.fn() }))
+vi.mock('sonner', () => ({ toast: { error: toastErrorMock, success: vi.fn() } }))
+
 const mockFund = {
   fundId: 'fund-1',
   fundName: 'VNINDEX ETF',
@@ -76,6 +79,33 @@ const baseProps = {
   onClose: vi.fn(),
   onDataChanged: vi.fn(),
 }
+
+describe('GoalDetailSheet — delete failure feedback', () => {
+  it('shows an error toast and keeps the sheet open (no onClose) when the delete fails', async () => {
+    toastErrorMock.mockClear()
+    global.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (url.includes('savings-goals') && init?.method === 'DELETE') {
+        return Promise.resolve({ ok: false, json: async () => ({}) })
+      }
+      if (url.includes('investment-transactions')) {
+        return Promise.resolve({ ok: true, json: async () => ({ transactions: [] }) })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+    const onClose = vi.fn()
+    const onDataChanged = vi.fn()
+
+    render(<GoalDetailSheet {...baseProps} onClose={onClose} onDataChanged={onDataChanged} />)
+
+    await userEvent.click(await screen.findByTestId('goal-options-btn'))
+    await userEvent.click(await screen.findByTestId('goal-delete-action'))
+    await userEvent.click(await screen.findByTestId('goal-delete-confirm'))
+
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalled())
+    expect(onClose).not.toHaveBeenCalled()
+    expect(onDataChanged).not.toHaveBeenCalled()
+  })
+})
 
 describe('GoalDetailSheet — investments load error vs empty', () => {
   // A goal with no overview funds, so the investments list depends entirely on

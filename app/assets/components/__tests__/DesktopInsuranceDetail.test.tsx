@@ -3,6 +3,9 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import DesktopInsuranceDetail from '../DesktopInsuranceDetail'
 import type { InsuranceData } from '../../DashboardClient'
 
+const { toastErrorMock } = vi.hoisted(() => ({ toastErrorMock: vi.fn() }))
+vi.mock('sonner', () => ({ toast: { error: toastErrorMock, success: vi.fn() } }))
+
 const ins: InsuranceData = {
   insuranceId: 'ins-1',
   insuranceName: 'John Doe',
@@ -87,6 +90,32 @@ describe('DesktopInsuranceDetail — history load error vs empty', () => {
 
     expect(await screen.findByText('Logged payment')).toBeInTheDocument()
     expect(screen.queryByTestId('load-error')).not.toBeInTheDocument()
+  })
+})
+
+describe('DesktopInsuranceDetail — delete failure feedback', () => {
+  it('shows an error toast and keeps the member (no onChanged/onClose) when the delete fails', async () => {
+    toastErrorMock.mockClear()
+    vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => {
+      if (typeof url === 'string' && url.includes('insurance-members') && init?.method === 'DELETE') {
+        return Promise.resolve({ ok: false, json: () => Promise.resolve({}) })
+      }
+      if (typeof url === 'string' && url.includes('/savings')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ entries: [], totalSaved: 0 }) })
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+    }))
+    const onChanged = vi.fn()
+    const onClose = vi.fn()
+
+    render(<DesktopInsuranceDetail ins={ins} locale="en" onClose={onClose} onChanged={onChanged} />)
+
+    fireEvent.click(screen.getByTestId('insurance-remove-btn'))
+    fireEvent.click(screen.getByTestId('insurance-remove-confirm'))
+
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalled())
+    expect(onChanged).not.toHaveBeenCalled()
+    expect(onClose).not.toHaveBeenCalled()
   })
 })
 
