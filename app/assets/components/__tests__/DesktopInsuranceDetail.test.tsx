@@ -56,6 +56,40 @@ describe('DesktopInsuranceDetail — payment history (issue #223)', () => {
   })
 })
 
+describe('DesktopInsuranceDetail — history load error vs empty', () => {
+  it('shows a retry state (not "No payments yet") when the savings fetch fails', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: false, json: () => Promise.resolve({}) })))
+
+    render(<DesktopInsuranceDetail ins={ins} locale="en" onClose={vi.fn()} />)
+
+    expect(await screen.findByTestId('load-error')).toBeInTheDocument()
+    expect(screen.queryByText('No payments yet')).not.toBeInTheDocument()
+  })
+
+  it('retry re-fetches and renders the history on success', async () => {
+    let call = 0
+    vi.stubGlobal('fetch', vi.fn((url: string) => {
+      if (typeof url === 'string' && url.includes('/savings')) {
+        call += 1
+        if (call === 1) return Promise.resolve({ ok: false, json: () => Promise.resolve({}) })
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ entries: [{ id: 's1', amount: 1_500_000, date: '2026-03-15', kind: 'logged' }] }),
+        })
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+    }))
+
+    render(<DesktopInsuranceDetail ins={ins} locale="en" onClose={vi.fn()} />)
+    expect(await screen.findByTestId('load-error')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByTestId('load-error-retry'))
+
+    expect(await screen.findByText('Logged payment')).toBeInTheDocument()
+    expect(screen.queryByTestId('load-error')).not.toBeInTheDocument()
+  })
+})
+
 describe('DesktopInsuranceDetail — coverage round-trips through relationship', () => {
   it('preselects the member’s coverage in the edit form and offers Parent/Other', async () => {
     const parentIns = { ...ins, coverageType: 'Parent' } as InsuranceData

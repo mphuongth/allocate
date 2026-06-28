@@ -77,6 +77,46 @@ const baseProps = {
   onDataChanged: vi.fn(),
 }
 
+describe('GoalDetailSheet — investments load error vs empty', () => {
+  // A goal with no overview funds, so the investments list depends entirely on
+  // the (failing) transactions fetch.
+  const noFundGoal: GoalData = { ...mockGoal, funds: [], currentValue: 9_000_000, transactionCount: 1 }
+  const mockBankTx = {
+    transaction_id: 'tx-bank-err', transaction_type: 'investment', asset_type: 'bank',
+    fund_id: null, fund_name: null, investment_date: '2026-01-01', amount_vnd: 9_000_000,
+    units: null, interest_rate: 6.5, notes: 'Techcombank', principal_withdrawn: null, units_withdrawn: null,
+  }
+
+  it('shows a retry state (not "No investments yet") when the transactions fetch fails', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) })
+
+    render(<GoalDetailSheet {...baseProps} goal={noFundGoal} />)
+
+    await waitFor(() => expect(screen.getByTestId('load-error')).toBeInTheDocument())
+    expect(screen.queryByText('No investments yet')).not.toBeInTheDocument()
+  })
+
+  it('retry re-fetches and renders the investments on success', async () => {
+    let call = 0
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('investment-transactions')) {
+        call += 1
+        if (call === 1) return Promise.resolve({ ok: false, json: async () => ({}) })
+        return Promise.resolve({ ok: true, json: async () => ({ transactions: [mockBankTx] }) })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+
+    render(<GoalDetailSheet {...baseProps} goal={noFundGoal} />)
+    await waitFor(() => expect(screen.getByTestId('load-error')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByTestId('load-error-retry'))
+
+    await waitFor(() => expect(screen.getByText('Techcombank')).toBeInTheDocument())
+    expect(screen.queryByTestId('load-error')).not.toBeInTheDocument()
+  })
+})
+
 describe('GoalDetailSheet — DCA pending row filtering', () => {
   it('excludes DCA-seeded rows with null units from transaction history', async () => {
     global.fetch = vi.fn().mockImplementation((url: string) => {
@@ -99,7 +139,7 @@ describe('GoalDetailSheet — DCA pending row filtering', () => {
 
     render(<GoalDetailSheet {...baseProps} />)
     await waitFor(() => screen.getByText('VNINDEX ETF'))
-    await userEvent.click(screen.getByRole('button', { name: 'Options', exact: true }))
+    await userEvent.click(screen.getByRole('button', { name: /^Options$/ }))
     await waitFor(() => screen.getAllByText('Transaction history').length > 0)
     await userEvent.click(screen.getAllByText('Transaction history')[0])
     await waitFor(() => screen.getByRole('heading', { name: 'VNINDEX ETF' }))
@@ -169,7 +209,7 @@ describe('GoalDetailSheet — transaction history integration', () => {
     await waitFor(() => expect(screen.getByText('VNINDEX ETF')).toBeInTheDocument())
 
     // Tap the ⋯ options button on the fund row
-    const optionsBtn = screen.getByRole('button', { name: 'Options', exact: true })
+    const optionsBtn = screen.getByRole('button', { name: /^Options$/ })
     await userEvent.click(optionsBtn)
 
     // InvestmentActionSheet appears — tap "Transaction history" action
@@ -186,7 +226,7 @@ describe('GoalDetailSheet — transaction history integration', () => {
     render(<GoalDetailSheet {...baseProps} />)
 
     await waitFor(() => screen.getByText('VNINDEX ETF'))
-    await userEvent.click(screen.getByRole('button', { name: 'Options', exact: true }))
+    await userEvent.click(screen.getByRole('button', { name: /^Options$/ }))
     await waitFor(() => screen.getAllByText('Transaction history').length > 0)
     await userEvent.click(screen.getAllByText('Transaction history')[0])
 
@@ -199,7 +239,7 @@ describe('GoalDetailSheet — transaction history integration', () => {
     render(<GoalDetailSheet {...baseProps} />)
 
     await waitFor(() => screen.getByText('VNINDEX ETF'))
-    await userEvent.click(screen.getByRole('button', { name: 'Options', exact: true }))
+    await userEvent.click(screen.getByRole('button', { name: /^Options$/ }))
     await waitFor(() => screen.getAllByText('Transaction history').length > 0)
     await userEvent.click(screen.getAllByText('Transaction history')[0])
     await waitFor(() => screen.getByRole('heading', { name: 'VNINDEX ETF' }))
@@ -218,7 +258,7 @@ describe('GoalDetailSheet — unassign from goal', () => {
   it('InvestmentActionSheet exposes an "Unassign from goal" option', async () => {
     render(<GoalDetailSheet {...baseProps} />)
     await waitFor(() => screen.getByText('VNINDEX ETF'))
-    await userEvent.click(screen.getByRole('button', { name: 'Options', exact: true }))
+    await userEvent.click(screen.getByRole('button', { name: /^Options$/ }))
     await waitFor(() =>
       expect(screen.getAllByText(/unassign from goal/i).length).toBeGreaterThan(0)
     )
@@ -227,7 +267,7 @@ describe('GoalDetailSheet — unassign from goal', () => {
   it('opens the confirmation sheet when Unassign is tapped', async () => {
     render(<GoalDetailSheet {...baseProps} />)
     await waitFor(() => screen.getByText('VNINDEX ETF'))
-    await userEvent.click(screen.getByRole('button', { name: 'Options', exact: true }))
+    await userEvent.click(screen.getByRole('button', { name: /^Options$/ }))
     await waitFor(() => screen.getAllByText(/unassign from goal/i).length > 0)
     // Click the action-sheet row labeled "Unassign from goal"
     await userEvent.click(screen.getAllByText(/unassign from goal/i)[0])
@@ -255,7 +295,7 @@ describe('GoalDetailSheet — unassign from goal', () => {
     const onDataChanged = vi.fn()
     render(<GoalDetailSheet {...baseProps} onDataChanged={onDataChanged} />)
     await waitFor(() => screen.getByText('VNINDEX ETF'))
-    await userEvent.click(screen.getByRole('button', { name: 'Options', exact: true }))
+    await userEvent.click(screen.getByRole('button', { name: /^Options$/ }))
     await waitFor(() => screen.getAllByText(/unassign from goal/i).length > 0)
     await userEvent.click(screen.getAllByText(/unassign from goal/i)[0])
     await waitFor(() => screen.getByText(/unassign from goal\?/i))
@@ -288,7 +328,7 @@ describe('GoalDetailSheet — unassign from goal', () => {
 
     render(<GoalDetailSheet {...baseProps} />)
     await waitFor(() => screen.getByText('VNINDEX ETF'))
-    await userEvent.click(screen.getByRole('button', { name: 'Options', exact: true }))
+    await userEvent.click(screen.getByRole('button', { name: /^Options$/ }))
     await waitFor(() => screen.getAllByText(/unassign from goal/i).length > 0)
     await userEvent.click(screen.getAllByText(/unassign from goal/i)[0])
     await waitFor(() => screen.getByText(/unassign from goal\?/i))
@@ -327,7 +367,7 @@ describe('GoalDetailSheet — investment options Sell / history (issue #224)', (
   it('opens the Sell sheet when "Sell" is tapped on a fund investment', async () => {
     render(<GoalDetailSheet {...baseProps} />)
     await waitFor(() => screen.getByText('VNINDEX ETF'))
-    await userEvent.click(screen.getByRole('button', { name: 'Options', exact: true }))
+    await userEvent.click(screen.getByRole('button', { name: /^Options$/ }))
     await waitFor(() => expect(screen.getByText('Sell')).toBeInTheDocument())
     await userEvent.click(screen.getByText('Sell'))
     await waitFor(() => expect(screen.getByTestId('sell-sheet')).toBeInTheDocument())
@@ -342,7 +382,7 @@ describe('GoalDetailSheet — investment options Sell / history (issue #224)', (
     })
     render(<GoalDetailSheet {...baseProps} goal={bankGoal} />)
     await waitFor(() => screen.getByText('Techcombank'))
-    await userEvent.click(screen.getByRole('button', { name: 'Options', exact: true }))
+    await userEvent.click(screen.getByRole('button', { name: /^Options$/ }))
     await waitFor(() => expect(screen.getByText('Withdraw')).toBeInTheDocument())
     await userEvent.click(screen.getByText('Withdraw'))
     await waitFor(() => expect(screen.getByTestId('sell-sheet')).toBeInTheDocument())
@@ -357,7 +397,7 @@ describe('GoalDetailSheet — investment options Sell / history (issue #224)', (
     })
     render(<GoalDetailSheet {...baseProps} goal={bankGoal} />)
     await waitFor(() => screen.getByText('Techcombank'))
-    await userEvent.click(screen.getByRole('button', { name: 'Options', exact: true }))
+    await userEvent.click(screen.getByRole('button', { name: /^Options$/ }))
     await waitFor(() => expect(screen.getByText('Transaction history')).toBeInTheDocument())
     await userEvent.click(screen.getByText('Transaction history'))
 
@@ -399,7 +439,7 @@ describe('GoalDetailSheet — bank maturity in Options sheet (issue #263)', () =
     })
     render(<GoalDetailSheet {...baseProps} goal={bankGoal} />)
     await waitFor(() => screen.getByText('Techcombank'))
-    await userEvent.click(screen.getByRole('button', { name: 'Options', exact: true }))
+    await userEvent.click(screen.getByRole('button', { name: /^Options$/ }))
 
     await waitFor(() => expect(screen.getByText('Maturity')).toBeInTheDocument())
     expect(screen.getByText('15 Aug 2030')).toBeInTheDocument()
@@ -443,7 +483,7 @@ describe('GoalDetailSheet — gold sell uses current price (issue #251)', () => 
 
     render(<GoalDetailSheet {...baseProps} goal={goldGoal} />)
     await waitFor(() => screen.getByText('PNJ Gold'))
-    await userEvent.click(screen.getByRole('button', { name: 'Options', exact: true }))
+    await userEvent.click(screen.getByRole('button', { name: /^Options$/ }))
     await waitFor(() => expect(screen.getByText('Sell')).toBeInTheDocument())
     await userEvent.click(screen.getByText('Sell'))
 
@@ -622,7 +662,7 @@ describe('GoalDetailSheet — refreshKey triggers refetch', () => {
     await waitFor(() => screen.getByText('VNINDEX ETF'))
 
     // 1) Unassign the tx
-    await userEvent.click(screen.getByRole('button', { name: 'Options', exact: true }))
+    await userEvent.click(screen.getByRole('button', { name: /^Options$/ }))
     await waitFor(() => screen.getAllByText(/unassign from goal/i).length > 0)
     await userEvent.click(screen.getAllByText(/unassign from goal/i)[0])
     await waitFor(() => screen.getByText(/unassign from goal\?/i))
