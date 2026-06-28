@@ -467,6 +467,7 @@
     "sectionGoals": "Mục tiêu",
     "sectionUnallocated": "Chưa phân bổ",
     "availableToAssign": "có thể gán cho mục tiêu",
+    "unallocatedHint": "Các khoản đầu tư chưa gắn với mục tiêu nào — hãy gán để tính vào tiến độ của mục tiêu.",
     "recentActivity": "Hoạt động gần đây",
     "viewAll": "Xem tất cả",
     "recentActivityEmpty": "Chưa có giao dịch",
