@@ -116,6 +116,29 @@ export async function deleteInsuranceMember(memberId: string) {
   await supabase.from('insurance_members').delete().eq('member_id', memberId)
 }
 
+export async function createInsuranceSaving(data: {
+  insurance_member_id: string
+  amount_saved_vnd: number
+  saved_date?: string
+}) {
+  const userId = await getTestUserId()
+  const { data: row, error } = await supabase
+    .from('insurance_savings')
+    .insert({ user_id: userId, ...data })
+    .select()
+    .single()
+  if (error) throw error
+  return row
+}
+
+export async function countInsuranceSavings(memberId: string): Promise<number> {
+  const { count } = await supabase
+    .from('insurance_savings')
+    .select('id', { count: 'exact', head: true })
+    .eq('insurance_member_id', memberId)
+  return count ?? 0
+}
+
 export async function createFixedExpense(data: {
   expense_name: string
   amount_vnd: number

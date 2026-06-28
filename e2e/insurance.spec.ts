@@ -106,6 +106,49 @@ test('edit an insurance member annual premium', async ({ page }) => {
   }, { timeout: 10_000 }).toBe(24_000_000)
 })
 
+test('delete a logged payment from the history and the saved progress drops', async ({ page }) => {
+  await api.deleteAllInsuranceMembersByName('E2E Dash Undo Payment')
+  const member = await api.createInsuranceMember({
+    member_name: 'E2E Dash Undo Payment',
+    relationship: 'Self',
+    annual_payment_vnd: 12_000_000,
+  })
+  cleanup.add(() => api.deleteInsuranceMember(member.member_id))
+
+  // Seed an ad-hoc logged contribution in the current cycle.
+  const today = new Date().toISOString().slice(0, 10)
+  const saving = await api.createInsuranceSaving({
+    insurance_member_id: member.member_id,
+    amount_saved_vnd: 1_500_000,
+    saved_date: today,
+  })
+  expect(await api.countInsuranceSavings(member.member_id)).toBe(1)
+
+  await gotoDashboardFresh(page)
+  const row = page.getByTestId('insurance-row').filter({ hasText: 'E2E Dash Undo Payment' }).first()
+  await expect(row).toBeVisible({ timeout: 10_000 })
+  await row.click()
+
+  const panel = page.getByTestId('insurance-detail-panel')
+  await expect(panel).toBeVisible({ timeout: 5_000 })
+  // The logged payment is listed in the history.
+  await expect(panel.getByText(/Logged payment|Đã ghi nhận/)).toBeVisible({ timeout: 10_000 })
+
+  // Delete it and confirm.
+  await panel.getByTestId(`insurance-delete-savings-${saving.id}`).click()
+  await Promise.all([
+    page.waitForResponse(
+      (r) => r.url().includes(`/api/v1/insurance-savings/${saving.id}`) && r.request().method() === 'DELETE' && r.status() < 400,
+      { timeout: 20_000 }
+    ),
+    page.getByTestId('insurance-delete-savings-confirm').click(),
+  ])
+
+  // Closes the loop: the row is gone from the DB (saved progress drops to match).
+  await expect.poll(async () => await api.countInsuranceSavings(member.member_id), { timeout: 10_000 }).toBe(0)
+  await expect(panel.getByText(/Logged payment|Đã ghi nhận/)).not.toBeVisible({ timeout: 10_000 })
+})
+
 test('delete an insurance member', async ({ page }) => {
   await api.deleteAllInsuranceMembersByName('E2E Dash Delete Insurance')
   const member = await api.createInsuranceMember({
