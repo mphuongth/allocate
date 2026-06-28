@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { ChevronLeft, X, MoreHorizontal, Edit2, Trash2, ChevronRight, ArrowDownRight, ArrowUpRight, Target, CalendarDays, Check, ArrowDownToLine, Wallet, Shield, RefreshCw, PiggyBank, GitMerge } from 'lucide-react'
+import { toast } from 'sonner'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import type { GoalData } from '../DashboardClient'
 import { GD_COLORS, buildCompositionSegments, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, buildRenewalSummary, AffectsProgressControl, BankInfoStrip, TopUpControl, RenewalSummaryLine, needsMaturityAction, needsBookMaturityAction, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
@@ -123,7 +124,12 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
     setIsDeleting(true)
     try {
       const res = await fetch(`/api/v1/savings-goals/${goal.goalId}`, { method: 'DELETE' })
-      if (res.ok) { setDeleteOpen(false); onDataChanged() }
+      if (!res.ok) throw new Error('delete failed')
+      setDeleteOpen(false)
+      onDataChanged()
+    } catch {
+      // Keep the confirm modal open so the user can retry; don't claim success.
+      toast.error(isVi ? 'Không thể xoá mục tiêu' : "Couldn't delete goal")
     } finally {
       setIsDeleting(false)
     }
@@ -138,24 +144,28 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
         if (!res.ok) throw new Error('fetch failed')
         const data = await res.json() as { investments?: Array<{ id: string }> }
         const investments = data.investments ?? []
-        await Promise.all(investments.map((fi) =>
+        const results = await Promise.all(investments.map((fi) =>
           fetch(`/api/v1/fund-investments/${fi.id}/goal`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ goal_id: null }),
           })
         ))
+        if (results.some((r) => !r.ok)) throw new Error('unassign failed')
       } else {
-        await fetch(`/api/v1/investment-transactions/${actionInv.id}/assign`, {
+        const res = await fetch(`/api/v1/investment-transactions/${actionInv.id}/assign`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ goal_id: null }),
         })
+        if (!res.ok) throw new Error('unassign failed')
       }
       setUnassignedIds((prev) => [...prev, actionInv.id])
       setShowUnassignConfirm(false)
       setActionInv(null)
       onDataChanged()
+    } catch {
+      toast.error(isVi ? 'Không thể huỷ liên kết' : "Couldn't unassign")
     } finally {
       setUnassigning(false)
     }
@@ -196,7 +206,10 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
     setUnholdingId(heldTxId)
     try {
       const res = await fetch(`/api/v1/investment-transactions/${heldTxId}`, { method: 'DELETE' })
-      if (res.ok) onDataChanged()
+      if (!res.ok) throw new Error('unhold failed')
+      onDataChanged()
+    } catch {
+      toast.error(isVi ? 'Không thể bỏ chờ gộp' : "Couldn't cancel the merge hold")
     } finally {
       setUnholdingId(null)
     }

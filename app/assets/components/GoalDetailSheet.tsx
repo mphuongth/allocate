@@ -6,6 +6,7 @@ import {
   Edit2, Trash2, Calendar, Download, ArrowDownRight, ArrowUpRight, Target, RefreshCw, PiggyBank, GitMerge,
 } from 'lucide-react'
 import { useLocale } from 'next-intl'
+import { toast } from 'sonner'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import type { GoalData, FundBreakdownItem } from '../DashboardClient'
 import TransactionHistorySheet, { type PurchaseHistoryRow } from './TransactionHistorySheet'
@@ -841,11 +842,16 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
     setIsDeleting(true)
     try {
       const res = await fetch(`/api/v1/savings-goals/${goal.goalId}`, { method: 'DELETE' })
-      if (res.ok) { onDataChanged(); onClose() }
+      if (!res.ok) throw new Error('delete failed')
+      onDataChanged()
+      onClose()
+      setActionsOpen(false)
+    } catch {
+      // Keep the confirm sheet open so the user can retry; don't claim success.
+      toast.error(isVI ? 'Không thể xoá mục tiêu' : "Couldn't delete goal")
     } finally {
       setIsDeleting(false)
     }
-    setActionsOpen(false)
   }
 
   // "Bỏ chờ gộp" — delete the held settlement row, which restores the original
@@ -856,7 +862,10 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
     setUnholdingId(heldTxId)
     try {
       const res = await fetch(`/api/v1/investment-transactions/${heldTxId}`, { method: 'DELETE' })
-      if (res.ok) onDataChanged()
+      if (!res.ok) throw new Error('unhold failed')
+      onDataChanged()
+    } catch {
+      toast.error(isVI ? 'Không thể bỏ chờ gộp' : "Couldn't cancel the merge hold")
     } finally {
       setUnholdingId(null)
     }
@@ -874,24 +883,28 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
         if (!res.ok) throw new Error('fetch failed')
         const data = await res.json() as { investments?: Array<{ id: string }> }
         const investments = data.investments ?? []
-        await Promise.all(investments.map((fi) =>
+        const results = await Promise.all(investments.map((fi) =>
           fetch(`/api/v1/fund-investments/${fi.id}/goal`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ goal_id: null }),
           })
         ))
+        if (results.some((r) => !r.ok)) throw new Error('unassign failed')
       } else {
-        await fetch(`/api/v1/investment-transactions/${actionInv.id}/assign`, {
+        const res = await fetch(`/api/v1/investment-transactions/${actionInv.id}/assign`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ goal_id: null }),
         })
+        if (!res.ok) throw new Error('unassign failed')
       }
       setUnassignedIds((prev) => [...prev, actionInv.id])
       setUnassignConfirmOpen(false)
       setActionInv(null)
       onDataChanged()
+    } catch {
+      toast.error(isVI ? 'Không thể huỷ liên kết' : "Couldn't unassign")
     } finally {
       setUnassigning(false)
     }

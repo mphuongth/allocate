@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { Check, ChevronLeft, Edit2, Plus, Trash2, Calendar, X } from 'lucide-react'
+import { toast } from 'sonner'
 import { fmt, fmtCompact } from '@/lib/formatters'
 import { STATUS_COLOR, BAR_COLOR_DETAIL, COVERAGE_OPTIONS, insurancePaidState, insuranceStatusLabel } from './insuranceShared'
 import type { InsuranceData } from '../DashboardClient'
@@ -145,11 +146,13 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
     setDeleting(true)
     try {
       const res = await fetch(`/api/v1/insurance-members/${ins.insuranceId}`, { method: 'DELETE' })
-      if (res.ok) {
-        setShowDeleteConfirm(false)
-        onChanged?.()
-        onClose()
-      }
+      if (!res.ok) throw new Error('delete failed')
+      setShowDeleteConfirm(false)
+      onChanged?.()
+      onClose()
+    } catch {
+      // Keep the confirm dialog open so the user can retry; don't claim success.
+      toast.error(isVi ? 'Không thể xoá thành viên' : "Couldn't remove member")
     } finally {
       setDeleting(false)
     }

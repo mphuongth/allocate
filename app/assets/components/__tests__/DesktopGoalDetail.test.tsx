@@ -4,6 +4,9 @@ import userEvent from '@testing-library/user-event'
 import DesktopGoalDetail from '../DesktopGoalDetail'
 import type { GoalData } from '../../DashboardClient'
 
+const { toastErrorMock } = vi.hoisted(() => ({ toastErrorMock: vi.fn() }))
+vi.mock('sonner', () => ({ toast: { error: toastErrorMock, success: vi.fn() } }))
+
 const mockGoal: GoalData = {
   goalId: 'goal-1',
   goalName: 'House Fund',
@@ -24,6 +27,39 @@ const baseProps = {
   onClose: vi.fn(),
   onDataChanged: vi.fn(),
 }
+
+describe('DesktopGoalDetail — delete failure feedback', () => {
+  beforeEach(() => {
+    toastErrorMock.mockClear()
+    global.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (url.includes('savings-goals') && init?.method === 'DELETE') {
+        return Promise.resolve({ ok: false, json: async () => ({}) })
+      }
+      if (url.includes('investment-transactions')) {
+        return Promise.resolve({ ok: true, json: async () => ({ transactions: [] }) })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+  })
+
+  it('shows an error toast and keeps the goal (no onDataChanged) when the delete fails', async () => {
+    const onDataChanged = vi.fn()
+    render(<DesktopGoalDetail {...baseProps} onDataChanged={onDataChanged} />)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Goal options' }))
+    await userEvent.click(await screen.findByText('Delete goal'))
+
+    // Confirm modal
+    await screen.findByText('Delete goal?')
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete goal' }))
+
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalled())
+    // A failed delete must NOT signal success.
+    expect(onDataChanged).not.toHaveBeenCalled()
+    // The confirm modal stays open so the user can retry.
+    expect(screen.getByText('Delete goal?')).toBeInTheDocument()
+  })
+})
 
 describe('DesktopGoalDetail — investments load error vs empty', () => {
   const mockBankTx = {
