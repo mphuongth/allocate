@@ -31,6 +31,16 @@ describe('AddInsuranceMemberModal — responsive presentation', () => {
     expect(screen.getByRole('button', { name: /add member/i })).toBeInTheDocument()
   })
 
+  it('labels the relationship picker and the payment-date field accurately (not "Coverage type"/"Start date")', () => {
+    render(<AddInsuranceMemberModal open onClose={vi.fn()} locale="en" />)
+    // The picker holds relationships (Self/Spouse/Parent…), not coverage tiers.
+    expect(screen.getByText('Relationship')).toBeInTheDocument()
+    expect(screen.queryByText('Coverage type')).not.toBeInTheDocument()
+    // The date is the annual premium due date, not a policy start date.
+    expect(screen.getByText('Payment date')).toBeInTheDocument()
+    expect(screen.queryByText('Start date')).not.toBeInTheDocument()
+  })
+
   it('offers the full relationship set including Parent and Other (no Husband/Wife)', () => {
     render(<AddInsuranceMemberModal open onClose={vi.fn()} locale="en" />)
     for (const label of ['Self', 'Spouse', 'Child', 'Parent', 'Other']) {

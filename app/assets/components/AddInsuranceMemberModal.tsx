@@ -66,11 +66,11 @@ export default function AddInsuranceMemberModal({ open, onClose, onCreated, loca
   const t = isVi
     ? { title: 'Thêm thành viên BH', name: 'Họ tên', namePh: 'VD. Linh Nguyễn',
         coverage: 'Mối quan hệ', premium: 'Phí bảo hiểm năm (₫)',
-        start: 'Ngày bắt đầu', monthly: 'Đóng góp hàng tháng',
+        start: 'Ngày đóng phí', monthly: 'Đóng góp hàng tháng',
         save: 'Thêm thành viên', cancel: 'Hủy' }
     : { title: 'Add insurance member', name: 'Full name', namePh: 'e.g. Linh Nguyen',
-        coverage: 'Coverage type', premium: 'Annual premium (₫)',
-        start: 'Start date', monthly: 'Monthly contribution',
+        coverage: 'Relationship', premium: 'Annual premium (₫)',
+        start: 'Payment date', monthly: 'Monthly contribution',
         save: 'Add member', cancel: 'Cancel' }
 
   async function handleSubmit() {
@@ -166,7 +166,7 @@ export default function AddInsuranceMemberModal({ open, onClose, onCreated, loca
         </div>
       </div>
 
-      {/* Start date */}
+      {/* Annual premium due date */}
       <FormField label={t.start}>
         <input
           type="date"

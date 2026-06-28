@@ -209,7 +209,7 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
           <Field label={isVi ? 'Họ tên' : 'Full name'}>
             <input value={editName} onChange={(e) => setEditName(e.target.value)} className="cn-input" autoFocus />
           </Field>
-          <Field label={isVi ? 'Mối quan hệ' : 'Coverage type'}>
+          <Field label={isVi ? 'Mối quan hệ' : 'Relationship'}>
             <div style={{ display: 'flex', gap: 8 }}>
               {COVERAGE_OPTIONS.map((o) => {
                 const active = editCoverage === o.value
@@ -245,7 +245,7 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
               {fmtCompact(editPremium / 12)} / {isVi ? 'tháng' : 'month'}
             </div>
           </Field>
-          <Field label={isVi ? 'Ngày bắt đầu' : 'Start date'}>
+          <Field label={isVi ? 'Ngày đóng phí' : 'Payment date'}>
             <input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} className="cn-input" />
           </Field>
           {editError && <div role="alert" style={{ fontSize: 12, color: 'var(--c-neg)' }}>{editError}</div>}
