@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Check, X, TrendingUp, Building2, Coins, ArrowRight } from 'lucide-react'
 import { useLocale } from 'next-intl'
 import { fmt, fmtCompact } from '@/lib/formatters'
+import LoadError from './LoadError'
 
 interface GoalOption {
   id: string
@@ -45,11 +46,33 @@ export default function AssignGoalSheet({ open, onClose, onConfirm, item, deskto
   const [mounted, setMounted] = useState(false)
   const [goals, setGoals] = useState<GoalOption[]>([])
   const [goalsLoading, setGoalsLoading] = useState(false)
+  const [goalsError, setGoalsError] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
   const [confirming, setConfirming] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const [successName, setSuccessName] = useState('')
+
+  // A failed goals fetch shows a retry state — never an empty "no goals" list,
+  // which would read as "you have no goals" on a transient network error.
+  const loadGoals = useCallback(() => {
+    setGoalsLoading(true)
+    setGoalsError(false)
+    fetch('/api/v1/savings-goals?stats=true')
+      .then((r) => { if (!r.ok) throw new Error('load failed'); return r.json() })
+      .then((res: { goals?: Array<{ goal_id: string; goal_name: string; current_value?: number; target_amount?: number | null; progress_percentage?: number | null }> }) => {
+        const rows = res.goals ?? []
+        setGoals(rows.map((g) => ({
+          id: g.goal_id,
+          name: g.goal_name,
+          currentValue: g.current_value ?? 0,
+          targetAmount: g.target_amount ?? null,
+          progressPercent: g.progress_percentage ?? null,
+        })))
+      })
+      .catch(() => setGoalsError(true))
+      .finally(() => setGoalsLoading(false))
+  }, [])
 
   useEffect(() => {
     if (open) {
@@ -57,26 +80,12 @@ export default function AssignGoalSheet({ open, onClose, onConfirm, item, deskto
       setSelected(null)
       setError('')
       setSuccess(false)
-      setGoalsLoading(true)
-      fetch('/api/v1/savings-goals?stats=true')
-        .then((r) => r.ok ? r.json() : { goals: [] })
-        .then((res: { goals?: Array<{ goal_id: string; goal_name: string; current_value?: number; target_amount?: number | null; progress_percentage?: number | null }> }) => {
-          const rows = res.goals ?? []
-          setGoals(rows.map((g) => ({
-            id: g.goal_id,
-            name: g.goal_name,
-            currentValue: g.current_value ?? 0,
-            targetAmount: g.target_amount ?? null,
-            progressPercent: g.progress_percentage ?? null,
-          })))
-        })
-        .catch(() => setGoals([]))
-        .finally(() => setGoalsLoading(false))
+      loadGoals()
     } else {
       const t = setTimeout(() => setMounted(false), 220)
       return () => clearTimeout(t)
     }
-  }, [open])
+  }, [open, loadGoals])
 
   async function handleConfirm() {
     if (!selected) return
@@ -155,12 +164,15 @@ export default function AssignGoalSheet({ open, onClose, onConfirm, item, deskto
               {isVI ? 'Đang tải…' : 'Loading…'}
             </p>
           )}
-          {!goalsLoading && goals.length === 0 && (
+          {!goalsLoading && goalsError && (
+            <LoadError isVI={isVI} onRetry={loadGoals} retrying={goalsLoading} />
+          )}
+          {!goalsLoading && !goalsError && goals.length === 0 && (
             <p style={{ color: 'var(--c-muted)', fontSize: 14, textAlign: 'center', padding: '24px 0', margin: 0 }}>
               {isVI ? 'Chưa có mục tiêu nào' : 'No goals yet'}
             </p>
           )}
-          {!goalsLoading && goals.map((g) => {
+          {!goalsLoading && !goalsError && goals.map((g) => {
             const isSel = selected === g.id
             const isComplete = g.progressPercent != null && g.progressPercent >= 100
             const remaining = g.targetAmount != null ? Math.max(0, g.targetAmount - g.currentValue) : null

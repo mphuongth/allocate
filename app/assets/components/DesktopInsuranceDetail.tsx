@@ -7,6 +7,7 @@ import { STATUS_COLOR, BAR_COLOR_DETAIL, COVERAGE_OPTIONS, insurancePaidState, i
 import type { InsuranceData } from '../DashboardClient'
 import LogInsurancePaymentModal from './LogInsurancePaymentModal'
 import { TxRowsSkeleton } from './Skeletons'
+import LoadError from './LoadError'
 
 interface Props {
   ins: InsuranceData
@@ -59,6 +60,7 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
 
   const [history, setHistory] = useState<HistoryEntry[] | null>(null)
   const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyError, setHistoryError] = useState(false)
 
   // Sync edit form when target member changes
   useEffect(() => {
@@ -70,18 +72,21 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
     setEditError(null)
   }, [ins.insuranceId, ins.insuranceName, ins.coverageType, ins.annualPremium, ins.nextPaymentDate])
 
+  // A failed history fetch shows a retry state — never "No payments yet", which
+  // would falsely imply a paying member never paid on a transient error.
   const loadHistory = useCallback(async () => {
     setHistoryLoading(true)
+    setHistoryError(false)
     try {
       const res = await fetch(`/api/v1/insurance-members/${ins.insuranceId}/savings`)
       if (res.ok) {
         const j = await res.json()
         setHistory(j.entries ?? [])
       } else {
-        setHistory([])
+        setHistoryError(true)
       }
     } catch {
-      setHistory([])
+      setHistoryError(true)
     } finally {
       setHistoryLoading(false)
     }
@@ -364,6 +369,8 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
             </div>
             {historyLoading && history === null ? (
               <TxRowsSkeleton rows={3} />
+            ) : historyError ? (
+              <LoadError isVI={isVi} onRetry={loadHistory} retrying={historyLoading} compact />
             ) : !history || history.length === 0 ? (
               <div style={{ padding: '14px 16px', fontSize: 12, color: 'var(--c-muted)' }}>
                 {isVi ? 'Chưa có giao dịch' : 'No payments yet'}

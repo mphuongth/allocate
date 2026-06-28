@@ -25,6 +25,43 @@ const baseProps = {
   onDataChanged: vi.fn(),
 }
 
+describe('DesktopGoalDetail — investments load error vs empty', () => {
+  const mockBankTx = {
+    transaction_id: 'tx-bank-err', transaction_type: 'investment', asset_type: 'bank',
+    fund_id: null, fund_name: null, investment_date: '2026-01-01', amount_vnd: 9_000_000,
+    units: null, interest_rate: 6.5, notes: 'Techcombank', principal_withdrawn: null, units_withdrawn: null,
+  }
+
+  it('shows a retry state (not "No investments yet") when the transactions fetch fails', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) })
+
+    render(<DesktopGoalDetail {...baseProps} />)
+
+    await waitFor(() => expect(screen.getByTestId('load-error')).toBeInTheDocument())
+    expect(screen.queryByText('No investments yet')).not.toBeInTheDocument()
+  })
+
+  it('retry re-fetches and renders the investments on success', async () => {
+    let call = 0
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('investment-transactions')) {
+        call += 1
+        if (call === 1) return Promise.resolve({ ok: false, json: async () => ({}) })
+        return Promise.resolve({ ok: true, json: async () => ({ transactions: [mockBankTx] }) })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+
+    render(<DesktopGoalDetail {...baseProps} />)
+    await waitFor(() => expect(screen.getByTestId('load-error')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByTestId('load-error-retry'))
+
+    await waitFor(() => expect(screen.getByText('Techcombank')).toBeInTheDocument())
+    expect(screen.queryByTestId('load-error')).not.toBeInTheDocument()
+  })
+})
+
 describe('DesktopGoalDetail — gold sell uses current price (issue #251)', () => {
   // Bought 1 chỉ at 9,000,000. Current market price is 9,200,000.
   const mockGoldTx = {

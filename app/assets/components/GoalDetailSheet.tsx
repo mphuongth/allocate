@@ -14,6 +14,7 @@ import { MaturityResolveSheet } from './MaturityResolveSheet'
 import { GD_COLORS, buildCompositionSegments, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, buildRenewalSummary, BankInfoStrip, TopUpControl, RenewalSummaryLine, needsMaturityAction, needsBookMaturityAction, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
 import { fmtTxDate, txKind } from './transactionUtils'
 import { TxRowsSkeleton } from './Skeletons'
+import LoadError from './LoadError'
 
 interface InvestmentTx {
   transaction_id: string
@@ -767,6 +768,9 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
   const [transactions, setTransactions] = useState<InvestmentTx[]>([])
   const [goldPricePerChi, setGoldPricePerChi] = useState<number | null>(null)
   const [txLoading, setTxLoading] = useState(false)
+  const [txError, setTxError] = useState(false)
+  // Bumped by the retry button to re-run the transactions fetch.
+  const [txReload, setTxReload] = useState(0)
   const [actionsOpen, setActionsOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
@@ -797,6 +801,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
   useEffect(() => {
     if (!open || !goal) return
     setTxLoading(true)
+    setTxError(false)
     // The new server response is the source of truth — drop any locally
     // hidden tx IDs from the unassign flow so a re-assigned tx isn't stuck
     // behind the optimistic filter on subsequent refreshes.
@@ -806,17 +811,21 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
     // Recurring savings are plan-only (no investment_transactions row), so fetch
     // their realized contributions separately and merge into the history list.
     Promise.all([
+      // The investments list is built from these rows — a failed fetch must
+      // surface a retry, not render as "No investments yet".
       fetch(`/api/v1/investment-transactions?goal_id=${goal.goalId}&limit=200&include_history=true`, { cache: 'no-store' })
-        .then((r) => r.ok ? r.json() : { transactions: [] }),
+        .then((r) => { if (!r.ok) throw new Error('load failed'); return r.json() }),
+      // Recurring contributions are supplementary — degrade to empty on failure.
       fetch(`/api/v1/savings-goals/${goal.goalId}/recurring-contributions`, { cache: 'no-store' })
-        .then((r) => r.ok ? r.json() : { contributions: [] }),
+        .then((r) => r.ok ? r.json() : { contributions: [] })
+        .catch(() => ({ contributions: [] })),
     ])
       .then(([txRes, recRes]) => {
         const merged: InvestmentTx[] = [...(txRes.transactions ?? []), ...(recRes.contributions ?? [])]
         merged.sort((a, b) => (a.investment_date < b.investment_date ? 1 : a.investment_date > b.investment_date ? -1 : 0))
         setTransactions(merged)
       })
-      .catch(() => setTransactions([]))
+      .catch(() => { setTransactions([]); setTxError(true) })
       .finally(() => setTxLoading(false))
     // Gold is valued at the live market price per chỉ, not its purchase cost —
     // without this the sell sheet would prefill the stale buy price (issue #251).
@@ -824,7 +833,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
       .then((r) => r.ok ? r.json() : null)
       .then((res) => setGoldPricePerChi(res?.price_per_chi ?? null))
       .catch(() => setGoldPricePerChi(null))
-  }, [open, goal, refreshKey])
+  }, [open, goal, refreshKey, txReload])
 
   async function handleDelete() {
     if (!goal) return
@@ -1136,7 +1145,10 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
                 </div>
               )}
               {txLoading && <TxRowsSkeleton />}
-              {!txLoading && invRows.length === 0 && (
+              {!txLoading && txError && (
+                <LoadError isVI={isVI} onRetry={() => setTxReload((n) => n + 1)} />
+              )}
+              {!txLoading && !txError && invRows.length === 0 && (
                 <p style={{ color: 'var(--c-muted)', fontSize: 14, textAlign: 'center', padding: '24px 0' }}>
                   {isVI ? 'Chưa có khoản đầu tư nào' : 'No investments yet'}
                 </p>
@@ -1335,7 +1347,10 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
           {activeTab === 'history' && (
             <div style={{ background: 'var(--c-card)', borderRadius: 16, padding: '0 14px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
               {txLoading && <TxRowsSkeleton />}
-              {!txLoading && transactions.length === 0 && (
+              {!txLoading && txError && (
+                <LoadError isVI={isVI} onRetry={() => setTxReload((n) => n + 1)} />
+              )}
+              {!txLoading && !txError && transactions.length === 0 && (
                 <p style={{ color: 'var(--c-muted)', fontSize: 14, textAlign: 'center', padding: '24px 0' }}>
                   {isVI ? 'Chưa có giao dịch nào' : 'No transactions yet'}
                 </p>
