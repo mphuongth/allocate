@@ -534,6 +534,9 @@ export default function UnallocatedSection({
 
           {open && (
             <div style={{ borderTop: '1px solid var(--c-line)' }}>
+              <p style={{ margin: 0, padding: '10px 16px', fontSize: 11, color: 'var(--c-muted)', lineHeight: 1.5, borderBottom: '1px solid var(--c-line)' }}>
+                {t('unallocatedHint')}
+              </p>
               {renderRows('12px 16px')}
             </div>
           )}
@@ -650,6 +653,9 @@ export default function UnallocatedSection({
             overflow: 'hidden',
             padding: '4px 14px',
           }}>
+            <p style={{ margin: 0, padding: '8px 0', fontSize: 11, color: 'var(--c-muted)', lineHeight: 1.5, borderBottom: '1px solid var(--c-line)' }}>
+              {t('unallocatedHint')}
+            </p>
             {renderRows('12px 0')}
           </div>
         )}

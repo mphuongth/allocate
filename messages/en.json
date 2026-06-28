@@ -467,6 +467,7 @@
     "sectionGoals": "Goals",
     "sectionUnallocated": "Unallocated",
     "availableToAssign": "available to assign",
+    "unallocatedHint": "Holdings not yet linked to a goal — assign them to count toward a goal's progress.",
     "recentActivity": "Recent activity",
     "viewAll": "View all",
     "recentActivityEmpty": "No transactions yet",
