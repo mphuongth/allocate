@@ -785,6 +785,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
   const [fundDetailId, setFundDetailId] = useState<string | null>(null)
   const [purchaseHistory, setPurchaseHistory] = useState<PurchaseHistoryRow[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyError, setHistoryError] = useState(false)
   const [monthlyContrib, setMonthlyContrib] = useState('')
 
   useEffect(() => {
@@ -899,19 +900,22 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
   async function openFundDetail(fund: FundBreakdownItem) {
     setFundDetailId(fund.fundId)
     setPurchaseHistory([])
+    setHistoryError(false)
     setHistoryLoading(true)
     try {
       const res = await fetch(`/api/v1/fund-investments?fund_id=${fund.fundId}`)
-      if (res.ok) {
-        const items = await res.json()
-        setPurchaseHistory(
-          (items as Array<{ nav_at_purchase: number | null; units_purchased: number | null; investment_date: string | null; created_at: string; is_dca_seeded?: boolean }>)
-            .filter((i) => !(i.is_dca_seeded && i.units_purchased == null))
-            .map((i) => ({ purchase_date: i.investment_date ?? i.created_at, units: i.units_purchased, nav_at_purchase: i.nav_at_purchase }))
-            .sort((a, b) => new Date(b.purchase_date).getTime() - new Date(a.purchase_date).getTime())
-        )
-      }
-    } catch { /* ignore */ }
+      if (!res.ok) throw new Error('load failed')
+      const items = await res.json()
+      setPurchaseHistory(
+        (items as Array<{ nav_at_purchase: number | null; units_purchased: number | null; investment_date: string | null; created_at: string; is_dca_seeded?: boolean }>)
+          .filter((i) => !(i.is_dca_seeded && i.units_purchased == null))
+          .map((i) => ({ purchase_date: i.investment_date ?? i.created_at, units: i.units_purchased, nav_at_purchase: i.nav_at_purchase }))
+          .sort((a, b) => new Date(b.purchase_date).getTime() - new Date(a.purchase_date).getTime())
+      )
+    } catch {
+      // Distinguish a failed load from a genuinely empty history.
+      setHistoryError(true)
+    }
     setHistoryLoading(false)
   }
 
@@ -1492,7 +1496,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
 
       <TransactionHistorySheet
         open={!!(fundDetailId && detailFund)}
-        onClose={() => { setFundDetailId(null); setPurchaseHistory([]); setHistoryLoading(false) }}
+        onClose={() => { setFundDetailId(null); setPurchaseHistory([]); setHistoryLoading(false); setHistoryError(false) }}
         fundName={detailFund?.fundName ?? ''}
         currentNAV={detailFund?.currentNAV ?? 0}
         quantity={detailFund?.quantity ?? 0}
@@ -1502,6 +1506,8 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
         profitLossPercentage={detailFund?.profitLossPercentage ?? 0}
         purchaseHistory={purchaseHistory}
         loading={historyLoading}
+        error={historyError}
+        onRetry={() => { if (detailFund) openFundDetail(detailFund) }}
       />
     </>
   )
