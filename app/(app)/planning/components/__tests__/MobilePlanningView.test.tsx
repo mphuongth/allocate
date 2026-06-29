@@ -595,6 +595,23 @@ describe('MobilePlanningView — save error feedback (no false success)', () => 
   })
 })
 
+describe('MobilePlanningView — sheet focus a11y (Sheet)', () => {
+  it('exposes role=dialog + aria-modal on an open sheet', async () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Edit income' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog).toHaveAttribute('aria-modal', 'true')
+  })
+
+  it('closes a sheet on Escape', async () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Edit income' }))
+    expect(await screen.findByTestId('mobile-salary-input')).toBeInTheDocument()
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByTestId('mobile-salary-input')).not.toBeInTheDocument())
+  })
+})
+
 describe('MobilePlanningView — insurance section parity + Add member', () => {
   it('shows the insurance section even when there are no members', () => {
     render(<MobilePlanningView {...defaultProps} plan={basePlan} insuranceMembers={[]} />)

@@ -14,6 +14,7 @@ import RecurringSavingManager from './RecurringSavingManager'
 import AddTransactionSheet, { type EditableTransaction, type PrefillTransaction } from '@/app/assets/components/AddTransactionSheet'
 import RecurringBookTopUpSheet, { type BookTopUpTarget } from '@/app/assets/components/RecurringBookTopUpSheet'
 import AddInsuranceMemberModal from '@/app/assets/components/AddInsuranceMemberModal'
+import { useDialogA11y } from './useDialogA11y'
 import { buildByGoal, resolveRecurringSavings, DEPOSIT_BACKED_FULFILLMENT_SOURCES, type GoalRow, type GoalItem } from '@/lib/planning'
 import { relationshipLabel } from '@/app/assets/components/insuranceShared'
 import { MobilePlanningSkeleton } from './PlanningSkeleton'
@@ -94,6 +95,8 @@ function TrashIcon({ size = 16, color = 'currentColor' }: { size?: number; color
 
 function Sheet({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useDialogA11y(dialogRef, open && mounted, onClose)
   useEffect(() => {
     if (open) setMounted(true)
     else { const t = setTimeout(() => setMounted(false), 220); return () => clearTimeout(t) }
@@ -110,12 +113,17 @@ function Sheet({ open, onClose, title, children }: { open: boolean; onClose: () 
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        tabIndex={-1}
         style={{
           width: '100%', background: 'var(--c-card)', borderRadius: '16px 16px 0 0',
           // overflow:hidden forces iOS WebKit to clip the rounded top corners —
           // without it the slide-up transform composites the layer and the
           // corners render square (issue #319).
-          overflow: 'hidden',
+          overflow: 'hidden', outline: 'none',
           paddingBottom: 'env(safe-area-inset-bottom,0)',
           animation: open ? 'slide-up 220ms cubic-bezier(0.2,0.8,0.2,1)' : 'slide-down 180ms ease forwards',
         }}
