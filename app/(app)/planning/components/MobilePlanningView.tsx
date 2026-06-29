@@ -537,7 +537,7 @@ function SalaryCard({ amount, isVI, onEdit, onDelete }: { amount: number; isVI: 
         <button
           onClick={onEdit}
           aria-label="Edit income"
-          style={{ padding: 6, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          style={{ minWidth: 44, minHeight: 44, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--c-card-2)')}
           onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
         >
@@ -546,7 +546,7 @@ function SalaryCard({ amount, isVI, onEdit, onDelete }: { amount: number; isVI: 
         <button
           onClick={onDelete}
           aria-label="Delete plan"
-          style={{ padding: 6, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          style={{ minWidth: 44, minHeight: 44, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--c-card-2)')}
           onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
         >
@@ -777,9 +777,14 @@ function GoalAllocationRow({ entry, isVI, onRecSkip, onRecRestore, onRecOverride
         <button
           onClick={onLogContribution}
           aria-label={isVI ? 'Ghi nhận đóng góp' : 'Log contribution'}
-          style={{ padding: 4, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, color: 'var(--c-pos)', display: 'flex', flexShrink: 0 }}
+          title={isVI ? 'Ghi nhận đóng góp vào mục tiêu' : 'Log a contribution to this goal'}
+          style={{ minWidth: 44, minHeight: 44, padding: 0, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
         >
-          <Plus size={16} strokeWidth={2.4} />
+          {/* Tinted chip so it reads as a discrete "add money" action (not a bare
+              "+" that could be mistaken for "add goal"), matching the Saved/Buy pills. */}
+          <span style={{ width: 28, height: 28, borderRadius: 999, background: 'var(--c-pos-tint)', color: 'var(--c-pos)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Plus size={16} strokeWidth={2.4} />
+          </span>
         </button>
         <button
           onClick={() => setOpen((o) => !o)}
@@ -1555,7 +1560,7 @@ export default function MobilePlanningView({
                   <button
                     onClick={() => { setSheet({ type: 'other-expense', existing: o }) }}
                     aria-label="Edit expense"
-                    style={{ padding: 4, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 4, display: 'flex', alignItems: 'center' }}
+                    style={{ minWidth: 44, minHeight: 44, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
                   >
                     <EditIcon size={14} color="var(--c-muted)" />
                   </button>
