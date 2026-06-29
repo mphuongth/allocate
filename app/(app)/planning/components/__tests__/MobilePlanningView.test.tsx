@@ -1,8 +1,11 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, within, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import MobilePlanningView from '../MobilePlanningView'
 import type { MonthlyPlan, FixedExpense, InsuranceMember, OtherExpense, FundInvestment, DirectSaving, RecurringFulfillment } from '../../PlanningClient'
+
+const { toastErrorMock } = vi.hoisted(() => ({ toastErrorMock: vi.fn() }))
+vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: toastErrorMock, success: vi.fn() }) }))
 
 vi.mock('next-intl', () => ({
   useTranslations: () => (key: string, params?: Record<string, unknown>) =>
@@ -527,5 +530,67 @@ describe('MobilePlanningView — recurring savings in By goal', () => {
     await userEvent.click(screen.getByText('Retirement'))
     expect(screen.getByText('VFMVF1')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Restore DCA/i })).toBeInTheDocument()
+  })
+})
+
+describe('MobilePlanningView — save error feedback (no false success)', () => {
+  const fixedExpenses: FixedExpense[] = [{ expense_id: 'fe1', expense_name: 'Rent', amount_vnd: 8_500_000 }]
+  const recurringSavings = [
+    { saving_id: 'rs1', name: 'VCB Savings', goal_id: 'g1', amount_vnd: 2_000_000, effective_from: null, effective_to: null, savings_goals: { goal_name: 'Retirement' } },
+  ]
+
+  it('fixed-expense override failure shows an error toast and keeps the sheet open', async () => {
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: false, json: () => Promise.resolve({ error: 'boom' }) }))
+    vi.stubGlobal('fetch', fetchMock)
+    toastErrorMock.mockClear()
+    const onToast = vi.fn()
+    try {
+      render(<MobilePlanningView {...defaultProps} plan={basePlan} fixedExpenses={fixedExpenses} onToast={onToast} />)
+      await userEvent.click(screen.getByRole('button', { name: 'More options' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Override amount' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+      await waitFor(() => expect(toastErrorMock).toHaveBeenCalled())
+      expect(onToast).not.toHaveBeenCalled()
+      // Sheet stayed open → its Save button is still mounted.
+      expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('skip failure shows an error toast and does not report success', async () => {
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: false, json: () => Promise.resolve({ error: 'boom' }) }))
+    vi.stubGlobal('fetch', fetchMock)
+    toastErrorMock.mockClear()
+    const onToast = vi.fn()
+    try {
+      render(<MobilePlanningView {...defaultProps} plan={basePlan} fixedExpenses={fixedExpenses} onToast={onToast} />)
+      await userEvent.click(screen.getByRole('button', { name: 'More options' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Skip this month' }))
+      await waitFor(() => expect(toastErrorMock).toHaveBeenCalled())
+      expect(onToast).not.toHaveBeenCalled()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('recurring override writes once to the correct endpoint (not the insurance endpoint)', async () => {
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }))
+    vi.stubGlobal('fetch', fetchMock)
+    const onToast = vi.fn()
+    try {
+      render(<MobilePlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} goals={[{ goal_id: 'g1', goal_name: 'Retirement' }]} onToast={onToast} />)
+      await userEvent.click(screen.getByText('Retirement'))
+      await userEvent.click(screen.getByRole('button', { name: 'Saving actions' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Save more this month' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+      await waitFor(() => expect(onToast).toHaveBeenCalled())
+      const urls = fetchMock.mock.calls.map((c) => String(c[0]))
+      expect(urls.some((u) => u.includes('/recurring-saving-overrides'))).toBe(true)
+      // The old SimpleOverrideSheet double-POSTed to the wrong (insurance) endpoint.
+      expect(urls.some((u) => u.includes('/insurance-overrides'))).toBe(false)
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 })
