@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useLocale } from 'next-intl'
+import { toast } from 'sonner'
 import {
   Wallet, Target, Shield, ShoppingCart,
   ChevronDown, ChevronUp,
@@ -1002,6 +1003,7 @@ export default function MobilePlanningView({
 }: Props) {
   const locale = useLocale()
   const isVI = locale === 'vi'
+  const failMsg = isVI ? 'Có lỗi, vui lòng thử lại' : 'Something went wrong — please try again'
   const [sheet, setSheet] = useState<SheetState>(null)
   // Recording a DCA buy opens the canonical Add-Transaction sheet in edit mode,
   // pre-filled from the planned investment, so saving completes that same
@@ -1059,64 +1061,70 @@ export default function MobilePlanningView({
 
   async function handleSkipFE(expense: FixedExpense) {
     if (!plan) return
-    await fetch(`/api/v1/monthly-plans/${plan.id}/fixed-expense-overrides`, {
+    const res = await fetch(`/api/v1/monthly-plans/${plan.id}/fixed-expense-overrides`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ fixed_expense_id: expense.expense_id, monthly_amount_override_vnd: 0 }),
-    })
+    }).catch(() => null)
+    if (!res?.ok) { toast.error(failMsg); return }
     onToast(isVI ? `Đã bỏ qua ${expense.expense_name}` : `Skipped ${expense.expense_name}`)
     onRefresh()
   }
 
   async function handleRestoreFE(expense: FixedExpense) {
     if (!plan) return
-    const res = await fetch(`/api/v1/monthly-plans/${plan.id}/fixed-expense-overrides`)
-    if (!res.ok) return
+    const res = await fetch(`/api/v1/monthly-plans/${plan.id}/fixed-expense-overrides`).catch(() => null)
+    if (!res?.ok) { toast.error(failMsg); return }
     const overrides: Array<{ id: string; fixed_expense_id: string }> = await res.json()
     const match = overrides.find((o) => o.fixed_expense_id === expense.expense_id)
     if (!match) return
-    await fetch(`/api/v1/monthly-plans/${plan.id}/fixed-expense-overrides/${match.id}`, { method: 'DELETE' })
+    const del = await fetch(`/api/v1/monthly-plans/${plan.id}/fixed-expense-overrides/${match.id}`, { method: 'DELETE' }).catch(() => null)
+    if (!del?.ok) { toast.error(failMsg); return }
     onToast(isVI ? `Đã khôi phục ${expense.expense_name}` : `Restored ${expense.expense_name}`)
     onRefresh()
   }
 
   async function handleSkipIns(member: InsuranceMember) {
     if (!plan) return
-    await fetch(`/api/v1/monthly-plans/${plan.id}/excluded-insurance`, {
+    const res = await fetch(`/api/v1/monthly-plans/${plan.id}/excluded-insurance`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ member_id: member.member_id }),
-    })
+    }).catch(() => null)
+    if (!res?.ok) { toast.error(failMsg); return }
     onToast(isVI ? `Đã bỏ qua ${member.member_name}` : `Skipped ${member.member_name}`)
     onRefresh()
   }
 
   async function handleRestoreIns(member: InsuranceMember) {
     if (!plan) return
-    await fetch(`/api/v1/monthly-plans/${plan.id}/excluded-insurance/${member.member_id}`, { method: 'DELETE' })
+    const res = await fetch(`/api/v1/monthly-plans/${plan.id}/excluded-insurance/${member.member_id}`, { method: 'DELETE' }).catch(() => null)
+    if (!res?.ok) { toast.error(failMsg); return }
     onToast(isVI ? `Đã khôi phục ${member.member_name}` : `Restored ${member.member_name}`)
     onRefresh()
   }
 
   async function handleSkipRec(item: GoalItem) {
     if (!plan || !item.recurringId) return
-    await fetch(`/api/v1/monthly-plans/${plan.id}/recurring-saving-overrides`, {
+    const res = await fetch(`/api/v1/monthly-plans/${plan.id}/recurring-saving-overrides`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ recurring_saving_id: item.recurringId, monthly_amount_override_vnd: 0 }),
-    })
+    }).catch(() => null)
+    if (!res?.ok) { toast.error(failMsg); return }
     onToast(isVI ? `Đã bỏ qua ${item.name}` : `Skipped ${item.name}`)
     onRefresh()
   }
 
   async function handleRestoreRec(item: GoalItem) {
     if (!plan || !item.recurringId) return
-    const res = await fetch(`/api/v1/monthly-plans/${plan.id}/recurring-saving-overrides`)
-    if (!res.ok) return
+    const res = await fetch(`/api/v1/monthly-plans/${plan.id}/recurring-saving-overrides`).catch(() => null)
+    if (!res?.ok) { toast.error(failMsg); return }
     const overrides: Array<{ id: string; recurring_saving_id: string }> = await res.json()
     const match = overrides.find((o) => o.recurring_saving_id === item.recurringId)
     if (!match) return
-    await fetch(`/api/v1/monthly-plans/${plan.id}/recurring-saving-overrides/${match.id}`, { method: 'DELETE' })
+    const del = await fetch(`/api/v1/monthly-plans/${plan.id}/recurring-saving-overrides/${match.id}`, { method: 'DELETE' }).catch(() => null)
+    if (!del?.ok) { toast.error(failMsg); return }
     onToast(isVI ? `Đã khôi phục ${item.name}` : `Restored ${item.name}`)
     onRefresh()
   }
@@ -1129,18 +1137,20 @@ export default function MobilePlanningView({
 
   async function handleDcaSkip(item: GoalItem) {
     if (!plan || !item.fundId) return
-    await fetch(`/api/v1/monthly-plans/${plan.id}/dca-skips`, {
+    const res = await fetch(`/api/v1/monthly-plans/${plan.id}/dca-skips`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ fund_id: item.fundId }),
-    })
+    }).catch(() => null)
+    if (!res?.ok) { toast.error(failMsg); return }
     onToast(isVI ? `Đã bỏ qua ${item.name}` : `Skipped ${item.name}`)
     onRefresh()
   }
 
   async function handleDcaRestore(item: GoalItem) {
     if (!plan || !item.fundId) return
-    await fetch(`/api/v1/monthly-plans/${plan.id}/dca-skips/${item.fundId}`, { method: 'DELETE' })
+    const res = await fetch(`/api/v1/monthly-plans/${plan.id}/dca-skips/${item.fundId}`, { method: 'DELETE' }).catch(() => null)
+    if (!res?.ok) { toast.error(failMsg); return }
     onToast(isVI ? `Đã khôi phục ${item.name}` : `Restored ${item.name}`)
     onRefresh()
   }
@@ -1222,27 +1232,22 @@ export default function MobilePlanningView({
     setSheet({ type: 'override-ins', member })
   }
 
+  // The single source of truth for an override write. SimpleOverrideSheet is now
+  // presentational (it used to POST too — double-writing, and to the wrong
+  // endpoint for recurring), so this is the only request that fires.
   async function handleOverrideSave(amount: number) {
     if (!plan || !overrideTarget) return
-    if (overrideTarget.type === 'fe') {
-      await fetch(`/api/v1/monthly-plans/${plan.id}/fixed-expense-overrides`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fixed_expense_id: overrideTarget.id, monthly_amount_override_vnd: amount }),
-      })
-    } else if (overrideTarget.type === 'rec') {
-      await fetch(`/api/v1/monthly-plans/${plan.id}/recurring-saving-overrides`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ recurring_saving_id: overrideTarget.id, monthly_amount_override_vnd: amount }),
-      })
-    } else {
-      await fetch(`/api/v1/monthly-plans/${plan.id}/insurance-overrides`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ member_id: overrideTarget.id, monthly_amount_override_vnd: amount }),
-      })
-    }
+    const { url, body } = overrideTarget.type === 'fe'
+      ? { url: `/api/v1/monthly-plans/${plan.id}/fixed-expense-overrides`, body: { fixed_expense_id: overrideTarget.id, monthly_amount_override_vnd: amount } }
+      : overrideTarget.type === 'rec'
+        ? { url: `/api/v1/monthly-plans/${plan.id}/recurring-saving-overrides`, body: { recurring_saving_id: overrideTarget.id, monthly_amount_override_vnd: amount } }
+        : { url: `/api/v1/monthly-plans/${plan.id}/insurance-overrides`, body: { member_id: overrideTarget.id, monthly_amount_override_vnd: amount } }
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).catch(() => null)
+    if (!res?.ok) { toast.error(failMsg); return }
     setSheet(null)
     setOverrideTarget(null)
     onToast(isVI ? 'Đã ghi đè' : 'Override saved')
@@ -1517,9 +1522,6 @@ export default function MobilePlanningView({
           onClose={() => { setSheet(null); setOverrideTarget(null) }}
           name={overrideTarget.name}
           defaultAmount={overrideTarget.defaultAmount}
-          planId={plan.id}
-          targetId={overrideTarget.id}
-          targetType={overrideTarget.type}
           isVI={isVI}
           onSaved={handleOverrideSave}
         />
@@ -1587,17 +1589,16 @@ export default function MobilePlanningView({
 // ─── SimpleOverrideSheet (used inline — keeps handleOverrideSave in parent) ───
 
 function SimpleOverrideSheet({
-  open, onClose, name, defaultAmount, planId, targetId, targetType, isVI, onSaved,
+  open, onClose, name, defaultAmount, isVI, onSaved,
 }: {
   open: boolean
   onClose: () => void
   name: string
   defaultAmount: number
-  planId: string
-  targetId: string
-  targetType: 'fe' | 'ins' | 'rec'
   isVI: boolean
-  onSaved: (amount: number) => void
+  // The parent owns the single write (and the failure toast); this sheet only
+  // collects + validates the amount, then hands it up.
+  onSaved: (amount: number) => void | Promise<void>
 }) {
   const [value, setValue] = useState(String(defaultAmount))
   const [saving, setSaving] = useState(false)
@@ -1610,19 +1611,7 @@ function SimpleOverrideSheet({
     if (!value || isNaN(num) || num <= 0) { setError(isVI ? 'Vui lòng nhập số tiền hợp lệ' : 'Please enter a valid amount'); return }
     setError('')
     setSaving(true)
-    try {
-      const endpoint = targetType === 'fe' ? 'fixed-expense-overrides' : 'insurance-overrides'
-      const body = targetType === 'fe'
-        ? { fixed_expense_id: targetId, monthly_amount_override_vnd: num }
-        : { member_id: targetId, monthly_amount_override_vnd: num }
-      await fetch(`/api/v1/monthly-plans/${planId}/${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      onSaved(num)
-    } catch { setError(isVI ? 'Lỗi kết nối' : 'Connection error') }
-    setSaving(false)
+    try { await onSaved(num) } finally { setSaving(false) }
   }
 
   return (

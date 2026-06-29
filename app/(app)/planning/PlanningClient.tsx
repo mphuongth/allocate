@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { toast } from 'sonner'
 import { useTranslations, useLocale } from 'next-intl'
 import { useNavigation } from '@/app/components/navigation/NavigationContext'
 import MobilePlanningView from './components/MobilePlanningView'
@@ -148,12 +149,10 @@ export default function PlanningClient() {
   const [funds, setFunds] = useState<Fund[]>(initialCache?.funds ?? [])
   const [goals, setGoals] = useState<Goal[]>(initialCache?.goals ?? [])
   const [loading, setLoading] = useState(!initialCache)
-  const [, setToast] = useState('')
 
-  const showToast = useCallback((msg: string) => {
-    setToast(msg)
-    setTimeout(() => setToast(''), 3000)
-  }, [])
+  // Surface confirmations through the globally-mounted sonner Toaster (neutral —
+  // onToast carries both confirmations and the "book has matured" warning).
+  const showToast = useCallback((msg: string) => { toast(msg) }, [])
 
   const fetchPlan = useCallback(async (opts?: { force?: boolean }) => {
     if (opts?.force) bustPlanCache(month, year)

@@ -7,6 +7,7 @@ import {
   MoreHorizontal, Check, RefreshCw, X, Plus, Settings, TrendingUp,
 } from 'lucide-react'
 import { useLocale } from 'next-intl'
+import { toast } from 'sonner'
 import { fmt, fmtCompact } from '@/lib/formatters'
 import { DesktopPlanningSkeleton } from './PlanningSkeleton'
 import FixedExpenseManager from './FixedExpenseManager'
@@ -449,6 +450,7 @@ export default function DesktopPlanningView({
 }: Props) {
   const locale = useLocale()
   const isVI = locale === 'vi'
+  const failMsg = isVI ? 'Có lỗi, vui lòng thử lại' : 'Something went wrong — please try again'
 
   // ── Modal state ──
   const [showIncome, setShowIncome] = useState(false)
@@ -533,6 +535,7 @@ export default function DesktopPlanningView({
           body: JSON.stringify({ salary_vnd: num }),
         })
         if (res.ok) { setShowIncome(false); onRefresh(); onToast(isVI ? 'Đã cập nhật thu nhập' : 'Income updated') }
+        else { toast.error(failMsg) }
       } else {
         const res = await fetch('/api/v1/monthly-plans', {
           method: 'POST',
@@ -543,16 +546,17 @@ export default function DesktopPlanningView({
           const p = await res.json()
           setShowIncome(false)
           onPlanCreated({ id: p.id, month: p.month, year: p.year, salary_vnd: p.salary_vnd })
-        }
+        } else { toast.error(failMsg) }
       }
-    } finally { setSaving(false) }
+    } catch { toast.error(failMsg) } finally { setSaving(false) }
   }
 
   async function handleDeletePlan() {
     if (!plan) return
     setSaving(true)
     try {
-      await fetch(`/api/v1/monthly-plans/${plan.id}`, { method: 'DELETE' })
+      const res = await fetch(`/api/v1/monthly-plans/${plan.id}`, { method: 'DELETE' }).catch(() => null)
+      if (!res?.ok) { toast.error(failMsg); return }
       setShowDelete(false)
       onPlanDeleted()
       onToast(isVI ? `Đã xoá kế hoạch ${monthLabel}` : `Plan for ${monthLabel} deleted`)
@@ -561,37 +565,43 @@ export default function DesktopPlanningView({
 
   async function handleFESkip(fe: FixedExpense) {
     if (!plan) return
-    await fetch(`/api/v1/monthly-plans/${plan.id}/fixed-expense-overrides`, {
+    const res = await fetch(`/api/v1/monthly-plans/${plan.id}/fixed-expense-overrides`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ fixed_expense_id: fe.expense_id, monthly_amount_override_vnd: 0 }),
-    })
+    }).catch(() => null)
+    if (!res?.ok) { toast.error(failMsg); return }
     onRefresh(); onToast(isVI ? `Đã bỏ qua ${fe.expense_name}` : `Skipped ${fe.expense_name}`)
   }
 
   async function handleFERestore(fe: FixedExpense) {
     if (!plan) return
-    const res = await fetch(`/api/v1/monthly-plans/${plan.id}/fixed-expense-overrides`)
-    if (!res.ok) return
+    const res = await fetch(`/api/v1/monthly-plans/${plan.id}/fixed-expense-overrides`).catch(() => null)
+    if (!res?.ok) { toast.error(failMsg); return }
     const overrides: Array<{ id: string; fixed_expense_id: string }> = await res.json()
     const match = overrides.find(o => o.fixed_expense_id === fe.expense_id)
-    if (match) await fetch(`/api/v1/monthly-plans/${plan.id}/fixed-expense-overrides/${match.id}`, { method: 'DELETE' })
+    if (match) {
+      const del = await fetch(`/api/v1/monthly-plans/${plan.id}/fixed-expense-overrides/${match.id}`, { method: 'DELETE' }).catch(() => null)
+      if (!del?.ok) { toast.error(failMsg); return }
+    }
     onRefresh(); onToast(isVI ? `Đã khôi phục ${fe.expense_name}` : `Restored ${fe.expense_name}`)
   }
 
   async function handleInsSkip(m: InsuranceMember) {
     if (!plan) return
-    await fetch(`/api/v1/monthly-plans/${plan.id}/excluded-insurance`, {
+    const res = await fetch(`/api/v1/monthly-plans/${plan.id}/excluded-insurance`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ member_id: m.member_id }),
-    })
+    }).catch(() => null)
+    if (!res?.ok) { toast.error(failMsg); return }
     onRefresh(); onToast(isVI ? `Đã bỏ qua ${m.member_name}` : `Skipped ${m.member_name}`)
   }
 
   async function handleInsRestore(m: InsuranceMember) {
     if (!plan) return
-    await fetch(`/api/v1/monthly-plans/${plan.id}/excluded-insurance/${m.member_id}`, { method: 'DELETE' })
+    const res = await fetch(`/api/v1/monthly-plans/${plan.id}/excluded-insurance/${m.member_id}`, { method: 'DELETE' }).catch(() => null)
+    if (!res?.ok) { toast.error(failMsg); return }
     const oRes = await fetch(`/api/v1/monthly-plans/${plan.id}/insurance-overrides`)
     if (oRes.ok) {
       const overrides: Array<{ id: string; member_id: string }> = await oRes.json()
@@ -603,37 +613,43 @@ export default function DesktopPlanningView({
 
   async function handleRecSkip(item: { recurringId?: string; name: string }) {
     if (!plan || !item.recurringId) return
-    await fetch(`/api/v1/monthly-plans/${plan.id}/recurring-saving-overrides`, {
+    const res = await fetch(`/api/v1/monthly-plans/${plan.id}/recurring-saving-overrides`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ recurring_saving_id: item.recurringId, monthly_amount_override_vnd: 0 }),
-    })
+    }).catch(() => null)
+    if (!res?.ok) { toast.error(failMsg); return }
     onRefresh(); onToast(isVI ? `Đã bỏ qua ${item.name}` : `Skipped ${item.name}`)
   }
 
   async function handleRecRestore(item: { recurringId?: string; name: string }) {
     if (!plan || !item.recurringId) return
-    const res = await fetch(`/api/v1/monthly-plans/${plan.id}/recurring-saving-overrides`)
-    if (!res.ok) return
+    const res = await fetch(`/api/v1/monthly-plans/${plan.id}/recurring-saving-overrides`).catch(() => null)
+    if (!res?.ok) { toast.error(failMsg); return }
     const overrides: Array<{ id: string; recurring_saving_id: string }> = await res.json()
     const match = overrides.find(o => o.recurring_saving_id === item.recurringId)
-    if (match) await fetch(`/api/v1/monthly-plans/${plan.id}/recurring-saving-overrides/${match.id}`, { method: 'DELETE' })
+    if (match) {
+      const del = await fetch(`/api/v1/monthly-plans/${plan.id}/recurring-saving-overrides/${match.id}`, { method: 'DELETE' }).catch(() => null)
+      if (!del?.ok) { toast.error(failMsg); return }
+    }
     onRefresh(); onToast(isVI ? `Đã khôi phục ${item.name}` : `Restored ${item.name}`)
   }
 
   async function handleDcaSkip(item: { fundId?: string | null; name: string }) {
     if (!plan || !item.fundId) return
-    await fetch(`/api/v1/monthly-plans/${plan.id}/dca-skips`, {
+    const res = await fetch(`/api/v1/monthly-plans/${plan.id}/dca-skips`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ fund_id: item.fundId }),
-    })
+    }).catch(() => null)
+    if (!res?.ok) { toast.error(failMsg); return }
     onRefresh(); onToast(isVI ? `Đã bỏ qua ${item.name}` : `Skipped ${item.name}`)
   }
 
   async function handleDcaRestore(item: { fundId?: string | null; name: string }) {
     if (!plan || !item.fundId) return
-    await fetch(`/api/v1/monthly-plans/${plan.id}/dca-skips/${item.fundId}`, { method: 'DELETE' })
+    const res = await fetch(`/api/v1/monthly-plans/${plan.id}/dca-skips/${item.fundId}`, { method: 'DELETE' }).catch(() => null)
+    if (!res?.ok) { toast.error(failMsg); return }
     onRefresh(); onToast(isVI ? `Đã khôi phục ${item.name}` : `Restored ${item.name}`)
   }
 
@@ -715,7 +731,8 @@ export default function DesktopPlanningView({
         : overrideModal.type === 'rec'
           ? { recurring_saving_id: overrideModal.id, monthly_amount_override_vnd: num }
           : { member_id: overrideModal.id, monthly_amount_override_vnd: num }
-      await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => null)
+      if (!res?.ok) { toast.error(failMsg); return }
       setOverrideModal(null)
       onRefresh(); onToast(isVI ? 'Đã lưu' : 'Saved')
     } finally { setSaving(false) }
@@ -735,11 +752,12 @@ export default function DesktopPlanningView({
       const url = isEdit
         ? `/api/v1/monthly-plans/${plan.id}/other-expenses/${(otherModal as OtherExpense).id}`
         : `/api/v1/monthly-plans/${plan.id}/other-expenses`
-      await fetch(url, {
+      const res = await fetch(url, {
         method: isEdit ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ description: otherDesc.trim(), amount_vnd: Number(otherAmt) }),
-      })
+      }).catch(() => null)
+      if (!res?.ok) { toast.error(failMsg); return }
       setOtherModal(null)
       onRefresh()
       onToast(isVI ? 'Đã lưu' : 'Saved')

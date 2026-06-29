@@ -1,8 +1,11 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, within, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import DesktopPlanningView from '../DesktopPlanningView'
-import type { MonthlyPlan, FundInvestment, DirectSaving, RecurringSaving, RecurringFulfillment, InsuranceMember } from '../../PlanningClient'
+import type { MonthlyPlan, FundInvestment, DirectSaving, RecurringSaving, RecurringFulfillment, InsuranceMember, FixedExpense } from '../../PlanningClient'
+
+const { toastErrorMock } = vi.hoisted(() => ({ toastErrorMock: vi.fn() }))
+vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: toastErrorMock, success: vi.fn() }) }))
 
 vi.mock('next-intl', () => ({
   useTranslations: () => (key: string, params?: Record<string, unknown>) =>
@@ -194,6 +197,70 @@ describe('DesktopPlanningView — allocation card amounts never wrap', () => {
     expect(within(card).getByText('+43.0M ₫')).toHaveStyle({ whiteSpace: 'nowrap' })
     // Per-row percentage chip.
     expect(within(card).getByText('4%', { exact: true })).toHaveStyle({ whiteSpace: 'nowrap' })
+  })
+})
+
+describe('DesktopPlanningView — save error feedback (no false success)', () => {
+  const fixedExpenses: FixedExpense[] = [{ expense_id: 'fe1', expense_name: 'Rent', amount_vnd: 8_500_000 }]
+
+  function stubFailingFetch() {
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: false, json: () => Promise.resolve({ error: 'boom' }) }))
+    vi.stubGlobal('fetch', fetchMock)
+    return fetchMock
+  }
+
+  it('income save failure shows an error toast and keeps the modal open', async () => {
+    stubFailingFetch()
+    toastErrorMock.mockClear()
+    const onToast = vi.fn()
+    try {
+      render(<DesktopPlanningView {...defaultProps} plan={basePlan} onToast={onToast} />)
+      await userEvent.click(screen.getByRole('button', { name: 'Edit income' }))
+      const input = await screen.findByPlaceholderText('e.g. 45,000,000')
+      await userEvent.clear(input)
+      await userEvent.type(input, '50000000')
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+      await waitFor(() => expect(toastErrorMock).toHaveBeenCalled())
+      expect(onToast).not.toHaveBeenCalled()
+      expect(screen.getByPlaceholderText('e.g. 45,000,000')).toBeInTheDocument()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('override save failure shows an error toast and keeps the modal open', async () => {
+    stubFailingFetch()
+    toastErrorMock.mockClear()
+    const onToast = vi.fn()
+    try {
+      render(<DesktopPlanningView {...defaultProps} plan={basePlan} fixedExpenses={fixedExpenses} onToast={onToast} />)
+      await userEvent.click(screen.getByRole('button', { name: 'More options' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Override amount' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+      await waitFor(() => expect(toastErrorMock).toHaveBeenCalled())
+      expect(onToast).not.toHaveBeenCalled()
+      // Modal stayed open → its name (now shown in both the row and the modal)
+      // and Save button are still mounted.
+      expect(screen.getAllByText('Rent').length).toBeGreaterThan(1)
+      expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('skip failure shows an error toast and does not report success', async () => {
+    stubFailingFetch()
+    toastErrorMock.mockClear()
+    const onToast = vi.fn()
+    try {
+      render(<DesktopPlanningView {...defaultProps} plan={basePlan} fixedExpenses={fixedExpenses} onToast={onToast} />)
+      await userEvent.click(screen.getByRole('button', { name: 'More options' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Skip this month' }))
+      await waitFor(() => expect(toastErrorMock).toHaveBeenCalled())
+      expect(onToast).not.toHaveBeenCalled()
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 })
 
