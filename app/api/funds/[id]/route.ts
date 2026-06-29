@@ -66,19 +66,27 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: 'Invalid goal' }, { status: 400 })
   }
 
+  const update: Record<string, unknown> = {
+    name: name.trim(),
+    code: code.trim().toUpperCase(),
+    fund_type,
+    nav: navNum,
+    nav_source_url: typeof nav_source_url === 'string' && nav_source_url.trim() ? nav_source_url.trim() : null,
+  }
+  // DCA fields use partial-update semantics: only written when the caller
+  // actually sends is_dca. The Add/Edit form omits them, so a name/NAV edit
+  // must preserve the existing DCA config instead of silently wiping it. The
+  // DCA toggle/amount/goal handlers always send is_dca, so they're unaffected.
+  if (is_dca !== undefined) {
+    update.is_dca = is_dca === true
+    update.dca_monthly_amount_vnd = is_dca === true && dca_monthly_amount_vnd ? Number(dca_monthly_amount_vnd) : null
+    // Goal target only applies while DCA is on; cleared otherwise.
+    update.dca_goal_id = is_dca === true && dca_goal_id ? dca_goal_id : null
+  }
+
   const { data: fund, error } = await supabase
     .from('funds')
-    .update({
-      name: name.trim(),
-      code: code.trim().toUpperCase(),
-      fund_type,
-      nav: navNum,
-      nav_source_url: typeof nav_source_url === 'string' && nav_source_url.trim() ? nav_source_url.trim() : null,
-      is_dca: is_dca === true,
-      dca_monthly_amount_vnd: is_dca === true && dca_monthly_amount_vnd ? Number(dca_monthly_amount_vnd) : null,
-      // Goal target only applies while DCA is on; cleared otherwise.
-      dca_goal_id: is_dca === true && dca_goal_id ? dca_goal_id : null,
-    })
+    .update(update)
     .eq('id', id)
     .eq('user_id', user.id)
     .select()
