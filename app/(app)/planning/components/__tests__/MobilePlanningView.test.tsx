@@ -547,7 +547,7 @@ describe('MobilePlanningView — save error feedback (no false success)', () => 
     try {
       render(<MobilePlanningView {...defaultProps} plan={basePlan} fixedExpenses={fixedExpenses} onToast={onToast} />)
       await userEvent.click(screen.getByRole('button', { name: 'More options' }))
-      await userEvent.click(screen.getByRole('button', { name: 'Override amount' }))
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Override amount' }))
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalled())
       expect(onToast).not.toHaveBeenCalled()
@@ -566,7 +566,7 @@ describe('MobilePlanningView — save error feedback (no false success)', () => 
     try {
       render(<MobilePlanningView {...defaultProps} plan={basePlan} fixedExpenses={fixedExpenses} onToast={onToast} />)
       await userEvent.click(screen.getByRole('button', { name: 'More options' }))
-      await userEvent.click(screen.getByRole('button', { name: 'Skip this month' }))
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Skip this month' }))
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalled())
       expect(onToast).not.toHaveBeenCalled()
     } finally {
@@ -582,7 +582,7 @@ describe('MobilePlanningView — save error feedback (no false success)', () => 
       render(<MobilePlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} goals={[{ goal_id: 'g1', goal_name: 'Retirement' }]} onToast={onToast} />)
       await userEvent.click(screen.getByText('Retirement'))
       await userEvent.click(screen.getByRole('button', { name: 'Saving actions' }))
-      await userEvent.click(screen.getByRole('button', { name: 'Save more this month' }))
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Save more this month' }))
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
       await waitFor(() => expect(onToast).toHaveBeenCalled())
       const urls = fetchMock.mock.calls.map((c) => String(c[0]))
@@ -592,6 +592,28 @@ describe('MobilePlanningView — save error feedback (no false success)', () => 
     } finally {
       vi.unstubAllGlobals()
     }
+  })
+})
+
+describe('MobilePlanningView — kebab menu semantics', () => {
+  it('plan-line kebab (fixed expense) exposes a role=menu with menuitems', async () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} fixedExpenses={[{ expense_id: 'fe1', expense_name: 'Rent', amount_vnd: 8_500_000 }]} />)
+    const trigger = screen.getByRole('button', { name: 'More options' })
+    expect(trigger).toHaveAttribute('aria-haspopup', 'menu')
+    await userEvent.click(trigger)
+    const menu = screen.getByRole('menu')
+    expect(within(menu).getAllByRole('menuitem').length).toBeGreaterThan(0)
+  })
+
+  it('recurring-saving kebab exposes a role=menu with menuitems', async () => {
+    const recurringSavings = [
+      { saving_id: 'rs1', name: 'VCB Savings', goal_id: 'g1', amount_vnd: 2_000_000, effective_from: null, effective_to: null, savings_goals: { goal_name: 'Retirement' } },
+    ]
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} goals={[{ goal_id: 'g1', goal_name: 'Retirement' }]} />)
+    await userEvent.click(screen.getByText('Retirement'))
+    await userEvent.click(screen.getByRole('button', { name: 'Saving actions' }))
+    const menu = screen.getByRole('menu')
+    expect(within(menu).getAllByRole('menuitem').length).toBeGreaterThan(0)
   })
 })
 
@@ -630,14 +652,14 @@ describe('MobilePlanningView — overridden-item restore parity + recurring deep
     const fixedExpenses: FixedExpense[] = [{ expense_id: 'fe1', expense_name: 'Rent', amount_vnd: 8_500_000, override: 10_000_000 }]
     render(<MobilePlanningView {...defaultProps} plan={basePlan} fixedExpenses={fixedExpenses} />)
     await userEvent.click(screen.getByRole('button', { name: 'More options' }))
-    expect(screen.getByRole('button', { name: /Restore default/i })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /Restore default/i })).toBeInTheDocument()
   })
 
   it('does NOT offer "Restore default" on a plain (non-overridden) fixed expense', async () => {
     const fixedExpenses: FixedExpense[] = [{ expense_id: 'fe1', expense_name: 'Rent', amount_vnd: 8_500_000 }]
     render(<MobilePlanningView {...defaultProps} plan={basePlan} fixedExpenses={fixedExpenses} />)
     await userEvent.click(screen.getByRole('button', { name: 'More options' }))
-    expect(screen.queryByRole('button', { name: /Restore default/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: /Restore default/i })).not.toBeInTheDocument()
   })
 
   it('"Edit recurring plan" opens the manager straight on that item’s edit form', async () => {
@@ -657,7 +679,7 @@ describe('MobilePlanningView — overridden-item restore parity + recurring deep
       render(<MobilePlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} goals={[{ goal_id: 'g1', goal_name: 'Retirement' }]} />)
       await userEvent.click(screen.getByText('Retirement'))
       await userEvent.click(screen.getByRole('button', { name: 'Saving actions' }))
-      await userEvent.click(screen.getByRole('button', { name: 'Edit recurring plan' }))
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Edit recurring plan' }))
       // List mode would not render the name input; the edit form does, pre-filled.
       const nameInput = await screen.findByTestId('rs-name')
       expect((nameInput as HTMLInputElement).value).toBe('VCB Savings')

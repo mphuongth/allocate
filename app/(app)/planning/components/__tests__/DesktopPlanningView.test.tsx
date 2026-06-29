@@ -102,7 +102,7 @@ describe('DesktopPlanningView — recurring deep-link edit', () => {
     try {
       render(<DesktopPlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} goals={[{ goal_id: 'g1', goal_name: 'Retirement' }]} />)
       await userEvent.click(screen.getByRole('button', { name: 'Saving actions' }))
-      await userEvent.click(screen.getByRole('button', { name: 'Edit recurring plan' }))
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Edit recurring plan' }))
       const nameInput = await screen.findByTestId('rs-name')
       expect((nameInput as HTMLInputElement).value).toBe('VCB Savings')
     } finally {
@@ -243,6 +243,19 @@ describe('DesktopPlanningView — allocation card amounts never wrap', () => {
   })
 })
 
+describe('DesktopPlanningView — kebab menu semantics', () => {
+  it('exposes a role=menu with menuitems and toggles aria-expanded', async () => {
+    render(<DesktopPlanningView {...defaultProps} plan={basePlan} fixedExpenses={[{ expense_id: 'fe1', expense_name: 'Rent', amount_vnd: 8_500_000 }]} />)
+    const trigger = screen.getByRole('button', { name: 'More options' })
+    expect(trigger).toHaveAttribute('aria-haspopup', 'menu')
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    await userEvent.click(trigger)
+    expect(trigger).toHaveAttribute('aria-expanded', 'true')
+    const menu = screen.getByRole('menu')
+    expect(within(menu).getAllByRole('menuitem').length).toBeGreaterThan(0)
+  })
+})
+
 describe('DesktopPlanningView — modal focus a11y (DModal)', () => {
   it('closes the income modal on Escape', async () => {
     render(<DesktopPlanningView {...defaultProps} plan={basePlan} />)
@@ -304,7 +317,7 @@ describe('DesktopPlanningView — save error feedback (no false success)', () =>
     try {
       render(<DesktopPlanningView {...defaultProps} plan={basePlan} fixedExpenses={fixedExpenses} onToast={onToast} />)
       await userEvent.click(screen.getByRole('button', { name: 'More options' }))
-      await userEvent.click(screen.getByRole('button', { name: 'Override amount' }))
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Override amount' }))
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalled())
       expect(onToast).not.toHaveBeenCalled()
@@ -324,7 +337,7 @@ describe('DesktopPlanningView — save error feedback (no false success)', () =>
     try {
       render(<DesktopPlanningView {...defaultProps} plan={basePlan} fixedExpenses={fixedExpenses} onToast={onToast} />)
       await userEvent.click(screen.getByRole('button', { name: 'More options' }))
-      await userEvent.click(screen.getByRole('button', { name: 'Skip this month' }))
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Skip this month' }))
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalled())
       expect(onToast).not.toHaveBeenCalled()
     } finally {
