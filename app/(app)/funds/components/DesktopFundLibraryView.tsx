@@ -69,13 +69,15 @@ const FundIcon = ({ code, type, size = 32 }: { code: string; type: FundType; siz
 
 // ─── DModal ───────────────────────────────────────────────────────────────────
 
-function DModal({ open, onClose, title, width = 460, children }: {
-  open: boolean; onClose: () => void; title: string; width?: number; children: ReactNode
+function DModal({ open, onClose, title, width = 460, dismissOnBackdrop = true, children }: {
+  open: boolean; onClose: () => void; title: string; width?: number; dismissOnBackdrop?: boolean; children: ReactNode
 }) {
   if (!open) return null
   return (
     <div
-      onClick={onClose}
+      // Form modals opt out of backdrop dismissal so a stray click doesn't
+      // discard typed input; they're closed via Cancel or the X (#2 P2).
+      onClick={dismissOnBackdrop ? onClose : undefined}
       style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.4)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, backdropFilter: 'blur(2px)', animation: 'fade-in 150ms ease' }}
     >
       <div
@@ -588,6 +590,7 @@ export default function DesktopFundLibraryView({ funds, setFunds, goals, loading
             <button
               onClick={handleRefreshNav}
               disabled={refreshing || !funds.some(f => f.nav_source_url)}
+              title={funds.some(f => f.nav_source_url) ? undefined : t('refreshDisabledHint')}
               className="cn-btn ghost"
               style={{ padding: '7px 10px', gap: 5, fontSize: 12, display: 'flex', alignItems: 'center' }}
             >
@@ -763,6 +766,7 @@ export default function DesktopFundLibraryView({ funds, setFunds, goals, loading
       <DModal
         open={!!modalMode}
         onClose={closeModal}
+        dismissOnBackdrop={false}
         title={modalMode === 'edit' ? t('editModal') : t('addModal')}
         width={460}
       >
