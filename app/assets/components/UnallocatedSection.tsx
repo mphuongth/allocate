@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronUp, ChevronRight, Target, Building, Coins, TrendingUp, BarChart2, Clock, ArrowDownToLine, ArrowDownRight, ArrowRight, Wallet, Check, X } from 'lucide-react'
 import { iconHit } from './iconHit'
+import { SUCCESS_FLASH_MS } from '../successFlash'
 import { useTranslations } from 'next-intl'
 import { useLocale } from 'next-intl'
 import type { FundBreakdownItem, NonFundUnallocatedItem } from '../DashboardClient'
@@ -223,7 +224,7 @@ export default function UnallocatedSection({
       const goalName = assignGoals.find((g) => g.id === assignSelected)?.name ?? ''
       setAssignSuccessName(goalName)
       setAssignSuccess(true)
-      setTimeout(() => closeAction(), 1500)
+      setTimeout(() => closeAction(), SUCCESS_FLASH_MS)
     } catch (e: unknown) {
       setAssignError(e instanceof Error ? e.message : (isVI ? 'Lỗi kết nối' : 'Connection error'))
     }

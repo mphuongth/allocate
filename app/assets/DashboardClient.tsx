@@ -24,6 +24,7 @@ import { isActionableTermDeposit, MATURING_COUNT_EVENT } from '@/lib/maturity'
 import { detectMergeClusters } from '@/lib/mergeCluster'
 import { actionableBooks } from './maturityCardItems'
 import { collapseUnallocatedBooks } from './unallocatedBooks'
+import { SUCCESS_FLASH_MS } from './successFlash'
 import type { InvRow } from './components/goalDetailShared'
 import { loadOverview, overviewErrorText, getCachedOverview, setCachedOverview, computeAllocationTotals } from './overviewData'
 import { fetchNetWorthHistory, type TimeRange, type ChartPoint } from './components/netWorthHistory'
@@ -842,9 +843,10 @@ export default function DashboardClient({ userId }: { userId: string }) {
                             throw new Error(e ?? 'Failed to assign')
                           }
                         }
-                        // Delay refresh so the 1.5s success state in the modal
-                        // stays visible before UnallocatedSection unmounts
-                        setTimeout(() => fetchData({ force: true }), 2000)
+                        // Delay refresh so the success state in the modal stays
+                        // visible before UnallocatedSection unmounts — matched to
+                        // the modal's own flash so the refresh fires as it ends.
+                        setTimeout(() => fetchData({ force: true }), SUCCESS_FLASH_MS)
                       }}
                     />
                   </div>
