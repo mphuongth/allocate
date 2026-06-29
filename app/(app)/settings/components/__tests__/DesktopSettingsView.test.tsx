@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import DesktopSettingsView from '../DesktopSettingsView'
 
@@ -277,5 +277,25 @@ describe('DesktopSettingsView — version text', () => {
   it('renders version info', () => {
     render(<DesktopSettingsView {...defaultProps} />)
     expect(screen.getByText(/v\d/i)).toBeInTheDocument()
+  })
+})
+
+// ─── Dialog a11y (parity with the Plan page's useDialogA11y) ─────────────────────
+// The edit-profile modal must close on Escape and carry an accessible name, so a
+// keyboard / screen-reader user gets the same behaviour as the Plan page modals.
+
+describe('DesktopSettingsView — dialog a11y', () => {
+  it('closes the edit-profile modal on Escape', async () => {
+    render(<DesktopSettingsView {...defaultProps} />)
+    await userEvent.click(screen.getByRole('button', { name: /^edit$/i }))
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('exposes the open modal as a labelled dialog', async () => {
+    render(<DesktopSettingsView {...defaultProps} />)
+    await userEvent.click(screen.getByRole('button', { name: /^edit$/i }))
+    expect(screen.getByRole('dialog')).toHaveAccessibleName(/profile/i)
   })
 })
