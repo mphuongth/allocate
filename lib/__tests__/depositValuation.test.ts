@@ -186,6 +186,26 @@ describe('valueNonFundHolding', () => {
     })
   })
 
+  // The overview route must pass a fixed "today midnight" asOf to valueNonFundHolding
+  // so that bank deposit values are stable across multiple API calls within the same day.
+  // Without this, calcProjectedInterest uses Date.now() and the networth changes every
+  // millisecond — visible as a number jump when the 2-min localStorage cache expires and
+  // a fresh fetch returns a slightly different value (issue #402).
+  it('same interest when asOf is pinned to midnight — stable-daily contract the route must honour', () => {
+    const { parentWdMap } = buildWithdrawalMaps([])
+    const deposit = bank({ amount_vnd: 100_000_000, interest_rate: 7, investment_date: '2026-01-01', expiry_date: '2027-01-01' })
+    const midnightToday = Date.UTC(2026, 6, 1)  // what the route passes — fixed per day
+
+    // Two calls with the same midnight asOf must return identical values.
+    const v1 = valueNonFundHolding(deposit, parentWdMap, null, midnightToday)!
+    const v2 = valueNonFundHolding(deposit, parentWdMap, null, midnightToday)!
+    expect(v1.currentValue).toBe(v2.currentValue)
+
+    // Contrast: calls a millisecond apart (simulating Date.now() drift) differ.
+    const v3 = valueNonFundHolding(deposit, parentWdMap, null, midnightToday + 1)!
+    expect(v3.currentValue).toBeGreaterThan(v1.currentValue)  // proves sub-day drift exists
+  })
+
   describe('gold', () => {
     it('values remaining units at the gold price and reduces units by the sale', () => {
       const { parentWdMap } = buildWithdrawalMaps([
