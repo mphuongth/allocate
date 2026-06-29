@@ -212,6 +212,15 @@ describe('MobileSettingsView — appearance sheet', () => {
     expect(screen.getByRole('button', { name: /apply/i })).toBeInTheDocument()
   })
 
+  it('shows Light, Dark and System options in the appearance sheet', async () => {
+    render(<MobileSettingsView {...defaultProps} />)
+    await userEvent.click(screen.getByRole('button', { name: /appearance/i }))
+    // The current-theme value also renders these labels, so match ≥1 occurrence.
+    expect(screen.getAllByText(/^light$/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/^dark$/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/^system$/i).length).toBeGreaterThan(0)
+  })
+
   it('closes appearance sheet when apply is clicked', async () => {
     render(<MobileSettingsView {...defaultProps} />)
     await userEvent.click(screen.getByRole('button', { name: /appearance/i }))
@@ -280,6 +289,14 @@ describe('MobileSettingsView — data section', () => {
     render(<MobileSettingsView {...defaultProps} />)
     await userEvent.click(screen.getByRole('button', { name: /export data/i }))
     expect(screen.getByText(/portfolio report/i)).toBeInTheDocument()
+  })
+
+  it('offers a single PDF export button and no dead CSV picker', async () => {
+    render(<MobileSettingsView {...defaultProps} />)
+    await userEvent.click(screen.getByRole('button', { name: /export data/i }))
+    expect(screen.getByRole('button', { name: /export report/i })).toBeInTheDocument()
+    // The CSV option was a dead control (always exported PDF) and was removed.
+    expect(screen.queryByRole('button', { name: /^csv$/i })).not.toBeInTheDocument()
   })
 
   it('shows KPI data in report sheet after fetch', async () => {
