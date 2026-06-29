@@ -19,6 +19,7 @@
 import { useState, useEffect } from 'react'
 import { RefreshCw, Pencil, ArrowDownToLine, AlertTriangle, Check, Building2, X, Plus, Wallet, Lock, SlidersHorizontal, PiggyBank, GitMerge } from 'lucide-react'
 import { fmt, fmtCompact } from '@/lib/formatters'
+import AmountInput from '@/app/components/ui/AmountInput'
 import { fmtMaturity, type InvRow } from './goalDetailShared'
 import {
   depositMaturityState,
@@ -46,14 +47,34 @@ const moneyInput: React.CSSProperties = {
   borderRadius: 10, color: 'var(--c-ink)', outline: 'none',
 }
 
+// Money entry core: a digit-grouped amount field (₫ suffix). Reused by every
+// money input in the maturity flow so large VND amounts stay readable
+// (e.g. "37,030,000" rather than "37030000"). `AmountInput` keeps the value raw
+// (digits only) while displaying thousands separators and a numeric keypad.
+// `compact` is the tight in-row variant (per-source merge cash); `style` merges
+// onto the field (e.g. the navy-bordered re-deposit amount).
+function MoneyInputCore({ value, onChange, testId, style, compact }: {
+  value: string; onChange: (v: string) => void; testId?: string;
+  style?: React.CSSProperties; compact?: boolean
+}) {
+  return (
+    <div style={{ position: 'relative', ...(compact ? { flex: 1 } : null) }}>
+      <AmountInput
+        data-testid={testId}
+        value={value}
+        onChange={onChange}
+        style={compact ? { ...moneyInput, padding: '7px 24px 7px 10px', fontSize: 16, ...style } : { ...moneyInput, ...style }}
+      />
+      <span style={{ position: 'absolute', right: compact ? 9 : 12, top: '50%', transform: 'translateY(-50%)', fontSize: compact ? 12 : 13, color: 'var(--c-muted)', pointerEvents: 'none' }}>₫</span>
+    </div>
+  )
+}
+
 function MoneyField({ label, value, onChange, testId }: { label: string; value: string; onChange: (v: string) => void; testId?: string }) {
   return (
     <div>
       <div style={fieldLabel}>{label}</div>
-      <div style={{ position: 'relative' }}>
-        <input data-testid={testId} type="number" value={value} onChange={(e) => onChange(e.target.value)} style={moneyInput} />
-        <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--c-muted)', pointerEvents: 'none' }}>₫</span>
-      </div>
+      <MoneyInputCore value={value} onChange={onChange} testId={testId} />
     </div>
   )
 }
@@ -814,12 +835,9 @@ export function MaturityResolveBody({
           {/* Re-deposit amount (suggested = principal + interest + recurring) */}
           <div>
             <div style={fieldLabel}>{t.redepositAmount}</div>
-            <div style={{ position: 'relative' }}>
-              <input data-testid="maturity-redeposit" type="number" value={redeposit}
-                onChange={(e) => { setRedeposit(e.target.value); setRedepositTouched(true) }}
-                style={{ ...moneyInput, borderColor: 'var(--c-navy)' }} />
-              <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--c-muted)', pointerEvents: 'none' }}>₫</span>
-            </div>
+            <MoneyInputCore testId="maturity-redeposit" value={redeposit}
+              onChange={(v) => { setRedeposit(v); setRedepositTouched(true) }}
+              style={{ borderColor: 'var(--c-navy)' }} />
             <p style={{ margin: '7px 2px 0', fontSize: 11, color: 'var(--c-muted)', lineHeight: 1.45 }}>{t.redepositHint(fmtCompact(principal + iNum + linkedAmt))}</p>
           </div>
 
@@ -893,12 +911,8 @@ export function MaturityResolveBody({
                       {sel && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 28 }}>
                           <span style={{ fontSize: 11, color: 'var(--c-muted)', flexShrink: 0 }}>{t.mergeReceivedLabel}</span>
-                          <div style={{ position: 'relative', flex: 1 }}>
-                            <input data-testid={`merge-received-${s.id}`} type="number" value={mergeRecv[s.id] ?? ''}
-                              onChange={(e) => { setMergeRecv((prev) => ({ ...prev, [s.id]: e.target.value })); setMergeTotal(''); setMergeTotalTouched(false) }}
-                              style={{ ...moneyInput, padding: '7px 24px 7px 10px', fontSize: 16 }} />
-                            <span style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)', fontSize: 12, color: 'var(--c-muted)', pointerEvents: 'none' }}>₫</span>
-                          </div>
+                          <MoneyInputCore compact testId={`merge-received-${s.id}`} value={mergeRecv[s.id] ?? ''}
+                            onChange={(v) => { setMergeRecv((prev) => ({ ...prev, [s.id]: v })); setMergeTotal(''); setMergeTotalTouched(false) }} />
                         </div>
                       )}
                     </div>
@@ -924,11 +938,8 @@ export function MaturityResolveBody({
                   {selectedSources.length > 1 && (
                     <div>
                       <div style={fieldLabel}>{t.mergeTotalLabel}</div>
-                      <div style={{ position: 'relative' }}>
-                        <input data-testid="merge-total" type="number" value={mergeTotal === '' ? String(mergeReceivedTotal) : mergeTotal}
-                          onChange={(e) => onMergeTotalChange(e.target.value)} style={moneyInput} />
-                        <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--c-muted)', pointerEvents: 'none' }}>₫</span>
-                      </div>
+                      <MoneyInputCore testId="merge-total" value={mergeTotal === '' ? String(mergeReceivedTotal) : mergeTotal}
+                        onChange={onMergeTotalChange} />
                     </div>
                   )}
                   {selectedSources.length === 1 && <input data-testid="merge-total" type="hidden" value={String(mergeReceivedTotal)} readOnly />}
