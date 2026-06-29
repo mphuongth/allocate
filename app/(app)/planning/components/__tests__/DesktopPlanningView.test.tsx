@@ -243,6 +243,32 @@ describe('DesktopPlanningView — allocation card amounts never wrap', () => {
   })
 })
 
+describe('DesktopPlanningView — modal focus a11y (DModal)', () => {
+  it('closes the income modal on Escape', async () => {
+    render(<DesktopPlanningView {...defaultProps} plan={basePlan} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Edit income' }))
+    expect(await screen.findByPlaceholderText('e.g. 45,000,000')).toBeInTheDocument()
+    await userEvent.keyboard('{Escape}')
+    expect(screen.queryByPlaceholderText('e.g. 45,000,000')).not.toBeInTheDocument()
+  })
+
+  it('moves focus into the dialog on open (no autofocus field)', async () => {
+    render(<DesktopPlanningView {...defaultProps} plan={basePlan} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Delete plan' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog.contains(document.activeElement)).toBe(true)
+  })
+
+  it('restores focus to the trigger when the modal closes', async () => {
+    render(<DesktopPlanningView {...defaultProps} plan={basePlan} />)
+    const trigger = screen.getByRole('button', { name: 'Delete plan' })
+    await userEvent.click(trigger)
+    await screen.findByRole('dialog')
+    await userEvent.keyboard('{Escape}')
+    expect(document.activeElement).toBe(trigger)
+  })
+})
+
 describe('DesktopPlanningView — save error feedback (no false success)', () => {
   const fixedExpenses: FixedExpense[] = [{ expense_id: 'fe1', expense_name: 'Rent', amount_vnd: 8_500_000 }]
 
