@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { Check, ChevronLeft, Edit2, Plus, Trash2, Calendar, X } from 'lucide-react'
+import { iconHit } from './iconHit'
 import { toast } from 'sonner'
 import { fmt, fmtCompact } from '@/lib/formatters'
 import { STATUS_COLOR, BAR_COLOR_DETAIL, COVERAGE_OPTIONS, insurancePaidState, insuranceStatusLabel } from './insuranceShared'
@@ -213,7 +214,7 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
             onClick={() => setEditing(true)}
             aria-label={isVi ? 'Chỉnh sửa' : 'Edit'}
             className="cn-btn ghost"
-            style={{ padding: 6 }}
+            style={{ ...iconHit }}
           >
             <Edit2 size={14} color="var(--c-muted)" />
           </button>
@@ -557,7 +558,7 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
                 onClick={() => !deleting && setShowDeleteConfirm(false)}
                 aria-label={isVi ? 'Đóng' : 'Close'}
                 className="cn-btn ghost"
-                style={{ padding: 6 }}
+                style={{ ...iconHit }}
               >
                 <X size={16} />
               </button>
@@ -625,7 +626,7 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
                 onClick={() => !deletingEntry && setDeleteEntryId(null)}
                 aria-label={isVi ? 'Đóng' : 'Close'}
                 className="cn-btn ghost"
-                style={{ padding: 6 }}
+                style={{ ...iconHit }}
               >
                 <X size={16} />
               </button>

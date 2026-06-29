@@ -5,6 +5,7 @@ import {
   ChevronLeft, ChevronRight, MoreHorizontal,
   Edit2, Trash2, Calendar, Download, ArrowDownRight, ArrowUpRight, Target, RefreshCw, PiggyBank, GitMerge, Plus,
 } from 'lucide-react'
+import { iconHit } from './iconHit'
 import { useLocale } from 'next-intl'
 import { toast } from 'sonner'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
@@ -995,7 +996,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
             <button
               data-testid="goal-back-btn"
               onClick={onClose}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, color: 'var(--c-ink)', display: 'flex', alignItems: 'center', flexShrink: 0 }}
+              style={{ ...iconHit, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--c-ink)', flexShrink: 0 }}
             >
               <ChevronLeft size={20} />
             </button>
@@ -1011,7 +1012,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
               data-testid="goal-options-btn"
               aria-label={isVI ? 'Tùy chọn mục tiêu' : 'Goal options'}
               onClick={() => setActionsOpen(true)}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, color: 'var(--c-ink)', display: 'flex', alignItems: 'center', flexShrink: 0 }}
+              style={{ ...iconHit, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--c-ink)', flexShrink: 0 }}
             >
               <MoreHorizontal size={18} />
             </button>

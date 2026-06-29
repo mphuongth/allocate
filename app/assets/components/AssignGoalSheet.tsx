@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { Check, X, TrendingUp, Building2, Coins, ArrowRight } from 'lucide-react'
+import { iconHit } from './iconHit'
 import { useLocale } from 'next-intl'
 import { fmt, fmtCompact } from '@/lib/formatters'
 import LoadError from './LoadError'
@@ -277,7 +278,7 @@ export default function AssignGoalSheet({ open, onClose, onConfirm, item, deskto
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px 14px', borderBottom: '1px solid var(--c-line)', flexShrink: 0 }}>
             <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em' }}>{title}</h3>
-            <button onClick={onClose} aria-label="Close" style={{ padding: 6, border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', color: 'var(--c-muted)', display: 'flex' }}><X size={18} /></button>
+            <button onClick={onClose} aria-label="Close" style={{ ...iconHit, border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', color: 'var(--c-muted)' }}><X size={18} /></button>
           </div>
           <div style={{ flex: 1, padding: '18px 20px', overflowY: 'auto' }}>
             {body}

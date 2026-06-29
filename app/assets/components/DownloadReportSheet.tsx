@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Check, Download, X } from 'lucide-react'
+import { iconHit } from './iconHit'
 import { useLocale } from 'next-intl'
 import { fmt } from '@/lib/formatters'
 import { CairnLoader } from '@/app/components/ui/CairnLoader'
@@ -210,7 +211,7 @@ export default function DownloadReportSheet({ open, onClose, data, onExport, des
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px 14px', borderBottom: '1px solid var(--c-line)', flexShrink: 0 }}>
             <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em' }}>{t.title}</h3>
-            <button onClick={onClose} aria-label="Close" style={{ padding: 6, border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', color: 'var(--c-muted)', display: 'flex' }}><X size={18} /></button>
+            <button onClick={onClose} aria-label="Close" style={{ ...iconHit, border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', color: 'var(--c-muted)' }}><X size={18} /></button>
           </div>
           <div style={{ flex: 1, padding: '18px 20px', overflowY: 'auto' }}>
             {body}

@@ -51,4 +51,17 @@ describe('TransactionLedgerSheet — held-for-merge rows read neutrally', () => 
     expect(screen.getByText('withdrawal')).toBeInTheDocument()
     expect(row.textContent).toContain('−')
   })
+
+  it('gives the row edit/delete buttons a ≥44px touch target', async () => {
+    mockTxs([{ ...base, transaction_id: 'd1', transaction_type: 'deposit' }])
+    render(<TransactionLedgerSheet {...props} />)
+
+    const del = await screen.findByTestId('tx-ledger-delete')
+    expect(parseFloat(del.style.minWidth)).toBeGreaterThanOrEqual(44)
+    expect(parseFloat(del.style.minHeight)).toBeGreaterThanOrEqual(44)
+
+    const edit = screen.getByRole('button', { name: 'edit' })
+    expect(parseFloat(edit.style.minWidth)).toBeGreaterThanOrEqual(44)
+    expect(parseFloat(edit.style.minHeight)).toBeGreaterThanOrEqual(44)
+  })
 })

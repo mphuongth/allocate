@@ -44,4 +44,14 @@ describe('AssignGoalSheet — goals load error vs empty', () => {
     await waitFor(() => expect(screen.getByText('House Fund')).toBeInTheDocument())
     expect(screen.queryByTestId('load-error')).not.toBeInTheDocument()
   })
+
+  it('gives the close button a ≥44px touch target', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ goals: [] }) })
+
+    render(<AssignGoalSheet {...baseProps} />)
+
+    const close = await screen.findByRole('button', { name: 'Close' })
+    expect(parseFloat(close.style.minWidth)).toBeGreaterThanOrEqual(44)
+    expect(parseFloat(close.style.minHeight)).toBeGreaterThanOrEqual(44)
+  })
 })
