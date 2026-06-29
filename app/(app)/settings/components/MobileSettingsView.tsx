@@ -279,6 +279,78 @@ function AppearanceSheet({ open, onClose, onApply }: {
   )
 }
 
+// ─── Language sheet ────────────────────────────────────────────────────────────
+// Mirrors AppearanceSheet so the Language row's chevron is honest: it opens a
+// chooser (explicit select + Apply) rather than silently flipping en↔vi on tap.
+
+function LanguageSheet({ open, onClose, onApply, currentLocale }: {
+  open: boolean
+  onClose: () => void
+  onApply: (next: string) => void
+  currentLocale: string
+}) {
+  const t = useTranslations('settings')
+  const [selected, setSelected] = useState(currentLocale)
+
+  useEffect(() => {
+    if (open) setSelected(currentLocale)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+
+  const options = [
+    { v: 'en', label: t('languageEnglish') },
+    { v: 'vi', label: t('languageVietnamese') },
+  ]
+
+  function handleApply() {
+    onApply(selected)
+    onClose()
+  }
+
+  return (
+    <BottomSheet open={open} onClose={onClose} title={t('language')}>
+      <div style={{ display: 'grid', gap: 8, marginBottom: 14 }}>
+        {options.map(opt => (
+          <button
+            key={opt.v}
+            onClick={() => setSelected(opt.v)}
+            style={{
+              width: '100%', textAlign: 'left', padding: '14px 16px', minHeight: 44,
+              background: selected === opt.v ? 'var(--c-navy-tint)' : 'var(--c-card)',
+              border: `1.5px solid ${selected === opt.v ? 'var(--c-navy)' : 'var(--c-line)'}`,
+              borderRadius: 12, cursor: 'pointer', fontFamily: 'inherit',
+              display: 'flex', alignItems: 'center', gap: 12, transition: 'all 120ms',
+            }}
+          >
+            <span style={{ color: selected === opt.v ? 'var(--c-navy)' : 'var(--c-muted)' }}><Globe size={18} /></span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: selected === opt.v ? 'var(--c-navy)' : 'var(--c-ink)', flex: 1 }}>
+              {opt.label}
+            </span>
+            {selected === opt.v && (
+              <div style={{ width: 20, height: 20, borderRadius: 10, background: 'var(--c-btn-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Check size={12} strokeWidth={2.5} color="#fff" />
+              </div>
+            )}
+          </button>
+        ))}
+      </div>
+      <button
+        onClick={handleApply}
+        aria-label={t('apply')}
+        style={{
+          width: '100%', padding: '11px 0', fontSize: 13, fontWeight: 600,
+          minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'var(--c-btn-primary)', border: 'none',
+          borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit',
+          color: '#fff',
+        }}
+      >
+        {t('apply')}
+      </button>
+    </BottomSheet>
+  )
+}
+
 // ─── Settings row ──────────────────────────────────────────────────────────────
 
 function SettingsRow({ icon, label, value, onClick, last = false }: {
@@ -342,6 +414,7 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
     .join('') || initials
 
   const [showProfile, setShowProfile] = useState(false)
+  const [showLanguage, setShowLanguage] = useState(false)
   const [showAppearance, setShowAppearance] = useState(false)
   const [showReport, setShowReport] = useState(false)
   const [overviewCache, setOverviewCache] = useState<DashboardData | null>(null)
@@ -470,7 +543,7 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
               icon={<Globe size={16} />}
               label={t('language')}
               value={localeLabel}
-              onClick={() => switchLocale(locale === 'vi' ? 'en' : 'vi')}
+              onClick={() => setShowLanguage(true)}
             />
             <SettingsRow
               icon={<Sun size={16} />}
@@ -605,6 +678,12 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
         onSave={handleSaveProfile}
         displayName={localDisplayName}
         email={email}
+      />
+      <LanguageSheet
+        open={showLanguage}
+        onClose={() => setShowLanguage(false)}
+        onApply={switchLocale}
+        currentLocale={locale}
       />
       <AppearanceSheet
         open={showAppearance}

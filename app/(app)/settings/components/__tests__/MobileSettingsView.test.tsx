@@ -493,3 +493,46 @@ describe('MobileSettingsView — export sheet touch targets (≥44px)', () => {
       .toHaveStyle({ minWidth: '44px', minHeight: '44px' })
   })
 })
+
+// ─── Language chooser (honest chevron) ───────────────────────────────────────────
+// The Language row carries a chevron — the same affordance as Appearance, which
+// opens a chooser. It must actually open a chooser sheet (explicit select +
+// Apply), not silently flip en↔vi on tap. Tapping a row that looks like it opens
+// a picker but instead mutates state is a dishonest affordance.
+
+describe('MobileSettingsView — language chooser', () => {
+  it('opens a labelled chooser sheet with both languages instead of toggling', async () => {
+    render(<MobileSettingsView {...defaultProps} />)
+    await userEvent.click(screen.getByRole('button', { name: /language/i }))
+    // Same pattern as Appearance: a labelled dialog with the options + Apply.
+    expect(screen.getByRole('dialog')).toHaveAccessibleName(/language/i)
+    expect(screen.getByRole('button', { name: 'English' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Tiếng Việt' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /apply/i })).toBeInTheDocument()
+  })
+
+  it('persists the chosen locale only after Apply (not on row tap or select)', async () => {
+    // Clear any locale cookie left by a prior test so the assertions are clean.
+    document.cookie = 'locale=;path=/;max-age=0'
+    render(<MobileSettingsView {...defaultProps} />)
+
+    // Opening the row alone must not switch the locale…
+    await userEvent.click(screen.getByRole('button', { name: /language/i }))
+    expect(document.cookie).not.toContain('locale=vi')
+
+    // …nor does merely selecting an option…
+    await userEvent.click(screen.getByRole('button', { name: 'Tiếng Việt' }))
+    expect(document.cookie).not.toContain('locale=vi')
+
+    // …only Apply persists the chosen locale.
+    await userEvent.click(screen.getByRole('button', { name: /apply/i }))
+    expect(document.cookie).toContain('locale=vi')
+  })
+
+  it('gives the chooser options and Apply a ≥44px touch target', async () => {
+    render(<MobileSettingsView {...defaultProps} />)
+    await userEvent.click(screen.getByRole('button', { name: /language/i }))
+    expect(screen.getByRole('button', { name: 'English' })).toHaveStyle({ minHeight: '44px' })
+    expect(screen.getByRole('button', { name: /apply/i })).toHaveStyle({ minHeight: '44px' })
+  })
+})
