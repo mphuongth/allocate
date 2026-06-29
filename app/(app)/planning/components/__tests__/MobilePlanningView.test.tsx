@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, within, waitFor } from '@testing-library/react'
+import { render, screen, within, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import MobilePlanningView from '../MobilePlanningView'
 import type { MonthlyPlan, FixedExpense, InsuranceMember, OtherExpense, FundInvestment, DirectSaving, RecurringFulfillment } from '../../PlanningClient'
@@ -592,6 +592,16 @@ describe('MobilePlanningView — save error feedback (no false success)', () => 
     } finally {
       vi.unstubAllGlobals()
     }
+  })
+})
+
+describe('MobilePlanningView — kebab closes on scroll', () => {
+  it('closes an open plan-line kebab when the page scrolls', async () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} fixedExpenses={[{ expense_id: 'fe1', expense_name: 'Rent', amount_vnd: 8_500_000 }]} />)
+    await userEvent.click(screen.getByRole('button', { name: 'More options' }))
+    expect(screen.getByRole('menu')).toBeInTheDocument()
+    fireEvent.scroll(window)
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   })
 })
 

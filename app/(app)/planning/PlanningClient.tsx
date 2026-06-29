@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react'
 import { toast } from 'sonner'
 import { useTranslations, useLocale } from 'next-intl'
 import { useNavigation } from '@/app/components/navigation/NavigationContext'
@@ -282,6 +282,17 @@ export default function PlanningClient() {
       title: isVI ? 'Kế hoạch Tháng' : 'Monthly Plan',
       subtitle: isVI ? 'Kế hoạch' : 'Planning',
       trailing: (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        {!(month === initialMonth && year === initialYear) && (
+          <button
+            onClick={navigateToday}
+            data-testid="mobile-today"
+            aria-label={isVI ? 'Về tháng hiện tại' : 'Jump to current month'}
+            style={{ minWidth: 36, minHeight: 36, border: '1px solid var(--c-line)', background: 'var(--c-card)', cursor: 'pointer', borderRadius: 8, color: 'var(--c-navy)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >
+            <RotateCcw size={15} />
+          </button>
+        )}
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: 3, background: 'var(--c-card-2)', border: '1px solid var(--c-line)', borderRadius: 10 }}>
           <button
             onClick={navigatePrev}
@@ -303,10 +314,11 @@ export default function PlanningClient() {
             <ChevronRight size={16} color="var(--c-ink)" />
           </button>
         </div>
+        </div>
       ),
     })
     return () => setMobileTopBar({ title: '' })
-  }, [month, year, isVI, navigatePrev, navigateNext, setMobileTopBar])
+  }, [month, year, isVI, initialMonth, initialYear, navigatePrev, navigateNext, navigateToday, setMobileTopBar])
 
   return (
     <>
