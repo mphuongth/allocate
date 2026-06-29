@@ -423,7 +423,9 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
                 // and getting hard-clipped at the right edge (#363).
                 minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                 border: '1px solid var(--c-line)', borderRadius: 6,
-                background: 'var(--c-card)', color: 'var(--c-muted)',
+                // --c-ink-2 (not --c-muted): the select holds a real chosen goal, so
+                // it needs readable contrast, not faint placeholder-grey.
+                background: 'var(--c-card)', color: 'var(--c-ink-2)',
                 fontFamily: 'inherit', cursor: 'pointer', appearance: 'none', outline: 'none',
               }}
             >
