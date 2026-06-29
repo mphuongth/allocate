@@ -62,6 +62,7 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
   // computed, not stored, so they have no row to delete.
   const [deleteEntryId, setDeleteEntryId] = useState<string | null>(null)
   const [deletingEntry, setDeletingEntry] = useState(false)
+  const [undoingPaid, setUndoingPaid] = useState(false)
 
   const [history, setHistory] = useState<HistoryEntry[] | null>(null)
   const [historyLoading, setHistoryLoading] = useState(false)
@@ -176,6 +177,21 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
       toast.error(isVi ? 'Không thể xoá khoản đã ghi nhận' : "Couldn't delete the logged payment")
     } finally {
       setDeletingEntry(false)
+    }
+  }
+
+  async function handleUndoMarkPaid() {
+    setUndoingPaid(true)
+    try {
+      const res = await fetch(`/api/v1/insurance-members/${ins.insuranceId}/mark-paid/undo`, { method: 'POST' })
+      if (!res.ok) throw new Error('undo failed')
+      // Reverts the settlement: due date rolls back and the member leaves the
+      // paid state. Refresh the dashboard so the panel re-renders from fresh data.
+      onChanged?.()
+    } catch {
+      toast.error(isVi ? 'Không thể hoàn tác' : "Couldn't undo the payment")
+    } finally {
+      setUndoingPaid(false)
     }
   }
 
@@ -310,6 +326,21 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
                   <div style={{ flex: 1, fontSize: 12, color: 'var(--c-pos)', fontWeight: 500 }}>
                     {isVi ? `Phí ${paidYear} đã thanh toán` : `${paidYear} premium settled`}
                   </div>
+                  {/* Reverse an accidental settlement — rolls the due date back and
+                      restores the saved progress (issue: mark-paid was one-way). */}
+                  <button
+                    data-testid="insurance-undo-mark-paid"
+                    onClick={handleUndoMarkPaid}
+                    disabled={undoingPaid}
+                    style={{
+                      flexShrink: 0, background: 'transparent', border: 'none',
+                      fontSize: 11, fontWeight: 600, color: 'var(--c-pos)',
+                      textDecoration: 'underline', cursor: undoingPaid ? 'default' : 'pointer',
+                      fontFamily: 'inherit', opacity: undoingPaid ? 0.6 : 1, padding: 0,
+                    }}
+                  >
+                    {undoingPaid ? (isVi ? 'Đang hoàn tác…' : 'Undoing…') : (isVi ? 'Hoàn tác' : 'Undo')}
+                  </button>
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--c-muted)', marginBottom: 6, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
                   {isVi ? `Tích lũy cho ${paidYear! + 1}` : `Saving for ${paidYear! + 1}`}

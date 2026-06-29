@@ -149,6 +149,64 @@ test('delete a logged payment from the history and the saved progress drops', as
   await expect(panel.getByText(/Logged payment|Đã ghi nhận/)).not.toBeVisible({ timeout: 10_000 })
 })
 
+test('undo mark-paid restores the due date and clears the settlement', async ({ page }) => {
+  await api.deleteAllInsuranceMembersByName('E2E Undo Paid')
+  const due = new Date()
+  due.setDate(due.getDate() + 60)
+  const dueISO = due.toISOString().slice(0, 10)
+  const member = await api.createInsuranceMember({
+    member_name: 'E2E Undo Paid',
+    relationship: 'Self',
+    annual_payment_vnd: 12_000_000,
+    payment_date: dueISO,
+  })
+  cleanup.add(() => api.deleteInsuranceMember(member.member_id))
+
+  await gotoDashboardFresh(page)
+  const row = page.getByTestId('insurance-row').filter({ hasText: 'E2E Undo Paid' }).first()
+  await expect(row).toBeVisible({ timeout: 10_000 })
+  await row.click()
+  const panel = page.getByTestId('insurance-detail-panel')
+  await expect(panel).toBeVisible({ timeout: 5_000 })
+
+  // Settle the premium via the status CTA → payment modal → confirm.
+  await panel.getByTestId('insurance-cta-status').click()
+  const modal = page.getByTestId('log-payment-modal')
+  await expect(modal).toBeVisible({ timeout: 5_000 })
+  await Promise.all([
+    page.waitForResponse(
+      (r) => r.url().includes('/mark-paid') && !r.url().includes('/undo') && r.request().method() === 'POST' && r.status() < 400,
+      { timeout: 20_000 }
+    ),
+    modal.getByRole('button', { name: /confirm|xác nhận/i }).click(),
+  ])
+
+  // Now in the settled state — the Undo control appears in the chip.
+  const undo = panel.getByTestId('insurance-undo-mark-paid')
+  await expect(undo).toBeVisible({ timeout: 8_000 })
+
+  await Promise.all([
+    page.waitForResponse(
+      (r) => r.url().includes('/mark-paid/undo') && r.request().method() === 'POST' && r.status() < 400,
+      { timeout: 20_000 }
+    ),
+    undo.click(),
+  ])
+
+  // Closes the loop: the original due date is restored and the settlement is
+  // cleared in the DB (the member leaves the paid state).
+  await expect.poll(async () => {
+    const { createClient } = await import('@supabase/supabase-js')
+    const supabase = createClient(process.env.E2E_SUPABASE_URL!, process.env.E2E_SUPABASE_SERVICE_ROLE_KEY!)
+    const { data } = await supabase
+      .from('insurance_members')
+      .select('payment_date, last_payment_date')
+      .eq('member_id', member.member_id)
+      .single()
+    return data
+  }, { timeout: 10_000 }).toMatchObject({ payment_date: dueISO, last_payment_date: null })
+})
+
 test('delete an insurance member', async ({ page }) => {
   await api.deleteAllInsuranceMembersByName('E2E Dash Delete Insurance')
   const member = await api.createInsuranceMember({

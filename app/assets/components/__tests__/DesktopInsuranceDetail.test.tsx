@@ -219,6 +219,68 @@ describe('DesktopInsuranceDetail — coverage round-trips through relationship',
   })
 })
 
+describe('DesktopInsuranceDetail — undo mark-paid', () => {
+  afterEach(() => vi.useRealTimers())
+
+  const paidIns: InsuranceData = {
+    ...ins,
+    status: 'on_track',
+    amountSaved: 0,
+    savingsProgressPercentage: 0,
+    nextPaymentDate: '2027-05-28',
+    lastPaymentDate: '2026-05-28',
+  } as InsuranceData
+
+  // Render in the settled state deterministically, then hand control back to real
+  // timers so waitFor (which polls on a timer) resolves.
+  function renderPaid(onChanged = vi.fn()) {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 4, 28))
+    const utils = render(<DesktopInsuranceDetail ins={paidIns} locale="en" onClose={vi.fn()} onChanged={onChanged} />)
+    vi.useRealTimers()
+    return { ...utils, onChanged }
+  }
+
+  it('reverts the settlement (POST .../mark-paid/undo) and refreshes', async () => {
+    let undoCalled = false
+    vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => {
+      if (typeof url === 'string' && url.includes('/mark-paid/undo') && init?.method === 'POST') {
+        undoCalled = true
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: {} }) })
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ entries: [], totalSaved: 0 }) })
+    }))
+    const { onChanged } = renderPaid()
+
+    fireEvent.click(screen.getByTestId('insurance-undo-mark-paid'))
+
+    await waitFor(() => expect(undoCalled).toBe(true))
+    await waitFor(() => expect(onChanged).toHaveBeenCalled())
+  })
+
+  it('shows an error toast and does not refresh when the undo fails', async () => {
+    toastErrorMock.mockClear()
+    vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => {
+      if (typeof url === 'string' && url.includes('/mark-paid/undo') && init?.method === 'POST') {
+        return Promise.resolve({ ok: false, json: () => Promise.resolve({}) })
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ entries: [], totalSaved: 0 }) })
+    }))
+    const { onChanged } = renderPaid()
+
+    fireEvent.click(screen.getByTestId('insurance-undo-mark-paid'))
+
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalled())
+    expect(onChanged).not.toHaveBeenCalled()
+  })
+
+  it('offers no undo control when the member is not settled this year', () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ entries: [], totalSaved: 0 }) })))
+    render(<DesktopInsuranceDetail ins={ins} locale="en" onClose={vi.fn()} />)
+    expect(screen.queryByTestId('insurance-undo-mark-paid')).not.toBeInTheDocument()
+  })
+})
+
 describe('DesktopInsuranceDetail — paid-for-the-year state (issue #227)', () => {
   afterEach(() => vi.useRealTimers())
 

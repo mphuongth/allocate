@@ -25,7 +25,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   // Fetch member — distinguish 404 vs 403
   const { data: member, error: fetchError } = await supabase
     .from('insurance_members')
-    .select('member_id, user_id, member_name, annual_payment_vnd, monthly_premium_vnd, payment_date, updated_at')
+    .select('member_id, user_id, member_name, annual_payment_vnd, monthly_premium_vnd, payment_date, last_payment_date, updated_at')
     .eq('member_id', memberId)
     .single()
 
@@ -59,12 +59,15 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   // funded the now-settled cycle; progress for the next cycle is computed from
   // contributions made after last_payment_date (see isInCurrentCycle).
 
-  // Advance payment_date by 1 year and record last_payment_date
+  // Advance payment_date by 1 year and record last_payment_date. Snapshot the two
+  // dates we're overwriting so the settlement can be undone (one level back).
   const { data: updated, error: updateError } = await supabase
     .from('insurance_members')
     .update({
       payment_date: nextPaymentDate,
       last_payment_date: paidISO,
+      prev_payment_date: member.payment_date,
+      prev_last_payment_date: member.last_payment_date,
       updated_at: now.toISOString(),
     })
     .eq('member_id', memberId)
