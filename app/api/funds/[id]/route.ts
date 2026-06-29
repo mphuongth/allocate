@@ -134,6 +134,14 @@ export async function DELETE(
   const { error } = await supabase.from('funds').delete().eq('id', id).eq('user_id', user.id)
 
   if (error) {
+    // A fund referenced by a monthly-plan allocation is protected by an
+    // ON DELETE RESTRICT foreign key (Postgres 23503). Funds drive cash-flow
+    // planning, so we hard-block the delete and return a specific, actionable
+    // 409 (code: fund_in_use) instead of a generic 500 — the UI tells the user
+    // to remove it from the plan first (#1).
+    if (error.code === '23503') {
+      return NextResponse.json({ error: 'Fund is in use', code: 'fund_in_use' }, { status: 409 })
+    }
     return NextResponse.json({ error: 'Failed to delete fund' }, { status: 500 })
   }
 

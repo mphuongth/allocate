@@ -503,6 +503,13 @@ export default function DesktopFundLibraryView({ funds, setFunds, goals, loading
     setDeleting(true)
     try {
       const res = await fetch(`/api/funds/${deleteTarget.id}`, { method: 'DELETE' })
+      // Hard-block: a fund used in a monthly plan can't be deleted (#1). Show a
+      // specific, actionable message instead of the generic failure toast.
+      if (res.status === 409) {
+        setDeleteTarget(null)
+        addToast(t('toastDeleteInUse'), false)
+        return
+      }
       if (!res.ok && res.status !== 204) throw new Error()
       setDeleteTarget(null)
       await reload()
