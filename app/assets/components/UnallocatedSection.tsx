@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { ChevronDown, ChevronUp, ChevronRight, Target, Building, Coins, TrendingUp, BarChart2, Clock, ArrowDownToLine, ArrowDownRight, ArrowRight, Wallet, Check, X } from 'lucide-react'
+import { iconHit } from './iconHit'
 import { useTranslations } from 'next-intl'
 import { useLocale } from 'next-intl'
 import type { FundBreakdownItem, NonFundUnallocatedItem } from '../DashboardClient'
@@ -576,7 +577,7 @@ export default function UnallocatedSection({
                 <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em' }}>
                   {desktopStep === 'assign' ? (isVI ? 'Gán vào mục tiêu' : 'Assign to goal') : (isVI ? 'Tùy chọn' : 'Options')}
                 </h3>
-                <button onClick={closeAction} aria-label="Close" style={{ padding: 6, border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', color: 'var(--c-muted)', display: 'flex' }}>
+                <button onClick={closeAction} aria-label="Close" style={{ ...iconHit, border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', color: 'var(--c-muted)' }}>
                   <X size={18} />
                 </button>
               </div>

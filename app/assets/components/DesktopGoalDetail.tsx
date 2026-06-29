@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { ChevronLeft, X, MoreHorizontal, Edit2, Trash2, ChevronRight, ArrowDownRight, ArrowUpRight, Target, CalendarDays, Check, ArrowDownToLine, Wallet, Shield, RefreshCw, PiggyBank, GitMerge, Plus } from 'lucide-react'
+import { iconHit } from './iconHit'
 import { toast } from 'sonner'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import type { GoalData } from '../DashboardClient'
@@ -257,7 +258,7 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
               <button
                 onClick={() => setActionsOpen(true)}
                 className="cn-btn ghost"
-                style={{ padding: 5 }}
+                style={{ ...iconHit }}
                 aria-label="Goal options"
               >
                 <MoreHorizontal size={15} color="var(--c-muted)" />
@@ -429,7 +430,7 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
                   <button
                     onClick={() => { setActionInv(inv); setShowInvOptions(true) }}
                     className="cn-btn ghost"
-                    style={{ padding: 5, flexShrink: 0 }}
+                    style={{ ...iconHit, flexShrink: 0 }}
                     aria-label="Options"
                   >
                     <MoreHorizontal size={14} color="var(--c-muted)" />
@@ -1289,7 +1290,7 @@ function DModal({ onClose, title, width = 380, children }: {
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px 14px', borderBottom: '1px solid var(--c-line)', flexShrink: 0 }}>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em' }}>{title}</h3>
-          <button onClick={onClose} className="cn-btn ghost" style={{ padding: 6 }} aria-label="Close"><X size={18} /></button>
+          <button onClick={onClose} className="cn-btn ghost" style={{ ...iconHit }} aria-label="Close"><X size={18} /></button>
         </div>
         <div style={{ flex: 1, padding: '18px 20px', overflowY: 'auto' }}>{children}</div>
       </div>

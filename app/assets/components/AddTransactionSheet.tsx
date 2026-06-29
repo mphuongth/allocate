@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { X, TrendingUp, Building2, Coins, ArrowUpRight, ArrowDownRight, ArrowDownToLine, Wallet, Shield } from 'lucide-react'
+import { iconHit } from './iconHit'
 import { useLocale, useTranslations } from 'next-intl'
 import { CairnLoader } from '@/app/components/ui/CairnLoader'
 import { todayIso } from '@/lib/dates'
@@ -1336,7 +1337,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px 14px', borderBottom: '1px solid var(--c-line)', flexShrink: 0 }}>
             <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em' }}>{existing ? t('editTitle') : t('title')}</h3>
-            <button onClick={onClose} style={{ padding: 6, border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', color: 'var(--c-muted)', display: 'flex' }} aria-label="Close"><X size={18} /></button>
+            <button onClick={onClose} style={{ ...iconHit, border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', color: 'var(--c-muted)' }} aria-label="Close"><X size={18} /></button>
           </div>
           <div style={{ flex: 1, padding: '18px 20px', overflowY: 'auto', overflowX: 'hidden', overscrollBehavior: 'contain' }}>
             {formBody}
@@ -1379,7 +1380,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
           </h3>
           <button
             onClick={onClose}
-            style={{ padding: 6, border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', color: 'var(--c-muted)', display: 'flex' }}
+            style={{ ...iconHit, border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', color: 'var(--c-muted)' }}
             aria-label="Close"
           >
             <X size={18} />

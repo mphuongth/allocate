@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslations } from 'next-intl'
 import { Plus, Download, Edit2, Trash, ChevronLeft, ChevronRight, X, Calendar, ArrowUpRight, ArrowDownRight, PiggyBank, GitMerge } from 'lucide-react'
+import { iconHit } from './iconHit'
 import AmountInput from '@/app/components/ui/AmountInput'
 import DecimalInput from '@/app/components/ui/DecimalInput'
 import { fmtCompact, fmtNav, fmtUnits } from '@/lib/formatters'
@@ -91,7 +92,7 @@ function Shell({ open, onClose, title, desktop, width = 520, testId, children }:
   const header = (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: desktop ? '18px 20px 14px' : '0 16px 16px', borderBottom: desktop ? '1px solid var(--c-line)' : 'none', flexShrink: 0 }}>
       <h3 style={{ margin: 0, fontSize: desktop ? 16 : 17, fontWeight: desktop ? 700 : 600, letterSpacing: '-0.01em', color: 'var(--c-ink)' }}>{title}</h3>
-      <button onClick={onClose} style={{ padding: 6, border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', color: 'var(--c-muted)', display: 'flex' }} aria-label="Close"><X size={18} /></button>
+      <button onClick={onClose} style={{ ...iconHit, border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', color: 'var(--c-muted)' }} aria-label="Close"><X size={18} /></button>
     </div>
   )
 
@@ -383,9 +384,9 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
   const rowActions = (tx: LedgerTransaction) => (
     <span style={{ display: 'inline-flex', gap: 2, whiteSpace: 'nowrap' }}>
       {!isWithdrawal(tx) && (
-        <button onClick={() => (tx.asset_type === 'stock' ? openEdit(tx) : setEditExisting(tx))} className="cn-btn ghost" style={{ padding: 5 }} aria-label={tc('edit')}><Edit2 size={14} color="var(--c-muted)" /></button>
+        <button onClick={() => (tx.asset_type === 'stock' ? openEdit(tx) : setEditExisting(tx))} className="cn-btn ghost" style={{ ...iconHit }} aria-label={tc('edit')}><Edit2 size={14} color="var(--c-muted)" /></button>
       )}
-      <button data-testid="tx-ledger-delete" onClick={() => setConfirmTx(tx)} className="cn-btn ghost" style={{ padding: 5 }} aria-label={tc('delete')}><Trash size={14} color="var(--c-neg)" /></button>
+      <button data-testid="tx-ledger-delete" onClick={() => setConfirmTx(tx)} className="cn-btn ghost" style={{ ...iconHit }} aria-label={tc('delete')}><Trash size={14} color="var(--c-neg)" /></button>
     </span>
   )
 

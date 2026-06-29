@@ -20,6 +20,7 @@ import { useState, useEffect } from 'react'
 import { RefreshCw, Pencil, ArrowDownToLine, AlertTriangle, Check, Building2, X, Plus, Wallet, Lock, SlidersHorizontal, PiggyBank, GitMerge } from 'lucide-react'
 import { fmt, fmtCompact } from '@/lib/formatters'
 import AmountInput from '@/app/components/ui/AmountInput'
+import { iconHit } from './iconHit'
 import { fmtMaturity, type InvRow } from './goalDetailShared'
 import {
   depositMaturityState,
@@ -1279,7 +1280,7 @@ export function MaturityResolveModal({
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px 14px', borderBottom: '1px solid var(--c-line)', flexShrink: 0 }}>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em' }}>{isVi ? 'Xử lý đáo hạn' : 'Handle maturity'}</h3>
-          <button onClick={onClose} className="cn-btn ghost" style={{ padding: 6 }} aria-label="Close"><X size={18} /></button>
+          <button onClick={onClose} className="cn-btn ghost" style={{ ...iconHit }} aria-label="Close"><X size={18} /></button>
         </div>
         <div style={{ flex: 1, padding: '18px 20px', overflowY: 'auto' }}>
           <MaturityResolveBody inv={inv} goalId={goalId} siblingDeposits={siblingDeposits} heldSiblings={heldSiblings} isVi={isVi} onClose={onClose} onRenewed={onRenewed} onWithdraw={onWithdraw} />

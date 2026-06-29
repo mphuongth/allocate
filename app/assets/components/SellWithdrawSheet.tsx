@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useLocale } from 'next-intl'
 import { ArrowDownRight, ArrowDownToLine, Building, Check, Coins, Shield, TrendingUp, Wallet, X } from 'lucide-react'
+import { iconHit } from './iconHit'
 import { fmt } from '@/lib/formatters'
 import { todayIso } from '@/lib/dates'
 import { CairnLoader } from '@/app/components/ui/CairnLoader'
@@ -349,7 +350,7 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
         {/* Header — pinned, sits outside the scrollable body */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: desktop ? '18px 20px 14px' : '0 16px 16px', borderBottom: desktop ? '1px solid var(--c-line)' : undefined, flexShrink: 0 }}>
           <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>{titleText}</h3>
-          <button onClick={onClose} style={{ padding: 6, border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', color: 'var(--c-muted)', display: 'flex' }}>
+          <button onClick={onClose} aria-label="Close" style={{ ...iconHit, border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', color: 'var(--c-muted)' }}>
             <X size={18} />
           </button>
         </div>
