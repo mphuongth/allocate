@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Check, Download, X } from 'lucide-react'
 import { iconHit } from './iconHit'
 import { useLocale } from 'next-intl'
 import { fmt } from '@/lib/formatters'
 import { CairnLoader } from '@/app/components/ui/CairnLoader'
+import { useDialogA11y } from '@/app/(app)/planning/components/useDialogA11y'
 
 interface Props {
   open: boolean
@@ -21,6 +22,11 @@ export default function DownloadReportSheet({ open, onClose, data, onExport, des
   const [exporting, setExporting] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
+  const dialogRef = useRef<HTMLDivElement>(null)
+  // Esc-to-close, focus-trap and focus-restore — same hook the Plan page dialogs
+  // use. Active while the panel is on screen (the mobile variant lingers one
+  // close-animation past `open`, the desktop variant unmounts immediately).
+  useDialogA11y(dialogRef, desktop ? open : (open && mounted), onClose)
 
   useEffect(() => {
     if (open) {
@@ -200,13 +206,18 @@ export default function DownloadReportSheet({ open, onClose, data, onExport, des
         }}
       >
         <div
+          ref={dialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label={t.title}
+          tabIndex={-1}
           onClick={(e) => e.stopPropagation()}
           style={{
             width: '100%', maxWidth: 460, maxHeight: 'calc(100vh - 48px)',
             background: 'var(--c-card)', borderRadius: 16,
             boxShadow: '0 24px 48px rgba(15,23,42,0.18), 0 8px 16px rgba(15,23,42,0.08)',
             display: 'flex', flexDirection: 'column',
-            animation: 'modal-in 200ms cubic-bezier(0.2,0.8,0.2,1)', overflow: 'hidden',
+            animation: 'modal-in 200ms cubic-bezier(0.2,0.8,0.2,1)', overflow: 'hidden', outline: 'none',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px 14px', borderBottom: '1px solid var(--c-line)', flexShrink: 0 }}>
@@ -230,6 +241,11 @@ export default function DownloadReportSheet({ open, onClose, data, onExport, des
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={t.title}
+        tabIndex={-1}
         style={{
           position: 'absolute', bottom: 0, left: 0, right: 0,
           background: 'var(--c-card)', borderRadius: '16px 16px 0 0',
@@ -237,6 +253,7 @@ export default function DownloadReportSheet({ open, onClose, data, onExport, des
           animation: open
             ? 'slide-up 220ms cubic-bezier(0.2, 0.8, 0.2, 1)'
             : 'slide-down 180ms ease forwards',
+          outline: 'none',
         }}
         onClick={(e) => e.stopPropagation()}
       >

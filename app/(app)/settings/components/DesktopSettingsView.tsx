@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect, useMemo, useTransition } from 'react'
+import { useState, useEffect, useMemo, useRef, useTransition } from 'react'
 import { useLocale, useTranslations } from 'next-intl'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import { useTheme, type ThemeChoice } from '@/app/components/ThemeProvider'
 import { useNavigation } from '@/app/components/navigation/NavigationContext'
+import { useDialogA11y } from '@/app/(app)/planning/components/useDialogA11y'
 import {
   Sun, Moon, Settings, RefreshCw, TrendingUp,
   Coins, LogOut, Download, X, Check, Edit2,
@@ -33,6 +34,9 @@ function DModal({ open, onClose, title, children }: {
   title: string
   children: React.ReactNode
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null)
+  // Esc-to-close, focus-trap and focus-restore — same hook the Plan page modals use.
+  useDialogA11y(dialogRef, open, onClose)
   if (!open) return null
   return (
     <div
@@ -47,14 +51,17 @@ function DModal({ open, onClose, title, children }: {
       }}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
+        aria-label={title}
+        tabIndex={-1}
         onClick={e => e.stopPropagation()}
         style={{
           width: 400, maxWidth: '100%',
           background: 'var(--c-card)', borderRadius: 'var(--r-card)',
           boxShadow: '0 20px 60px rgba(0,0,0,0.18)',
-          animation: 'pop-in 180ms ease', overflow: 'hidden',
+          animation: 'pop-in 180ms ease', overflow: 'hidden', outline: 'none',
         }}
       >
         <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--c-line)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

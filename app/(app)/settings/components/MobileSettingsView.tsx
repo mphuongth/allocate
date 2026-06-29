@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect, useMemo, useTransition } from 'react'
+import { useState, useEffect, useMemo, useRef, useTransition } from 'react'
 import { useLocale, useTranslations } from 'next-intl'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import { useTheme, type ThemeChoice } from '@/app/components/ThemeProvider'
+import { useDialogA11y } from '@/app/(app)/planning/components/useDialogA11y'
 import {
   Globe, Sun, Moon, Settings, Download, RefreshCw,
   TrendingUp, Coins, LogOut, ChevronRight, Check,
@@ -43,6 +44,9 @@ function BottomSheet({ open, onClose, title, children }: {
   children: React.ReactNode
 }) {
   const [mounted, setMounted] = useState(false)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  // Esc-to-close, focus-trap and focus-restore — same hook the Plan page sheets use.
+  useDialogA11y(dialogRef, open && mounted, onClose)
 
   useEffect(() => {
     if (open) {
@@ -66,6 +70,11 @@ function BottomSheet({ open, onClose, title, children }: {
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        tabIndex={-1}
         style={{
           position: 'absolute', bottom: 0, left: 0, right: 0,
           background: 'var(--c-card)',
@@ -76,6 +85,7 @@ function BottomSheet({ open, onClose, title, children }: {
             : 'slide-down 180ms ease forwards',
           maxHeight: '85dvh',
           overflowY: 'auto',
+          outline: 'none',
         }}
         onClick={(e) => e.stopPropagation()}
       >

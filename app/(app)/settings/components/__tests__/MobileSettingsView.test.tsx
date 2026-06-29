@@ -406,3 +406,36 @@ describe('MobileSettingsView — version text', () => {
     expect(screen.getByText(/v\d/i)).toBeInTheDocument()
   })
 })
+
+// ─── Dialog a11y (parity with the Plan page's useDialogA11y) ─────────────────────
+// The bottom sheets must close on Escape and expose themselves as a labelled
+// dialog, matching the keyboard/screen-reader behaviour the rest of the app
+// standardized on. Without this, a keyboard user has no non-pointer way out.
+
+describe('MobileSettingsView — dialog a11y', () => {
+  it('closes the profile sheet on Escape', async () => {
+    render(<MobileSettingsView {...defaultProps} />)
+    await userEvent.click(screen.getByRole('button', { name: /profile/i }))
+    expect(screen.getByDisplayValue('phuong.tran@example.com')).toBeInTheDocument()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    await waitFor(() =>
+      expect(screen.queryByDisplayValue('phuong.tran@example.com')).not.toBeInTheDocument()
+    )
+  })
+
+  it('closes the appearance sheet on Escape', async () => {
+    render(<MobileSettingsView {...defaultProps} />)
+    await userEvent.click(screen.getByRole('button', { name: /appearance/i }))
+    expect(screen.getByRole('button', { name: /apply/i })).toBeInTheDocument()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: /apply/i })).not.toBeInTheDocument()
+    )
+  })
+
+  it('exposes the open sheet as a labelled dialog', async () => {
+    render(<MobileSettingsView {...defaultProps} />)
+    await userEvent.click(screen.getByRole('button', { name: /profile/i }))
+    expect(screen.getByRole('dialog')).toHaveAccessibleName(/profile/i)
+  })
+})
