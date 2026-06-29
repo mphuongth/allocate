@@ -1,16 +1,45 @@
 ## Development Methodology
 
-**Always use Test-Driven Development (TDD).** For every feature or bug fix, write tests first — then implement.
+**Always use Test-Driven Development (TDD).** For every feature or bug fix, write a
+failing test first, then implement the minimum code to make it pass, then refactor with
+the test green. TDD is non-negotiable — but *which layer* you write the test at is a
+deliberate choice, not "all of them by default" (see below).
 
-Rules:
-1. Write unit tests and/or E2E tests that define the expected behavior **before** writing any implementation code
-2. Run the tests to confirm they fail (red phase)
-3. Implement the minimum code needed to make the tests pass (green phase)
+Red → green → refactor:
+1. Write the test(s) that define the expected behavior **before** any implementation code
+2. Run them to confirm they fail (red)
+3. Implement the minimum to make them pass (green)
 4. Refactor if needed, keeping tests green
 
-This applies to both new features and bug fixes. Never write implementation code without a failing test first.
+### Pick the right layer — write the test as low as it can meaningfully live
 
-**TDD lesson learned:** Tests must assert the *user-visible outcome*, not just the data that enables it. For example, testing that a flag is stored correctly in the DB is necessary but not sufficient — the E2E test must also assert the rendered result (e.g. the progress bar percentage is unchanged). A passing test that only checks storage can miss bugs in a separate code path that computes the same value locally. Always close the loop: UI action → assert the rendered outcome.
+Default downward. E2E is the scarce resource (~8 min serial, local-only, brittle against
+DOM/i18n changes), so a new E2E must earn its place. Test each behavior at **one** layer —
+the lowest one that can actually catch the bug — not at every layer.
+
+1. **Pure logic** (money math, interest, %, fulfillments, double-count guards, date
+   rollovers) → **unit test in `lib/`**. This is where the real bugs live; test it densely
+   here. Almost every money bug we've shipped was a logic bug that a `lib/` test would have
+   caught — not something that needed a browser.
+2. **Component behavior** (renders the right outcome from given props/state, conditional UI,
+   error vs. empty) → **component unit test (Vitest + React Testing Library)**. The
+   "user-visible outcome" below is almost always assertable here, without a real browser.
+3. **End-to-end integration** (auth/session, routing, the dashboard overview API, a real
+   create→render round-trip, a migration's effect) → **E2E**. Add a *new* E2E only when the
+   behavior genuinely spans layers and can't be pinned down at layer 1 or 2. Most bug fixes
+   need **one** unit test, not a new E2E. Extend an existing spec before adding a new one.
+
+Corollary — **do not add a desktop *and* a mobile E2E for the same logic.** Viewport-specific
+rendering is a component-test concern; reserve the desktop/mobile E2E split for behavior that
+truly differs across viewports.
+
+**TDD lesson learned (assert the outcome, but at the right layer):** Tests must assert the
+*user-visible outcome*, not just the data that enables it — e.g. testing that a flag is
+stored in the DB is necessary but not sufficient; also assert the rendered result (the
+progress-bar percentage is unchanged). A storage-only test misses bugs in a separate code
+path that recomputes the same value. Close the loop: action → assert the rendered outcome.
+But "rendered outcome" usually means a component test asserting the rendered DOM from props —
+not a full E2E. Reach for E2E only when the loop itself crosses the network/DB boundary.
 
 ## What to run before opening a PR
 
