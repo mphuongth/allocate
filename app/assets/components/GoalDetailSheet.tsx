@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import {
   ChevronLeft, ChevronRight, MoreHorizontal,
-  Edit2, Trash2, Calendar, Download, ArrowDownRight, ArrowUpRight, Target, RefreshCw, PiggyBank, GitMerge,
+  Edit2, Trash2, Calendar, Download, ArrowDownRight, ArrowUpRight, Target, RefreshCw, PiggyBank, GitMerge, Plus,
 } from 'lucide-react'
 import { useLocale } from 'next-intl'
 import { toast } from 'sonner'
@@ -53,6 +53,9 @@ interface Props {
    * without requiring a hard page reload.
    */
   refreshKey?: number
+  /** Opens the Add-transaction flow prefilled with this goal, so a new
+   *  contribution is logged straight to it (the sheet was otherwise a dead end). */
+  onAddToGoal?: () => void
 }
 
 function GoalActionsSheet({
@@ -762,7 +765,7 @@ function UnassignConfirmSheet({
   )
 }
 
-export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, refreshKey }: Props) {
+export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, refreshKey, onAddToGoal }: Props) {
   const isVI = useLocale() === 'vi'
   const [mounted, setMounted] = useState(false)
   const [activeTab, setActiveTab] = useState<'investments' | 'calculator' | 'history'>('investments')
@@ -1073,6 +1076,20 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
               ))}
             </div>
           </div>
+
+          {/* Add to this goal — opens the Add-transaction flow prefilled, so the
+              sheet is a place you can fund the goal from, not just inspect it. */}
+          {onAddToGoal && (
+            <button
+              data-testid="goal-add-to-goal"
+              onClick={onAddToGoal}
+              className="cn-btn primary"
+              style={{ width: '100%', justifyContent: 'center', gap: 7, marginBottom: 16 }}
+            >
+              <Plus size={16} strokeWidth={2.4} />
+              {isVI ? 'Thêm vào mục tiêu' : 'Add to this goal'}
+            </button>
+          )}
 
           {/* Composition bar */}
           {segs.length > 0 && (

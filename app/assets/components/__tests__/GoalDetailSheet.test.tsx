@@ -80,6 +80,16 @@ const baseProps = {
   onDataChanged: vi.fn(),
 }
 
+describe('GoalDetailSheet — add-to-goal CTA', () => {
+  it('renders an "Add to this goal" CTA and calls onAddToGoal when clicked', async () => {
+    const onAddToGoal = vi.fn()
+    render(<GoalDetailSheet {...baseProps} onAddToGoal={onAddToGoal} />)
+
+    await userEvent.click(await screen.findByTestId('goal-add-to-goal'))
+    expect(onAddToGoal).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('GoalDetailSheet — delete failure feedback', () => {
   it('shows an error toast and keeps the sheet open (no onClose) when the delete fails', async () => {
     toastErrorMock.mockClear()

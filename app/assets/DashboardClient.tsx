@@ -16,7 +16,7 @@ import { SellWithdrawSheet, type SellItem } from './components/SellWithdrawSheet
 import GoalDetailSheet from './components/GoalDetailSheet'
 import AssignGoalSheet from './components/AssignGoalSheet'
 import DownloadReportSheet from './components/DownloadReportSheet'
-import AddTransactionSheet from './components/AddTransactionSheet'
+import AddTransactionSheet, { type PrefillTransaction } from './components/AddTransactionSheet'
 import RecentActivityCard from './components/RecentActivityCard'
 import MaturityActionCard from './components/MaturityActionCard'
 import { MaturityResolveSheet, MaturityResolveModal } from './components/MaturityResolveSheet'
@@ -313,6 +313,9 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const [showReportSheet, setShowReportSheet] = useState(false)
   const [selectedInsuranceId, setSelectedInsuranceId] = useState<string | null>(null)
   const [desktopAddTxOpen, setDesktopAddTxOpen] = useState(false)
+  // When set, the add-transaction sheet opens prefilled (e.g. "Add to this goal"
+  // from a goal detail). Cleared on close so the plain FAB/button path stays blank.
+  const [addTxPrefill, setAddTxPrefill] = useState<PrefillTransaction | null>(null)
   const [showAddInsurance, setShowAddInsurance] = useState(false)
   const selectedGoal = data?.goals.find((g) => g.goalId === selectedGoalId) ?? null
   // Derive the selected insurance from fresh data (mirrors selectedGoal) so the
@@ -733,7 +736,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button
                     data-testid="desktop-add-tx-btn"
-                    onClick={() => setDesktopAddTxOpen(true)}
+                    onClick={() => { setAddTxPrefill(null); setDesktopAddTxOpen(true) }}
                     className="cn-btn"
                     style={{ padding: '8px 14px', fontSize: 13, gap: 6 }}
                   >
@@ -889,6 +892,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                     // so the panel stays open and the renewal summary is visible.
                     onRenewed={() => fetchData({ force: true })}
                     refreshKey={historyKey}
+                    onAddToGoal={() => { setAddTxPrefill({ goal_id: selectedGoal.goalId }); setDesktopAddTxOpen(true) }}
                   />
                 ) : selectedInsurance ? (
                   <DesktopInsuranceDetail
@@ -1200,14 +1204,18 @@ export default function DashboardClient({ userId }: { userId: string }) {
         onClose={() => setGoalDetailOpen(false)}
         onDataChanged={() => fetchData({ force: true })}
         refreshKey={historyKey}
+        onAddToGoal={selectedGoal ? () => { setAddTxPrefill({ goal_id: selectedGoal.goalId }); setDesktopAddTxOpen(true) } : undefined}
       />
 
-      {/* Desktop: Add Transaction Sheet */}
+      {/* Add Transaction Sheet — opened by the desktop button (blank) or by a
+          goal detail's "Add to this goal" CTA (prefilled). Renders as a bottom
+          sheet on mobile via desktop={isDesktop}. */}
       <AddTransactionSheet
         open={desktopAddTxOpen}
-        onClose={() => setDesktopAddTxOpen(false)}
-        onSaved={() => fetchData({ force: true })}
+        onClose={() => { setDesktopAddTxOpen(false); setAddTxPrefill(null) }}
+        onSaved={() => { fetchData({ force: true }); setHistoryKey((k) => k + 1) }}
         desktop={isDesktop}
+        prefill={addTxPrefill}
       />
 
       {/* Download Report Sheet */}
