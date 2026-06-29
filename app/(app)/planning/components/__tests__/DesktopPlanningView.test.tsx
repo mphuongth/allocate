@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, within, waitFor } from '@testing-library/react'
+import { render, screen, within, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import DesktopPlanningView from '../DesktopPlanningView'
 import type { MonthlyPlan, FundInvestment, DirectSaving, RecurringSaving, RecurringFulfillment, InsuranceMember, FixedExpense } from '../../PlanningClient'
@@ -240,6 +240,32 @@ describe('DesktopPlanningView — allocation card amounts never wrap', () => {
     expect(within(card).getByText('+43.0M ₫')).toHaveStyle({ whiteSpace: 'nowrap' })
     // Per-row percentage chip.
     expect(within(card).getByText('4%', { exact: true })).toHaveStyle({ whiteSpace: 'nowrap' })
+  })
+})
+
+describe('DesktopPlanningView — jump-to-today affordance', () => {
+  it('shows a Today button when viewing a non-current month and calls onToday', async () => {
+    const onToday = vi.fn()
+    // defaultProps month/year = 5/2026 — not the current month.
+    render(<DesktopPlanningView {...defaultProps} plan={basePlan} onToday={onToday} />)
+    await userEvent.click(screen.getByRole('button', { name: /^(Today|Hôm nay)$/i }))
+    expect(onToday).toHaveBeenCalled()
+  })
+
+  it('hides the Today button when already on the current month', () => {
+    const now = new Date()
+    render(<DesktopPlanningView {...defaultProps} plan={basePlan} month={now.getMonth() + 1} year={now.getFullYear()} />)
+    expect(screen.queryByRole('button', { name: /^(Today|Hôm nay)$/i })).not.toBeInTheDocument()
+  })
+})
+
+describe('DesktopPlanningView — kebab closes on scroll', () => {
+  it('closes an open kebab menu when the page scrolls', async () => {
+    render(<DesktopPlanningView {...defaultProps} plan={basePlan} fixedExpenses={[{ expense_id: 'fe1', expense_name: 'Rent', amount_vnd: 8_500_000 }]} />)
+    await userEvent.click(screen.getByRole('button', { name: 'More options' }))
+    expect(screen.getByRole('menu')).toBeInTheDocument()
+    fireEvent.scroll(window)
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   })
 })
 

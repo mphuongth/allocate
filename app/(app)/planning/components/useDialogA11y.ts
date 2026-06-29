@@ -11,6 +11,21 @@ import { useEffect, useRef, type RefObject } from 'react'
 // `onClose={() => …}` (new identity each render) doesn't re-run focus handling
 // and steal focus mid-interaction.
 
+// Close an open popover (a kebab menu) when anything scrolls. The menus are
+// position:fixed (computed once from the trigger's rect), so without this they
+// detach and float when the page or a scroll container moves. Capture phase so
+// scrolls from inner scroll containers count too.
+export function useCloseOnScroll(active: boolean, onClose: () => void) {
+  const onCloseRef = useRef(onClose)
+  useEffect(() => { onCloseRef.current = onClose })
+  useEffect(() => {
+    if (!active) return
+    const close = () => onCloseRef.current()
+    window.addEventListener('scroll', close, true)
+    return () => window.removeEventListener('scroll', close, true)
+  }, [active])
+}
+
 const FOCUSABLE = [
   'a[href]', 'button:not([disabled])', 'textarea:not([disabled])',
   'input:not([disabled])', 'select:not([disabled])', '[tabindex]:not([tabindex="-1"])',

@@ -14,7 +14,7 @@ import RecurringSavingManager from './RecurringSavingManager'
 import AddTransactionSheet, { type EditableTransaction, type PrefillTransaction } from '@/app/assets/components/AddTransactionSheet'
 import RecurringBookTopUpSheet, { type BookTopUpTarget } from '@/app/assets/components/RecurringBookTopUpSheet'
 import AddInsuranceMemberModal from '@/app/assets/components/AddInsuranceMemberModal'
-import { useDialogA11y } from './useDialogA11y'
+import { useDialogA11y, useCloseOnScroll } from './useDialogA11y'
 import { buildByGoal, resolveRecurringSavings, DEPOSIT_BACKED_FULFILLMENT_SOURCES, type GoalRow, type GoalItem } from '@/lib/planning'
 import { relationshipLabel } from '@/app/assets/components/insuranceShared'
 import { MobilePlanningSkeleton } from './PlanningSkeleton'
@@ -818,6 +818,7 @@ function GoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit, onReco
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPos, setMenuPos] = useState({ top: 0, right: 0 })
   const btnRef = useRef<HTMLButtonElement>(null)
+  useCloseOnScroll(menuOpen, () => setMenuOpen(false))
   const skipped = !!item.skipped
   const recorded = !!item.recorded
 
@@ -942,6 +943,7 @@ function PlanLineItem({
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPos, setMenuPos] = useState({ top: 0, right: 0 })
   const btnRef = useRef<HTMLButtonElement>(null)
+  useCloseOnScroll(menuOpen, () => setMenuOpen(false))
 
   function openMenu() {
     if (btnRef.current) {

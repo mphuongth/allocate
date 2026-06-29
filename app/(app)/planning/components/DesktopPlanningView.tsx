@@ -15,7 +15,7 @@ import RecurringSavingManager from './RecurringSavingManager'
 import AddTransactionSheet, { type EditableTransaction, type PrefillTransaction } from '@/app/assets/components/AddTransactionSheet'
 import RecurringBookTopUpSheet, { type BookTopUpTarget } from '@/app/assets/components/RecurringBookTopUpSheet'
 import AddInsuranceMemberModal from '@/app/assets/components/AddInsuranceMemberModal'
-import { useDialogA11y } from './useDialogA11y'
+import { useDialogA11y, useCloseOnScroll } from './useDialogA11y'
 import { buildByGoal, resolveRecurringSavings, DEPOSIT_BACKED_FULFILLMENT_SOURCES, type GoalItem } from '@/lib/planning'
 import { relationshipLabel } from '@/app/assets/components/insuranceShared'
 import type {
@@ -156,6 +156,7 @@ function DPlanRow({ primary, secondary, amount, relationship, defaultAmount, mut
   const [open, setOpen] = useState(false)
   const [menuPos, setMenuPos] = useState({ top: 0, right: 0 })
   const btnRef = useRef<HTMLButtonElement>(null)
+  useCloseOnScroll(open, () => setOpen(false))
 
   function openMenu() {
     if (btnRef.current) {
@@ -221,6 +222,7 @@ function DGoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit, onRec
   const [open, setOpen] = useState(false)
   const [menuPos, setMenuPos] = useState({ top: 0, right: 0 })
   const btnRef = useRef<HTMLButtonElement>(null)
+  useCloseOnScroll(open, () => setOpen(false))
   const skipped = !!item.skipped
   const recorded = !!item.recorded
 
@@ -532,6 +534,8 @@ export default function DesktopPlanningView({
   const longMonths  = isVI ? LONG_MONTHS_VI  : LONG_MONTHS_EN
   const monthLabel  = `${longMonths[month - 1]} ${year}`
   const shortLabel  = `${shortMonths[month - 1]} ${year}`
+  const todayD      = new Date()
+  const isCurrentMonth = month === todayD.getMonth() + 1 && year === todayD.getFullYear()
 
   // ── API handlers ──
 
@@ -796,6 +800,16 @@ export default function DesktopPlanningView({
         </div>
 
         {/* Month picker */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {!isCurrentMonth && (
+          <button
+            onClick={onToday}
+            style={{ padding: '6px 12px', border: '1px solid var(--c-line)', background: 'var(--c-card)', cursor: 'pointer', borderRadius: 8, fontSize: 12, fontWeight: 600, color: 'var(--c-navy)', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5 }}
+          >
+            <RefreshCw size={13} />
+            {isVI ? 'Hôm nay' : 'Today'}
+          </button>
+        )}
         <div
           data-testid="desktop-month-picker"
           style={{ display: 'flex', alignItems: 'center', gap: 4, padding: 3, background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 10 }}
@@ -823,6 +837,7 @@ export default function DesktopPlanningView({
           >
             <ChevronRight size={15} />
           </button>
+        </div>
         </div>
       </header>
 
