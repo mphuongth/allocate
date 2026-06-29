@@ -64,6 +64,12 @@ export async function GET() {
   // Today's date (server local) — used both to read the existing snapshot below
   // and to upsert it at the end.
   const today = new Date().toISOString().split('T')[0]
+  // Pin interest accrual to UTC midnight so the displayed networth is stable
+  // across multiple API calls within the same day. Using Date.now() makes
+  // calcProjectedInterest return a slightly different value every millisecond —
+  // visible as a number jump when the 2-min localStorage cache expires and a
+  // fresh fetch returns a different value (issue #402).
+  const valuationAsOf = new Date(today).getTime()
 
   const [plansRes, goalsRes, txRes, insuranceRes, insuranceSavingsRes, recSavingsRes, goldPriceRes, snapshotRes] = await Promise.all([
     supabase.from('monthly_plans').select('id, month, year').eq('user_id', user.id),
@@ -278,8 +284,8 @@ export async function GET() {
       // (progress-affecting only → goal bar). They differ only when the holding
       // has an affects_progress=false withdrawal, which net worth must subtract
       // but the bar must not.
-      const valued = valueNonFundHolding(tx, parentWdMapAll, goldPricePerChi)
-      const progValued = valueNonFundHolding(tx, parentWdMap, goldPricePerChi)
+      const valued = valueNonFundHolding(tx, parentWdMapAll, goldPricePerChi, valuationAsOf)
+      const progValued = valueNonFundHolding(tx, parentWdMap, goldPricePerChi, valuationAsOf)
       // The bar holds the value any affects_progress=false withdrawal removed,
       // even after the holding is fully gone from net worth.
       const progressContribution = progValued?.currentValue ?? 0
