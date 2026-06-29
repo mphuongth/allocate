@@ -179,6 +179,7 @@ function ProfileSheet({ open, onClose, onSave, displayName, email }: {
               aria-label={t('cancel')}
               style={{
                 flex: 1, padding: '10px 0', fontSize: 13, fontWeight: 500,
+                minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center',
                 background: 'var(--c-card)', border: '1px solid var(--c-line)',
                 borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit',
                 color: 'var(--c-ink)',
@@ -190,6 +191,7 @@ function ProfileSheet({ open, onClose, onSave, displayName, email }: {
               onClick={handleSave}
               style={{
                 flex: 2, padding: '10px 0', fontSize: 13, fontWeight: 600,
+                minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center',
                 background: 'var(--c-btn-primary)', border: 'none',
                 borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit',
                 color: '#fff',
@@ -265,6 +267,7 @@ function AppearanceSheet({ open, onClose, onApply }: {
         aria-label={t('apply')}
         style={{
           width: '100%', padding: '11px 0', fontSize: 13, fontWeight: 600,
+          minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center',
           background: 'var(--c-btn-primary)', border: 'none',
           borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit',
           color: '#fff',
@@ -528,6 +531,7 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
                 aria-label={t('syncNow')}
                 style={{
                   padding: '7px 14px', fontSize: 12, fontWeight: 600,
+                  minHeight: 44, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                   background: 'var(--c-btn-primary)', border: 'none', borderRadius: 8,
                   color: '#fff', cursor: syncing ? 'not-allowed' : 'pointer',
                   fontFamily: 'inherit', opacity: syncing ? 0.6 : 1,
@@ -576,7 +580,7 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
           onClick={handleSignOut}
           aria-label={t('signOut')}
           style={{
-            width: '100%', marginTop: 22, padding: '13px 14px',
+            width: '100%', marginTop: 22, padding: '13px 14px', minHeight: 44,
             background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 10,
             color: 'var(--c-neg)', fontSize: 13, fontWeight: 600,
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,

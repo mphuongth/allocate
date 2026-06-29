@@ -160,6 +160,7 @@ export default function DownloadReportSheet({ open, onClose, data, onExport, des
                   aria-label="cancel"
                   style={{
                     flex: 1, padding: '11px 0', fontSize: 13, fontWeight: 500,
+                    minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center',
                     background: 'var(--c-card)', border: '1px solid var(--c-line)',
                     borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit',
                     color: 'var(--c-ink)',
@@ -174,6 +175,7 @@ export default function DownloadReportSheet({ open, onClose, data, onExport, des
                   aria-label={exporting ? 'exporting' : t.export}
                   style={{
                     flex: 2, padding: '11px 0', fontSize: 13, fontWeight: 600,
+                    minHeight: 44,
                     background: 'var(--c-btn-primary)', border: 'none',
                     borderRadius: 10, color: '#fff',
                     cursor: exporting ? 'default' : 'pointer',
@@ -266,9 +268,8 @@ export default function DownloadReportSheet({ open, onClose, data, onExport, des
               onClick={onClose}
               aria-label="close"
               style={{
-                padding: 6, background: 'transparent', border: 'none',
+                ...iconHit, background: 'transparent', border: 'none',
                 cursor: 'pointer', color: 'var(--c-muted)', borderRadius: 8,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}
             >
               <X size={18} />
