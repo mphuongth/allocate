@@ -31,6 +31,80 @@ const FULL_PLAN = {
   recurring_savings: [], recurring_saving_overrides: [], dca_skips: [], recurring_fulfillments: [],
 }
 
+describe('PlanningClient — error vs empty on plan fetch', () => {
+  it('shows an error state (not the empty "set income" state) when the fetch fails with 500', async () => {
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({ error: 'boom' }) }))
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      render(<PlanningClient />)
+      // Error state appears in both the desktop + mobile views.
+      expect((await screen.findAllByTestId('planning-error-state')).length).toBeGreaterThan(0)
+      // It must NOT be mistaken for the legit "no plan yet" empty state.
+      expect(screen.queryByTestId('planning-empty-state')).not.toBeInTheDocument()
+      // A retry affordance is offered.
+      expect(screen.getAllByRole('button', { name: /Try again/i }).length).toBeGreaterThan(0)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('shows the empty state on 404 (no plan yet), not the error state', async () => {
+    const fetchMock = vi.fn((url: string) => {
+      const u = String(url)
+      if (u.includes('/api/v1/monthly-plans?')) {
+        return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({ error: 'Plan not found for this month' }) })
+      }
+      // The 404 branch still loads master fixed expenses + insurance members.
+      if (u.includes('fixed-expenses')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ expenses: [] }) })
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ members: [] }) })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      render(<PlanningClient />)
+      expect((await screen.findAllByTestId('planning-empty-state')).length).toBeGreaterThan(0)
+      expect(screen.queryByTestId('planning-error-state')).not.toBeInTheDocument()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('does not get stuck on the skeleton when the fetch rejects (network error) → shows error', async () => {
+    const fetchMock = vi.fn(() => Promise.reject(new Error('offline')))
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      render(<PlanningClient />)
+      expect((await screen.findAllByTestId('planning-error-state')).length).toBeGreaterThan(0)
+      expect(screen.queryByTestId('planning-loading')).not.toBeInTheDocument()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('retry refetches and renders the plan once the request succeeds', async () => {
+    let call = 0
+    const fetchMock = vi.fn((url: string) => {
+      const u = String(url)
+      if (u.includes('/api/v1/monthly-plans?')) {
+        call += 1
+        if (call === 1) return Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({ error: 'boom' }) })
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(FULL_PLAN) })
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      render(<PlanningClient />)
+      const retry = (await screen.findAllByRole('button', { name: /Try again/i }))[0]
+      await userEvent.click(retry)
+      await waitFor(() => expect(screen.queryByTestId('planning-error-state')).not.toBeInTheDocument())
+      // The plan content (income editor) is now shown.
+      expect((await screen.findAllByRole('button', { name: 'Edit income' })).length).toBeGreaterThan(0)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+})
+
 describe('PlanningClient — toast delivery', () => {
   it('surfaces a confirmation toast (via sonner) after a successful income edit', async () => {
     const fetchMock = vi.fn((url: string) => {
