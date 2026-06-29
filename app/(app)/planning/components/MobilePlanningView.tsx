@@ -13,6 +13,7 @@ import FixedExpenseManager from './FixedExpenseManager'
 import RecurringSavingManager from './RecurringSavingManager'
 import AddTransactionSheet, { type EditableTransaction, type PrefillTransaction } from '@/app/assets/components/AddTransactionSheet'
 import RecurringBookTopUpSheet, { type BookTopUpTarget } from '@/app/assets/components/RecurringBookTopUpSheet'
+import AddInsuranceMemberModal from '@/app/assets/components/AddInsuranceMemberModal'
 import { buildByGoal, resolveRecurringSavings, DEPOSIT_BACKED_FULFILLMENT_SOURCES, type GoalRow, type GoalItem } from '@/lib/planning'
 import { relationshipLabel } from '@/app/assets/components/insuranceShared'
 import { MobilePlanningSkeleton } from './PlanningSkeleton'
@@ -1059,6 +1060,7 @@ export default function MobilePlanningView({
   const [buyEdit, setBuyEdit] = useState<EditableTransaction | null>(null)
   const [prefillTx, setPrefillTx] = useState<PrefillTransaction | null>(null)
   const [bookTopUp, setBookTopUp] = useState<BookTopUpTarget | null>(null)
+  const [showAddInsurance, setShowAddInsurance] = useState(false)
   const [overrideTarget, setOverrideTarget] = useState<{ type: 'fe' | 'ins' | 'rec'; id: string; name: string; defaultAmount: number } | null>(null)
 
   const monthLabel = getMonthLabel(month, year)
@@ -1450,15 +1452,33 @@ export default function MobilePlanningView({
               </BudgetSection>
 
             {/* Insurance section */}
-            {insuranceMembers.length > 0 && (
-              <BudgetSection
+            {/* Shown even with no members (parity with desktop + the other
+                sections) so insurance isn't a hidden dead-end — Add member opens
+                the same modal the dashboard uses. */}
+            <BudgetSection
                 icon={Shield}
                 iconColor="var(--c-accent-insurance)"
                 title={isVI ? 'Bảo hiểm' : 'Insurance'}
                 count={`${insuranceMembers.length} ${isVI ? 'thành viên' : insuranceMembers.length === 1 ? 'member' : 'members'}`}
                 total={totalInsurance}
                 testId="section-insurance"
+                action={
+                  <button
+                    data-testid="mobile-add-insurance"
+                    onClick={() => setShowAddInsurance(true)}
+                    aria-label={isVI ? 'Thêm thành viên bảo hiểm' : 'Add insurance member'}
+                    style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 8px', fontSize: 12, fontWeight: 600, color: 'var(--c-navy)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', borderRadius: 6 }}
+                  >
+                    <Plus size={14} strokeWidth={2.4} />
+                    {isVI ? 'Thêm' : 'Add'}
+                  </button>
+                }
               >
+                {insuranceMembers.length === 0 && (
+                  <div style={{ padding: '14px', fontSize: 13, color: 'var(--c-muted)' }}>
+                    {isVI ? 'Chưa có thành viên bảo hiểm.' : 'No insurance members yet.'}
+                  </div>
+                )}
                 {insuranceMembers.map((m, i) => {
                   const defaultMonthly = Math.round(m.annual_payment_vnd / 12)
                   const hasOverride = m.monthlyOverride != null && m.monthlyOverride !== defaultMonthly
@@ -1489,7 +1509,6 @@ export default function MobilePlanningView({
                   )
                 })}
               </BudgetSection>
-            )}
 
             {/* Other expenses section */}
             <BudgetSection
@@ -1632,6 +1651,13 @@ export default function MobilePlanningView({
         isVi={isVI}
         onClose={() => setBookTopUp(null)}
         onDone={() => { onToast(isVI ? 'Đã nạp vào sổ' : 'Topped up book'); onRefresh() }}
+      />
+
+      <AddInsuranceMemberModal
+        open={showAddInsurance}
+        locale={locale}
+        onClose={() => setShowAddInsurance(false)}
+        onCreated={() => { onToast(isVI ? 'Đã thêm thành viên' : 'Member added'); onRefresh() }}
       />
     </div>
   )

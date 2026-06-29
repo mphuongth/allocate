@@ -14,6 +14,7 @@ import FixedExpenseManager from './FixedExpenseManager'
 import RecurringSavingManager from './RecurringSavingManager'
 import AddTransactionSheet, { type EditableTransaction, type PrefillTransaction } from '@/app/assets/components/AddTransactionSheet'
 import RecurringBookTopUpSheet, { type BookTopUpTarget } from '@/app/assets/components/RecurringBookTopUpSheet'
+import AddInsuranceMemberModal from '@/app/assets/components/AddInsuranceMemberModal'
 import { buildByGoal, resolveRecurringSavings, DEPOSIT_BACKED_FULFILLMENT_SOURCES, type GoalItem } from '@/lib/planning'
 import { relationshipLabel } from '@/app/assets/components/insuranceShared'
 import type {
@@ -465,6 +466,7 @@ export default function DesktopPlanningView({
   const [otherDesc, setOtherDesc] = useState('')
   const [otherAmt, setOtherAmt] = useState('')
   const [showFEManage, setShowFEManage] = useState(false)
+  const [showAddInsurance, setShowAddInsurance] = useState(false)
   const [showRSManage, setShowRSManage] = useState(false)
   // When set, the recurring manager opens straight on this saving's edit form.
   const [rsEditId, setRsEditId] = useState<string | null>(null)
@@ -1044,7 +1046,22 @@ export default function DesktopPlanningView({
               </PlanTable>
 
               {/* Insurance */}
-              <PlanTable icon={<Shield size={15} />} iconColor="var(--c-accent-insurance,#7c3aed)" title={isVI ? 'Bảo hiểm' : 'Insurance'} total={insTotal}>
+              <PlanTable
+                icon={<Shield size={15} />}
+                iconColor="var(--c-accent-insurance,#7c3aed)"
+                title={isVI ? 'Bảo hiểm' : 'Insurance'}
+                total={insTotal}
+                action={
+                  <button
+                    data-testid="desktop-add-insurance"
+                    onClick={() => setShowAddInsurance(true)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', fontSize: 12, fontWeight: 600, color: 'var(--c-navy)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', borderRadius: 8 }}
+                  >
+                    <Plus size={14} strokeWidth={2.4} />
+                    {isVI ? 'Thêm thành viên' : 'Add member'}
+                  </button>
+                }
+              >
                 <THead
                   col1={isVI ? 'Thành viên' : 'Member'}
                   colRel={isVI ? 'Quan hệ' : 'Relationship'}
@@ -1241,6 +1258,14 @@ export default function DesktopPlanningView({
           <FixedExpenseManager onChange={onRefresh} onToast={onToast} />
         </DModal>
       )}
+
+      <AddInsuranceMemberModal
+        open={showAddInsurance}
+        desktop
+        locale={locale}
+        onClose={() => setShowAddInsurance(false)}
+        onCreated={() => { onRefresh(); onToast(isVI ? 'Đã thêm thành viên' : 'Member added') }}
+      />
 
       {showRSManage && (
         <DModal onClose={() => setShowRSManage(false)} title={isVI ? 'Tiết kiệm định kỳ' : 'Recurring savings'} width={460}>
