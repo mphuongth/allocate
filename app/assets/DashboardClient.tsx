@@ -244,10 +244,12 @@ interface MaturingDep {
 }
 
 // Build the SellWithdrawSheet payload for a non-fund holding (bank/gold/stock).
-function nonFundToSellItem(item: NonFundUnallocatedItem): SellItem {
+// `isVi` localises the no-notes fallback name, mirroring nonFundToInvRow — without
+// it a Vietnamese user saw the raw English "Bank deposit" / "Gold" in the sheet.
+export function nonFundToSellItem(item: NonFundUnallocatedItem, isVi: boolean): SellItem {
   return {
     type: item.type as 'bank' | 'gold' | 'stock',
-    name: item.notes ?? (item.type === 'bank' ? 'Bank deposit' : item.type === 'gold' ? 'Gold' : item.type),
+    name: item.notes ?? (item.type === 'bank' ? (isVi ? 'Tiền gửi' : 'Bank deposit') : item.type === 'gold' ? (isVi ? 'Vàng' : 'Gold') : item.type),
     currentValue: item.currentValue,
     units: item.units ?? undefined,
     navPerUnit: item.units && item.units > 0 ? item.currentValue / item.units : undefined,
@@ -540,7 +542,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
   }
 
   function openSellNonFund(item: NonFundUnallocatedItem) {
-    setSellItem(nonFundToSellItem(item))
+    setSellItem(nonFundToSellItem(item, isVi))
     setSellSheetOpen(true)
   }
 
@@ -651,7 +653,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
     // prefills the book balance, not just the anchor tranche's value.
     const item: SellItem = dep.inv.depositGroupId
       ? { type: 'bank', name: dep.inv.name, currentValue: dep.inv.value, transactionId: dep.inv.id, purchasePrice: dep.inv.principal ?? dep.inv.value, depositGroupId: dep.inv.depositGroupId, interestRate: dep.inv.interestRate ?? undefined }
-      : nonFundToSellItem(dep.raw)
+      : nonFundToSellItem(dep.raw, isVi)
     if (dep.goalId) {
       const goal = data?.goals.find((g) => g.goalId === dep.goalId)
       setMaturityWithdraw({
