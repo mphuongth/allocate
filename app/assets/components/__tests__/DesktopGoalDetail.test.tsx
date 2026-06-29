@@ -28,6 +28,22 @@ const baseProps = {
   onDataChanged: vi.fn(),
 }
 
+describe('DesktopGoalDetail — add-to-goal CTA', () => {
+  beforeEach(() => {
+    global.fetch = vi.fn().mockImplementation(() =>
+      Promise.resolve({ ok: true, json: async () => ({ transactions: [] }) }),
+    )
+  })
+
+  it('renders an "Add to this goal" CTA and calls onAddToGoal when clicked', async () => {
+    const onAddToGoal = vi.fn()
+    render(<DesktopGoalDetail {...baseProps} onAddToGoal={onAddToGoal} />)
+
+    await userEvent.click(await screen.findByTestId('goal-add-to-goal'))
+    expect(onAddToGoal).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('DesktopGoalDetail — delete failure feedback', () => {
   beforeEach(() => {
     toastErrorMock.mockClear()

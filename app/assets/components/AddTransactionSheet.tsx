@@ -696,6 +696,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
             <div>
               <label style={labelStyle}>{t('goal')}</label>
               <select
+                data-testid="addtx-goal-select"
                 value={goalId}
                 onChange={(e) => setGoalId(e.target.value)}
                 style={{ ...inputStyle }}

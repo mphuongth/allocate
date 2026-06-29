@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { ChevronLeft, X, MoreHorizontal, Edit2, Trash2, ChevronRight, ArrowDownRight, ArrowUpRight, Target, CalendarDays, Check, ArrowDownToLine, Wallet, Shield, RefreshCw, PiggyBank, GitMerge } from 'lucide-react'
+import { ChevronLeft, X, MoreHorizontal, Edit2, Trash2, ChevronRight, ArrowDownRight, ArrowUpRight, Target, CalendarDays, Check, ArrowDownToLine, Wallet, Shield, RefreshCw, PiggyBank, GitMerge, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import type { GoalData } from '../DashboardClient'
@@ -53,9 +53,13 @@ interface Props {
    * requiring a hard page reload.
    */
   refreshKey?: number
+  /** Opens the Add-transaction flow prefilled with this goal, so a new
+   *  contribution is logged straight to it (the goal detail was otherwise a
+   *  dead end — no way to add money from here). */
+  onAddToGoal?: () => void
 }
 
-export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged, onRenewed, refreshKey }: Props) {
+export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged, onRenewed, refreshKey, onAddToGoal }: Props) {
   const isVi = locale === 'vi'
   const [tab, setTab] = useState<'investments' | 'calculator' | 'history'>('investments')
   const [transactions, setTransactions] = useState<InvestmentTx[]>([])
@@ -300,6 +304,20 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
             ))}
           </div>
         </div>
+
+        {/* Add to this goal — turns the detail panel from a dead end into a place
+            you can fund the goal from. Opens the Add-transaction flow prefilled. */}
+        {onAddToGoal && (
+          <button
+            data-testid="goal-add-to-goal"
+            onClick={onAddToGoal}
+            className="cn-btn primary"
+            style={{ width: '100%', justifyContent: 'center', gap: 7 }}
+          >
+            <Plus size={15} strokeWidth={2.4} />
+            {isVi ? 'Thêm vào mục tiêu' : 'Add to this goal'}
+          </button>
+        )}
 
         {/* Composition */}
         {segs.length > 0 && (

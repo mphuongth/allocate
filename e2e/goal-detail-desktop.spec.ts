@@ -71,6 +71,19 @@ test.describe('Desktop goal detail panel', () => {
     await expect(page.getByTestId('desktop-net-worth-panel')).toBeVisible({ timeout: 10_000 })
   })
 
+  test('"Add to this goal" opens the Add-transaction sheet preselected to this goal', async ({ page }) => {
+    await page.getByText('E2E Desktop Goal').first().click()
+    await expect(page.getByTestId('desktop-goal-detail')).toBeVisible({ timeout: 5_000 })
+
+    await page.getByTestId('goal-add-to-goal').click()
+
+    // The sheet opens and the goal selector is pre-set to this goal, so a new
+    // contribution is logged straight to it (the panel was otherwise a dead end).
+    const goalSelect = page.getByTestId('addtx-goal-select')
+    await expect(goalSelect).toBeVisible({ timeout: 5_000 })
+    await expect(goalSelect).toHaveValue(goalId)
+  })
+
   // Issue #261: after fully withdrawing a bank deposit from the goal detail,
   // it must no longer appear on the Investments tab. Attach the deposit to the
   // shared goal (reliably rendered) — the Investments tab fetches transactions
