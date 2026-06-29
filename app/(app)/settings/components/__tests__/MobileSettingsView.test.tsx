@@ -439,3 +439,57 @@ describe('MobileSettingsView — dialog a11y', () => {
     expect(screen.getByRole('dialog')).toHaveAccessibleName(/profile/i)
   })
 })
+
+// ─── Mobile touch targets (≥44px — WCAG 2.5.5, parity with #410/#413/#416) ───────
+// On a phone these are the primary actions. They previously sat at ~31–42px
+// (small padding + 12–13px text), below the 44px minimum hit area. Assert the
+// inline minHeight floor (jsdom does no layout, so the style is the contract).
+
+describe('MobileSettingsView — touch targets (≥44px)', () => {
+  it('gives the Sync now button a ≥44px touch target', () => {
+    render(<MobileSettingsView {...defaultProps} />)
+    expect(screen.getByRole('button', { name: /sync now/i })).toHaveStyle({ minHeight: '44px' })
+  })
+
+  it('gives the Sign out button a ≥44px touch target', () => {
+    render(<MobileSettingsView {...defaultProps} />)
+    expect(screen.getByRole('button', { name: /sign out/i })).toHaveStyle({ minHeight: '44px' })
+  })
+
+  it('gives the profile sheet Save and Cancel buttons a ≥44px touch target', async () => {
+    render(<MobileSettingsView {...defaultProps} />)
+    await userEvent.click(screen.getByRole('button', { name: /profile/i }))
+    expect(screen.getByRole('button', { name: /save/i })).toHaveStyle({ minHeight: '44px' })
+    expect(screen.getByRole('button', { name: /cancel/i })).toHaveStyle({ minHeight: '44px' })
+  })
+
+  it('gives the appearance sheet Apply button a ≥44px touch target', async () => {
+    render(<MobileSettingsView {...defaultProps} />)
+    await userEvent.click(screen.getByRole('button', { name: /appearance/i }))
+    expect(screen.getByRole('button', { name: /apply/i })).toHaveStyle({ minHeight: '44px' })
+  })
+})
+
+describe('MobileSettingsView — export sheet touch targets (≥44px)', () => {
+  let fetchSpy: ReturnType<typeof vi.spyOn>
+  beforeEach(() => {
+    fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(
+      async () => new Response(JSON.stringify(mockOverviewResponse), { status: 200 })
+    )
+  })
+  afterEach(() => fetchSpy.mockRestore())
+
+  it('gives the Export and Cancel buttons a ≥44px touch target', async () => {
+    render(<MobileSettingsView {...defaultProps} />)
+    await userEvent.click(screen.getByRole('button', { name: /export data/i }))
+    expect(screen.getByTestId('export-report-btn')).toHaveStyle({ minHeight: '44px' })
+    expect(screen.getByRole('button', { name: /^cancel$/i })).toHaveStyle({ minHeight: '44px' })
+  })
+
+  it('gives the close button a ≥44px square touch target', async () => {
+    render(<MobileSettingsView {...defaultProps} />)
+    await userEvent.click(screen.getByRole('button', { name: /export data/i }))
+    expect(screen.getByRole('button', { name: /^close$/i }))
+      .toHaveStyle({ minWidth: '44px', minHeight: '44px' })
+  })
+})
