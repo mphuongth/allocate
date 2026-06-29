@@ -594,3 +594,69 @@ describe('MobilePlanningView — save error feedback (no false success)', () => 
     }
   })
 })
+
+describe('MobilePlanningView — overridden-item restore parity + recurring deep-link edit', () => {
+  it('offers "Restore default" on an OVERRIDDEN (not skipped) fixed expense', async () => {
+    const fixedExpenses: FixedExpense[] = [{ expense_id: 'fe1', expense_name: 'Rent', amount_vnd: 8_500_000, override: 10_000_000 }]
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} fixedExpenses={fixedExpenses} />)
+    await userEvent.click(screen.getByRole('button', { name: 'More options' }))
+    expect(screen.getByRole('button', { name: /Restore default/i })).toBeInTheDocument()
+  })
+
+  it('does NOT offer "Restore default" on a plain (non-overridden) fixed expense', async () => {
+    const fixedExpenses: FixedExpense[] = [{ expense_id: 'fe1', expense_name: 'Rent', amount_vnd: 8_500_000 }]
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} fixedExpenses={fixedExpenses} />)
+    await userEvent.click(screen.getByRole('button', { name: 'More options' }))
+    expect(screen.queryByRole('button', { name: /Restore default/i })).not.toBeInTheDocument()
+  })
+
+  it('"Edit recurring plan" opens the manager straight on that item’s edit form', async () => {
+    const recurringSavings = [
+      { saving_id: 'rs1', name: 'VCB Savings', goal_id: 'g1', amount_vnd: 2_000_000, effective_from: null, effective_to: null, savings_goals: { goal_name: 'Retirement' } },
+    ]
+    const fetchMock = vi.fn((url: string) => {
+      const u = String(url)
+      if (u.includes('/api/v1/recurring-savings')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ savings: [{ saving_id: 'rs1', name: 'VCB Savings', goal_id: 'g1', amount_vnd: 2_000_000, effective_from: null, effective_to: null, linked_deposit_tx_id: null }] }) })
+      }
+      if (u.includes('investment-transactions')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [] }) })
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      render(<MobilePlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} goals={[{ goal_id: 'g1', goal_name: 'Retirement' }]} />)
+      await userEvent.click(screen.getByText('Retirement'))
+      await userEvent.click(screen.getByRole('button', { name: 'Saving actions' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Edit recurring plan' }))
+      // List mode would not render the name input; the edit form does, pre-filled.
+      const nameInput = await screen.findByTestId('rs-name')
+      expect((nameInput as HTMLInputElement).value).toBe('VCB Savings')
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('the section "Manage" button opens the manager in LIST mode (no deep-link)', async () => {
+    const recurringSavings = [
+      { saving_id: 'rs1', name: 'VCB Savings', goal_id: 'g1', amount_vnd: 2_000_000, effective_from: null, effective_to: null, savings_goals: { goal_name: 'Retirement' } },
+    ]
+    const fetchMock = vi.fn((url: string) => {
+      const u = String(url)
+      if (u.includes('/api/v1/recurring-savings')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ savings: [{ saving_id: 'rs1', name: 'VCB Savings', goal_id: 'g1', amount_vnd: 2_000_000, effective_from: null, effective_to: null, linked_deposit_tx_id: null }] }) })
+      }
+      if (u.includes('investment-transactions')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [] }) })
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      render(<MobilePlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} goals={[{ goal_id: 'g1', goal_name: 'Retirement' }]} />)
+      await userEvent.click(screen.getByTestId('mobile-manage-savings'))
+      // List mode shows the add button; the edit form (rs-name) is absent.
+      expect(await screen.findByTestId('rs-add')).toBeInTheDocument()
+      expect(screen.queryByTestId('rs-name')).not.toBeInTheDocument()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+})

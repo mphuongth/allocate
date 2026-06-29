@@ -56,7 +56,7 @@ type SheetState =
   | { type: 'override-rec'; item: GoalItem }
   | { type: 'other-expense'; existing: OtherExpense | null }
   | { type: 'manage-fixed' }
-  | { type: 'manage-recurring' }
+  | { type: 'manage-recurring'; editId?: string }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -719,7 +719,7 @@ function GoalAllocationRow({ entry, isVI, onRecSkip, onRecRestore, onRecOverride
   onRecSkip: (item: GoalItem) => void
   onRecRestore: (item: GoalItem) => void
   onRecOverride: (item: GoalItem) => void
-  onRecEdit: () => void
+  onRecEdit: (item: GoalItem) => void
   onRecordBuy: (item: GoalItem) => void
   onRecordDeposit: (item: GoalItem) => void
   onLogContribution: () => void
@@ -788,7 +788,7 @@ function GoalAllocationRow({ entry, isVI, onRecSkip, onRecRestore, onRecOverride
           onSkip={() => onRecSkip(item)}
           onRestore={() => onRecRestore(item)}
           onOverride={() => onRecOverride(item)}
-          onEdit={onRecEdit}
+          onEdit={() => onRecEdit(item)}
           onRecordBuy={() => onRecordBuy(item)}
           onRecordDeposit={() => onRecordDeposit(item)}
           onDcaSkip={() => onDcaSkip(item)}
@@ -916,13 +916,14 @@ function GoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit, onReco
 // ─── PlanLineItem (with kebab menu) ───────────────────────────────────────────
 
 function PlanLineItem({
-  primary, secondary, amount, muted, last, isVI,
+  primary, secondary, amount, muted, overridden, last, isVI,
   onSkip, onRestore, onOverride,
 }: {
   primary: string
   secondary?: string | null
   amount: number
   muted?: boolean
+  overridden?: boolean
   last?: boolean
   isVI: boolean
   onSkip?: () => void
@@ -1000,6 +1001,15 @@ function PlanLineItem({
                   <EditIcon size={14} color="var(--c-muted)" />
                   {isVI ? 'Ghi đè số tiền' : 'Override amount'}
                 </button>
+                {overridden && onRestore && (
+                  <button
+                    onClick={() => { onRestore(); setMenuOpen(false) }}
+                    style={{ width: '100%', textAlign: 'left', padding: '10px 12px', fontSize: 12, background: 'transparent', border: 'none', borderBottom: '1px solid var(--c-line)', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--c-ink)', display: 'flex', alignItems: 'center', gap: 8 }}
+                  >
+                    <RefreshCw size={14} color="var(--c-muted)" />
+                    {isVI ? 'Khôi phục mặc định' : 'Restore default'}
+                  </button>
+                )}
                 <button
                   onClick={() => { onSkip?.(); setMenuOpen(false) }}
                   style={{ width: '100%', textAlign: 'left', padding: '10px 12px', fontSize: 12, background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--c-neg)', display: 'flex', alignItems: 'center', gap: 8 }}
@@ -1378,7 +1388,7 @@ export default function MobilePlanningView({
                     onRecSkip={handleSkipRec}
                     onRecRestore={handleRestoreRec}
                     onRecOverride={openOverrideRec}
-                    onRecEdit={() => setSheet({ type: 'manage-recurring' })}
+                    onRecEdit={(item) => setSheet({ type: 'manage-recurring', editId: item.recurringId ?? undefined })}
                     onRecordBuy={openBuy}
                     onRecordDeposit={(item) => recordRecurring(entry, item)}
                     onLogContribution={() => openContribution(entry)}
@@ -1428,6 +1438,7 @@ export default function MobilePlanningView({
                       secondary={secondary}
                       amount={thisMonth}
                       muted={isSkipped}
+                      overridden={hasOverride}
                       last={i === fixedExpenses.length - 1}
                       isVI={isVI}
                       onSkip={() => handleSkipFE(fe)}
@@ -1468,6 +1479,7 @@ export default function MobilePlanningView({
                       secondary={secondary}
                       amount={thisMonth}
                       muted={m.excluded}
+                      overridden={hasOverride}
                       last={i === insuranceMembers.length - 1}
                       isVI={isVI}
                       onSkip={() => handleSkipIns(m)}
@@ -1597,7 +1609,7 @@ export default function MobilePlanningView({
         title={isVI ? 'Tiết kiệm định kỳ' : 'Recurring savings'}
       >
         {sheet?.type === 'manage-recurring' && (
-          <RecurringSavingManager goals={goals} onChange={onRefresh} onToast={onToast} variant="sheet" />
+          <RecurringSavingManager goals={goals} onChange={onRefresh} onToast={onToast} variant="sheet" editSavingId={sheet.type === 'manage-recurring' ? sheet.editId : undefined} />
         )}
       </Sheet>
 
