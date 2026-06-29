@@ -39,6 +39,8 @@ interface Props {
   funds: Fund[]
   goals: Goal[]
   loading?: boolean
+  error?: boolean
+  onRetry?: () => void
   onPlanCreated: (plan: MonthlyPlan) => void
   onPlanDeleted: () => void
   onRefresh: () => void
@@ -457,6 +459,42 @@ function NoPlanState({ monthLabel, onSetSalary, isVI }: { monthLabel: string; on
       >
         <Plus size={14} strokeWidth={2.4} />
         {isVI ? 'Thêm thu nhập' : 'Set income'}
+      </button>
+    </div>
+  )
+}
+
+// ─── PlanErrorState ──────────────────────────────────────────────────────────
+// A failed load (≠ 404) — distinct from the "no plan yet" empty state, with retry.
+
+function PlanErrorState({ isVI, onRetry }: { isVI: boolean; onRetry?: () => void }) {
+  return (
+    <div data-testid="planning-error-state" style={{
+      padding: '44px 20px', textAlign: 'center',
+      background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 16,
+    }}>
+      <div style={{ width: 48, height: 48, borderRadius: 24, background: 'var(--c-neg-tint)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12, color: 'var(--c-neg)' }}>
+        <svg viewBox="0 0 24 24" width={22} height={22} fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
+        </svg>
+      </div>
+      <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--c-ink)' }}>
+        {isVI ? 'Không tải được kế hoạch' : "Couldn't load this plan"}
+      </h3>
+      <p style={{ margin: '4px 0 16px', fontSize: 12, color: 'var(--c-muted)' }}>
+        {isVI ? 'Đã xảy ra lỗi khi tải. Vui lòng thử lại.' : 'Something went wrong while loading. Please try again.'}
+      </p>
+      <button
+        onClick={onRetry}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          padding: '9px 16px', borderRadius: 10, border: 'none',
+          background: 'var(--c-btn-primary)', color: '#fff', fontSize: 13, fontWeight: 600,
+          cursor: 'pointer', fontFamily: 'inherit',
+        }}
+      >
+        <RefreshCw size={14} />
+        {isVI ? 'Thử lại' : 'Try again'}
       </button>
     </div>
   )
@@ -998,8 +1036,8 @@ function MenuItem({ icon, label, onClick, danger, noBorder }: {
 
 export default function MobilePlanningView({
   month, year, plan, investments, savings, fixedExpenses, insuranceMembers, otherExpenses,
-  recurringSavings, recurringSavingOverrides, recurringFulfillments, dcaSkips, funds, goals, loading,
-  onPlanCreated, onPlanDeleted, onRefresh, onToast,
+  recurringSavings, recurringSavingOverrides, recurringFulfillments, dcaSkips, funds, goals, loading, error,
+  onRetry, onPlanCreated, onPlanDeleted, onRefresh, onToast,
 }: Props) {
   const locale = useLocale()
   const isVI = locale === 'vi'
@@ -1261,6 +1299,8 @@ export default function MobilePlanningView({
       <div style={{ padding: '4px 16px 100px', display: 'grid', gap: 10 }}>
         {loading ? (
           <MobilePlanningSkeleton />
+        ) : error ? (
+          <PlanErrorState isVI={isVI} onRetry={onRetry} />
         ) : !plan ? (
           <NoPlanState monthLabel={monthLabel} isVI={isVI} onSetSalary={() => setSheet({ type: 'salary' })} />
         ) : (

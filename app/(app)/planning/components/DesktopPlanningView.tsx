@@ -432,6 +432,8 @@ interface Props {
   funds: Fund[]
   goals: Goal[]
   loading: boolean
+  error: boolean
+  onRetry: () => void
   onPrev: () => void
   onNext: () => void
   onToday: () => void
@@ -445,8 +447,8 @@ interface Props {
 
 export default function DesktopPlanningView({
   month, year, plan, investments, savings, fixedExpenses, insuranceMembers,
-  otherExpenses, recurringSavings, recurringSavingOverrides, recurringFulfillments, dcaSkips, funds, goals, loading,
-  onPrev, onNext, onToday, onPlanCreated, onPlanDeleted, onRefresh, onToast,
+  otherExpenses, recurringSavings, recurringSavingOverrides, recurringFulfillments, dcaSkips, funds, goals, loading, error,
+  onRetry, onPrev, onNext, onToday, onPlanCreated, onPlanDeleted, onRefresh, onToast,
 }: Props) {
   const locale = useLocale()
   const isVI = locale === 'vi'
@@ -823,6 +825,28 @@ export default function DesktopPlanningView({
             <div data-testid="planning-loading">
               <DesktopPlanningSkeleton />
             </div>
+          ) : error ? (
+            /* Error state — distinct from the "no plan yet" empty state */
+            <div
+              data-testid="planning-error-state"
+              style={{ padding: '60px 20px', textAlign: 'center', background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 16, maxWidth: 480, margin: '0 auto' }}
+            >
+              <div style={{ width: 52, height: 52, borderRadius: 26, background: 'var(--c-neg-tint,#fef2f2)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14, color: 'var(--c-neg)' }}>
+                <svg viewBox="0 0 24 24" width={24} height={24} fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
+                </svg>
+              </div>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
+                {isVI ? 'Không tải được kế hoạch' : "Couldn't load this plan"}
+              </h3>
+              <p style={{ margin: '6px 0 18px', fontSize: 13, color: 'var(--c-muted)' }}>
+                {isVI ? 'Đã xảy ra lỗi khi tải. Vui lòng thử lại.' : 'Something went wrong while loading. Please try again.'}
+              </p>
+              <button onClick={onRetry} className="cn-btn primary" style={{ padding: '10px 18px' }}>
+                <RefreshCw size={14} />
+                {isVI ? 'Thử lại' : 'Try again'}
+              </button>
+            </div>
           ) : !plan ? (
             /* Empty state */
             <div
@@ -1083,7 +1107,7 @@ export default function DesktopPlanningView({
         </div>
 
         {/* Right — allocation sidebar */}
-        {plan && (
+        {plan && !error && (
           <div style={{ width: 280, flexShrink: 0, overflowY: 'auto', padding: '20px 20px 40px 4px', borderLeft: '1px solid var(--c-line)' }}>
             <AllocationCard
               salary={plan.salary_vnd}

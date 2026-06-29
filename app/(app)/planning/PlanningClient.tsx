@@ -149,6 +149,9 @@ export default function PlanningClient() {
   const [funds, setFunds] = useState<Fund[]>(initialCache?.funds ?? [])
   const [goals, setGoals] = useState<Goal[]>(initialCache?.goals ?? [])
   const [loading, setLoading] = useState(!initialCache)
+  // A failed load (≠ 404) must not masquerade as the legit "no plan yet" empty
+  // state — the API returns 404 only when the month genuinely has no plan.
+  const [loadError, setLoadError] = useState(false)
 
   // Surface confirmations through the globally-mounted sonner Toaster (neutral —
   // onToast carries both confirmations and the "book has matured" warning).
@@ -157,8 +160,16 @@ export default function PlanningClient() {
   const fetchPlan = useCallback(async (opts?: { force?: boolean }) => {
     if (opts?.force) bustPlanCache(month, year)
 
-    const res = await fetch(`/api/v1/monthly-plans?month=${month}&year=${year}&full=true`)
+    let res: Response
+    try {
+      res = await fetch(`/api/v1/monthly-plans?month=${month}&year=${year}&full=true`)
+    } catch {
+      setLoadError(true)
+      setLoading(false)
+      return
+    }
     if (res.ok) {
+      setLoadError(false)
       const p = await res.json()
 
       const overrideMap = new Map(
@@ -211,7 +222,9 @@ export default function PlanningClient() {
       setRecurringSavingOverrides(fresh.recurringSavingOverrides)
       setDcaSkips(fresh.dcaSkips)
       setRecurringFulfillments(fresh.recurringFulfillments)
-    } else {
+    } else if (res.status === 404) {
+      // Genuine "no plan for this month yet" → the empty state.
+      setLoadError(false)
       bustPlanCache(month, year)
       setPlan(null)
       setInvestments([])
@@ -224,14 +237,20 @@ export default function PlanningClient() {
       setDcaSkips([])
       setRecurringFulfillments([])
       // Still load fixed expenses and insurance even without a plan
-      const [expRes, insRes] = await Promise.all([
-        fetch('/api/v1/fixed-expenses'),
-        fetch('/api/v1/insurance-members'),
-      ])
-      const { expenses } = expRes.ok ? await expRes.json() : { expenses: [] }
-      setFixedExpenses((expenses ?? []).map((e: { expense_id: string; expense_name: string; amount_vnd: number }) => ({ ...e })))
-      const { members } = insRes.ok ? await insRes.json() : { members: [] }
-      setInsuranceMembers(members ?? [])
+      try {
+        const [expRes, insRes] = await Promise.all([
+          fetch('/api/v1/fixed-expenses'),
+          fetch('/api/v1/insurance-members'),
+        ])
+        const { expenses } = expRes.ok ? await expRes.json() : { expenses: [] }
+        setFixedExpenses((expenses ?? []).map((e: { expense_id: string; expense_name: string; amount_vnd: number }) => ({ ...e })))
+        const { members } = insRes.ok ? await insRes.json() : { members: [] }
+        setInsuranceMembers(members ?? [])
+      } catch { /* leave fixed/insurance empty — the month is still a valid empty plan */ }
+    } else {
+      // 401 / 500 / etc — a real failure. Keep whatever's shown and surface an
+      // error state with retry rather than pretending the month is empty.
+      setLoadError(true)
     }
     setLoading(false)
   }, [month, year])
@@ -308,6 +327,8 @@ export default function PlanningClient() {
         funds={funds}
         goals={goals}
         loading={loading}
+        error={loadError}
+        onRetry={refetch}
         onPlanCreated={(p) => { setPlan(p); refetch() }}
         onPlanDeleted={() => {
           bustPlanCache(month, year)
@@ -338,6 +359,8 @@ export default function PlanningClient() {
         funds={funds}
         goals={goals}
         loading={loading}
+        error={loadError}
+        onRetry={refetch}
         onPrev={navigatePrev}
         onNext={navigateNext}
         onToday={navigateToday}
