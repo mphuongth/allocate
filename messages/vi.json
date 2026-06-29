@@ -646,7 +646,8 @@
     "navUrlPlaceholder": "https://...",
     "editFund": "Sửa quỹ",
     "enableDca": "Bật DCA",
-    "disableDca": "Tắt DCA"
+    "disableDca": "Tắt DCA",
+    "refreshDisabledHint": "Thêm URL nguồn NAV cho một quỹ để bật làm mới tự động."
   },
   "planning": {
     "title": "Kế hoạch Tháng",

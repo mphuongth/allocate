@@ -646,7 +646,8 @@
     "navUrlPlaceholder": "https://...",
     "editFund": "Edit fund",
     "enableDca": "Enable DCA",
-    "disableDca": "Disable DCA"
+    "disableDca": "Disable DCA",
+    "refreshDisabledHint": "Add a NAV source URL to a fund to enable auto-refresh."
   },
   "planning": {
     "title": "Monthly Plan",

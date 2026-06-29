@@ -159,7 +159,7 @@ function TypeDropdown({ value, onChange }: { value: FundType; onChange: (v: Fund
 
 // ─── Sheet ───────────────────────────────────────────────────────────────────
 
-function Sheet({ open, onClose, testId, children }: { open: boolean; onClose: () => void; testId: string; children: React.ReactNode }) {
+function Sheet({ open, onClose, testId, dismissOnBackdrop = true, children }: { open: boolean; onClose: () => void; testId: string; dismissOnBackdrop?: boolean; children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false)
   useEffect(() => {
     if (open) setMounted(true)
@@ -170,7 +170,9 @@ function Sheet({ open, onClose, testId, children }: { open: boolean; onClose: ()
   return (
     <div
       style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.3)', zIndex: 200, pointerEvents: open ? 'auto' : 'none', display: 'flex', alignItems: 'flex-end' }}
-      onClick={onClose}
+      // Form sheets opt out of backdrop dismissal so a stray tap doesn't discard
+      // typed input; they're closed via the Cancel button (#2 P2).
+      onClick={dismissOnBackdrop ? onClose : undefined}
     >
       <div
         data-testid={testId}
@@ -801,7 +803,7 @@ export default function MobileFundLibraryView({ funds, setFunds, goals, loading,
       </div>
 
       {/* Add sheet */}
-      <Sheet open={addOpen} onClose={() => { setAddOpen(false); setFormError(null) }} testId="fund-sheet">
+      <Sheet open={addOpen} onClose={() => { setAddOpen(false); setFormError(null) }} testId="fund-sheet" dismissOnBackdrop={false}>
         <FundForm
           existing={null}
           title={t('addModal')}
@@ -813,7 +815,7 @@ export default function MobileFundLibraryView({ funds, setFunds, goals, loading,
       </Sheet>
 
       {/* Edit sheet */}
-      <Sheet open={!!editFund} onClose={() => { setEditFund(null); setFormError(null) }} testId="fund-sheet">
+      <Sheet open={!!editFund} onClose={() => { setEditFund(null); setFormError(null) }} testId="fund-sheet" dismissOnBackdrop={false}>
         {editFund && (
           <FundForm
             existing={editFund}
@@ -831,7 +833,8 @@ export default function MobileFundLibraryView({ funds, setFunds, goals, loading,
         {deleteFund && (
           <div style={{ paddingTop: 14, display: 'grid', gap: 14 }}>
             <p style={{ margin: 0, fontWeight: 700, fontSize: 16, color: 'var(--c-ink)' }}>{t('deleteModal', { name: deleteFund.code })}</p>
-            <p style={{ margin: 0, fontSize: 13, color: 'var(--c-muted)', lineHeight: 1.5 }}>{t('deleteCannotUndo')}</p>
+            {/* Impact line — parity with desktop DeleteModal (#2 P2). */}
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--c-muted)', lineHeight: 1.5 }}>{t('deleteWarning', { name: deleteFund.code })} {t('deleteCannotUndo')}</p>
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => setDeleteFund(null)} disabled={deleting} style={{ flex: 1, padding: '10px 14px', fontSize: 13, fontWeight: 600, border: '1px solid var(--c-line)', borderRadius: 10, background: 'var(--c-card)', color: 'var(--c-ink)', cursor: 'pointer', fontFamily: 'inherit' }}>
                 {tc('cancel')}
