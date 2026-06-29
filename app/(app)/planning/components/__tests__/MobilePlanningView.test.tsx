@@ -178,6 +178,12 @@ describe('MobilePlanningView — with plan', () => {
     expect(screen.getByLabelText(/delete/i)).toBeInTheDocument()
   })
 
+  it('gives the salary-card edit/delete buttons a ≥44px touch target', () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} />)
+    expect(screen.getByLabelText('Edit income')).toHaveStyle({ minWidth: '44px', minHeight: '44px' })
+    expect(screen.getByLabelText('Delete plan')).toHaveStyle({ minWidth: '44px', minHeight: '44px' })
+  })
+
   it('opens salary edit sheet when edit button is clicked', async () => {
     render(<MobilePlanningView {...defaultProps} plan={basePlan} />)
     await userEvent.click(screen.getByLabelText(/edit/i))
@@ -463,6 +469,12 @@ describe('MobilePlanningView — recurring savings in By goal', () => {
   it('renders a Log contribution "+" on the goal header', () => {
     render(<MobilePlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} />)
     expect(screen.getByRole('button', { name: /Log contribution/i })).toBeInTheDocument()
+  })
+
+  it('gives the Log contribution "+" a ≥44px touch target', () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} />)
+    const btn = screen.getByRole('button', { name: /Log contribution/i })
+    expect(btn).toHaveStyle({ minWidth: '44px', minHeight: '44px' })
   })
 
   it('opens the Add-Transaction sheet when the goal "+" is clicked', async () => {

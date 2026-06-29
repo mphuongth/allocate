@@ -3,6 +3,9 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import FixedExpenseManager from '../FixedExpenseManager'
 
+const { toastErrorMock } = vi.hoisted(() => ({ toastErrorMock: vi.fn() }))
+vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: toastErrorMock, success: vi.fn() }) }))
+
 vi.mock('next-intl', () => ({
   useTranslations: () => (key: string, params?: Record<string, unknown>) =>
     params ? `${key}:${JSON.stringify(params)}` : key,
@@ -170,6 +173,25 @@ describe('FixedExpenseManager — delete', () => {
       expect(del).toBeTruthy()
     })
     expect(onChange).toHaveBeenCalled()
+  })
+
+  it('shows an error toast and keeps the confirmation open when delete fails', async () => {
+    mockFetch((url, init) => {
+      if (url.includes('/api/v1/fixed-expenses/fe1') && init?.method === 'DELETE') {
+        return { ok: false, json: async () => ({ error: 'boom' }) }
+      }
+      return undefined
+    })
+    toastErrorMock.mockClear()
+    const onChange = vi.fn()
+    render(<FixedExpenseManager onChange={onChange} />)
+    await screen.findByText('Rent')
+    await userEvent.click(within(screen.getByTestId('fe-row-fe1')).getByTestId('fe-delete'))
+    await userEvent.click(screen.getByTestId('fe-delete-confirm'))
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalled())
+    // Confirmation stays open (not dismissed) and we didn't claim success.
+    expect(screen.getByTestId('fe-delete-overlay')).toBeInTheDocument()
+    expect(onChange).not.toHaveBeenCalled()
   })
 
   it('centers the delete confirmation in the default (modal) variant', async () => {

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslations, useLocale } from 'next-intl'
+import { toast } from 'sonner'
 import { Plus, ChevronLeft } from 'lucide-react'
 import { fmt, fmtCompact } from '@/lib/formatters'
 import type { Goal } from '../PlanningClient'
@@ -203,12 +204,14 @@ export default function RecurringSavingManager({ goals, onChange, onToast, varia
   async function handleDelete(s: Saving) {
     setDeleting(true)
     try {
-      const res = await fetch(`/api/v1/recurring-savings/${s.saving_id}`, { method: 'DELETE' })
-      if (res.ok) {
+      const res = await fetch(`/api/v1/recurring-savings/${s.saving_id}`, { method: 'DELETE' }).catch(() => null)
+      if (res?.ok) {
         setConfirmDelete(null)
         onToast?.(isVI ? 'Đã xoá khoản' : 'Saving deleted')
         await fetchList()
         onChange()
+      } else {
+        toast.error(isVI ? 'Không thể xoá, vui lòng thử lại' : "Couldn't delete — please try again")
       }
     } finally {
       setDeleting(false)
