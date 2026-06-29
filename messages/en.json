@@ -647,7 +647,8 @@
     "editFund": "Edit fund",
     "enableDca": "Enable DCA",
     "disableDca": "Disable DCA",
-    "refreshDisabledHint": "Add a NAV source URL to a fund to enable auto-refresh."
+    "refreshDisabledHint": "Add a NAV source URL to a fund to enable auto-refresh.",
+    "toastDeleteInUse": "Can't delete this fund — it's used in a monthly plan. Remove it from the plan first."
   },
   "planning": {
     "title": "Monthly Plan",

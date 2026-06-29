@@ -647,7 +647,8 @@
     "editFund": "Sửa quỹ",
     "enableDca": "Bật DCA",
     "disableDca": "Tắt DCA",
-    "refreshDisabledHint": "Thêm URL nguồn NAV cho một quỹ để bật làm mới tự động."
+    "refreshDisabledHint": "Thêm URL nguồn NAV cho một quỹ để bật làm mới tự động.",
+    "toastDeleteInUse": "Không thể xóa quỹ này — nó đang được dùng trong một kế hoạch. Hãy gỡ khỏi kế hoạch trước."
   },
   "planning": {
     "title": "Kế hoạch Tháng",
