@@ -205,6 +205,18 @@ describe('MaturityResolveBody', () => {
       expect(screen.queryByTestId('merge-source-sib-stock')).toBeNull()   // non-bank excluded
     })
 
+    it('formats the re-deposit amount with thousands separators', async () => {
+      const user = userEvent.setup()
+      stubEmptyRecurring()
+      render(
+        <MaturityResolveBody inv={maturedDeposit} goalId="goal-1" siblingDeposits={[sibBank]}
+          isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
+      )
+      await user.click(await screen.findByRole('button', { name: /Settle & re-deposit/i }))
+      // Default = principal + interest + recurring(0) = 37,030,000, shown grouped.
+      expect((screen.getByTestId('maturity-redeposit') as HTMLInputElement).value).toBe('37,030,000')
+    })
+
     it('prefills each selected source with its current value and shows the penalty caption', async () => {
       const user = userEvent.setup()
       stubEmptyRecurring()
@@ -217,7 +229,8 @@ describe('MaturityResolveBody', () => {
 
       // sibBank matures far past the anchor → out of window, folded in via override.
       await user.click(screen.getByTestId('merge-override-sib-bank'))
-      expect((screen.getByTestId('merge-received-sib-bank') as HTMLInputElement).value).toBe('8000000')
+      // Money fields render thousands separators (user-visible), not the raw digits.
+      expect((screen.getByTestId('merge-received-sib-bank') as HTMLInputElement).value).toBe('8,000,000')
       expect(screen.getByTestId('merge-penalty-caption')).toBeTruthy()
     })
 
@@ -238,8 +251,8 @@ describe('MaturityResolveBody', () => {
 
       // Weights ordered by (investmentDate, id): sib-bank (−150d) then sib-bank-2 (−100d).
       const [a1, a2] = allocateCumulative(10_000_000, [8_000_000, 4_000_000])
-      expect((screen.getByTestId('merge-received-sib-bank') as HTMLInputElement).value).toBe(String(a1))
-      expect((screen.getByTestId('merge-received-sib-bank-2') as HTMLInputElement).value).toBe(String(a2))
+      expect((screen.getByTestId('merge-received-sib-bank') as HTMLInputElement).value).toBe(a1.toLocaleString('en-US'))
+      expect((screen.getByTestId('merge-received-sib-bank-2') as HTMLInputElement).value).toBe(a2.toLocaleString('en-US'))
     })
 
     it('previews base + Σreceived but submits amount_vnd == BASE plus merge_sources', async () => {
@@ -431,7 +444,7 @@ describe('MaturityResolveBody', () => {
       await user.click(await screen.findByRole('button', { name: /Settle & re-deposit/i }))
 
       // In-window → preselected, so its received field is already shown + prefilled.
-      expect((await screen.findByTestId('merge-received-sib-in') as HTMLInputElement).value).toBe('6000000')
+      expect((await screen.findByTestId('merge-received-sib-in') as HTMLInputElement).value).toBe('6,000,000')
       // Out-of-window → not selected; offered behind an override, no received field yet.
       expect(screen.getByTestId('merge-override-sib-out')).toBeTruthy()
       expect(screen.queryByTestId('merge-received-sib-out')).toBeNull()
@@ -451,7 +464,7 @@ describe('MaturityResolveBody', () => {
       // Push the window past the 52-day gap → it becomes eligible and auto-selects.
       fireEvent.change(screen.getByTestId('merge-window-slider'), { target: { value: '60' } })
       expect(screen.queryByTestId('merge-override-sib-out')).toBeNull()
-      expect((screen.getByTestId('merge-received-sib-out') as HTMLInputElement).value).toBe('8000000')
+      expect((screen.getByTestId('merge-received-sib-out') as HTMLInputElement).value).toBe('8,000,000')
     })
 
     it('hard-blocks a different-currency sibling with no override', async () => {
@@ -480,7 +493,7 @@ describe('MaturityResolveBody', () => {
       await user.click(await screen.findByRole('button', { name: /Settle & re-deposit/i }))
       await user.click(screen.getByTestId('merge-override-sib-out'))
 
-      expect((screen.getByTestId('merge-received-sib-out') as HTMLInputElement).value).toBe('8000000')
+      expect((screen.getByTestId('merge-received-sib-out') as HTMLInputElement).value).toBe('8,000,000')
       // Anchor + the one folded source = 2 sources of provenance.
       expect(screen.getByTestId('merge-provenance').textContent).toMatch(/2 sources/i)
     })
@@ -529,7 +542,7 @@ describe('MaturityResolveBody', () => {
       await user.click(screen.getByRole('button', { name: /Don.t renew/i }))
       expect(screen.getByTestId('maturity-hold-fork')).toBeTruthy()
       // The received field (hold path) is shown, defaulted to the current value.
-      expect((screen.getByTestId('maturity-hold-received') as HTMLInputElement).value).toBe('10500000')
+      expect((screen.getByTestId('maturity-hold-received') as HTMLInputElement).value).toBe('10,500,000')
 
       await user.click(screen.getByRole('button', { name: /Confirm hold/i }))
       await waitFor(() => {
