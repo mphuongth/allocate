@@ -159,16 +159,26 @@ function DeleteModal({ open, onClose, fundCode, onConfirm, deleting }: {
 const SortTh = ({ label, sortKey, active, asc, onSort, align = 'right' }: {
   label: string; sortKey: SortKey; active: boolean; asc: boolean; onSort: (k: SortKey) => void; align?: 'left' | 'right'
 }) => (
+  // The clickable sort target is a real <button> (not a bare th onClick) so it's
+  // keyboard-focusable + Enter/Space-activatable; aria-sort exposes state to AT.
   <th
-    onClick={() => onSort(sortKey)}
-    style={{
-      padding: '10px 12px', textAlign: align,
-      fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
-      color: active ? 'var(--c-navy)' : 'var(--c-muted)',
-      cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap',
-    }}
+    aria-sort={active ? (asc ? 'ascending' : 'descending') : 'none'}
+    style={{ padding: 0, whiteSpace: 'nowrap' }}
   >
-    {label} {active ? (asc ? '↑' : '↓') : ''}
+    <button
+      type="button"
+      onClick={() => onSort(sortKey)}
+      style={{
+        width: '100%', textAlign: align,
+        padding: '10px 12px', background: 'none', border: 'none',
+        fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
+        color: active ? 'var(--c-navy)' : 'var(--c-muted)',
+        cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap',
+        fontFamily: 'inherit',
+      }}
+    >
+      {label} {active ? (asc ? '↑' : '↓') : ''}
+    </button>
   </th>
 )
 
@@ -264,7 +274,9 @@ function DcaToggle({ fund, editId, editValue, toggling, goals, goalLabel, unallo
           style={{
             fontSize: 11, fontWeight: 500, padding: '3px 6px', maxWidth: 120,
             border: '1px solid var(--c-line)', borderRadius: 6,
-            background: 'var(--c-card)', color: 'var(--c-muted)',
+            // --c-ink-2 (not --c-muted): the select holds a real chosen goal, so
+            // it needs readable contrast, not faint placeholder-grey.
+            background: 'var(--c-card)', color: 'var(--c-ink-2)',
             fontFamily: 'inherit', cursor: 'pointer', appearance: 'none', outline: 'none',
           }}
         >
