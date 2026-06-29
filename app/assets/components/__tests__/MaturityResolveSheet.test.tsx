@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MaturityResolveBody } from '../MaturityResolveSheet'
 import { addMonths, monthsBetween, allocateCumulative } from '@/lib/maturity'
 import { fmt } from '@/lib/formatters'
+import { SUCCESS_FLASH_MS } from '../../successFlash'
 import type { InvRow } from '../goalDetailShared'
 
 // A YYYY-MM-DD string `n` days from today (deterministic regardless of run date).
@@ -671,6 +672,37 @@ describe('MaturityResolveBody', () => {
       await user.click(screen.getByTestId('merge-override-sib-bank'))
       // The compact per-source "received" field is the worst offender (was 13px).
       expect(fontPx(screen.getByTestId('merge-received-sib-bank'))).toBeGreaterThanOrEqual(16)
+    })
+  })
+
+  // ── Success-flash timing ────────────────────────────────────────────────────
+  // After a successful renew the sheet shows a "done" confirmation, then closes
+  // and tells the parent to refresh. That hand-off was a 1.7s wait that read as
+  // the sheet being stuck; it's now a brief SUCCESS_FLASH_MS flash.
+  describe('renew success flash is brief', () => {
+    it('keeps the flash short, then auto-closes + refreshes (was a 1.7s wait)', async () => {
+      const user = userEvent.setup()
+      const onRenewed = vi.fn()
+      const onClose = vi.fn()
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }))
+
+      render(
+        <MaturityResolveBody inv={maturedDeposit} isVi={false} onClose={onClose} onRenewed={onRenewed} onWithdraw={() => {}} />,
+      )
+      await user.click(screen.getByRole('button', { name: /Confirm renewal/i }))
+
+      // The done confirmation shows first; the parent hasn't been told yet.
+      await screen.findByTestId('maturity-renewed')
+      expect(onRenewed).not.toHaveBeenCalled()
+
+      // It closes + refreshes well within ~1s — the old 1.7s wait would still be
+      // pending at this 1.3s deadline, so this fails on a regression back to it.
+      await waitFor(() => expect(onRenewed).toHaveBeenCalledTimes(1), { timeout: 1300 })
+      expect(onClose).toHaveBeenCalledTimes(1)
+    })
+
+    it('uses a short, non-blocking flash duration', () => {
+      expect(SUCCESS_FLASH_MS).toBeLessThanOrEqual(1000)
     })
   })
 

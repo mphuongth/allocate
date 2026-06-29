@@ -21,6 +21,7 @@ import { RefreshCw, Pencil, ArrowDownToLine, AlertTriangle, Check, Building2, X,
 import { fmt, fmtCompact } from '@/lib/formatters'
 import AmountInput from '@/app/components/ui/AmountInput'
 import { iconHit } from './iconHit'
+import { SUCCESS_FLASH_MS } from '../successFlash'
 import { fmtMaturity, type InvRow } from './goalDetailShared'
 import {
   depositMaturityState,
@@ -589,7 +590,7 @@ export function MaturityResolveBody({
         return
       }
       setHeldDone({ anchorName: holdAnchor.name })
-      setTimeout(() => { onRenewed(); onClose() }, 1700)
+      setTimeout(() => { onRenewed(); onClose() }, SUCCESS_FLASH_MS)
     } catch {
       setError(isVi ? 'Lỗi kết nối' : 'Connection error')
       setSaving(false)
@@ -664,7 +665,7 @@ export function MaturityResolveBody({
           ? [...selectedSources.map((s) => s.name), ...selectedHeld.map((h) => h.name ?? (isVi ? 'Sổ chờ gộp' : 'Held deposit'))]
           : [],
       })
-      setTimeout(() => { onRenewed(); onClose() }, 1700)
+      setTimeout(() => { onRenewed(); onClose() }, SUCCESS_FLASH_MS)
     } catch {
       setError(isVi ? 'Lỗi kết nối' : 'Connection error')
       setSaving(false)
