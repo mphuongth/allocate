@@ -466,6 +466,8 @@ export default function DesktopPlanningView({
   const [otherAmt, setOtherAmt] = useState('')
   const [showFEManage, setShowFEManage] = useState(false)
   const [showRSManage, setShowRSManage] = useState(false)
+  // When set, the recurring manager opens straight on this saving's edit form.
+  const [rsEditId, setRsEditId] = useState<string | null>(null)
   // Recording a DCA buy opens the canonical Add-Transaction sheet in edit mode,
   // pre-filled from the planned investment. Saving completes the same planned
   // row (PUT), so it never double-counts against the goal.
@@ -922,7 +924,7 @@ export default function DesktopPlanningView({
                 action={
                   <button
                     data-testid="desktop-manage-savings"
-                    onClick={() => setShowRSManage(true)}
+                    onClick={() => { setRsEditId(null); setShowRSManage(true) }}
                     style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', fontSize: 12, fontWeight: 600, color: 'var(--c-navy)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', borderRadius: 8 }}
                   >
                     <Settings size={14} />
@@ -981,7 +983,7 @@ export default function DesktopPlanningView({
                           isVI={isVI}
                           onSkip={() => handleRecSkip(inv)}
                           onRestore={() => handleRecRestore(inv)}
-                          onEdit={() => setShowRSManage(true)}
+                          onEdit={() => { setRsEditId(inv.recurringId ?? null); setShowRSManage(true) }}
                           onOverride={() => {
                             setOverrideModal({ id: inv.recurringId!, name: inv.name, defaultAmount: inv.baseAmount ?? inv.amount, type: 'rec' })
                             setOverrideVal(String(inv.baseAmount ?? inv.amount))
@@ -1242,7 +1244,7 @@ export default function DesktopPlanningView({
 
       {showRSManage && (
         <DModal onClose={() => setShowRSManage(false)} title={isVI ? 'Tiết kiệm định kỳ' : 'Recurring savings'} width={460}>
-          <RecurringSavingManager goals={goals} onChange={onRefresh} onToast={onToast} />
+          <RecurringSavingManager goals={goals} onChange={onRefresh} onToast={onToast} editSavingId={rsEditId} />
         </DModal>
       )}
 

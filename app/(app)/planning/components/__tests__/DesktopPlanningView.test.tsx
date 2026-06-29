@@ -88,6 +88,49 @@ describe('DesktopPlanningView — goal header "+" log contribution', () => {
   })
 })
 
+describe('DesktopPlanningView — recurring deep-link edit', () => {
+  it('"Edit recurring plan" opens the manager straight on that item’s edit form', async () => {
+    const fetchMock = vi.fn((url: string) => {
+      const u = String(url)
+      if (u.includes('/api/v1/recurring-savings')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ savings: [{ saving_id: 'rs1', name: 'VCB Savings', goal_id: 'g1', amount_vnd: 2_000_000, effective_from: null, effective_to: null, linked_deposit_tx_id: null }] }) })
+      }
+      if (u.includes('investment-transactions')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [] }) })
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      render(<DesktopPlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} goals={[{ goal_id: 'g1', goal_name: 'Retirement' }]} />)
+      await userEvent.click(screen.getByRole('button', { name: 'Saving actions' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Edit recurring plan' }))
+      const nameInput = await screen.findByTestId('rs-name')
+      expect((nameInput as HTMLInputElement).value).toBe('VCB Savings')
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('the "Manage savings" button opens the manager in LIST mode (no deep-link)', async () => {
+    const fetchMock = vi.fn((url: string) => {
+      const u = String(url)
+      if (u.includes('/api/v1/recurring-savings')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ savings: [{ saving_id: 'rs1', name: 'VCB Savings', goal_id: 'g1', amount_vnd: 2_000_000, effective_from: null, effective_to: null, linked_deposit_tx_id: null }] }) })
+      }
+      if (u.includes('investment-transactions')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [] }) })
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      render(<DesktopPlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} goals={[{ goal_id: 'g1', goal_name: 'Retirement' }]} />)
+      await userEvent.click(screen.getByTestId('desktop-manage-savings'))
+      expect(await screen.findByTestId('rs-add')).toBeInTheDocument()
+      expect(screen.queryByTestId('rs-name')).not.toBeInTheDocument()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+})
+
 describe('DesktopPlanningView — recurring bank "Saved" deposit', () => {
   it('renders a Saved button on a recurring bank saving row', () => {
     render(<DesktopPlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} />)

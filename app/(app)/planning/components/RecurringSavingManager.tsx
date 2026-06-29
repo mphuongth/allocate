@@ -72,9 +72,12 @@ interface Props {
   onChange: () => void
   onToast?: (msg: string) => void
   variant?: 'modal' | 'sheet'
+  // When set, open straight on this saving's edit form (deep-link from a plan
+  // line's "Edit recurring plan") instead of the list.
+  editSavingId?: string | null
 }
 
-export default function RecurringSavingManager({ goals, onChange, onToast, variant = 'modal' }: Props) {
+export default function RecurringSavingManager({ goals, onChange, onToast, variant = 'modal', editSavingId }: Props) {
   const tc = useTranslations('common')
   const isVI = useLocale() === 'vi'
 
@@ -94,9 +97,29 @@ export default function RecurringSavingManager({ goals, onChange, onToast, varia
   const fetchList = useCallback(async () => {
     const res = await fetch('/api/v1/recurring-savings')
     const data = res.ok ? await res.json() : { savings: [] }
-    setItems(data.savings ?? [])
+    const list: Saving[] = data.savings ?? []
+    setItems(list)
     setLoading(false)
-  }, [])
+    // Deep-link: open straight into the edit form for the requested saving once
+    // its data has loaded. (setState here runs after the await, not synchronously
+    // in an effect, so it doesn't cascade-render the list first.)
+    if (editSavingId) {
+      const item = list.find((s) => s.saving_id === editSavingId)
+      if (item) {
+        setEditing(item)
+        setForm({
+          name: item.name,
+          goal_id: item.goal_id ?? '',
+          amount_vnd: String(item.amount_vnd),
+          effective_from: toMonthInput(item.effective_from),
+          effective_to: toMonthInput(item.effective_to),
+          linked_deposit_tx_id: item.linked_deposit_tx_id ?? '',
+        })
+        setFormError('')
+        setMode('form')
+      }
+    }
+  }, [editSavingId])
 
   useEffect(() => { fetchList() }, [fetchList])
 
