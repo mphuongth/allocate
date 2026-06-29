@@ -869,13 +869,13 @@ function GoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit, onReco
               <Plus size={12} strokeWidth={2.4} />{isVI ? 'Đã gửi' : 'Saved'}
             </button>
           )}
-          <button ref={btnRef} onClick={() => (menuOpen ? setMenuOpen(false) : openMenu())} aria-label="Saving actions" style={{ padding: 4, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, color: 'var(--c-muted)', display: 'flex', flexShrink: 0 }}>
+          <button ref={btnRef} onClick={() => (menuOpen ? setMenuOpen(false) : openMenu())} aria-label="Saving actions" aria-haspopup="menu" aria-expanded={menuOpen} style={{ minWidth: 44, minHeight: 44, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, color: 'var(--c-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <MoreHorizontal size={14} />
           </button>
           {menuOpen && (
             <>
               <div onClick={() => setMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 5 }} />
-              <div style={{ position: 'fixed', top: menuPos.top, right: menuPos.right, zIndex: 6, background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 8, boxShadow: '0 6px 20px rgba(15,23,42,0.12)', minWidth: 200, overflow: 'hidden' }}>
+              <div role="menu" style={{ position: 'fixed', top: menuPos.top, right: menuPos.right, zIndex: 6, background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 8, boxShadow: '0 6px 20px rgba(15,23,42,0.12)', minWidth: 200, overflow: 'hidden' }}>
                 {skipped ? (
                   <MenuItem icon={<Check size={13} />} label={isVI ? 'Bao gồm tháng này' : 'Include this month'} onClick={() => { onRestore(); setMenuOpen(false) }} noBorder />
                 ) : (
@@ -904,13 +904,13 @@ function GoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit, onReco
           <button onClick={onRecordBuy} aria-label={isVI ? 'Ghi nhận mua' : 'Record buy'} style={{ padding: '4px 9px', fontSize: 11, fontWeight: 600, color: 'var(--c-pos)', background: 'var(--c-pos-tint)', border: '1px solid transparent', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0, whiteSpace: 'nowrap' }}>
             <Plus size={12} strokeWidth={2.4} />{isVI ? 'Mua' : 'Buy'}
           </button>
-          <button ref={btnRef} onClick={() => (menuOpen ? setMenuOpen(false) : openMenu())} aria-label="DCA actions" style={{ padding: 4, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, color: 'var(--c-muted)', display: 'flex', flexShrink: 0 }}>
+          <button ref={btnRef} onClick={() => (menuOpen ? setMenuOpen(false) : openMenu())} aria-label="DCA actions" aria-haspopup="menu" aria-expanded={menuOpen} style={{ minWidth: 44, minHeight: 44, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, color: 'var(--c-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <MoreHorizontal size={14} />
           </button>
           {menuOpen && (
             <>
               <div onClick={() => setMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 5 }} />
-              <div style={{ position: 'fixed', top: menuPos.top, right: menuPos.right, zIndex: 6, background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 8, boxShadow: '0 6px 20px rgba(15,23,42,0.12)', minWidth: 200, overflow: 'hidden' }}>
+              <div role="menu" style={{ position: 'fixed', top: menuPos.top, right: menuPos.right, zIndex: 6, background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 8, boxShadow: '0 6px 20px rgba(15,23,42,0.12)', minWidth: 200, overflow: 'hidden' }}>
                 <MenuItem icon={<Plus size={13} />} label={isVI ? 'Ghi nhận mua tháng này' : 'Record buy this month'} onClick={() => { onRecordBuy(); setMenuOpen(false) }} />
                 <MenuItem icon={<X size={13} />} label={isVI ? 'Bỏ qua tháng này' : 'Skip this month'} onClick={() => { onDcaSkip(); setMenuOpen(false) }} danger noBorder />
               </div>
@@ -980,14 +980,16 @@ function PlanLineItem({
         ref={btnRef}
         onClick={() => menuOpen ? setMenuOpen(false) : openMenu()}
         aria-label="More options"
-        style={{ padding: 4, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 4, display: 'flex', alignItems: 'center' }}
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        style={{ minWidth: 44, minHeight: 44, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
       >
         <MoreHorizontal size={14} color="var(--c-muted)" />
       </button>
       {menuOpen && (
         <>
           <div onClick={() => setMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 50 }} />
-          <div style={{
+          <div role="menu" style={{
             position: 'fixed', top: menuPos.top, right: menuPos.right, zIndex: 51,
             background: 'var(--c-card)', border: '1px solid var(--c-line)',
             borderRadius: 8, boxShadow: 'var(--shadow-pop)',
@@ -995,6 +997,7 @@ function PlanLineItem({
           }}>
             {muted ? (
               <button
+                role="menuitem"
                 onClick={() => { onRestore?.(); setMenuOpen(false) }}
                 style={{ width: '100%', textAlign: 'left', padding: '10px 12px', fontSize: 12, background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--c-ink)', display: 'flex', alignItems: 'center', gap: 8 }}
               >
@@ -1004,6 +1007,7 @@ function PlanLineItem({
             ) : (
               <>
                 <button
+                  role="menuitem"
                   onClick={() => { onOverride?.(); setMenuOpen(false) }}
                   style={{ width: '100%', textAlign: 'left', padding: '10px 12px', fontSize: 12, background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--c-ink)', display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid var(--c-line)' }}
                 >
@@ -1012,6 +1016,7 @@ function PlanLineItem({
                 </button>
                 {overridden && onRestore && (
                   <button
+                    role="menuitem"
                     onClick={() => { onRestore(); setMenuOpen(false) }}
                     style={{ width: '100%', textAlign: 'left', padding: '10px 12px', fontSize: 12, background: 'transparent', border: 'none', borderBottom: '1px solid var(--c-line)', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--c-ink)', display: 'flex', alignItems: 'center', gap: 8 }}
                   >
@@ -1020,6 +1025,7 @@ function PlanLineItem({
                   </button>
                 )}
                 <button
+                  role="menuitem"
                   onClick={() => { onSkip?.(); setMenuOpen(false) }}
                   style={{ width: '100%', textAlign: 'left', padding: '10px 12px', fontSize: 12, background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--c-neg)', display: 'flex', alignItems: 'center', gap: 8 }}
                 >
@@ -1042,6 +1048,7 @@ function MenuItem({ icon, label, onClick, danger, noBorder }: {
 }) {
   return (
     <button
+      role="menuitem"
       onClick={onClick}
       style={{ width: '100%', textAlign: 'left', padding: '10px 12px', fontSize: 12, background: 'transparent', border: 'none', borderBottom: noBorder ? 'none' : '1px solid var(--c-line)', cursor: 'pointer', fontFamily: 'inherit', color: danger ? 'var(--c-neg)' : 'var(--c-ink)', display: 'flex', alignItems: 'center', gap: 8 }}
     >
