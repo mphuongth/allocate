@@ -7,6 +7,9 @@ import { Plus, RefreshCw, Search, X } from 'lucide-react'
 import { fmtCompact, fmtNav } from '@/lib/formatters'
 import { Skeleton } from '@/app/components/ui/Skeleton'
 import { SyncPill } from '@/app/components/ui/SyncPill'
+// Shared dialog a11y (Esc-to-close + focus trap + focus restore). Lives under
+// the Plan feature today; reused here so Funds dialogs behave the same.
+import { useDialogA11y } from '@/app/(app)/planning/components/useDialogA11y'
 import { FundsEmptyState } from './FundsEmptyState'
 import type { Fund, Goal, FundType, FundsData } from './useFundsData'
 
@@ -72,6 +75,8 @@ const FundIcon = ({ code, type, size = 32 }: { code: string; type: FundType; siz
 function DModal({ open, onClose, title, width = 460, dismissOnBackdrop = true, children }: {
   open: boolean; onClose: () => void; title: string; width?: number; dismissOnBackdrop?: boolean; children: ReactNode
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useDialogA11y(dialogRef, open, onClose)
   if (!open) return null
   return (
     <div
@@ -81,6 +86,7 @@ function DModal({ open, onClose, title, width = 460, dismissOnBackdrop = true, c
       style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.4)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, backdropFilter: 'blur(2px)', animation: 'fade-in 150ms ease' }}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         data-testid="fund-modal"
@@ -104,6 +110,8 @@ function DeleteModal({ open, onClose, fundCode, onConfirm, deleting }: {
 }) {
   const t = useTranslations('funds')
   const tc = useTranslations('common')
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useDialogA11y(dialogRef, open, onClose)
   if (!open) return null
   return (
     <div
@@ -111,6 +119,7 @@ function DeleteModal({ open, onClose, fundCode, onConfirm, deleting }: {
       style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.4)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, backdropFilter: 'blur(2px)', animation: 'fade-in 150ms ease' }}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         data-testid="delete-fund-modal"

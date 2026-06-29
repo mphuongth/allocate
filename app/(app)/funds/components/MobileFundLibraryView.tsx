@@ -7,6 +7,9 @@ import { useNavigation } from '@/app/components/navigation/NavigationContext'
 import { Skeleton } from '@/app/components/ui/Skeleton'
 import { SyncPill } from '@/app/components/ui/SyncPill'
 import { fmtNav, fmtCompact } from '@/lib/formatters'
+// Shared dialog a11y (Esc-to-close + focus trap + focus restore). Lives under
+// the Plan feature today; reused here so Funds sheets behave the same.
+import { useDialogA11y } from '@/app/(app)/planning/components/useDialogA11y'
 import { FundsEmptyState } from './FundsEmptyState'
 import type { Fund, Goal, FundType, FundsData } from './useFundsData'
 
@@ -161,6 +164,8 @@ function TypeDropdown({ value, onChange }: { value: FundType; onChange: (v: Fund
 
 function Sheet({ open, onClose, testId, dismissOnBackdrop = true, children }: { open: boolean; onClose: () => void; testId: string; dismissOnBackdrop?: boolean; children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false)
+  const sheetRef = useRef<HTMLDivElement>(null)
+  useDialogA11y(sheetRef, open, onClose)
   useEffect(() => {
     if (open) setMounted(true)
     else { const t = setTimeout(() => setMounted(false), 220); return () => clearTimeout(t) }
@@ -175,6 +180,7 @@ function Sheet({ open, onClose, testId, dismissOnBackdrop = true, children }: { 
       onClick={dismissOnBackdrop ? onClose : undefined}
     >
       <div
+        ref={sheetRef}
         data-testid={testId}
         style={{ width: '100%', background: 'var(--c-card)', borderRadius: '16px 16px 0 0', paddingBottom: 'env(safe-area-inset-bottom,0)', animation: open ? 'slide-up 220ms cubic-bezier(0.2,0.8,0.2,1)' : 'slide-down 180ms ease forwards' }}
         onClick={(e) => e.stopPropagation()}
