@@ -294,6 +294,11 @@ export default function DesktopFundLibraryView({ funds, setFunds, goals, loading
   // DCA inline edit
   const [dcaEditId, setDcaEditId] = useState<string | null>(null)
   const [dcaEditValue, setDcaEditValue] = useState('')
+  // True only while editing a DCA that was *just* toggled on and never persisted.
+  // Distinguishes "cancel a brand-new enable" (revert to off) from "clear an
+  // already-saved amount" (a no-op cancel — the server still has DCA on, so
+  // flipping the local row off would desync until the next reload) (#2).
+  const [dcaEditIsNew, setDcaEditIsNew] = useState(false)
   // Funds with an in-flight DCA PUT — toggle/goal-select disabled until it lands
   // (parity with mobile's togglingIds, prevents overlapping PUTs on fast clicks).
   const [togglingIds, setTogglingIds] = useState<Set<string>>(new Set())
@@ -416,6 +421,7 @@ export default function DesktopFundLibraryView({ funds, setFunds, goals, loading
     if (turningOn) {
       setDcaEditId(fund.id)
       setDcaEditValue('')
+      setDcaEditIsNew(true)
       return
     }
 
@@ -440,11 +446,18 @@ export default function DesktopFundLibraryView({ funds, setFunds, goals, loading
     const amount = Number(dcaEditValue)
     const valid = dcaEditValue !== '' && !isNaN(amount) && amount > 0
     if (!valid) {
-      setFunds(p => p.map(f => f.id === fund.id ? { ...f, is_dca: false, dca_monthly_amount_vnd: null } : f))
+      // Only a brand-new, never-persisted enable reverts to off. Clearing an
+      // already-saved amount is a no-op cancel; the saved row stays as the
+      // server has it (#2). Turning DCA off is done via the toggle.
+      if (dcaEditIsNew) {
+        setFunds(p => p.map(f => f.id === fund.id ? { ...f, is_dca: false, dca_monthly_amount_vnd: null } : f))
+      }
       setDcaEditId(null)
+      setDcaEditIsNew(false)
       return
     }
     setDcaEditId(null)
+    setDcaEditIsNew(false)
     setTogglingIds(p => new Set(p).add(fund.id))
     try {
       const res = await fetch(`/api/funds/${fund.id}`, {
@@ -686,10 +699,10 @@ export default function DesktopFundLibraryView({ funds, setFunds, goals, loading
                           goalLabel={t('dcaGoalLabel')}
                           unallocatedLabel={t('dcaGoalUnallocated')}
                           onToggle={() => handleToggleDca(fund)}
-                          onEditStart={() => { setDcaEditId(fund.id); setDcaEditValue(String(fund.dca_monthly_amount_vnd ?? '')) }}
+                          onEditStart={() => { setDcaEditId(fund.id); setDcaEditValue(String(fund.dca_monthly_amount_vnd ?? '')); setDcaEditIsNew(false) }}
                           onEditChange={setDcaEditValue}
                           onEditCommit={() => handleSaveDcaAmount(fund)}
-                          onEditCancel={() => { setFunds(p => p.map(f => f.id === fund.id ? { ...f, is_dca: false, dca_monthly_amount_vnd: null } : f)); setDcaEditId(null) }}
+                          onEditCancel={() => { if (dcaEditIsNew) setFunds(p => p.map(f => f.id === fund.id ? { ...f, is_dca: false, dca_monthly_amount_vnd: null } : f)); setDcaEditId(null); setDcaEditIsNew(false) }}
                           onGoalChange={(goalId) => handleSetDcaGoal(fund, goalId)}
                         />
                       </td>

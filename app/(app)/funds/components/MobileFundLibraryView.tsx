@@ -271,7 +271,7 @@ function FundForm({ existing, title, onClose, onSave, saving, formError }: {
 
 // ─── FundCard ────────────────────────────────────────────────────────────────
 
-function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel, unallocatedLabel, onEdit, onDelete, onToggleDca, onSaveDcaAmount, onGoalChange, setDcaEditId, setDcaEditValue }: {
+function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel, unallocatedLabel, onEdit, onDelete, onToggleDca, onSaveDcaAmount, onCancelDcaEdit, onGoalChange, setDcaEditId, setDcaEditValue, setDcaEditIsNew }: {
   fund: Fund
   dcaEditId: string | null
   dcaEditValue: string
@@ -283,9 +283,11 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
   onDelete: () => void
   onToggleDca: () => void
   onSaveDcaAmount: (val: string) => void
+  onCancelDcaEdit: () => void
   onGoalChange: (goalId: string | null) => void
   setDcaEditId: (id: string | null) => void
   setDcaEditValue: (v: string) => void
+  setDcaEditIsNew: (v: boolean) => void
 }) {
   const t = useTranslations('funds')
   const tc = useTranslations('common')
@@ -371,7 +373,7 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
                 onBlur={() => { onSaveDcaAmount(dcaEditValue); setDcaEditId(null) }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') { onSaveDcaAmount(dcaEditValue); setDcaEditId(null) }
-                  if (e.key === 'Escape') setDcaEditId(null)
+                  if (e.key === 'Escape') onCancelDcaEdit()
                 }}
                 placeholder={`${tc('amount')} ₫`}
                 style={{ width: 90, padding: '3px 8px', fontSize: 16, border: '1px solid var(--c-navy)', borderRadius: 6, background: 'var(--c-card)', fontFamily: 'inherit', outline: 'none', color: 'var(--c-ink)' }}
@@ -380,7 +382,7 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
               <button
                 type="button"
                 data-testid={`dca-amount-btn-${fund.id}`}
-                onClick={() => { setDcaEditId(fund.id); setDcaEditValue(String(fund.dca_monthly_amount_vnd)) }}
+                onClick={() => { setDcaEditId(fund.id); setDcaEditValue(String(fund.dca_monthly_amount_vnd)); setDcaEditIsNew(false) }}
                 style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', background: 'var(--c-navy-tint)', color: 'var(--c-navy)', border: '1px solid var(--c-navy-tint)', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit' }}
               >
                 {fmtCompact(fund.dca_monthly_amount_vnd)}
@@ -388,7 +390,7 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
             ) : (
               <button
                 type="button"
-                onClick={() => { setDcaEditId(fund.id); setDcaEditValue('') }}
+                onClick={() => { setDcaEditId(fund.id); setDcaEditValue(''); setDcaEditIsNew(false) }}
                 style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', background: 'var(--c-navy-tint)', color: 'var(--c-navy)', border: '1px solid var(--c-navy-tint)', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit' }}
               >
                 {t('setAmount')}
@@ -458,6 +460,11 @@ export default function MobileFundLibraryView({ funds, setFunds, goals, loading,
   // DCA inline edit
   const [dcaEditId, setDcaEditId] = useState<string | null>(null)
   const [dcaEditValue, setDcaEditValue] = useState('')
+  // True only while editing a DCA that was *just* toggled on and never persisted.
+  // Distinguishes "cancel a brand-new enable" (revert to off) from "clear an
+  // already-saved amount" (a no-op cancel — the server still has DCA on, so
+  // flipping the local card off would desync until the next reload) (#2).
+  const [dcaEditIsNew, setDcaEditIsNew] = useState(false)
   const [togglingIds, setTogglingIds] = useState<Set<string>>(new Set())
 
   // Toasts
@@ -587,6 +594,7 @@ export default function MobileFundLibraryView({ funds, setFunds, goals, loading,
     if (turningOn) {
       setDcaEditId(fund.id)
       setDcaEditValue('')
+      setDcaEditIsNew(true)
       return
     }
 
@@ -608,10 +616,17 @@ export default function MobileFundLibraryView({ funds, setFunds, goals, loading,
     const valid = val !== '' && !isNaN(amount) && amount > 0
 
     if (!valid) {
-      setFunds((prev) => prev.map((f) => f.id === fund.id ? { ...f, is_dca: false, dca_monthly_amount_vnd: null } : f))
+      // Only a brand-new, never-persisted enable reverts to off. Clearing an
+      // already-saved amount is a no-op cancel; the saved card stays as the
+      // server has it (#2). Turning DCA off is done via the toggle.
+      if (dcaEditIsNew) {
+        setFunds((prev) => prev.map((f) => f.id === fund.id ? { ...f, is_dca: false, dca_monthly_amount_vnd: null } : f))
+      }
+      setDcaEditIsNew(false)
       return
     }
 
+    setDcaEditIsNew(false)
     setTogglingIds((prev) => new Set([...prev, fund.id]))
     try {
       const res = await fetch(`/api/funds/${fund.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: fund.name, code: fund.code, fund_type: fund.fund_type, nav: fund.nav, nav_source_url: fund.nav_source_url, is_dca: true, dca_monthly_amount_vnd: amount, dca_goal_id: fund.dca_goal_id }) })
@@ -623,6 +638,16 @@ export default function MobileFundLibraryView({ funds, setFunds, goals, loading,
     } finally {
       setTogglingIds((prev) => { const s = new Set(prev); s.delete(fund.id); return s })
     }
+  }
+
+  // Abandon an inline amount edit (Escape). A brand-new enable reverts to off;
+  // editing an already-saved amount just closes the editor (#2).
+  function handleCancelDcaEdit(fund: Fund) {
+    if (dcaEditIsNew) {
+      setFunds((prev) => prev.map((f) => f.id === fund.id ? { ...f, is_dca: false, dca_monthly_amount_vnd: null } : f))
+    }
+    setDcaEditId(null)
+    setDcaEditIsNew(false)
   }
 
   async function handleSetDcaGoal(fund: Fund, goalId: string | null) {
@@ -753,9 +778,11 @@ export default function MobileFundLibraryView({ funds, setFunds, goals, loading,
                 onDelete={() => setDeleteFund(fund)}
                 onToggleDca={() => handleToggleDca(fund)}
                 onSaveDcaAmount={(val) => handleSaveDcaAmount(fund, val)}
+                onCancelDcaEdit={() => handleCancelDcaEdit(fund)}
                 onGoalChange={(goalId) => handleSetDcaGoal(fund, goalId)}
                 setDcaEditId={setDcaEditId}
                 setDcaEditValue={setDcaEditValue}
+                setDcaEditIsNew={setDcaEditIsNew}
               />
             ))}
           </div>
