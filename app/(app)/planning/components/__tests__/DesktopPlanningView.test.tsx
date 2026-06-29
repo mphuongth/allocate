@@ -307,6 +307,19 @@ describe('DesktopPlanningView — save error feedback (no false success)', () =>
   })
 })
 
+describe('DesktopPlanningView — insurance Add member (no dead-end)', () => {
+  it('offers an Add member action even when there are no members', () => {
+    render(<DesktopPlanningView {...defaultProps} plan={basePlan} insuranceMembers={[]} />)
+    expect(screen.getByTestId('desktop-add-insurance')).toBeInTheDocument()
+  })
+
+  it('opens the add-insurance modal when Add member is clicked', async () => {
+    render(<DesktopPlanningView {...defaultProps} plan={basePlan} insuranceMembers={[]} />)
+    await userEvent.click(screen.getByTestId('desktop-add-insurance'))
+    expect(await screen.findByTestId('add-insurance-modal')).toBeInTheDocument()
+  })
+})
+
 describe('DesktopPlanningView — insurance Relationship + Default columns', () => {
   // 14,000,000 / 12 = 1,166,667 — the default monthly contribution.
   const insuranceMembers: InsuranceMember[] = [

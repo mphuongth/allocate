@@ -595,6 +595,19 @@ describe('MobilePlanningView — save error feedback (no false success)', () => 
   })
 })
 
+describe('MobilePlanningView — insurance section parity + Add member', () => {
+  it('shows the insurance section even when there are no members', () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} insuranceMembers={[]} />)
+    expect(screen.getByTestId('section-insurance')).toBeInTheDocument()
+  })
+
+  it('offers an Add member action and opens the add-insurance sheet', async () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} insuranceMembers={[]} />)
+    await userEvent.click(screen.getByTestId('mobile-add-insurance'))
+    expect(await screen.findByTestId('add-insurance-modal')).toBeInTheDocument()
+  })
+})
+
 describe('MobilePlanningView — overridden-item restore parity + recurring deep-link edit', () => {
   it('offers "Restore default" on an OVERRIDDEN (not skipped) fixed expense', async () => {
     const fixedExpenses: FixedExpense[] = [{ expense_id: 'fe1', expense_name: 'Rent', amount_vnd: 8_500_000, override: 10_000_000 }]
