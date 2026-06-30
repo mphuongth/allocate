@@ -536,3 +536,37 @@ describe('MobileSettingsView — language chooser', () => {
     expect(screen.getByRole('button', { name: /apply/i })).toHaveStyle({ minHeight: '44px' })
   })
 })
+
+// ─── Cross-surface consistency (PR-4) ────────────────────────────────────────────
+
+describe('MobileSettingsView — section order (matches desktop)', () => {
+  it('places the Price sync section before Data', () => {
+    render(<MobileSettingsView {...defaultProps} />)
+    const priceSync = screen.getByText('Price sync')
+    const data = screen.getByText(/^data$/i)
+    // Desktop's right column is Price sync → Data; mobile should read the same.
+    expect(priceSync.compareDocumentPosition(data) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy()
+  })
+})
+
+describe('MobileSettingsView — profile form backdrop (no accidental data loss)', () => {
+  it('does NOT close the profile sheet on a backdrop tap (avoids losing a typed name)', async () => {
+    render(<MobileSettingsView {...defaultProps} />)
+    await userEvent.click(screen.getByRole('button', { name: /profile/i }))
+    const dialog = screen.getByRole('dialog')
+    fireEvent.click(dialog.parentElement as HTMLElement) // the backdrop
+    // Wait past the BottomSheet's 220ms close animation: with backdrop-dismiss
+    // disabled the sheet must still be mounted, not merely mid-close.
+    await new Promise(r => setTimeout(r, 280))
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
+
+  it('still closes the appearance sheet on a backdrop tap (no unsaved input there)', async () => {
+    render(<MobileSettingsView {...defaultProps} />)
+    await userEvent.click(screen.getByRole('button', { name: /appearance/i }))
+    const dialog = screen.getByRole('dialog')
+    fireEvent.click(dialog.parentElement as HTMLElement)
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+})
