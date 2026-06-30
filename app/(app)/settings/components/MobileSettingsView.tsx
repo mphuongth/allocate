@@ -37,10 +37,11 @@ function readThemeChoice(fallback: ThemeChoice): ThemeChoice {
 
 // ─── Bottom sheet wrapper ──────────────────────────────────────────────────────
 
-function BottomSheet({ open, onClose, title, children }: {
+function BottomSheet({ open, onClose, title, dismissOnBackdrop = true, children }: {
   open: boolean
   onClose: () => void
   title: string
+  dismissOnBackdrop?: boolean
   children: React.ReactNode
 }) {
   const [mounted, setMounted] = useState(false)
@@ -67,7 +68,9 @@ function BottomSheet({ open, onClose, title, children }: {
         zIndex: 150,
         pointerEvents: open ? 'auto' : 'none',
       }}
-      onClick={onClose}
+      // Form sheets (the profile editor) opt out of backdrop dismissal so a
+      // stray tap doesn't discard a half-typed name. Esc + Cancel still close.
+      onClick={dismissOnBackdrop ? onClose : undefined}
     >
       <div
         ref={dialogRef}
@@ -128,7 +131,7 @@ function ProfileSheet({ open, onClose, onSave, displayName, email }: {
   }
 
   return (
-    <BottomSheet open={open} onClose={onClose} title={t('profileModalTitle')}>
+    <BottomSheet open={open} onClose={onClose} title={t('profileModalTitle')} dismissOnBackdrop={false}>
       {saved ? (
         <div style={{ padding: '28px 0', textAlign: 'center' }}>
           <div style={{
@@ -555,21 +558,6 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
           </div>
         </section>
 
-        {/* Data section */}
-        <section style={{ marginTop: 22 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--c-muted)', marginBottom: 8, paddingLeft: 4 }}>
-            {t('data')}
-          </div>
-          <div style={{ background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 16, overflow: 'hidden', boxShadow: 'var(--shadow-card)' }}>
-            <SettingsRow
-              icon={<Download size={16} />}
-              label={t('exportData')}
-              onClick={handleOpenReport}
-              last
-            />
-          </div>
-        </section>
-
         {/* Price sync section */}
         <section style={{ marginTop: 22 }}>
           <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--c-muted)', marginBottom: 8, paddingLeft: 4 }}>
@@ -645,6 +633,21 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
                 </div>
               ))}
             </div>
+          </div>
+        </section>
+
+        {/* Data section — after Price sync, matching the desktop right column */}
+        <section style={{ marginTop: 22 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--c-muted)', marginBottom: 8, paddingLeft: 4 }}>
+            {t('data')}
+          </div>
+          <div style={{ background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 16, overflow: 'hidden', boxShadow: 'var(--shadow-card)' }}>
+            <SettingsRow
+              icon={<Download size={16} />}
+              label={t('exportData')}
+              onClick={handleOpenReport}
+              last
+            />
           </div>
         </section>
 
