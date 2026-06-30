@@ -82,7 +82,7 @@ export default function DesktopNetWorthPanel({ data, allocationTotals, goldUnits
     return Object.entries(raw)
       .filter(([, v]) => v > 0)
       .sort((a, b) => b[1] - a[1])
-      .map(([type, value], _i) => ({
+      .map(([type, value]) => ({
         type,
         value,
         pct: total > 0 ? (value / total) * 100 : 0,
