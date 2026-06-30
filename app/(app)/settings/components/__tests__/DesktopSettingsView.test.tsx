@@ -298,4 +298,12 @@ describe('DesktopSettingsView — dialog a11y', () => {
     await userEvent.click(screen.getByRole('button', { name: /^edit$/i }))
     expect(screen.getByRole('dialog')).toHaveAccessibleName(/profile/i)
   })
+
+  it('does NOT close the edit-profile modal on a backdrop click (avoids losing a typed name)', async () => {
+    render(<DesktopSettingsView {...defaultProps} />)
+    await userEvent.click(screen.getByRole('button', { name: /^edit$/i }))
+    const dialog = screen.getByRole('dialog')
+    fireEvent.click(dialog.parentElement as HTMLElement) // the backdrop
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
 })

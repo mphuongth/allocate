@@ -28,10 +28,11 @@ const SAVE_FLASH_MS = 1400
 
 // ─── Desktop Modal ─────────────────────────────────────────────────────────────
 
-function DModal({ open, onClose, title, children }: {
+function DModal({ open, onClose, title, dismissOnBackdrop = true, children }: {
   open: boolean
   onClose: () => void
   title: string
+  dismissOnBackdrop?: boolean
   children: React.ReactNode
 }) {
   const dialogRef = useRef<HTMLDivElement>(null)
@@ -40,7 +41,9 @@ function DModal({ open, onClose, title, children }: {
   if (!open) return null
   return (
     <div
-      onClick={onClose}
+      // Form modals (the profile editor) opt out of backdrop dismissal so a
+      // stray click doesn't discard a half-typed name. Esc + Cancel still close.
+      onClick={dismissOnBackdrop ? onClose : undefined}
       style={{
         position: 'fixed', inset: 0,
         background: 'rgba(15,23,42,0.4)',
@@ -450,7 +453,7 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
       </div>
 
       {/* ─── Edit profile modal ─────────────────────────────────────────────── */}
-      <DModal open={showProfile} onClose={() => { setShowProfile(false); setProfileSaved(false) }} title={t('profileModalTitle')}>
+      <DModal open={showProfile} onClose={() => { setShowProfile(false); setProfileSaved(false) }} title={t('profileModalTitle')} dismissOnBackdrop={false}>
         {profileSaved ? (
           <div style={{ padding: '28px 0', textAlign: 'center' }}>
             <div style={{ width: 52, height: 52, borderRadius: 26, background: 'var(--c-pos-tint)', color: 'var(--c-pos)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
