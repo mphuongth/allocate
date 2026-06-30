@@ -6,76 +6,14 @@ import { makeCleanupStack } from './helpers/cleanup'
 const cleanup = makeCleanupStack()
 test.afterEach(() => cleanup.run())
 
-test('desktop funds toolbar shows search, type filter pills, refresh and add buttons', async ({ page }) => {
-  await page.goto('/funds')
-  await page.waitForLoadState('networkidle')
-
-  const toolbar = page.getByTestId('desktop-funds-toolbar')
-  await expect(toolbar).toBeVisible({ timeout: 10_000 })
-  await expect(toolbar.getByPlaceholder(/search|tìm/i)).toBeVisible()
-  await expect(toolbar.getByRole('button', { name: /all|tất cả/i })).toBeVisible()
-  await expect(toolbar.getByRole('button', { name: /stock|cổ phiếu/i })).toBeVisible()
-  await expect(toolbar.getByRole('button', { name: /bond|trái phiếu/i })).toBeVisible()
-  await expect(toolbar.getByRole('button', { name: /balanced|cân bằng/i })).toBeVisible()
-  await expect(toolbar.getByRole('button', { name: /refresh|làm mới/i })).toBeVisible()
-  await expect(toolbar.getByRole('button', { name: /add fund|thêm quỹ/i })).toBeVisible()
-})
-
-test('desktop funds table shows fund code, type chip, and NAV columns', async ({ page }) => {
-  const fund = await api.createFund({ name: 'E2E Desktop Equity Fund', code: 'DTEQ01', fund_type: 'equity', nav: 55000 })
-  cleanup.add(() => api.deleteFund(fund.id))
-
-  await page.goto('/funds')
-  await page.waitForLoadState('networkidle')
-
-  const table = page.getByTestId('desktop-funds-table')
-  await expect(table).toBeVisible({ timeout: 10_000 })
-  const row = table.getByTestId(`fund-row-${fund.id}`)
-  await expect(row).toBeVisible({ timeout: 8_000 })
-  await expect(row.getByText('DTEQ01')).toBeVisible()
-  await expect(row.getByText(/stock|cổ phiếu/i)).toBeVisible()
-  await expect(row.getByText(/55.000|55,000/)).toBeVisible()
-})
-
-test('desktop funds form placeholders + action aria-labels are localized (vi)', async ({ page }) => {
-  // Review follow-up: the desktop form placeholders and the edit/delete/DCA
-  // aria-labels were hardcoded English. The e2e session renders vi.
-  const fund = await api.createFund({ name: 'E2E Desktop i18n Labels', code: 'DTI18N', fund_type: 'equity', nav: 12000 })
-  cleanup.add(() => api.deleteFund(fund.id))
-
-  await page.goto('/funds')
-  await page.waitForLoadState('networkidle')
-
-  const row = page.getByTestId('desktop-funds-table').getByTestId(`fund-row-${fund.id}`)
-  await expect(row).toBeVisible({ timeout: 10_000 })
-  await expect(row.getByRole('button', { name: /sửa quỹ/i })).toBeVisible()
-  await expect(row.getByRole('button', { name: /xóa quỹ/i })).toBeVisible()
-  await expect(row.getByRole('button', { name: /bật dca/i })).toBeVisible()
-
-  // Add modal: the fund-name input placeholder is localized ("vd: …").
-  await page.getByTestId('desktop-funds-toolbar').getByRole('button', { name: /add fund|thêm quỹ/i }).click()
-  const modal = page.getByTestId('fund-modal')
-  await expect(modal).toBeVisible({ timeout: 5_000 })
-  await expect(modal.getByPlaceholder(/^vd:/i).first()).toBeVisible()
-})
-
-test('desktop funds row shows per-fund NAV age when a source URL is set (#9)', async ({ page }) => {
-  // #9: mobile cards show "Updated …" per fund; the desktop table didn't expose
-  // NAV age at all. A fund with a nav_source_url now shows the relative age
-  // under its NAV (just-created → "Cập nhật vừa xong" / "Updated just now").
-  const fund = await api.createFund({
-    name: 'E2E Desktop NAV Age', code: 'DTAGE1', fund_type: 'equity', nav: 18000,
-    nav_source_url: 'https://example.com/nav',
-  })
-  cleanup.add(() => api.deleteFund(fund.id))
-
-  await page.goto('/funds')
-  await page.waitForLoadState('networkidle')
-
-  const row = page.getByTestId('desktop-funds-table').getByTestId(`fund-row-${fund.id}`)
-  await expect(row).toBeVisible({ timeout: 10_000 })
-  await expect(row.getByText(/cập nhật|updated/i)).toBeVisible()
-})
+// Presence/render + filter coverage (toolbar, table columns, NAV-age banner,
+// type/search filter, add/edit/delete modals, gold-excluded type dropdown,
+// localized chrome, DCA reveal) lives in the fast component + lib tests:
+//   app/(app)/funds/components/__tests__/DesktopFundLibraryView.render.test.tsx
+//   lib/__tests__/formatters.test.ts (fmtNav "₫ 55.000,00")
+// Only what a mocked component test can't prove stays here: the in-flight DCA
+// disable (real network timing), the cross-viewport state hand-off, and the DCA
+// persist-across-reload round-trips.
 
 test('desktop funds DCA toggle is disabled while the update is in flight (#8)', async ({ page }) => {
   // #8: the desktop DCA handlers had no in-flight guard (mobile dims + disables
@@ -104,154 +42,6 @@ test('desktop funds DCA toggle is disabled while the update is in flight (#8)', 
   await expect(toggle).toBeDisabled()
 })
 
-test('desktop funds NAV uses the shared ₫ + 2-decimal format (#6)', async ({ page }) => {
-  // #6: the desktop table showed a bare "55.000" (no decimals, no unit) while
-  // mobile showed "55.000,00 VND". Both now render the shared fmtNav: "₫ 55.000,00".
-  const fund = await api.createFund({ name: 'E2E Desktop NAV Format', code: 'DTNAVF', fund_type: 'equity', nav: 55000 })
-  cleanup.add(() => api.deleteFund(fund.id))
-
-  await page.goto('/funds')
-  await page.waitForLoadState('networkidle')
-
-  const row = page.getByTestId('desktop-funds-table').getByTestId(`fund-row-${fund.id}`)
-  await expect(row).toBeVisible({ timeout: 10_000 })
-  await expect(row.getByText(/₫\s*55\.000,00/)).toBeVisible()
-})
-
-test('desktop funds type filter pill filters by equity', async ({ page }) => {
-  const equityFund = await api.createFund({ name: 'E2E Desktop Equity', code: 'DTEQF', fund_type: 'equity', nav: 10000 })
-  const bondFund = await api.createFund({ name: 'E2E Desktop Bond', code: 'DTBDF', fund_type: 'debt', nav: 10000 })
-  cleanup.add(() => api.deleteFund(equityFund.id))
-  cleanup.add(() => api.deleteFund(bondFund.id))
-
-  await page.goto('/funds')
-  await page.waitForLoadState('networkidle')
-
-  const toolbar = page.getByTestId('desktop-funds-toolbar')
-  await toolbar.getByRole('button', { name: /stock|cổ phiếu/i }).click()
-
-  const table = page.getByTestId('desktop-funds-table')
-  await expect(table.getByTestId(`fund-row-${equityFund.id}`)).toBeVisible({ timeout: 8_000 })
-  await expect(table.getByTestId(`fund-row-${bondFund.id}`)).not.toBeVisible()
-})
-
-test('desktop funds search filters by fund code', async ({ page }) => {
-  const fund = await api.createFund({ name: 'E2E Desktop Search Fund', code: 'DTSRCH', fund_type: 'balanced', nav: 20000 })
-  cleanup.add(() => api.deleteFund(fund.id))
-
-  await page.goto('/funds')
-  await page.waitForLoadState('networkidle')
-
-  const toolbar = page.getByTestId('desktop-funds-toolbar')
-  await toolbar.getByPlaceholder(/search|tìm/i).fill('DTSRCH')
-
-  const table = page.getByTestId('desktop-funds-table')
-  await expect(table.getByTestId(`fund-row-${fund.id}`)).toBeVisible({ timeout: 8_000 })
-})
-
-
-test('desktop funds add fund button opens add modal', async ({ page }) => {
-  await page.goto('/funds')
-  await page.waitForLoadState('networkidle')
-
-  const toolbar = page.getByTestId('desktop-funds-toolbar')
-  await toolbar.getByRole('button', { name: /add fund|thêm quỹ/i }).click()
-
-  await expect(page.getByTestId('fund-modal')).toBeVisible({ timeout: 5_000 })
-  await expect(page.getByTestId('fund-modal-title')).toHaveText(/add fund|thêm quỹ/i)
-})
-
-test('desktop funds add modal Type dropdown excludes gold, matching mobile (#3)', async ({ page }) => {
-  // Parity: mobile filters gold out of the create form (gold is handled
-  // separately via byType), but the desktop <select> listed it. Gold must
-  // not be selectable when creating a fund on desktop either.
-  await page.goto('/funds')
-  await page.waitForLoadState('networkidle')
-
-  const toolbar = page.getByTestId('desktop-funds-toolbar')
-  await toolbar.getByRole('button', { name: /add fund|thêm quỹ/i }).click()
-
-  const modal = page.getByTestId('fund-modal')
-  await expect(modal).toBeVisible({ timeout: 5_000 })
-  const typeSelect = modal.locator('select')
-  // The three allowed types are present; gold is not.
-  await expect(typeSelect.locator('option')).toHaveCount(3)
-  await expect(typeSelect.locator('option[value="gold"]')).toHaveCount(0)
-})
-
-test('desktop funds edit button opens edit modal prefilled', async ({ page }) => {
-  const fund = await api.createFund({ name: 'E2E Desktop Edit Fund', code: 'DTEDT1', fund_type: 'balanced', nav: 42000 })
-  cleanup.add(() => api.deleteFund(fund.id))
-
-  await page.goto('/funds')
-  await page.waitForLoadState('networkidle')
-
-  const table = page.getByTestId('desktop-funds-table')
-  await table.getByTestId(`fund-row-${fund.id}`).getByTestId('fund-edit-btn').click()
-
-  const modal = page.getByTestId('fund-modal')
-  await expect(modal).toBeVisible({ timeout: 5_000 })
-  await expect(modal.locator('input').first()).toHaveValue('E2E Desktop Edit Fund')
-})
-
-test('desktop funds delete button opens delete confirmation modal', async ({ page }) => {
-  const fund = await api.createFund({ name: 'E2E Desktop Delete Fund', code: 'DTDEL1', fund_type: 'equity', nav: 10000 })
-  cleanup.add(() => api.deleteFund(fund.id))
-
-  await page.goto('/funds')
-  await page.waitForLoadState('networkidle')
-
-  const table = page.getByTestId('desktop-funds-table')
-  await table.getByTestId(`fund-row-${fund.id}`).getByTestId('fund-delete-btn').click()
-
-  await expect(page.getByTestId('delete-fund-modal')).toBeVisible({ timeout: 5_000 })
-})
-
-test('desktop funds chrome is localized to Vietnamese when locale=vi (#2/C)', async ({ page, context }) => {
-  // Regression #2/C: the desktop view ignored locale and rendered hardcoded
-  // English (toolbar, type chips, NAV banner) even in the vi app.
-  await context.addCookies([{ name: 'locale', value: 'vi', url: 'http://localhost:3000' }])
-  const fund = await api.createFund({ name: 'E2E VN Chrome Fund', code: 'DTVNC1', fund_type: 'equity', nav: 15000 })
-  cleanup.add(() => api.deleteFund(fund.id))
-
-  await page.goto('/funds')
-  await page.waitForLoadState('networkidle')
-
-  const toolbar = page.getByTestId('desktop-funds-toolbar')
-  await expect(toolbar.getByRole('button', { name: /làm mới/i })).toBeVisible({ timeout: 10_000 })
-  await expect(toolbar.getByRole('button', { name: /thêm/i })).toBeVisible()
-  // Type chip uses the Vietnamese label.
-  const row = page.getByTestId('desktop-funds-table').getByTestId(`fund-row-${fund.id}`)
-  await expect(row.getByText(/^Cổ phiếu$/)).toBeVisible({ timeout: 8_000 })
-  // NAV info banner localized.
-  await expect(page.getByTestId('desktop-funds').getByText(/Về cập nhật NAV/i)).toBeVisible()
-})
-
-test('desktop funds add + delete modals are localized to Vietnamese when locale=vi (#2/E)', async ({ page, context }) => {
-  await context.addCookies([{ name: 'locale', value: 'vi', url: 'http://localhost:3000' }])
-  const fund = await api.createFund({ name: 'E2E VN Modal Fund', code: 'DTVNM1', fund_type: 'equity', nav: 15000 })
-  cleanup.add(() => api.deleteFund(fund.id))
-
-  await page.goto('/funds')
-  await page.waitForLoadState('networkidle')
-
-  const toolbar = page.getByTestId('desktop-funds-toolbar')
-  // Add modal: title + a form label come from i18n.
-  await toolbar.getByRole('button', { name: /thêm/i }).click()
-  const modal = page.getByTestId('fund-modal')
-  await expect(modal).toBeVisible({ timeout: 5_000 })
-  await expect(page.getByTestId('fund-modal-title')).toHaveText(/thêm quỹ/i)
-  await expect(modal.getByText('Tên Quỹ')).toBeVisible()
-  await modal.getByRole('button', { name: /^Hủy$/i }).click()
-
-  // Delete modal: title localized ("Xóa …?" not "Delete …?").
-  const row = page.getByTestId('desktop-funds-table').getByTestId(`fund-row-${fund.id}`)
-  await row.getByTestId('fund-delete-btn').click()
-  const del = page.getByTestId('delete-fund-modal')
-  await expect(del).toBeVisible({ timeout: 5_000 })
-  await expect(del.getByText(/^Xóa DTVNM1\?$/)).toBeVisible()
-})
-
 test('DCA enabled on desktop is reflected when switching to mobile viewport', async ({ page }) => {
   const fund = await api.createFund({ name: 'E2E Cross View DCA', code: 'DXVDCA', fund_type: 'equity', nav: 20000 })
   cleanup.add(() => api.deleteFund(fund.id))
@@ -274,34 +64,6 @@ test('DCA enabled on desktop is reflected when switching to mobile viewport', as
   const card = page.getByTestId('mobile-funds').getByTestId(`fund-card-${fund.id}`)
   await expect(card).toBeVisible({ timeout: 8_000 })
   await expect(card.getByRole('button', { name: /disable dca|tắt dca/i })).toBeVisible({ timeout: 5_000 })
-})
-
-test('desktop funds DCA toggle enables inline amount input', async ({ page }) => {
-  const fund = await api.createFund({ name: 'E2E Desktop DCA Fund', code: 'DTDCA1', fund_type: 'equity', nav: 15000 })
-  cleanup.add(() => api.deleteFund(fund.id))
-
-  await page.goto('/funds')
-  await page.waitForLoadState('networkidle')
-
-  const table = page.getByTestId('desktop-funds-table')
-  const row = table.getByTestId(`fund-row-${fund.id}`)
-  await row.getByTestId('dca-toggle').click()
-  await expect(row.getByPlaceholder(/amount|số tiền/i)).toBeVisible({ timeout: 5_000 })
-})
-
-test('desktop funds DCA shows goal target dropdown when enabled', async ({ page }) => {
-  const fund = await api.createFund({ name: 'E2E Desktop DCA Goal', code: 'DTDCG1', fund_type: 'equity', nav: 15000 })
-  cleanup.add(() => api.deleteFund(fund.id))
-
-  await page.goto('/funds')
-  await page.waitForLoadState('networkidle')
-
-  const table = page.getByTestId('desktop-funds-table')
-  const row = table.getByTestId(`fund-row-${fund.id}`)
-  await row.getByTestId('dca-toggle').click()
-  const select = row.getByTestId(`dca-goal-${fund.id}`)
-  await expect(select).toBeVisible({ timeout: 5_000 })
-  await expect(select).toHaveValue('')
 })
 
 test('desktop funds DCA goal selection persists across reload', async ({ page }) => {
@@ -332,8 +94,8 @@ test('desktop funds DCA goal selection persists across reload', async ({ page })
 
 test('desktop funds: editing the DCA amount keeps the assigned goal (#1)', async ({ page }) => {
   // Regression: handleSaveDcaAmount used to omit dca_goal_id from the PUT body,
-  // so the API reset dca_goal_id to null. Editing the amount of a DCA fund that
-  // already has a goal must NOT silently revert the goal to Unallocated.
+  // so the API reset dca_goal_id to null. The component test proves the PUT
+  // payload keeps the goal; this proves the real DB round-trip survives a reload.
   const goal = await api.createGoal({ goal_name: 'E2E Desktop DCA Amount-Edit Goal' })
   cleanup.add(() => api.deleteGoal(goal.goal_id))
   const fund = await api.createFund({
