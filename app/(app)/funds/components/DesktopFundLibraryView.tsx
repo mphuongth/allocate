@@ -11,6 +11,7 @@ import { SyncPill } from '@/app/components/ui/SyncPill'
 // the Plan feature today; reused here so Funds dialogs behave the same.
 import { useDialogA11y } from '@/app/(app)/planning/components/useDialogA11y'
 import { FundsEmptyState } from './FundsEmptyState'
+import { FundNavAge } from './FundNavAge'
 import type { Fund, Goal, FundType, FundsData } from './useFundsData'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -348,16 +349,6 @@ export default function DesktopFundLibraryView({ funds, setFunds, goals, loading
     setToasts(p => [...p, { id, msg, ok }])
     setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 3000)
   }, [])
-
-  // Relative NAV age per fund (#9) — same buckets as the mobile card.
-  const relDate = (str: string) => {
-    const mins = Math.floor((Date.now() - new Date(str).getTime()) / 60000)
-    if (mins < 1) return t('relJustNow')
-    if (mins < 60) return t('relMinutes', { m: mins })
-    const h = Math.floor(mins / 60)
-    if (h < 24) return t('relHours', { h })
-    return t('relDays', { d: Math.floor(h / 24) })
-  }
 
   // Sorting
   const handleSort = (key: SortKey) => {
@@ -713,9 +704,7 @@ export default function DesktopFundLibraryView({ funds, setFunds, goals, loading
                           {fmtNav(fund.nav)}
                         </span>
                         {fund.nav_source_url && fund.updated_at && (
-                          <div style={{ fontSize: 10, color: 'var(--c-muted)', marginTop: 2 }}>
-                            {t('updatedAgo', { time: relDate(fund.updated_at) })}
-                          </div>
+                          <FundNavAge isoStr={fund.updated_at} style={{ fontSize: 10, color: 'var(--c-muted)', marginTop: 2 }} />
                         )}
                       </td>
 

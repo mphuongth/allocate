@@ -11,6 +11,7 @@ import { fmtNav, fmtCompact } from '@/lib/formatters'
 // the Plan feature today; reused here so Funds sheets behave the same.
 import { useDialogA11y } from '@/app/(app)/planning/components/useDialogA11y'
 import { FundsEmptyState } from './FundsEmptyState'
+import { FundNavAge } from './FundNavAge'
 import type { Fund, Goal, FundType, FundsData } from './useFundsData'
 
 // Matches the design's exact icon paths (stroke-based, strokeWidth 1.75)
@@ -303,16 +304,6 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
   const isEditing = dcaEditId === fund.id
   const toggling = togglingIds.has(fund.id)
 
-  function relDate(str: string) {
-    const diff = Date.now() - new Date(str).getTime()
-    const mins = Math.floor(diff / 60000)
-    if (mins < 1) return t('relJustNow')
-    if (mins < 60) return t('relMinutes', { m: mins })
-    const h = Math.floor(mins / 60)
-    if (h < 24) return t('relHours', { h })
-    return t('relDays', { d: Math.floor(h / 24) })
-  }
-
   return (
     <div
       data-testid={`fund-card-${fund.id}`}
@@ -349,7 +340,7 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
             {fmtNav(fund.nav)}
           </div>
           {fund.nav_source_url && fund.updated_at && (
-            <div style={{ fontSize: 10, color: 'var(--c-muted)', marginTop: 1 }}>{t('updatedAgo', { time: relDate(fund.updated_at) })}</div>
+            <FundNavAge isoStr={fund.updated_at} style={{ fontSize: 10, color: 'var(--c-muted)', marginTop: 1 }} />
           )}
         </div>
 
