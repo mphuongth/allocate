@@ -546,7 +546,7 @@ export default function DesktopPlanningView({
     try {
       if (plan) {
         const res = await fetch(`/api/v1/monthly-plans/${plan.id}`, {
-          method: 'PATCH',
+          method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ salary_vnd: num }),
         })
