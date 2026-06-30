@@ -5,12 +5,17 @@ import { makeCleanupStack } from './helpers/cleanup'
 const cleanup = makeCleanupStack()
 test.afterEach(() => cleanup.run())
 
-// Shared, read-only unallocated fund fixture. The sell-sheet tests below only
-// OPEN the action / sell sheet to inspect UI (they never confirm a sale), so
-// they can reuse one fund + transaction instead of each creating and tearing
-// down their own — trimming several fund+tx create/delete cycles of DB churn
-// per run. Tests that actually mutate the holding (assign / confirm sell) keep
-// their own per-test fixtures via the cleanup stack.
+// Presence/render + computed coverage moved to fast component tests:
+//   SellWithdrawSheet.test.tsx — summary strip remaining, 0.1% tax row, "All"
+//     fills the amount, bank early-withdrawal warning
+//   NetWorthCard.test.tsx — allocation bar renders when investments exist
+//   OverviewEmptyState.test.tsx — the no-holdings empty state
+// Only real round-trips / orchestration that a component test can't prove stay
+// here: opening sheets/panels that DashboardClient wires up, and the
+// assign / sell / mark-paid mutations.
+
+// Shared, read-only unallocated fund fixture for the sheet-opening tests below
+// (they never confirm a sale), avoiding per-test fund+tx create/delete churn.
 let sharedFund: Awaited<ReturnType<typeof api.createFund>>
 
 test.beforeAll(async () => {
@@ -51,35 +56,6 @@ test('dashboard shows net worth card when data exists', async ({ page }) => {
   await page.waitForLoadState('networkidle')
   // Net worth card shows the net worth or total assets label in EN or VI
   await expect(page.locator('text=/Net Worth|Total Assets|Tài sản Ròng|Tổng Tài sản|Tổng tài sản/i').first()).toBeVisible({ timeout: 10_000 })
-})
-
-test('dashboard shows empty state when no investments', async ({ page }) => {
-  await page.goto('/dashboard')
-  await page.waitForLoadState('networkidle')
-  const emptyState = page.locator('text=/no investments|get started|chưa có/i').first()
-  const hasData = page.locator('text=/Net Worth|Tài sản Ròng|Tổng Tài sản|Tổng tài sản/i').first()
-  // Either empty state OR data is visible
-  await expect(emptyState.or(hasData)).toBeVisible({ timeout: 10_000 })
-})
-
-test('dashboard shows allocation bar when investments exist', async ({ page }) => {
-  await page.goto('/dashboard')
-  await page.waitForLoadState('networkidle')
-  // Allocation bar renders when there is at least one investment (seeded in setup)
-  await expect(page.getByTestId('allocation-bar')).toBeVisible({ timeout: 10_000 })
-})
-
-test('"Add Goal" button opens Create Goal dialog', async ({ page }) => {
-  await page.goto('/dashboard')
-  await page.waitForLoadState('networkidle')
-  const addGoalBtn = page.getByRole('button', { name: /add goal|create goal|thêm mục tiêu/i }).first()
-  if (await addGoalBtn.isVisible()) {
-    await addGoalBtn.click()
-    await expect(page.getByRole('dialog')).toBeVisible()
-    await expect(page.getByRole('dialog').getByRole('heading').first()).toBeVisible()
-    await page.getByRole('button', { name: /cancel|close|đóng/i }).first().click()
-    await expect(page.getByRole('dialog')).not.toBeVisible()
-  }
 })
 
 test('clicking a goal card opens goal detail panel', async ({ page }) => {
@@ -204,61 +180,6 @@ test('sell unallocated fund via action sheet', async ({ page }) => {
   await expect(page.getByTestId('sell-sheet')).not.toBeVisible({ timeout: 8_000 })
 })
 
-test('sell fund sheet shows remaining amount in summary strip', async ({ page }) => {
-  await gotoFreshDashboard(page)
-  const row = page.getByTestId('unallocated-row').filter({ hasText: sharedFund.name }).first()
-  await expect(row).toBeVisible({ timeout: 10_000 })
-  await row.click()
-  await page.getByTestId('action-sell').click()
-  await expect(page.getByTestId('sell-sheet')).toBeVisible({ timeout: 5_000 })
-
-  await page.getByTestId('sell-amount-input').fill('1000000')
-  await expect(page.getByTestId('sell-summary-strip')).toBeVisible({ timeout: 3_000 })
-})
-
-test('sell fund shows 0.1% tax estimate in summary strip', async ({ page }) => {
-  await gotoFreshDashboard(page)
-  const row = page.getByTestId('unallocated-row').filter({ hasText: sharedFund.name }).first()
-  await expect(row).toBeVisible({ timeout: 10_000 })
-  await row.click()
-  await page.getByTestId('action-sell').click()
-  await expect(page.getByTestId('sell-sheet')).toBeVisible({ timeout: 5_000 })
-
-  await page.getByTestId('sell-amount-input').fill('1000000')
-  // Tax row (0.1%) appears in summary strip for fund sells
-  await expect(page.locator('[data-testid="sell-summary-strip"] [data-testid="sell-tax-row"]')).toBeVisible({ timeout: 3_000 })
-})
-
-test('"All" button fills the full available amount', async ({ page }) => {
-  await gotoFreshDashboard(page)
-  const row = page.getByTestId('unallocated-row').filter({ hasText: sharedFund.name }).first()
-  await expect(row).toBeVisible({ timeout: 10_000 })
-  await row.click()
-  await page.getByTestId('action-sell').click()
-  await expect(page.getByTestId('sell-sheet')).toBeVisible({ timeout: 5_000 })
-
-  await page.getByTestId('sell-all-btn').click()
-  const val = await page.getByTestId('sell-amount-input').inputValue()
-  // Input displays vi-VN formatted numbers (dots as thousand separators), strip before parsing
-  expect(Number(val.replace(/\./g, '').replace(/,/g, ''))).toBeGreaterThan(0)
-})
-
-test('sell bank shows early-withdrawal warning', async ({ page }) => {
-  const tx = await api.createTransaction({
-    asset_type: 'bank', amount_vnd: 10_000_000, investment_date: '2026-01-01', interest_rate: 6,
-  })
-  cleanup.add(() => api.deleteTransaction(tx.transaction_id))
-
-  await gotoFreshDashboard(page)
-  const row = page.getByTestId('unallocated-row').filter({ hasText: /ngân hàng|bank/i }).first()
-  await expect(row).toBeVisible({ timeout: 10_000 })
-  await row.click()
-  await page.getByTestId('action-sell').click()
-  await expect(page.getByTestId('sell-sheet')).toBeVisible({ timeout: 5_000 })
-
-  await expect(page.getByTestId('sell-bank-warning')).toBeVisible({ timeout: 3_000 })
-})
-
 test('sell success state appears after confirm', async ({ page }) => {
   const fund = await api.createFund({ name: 'E2E Success Fund', code: 'E2ESUCFUND', fund_type: 'equity', nav: 10000 })
   cleanup.add(() => api.deleteFund(fund.id))
@@ -279,14 +200,6 @@ test('sell success state appears after confirm', async ({ page }) => {
   await page.getByTestId('sell-confirm-btn').click()
 
   await expect(page.getByTestId('sell-success')).toBeVisible({ timeout: 5_000 })
-})
-
-test('allocation bar renders when investments exist', async ({ page }) => {
-  // Uses the shared unallocated fund fixture for the "investments exist"
-  // precondition instead of creating its own.
-  await gotoFreshDashboard(page)
-
-  await expect(page.getByTestId('allocation-bar')).toBeVisible({ timeout: 10_000 })
 })
 
 test('insurance "Mark as Paid" updates status', async ({ page }) => {
@@ -314,7 +227,8 @@ test('insurance "Mark as Paid" updates status', async ({ page }) => {
 
 // Regression: a policy whose start date is in the past was incorrectly rendered
 // as "Overdue". The premium isn't due until the next anniversary, so the row
-// must show the on-track ("Not due") status — not Overdue.
+// must show the on-track ("Not due") status — not Overdue. The status is derived
+// by the overview API, so this stays an end-to-end check.
 test('a policy started in the past is not shown as Overdue', async ({ page }) => {
   // Started ~60 days ago → next anniversary ~10 months out → on_track.
   const start = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]

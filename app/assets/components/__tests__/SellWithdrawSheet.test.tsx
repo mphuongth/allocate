@@ -206,6 +206,52 @@ describe('SellWithdrawSheet — error path shows a real message (not a raw i18n 
   })
 })
 
+describe('SellWithdrawSheet — summary strip, tax & bank warning (moved off dashboard E2E)', () => {
+  const fundItem = {
+    type: 'fund' as const, name: 'VESAF',
+    currentValue: 10_000_000, units: 100, navPerUnit: 100_000,
+    fundId: 'f1', purchasePrice: 9_000_000,
+  }
+  const bankItem = {
+    type: 'bank' as const, name: 'Techcombank',
+    currentValue: 5_000_000, interestRate: 6,
+    transactionId: 't1', purchasePrice: 5_000_000,
+  }
+
+  it('shows the remaining amount in the summary strip after entering an amount', () => {
+    render(<SellWithdrawSheet item={fundItem} open context="unallocated" onClose={vi.fn()} onSuccess={vi.fn()} />)
+    fireEvent.change(screen.getByTestId('sell-amount-input'), { target: { value: '1000000' } })
+    const strip = screen.getByTestId('sell-summary-strip')
+    expect(strip).toBeInTheDocument()
+    expect(strip).toHaveTextContent(/Remaining after transaction/i)
+  })
+
+  it('shows the 0.1% personal income tax row for a fund sell', () => {
+    render(<SellWithdrawSheet item={fundItem} open context="unallocated" onClose={vi.fn()} onSuccess={vi.fn()} />)
+    fireEvent.change(screen.getByTestId('sell-amount-input'), { target: { value: '1000000' } })
+    const taxRow = screen.getByTestId('sell-tax-row')
+    expect(taxRow).toBeInTheDocument()
+    // 0.1% of 1,000,000 = 1,000 (label carries the rate).
+    expect(taxRow).toHaveTextContent(/0\.1%/)
+    expect(taxRow).toHaveTextContent('1.000')
+  })
+
+  it('the "All" button fills the input with the full available amount', () => {
+    render(<SellWithdrawSheet item={fundItem} open context="unallocated" onClose={vi.fn()} onSuccess={vi.fn()} />)
+    fireEvent.click(screen.getByTestId('sell-all-btn'))
+    const input = screen.getByTestId('sell-amount-input') as HTMLInputElement
+    // vi-VN grouping uses dots as thousand separators.
+    expect(Number(input.value.replace(/\./g, ''))).toBe(10_000_000)
+  })
+
+  it('shows the early-withdrawal warning for a bank withdrawal', () => {
+    render(<SellWithdrawSheet item={bankItem} open context="unallocated" onClose={vi.fn()} onSuccess={vi.fn()} />)
+    const warning = screen.getByTestId('sell-bank-warning')
+    expect(warning).toBeInTheDocument()
+    expect(warning).toHaveTextContent(/early withdrawal/i)
+  })
+})
+
 describe('SellWithdrawSheet — responsive presentation (#248)', () => {
   const item = {
     type: 'fund' as const, name: 'VESAF',
