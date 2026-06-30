@@ -307,3 +307,13 @@ describe('DesktopSettingsView — dialog a11y', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
 })
+
+// ─── P3 polish ───────────────────────────────────────────────────────────────────
+
+describe('DesktopSettingsView — profile email hint', () => {
+  it('explains that the read-only email cannot be changed', async () => {
+    render(<DesktopSettingsView {...defaultProps} />)
+    await userEvent.click(screen.getByRole('button', { name: /^edit$/i }))
+    expect(screen.getByText(/email can't be changed/i)).toBeInTheDocument()
+  })
+})

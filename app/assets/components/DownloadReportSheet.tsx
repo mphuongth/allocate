@@ -107,8 +107,9 @@ export default function DownloadReportSheet({ open, onClose, data, onExport, des
                 <span style={{ fontWeight: 600, color: 'var(--c-ink)' }}>{today}</span>
               </div>
 
-              {/* KPI grid */}
-              {data && (
+              {/* KPI grid — skeleton until the overview resolves, so the sheet
+                  shows a stable placeholder instead of an empty gap. */}
+              {data ? (
                 <div style={{
                   display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)',
                   gap: 1, background: 'var(--c-line)', borderRadius: 12, overflow: 'hidden',
@@ -122,6 +123,23 @@ export default function DownloadReportSheet({ open, onClose, data, onExport, des
                     <div key={label} style={{ background: 'var(--c-card)', padding: '10px 12px' }}>
                       <div style={{ fontSize: 10, color: 'var(--c-muted)' }}>{label}</div>
                       <div style={{ fontSize: 14, fontWeight: 600, marginTop: 2, color: color ?? 'var(--c-ink)' }}>{value}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div
+                  data-testid="report-kpi-loading"
+                  aria-busy="true"
+                  aria-label={isVI ? 'Đang tải số liệu' : 'Loading figures'}
+                  style={{
+                    display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)',
+                    gap: 1, background: 'var(--c-line)', borderRadius: 12, overflow: 'hidden',
+                  }}
+                >
+                  {[0, 1, 2, 3].map((i) => (
+                    <div key={i} style={{ background: 'var(--c-card)', padding: '10px 12px' }}>
+                      <div style={{ height: 8, width: '45%', borderRadius: 4, background: 'var(--c-line)' }} />
+                      <div style={{ height: 12, width: '70%', borderRadius: 4, background: 'var(--c-line)', marginTop: 6 }} />
                     </div>
                   ))}
                 </div>

@@ -175,6 +175,9 @@ function ProfileSheet({ open, onClose, onSave, displayName, email }: {
                 outline: 'none',
               }}
             />
+            <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 6 }}>
+              {t('emailReadonlyHint')}
+            </div>
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
             <button

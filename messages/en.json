@@ -129,6 +129,7 @@
     "edit": "Edit",
     "fullName": "Full name",
     "email": "Email",
+    "emailReadonlyHint": "Email can't be changed",
     "cancel": "Cancel",
     "save": "Save",
     "saved": "Saved",
