@@ -408,3 +408,75 @@ describe('DesktopPlanningView — insurance Relationship + Default columns', () 
     expect(screen.getAllByText('₫ 1166667').length).toBeGreaterThan(0)
   })
 })
+
+// Layout / header / summary presence — moved off the planning-desktop E2E spec
+// (these were "X is visible" / "shows label" checks running through a browser).
+describe('DesktopPlanningView — header & month picker', () => {
+  it('renders the Monthly Plan title', () => {
+    render(<DesktopPlanningView {...defaultProps} />)
+    expect(screen.getByRole('heading', { name: 'Monthly Plan' })).toBeInTheDocument()
+  })
+
+  it('renders the month picker showing the year, with prev/next that call their handlers', async () => {
+    const onPrev = vi.fn()
+    const onNext = vi.fn()
+    render(<DesktopPlanningView {...defaultProps} month={5} year={2026} onPrev={onPrev} onNext={onNext} />)
+    expect(screen.getByTestId('desktop-month-picker')).toHaveTextContent('2026')
+    await userEvent.click(screen.getByTestId('prev-month'))
+    expect(onPrev).toHaveBeenCalled()
+    await userEvent.click(screen.getByTestId('next-month'))
+    expect(onNext).toHaveBeenCalled()
+  })
+})
+
+describe('DesktopPlanningView — empty state', () => {
+  it('shows the empty state with a Set income button when there is no plan', () => {
+    render(<DesktopPlanningView {...defaultProps} plan={null} />)
+    expect(screen.getByTestId('planning-empty-state')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Set income' })).toBeInTheDocument()
+  })
+})
+
+describe('DesktopPlanningView — summary strip & sections', () => {
+  it('shows the Income / Outflow / Remaining / Saved % strip when a plan exists', () => {
+    render(<DesktopPlanningView {...defaultProps} plan={basePlan} />)
+    const strip = within(screen.getByTestId('planning-summary-strip'))
+    expect(strip.getByText('Income')).toBeInTheDocument()
+    expect(strip.getByText('Outflow')).toBeInTheDocument()
+    expect(strip.getByText('Remaining')).toBeInTheDocument()
+    expect(strip.getByText('Saved %')).toBeInTheDocument()
+  })
+
+  it('computes Remaining as income minus outflow (20M − 3M = 17.0M)', () => {
+    render(
+      <DesktopPlanningView
+        {...defaultProps}
+        plan={{ id: 'plan-1', month: 5, year: 2026, salary_vnd: 20_000_000 }}
+        fixedExpenses={[{ expense_id: 'fe1', expense_name: 'Rent', amount_vnd: 3_000_000 }]}
+      />,
+    )
+    // fmtCompact mock renders millions as "<n>.0M ₫".
+    expect(within(screen.getByTestId('planning-summary-strip')).getByText('17.0M ₫')).toBeInTheDocument()
+  })
+
+  it('renders line-item amounts in full (fmt), not abbreviated (fmtCompact)', () => {
+    render(
+      <DesktopPlanningView
+        {...defaultProps}
+        plan={basePlan}
+        fixedExpenses={[{ expense_id: 'fe1', expense_name: 'E2E Full Amount Rent', amount_vnd: 7_250_000 }]}
+      />,
+    )
+    // The line item uses fmt → "₫ 7250000" (full). (The dense alloc card
+    // legitimately shows the same total compact, so we don't assert "7.3M ₫"
+    // is absent page-wide — only that the full line-item amount is rendered.)
+    expect(screen.getAllByText('₫ 7250000').length).toBeGreaterThan(0)
+  })
+
+  it('shows the By goal / Fixed expenses / Insurance section headers when a plan exists', () => {
+    render(<DesktopPlanningView {...defaultProps} plan={basePlan} />)
+    expect(screen.getByText('By goal')).toBeInTheDocument()
+    expect(screen.getByText('Fixed expenses')).toBeInTheDocument()
+    expect(screen.getByText('Insurance')).toBeInTheDocument()
+  })
+})
