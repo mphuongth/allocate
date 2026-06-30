@@ -3,6 +3,14 @@ import * as api from './helpers/api'
 
 // All tests run on Desktop Chrome (1280×800) by default from playwright config.
 // These verify the two-column desktop layout for the Overview page.
+//
+// Presence/render that doesn't depend on real layout moved to component tests:
+//   DesktopNetWorthPanel.test.tsx — Net worth label, allocation bar, download report
+//   DesktopInsuranceList.test.tsx — Add button present + calls onAdd (no navigate)
+//   DesktopInsuranceDetail.test.tsx — avatar initials, Remove member control
+// What stays here is genuinely viewport/breakpoint/CSS-bound (jsdom has no layout)
+// or a real DB round-trip (maturity renew, mark-paid), plus the container-level
+// header/orchestration that DashboardClient owns.
 
 // Force a fresh dashboard load that bypasses the localStorage overview cache
 // (2-min TTL), so data created via the API after the beforeEach navigation is
@@ -30,21 +38,6 @@ test.describe('Desktop overview layout', () => {
 
   test('net worth panel is visible on the right side', async ({ page }) => {
     await expect(page.getByTestId('desktop-net-worth-panel')).toBeVisible({ timeout: 10_000 })
-  })
-
-  test('net worth panel shows Net worth label', async ({ page }) => {
-    await expect(
-      page.getByTestId('desktop-net-worth-panel').getByText(/net worth|tài sản ròng/i).first()
-    ).toBeVisible({ timeout: 10_000 })
-  })
-
-  test('net worth panel shows allocation bar when investments exist', async ({ page }) => {
-    // Global setup seeds a bank transaction so allocation data is always present
-    await expect(page.getByTestId('allocation-bar')).toBeVisible({ timeout: 10_000 })
-  })
-
-  test('net worth panel shows download report button', async ({ page }) => {
-    await expect(page.getByTestId('generate-report-btn')).toBeVisible({ timeout: 10_000 })
   })
 
   test('desktop layout is not visible on mobile viewport', async ({ page }) => {
@@ -159,44 +152,11 @@ test.describe('Desktop overview layout', () => {
     await expect(page.getByTestId('unallocated-card-header')).toBeVisible({ timeout: 10_000 })
   })
 
-  test('insurance section shows Add button', async ({ page }) => {
-    await expect(page.getByTestId('insurance-add-btn')).toBeVisible({ timeout: 10_000 })
-  })
-
   test('clicking insurance row shows insurance detail panel', async ({ page }) => {
     const row = page.getByTestId('insurance-row').first()
     await expect(row).toBeVisible({ timeout: 10_000 })
     await row.click()
     await expect(page.getByTestId('insurance-detail-panel')).toBeVisible({ timeout: 5_000 })
-  })
-
-  test('clicking Add insurance opens inline modal instead of navigating away', async ({ page }) => {
-    // Previously the Add button called window.open('/settings?tab=insurance')
-    // which navigated away. Now it opens an inline modal on the dashboard.
-    const startUrl = page.url()
-    const addBtn = page.getByTestId('insurance-add-btn')
-    await expect(addBtn).toBeVisible({ timeout: 10_000 })
-    await addBtn.click()
-    await expect(page.getByTestId('add-insurance-modal')).toBeVisible({ timeout: 5_000 })
-    expect(page.url()).toBe(startUrl)
-  })
-
-  test('insurance detail panel shows avatar initials, not just shield icon', async ({ page }) => {
-    const row = page.getByTestId('insurance-row').first()
-    await expect(row).toBeVisible({ timeout: 10_000 })
-    await row.click()
-    const avatar = page.getByTestId('insurance-avatar')
-    await expect(avatar).toBeVisible({ timeout: 5_000 })
-    const text = (await avatar.innerText()).trim()
-    // Initials are 1–2 uppercase letters derived from the member name
-    expect(text).toMatch(/^[A-ZÀ-Ỹ]{1,2}$/)
-  })
-
-  test('insurance detail panel exposes Remove member control', async ({ page }) => {
-    const row = page.getByTestId('insurance-row').first()
-    await expect(row).toBeVisible({ timeout: 10_000 })
-    await row.click()
-    await expect(page.getByTestId('insurance-remove-btn')).toBeVisible({ timeout: 5_000 })
   })
 
   // PR2: a matured term deposit surfaces the dashboard "Needs attention" card

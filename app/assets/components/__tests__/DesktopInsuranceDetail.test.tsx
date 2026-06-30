@@ -185,6 +185,21 @@ describe('DesktopInsuranceDetail — delete failure feedback', () => {
   })
 })
 
+describe('DesktopInsuranceDetail — header presence (moved off dashboard E2E)', () => {
+  it('shows avatar initials derived from the member name, not just a shield icon', () => {
+    render(<DesktopInsuranceDetail ins={ins} locale="en" onClose={vi.fn()} />)
+    const avatar = screen.getByTestId('insurance-avatar')
+    expect(avatar).toBeInTheDocument()
+    // "John Doe" → "JD" (1–2 uppercase letters).
+    expect(avatar.textContent?.trim()).toMatch(/^[A-ZÀ-Ỹ]{1,2}$/)
+  })
+
+  it('exposes a Remove member control', () => {
+    render(<DesktopInsuranceDetail ins={ins} locale="en" onClose={vi.fn()} />)
+    expect(screen.getByTestId('insurance-remove-btn')).toBeInTheDocument()
+  })
+})
+
 describe('DesktopInsuranceDetail — edit-form labels are accurate', () => {
   it('labels the relationship picker "Relationship" and the date "Payment date" (not "Coverage type"/"Start date")', () => {
     render(<DesktopInsuranceDetail ins={ins} locale="en" onClose={vi.fn()} />)

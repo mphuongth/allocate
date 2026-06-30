@@ -40,6 +40,15 @@ describe('DesktopInsuranceList — empty state (desktop design)', () => {
     expect(onAdd).toHaveBeenCalledTimes(1)
   })
 
+  it('the header Add button calls onAdd (opens the inline modal, never navigates away)', async () => {
+    // Regression: the Add action used to window.open('/settings?tab=insurance').
+    // It must invoke the onAdd callback (which opens an inline modal) instead.
+    const onAdd = vi.fn()
+    render(<DesktopInsuranceList insurance={[member]} goalCount={1} locale="en" onOpen={vi.fn()} onAdd={onAdd} />)
+    await userEvent.click(screen.getByTestId('insurance-add-btn'))
+    expect(onAdd).toHaveBeenCalledTimes(1)
+  })
+
   it('collapses to a quiet placeholder after "Later" and persists the dismissal', async () => {
     render(<DesktopInsuranceList insurance={[]} goalCount={2} locale="en" onOpen={vi.fn()} onAdd={vi.fn()} />)
     await userEvent.click(screen.getByRole('button', { name: /later/i }))

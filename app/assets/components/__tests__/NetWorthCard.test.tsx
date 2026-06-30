@@ -43,10 +43,18 @@ describe('NetWorthCard', () => {
 
   it('renders allocation breakdown with amount column per segment', () => {
     render(<NetWorthCard {...baseProps} allocationBar={{ fund: 300_000_000, bank: 110_000_000, gold: 0, stock: 40_000_000 }} />)
+    // The allocation bar itself renders when there are investments (the
+    // dashboard E2E used to assert this testid through a browser).
+    expect(screen.getByTestId('allocation-bar')).toBeInTheDocument()
     // Distinct values that don't collide with P/L (100M) so getByText is unambiguous
     expect(screen.getByText(/300\.0M/)).toBeInTheDocument()
     expect(screen.getByText(/110\.0M/)).toBeInTheDocument()
     expect(screen.getByText(/40\.0M/)).toBeInTheDocument()
+  })
+
+  it('does not render the allocation bar when there is no allocation data', () => {
+    render(<NetWorthCard {...baseProps} />)
+    expect(screen.queryByTestId('allocation-bar')).not.toBeInTheDocument()
   })
 
   it('renders gold row with units (chỉ) when goldUnits provided', () => {
