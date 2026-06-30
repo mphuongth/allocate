@@ -8,7 +8,7 @@ import { fmt } from '@/lib/formatters'
 import { todayIso } from '@/lib/dates'
 import { CairnLoader } from '@/app/components/ui/CairnLoader'
 import { AffectsProgressControl } from './goalDetailShared'
-const fmtVND = (n: number, _locale?: string) => fmt(n)
+const fmtVND = (n: number) => fmt(n)
 
 export interface SellItem {
   type: 'fund' | 'bank' | 'gold' | 'stock'

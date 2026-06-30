@@ -257,7 +257,6 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
       setGoldQty(existing.units != null ? String(existing.units) : '')
       setGoldPrice(existing.unit_price != null ? String(existing.unit_price) : '')
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, existing])
 
   // Create mode with prefilled defaults (e.g. logging a contribution from the
@@ -274,7 +273,6 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
       if (at === 'bank') setBankAmount(amt)
       else if (at === 'fund') setAmount(amt)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, existing, prefill])
 
   // Lazily load sellable holdings from the overview the first time the user
@@ -405,7 +403,6 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
     if (dir === 'sell' && assetType === 'gold' && sellNav) {
       setGoldSellPrice(String(Math.round(sellNav)))
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dir, assetType, holdingKey, sellNav])
 
   async function handleSave() {
