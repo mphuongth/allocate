@@ -496,6 +496,9 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
                   fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box',
                 }}
               />
+              <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 6 }}>
+                {t('emailReadonlyHint')}
+              </div>
             </div>
             <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
               <button

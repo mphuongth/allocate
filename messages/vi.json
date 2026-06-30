@@ -129,6 +129,7 @@
     "edit": "Sửa",
     "fullName": "Họ và tên",
     "email": "Email",
+    "emailReadonlyHint": "Không thể thay đổi email",
     "cancel": "Hủy",
     "save": "Lưu",
     "saved": "Đã lưu",

@@ -570,3 +570,27 @@ describe('MobileSettingsView — profile form backdrop (no accidental data loss)
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 })
+
+// ─── P3 polish ───────────────────────────────────────────────────────────────────
+
+describe('MobileSettingsView — profile email hint', () => {
+  it('explains that the read-only email cannot be changed', async () => {
+    render(<MobileSettingsView {...defaultProps} />)
+    await userEvent.click(screen.getByRole('button', { name: /profile/i }))
+    expect(screen.getByText(/email can't be changed/i)).toBeInTheDocument()
+  })
+})
+
+describe('MobileSettingsView — export KPI loading state', () => {
+  it('shows a KPI loading placeholder until the overview resolves', async () => {
+    // Never-resolving fetch: the overview (and last-sync) stay pending, so the
+    // report sheet must render a loading placeholder rather than an empty gap.
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(
+      () => new Promise(() => {}) as Promise<Response>
+    )
+    render(<MobileSettingsView {...defaultProps} />)
+    await userEvent.click(screen.getByRole('button', { name: /export data/i }))
+    expect(await screen.findByTestId('report-kpi-loading')).toBeInTheDocument()
+    fetchSpy.mockRestore()
+  })
+})
