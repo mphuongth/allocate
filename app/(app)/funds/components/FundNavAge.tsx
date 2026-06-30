@@ -21,15 +21,6 @@ type Bucket =
   | { kind: 'hour'; h: number }
   | { kind: 'day'; d: number }
 
-function format(b: Bucket, t: (k: string, p?: Record<string, unknown>) => string): string {
-  switch (b.kind) {
-    case 'justNow': return t('relJustNow')
-    case 'min': return t('relMinutes', { m: b.m })
-    case 'hour': return t('relHours', { h: b.h })
-    case 'day': return t('relDays', { d: b.d })
-  }
-}
-
 export function FundNavAge({ isoStr, style }: { isoStr: string; style?: React.CSSProperties }) {
   const t = useTranslations('funds')
   const [bucket, setBucket] = useState<Bucket | null>(null)
@@ -54,5 +45,14 @@ export function FundNavAge({ isoStr, style }: { isoStr: string; style?: React.CS
     setBucket(next)
   }, [isoStr])
   if (!bucket) return null
-  return <div style={style}>{t('updatedAgo', { time: format(bucket, t) })}</div>
+  // Translation is applied in render from the stored bucket (so `t`'s changing
+  // identity isn't an effect dependency); `format` is inlined here rather than
+  // typed separately to keep next-intl's Translator type inferred.
+  const time =
+    bucket.kind === 'justNow' ? t('relJustNow')
+      : bucket.kind === 'min' ? t('relMinutes', { m: bucket.m })
+        : bucket.kind === 'hour' ? t('relHours', { h: bucket.h })
+          : t('relDays', { d: bucket.d })
+  return <div style={style}>{t('updatedAgo', { time })}</div>
 }
+
