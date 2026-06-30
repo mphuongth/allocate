@@ -113,7 +113,7 @@ describe('PlanningClient — toast delivery', () => {
       if (u.includes('/api/v1/monthly-plans?')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(FULL_PLAN) })
       }
-      // PATCH the income update.
+      // PUT the income update.
       return Promise.resolve({ ok: true, json: () => Promise.resolve(FULL_PLAN) })
     })
     vi.stubGlobal('fetch', fetchMock)
@@ -129,6 +129,41 @@ describe('PlanningClient — toast delivery', () => {
       await userEvent.click(within(desktop).getByRole('button', { name: 'Save' }))
       // The dead-sink bug meant toast was never called; now it reaches sonner.
       await waitFor(() => expect(toastMock).toHaveBeenCalled())
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  // Regression: desktop edited income via PATCH, but /api/v1/monthly-plans/[id]
+  // only handles PUT (no PATCH export → Next.js returns 405). The save then
+  // failed silently with the error toast. Mobile already used PUT — this pins
+  // desktop to the same method so both views hit a real handler.
+  it('updates an existing plan with PUT (not PATCH → 405) from the desktop income editor', async () => {
+    const fetchMock = vi.fn((url: string) => {
+      const u = String(url)
+      if (u.includes('/api/v1/monthly-plans?')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(FULL_PLAN) })
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(FULL_PLAN) })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      render(<PlanningClient />)
+      const desktop = screen.getByTestId('desktop-planning')
+      const editBtn = await within(desktop).findByRole('button', { name: 'Edit income' })
+      await userEvent.click(editBtn)
+      const input = await within(desktop).findByPlaceholderText('e.g. 45,000,000')
+      await userEvent.clear(input)
+      await userEvent.type(input, '50000000')
+      await userEvent.click(within(desktop).getByRole('button', { name: 'Save' }))
+
+      await waitFor(() => {
+        const updateCall = fetchMock.mock.calls.find(
+          ([u, opts]) => String(u) === `/api/v1/monthly-plans/${FULL_PLAN.id}` && opts,
+        )
+        expect(updateCall).toBeTruthy()
+        expect((updateCall![1] as RequestInit).method).toBe('PUT')
+      })
     } finally {
       vi.unstubAllGlobals()
     }
