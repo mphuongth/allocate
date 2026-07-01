@@ -1,9 +1,4 @@
 {
-  "statusLine": {
-    "type": "command",
-    "command": ".claude/statusline.sh",
-    "padding": 0
-  },
   "enabledPlugins": {
     "skill-creator@claude-plugins-official": true,
     "supabase@claude-plugins-official": true
