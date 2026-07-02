@@ -22,7 +22,9 @@ function pillFor(inv: InvRow, isVi: boolean): { text: string; color: string; bg:
     }
   }
   return {
-    text: isVi ? (diff === 0 ? 'Đáo hạn hôm nay' : 'Đáo hạn ngày mai') : (diff === 0 ? 'Matures today' : 'Matures tomorrow'),
+    text: isVi
+      ? (diff === 0 ? 'Đáo hạn hôm nay' : diff === 1 ? 'Đáo hạn ngày mai' : `Đáo hạn sau ${diff} ngày`)
+      : (diff === 0 ? 'Matures today' : diff === 1 ? 'Matures tomorrow' : `Matures in ${diff}d`),
     color: 'var(--c-warn)', bg: 'var(--c-warn-tint)',
   }
 }

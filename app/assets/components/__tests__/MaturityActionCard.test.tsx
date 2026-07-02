@@ -50,6 +50,24 @@ describe('MaturityActionCard', () => {
     expect(screen.queryByText(/overdue|Matured|Matures/i)).not.toBeInTheDocument()
   })
 
+  it('shows an accurate maturity pill for each lead time (not a hardcoded "tomorrow")', () => {
+    const { rerender } = render(
+      <MaturityActionCard items={[mk({ expiryDate: daysFromNow(0) })]} isVi onResolve={() => {}} />,
+    )
+    expect(screen.getByText('Đáo hạn hôm nay')).toBeInTheDocument()
+
+    rerender(<MaturityActionCard items={[mk({ expiryDate: daysFromNow(1) })]} isVi onResolve={() => {}} />)
+    expect(screen.getByText('Đáo hạn ngày mai')).toBeInTheDocument()
+
+    // Within the 7-day window but more than a day out — must NOT say "ngày mai".
+    rerender(<MaturityActionCard items={[mk({ expiryDate: daysFromNow(5) })]} isVi onResolve={() => {}} />)
+    expect(screen.getByText('Đáo hạn sau 5 ngày')).toBeInTheDocument()
+    expect(screen.queryByText('Đáo hạn ngày mai')).not.toBeInTheDocument()
+
+    rerender(<MaturityActionCard items={[mk({ expiryDate: daysFromNow(5) })]} isVi={false} onResolve={() => {}} />)
+    expect(screen.getByText('Matures in 5d')).toBeInTheDocument()
+  })
+
   it('shows no merge banner when there are no clusters', () => {
     render(<MaturityActionCard items={[mk({ id: 'a' }), mk({ id: 'b' })]} isVi={false} onResolve={() => {}} />)
     expect(screen.queryByTestId(/^merge-cluster-banner-/)).not.toBeInTheDocument()
