@@ -9,8 +9,9 @@
 // goalDetailShared.tsx for the display formatting.
 
 // Surface a deposit as "needs attention" once it is within this many days of
-// maturity (in addition to already-matured ones).
-export const MATURITY_REMINDER_DAYS = 1
+// maturity (in addition to already-matured ones). A week of lead time lets the
+// user decide (renew / withdraw) before the deposit actually matures.
+export const MATURITY_REMINDER_DAYS = 7
 
 // Window event the dashboard dispatches (detail = number) with the live count of
 // maturing deposits, so the nav badge updates the instant the dashboard's data

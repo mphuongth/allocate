@@ -71,6 +71,34 @@ describe('MaturityResolveBody', () => {
     })
   })
 
+  it('blocks renewal for a not-yet-matured deposit (wider reminder window) and shows a hint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) })
+    vi.stubGlobal('fetch', fetchMock)
+    // Maturing in 5 days: surfaced by the 7-day reminder window, but its new cycle
+    // would start on that future date — which the renew route/RPC reject. Renewal
+    // is gated; the user records it at maturity.
+    const earlyDeposit: InvRow = { ...maturedDeposit, id: 'tx-early', expiryDate: daysFromNow(5) }
+    const user = userEvent.setup()
+    render(
+      <MaturityResolveBody inv={earlyDeposit} isVi onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
+    )
+
+    expect(screen.getByTestId('maturity-too-early-hint').textContent).toContain('còn 5 ngày')
+    const confirm = screen.getByRole('button', { name: /Xác nhận tái tục|Confirm renewal/i })
+    expect(confirm).toBeDisabled()
+    await user.click(confirm)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('still allows renewal for a deposit maturing tomorrow (within the route tolerance)', () => {
+    const tomorrowDeposit: InvRow = { ...maturedDeposit, id: 'tx-tmrw', expiryDate: daysFromNow(1) }
+    render(
+      <MaturityResolveBody inv={tomorrowDeposit} isVi onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
+    )
+    expect(screen.queryByTestId('maturity-too-early-hint')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Xác nhận tái tục|Confirm renewal/i })).not.toBeDisabled()
+  })
+
   it('lets the user override the new maturity date and freezes it from the term', async () => {
     const user = userEvent.setup()
     render(
