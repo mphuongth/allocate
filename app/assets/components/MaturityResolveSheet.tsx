@@ -10,8 +10,10 @@
 // maturity date, so the new cycle's compound-interest valuation in buildInvRows
 // picks up exactly where the closed cycle ended — an overdue book does not lose
 // the days it sat past maturity, nor does its next maturity skip forward by them.
-// (An actionable deposit's old maturity is at most "tomorrow", so this never
-// trips the route's future-date guard.) The new maturity defaults to old-maturity
+// (Renewal is offered only once the deposit has matured — or is within the
+// route's +1 day tolerance — so the anchored investment_date is never rejected as
+// a future date; a still-maturing deposit surfaced by the wider reminder window
+// shows a "record at maturity" hint instead.) The new maturity defaults to old-maturity
 // + term and follows the term until the user edits it by hand. Withdrawal hands
 // off to the existing Sell/Withdraw flow rather than re-implementing the payout
 // (the parent wires `onWithdraw`).
@@ -408,7 +410,16 @@ export function MaturityResolveBody({
   const rateValid = rate.trim() !== '' && Number(rate) > 0
   const amountValid = mode !== 'change' || (newAmount.trim() !== '' && Number(newAmount) > 0)
   const maturityValid = newMaturity > baseDate
-  const canRenew = tNum > 0 && rateValid && amountValid && newPrincipal > 0 && maturityValid
+  // A not-yet-matured deposit's new cycle would start on its (future) old maturity
+  // date, which the renew route + RPC reject as a future investment_date (they
+  // tolerate only +1 day of skew). The bank money isn't freed before maturity
+  // anyway, so recording a roll-over early isn't meaningful — the wider reminder
+  // window just surfaces it early; the user records the renewal once it matures.
+  // Early WITHDRAW (breaking the term) stays allowed — it posts via onWithdraw,
+  // not the date-anchored renew path.
+  const daysLeft = m?.diffDays ?? 0
+  const tooEarlyToRenew = !matured && daysLeft > 1
+  const canRenew = tNum > 0 && rateValid && amountValid && newPrincipal > 0 && maturityValid && !tooEarlyToRenew
 
   const t = isVi ? {
     summarySuffix: 'năm', perYr: 'năm', mo: 'tháng',
@@ -623,10 +634,11 @@ export function MaturityResolveBody({
           expiry_date: newMaturity,
           // Anchor the new cycle's accrual to the OLD maturity date (baseDate) so
           // the value calc restarts where the closed cycle ended — overdue days
-          // are not lost. An actionable deposit's old maturity is ≤ tomorrow, so
-          // this stays within the route's future-date tolerance. The route rolls
-          // the active row forward in place and appends a history snapshot of the
-          // cycle that just closed.
+          // are not lost. Renewal is gated to matured (or ≤ tomorrow) deposits
+          // (see tooEarlyToRenew), so baseDate is in the past or within the
+          // route's +1 day future-date tolerance and is never rejected. The route
+          // rolls the active row forward in place and appends a history snapshot
+          // of the cycle that just closed.
           investment_date: baseDate,
           // Realized interest for the cycle that just closed — recorded
           // permanently on the snapshot for the renewal-history summary. A book's
@@ -713,7 +725,12 @@ export function MaturityResolveBody({
       return { text: isVi ? (n === 0 ? 'Đã đáo hạn' : `Quá hạn ${n} ngày`) : (n === 0 ? 'Matured' : `${n}d overdue`), color: 'var(--c-neg)', bg: 'var(--c-neg-tint)' }
     }
     const n = m?.diffDays ?? 0
-    return { text: isVi ? (n === 0 ? 'Đáo hạn hôm nay' : 'Đáo hạn ngày mai') : (n === 0 ? 'Matures today' : 'Matures tomorrow'), color: 'var(--c-warn)', bg: 'var(--c-warn-tint)' }
+    return {
+      text: isVi
+        ? (n === 0 ? 'Đáo hạn hôm nay' : n === 1 ? 'Đáo hạn ngày mai' : `Đáo hạn sau ${n} ngày`)
+        : (n === 0 ? 'Matures today' : n === 1 ? 'Matures tomorrow' : `Matures in ${n}d`),
+      color: 'var(--c-warn)', bg: 'var(--c-warn-tint)',
+    }
   })()
 
   return (
@@ -1172,6 +1189,13 @@ export function MaturityResolveBody({
       {error && <p style={{ margin: 0, fontSize: 13, color: 'var(--c-neg)' }}>{error}</p>}
 
       {/* Actions */}
+      {tooEarlyToRenew && mode !== 'withdraw' && (
+        <p data-testid="maturity-too-early-hint" style={{ margin: 0, fontSize: 12.5, lineHeight: 1.45, color: 'var(--c-muted)' }}>
+          {isVi
+            ? `Sổ chưa tới hạn (còn ${daysLeft} ngày) — ghi nhận tái tục khi đáo hạn. Bạn vẫn có thể rút trước hạn.`
+            : `Not matured yet (${daysLeft} days left) — record the renewal at maturity. You can still withdraw early.`}
+        </p>
+      )}
       <div style={{ display: 'flex', gap: 8 }}>
         <button type="button" onClick={onClose} className="cn-btn ghost" style={{ flex: 1, justifyContent: 'center', border: '1px solid var(--c-line)' }}>{t.cancel}</button>
         {(() => {

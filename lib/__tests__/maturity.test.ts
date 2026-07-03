@@ -52,13 +52,14 @@ describe('depositMaturityState', () => {
     expect(depositMaturityState(-1)).toBe('matured')
     expect(depositMaturityState(-30)).toBe('matured')
   })
-  it('classifies today and tomorrow as maturing (REMINDER_DAYS = 1)', () => {
-    expect(MATURITY_REMINDER_DAYS).toBe(1)
+  it('classifies today through the reminder window as maturing (REMINDER_DAYS = 7)', () => {
+    expect(MATURITY_REMINDER_DAYS).toBe(7)
     expect(depositMaturityState(0)).toBe('maturing')
     expect(depositMaturityState(1)).toBe('maturing')
+    expect(depositMaturityState(7)).toBe('maturing') // last day inside the window
   })
-  it('classifies the day after tomorrow onward as active', () => {
-    expect(depositMaturityState(2)).toBe('active')
+  it('classifies past the reminder window as active', () => {
+    expect(depositMaturityState(8)).toBe('active') // first day outside the window
     expect(depositMaturityState(30)).toBe('active')
   })
 })
