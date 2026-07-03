@@ -71,6 +71,18 @@ Rules:
 4. Wait for explicit user approval ("merge it", "looks good") before merging
 5. Only merge after the user has reviewed and tested on the Vercel preview deployment
 
+**Always work in a dedicated git worktree — never on the shared main working directory.**
+Multiple Claude sessions often run against this repo at once, so a shared working dir and
+global stash race badly (files get clobbered, phantom `M` status, lost work). Isolate every
+piece of work:
+
+1. **Create a worktree off the latest `origin/main`** for each new branch, e.g.
+   `git fetch origin && git worktree add ../allocate-<branch> -b fix/some-bug origin/main`.
+   Do all editing, testing, committing, and pushing inside that folder.
+2. **Never `git stash`** in this repo (it uses a global stash shared across worktrees/sessions).
+3. **After the PR is merged, remove the worktree** — `git worktree remove ../allocate-<branch>`
+   (and delete the local branch). Don't leave stale worktree folders lying around.
+
 **PR isolation rule:** Each PR must be independent. If you are working on a new feature while another PR is open, start fresh from the latest `main` — do not stack branches or include commits that belong to an open PR. If a conflict arises because another PR hasn't merged yet, resolve it after that PR merges rather than combining them.
 
 **Why:** The user reviews and tests every change on the preview deployment before it reaches main. Stacked or combined PRs make it impossible to review and deploy changes independently.
