@@ -228,29 +228,6 @@ describe('DesktopPlanningView — recurring bank "Saved" deposit', () => {
       vi.unstubAllGlobals()
     }
   })
-
-  // The bank dropdown only lists banks with a structured code, so a deposit whose
-  // bank was recorded only as free-text can't be reselected there. Recording a
-  // recurring deposit is a repeat of one the user set up, so we carry the
-  // recurring's own name into the deposit-name field — even when it isn't linked
-  // to an existing deposit (nothing to fetch).
-  it('prefills the deposit name from the recurring saving when recording', async () => {
-    const fetchMock = vi.fn((url: string) =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve(String(url).includes('savings-goals') ? { goals: [] } : []),
-      }),
-    )
-    vi.stubGlobal('fetch', fetchMock)
-    try {
-      render(<DesktopPlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} />)
-      await userEvent.click(screen.getByRole('button', { name: /Record deposit/i }))
-      const nameInput = await screen.findByPlaceholderText('depositNamePlaceholder') as HTMLInputElement
-      await waitFor(() => expect(nameInput.value).toBe('VCB Savings'))
-    } finally {
-      vi.unstubAllGlobals()
-    }
-  })
 })
 
 describe('DesktopPlanningView — allocation card amounts never wrap', () => {

@@ -99,11 +99,6 @@ export interface PrefillTransaction {
   // Associates the new transaction with a monthly plan so it counts toward that
   // month's By-goal contributions (the plan queries transactions by plan_id).
   plan_id?: string | null
-  // Carried forward when recording a recurring deposit: the source deposit's
-  // structured bank (may be null on older deposits) and free-text name, so the
-  // user doesn't re-pick a bank that might not be in the dropdown at all.
-  bank_code?: string | null
-  notes?: string | null
 }
 
 interface Props {
@@ -175,7 +170,6 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
   const [nav, setNav] = useState('')  // editable unit price; defaults to the fund's current NAV
 
   // bank fields
-  const [bankName, setBankName] = useState('')
   const [bankCode, setBankCode] = useState('')
   const [depositType, setDepositType] = useState<'term' | 'flex' | 'accumulating'>('term')
   const [bankAmount, setBankAmount] = useState('')
@@ -203,6 +197,10 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
 
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+
+  // A bank deposit's name is the selected bank (there's no separate name field).
+  // Falls back to the general note, then null, when no bank is chosen.
+  const selectedBankName = banks.find((b) => b.code === bankCode)?.name ?? ''
 
   useEffect(() => {
     if (open) {
@@ -254,8 +252,11 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
       setRate(existing.interest_rate != null ? String(existing.interest_rate) : '')
       setMaturity(existing.expiry_date || '')
       setDepositType(existing.interest_rate != null ? 'term' : 'flex')
-      setBankName(existing.notes || '')
       setBankCode(existing.bank_code || '')
+      // Legacy deposits stored their name only as free text (no bank_code). Keep
+      // that text alive in the general note so editing doesn't silently drop it;
+      // structured deposits derive their name from the bank, so leave note blank.
+      setNote(existing.bank_code ? '' : (existing.notes || ''))
     } else {
       setGoldProvider(existing.notes || 'PNJ')
       setGoldUnit('chi')
@@ -277,10 +278,6 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
       const amt = String(prefill.amount_vnd)
       if (at === 'bank') setBankAmount(amt)
       else if (at === 'fund') setAmount(amt)
-    }
-    if (at === 'bank') {
-      if (prefill.bank_code != null) setBankCode(prefill.bank_code)
-      if (prefill.notes != null) setBankName(prefill.notes)
     }
   }, [open, existing, prefill])
 
@@ -314,7 +311,6 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
     setAmount('')
     setUnits('')
     setNav('')
-    setBankName('')
     setBankCode('')
     setDepositType('term')
     setBankAmount('')
@@ -438,7 +434,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
         payload = {
           asset_type: 'bank', fund_id: null, investment_date: date, amount_vnd: amt,
           interest_rate: rate ? Number(rate) : null, expiry_date: maturity || null,
-          goal_id: goalId || null, notes: bankName || note || null,
+          goal_id: goalId || null, notes: selectedBankName || note || null,
           bank_code: bankCode || null,
         }
       } else {
@@ -573,7 +569,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
       body = {
         ...body,
         amount_vnd: amt,
-        notes: bankName || note || null,
+        notes: selectedBankName || note || null,
         bank_code: bankCode || null,
         interest_rate: rate ? Number(rate) : null,
         expiry_date: maturity || null,
@@ -785,9 +781,9 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
           {/* Bank-specific */}
           {dir === 'buy' && assetType === 'bank' && (
             <>
-              {/* Structured bank (FK) — the deposit points at a real bank, not a
-                  parsed name. The free-text field below is just the deposit's
-                  own nickname. */}
+              {/* Structured bank (FK) — the deposit points at a real bank, and the
+                  chosen bank's name is the deposit's name (no separate name field).
+                  A general "note" further down covers any extra memo. */}
               <div>
                 <label style={labelStyle}>{t('bank')}</label>
                 <select
@@ -801,16 +797,6 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
                     <option key={b.code} value={b.code}>{b.name}</option>
                   ))}
                 </select>
-              </div>
-              <div>
-                <label style={labelStyle}>{t('depositName')}</label>
-                <input
-                  type="text"
-                  value={bankName}
-                  onChange={(e) => setBankName(e.target.value)}
-                  placeholder={t('depositNamePlaceholder')}
-                  style={inputStyle}
-                />
               </div>
               <div>
                 <label style={labelStyle}>{t('depositType')}</label>

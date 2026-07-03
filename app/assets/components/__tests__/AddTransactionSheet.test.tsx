@@ -446,6 +446,9 @@ describe('AddTransactionSheet — structured bank (bank_code)', () => {
       expect(body.asset_type).toBe('bank')
       expect(body.bank_code).toBe('MB')
       expect(body.amount_vnd).toBe(10_000_000)
+      // The selected bank's name becomes the deposit's stored name (no separate
+      // deposit-name field anymore).
+      expect(body.notes).toBe('MB Bank')
     })
   })
 
@@ -476,7 +479,21 @@ describe('AddTransactionSheet — structured bank (bank_code)', () => {
       const body = JSON.parse(String((put![1] as RequestInit).body))
       expect(body.asset_type).toBe('bank')
       expect(body.bank_code).toBe('VCB')
+      // Name is derived from the selected bank now.
+      expect(body.notes).toBe('Vietcombank')
     })
+  })
+
+  it('renders no separate deposit-name field for a bank deposit — the bank is the name', async () => {
+    const fetchMock = withBanks()
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<AddTransactionSheet open onClose={vi.fn()} onSaved={vi.fn()} />)
+
+    fireEvent.click(screen.getByText('Bank'))
+    await screen.findByTestId('bank-select')
+    // The old free-text "Deposit name" field (label t('depositName')) is gone.
+    expect(screen.queryByText('depositName')).not.toBeInTheDocument()
   })
 })
 
@@ -508,33 +525,5 @@ describe('AddTransactionSheet — prefill create mode (plan contribution)', () =
       expect(body.goal_id).toBe('g1')
       expect(body.amount_vnd).toBe(2_000_000)
     })
-  })
-
-  // Recording a recurring saving's monthly deposit is a repeat of a deposit the
-  // user already set up, so the sheet must carry that deposit's bank and name
-  // forward — the user shouldn't have to re-pick a bank from a dropdown that may
-  // not even contain theirs (older deposits keep the bank only in the free-text
-  // name, with bank_code null).
-  it('prefills the bank_code and deposit name from the source deposit', async () => {
-    const banks = [{ code: 'MB', name: 'MB Bank' }, { code: 'VCB', name: 'Vietcombank' }]
-    const fetchMock = vi.fn((url: string) => {
-      if (String(url).includes('/api/v1/banks')) return Promise.resolve({ ok: true, json: () => Promise.resolve(banks) })
-      if (String(url).includes('/savings-goals')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ goals: [] }) })
-      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
-    })
-    vi.stubGlobal('fetch', fetchMock)
-
-    render(
-      <AddTransactionSheet
-        open
-        onClose={vi.fn()}
-        onSaved={vi.fn()}
-        prefill={{ asset_type: 'bank', amount_vnd: 2_000_000, plan_id: 'plan-1', investment_date: '2026-06-01', bank_code: 'VCB', notes: 'Sổ tiết kiệm định kỳ' }}
-      />,
-    )
-
-    const sel = await screen.findByTestId('bank-select') as HTMLSelectElement
-    await waitFor(() => expect(sel.value).toBe('VCB'))
-    expect((screen.getByPlaceholderText('depositNamePlaceholder') as HTMLInputElement).value).toBe('Sổ tiết kiệm định kỳ')
   })
 })
