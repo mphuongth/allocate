@@ -509,4 +509,32 @@ describe('AddTransactionSheet — prefill create mode (plan contribution)', () =
       expect(body.amount_vnd).toBe(2_000_000)
     })
   })
+
+  // Recording a recurring saving's monthly deposit is a repeat of a deposit the
+  // user already set up, so the sheet must carry that deposit's bank and name
+  // forward — the user shouldn't have to re-pick a bank from a dropdown that may
+  // not even contain theirs (older deposits keep the bank only in the free-text
+  // name, with bank_code null).
+  it('prefills the bank_code and deposit name from the source deposit', async () => {
+    const banks = [{ code: 'MB', name: 'MB Bank' }, { code: 'VCB', name: 'Vietcombank' }]
+    const fetchMock = vi.fn((url: string) => {
+      if (String(url).includes('/api/v1/banks')) return Promise.resolve({ ok: true, json: () => Promise.resolve(banks) })
+      if (String(url).includes('/savings-goals')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ goals: [] }) })
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(
+      <AddTransactionSheet
+        open
+        onClose={vi.fn()}
+        onSaved={vi.fn()}
+        prefill={{ asset_type: 'bank', amount_vnd: 2_000_000, plan_id: 'plan-1', investment_date: '2026-06-01', bank_code: 'VCB', notes: 'Sổ tiết kiệm định kỳ' }}
+      />,
+    )
+
+    const sel = await screen.findByTestId('bank-select') as HTMLSelectElement
+    await waitFor(() => expect(sel.value).toBe('VCB'))
+    expect((screen.getByPlaceholderText('depositNamePlaceholder') as HTMLInputElement).value).toBe('Sổ tiết kiệm định kỳ')
+  })
 })

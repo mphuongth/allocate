@@ -99,6 +99,11 @@ export interface PrefillTransaction {
   // Associates the new transaction with a monthly plan so it counts toward that
   // month's By-goal contributions (the plan queries transactions by plan_id).
   plan_id?: string | null
+  // Carried forward when recording a recurring deposit: the source deposit's
+  // structured bank (may be null on older deposits) and free-text name, so the
+  // user doesn't re-pick a bank that might not be in the dropdown at all.
+  bank_code?: string | null
+  notes?: string | null
 }
 
 interface Props {
@@ -272,6 +277,10 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
       const amt = String(prefill.amount_vnd)
       if (at === 'bank') setBankAmount(amt)
       else if (at === 'fund') setAmount(amt)
+    }
+    if (at === 'bank') {
+      if (prefill.bank_code != null) setBankCode(prefill.bank_code)
+      if (prefill.notes != null) setBankName(prefill.notes)
     }
   }, [open, existing, prefill])
 

@@ -705,6 +705,9 @@ export default function DesktopPlanningView({
   // can't be topped up — steer the user to handle its maturity rather than silently
   // logging an unrelated standalone deposit. Otherwise log a standalone contribution.
   async function recordRecurring(g: { goalId: string; isUnallocated: boolean }, item: GoalItem) {
+    // Recording a recurring deposit is a repeat of an existing one, so carry the
+    // source deposit's bank + name forward when we open the sheet.
+    let bankPrefill: Partial<PrefillTransaction> = {}
     if (item.linkedDepositTxId && item.recurringId && plan) {
       try {
         const res = await fetch(`/api/v1/investment-transactions/${item.linkedDepositTxId}`)
@@ -725,10 +728,13 @@ export default function DesktopPlanningView({
             })
             return
           }
+          // Non-book term/standalone deposit: prefill its bank so the user
+          // doesn't re-pick one that may not be in the dropdown.
+          bankPrefill = { bank_code: dep.bank_code ?? null, notes: dep.notes ?? null }
         }
       } catch { /* fall through to the standard contribution */ }
     }
-    openContribution(g, { asset_type: 'bank', amount_vnd: item.amount })
+    openContribution(g, { asset_type: 'bank', amount_vnd: item.amount, ...bankPrefill })
   }
 
   async function handleSaveOverride() {
