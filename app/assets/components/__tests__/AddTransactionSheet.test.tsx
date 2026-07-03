@@ -446,6 +446,9 @@ describe('AddTransactionSheet — structured bank (bank_code)', () => {
       expect(body.asset_type).toBe('bank')
       expect(body.bank_code).toBe('MB')
       expect(body.amount_vnd).toBe(10_000_000)
+      // The selected bank's name becomes the deposit's stored name (no separate
+      // deposit-name field anymore).
+      expect(body.notes).toBe('MB Bank')
     })
   })
 
@@ -476,7 +479,21 @@ describe('AddTransactionSheet — structured bank (bank_code)', () => {
       const body = JSON.parse(String((put![1] as RequestInit).body))
       expect(body.asset_type).toBe('bank')
       expect(body.bank_code).toBe('VCB')
+      // Name is derived from the selected bank now.
+      expect(body.notes).toBe('Vietcombank')
     })
+  })
+
+  it('renders no separate deposit-name field for a bank deposit — the bank is the name', async () => {
+    const fetchMock = withBanks()
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<AddTransactionSheet open onClose={vi.fn()} onSaved={vi.fn()} />)
+
+    fireEvent.click(screen.getByText('Bank'))
+    await screen.findByTestId('bank-select')
+    // The old free-text "Deposit name" field (label t('depositName')) is gone.
+    expect(screen.queryByText('depositName')).not.toBeInTheDocument()
   })
 })
 
