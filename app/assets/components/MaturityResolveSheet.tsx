@@ -50,6 +50,15 @@ const moneyInput: React.CSSProperties = {
   background: 'var(--c-canvas,#faf9f7)', border: '1.5px solid var(--c-line)',
   borderRadius: 10, color: 'var(--c-ink)', outline: 'none',
 }
+// A native <input type=date> on iOS Safari sizes to its intrinsic content width
+// and ignores width:100%, so an un-clamped date field pushes the whole sheet
+// wider than the viewport — letting it be dragged sideways (#439). Clamp it like
+// the ledger's date filters (#362): appearance:none trims the intrinsic width,
+// maxWidth:100% + minWidth:0 pin it to its cell.
+const dateInput: React.CSSProperties = {
+  ...moneyInput, maxWidth: '100%', minWidth: 0,
+  WebkitAppearance: 'none', appearance: 'none',
+}
 
 // Money entry core: a digit-grouped amount field (₫ suffix). Reused by every
 // money input in the maturity flow so large VND amounts stay readable
@@ -1029,7 +1038,7 @@ export function MaturityResolveBody({
                 </button>
               )}
             </div>
-            <input type="date" value={newMaturity} min={baseDate} onChange={(e) => setMaturityOverride(e.target.value)} style={moneyInput} />
+            <input data-testid="maturity-combine-date" type="date" value={newMaturity} min={baseDate} onChange={(e) => setMaturityOverride(e.target.value)} style={dateInput} />
             {!maturityValid && <p style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--c-neg)', lineHeight: 1.4 }}>{t.maturityTooEarly}</p>}
           </div>
 
@@ -1106,7 +1115,7 @@ export function MaturityResolveBody({
               value={newMaturity}
               min={baseDate}
               onChange={(e) => setMaturityOverride(e.target.value)}
-              style={moneyInput}
+              style={dateInput}
             />
             {maturityValid
               ? <p style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--c-muted)', lineHeight: 1.4 }}>{t.maturityHint}</p>

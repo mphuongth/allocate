@@ -703,6 +703,54 @@ describe('MaturityResolveBody', () => {
     })
   })
 
+  // ── Mobile sheet-overflow guard (#439) ──────────────────────────────────────
+  // On iOS Safari a native <input type=date> sizes to its intrinsic content width
+  // and ignores width:100%, so an un-clamped date field pushes the whole sheet
+  // wider than the viewport — letting it be dragged sideways. Each date input must
+  // carry the same clamp as the ledger's date filters (#362): appearance:none to
+  // trim the intrinsic width, maxWidth:100% + minWidth:0 to pin it to its cell.
+  describe('date inputs are clamped so the sheet can’t overflow (#439)', () => {
+    function stubEmptyRecurring() {
+      const fetchMock = vi.fn().mockImplementation((url: string) => {
+        if (typeof url === 'string' && url.startsWith('/api/v1/recurring-savings')) {
+          return Promise.resolve({ ok: true, json: async () => ({ savings: [] }) })
+        }
+        return Promise.resolve({ ok: true, json: async () => [] })
+      })
+      vi.stubGlobal('fetch', fetchMock)
+      return fetchMock
+    }
+    function expectClamped(el: Element) {
+      const s = (el as HTMLElement).style
+      expect(s.maxWidth).toBe('100%')
+      expect(s.minWidth).toBe('0px')
+      expect(s.appearance).toBe('none')
+    }
+
+    it('clamps the renew-mode new-maturity date input', () => {
+      render(
+        <MaturityResolveBody inv={maturedDeposit} isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
+      )
+      expectClamped(screen.getByTestId('maturity-date-input'))
+    })
+
+    it('clamps the combine/merge sheet new-maturity date input', async () => {
+      const user = userEvent.setup()
+      stubEmptyRecurring()
+      const sibBank: InvRow = {
+        id: 'sib-bank', name: 'Vikki sibling', type: 'bank', value: 8_000_000, gainPct: null,
+        units: null, principal: 8_000_000, interestRate: 6, expiryDate: daysFromNow(40),
+        investmentDate: daysFromNow(-150), fund: null,
+      }
+      render(
+        <MaturityResolveBody inv={maturedDeposit} goalId="goal-1" siblingDeposits={[sibBank]}
+          isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
+      )
+      await user.click(await screen.findByRole('button', { name: /Settle & re-deposit/i }))
+      expectClamped(screen.getByTestId('maturity-combine-date'))
+    })
+  })
+
   // ── Success-flash timing ────────────────────────────────────────────────────
   // After a successful renew the sheet shows a "done" confirmation, then closes
   // and tells the parent to refresh. That hand-off was a 1.7s wait that read as
