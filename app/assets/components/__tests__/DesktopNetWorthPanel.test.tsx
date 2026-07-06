@@ -72,4 +72,16 @@ describe('DesktopNetWorthPanel', () => {
     expect(screen.getByText('Current value')).toBeInTheDocument()
     expect(screen.getByText('Total Assets')).toBeInTheDocument()
   })
+
+  // Desktop/mobile copy parity: the panel hardcodes its Vietnamese labels while
+  // the mobile NetWorthCard pulls the same strings from messages/vi.json. They
+  // used to drift ("tổng" vs "tổng thể"). Pin the desktop side to the canonical
+  // wording so the two viewports read identically.
+  it('uses the canonical Vietnamese labels (matches the mobile card)', () => {
+    renderPanel({ locale: 'vi' })
+    // overall-P&L suffix — must be "tổng thể", not the old "tổng"
+    expect(screen.getByText('tổng thể')).toBeInTheDocument()
+    // total-assets KPI label — correct Vietnamese casing
+    expect(screen.getByText('Tổng tài sản')).toBeInTheDocument()
+  })
 })
