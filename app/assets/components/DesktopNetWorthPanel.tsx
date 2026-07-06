@@ -127,7 +127,7 @@ export default function DesktopNetWorthPanel({ data, allocationTotals, goldUnits
             {isPos ? '+' : ''}{fmtCompact(netWorth.overallProfitLoss)}
           </span>
           <span style={{ fontSize: 11, color: 'var(--c-muted)' }}>
-            {isVi ? 'tổng' : 'overall'}
+            {isVi ? 'tổng thể' : 'overall'}
           </span>
         </div>
 
