@@ -63,4 +63,13 @@ describe('DesktopNetWorthPanel', () => {
     fireEvent.click(btn)
     expect(onDownloadReport).toHaveBeenCalled()
   })
+
+  // English copy parity with the mobile NetWorthCard (which reads en.json). The
+  // desktop panel hardcodes its KPI labels and had drifted from the mobile ones:
+  // "Current" vs "Current value", "Total assets" vs "Total Assets".
+  it('uses the canonical English KPI labels (matches the mobile card)', () => {
+    renderPanel({ locale: 'en' })
+    expect(screen.getByText('Current value')).toBeInTheDocument()
+    expect(screen.getByText('Total Assets')).toBeInTheDocument()
+  })
 })

@@ -93,8 +93,8 @@ export default function DesktopNetWorthPanel({ data, allocationTotals, goldUnits
 
   const kpis = [
     { l: isVi ? 'Đã đầu tư'       : 'Invested',     v: netWorth.totalInvested },
-    { l: isVi ? 'Giá trị hiện tại' : 'Current',      v: netWorth.currentValue },
-    { l: isVi ? 'Tổng tài sản'     : 'Total assets', v: netWorth.totalAssets },
+    { l: isVi ? 'Giá trị hiện tại' : 'Current value', v: netWorth.currentValue },
+    { l: isVi ? 'Tổng tài sản'     : 'Total Assets',  v: netWorth.totalAssets },
     { l: isVi ? 'Nợ'               : 'Liabilities',  v: netWorth.totalLiabilities },
   ]
 
