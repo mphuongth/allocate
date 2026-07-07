@@ -5,6 +5,7 @@ import { useTranslations, useLocale } from 'next-intl'
 import { toast } from 'sonner'
 import { Plus, ChevronLeft } from 'lucide-react'
 import { fmt, fmtCompact } from '@/lib/formatters'
+import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
 import type { Goal } from '../PlanningClient'
 
 interface Saving {
@@ -308,8 +309,8 @@ export default function RecurringSavingManager({ goals, onChange, onToast, varia
             data-testid="rs-amount"
             type="text"
             inputMode="numeric"
-            value={form.amount_vnd ? Number(form.amount_vnd).toLocaleString('en-US') : ''}
-            onChange={(e) => setForm({ ...form, amount_vnd: e.target.value.replace(/,/g, '').replace(/[^0-9]/g, '') })}
+            value={formatIntVN(form.amount_vnd)}
+            onChange={(e) => setForm({ ...form, amount_vnd: parseIntVN(e.target.value) })}
             placeholder="0"
             style={{ ...inputStyle, fontVariantNumeric: 'tabular-nums' }}
           />

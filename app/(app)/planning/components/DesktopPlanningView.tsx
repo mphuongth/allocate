@@ -9,6 +9,7 @@ import {
 import { useLocale } from 'next-intl'
 import { toast } from 'sonner'
 import { fmt, fmtCompact } from '@/lib/formatters'
+import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
 import { DesktopPlanningSkeleton } from './PlanningSkeleton'
 import FixedExpenseManager from './FixedExpenseManager'
 import RecurringSavingManager from './RecurringSavingManager'
@@ -1176,10 +1177,10 @@ export default function DesktopPlanningView({
               <input
                 type="text"
                 inputMode="numeric"
-                value={incomeVal ? Number(incomeVal).toLocaleString('en-US') : ''}
-                onChange={e => setIncomeVal(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))}
+                value={formatIntVN(incomeVal)}
+                onChange={e => setIncomeVal(parseIntVN(e.target.value))}
                 autoFocus
-                placeholder="e.g. 45,000,000"
+                placeholder="e.g. 45.000.000"
                 className="cn-input tabular"
               />
             </label>
@@ -1224,7 +1225,7 @@ export default function DesktopPlanningView({
             <div style={{ fontSize: 13, color: 'var(--c-muted)', fontWeight: 500 }}>{overrideModal.name}</div>
             <label style={{ display: 'grid', gap: 6 }}>
               <span style={labelStyle}>{isVI ? 'Số tiền tháng này (₫)' : 'Amount this month (₫)'}</span>
-              <input type="text" inputMode="numeric" value={overrideVal ? Number(overrideVal).toLocaleString('en-US') : ''} onChange={e => setOverrideVal(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))} autoFocus className="cn-input tabular" />
+              <input type="text" inputMode="numeric" value={formatIntVN(overrideVal)} onChange={e => setOverrideVal(parseIntVN(e.target.value))} autoFocus className="cn-input tabular" />
             </label>
             {overrideVal && Number(overrideVal) > 0 && (
               <div style={{ background: 'var(--c-navy-tint)', borderRadius: 8, padding: '6px 10px', fontSize: 12, color: 'var(--c-navy)', fontVariantNumeric: 'tabular-nums' }}>
@@ -1257,7 +1258,7 @@ export default function DesktopPlanningView({
             </label>
             <label style={{ display: 'grid', gap: 6 }}>
               <span style={labelStyle}>{isVI ? 'Số tiền (₫)' : 'Amount (₫)'}</span>
-              <input type="text" inputMode="numeric" value={otherAmt ? Number(otherAmt).toLocaleString('en-US') : ''} onChange={e => setOtherAmt(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))} placeholder="0" className="cn-input tabular" />
+              <input type="text" inputMode="numeric" value={formatIntVN(otherAmt)} onChange={e => setOtherAmt(parseIntVN(e.target.value))} placeholder="0" className="cn-input tabular" />
             </label>
             {otherAmt && Number(otherAmt) > 0 && (
               <div style={{ background: 'var(--c-navy-tint)', borderRadius: 8, padding: '6px 10px', fontSize: 12, color: 'var(--c-navy)', fontVariantNumeric: 'tabular-nums' }}>

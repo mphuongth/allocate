@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl'
 import { X, Mountain, Home, Shield, ShoppingCart, Target } from 'lucide-react'
 import { iconHit } from './iconHit'
 import { fmt } from '@/lib/formatters'
+import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
 import { CairnLoader } from '@/app/components/ui/CairnLoader'
 
 interface Props {
@@ -134,8 +135,8 @@ export function CreateGoalSheet({ open, onClose, onSuccess, desktop }: Props) {
               <input
                 type="text"
                 inputMode="numeric"
-                value={target ? Number(target).toLocaleString('vi-VN') : ''}
-                onChange={(e) => setTarget(e.target.value.replace(/\./g, '').replace(/[^0-9]/g, ''))}
+                value={formatIntVN(target)}
+                onChange={(e) => setTarget(parseIntVN(e.target.value))}
                 placeholder="100.000.000"
                 style={{
                   width: '100%', boxSizing: 'border-box',

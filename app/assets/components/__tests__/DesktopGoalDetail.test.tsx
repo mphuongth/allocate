@@ -152,8 +152,8 @@ describe('DesktopGoalDetail — gold sell uses current price (issue #251)', () =
     await userEvent.click(screen.getByText('Sell'))
 
     const priceInput = await screen.findByTestId('sell-gold-price-input')
-    // Must be the live market price (9,200,000), not the 9,000,000 buy price.
-    await waitFor(() => expect((priceInput as HTMLInputElement).value).toBe('9200000'))
+    // Must be the live market price (9.200.000), not the 9.000.000 buy price.
+    await waitFor(() => expect((priceInput as HTMLInputElement).value).toBe('9.200.000'))
   })
 })
 

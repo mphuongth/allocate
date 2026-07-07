@@ -286,9 +286,9 @@ describe('DesktopPlanningView — modal focus a11y (DModal)', () => {
   it('closes the income modal on Escape', async () => {
     render(<DesktopPlanningView {...defaultProps} plan={basePlan} />)
     await userEvent.click(screen.getByRole('button', { name: 'Edit income' }))
-    expect(await screen.findByPlaceholderText('e.g. 45,000,000')).toBeInTheDocument()
+    expect(await screen.findByPlaceholderText('e.g. 45.000.000')).toBeInTheDocument()
     await userEvent.keyboard('{Escape}')
-    expect(screen.queryByPlaceholderText('e.g. 45,000,000')).not.toBeInTheDocument()
+    expect(screen.queryByPlaceholderText('e.g. 45.000.000')).not.toBeInTheDocument()
   })
 
   it('moves focus into the dialog on open (no autofocus field)', async () => {
@@ -324,13 +324,13 @@ describe('DesktopPlanningView — save error feedback (no false success)', () =>
     try {
       render(<DesktopPlanningView {...defaultProps} plan={basePlan} onToast={onToast} />)
       await userEvent.click(screen.getByRole('button', { name: 'Edit income' }))
-      const input = await screen.findByPlaceholderText('e.g. 45,000,000')
+      const input = await screen.findByPlaceholderText('e.g. 45.000.000')
       await userEvent.clear(input)
       await userEvent.type(input, '50000000')
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalled())
       expect(onToast).not.toHaveBeenCalled()
-      expect(screen.getByPlaceholderText('e.g. 45,000,000')).toBeInTheDocument()
+      expect(screen.getByPlaceholderText('e.g. 45.000.000')).toBeInTheDocument()
     } finally {
       vi.unstubAllGlobals()
     }

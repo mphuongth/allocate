@@ -9,6 +9,7 @@ import { iconHit } from './iconHit'
 import { useLocale } from 'next-intl'
 import { toast } from 'sonner'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
+import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
 import type { GoalData, FundBreakdownItem } from '../DashboardClient'
 import TransactionHistorySheet, { type PurchaseHistoryRow } from './TransactionHistorySheet'
 import { SellWithdrawSheet, type SellItem } from './SellWithdrawSheet'
@@ -370,8 +371,8 @@ function EditGoalSheet({
             <input
               type="text"
               inputMode="numeric"
-              value={target ? Number(target).toLocaleString('en-US') : ''}
-              onChange={(e) => setTarget(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))}
+              value={formatIntVN(target)}
+              onChange={(e) => setTarget(parseIntVN(e.target.value))}
               placeholder="0"
               style={{
                 width: '100%', padding: '10px 12px', fontSize: 16,
@@ -1260,9 +1261,10 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
                   <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'var(--c-canvas,#faf9f7)', border: '2px solid var(--c-navy)', borderRadius: 10, minWidth: 0 }}>
                     <span style={{ fontSize: 15, color: 'var(--c-muted)', flexShrink: 0 }}>₫</span>
                     <input
-                      type="number"
-                      value={monthlyContrib}
-                      onChange={(e) => setMonthlyContrib(e.target.value)}
+                      type="text"
+                      inputMode="numeric"
+                      value={formatIntVN(monthlyContrib)}
+                      onChange={(e) => setMonthlyContrib(parseIntVN(e.target.value))}
                       placeholder="0"
                       style={{
                         flex: 1, border: 'none', outline: 'none',

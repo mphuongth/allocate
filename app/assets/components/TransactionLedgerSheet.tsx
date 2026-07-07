@@ -6,6 +6,7 @@ import { Plus, Download, Edit2, Trash, ChevronLeft, ChevronRight, X, Calendar, A
 import { iconHit } from './iconHit'
 import AmountInput from '@/app/components/ui/AmountInput'
 import DecimalInput from '@/app/components/ui/DecimalInput'
+import { formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
 import { fmtCompact, fmtNav, fmtUnits } from '@/lib/formatters'
 import { parseExcelPaste, type ParsedRow } from '@/lib/parseExcelPaste'
 import AddTransactionSheet from './AddTransactionSheet'
@@ -637,7 +638,7 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
           {txForm.asset_type === 'bank' && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <Field label={t('colInterest')}>
-                <input type="number" step="0.01" value={txForm.interest_rate} onChange={(e) => setTxForm((f) => ({ ...f, interest_rate: e.target.value }))} placeholder="6.5" className="cn-input tabular" />
+                <input type="text" inputMode="decimal" value={formatDecimalVN(txForm.interest_rate)} onChange={(e) => setTxForm((f) => ({ ...f, interest_rate: parseDecimalVN(e.target.value) }))} placeholder="6,5" className="cn-input tabular" />
               </Field>
               <Field label={t('colExpiry')}>
                 <input type="date" value={txForm.expiry_date} onChange={(e) => setTxForm((f) => ({ ...f, expiry_date: e.target.value }))} className="cn-input tabular" />
@@ -691,7 +692,7 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
                     {importRows.map((r, i) => (
                       <tr key={i} style={{ borderTop: '1px solid var(--c-line)', background: r.error ? 'var(--c-neg-tint)' : 'var(--c-card)' }}>
                         <td style={{ padding: '7px 10px', color: 'var(--c-ink)' }}>{r.investment_date || '—'}</td>
-                        <td className="tabular" style={{ padding: '7px 10px', textAlign: 'right' }}>{isNaN(r.amount_vnd) ? '—' : Math.round(r.amount_vnd).toLocaleString('en-US')}</td>
+                        <td className="tabular" style={{ padding: '7px 10px', textAlign: 'right' }}>{isNaN(r.amount_vnd) ? '—' : Math.round(r.amount_vnd).toLocaleString('vi-VN')}</td>
                         <td className="tabular" style={{ padding: '7px 10px', textAlign: 'right' }}>{isNaN(r.unit_price) ? '—' : fmtNav(r.unit_price)}</td>
                         <td className="tabular" style={{ padding: '7px 10px', textAlign: 'right' }}>{isNaN(r.units) ? '—' : fmtUnits(r.units)}</td>
                         <td style={{ padding: '7px 10px', textAlign: 'right' }}>{r.error ? <span style={{ color: 'var(--c-neg)', fontSize: 11 }}>{r.error}</span> : <span style={{ color: 'var(--c-pos)' }}>✓</span>}</td>

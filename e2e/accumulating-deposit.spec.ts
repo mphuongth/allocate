@@ -63,7 +63,7 @@ test.describe('Accumulating bank deposits (Loại 2)', () => {
       await page.getByTestId('top-up-btn').click()
       await expect(page.getByTestId('top-up-modal')).toBeVisible({ timeout: 5_000 })
       await page.getByTestId('top-up-amount').fill('4000000')
-      await page.getByTestId('top-up-rate').fill('3.4')
+      await page.getByTestId('top-up-rate').fill('3,4') // VN decimal separator
       const [resp] = await Promise.all([
         page.waitForResponse((r) => r.url().includes('/api/v1/investment-transactions') && r.request().method() === 'POST'),
         page.getByTestId('top-up-submit').click(),

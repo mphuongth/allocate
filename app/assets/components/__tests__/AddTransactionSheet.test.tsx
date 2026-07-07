@@ -250,7 +250,7 @@ describe('AddTransactionSheet — gold sell (quantity × price) (issue #232)', (
     fireEvent.click(screen.getByText('Gold'))    // asset type = gold
     fireEvent.click(screen.getByText('sell'))    // direction = sell
     await screen.findAllByText(/PNJ/)             // gold holding loaded (price prefills to 9,200,000)
-    fireEvent.change(screen.getByPlaceholderText('0.00'), { target: { value: '1' } })  // 1 chỉ
+    fireEvent.change(screen.getByPlaceholderText('0,00'), { target: { value: '1' } })  // 1 chỉ
     fireEvent.click(screen.getByText('confirmSale'))
 
     await waitFor(() => {
@@ -286,10 +286,10 @@ describe('AddTransactionSheet — editable NAV on a fund buy', () => {
 
     // NAV field is present and prefilled with the fund's current NAV (20,000).
     const navInput = await screen.findByTestId('buy-fund-nav-input') as HTMLInputElement
-    await waitFor(() => expect(navInput.value).toBe('20,000'))
+    await waitFor(() => expect(navInput.value).toBe('20.000'))
 
     // Enter amount; units derive from amount ÷ NAV.
-    fireEvent.change(screen.getByPlaceholderText('5,000,000'), { target: { value: '1000000' } })
+    fireEvent.change(screen.getByPlaceholderText('5.000.000'), { target: { value: '1000000' } })
     fireEvent.click(screen.getByText('save'))
 
     await waitFor(() => {
@@ -310,9 +310,9 @@ describe('AddTransactionSheet — editable NAV on a fund buy', () => {
     render(<AddTransactionSheet open onClose={vi.fn()} onSaved={vi.fn()} />)
 
     const navInput = await screen.findByTestId('buy-fund-nav-input') as HTMLInputElement
-    await waitFor(() => expect(navInput.value).toBe('20,000'))
+    await waitFor(() => expect(navInput.value).toBe('20.000'))
 
-    fireEvent.change(screen.getByPlaceholderText('5,000,000'), { target: { value: '1000000' } })
+    fireEvent.change(screen.getByPlaceholderText('5.000.000'), { target: { value: '1000000' } })
     fireEvent.change(navInput, { target: { value: '25000' } })   // override NAV
     fireEvent.click(screen.getByText('save'))
 
@@ -336,8 +336,8 @@ describe('AddTransactionSheet — bank term interest receivable (issue #245)', (
     const { container } = render(<AddTransactionSheet open onClose={vi.fn()} />)
 
     fireEvent.click(screen.getByText('Bank'))   // asset type = bank ('term' is default)
-    fireEvent.change(screen.getByPlaceholderText('10,000,000'), { target: { value: '100000000' } })
-    fireEvent.change(screen.getByPlaceholderText('5.5'), { target: { value: '6' } })
+    fireEvent.change(screen.getByPlaceholderText('10.000.000'), { target: { value: '100000000' } })
+    fireEvent.change(screen.getByPlaceholderText('5,5'), { target: { value: '6' } })
 
     // DOM order: [0] = maturity (bank section), [1] = transaction date (footer)
     const dateInputs = container.querySelectorAll<HTMLInputElement>('input[type="date"]')
@@ -360,8 +360,8 @@ describe('AddTransactionSheet — bank term interest receivable (issue #245)', (
     render(<AddTransactionSheet open onClose={vi.fn()} />)
 
     fireEvent.click(screen.getByText('Bank'))
-    fireEvent.change(screen.getByPlaceholderText('10,000,000'), { target: { value: '100000000' } })
-    fireEvent.change(screen.getByPlaceholderText('5.5'), { target: { value: '6' } })
+    fireEvent.change(screen.getByPlaceholderText('10.000.000'), { target: { value: '100000000' } })
+    fireEvent.change(screen.getByPlaceholderText('5,5'), { target: { value: '6' } })
 
     expect(screen.queryByText('estInterestReceivable')).not.toBeInTheDocument()
   })
@@ -378,7 +378,7 @@ describe('AddTransactionSheet — gold unit (issue #232)', () => {
     fireEvent.click(screen.getByText('Gold'))          // asset type
     fireEvent.click(screen.getByText('unitLuong'))      // unit = lượng
     fireEvent.change(screen.getByPlaceholderText('1'), { target: { value: '1' } })           // 1 lượng
-    fireEvent.change(screen.getByPlaceholderText('9,200,000'), { target: { value: '92000000' } }) // ₫/lượng
+    fireEvent.change(screen.getByPlaceholderText('9.200.000'), { target: { value: '92000000' } }) // ₫/lượng
     fireEvent.click(screen.getByText('save'))
 
     await waitFor(() => {
@@ -436,7 +436,7 @@ describe('AddTransactionSheet — structured bank (bank_code)', () => {
     fireEvent.click(screen.getByText('Bank'))                        // asset type = bank
     await screen.findByRole('option', { name: 'MB Bank' })           // bank list loaded
     fireEvent.change(screen.getByTestId('bank-select'), { target: { value: 'MB' } })
-    fireEvent.change(screen.getByPlaceholderText('10,000,000'), { target: { value: '10000000' } })
+    fireEvent.change(screen.getByPlaceholderText('10.000.000'), { target: { value: '10000000' } })
     fireEvent.click(screen.getByText('save'))
 
     await waitFor(() => {

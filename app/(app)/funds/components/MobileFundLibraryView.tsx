@@ -7,6 +7,7 @@ import { useNavigation } from '@/app/components/navigation/NavigationContext'
 import { Skeleton } from '@/app/components/ui/Skeleton'
 import { SyncPill } from '@/app/components/ui/SyncPill'
 import { fmtNav, fmtCompact } from '@/lib/formatters'
+import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
 // Shared dialog a11y (Esc-to-close + focus trap + focus restore). Lives under
 // the Plan feature today; reused here so Funds sheets behave the same.
 import { useDialogA11y } from '@/app/(app)/planning/components/useDialogA11y'
@@ -256,7 +257,7 @@ function FundForm({ existing, title, onClose, onSave, saving, formError }: {
       </div>
       <div style={{ display: 'grid', gap: 6 }}>
         <label style={labelStyle}>{t('navLabel')}</label>
-        <input type="number" value={nav} onChange={(e) => setNav(e.target.value)} min="0.01" step="0.01" placeholder={t('navPlaceholder')} style={{ ...inputStyle, fontVariantNumeric: 'tabular-nums' }} />
+        <input type="text" inputMode="decimal" value={formatDecimalVN(nav)} onChange={(e) => setNav(parseDecimalVN(e.target.value))} placeholder={t('navPlaceholder')} style={{ ...inputStyle, fontVariantNumeric: 'tabular-nums' }} />
       </div>
       <div style={{ display: 'grid', gap: 6 }}>
         <label style={labelStyle}>{t('navSourceLabel')}</label>
@@ -367,8 +368,8 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
                 data-testid={`dca-amount-input-${fund.id}`}
                 type="text"
                 inputMode="numeric"
-                value={dcaEditValue ? Number(dcaEditValue).toLocaleString('en-US') : ''}
-                onChange={(e) => setDcaEditValue(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))}
+                value={formatIntVN(dcaEditValue)}
+                onChange={(e) => setDcaEditValue(parseIntVN(e.target.value))}
                 onBlur={() => { onSaveDcaAmount(dcaEditValue); setDcaEditId(null) }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') { onSaveDcaAmount(dcaEditValue); setDcaEditId(null) }

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { useState } from 'react'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, within, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import MobileFundLibraryView from '../MobileFundLibraryView'
 import type { Fund } from '../useFundsData'
@@ -145,6 +145,18 @@ describe('MobileFundLibraryView — sheets', () => {
     expect(sheet.getByDisplayValue('Editable Fund')).toBeInTheDocument()
     // Placeholders come from t() (namePlaceholder), not hardcoded English.
     expect(sheet.getByPlaceholderText('namePlaceholder')).toBeInTheDocument()
+  })
+
+  // #445 — on a VN mobile keypad the only decimal key is a comma; the NAV field
+  // must show the VN format and accept that comma as the decimal separator.
+  it('shows the NAV in VN format and accepts a comma decimal (issue #445)', async () => {
+    render(<Harness initial={[makeFund({ name: 'Editable Fund', nav: 36120.5 })]} />)
+    await userEvent.click(within(screen.getByTestId('fund-card-f1')).getByRole('button', { name: 'editFund' }))
+    const sheet = within(screen.getByTestId('fund-sheet'))
+    const navInput = sheet.getByPlaceholderText('navPlaceholder') as HTMLInputElement
+    expect(navInput.value).toBe('36.120,5')
+    fireEvent.change(navInput, { target: { value: '36.120,75' } })
+    expect(navInput.value).toBe('36.120,75')
   })
 
   it('opens the delete sheet with a localized title key', async () => {

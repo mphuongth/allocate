@@ -5,6 +5,7 @@ import { ChevronLeft, X, MoreHorizontal, Edit2, Trash2, ChevronRight, ArrowDownR
 import { iconHit } from './iconHit'
 import { toast } from 'sonner'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
+import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
 import type { GoalData } from '../DashboardClient'
 import { GD_COLORS, buildCompositionSegments, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, buildRenewalSummary, AffectsProgressControl, BankInfoStrip, TopUpControl, RenewalSummaryLine, needsMaturityAction, needsBookMaturityAction, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
 import { MaturityResolveModal } from './MaturityResolveSheet'
@@ -453,8 +454,8 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
                     <input
                       type="text"
                       inputMode="numeric"
-                      value={calcAmount ? Number(calcAmount).toLocaleString('en-US') : ''}
-                      onChange={(e) => setCalcAmount(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))}
+                      value={formatIntVN(calcAmount)}
+                      onChange={(e) => setCalcAmount(parseIntVN(e.target.value))}
                       placeholder="0"
                       style={{ width: '100%', minWidth: 0, border: 'none', outline: 'none', fontSize: 16, fontWeight: 700, fontFamily: 'inherit', background: 'transparent', color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}
                     />
@@ -923,8 +924,9 @@ function SellModal({ inv, isVi, goalId, goalCurrentValue, goalTargetAmount, onCl
   }
 
   function handleUnitsChange(val: string) {
-    setUnits(val)
-    if (navPerUnit && val) setAmount(Math.round(Number(val) * navPerUnit).toString())
+    const canonical = parseDecimalVN(val)
+    setUnits(canonical)
+    if (navPerUnit && canonical) setAmount(Math.round(Number(canonical) * navPerUnit).toString())
     else setAmount('')
   }
 
@@ -1039,7 +1041,7 @@ function SellModal({ inv, isVi, goalId, goalCurrentValue, goalTargetAmount, onCl
                   data-testid="sell-amount-input"
                   autoFocus
                   type="text" inputMode="numeric"
-                  value={amount ? Number(amount).toLocaleString('vi-VN') : ''}
+                  value={formatIntVN(amount)}
                   onChange={(e) => handleAmountChange(e.target.value)}
                   placeholder="0"
                   style={{ flex: 1, border: 'none', outline: 'none', fontSize: 15, fontWeight: 600, fontFamily: 'inherit', background: 'transparent', color: isOverMax ? 'var(--c-neg)' : 'var(--c-ink)' }}
@@ -1065,8 +1067,8 @@ function SellModal({ inv, isVi, goalId, goalCurrentValue, goalTargetAmount, onCl
                 <span style={{ fontSize: 14, color: 'var(--c-muted)' }}>₫</span>
                 <input
                   type="text" inputMode="numeric"
-                  value={received ? Number(received).toLocaleString('vi-VN') : ''}
-                  onChange={(e) => { setReceived(e.target.value.replace(/[^0-9]/g, '')); setError('') }}
+                  value={formatIntVN(received)}
+                  onChange={(e) => { setReceived(parseIntVN(e.target.value)); setError('') }}
                   placeholder="0"
                   style={{ flex: 1, border: 'none', outline: 'none', fontSize: 15, fontWeight: 600, fontFamily: 'inherit', background: 'transparent', color: 'var(--c-ink)' }}
                 />
@@ -1080,7 +1082,7 @@ function SellModal({ inv, isVi, goalId, goalCurrentValue, goalTargetAmount, onCl
             <div>
               <div style={{ fontSize: 11, color: 'var(--c-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{isVi ? 'Số phần' : 'Units'}</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 10 }}>
-                <input type="number" value={units} onChange={(e) => handleUnitsChange(e.target.value)} placeholder="0.00"
+                <input type="text" inputMode="decimal" value={formatDecimalVN(units)} onChange={(e) => handleUnitsChange(e.target.value)} placeholder="0,00"
                   style={{ flex: 1, border: 'none', outline: 'none', fontSize: 15, fontWeight: 600, fontFamily: 'inherit', background: 'transparent', color: 'var(--c-ink)' }} />
                 <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{isVi ? 'phần' : 'units'}</span>
               </div>
@@ -1142,7 +1144,7 @@ function SellModal({ inv, isVi, goalId, goalCurrentValue, goalTargetAmount, onCl
             <div style={{ fontSize: 11, color: 'var(--c-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{isVi ? 'Số lượng bán' : 'Quantity to sell'}</div>
             <div style={{ display: 'flex', gap: 8 }}>
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'var(--c-card)', border: `1.5px solid ${isOverUnits ? 'var(--c-neg)' : 'var(--c-navy)'}`, borderRadius: 10 }}>
-                <input autoFocus type="number" step="0.1" value={units} onChange={(e) => { setUnits(e.target.value); setError('') }} placeholder="0.00"
+                <input autoFocus type="text" inputMode="decimal" value={formatDecimalVN(units)} onChange={(e) => { setUnits(parseDecimalVN(e.target.value)); setError('') }} placeholder="0,00"
                   style={{ flex: 1, border: 'none', outline: 'none', fontSize: 15, fontWeight: 600, fontFamily: 'inherit', background: 'transparent', color: isOverUnits ? 'var(--c-neg)' : 'var(--c-ink)' }} />
                 <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>chỉ</span>
               </div>
@@ -1160,7 +1162,7 @@ function SellModal({ inv, isVi, goalId, goalCurrentValue, goalTargetAmount, onCl
             <div style={{ fontSize: 11, color: 'var(--c-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{isVi ? 'Giá bán mỗi chỉ' : 'Sale price per chỉ'}</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 10 }}>
               <span style={{ fontSize: 14, color: 'var(--c-muted)' }}>₫</span>
-              <input data-testid="sell-gold-price-input" type="number" value={salePrice} onChange={(e) => { setSalePrice(e.target.value); setError('') }} placeholder="0"
+              <input data-testid="sell-gold-price-input" type="text" inputMode="numeric" value={formatIntVN(salePrice)} onChange={(e) => { setSalePrice(parseIntVN(e.target.value)); setError('') }} placeholder="0"
                 style={{ flex: 1, border: 'none', outline: 'none', fontSize: 15, fontWeight: 600, fontFamily: 'inherit', background: 'transparent', color: 'var(--c-ink)' }} />
               <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>/chỉ</span>
             </div>
@@ -1414,8 +1416,8 @@ function EditGoalModal({ open, onClose, goal, onSaved, isVi }: {
           <input
             type="text"
             inputMode="numeric"
-            value={target ? Number(target).toLocaleString('en-US') : ''}
-            onChange={(e) => setTarget(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))}
+            value={formatIntVN(target)}
+            onChange={(e) => setTarget(parseIntVN(e.target.value))}
             style={{ width: '100%', padding: '10px 12px', fontSize: 14, border: '1px solid var(--c-line)', borderRadius: 10, background: 'var(--c-card-2)', color: 'var(--c-ink)', boxSizing: 'border-box', fontFamily: 'inherit', outline: 'none', fontVariantNumeric: 'tabular-nums' }} />
         </div>
         <div>
