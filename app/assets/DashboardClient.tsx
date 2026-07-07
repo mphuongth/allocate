@@ -491,7 +491,10 @@ export default function DashboardClient({ userId }: { userId: string }) {
     setMobileTopBar({
       title: t('greeting', { name: userName }),
       subtitle: t('overview'),
-      trailing: isDesktop ? undefined : (
+      // Hide the download-report action on an empty account — there's nothing to
+      // export yet. `isEmpty` is derived below from `data`; the effect re-runs on
+      // `data` changes so the button appears once real holdings load.
+      trailing: (isDesktop || isEmpty) ? undefined : (
         <button
           data-testid="generate-report-btn"
           onClick={() => setShowReportSheet(true)}
