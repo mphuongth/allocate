@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Plus, X } from 'lucide-react'
 import { fmtCompact } from '@/lib/formatters'
+import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
 import { COVERAGE_OPTIONS } from './insuranceShared'
 
 interface Props {
@@ -143,8 +144,8 @@ export default function AddInsuranceMemberModal({ open, onClose, onCreated, loca
         <input
           type="text"
           inputMode="numeric"
-          value={premium ? Number(premium).toLocaleString('en-US') : ''}
-          onChange={(e) => setPremium(Number(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, '')))}
+          value={premium ? formatIntVN(String(premium)) : ''}
+          onChange={(e) => setPremium(Number(parseIntVN(e.target.value)))}
           className="cn-input"
           style={{ fontVariantNumeric: 'tabular-nums' }}
         />

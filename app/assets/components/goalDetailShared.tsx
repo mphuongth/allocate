@@ -6,6 +6,7 @@
 import { useState, type CSSProperties } from 'react'
 import { TrendingUp, Building, Coins, BarChart2, Target, RefreshCw, Plus } from 'lucide-react'
 import { fmtCompact } from '@/lib/formatters'
+import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
 import { calcProjectedInterest } from '@/lib/finance'
 import { blendedRate } from '@/lib/accumulating'
 import { fmtTxDate } from './transactionUtils'
@@ -607,12 +608,12 @@ export function TopUpControl({ inv, isVi, onDone }: { inv: InvRow; isVi: boolean
             <div style={{ fontSize: 15, fontWeight: 700 }}>{isVi ? 'Nạp thêm vào sổ' : 'Top up deposit'}</div>
             <div>
               <label style={lbl}>{isVi ? 'Số tiền nạp (₫)' : 'Top-up amount (₫)'}</label>
-              <input data-testid="top-up-amount" type="text" inputMode="numeric" value={amount ? Number(amount).toLocaleString('en-US') : ''} onChange={(e) => setAmount(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))} placeholder="2,000,000" style={field} />
+              <input data-testid="top-up-amount" type="text" inputMode="numeric" value={formatIntVN(amount)} onChange={(e) => setAmount(parseIntVN(e.target.value))} placeholder="2.000.000" style={field} />
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div>
                 <label style={lbl}>{isVi ? 'Lãi suất lần này' : 'Rate this top-up'}</label>
-                <input data-testid="top-up-rate" type="number" step="0.1" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="3.5" style={field} />
+                <input data-testid="top-up-rate" type="text" inputMode="decimal" value={formatDecimalVN(rate)} onChange={(e) => setRate(parseDecimalVN(e.target.value))} placeholder="3,5" style={field} />
               </div>
               <div>
                 <label style={lbl}>{isVi ? 'Ngày nạp' : 'Date'}</label>

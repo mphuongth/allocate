@@ -6,6 +6,7 @@ import { iconHit } from './iconHit'
 import { useLocale, useTranslations } from 'next-intl'
 import { CairnLoader } from '@/app/components/ui/CairnLoader'
 import { todayIso } from '@/lib/dates'
+import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
 import LoadError from './LoadError'
 
 interface Fund { id: string; name: string; nav: number; code: string | null; fund_type?: string }
@@ -133,18 +134,6 @@ const ASSET_TYPES = [
 type AssetType = typeof ASSET_TYPES[number]['v']
 
 const GOLD_PROVIDERS = ['PNJ', 'DOJI', 'SJC', 'Bảo Tín']
-
-// Group a numeric string's integer part with thousand separators while keeping
-// the user's exact fractional input (NAVs can carry decimals). "20000" → "20,000".
-function groupThousands(value: string): string {
-  if (value === '') return ''
-  const cleaned = value.replace(/[^0-9.]/g, '')
-  const dot = cleaned.indexOf('.')
-  const intPart = dot === -1 ? cleaned : cleaned.slice(0, dot)
-  const decPart = dot === -1 ? '' : cleaned.slice(dot + 1).replace(/\./g, '')
-  const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
-  return dot === -1 ? grouped : `${grouped}.${decPart}`
-}
 
 export default function AddTransactionSheet({ open, onClose, onSaved, desktop, existing, prefill }: Props) {
   const t = useTranslations('addTx')
@@ -744,9 +733,9 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
                   <input
                     type="text"
                     inputMode="numeric"
-                    value={amount ? Number(amount).toLocaleString('en-US') : ''}
-                    onChange={(e) => { setAmount(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, '')); setUnits('') }}
-                    placeholder="5,000,000"
+                    value={formatIntVN(amount)}
+                    onChange={(e) => { setAmount(parseIntVN(e.target.value)); setUnits('') }}
+                    placeholder="5.000.000"
                     style={inputStyle}
                   />
                 </div>
@@ -756,9 +745,9 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
                     data-testid="buy-fund-nav-input"
                     type="text"
                     inputMode="decimal"
-                    value={groupThousands(displayNav)}
-                    onChange={(e) => { setNav(e.target.value.replace(/,/g, '').replace(/[^0-9.]/g, '')); setUnits('') }}
-                    placeholder={selectedFund ? groupThousands(String(selectedFund.nav)) : '0'}
+                    value={formatDecimalVN(displayNav)}
+                    onChange={(e) => { setNav(parseDecimalVN(e.target.value)); setUnits('') }}
+                    placeholder={selectedFund ? formatDecimalVN(String(selectedFund.nav)) : '0'}
                     style={inputStyle}
                   />
                   {navIsCurrent && <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 4 }}>{t('navCurrent')}</div>}
@@ -766,10 +755,10 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
                 <div>
                   <label style={labelStyle}>{t('units')}</label>
                   <input
-                    type="number"
-                    step="0.01"
-                    value={units || autoUnits || ''}
-                    onChange={(e) => { setUnits(e.target.value); setAmount(navNum > 0 && e.target.value ? String(Math.round(Number(e.target.value) * navNum)) : amount) }}
+                    type="text"
+                    inputMode="decimal"
+                    value={formatDecimalVN(units || autoUnits || '')}
+                    onChange={(e) => { const v = parseDecimalVN(e.target.value); setUnits(v); setAmount(navNum > 0 && v ? String(Math.round(Number(v) * navNum)) : amount) }}
                     placeholder={t('unitsAuto')}
                     style={inputStyle}
                   />
@@ -830,9 +819,9 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
                   <input
                     type="text"
                     inputMode="numeric"
-                    value={bankAmount ? Number(bankAmount).toLocaleString('en-US') : ''}
-                    onChange={(e) => setBankAmount(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))}
-                    placeholder="10,000,000"
+                    value={formatIntVN(bankAmount)}
+                    onChange={(e) => setBankAmount(parseIntVN(e.target.value))}
+                    placeholder="10.000.000"
                     style={inputStyle}
                   />
                 </div>
@@ -840,11 +829,11 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
                   <div>
                     <label style={labelStyle}>{t('rate')}</label>
                     <input
-                      type="number"
-                      step="0.1"
-                      value={rate}
-                      onChange={(e) => setRate(e.target.value)}
-                      placeholder="5.5"
+                      type="text"
+                      inputMode="decimal"
+                      value={formatDecimalVN(rate)}
+                      onChange={(e) => setRate(parseDecimalVN(e.target.value))}
+                      placeholder="5,5"
                       style={inputStyle}
                     />
                   </div>
@@ -946,10 +935,10 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
                 <div>
                   <label style={labelStyle}>{t('qty')}</label>
                   <input
-                    type="number"
-                    step="0.1"
-                    value={goldQty}
-                    onChange={(e) => setGoldQty(e.target.value)}
+                    type="text"
+                    inputMode="decimal"
+                    value={formatDecimalVN(goldQty)}
+                    onChange={(e) => setGoldQty(parseDecimalVN(e.target.value))}
                     placeholder="1"
                     style={inputStyle}
                   />
@@ -960,9 +949,9 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
                 <input
                   type="text"
                   inputMode="numeric"
-                  value={goldPrice ? Number(goldPrice).toLocaleString('en-US') : ''}
-                  onChange={(e) => setGoldPrice(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))}
-                  placeholder="9,200,000"
+                  value={formatIntVN(goldPrice)}
+                  onChange={(e) => setGoldPrice(parseIntVN(e.target.value))}
+                  placeholder="9.200.000"
                   style={inputStyle}
                 />
               </div>
@@ -1037,9 +1026,9 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
                           <input
                             type="text"
                             inputMode="numeric"
-                            value={sellAmount ? Number(sellAmount).toLocaleString('en-US') : ''}
+                            value={formatIntVN(sellAmount)}
                             onChange={(e) => {
-                              const v = e.target.value.replace(/,/g, '').replace(/[^0-9]/g, '')
+                              const v = parseIntVN(e.target.value)
                               setSellAmount(v)
                               const n = Number(v) || 0
                               if (assetType === 'fund') setFundSellUnits(sellNav && n ? (n / sellNav).toFixed(2) : '')
@@ -1069,16 +1058,16 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'var(--c-card)', border: '1.5px solid var(--c-navy)', borderRadius: 10 }}>
                           <input
                             data-testid="sell-fund-units-input"
-                            type="number"
-                            step="0.01"
-                            value={fundSellUnits}
+                            type="text"
+                            inputMode="decimal"
+                            value={formatDecimalVN(fundSellUnits)}
                             onChange={(e) => {
-                              const v = e.target.value
+                              const v = parseDecimalVN(e.target.value)
                               setFundSellUnits(v)
                               const u = Number(v) || 0
                               setSellAmount(sellNav && u ? String(Math.round(u * sellNav)) : '')
                             }}
-                            placeholder="0.00"
+                            placeholder="0,00"
                             style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', fontSize: 16, fontWeight: 600, fontFamily: 'inherit', background: 'transparent', color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}
                           />
                           <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{t('unitsShort')}</span>
@@ -1097,8 +1086,8 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
                             data-testid="sell-bank-received-input"
                             type="text"
                             inputMode="numeric"
-                            value={received ? Number(received).toLocaleString('en-US') : ''}
-                            onChange={(e) => setReceived(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))}
+                            value={formatIntVN(received)}
+                            onChange={(e) => setReceived(parseIntVN(e.target.value))}
                             placeholder="0"
                             style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', fontSize: 16, fontWeight: 600, fontFamily: 'inherit', background: 'transparent', color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}
                           />
@@ -1161,11 +1150,11 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
                       <div style={{ display: 'flex', gap: 8 }}>
                         <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'var(--c-card)', border: `1.5px solid ${isOverUnits ? 'var(--c-neg)' : 'var(--c-navy)'}`, borderRadius: 10 }}>
                           <input
-                            type="number"
-                            step="0.1"
-                            value={goldSellQty}
-                            onChange={(e) => setGoldSellQty(e.target.value)}
-                            placeholder="0.00"
+                            type="text"
+                            inputMode="decimal"
+                            value={formatDecimalVN(goldSellQty)}
+                            onChange={(e) => setGoldSellQty(parseDecimalVN(e.target.value))}
+                            placeholder="0,00"
                             style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', fontSize: 16, fontWeight: 600, fontFamily: 'inherit', background: 'transparent', color: isOverUnits ? 'var(--c-neg)' : 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}
                           />
                           <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{t('chiShort')}</span>
@@ -1185,9 +1174,10 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 10 }}>
                         <span style={{ fontSize: 14, color: 'var(--c-muted)' }}>₫</span>
                         <input
-                          type="number"
-                          value={goldSellPrice}
-                          onChange={(e) => setGoldSellPrice(e.target.value)}
+                          type="text"
+                          inputMode="numeric"
+                          value={formatIntVN(goldSellPrice)}
+                          onChange={(e) => setGoldSellPrice(parseIntVN(e.target.value))}
                           placeholder="0"
                           style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', fontSize: 16, fontWeight: 600, fontFamily: 'inherit', background: 'transparent', color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}
                         />

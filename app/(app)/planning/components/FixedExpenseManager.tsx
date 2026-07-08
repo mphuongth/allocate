@@ -5,6 +5,7 @@ import { useTranslations, useLocale } from 'next-intl'
 import { toast } from 'sonner'
 import { Plus, ChevronLeft } from 'lucide-react'
 import { fmt, fmtCompact } from '@/lib/formatters'
+import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
 
 // Master fixed-expense definitions. Categories mirror the Settings tab and the
 // API's accepted values; labels are localised for display only.
@@ -223,8 +224,8 @@ export default function FixedExpenseManager({ onChange, onToast, variant = 'moda
             data-testid="fe-amount"
             type="text"
             inputMode="numeric"
-            value={form.amount_vnd ? Number(form.amount_vnd).toLocaleString('en-US') : ''}
-            onChange={(e) => setForm({ ...form, amount_vnd: e.target.value.replace(/,/g, '').replace(/[^0-9]/g, '') })}
+            value={formatIntVN(form.amount_vnd)}
+            onChange={(e) => setForm({ ...form, amount_vnd: parseIntVN(e.target.value) })}
             placeholder={t('amountPlaceholder')}
             style={{ ...inputStyle, fontVariantNumeric: 'tabular-nums' }}
           />

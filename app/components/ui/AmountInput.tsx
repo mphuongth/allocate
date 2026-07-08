@@ -1,6 +1,7 @@
 'use client'
 
 import React from 'react'
+import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
 
 interface Props extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'type'> {
   value: string
@@ -8,14 +9,13 @@ interface Props extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value
 }
 
 export default function AmountInput({ value, onChange, ...props }: Props) {
-  const display = value ? Number(value).toLocaleString('en-US') : ''
   return (
     <input
       {...props}
       type="text"
       inputMode="numeric"
-      value={display}
-      onChange={(e) => onChange(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))}
+      value={formatIntVN(value)}
+      onChange={(e) => onChange(parseIntVN(e.target.value))}
     />
   )
 }

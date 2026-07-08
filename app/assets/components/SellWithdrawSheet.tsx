@@ -6,6 +6,7 @@ import { ArrowDownRight, ArrowDownToLine, Building, Check, Coins, Shield, Trendi
 import { iconHit } from './iconHit'
 import { fmt } from '@/lib/formatters'
 import { todayIso } from '@/lib/dates'
+import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
 import { CairnLoader } from '@/app/components/ui/CairnLoader'
 import { AffectsProgressControl } from './goalDetailShared'
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -159,7 +160,7 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
   }, [open, isGold, navPerUnit])
 
   function handleAmountChange(val: string) {
-    const raw = val.replace(/,/g, '').replace(/[^0-9]/g, '')
+    const raw = parseIntVN(val)
     setAmount(raw)
     setError('')
     if (isBank) setReceived(raw)  // received tracks the amount until edited down
@@ -172,10 +173,11 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
   }
 
   function handleUnitsChange(val: string) {
-    setUnits(val)
+    const v = parseDecimalVN(val)
+    setUnits(v)
     setError('')
-    if (navPerUnit && val) {
-      const a = Number(val) * navPerUnit
+    if (navPerUnit && v) {
+      const a = Number(v) * navPerUnit
       setAmount(a > 0 ? Math.round(a).toString() : '')
     } else {
       setAmount('')
@@ -418,7 +420,7 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
                     data-testid="sell-amount-input"
                     type="text"
                     inputMode="numeric"
-                    value={amount ? Number(amount).toLocaleString('vi-VN') : ''}
+                    value={formatIntVN(amount)}
                     onChange={e => handleAmountChange(e.target.value)}
                     placeholder="0"
                     style={{ flex: 1, border: 'none', outline: 'none', fontSize: 16, fontWeight: 600, background: 'transparent', color: isOverMax ? 'var(--c-neg, #dc2626)' : 'var(--c-ink)' }}
@@ -450,8 +452,8 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
                     data-testid="sell-received-input"
                     type="text"
                     inputMode="numeric"
-                    value={received ? Number(received).toLocaleString('vi-VN') : ''}
-                    onChange={e => { setReceived(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, '')); setError('') }}
+                    value={formatIntVN(received)}
+                    onChange={e => { setReceived(parseIntVN(e.target.value)); setError('') }}
                     placeholder="0"
                     style={{ flex: 1, border: 'none', outline: 'none', fontSize: 16, fontWeight: 600, background: 'transparent', color: 'var(--c-ink)' }}
                   />
@@ -468,10 +470,11 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
                 <div style={{ fontSize: 11, color: 'var(--c-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{isVI ? 'Số phần' : 'Units'}</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 10 }}>
                   <input
-                    type="number"
-                    value={units}
+                    type="text"
+                    inputMode="decimal"
+                    value={formatDecimalVN(units)}
                     onChange={e => handleUnitsChange(e.target.value)}
-                    placeholder="0.00"
+                    placeholder="0,00"
                     style={{ flex: 1, border: 'none', outline: 'none', fontSize: 16, fontWeight: 600, background: 'transparent', color: 'var(--c-ink)' }}
                   />
                   <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{isVI ? 'phần' : 'units'}</span>
@@ -541,11 +544,11 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
                 <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'var(--c-card)', border: `1.5px solid ${isOverUnits ? 'var(--c-neg, #dc2626)' : 'var(--c-navy, #1e3a5f)'}`, borderRadius: 10 }}>
                   <input
                     data-testid="sell-gold-qty-input"
-                    type="number"
-                    step="0.1"
-                    value={units}
-                    onChange={e => { setUnits(e.target.value); setError('') }}
-                    placeholder="0.00"
+                    type="text"
+                    inputMode="decimal"
+                    value={formatDecimalVN(units)}
+                    onChange={e => { setUnits(parseDecimalVN(e.target.value)); setError('') }}
+                    placeholder="0,00"
                     style={{ flex: 1, border: 'none', outline: 'none', fontSize: 16, fontWeight: 600, background: 'transparent', color: isOverUnits ? 'var(--c-neg, #dc2626)' : 'var(--c-ink)' }}
                   />
                   <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>chỉ</span>
@@ -569,9 +572,10 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
                 <span style={{ fontSize: 14, color: 'var(--c-muted)' }}>₫</span>
                 <input
                   data-testid="sell-gold-price-input"
-                  type="number"
-                  value={salePrice}
-                  onChange={e => { setSalePrice(e.target.value); setError('') }}
+                  type="text"
+                  inputMode="numeric"
+                  value={formatIntVN(salePrice)}
+                  onChange={e => { setSalePrice(parseIntVN(e.target.value)); setError('') }}
                   placeholder="0"
                   style={{ flex: 1, border: 'none', outline: 'none', fontSize: 16, fontWeight: 600, background: 'transparent', color: 'var(--c-ink)' }}
                 />

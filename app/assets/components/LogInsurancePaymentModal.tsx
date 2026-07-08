@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Check, Shield, X } from 'lucide-react'
 import { fmtCompact } from '@/lib/formatters'
+import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
 import type { InsuranceData } from '../DashboardClient'
 
 interface Props {
@@ -197,9 +198,9 @@ export default function LogInsurancePaymentModal({ open, onClose, onSaved, ins, 
                     <input
                       type="text"
                       inputMode="numeric"
-                      value={amount ? Number(amount).toLocaleString('en-US') : ''}
-                      onChange={(e) => setAmount(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))}
-                      placeholder={suggested ? suggested.toLocaleString('en-US') : ''}
+                      value={formatIntVN(amount)}
+                      onChange={(e) => setAmount(parseIntVN(e.target.value))}
+                      placeholder={suggested ? formatIntVN(String(suggested)) : ''}
                       autoFocus
                       style={{
                         flex: 1, minWidth: 0, border: 'none', outline: 'none',

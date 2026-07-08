@@ -5,6 +5,7 @@ import { Check, ChevronLeft, Edit2, Plus, Trash2, Calendar, X } from 'lucide-rea
 import { iconHit } from './iconHit'
 import { toast } from 'sonner'
 import { fmt, fmtCompact } from '@/lib/formatters'
+import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
 import { STATUS_COLOR, BAR_COLOR_DETAIL, COVERAGE_OPTIONS, insurancePaidState, insuranceStatusLabel } from './insuranceShared'
 import type { InsuranceData } from '../DashboardClient'
 import LogInsurancePaymentModal from './LogInsurancePaymentModal'
@@ -253,8 +254,8 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
             <input
               type="text"
               inputMode="numeric"
-              value={editPremium ? Number(editPremium).toLocaleString('en-US') : ''}
-              onChange={(e) => setEditPremium(Number(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, '')))}
+              value={editPremium ? formatIntVN(String(editPremium)) : ''}
+              onChange={(e) => setEditPremium(Number(parseIntVN(e.target.value)))}
               className="cn-input"
               style={{ fontVariantNumeric: 'tabular-nums' }}
             />

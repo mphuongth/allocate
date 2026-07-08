@@ -22,6 +22,7 @@ import { useState, useEffect } from 'react'
 import { RefreshCw, Pencil, ArrowDownToLine, AlertTriangle, Check, Building2, X, Plus, Wallet, Lock, SlidersHorizontal, PiggyBank, GitMerge } from 'lucide-react'
 import { fmt, fmtCompact } from '@/lib/formatters'
 import AmountInput from '@/app/components/ui/AmountInput'
+import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
 import { iconHit } from './iconHit'
 import { SUCCESS_FLASH_MS } from '../successFlash'
 import { fmtMaturity, type InvRow } from './goalDetailShared'
@@ -1014,14 +1015,14 @@ export function MaturityResolveBody({
             <div>
               <div style={fieldLabel}>{t.newTerm}</div>
               <div style={{ position: 'relative' }}>
-                <input type="number" value={term} onChange={(e) => setTerm(e.target.value)} style={moneyInput} />
+                <input type="text" inputMode="numeric" value={formatIntVN(term)} onChange={(e) => setTerm(parseIntVN(e.target.value))} style={moneyInput} />
                 <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--c-muted)', pointerEvents: 'none' }}>{t.mo}</span>
               </div>
             </div>
             <div>
               <div style={fieldLabel}>{t.newRate}</div>
               <div style={{ position: 'relative' }}>
-                <input type="number" step="0.1" value={rate} onChange={(e) => setRate(e.target.value)} style={moneyInput} />
+                <input type="text" inputMode="decimal" value={formatDecimalVN(rate)} onChange={(e) => setRate(parseDecimalVN(e.target.value))} style={moneyInput} />
                 <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--c-muted)', pointerEvents: 'none' }}>%/{t.perYr}</span>
               </div>
             </div>
@@ -1077,7 +1078,7 @@ export function MaturityResolveBody({
             <div>
               <div style={fieldLabel}>{t.newTerm}</div>
               <div style={{ position: 'relative' }}>
-                <input data-testid="maturity-term-input" type="number" value={term} onChange={(e) => setTerm(e.target.value)} style={moneyInput} />
+                <input data-testid="maturity-term-input" type="text" inputMode="numeric" value={formatIntVN(term)} onChange={(e) => setTerm(parseIntVN(e.target.value))} style={moneyInput} />
                 <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--c-muted)', pointerEvents: 'none' }}>{t.mo}</span>
               </div>
             </div>
@@ -1086,7 +1087,7 @@ export function MaturityResolveBody({
             <div>
               <div style={fieldLabel}>{t.newRate}</div>
               <div style={{ position: 'relative' }}>
-                <input type="number" step="0.1" value={rate} onChange={(e) => setRate(e.target.value)} style={moneyInput} />
+                <input type="text" inputMode="decimal" value={formatDecimalVN(rate)} onChange={(e) => setRate(parseDecimalVN(e.target.value))} style={moneyInput} />
                 <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--c-muted)', pointerEvents: 'none' }}>%/{t.perYr}</span>
               </div>
             </div>

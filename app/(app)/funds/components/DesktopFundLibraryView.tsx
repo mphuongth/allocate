@@ -5,6 +5,7 @@ import type { ReactNode } from 'react'
 import { useTranslations, useLocale } from 'next-intl'
 import { Plus, RefreshCw, Search, X } from 'lucide-react'
 import { fmtCompact, fmtNav } from '@/lib/formatters'
+import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
 import { Skeleton } from '@/app/components/ui/Skeleton'
 import { SyncPill } from '@/app/components/ui/SyncPill'
 // Shared dialog a11y (Esc-to-close + focus trap + focus restore). Lives under
@@ -232,8 +233,8 @@ function DcaToggle({ fund, editId, editValue, toggling, goals, goalLabel, unallo
             type="text"
             inputMode="numeric"
             placeholder={tc('amount')}
-            value={editValue ? Number(editValue).toLocaleString('en-US') : ''}
-            onChange={e => onEditChange(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))}
+            value={formatIntVN(editValue)}
+            onChange={e => onEditChange(parseIntVN(e.target.value))}
             onBlur={onEditCommit}
             onKeyDown={e => {
               if (e.key === 'Enter') onEditCommit()
@@ -829,11 +830,10 @@ export default function DesktopFundLibraryView({ funds, setFunds, goals, loading
             </div>
             <FormField label={t('navLabel')}>
               <input
-                type="number"
-                step="0.01"
-                min="0.01"
-                value={formNav}
-                onChange={e => setFormNav(e.target.value)}
+                type="text"
+                inputMode="decimal"
+                value={formatDecimalVN(formNav)}
+                onChange={e => setFormNav(parseDecimalVN(e.target.value))}
                 className="cn-input"
                 style={{ fontVariantNumeric: 'tabular-nums' }}
                 placeholder={t('navPlaceholder')}

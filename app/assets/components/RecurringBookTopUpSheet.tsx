@@ -9,6 +9,7 @@
 // tranche AND marks the month fulfilled (no double-count).
 
 import { useEffect, useState, type CSSProperties } from 'react'
+import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
 import { fmtCompact } from '@/lib/formatters'
 
 export interface BookTopUpTarget {
@@ -88,14 +89,14 @@ export default function RecurringBookTopUpSheet({
         <div>
           <label style={lbl}>{isVi ? 'Số tiền nạp (₫)' : 'Top-up amount (₫)'}</label>
           <input data-testid="recurring-topup-amount" type="text" inputMode="numeric"
-            value={amount ? Number(amount).toLocaleString('en-US') : ''}
-            onChange={(e) => setAmount(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))}
+            value={formatIntVN(amount)}
+            onChange={(e) => setAmount(parseIntVN(e.target.value))}
             style={field} />
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <div>
             <label style={lbl}>{isVi ? 'Lãi suất lần này' : 'Rate this top-up'}</label>
-            <input data-testid="recurring-topup-rate" type="number" step="0.1" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="3.5" style={field} />
+            <input data-testid="recurring-topup-rate" type="text" inputMode="decimal" value={formatDecimalVN(rate)} onChange={(e) => setRate(parseDecimalVN(e.target.value))} placeholder="3,5" style={field} />
           </div>
           <div>
             <label style={lbl}>{isVi ? 'Ngày nạp' : 'Date'}</label>

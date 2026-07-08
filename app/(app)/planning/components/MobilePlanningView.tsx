@@ -9,6 +9,7 @@ import {
   MoreHorizontal, Plus, Check, X, Calendar, Settings, RefreshCw, TrendingUp,
 } from 'lucide-react'
 import { fmt, fmtCompact } from '@/lib/formatters'
+import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
 import FixedExpenseManager from './FixedExpenseManager'
 import RecurringSavingManager from './RecurringSavingManager'
 import AddTransactionSheet, { type EditableTransaction, type PrefillTransaction } from '@/app/assets/components/AddTransactionSheet'
@@ -203,9 +204,9 @@ function SalarySheet({
         <input
           type="text"
           inputMode="numeric"
-          value={value ? Number(value).toLocaleString('en-US') : ''}
-          onChange={(e) => setValue(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))}
-          placeholder="e.g. 45,000,000"
+          value={formatIntVN(value)}
+          onChange={(e) => setValue(parseIntVN(e.target.value))}
+          placeholder="e.g. 45.000.000"
           style={{
             width: '100%', padding: '10px 12px', fontSize: 16, fontVariantNumeric: 'tabular-nums',
             border: '1px solid var(--c-line)', borderRadius: 10,
@@ -380,8 +381,8 @@ function OtherExpenseSheet({
           <input
             type="text"
             inputMode="numeric"
-            value={amount ? Number(amount).toLocaleString('en-US') : ''}
-            onChange={(e) => setAmount(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))}
+            value={formatIntVN(amount)}
+            onChange={(e) => setAmount(parseIntVN(e.target.value))}
             placeholder="0"
             style={{
               width: '100%', padding: '10px 12px', fontSize: 16, fontVariantNumeric: 'tabular-nums',
@@ -1722,8 +1723,8 @@ function SimpleOverrideSheet({
         <input
           type="text"
           inputMode="numeric"
-          value={value ? Number(value).toLocaleString('en-US') : ''}
-          onChange={(e) => setValue(e.target.value.replace(/,/g, '').replace(/[^0-9]/g, ''))}
+          value={formatIntVN(value)}
+          onChange={(e) => setValue(parseIntVN(e.target.value))}
           style={{
             width: '100%', padding: '10px 12px', fontSize: 15,
             border: '1px solid var(--c-line)', borderRadius: 10,
