@@ -325,6 +325,18 @@
 @media (max-width: 768px) {
   .cn-input { font-size: 16px; }
   input, textarea, select { font-size: 16px; }
+  /* iOS Safari renders native date/time controls at an intrinsic width and
+     ignores width/max-width until -webkit-appearance is reset — so the NGÀY
+     field spilled past the edit-transaction sheet (#447). Resetting appearance
+     lets our width:100%/box-sizing apply; iOS still shows its native picker on
+     tap. Scoped to mobile so desktop keeps the native calendar-picker icon. */
+  input[type="date"],
+  input[type="datetime-local"],
+  input[type="time"],
+  input[type="month"] {
+    -webkit-appearance: none;
+    appearance: none;
+  }
 }
 
 /* Empty <input type=date>: iOS shows nothing, Chrome shows a native "mm/dd/yyyy".
