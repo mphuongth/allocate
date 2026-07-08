@@ -106,9 +106,9 @@ export default function MobileBottomTabs({ onAdd }: { onAdd: () => void }) {
             className="flex items-center justify-center"
             style={{
               width: 48, height: 48, borderRadius: 24,
-              marginTop: -18, // lift the circle so it sits proud of the bar
+              marginTop: -24, // lift half the circle proud of the bar for prominence
               background: 'var(--c-btn-primary)', color: '#fff', border: '3px solid var(--c-tab-bg)',
-              boxShadow: '0 4px 12px rgba(15, 42, 74, 0.28)',
+              boxShadow: '0 6px 16px rgba(15, 42, 74, 0.30)',
               cursor: 'pointer',
             }}
           >
