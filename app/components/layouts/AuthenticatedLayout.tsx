@@ -8,7 +8,6 @@ import { NavigationProvider, useNavigation } from '../navigation/NavigationConte
 import Sidebar from '../navigation/Sidebar'
 import Header from '../navigation/Header'
 import MobileBottomTabs from '../navigation/MobileBottomTabs'
-import MobileAddTransactionFab from '../navigation/MobileAddTransactionFab'
 import MobileTopBar from '../navigation/MobileTopBar'
 import OfflineBanner from '@/app/components/OfflineBanner'
 import AddTransactionSheet from '@/app/assets/components/AddTransactionSheet'
@@ -73,12 +72,8 @@ function AuthenticatedLayoutInner({ children, email, initials }: { children: Rea
         </main>
       </div>
 
-      {/* Mobile FAB — add transaction. Contextual: only on Overview & Funds, and
-          it yields on Overview while term deposits need a maturity decision. */}
-      <MobileAddTransactionFab onClick={() => setShowAddTx(true)} />
-
-      {/* Mobile bottom tab navigation */}
-      <MobileBottomTabs />
+      {/* Mobile bottom tab navigation — the center + is the add-transaction action */}
+      <MobileBottomTabs onAdd={() => setShowAddTx(true)} />
       <OfflineBanner />
 
       {/* Add transaction sheet */}
