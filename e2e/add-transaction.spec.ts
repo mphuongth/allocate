@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 
-// Mobile viewport — FAB is md:hidden
+// Mobile viewport — the add button lives in the bottom tab bar (md:hidden)
 test.use({ viewport: { width: 390, height: 844 } })
 
 test.beforeEach(async ({ page }) => {
@@ -9,29 +9,30 @@ test.beforeEach(async ({ page }) => {
   await page.context().addCookies([{ name: 'locale', value: 'en', domain: hostname, path: '/' }])
 })
 
-// ─── FAB visibility ──────────────────────────────────────────────────────────
+// ─── Add-button visibility ───────────────────────────────────────────────────
+// The add action is now the center + in the bottom tab bar (it replaced the
+// floating FAB), so it is present and consistent on every mobile page — including
+// Plan and Settings — and can never cover the Overview "Cần xử lý" card action.
 
-test('FAB is visible on dashboard', async ({ page }) => {
+test('add button is visible on dashboard', async ({ page }) => {
   await page.goto('/dashboard')
   await page.waitForLoadState('networkidle')
   await expect(page.getByRole('button', { name: /add transaction/i })).toBeVisible()
 })
 
-// The FAB is contextual (PR #390): it belongs only on Overview and Funds. On Plan
-// you add via the plan's own rows, so the FAB must NOT appear there.
-test('FAB is hidden on planning page', async ({ page }) => {
+test('add button is visible on planning page', async ({ page }) => {
   await page.goto('/planning')
   await page.waitForLoadState('networkidle')
-  await expect(page.getByRole('button', { name: /add transaction/i })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /add transaction/i })).toBeVisible()
 })
 
-test('FAB is hidden on settings page', async ({ page }) => {
+test('add button is visible on settings page', async ({ page }) => {
   await page.goto('/settings')
   await page.waitForLoadState('networkidle')
-  await expect(page.getByRole('button', { name: /add transaction/i })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /add transaction/i })).toBeVisible()
 })
 
-test('FAB is visible on funds page', async ({ page }) => {
+test('add button is visible on funds page', async ({ page }) => {
   await page.goto('/funds')
   await page.waitForLoadState('networkidle')
   await expect(page.getByRole('button', { name: /add transaction/i })).toBeVisible()
@@ -39,7 +40,7 @@ test('FAB is visible on funds page', async ({ page }) => {
 
 // ─── Sheet open / close ──────────────────────────────────────────────────────
 
-test('clicking FAB opens Add transaction sheet', async ({ page }) => {
+test('clicking the add button opens Add transaction sheet', async ({ page }) => {
   await page.goto('/dashboard')
   await page.waitForLoadState('networkidle')
   await page.getByRole('button', { name: /add transaction/i }).click()

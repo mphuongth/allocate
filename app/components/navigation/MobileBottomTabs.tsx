@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Calendar, TrendingUp, Settings } from 'lucide-react'
+import { Calendar, TrendingUp, Settings, Plus } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useMaturingDepositsCount } from './useMaturingDepositsCount'
 
@@ -46,10 +46,42 @@ const TABS: TabDef[] = [
   },
 ]
 
-export default function MobileBottomTabs() {
+export default function MobileBottomTabs({ onAdd }: { onAdd: () => void }) {
   const pathname = usePathname()
   const t = useTranslations('nav')
   const maturingCount = useMaturingDepositsCount()
+
+  const renderTab = ({ href, key, renderIcon }: TabDef) => {
+    const isActive = pathname.startsWith(href)
+    const badge = key === 'dashboard' && maturingCount > 0 ? maturingCount : 0
+    return (
+      <Link
+        key={href}
+        href={href}
+        className="relative flex flex-col items-center gap-0.5 py-2 rounded-xl transition-colors"
+        style={{ color: isActive ? 'var(--c-navy)' : 'var(--c-muted)' }}
+      >
+        {badge > 0 && (
+          <span
+            data-testid="nav-maturity-badge"
+            aria-label={`${badge} ${t('dashboard')}`}
+            style={{
+              position: 'absolute', top: 2, right: '50%', marginRight: -18,
+              minWidth: 16, height: 16, padding: '0 4px', borderRadius: 999,
+              background: 'var(--c-warn)', color: '#fff', fontSize: 9.5, fontWeight: 700,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1,
+            }}
+          >
+            {badge}
+          </span>
+        )}
+        {renderIcon(isActive)}
+        <span style={{ fontSize: '10.5px', fontWeight: isActive ? 600 : 500, letterSpacing: '0.01em', lineHeight: 1 }}>
+          {t(key)}
+        </span>
+      </Link>
+    )
+  }
 
   return (
     <nav
@@ -62,38 +94,30 @@ export default function MobileBottomTabs() {
         paddingBottom: 'env(safe-area-inset-bottom, 0)',
       }}
     >
-      <div className="grid grid-cols-4 px-1 py-1.5">
-        {TABS.map(({ href, key, renderIcon }) => {
-          const isActive = pathname.startsWith(href)
-          const badge = key === 'dashboard' && maturingCount > 0 ? maturingCount : 0
-          return (
-            <Link
-              key={href}
-              href={href}
-              className="relative flex flex-col items-center gap-0.5 py-2 rounded-xl transition-colors"
-              style={{ color: isActive ? 'var(--c-navy)' : 'var(--c-muted)' }}
-            >
-              {badge > 0 && (
-                <span
-                  data-testid="nav-maturity-badge"
-                  aria-label={`${badge} ${t('dashboard')}`}
-                  style={{
-                    position: 'absolute', top: 2, right: '50%', marginRight: -18,
-                    minWidth: 16, height: 16, padding: '0 4px', borderRadius: 999,
-                    background: 'var(--c-warn)', color: '#fff', fontSize: 9.5, fontWeight: 700,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1,
-                  }}
-                >
-                  {badge}
-                </span>
-              )}
-              {renderIcon(isActive)}
-              <span style={{ fontSize: '10.5px', fontWeight: isActive ? 600 : 500, letterSpacing: '0.01em', lineHeight: 1 }}>
-                {t(key)}
-              </span>
-            </Link>
-          )
-        })}
+      {/* 2 tabs · center add · 2 tabs. The add action lives in the fixed nav (not a
+          floating FAB) so it's consistent on every page and can never cover the
+          Overview "Cần xử lý" card's action button (#447 follow-up).
+          The + is absolutely positioned with its centre on the bar's top edge, so
+          exactly half of it protrudes above — independent of the tab row height.
+          The empty middle grid cell reserves its slot so the tabs stay symmetric. */}
+      <button
+        onClick={onAdd}
+        aria-label="Add transaction"
+        className="absolute left-1/2 flex items-center justify-center"
+        style={{
+          top: 0, transform: 'translate(-50%, -50%)',
+          width: 52, height: 52, borderRadius: 26,
+          background: 'var(--c-btn-primary)', color: '#fff', border: '3px solid var(--c-tab-bg)',
+          boxShadow: '0 6px 16px rgba(15, 42, 74, 0.30)',
+          cursor: 'pointer', zIndex: 1,
+        }}
+      >
+        <Plus size={26} strokeWidth={2.4} />
+      </button>
+      <div className="grid grid-cols-5 items-center px-1 py-1.5">
+        {TABS.slice(0, 2).map(renderTab)}
+        <div aria-hidden />
+        {TABS.slice(2).map(renderTab)}
       </div>
     </nav>
   )
