@@ -96,25 +96,27 @@ export default function MobileBottomTabs({ onAdd }: { onAdd: () => void }) {
     >
       {/* 2 tabs · center add · 2 tabs. The add action lives in the fixed nav (not a
           floating FAB) so it's consistent on every page and can never cover the
-          Overview "Cần xử lý" card's action button (#447 follow-up). */}
+          Overview "Cần xử lý" card's action button (#447 follow-up).
+          The + is absolutely positioned with its centre on the bar's top edge, so
+          exactly half of it protrudes above — independent of the tab row height.
+          The empty middle grid cell reserves its slot so the tabs stay symmetric. */}
+      <button
+        onClick={onAdd}
+        aria-label="Add transaction"
+        className="absolute left-1/2 flex items-center justify-center"
+        style={{
+          top: 0, transform: 'translate(-50%, -50%)',
+          width: 52, height: 52, borderRadius: 26,
+          background: 'var(--c-btn-primary)', color: '#fff', border: '3px solid var(--c-tab-bg)',
+          boxShadow: '0 6px 16px rgba(15, 42, 74, 0.30)',
+          cursor: 'pointer', zIndex: 1,
+        }}
+      >
+        <Plus size={26} strokeWidth={2.4} />
+      </button>
       <div className="grid grid-cols-5 items-center px-1 py-1.5">
         {TABS.slice(0, 2).map(renderTab)}
-        <div className="flex justify-center">
-          <button
-            onClick={onAdd}
-            aria-label="Add transaction"
-            className="flex items-center justify-center"
-            style={{
-              width: 48, height: 48, borderRadius: 24,
-              marginTop: -24, // lift half the circle proud of the bar for prominence
-              background: 'var(--c-btn-primary)', color: '#fff', border: '3px solid var(--c-tab-bg)',
-              boxShadow: '0 6px 16px rgba(15, 42, 74, 0.30)',
-              cursor: 'pointer',
-            }}
-          >
-            <Plus size={24} strokeWidth={2.4} />
-          </button>
-        </div>
+        <div aria-hidden />
         {TABS.slice(2).map(renderTab)}
       </div>
     </nav>
