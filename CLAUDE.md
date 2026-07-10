@@ -62,6 +62,16 @@ real date (e.g. planning's June-2026 fixtures), so they can fail as the calendar
 
 ## Git & PR Workflow
 
+**Always act as the `mphuongth` GitHub account for this repo.** This is a personal
+repo, but the machine may have other `gh` accounts logged in (e.g. an Agility work
+account set as the global default). Before **any** `gh` command or GitHub API call —
+commenting, closing, merging, pushing — verify the active account with
+`gh api user -q .login` and make sure it is `mphuongth`. The clean way to do this
+without changing the global default is to prefix gh commands with
+`GH_CONFIG_DIR=~/.config/gh-allocate` (a passive config dir whose active account is
+`mphuongth`; falls back to `gh auth switch --user mphuongth` if that dir is absent).
+Never comment / close / merge / push as any other account.
+
 **Never push code directly to `main`.** Every change — no matter how small — must go through a branch and PR.
 
 Rules:
