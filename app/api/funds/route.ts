@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { validateNavSourceUrl } from '@/lib/scrape-fund-nav'
+import { ValidationError } from '@/lib/validation'
 
 const FUND_TYPES = ['balanced', 'equity', 'debt', 'gold'] as const
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -63,6 +65,15 @@ export async function POST(request: NextRequest) {
   if (dca_goal_id != null && dca_goal_id !== '' && (typeof dca_goal_id !== 'string' || !UUID_RE.test(dca_goal_id))) {
     return NextResponse.json({ error: 'Invalid goal' }, { status: 400 })
   }
+  // Validate the NAV source URL (https + exact vendor-host allowlist) before it
+  // is stored and later fetched server-side — prevents SSRF.
+  let cleanNavUrl: string | null
+  try {
+    cleanNavUrl = validateNavSourceUrl(nav_source_url)
+  } catch (e) {
+    if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
+    throw e
+  }
 
   const { data: fund, error } = await supabase
     .from('funds')
@@ -72,7 +83,7 @@ export async function POST(request: NextRequest) {
       code: code.trim().toUpperCase(),
       fund_type,
       nav: navNum,
-      nav_source_url: typeof nav_source_url === 'string' && nav_source_url.trim() ? nav_source_url.trim() : null,
+      nav_source_url: cleanNavUrl,
       is_dca: is_dca === true,
       dca_monthly_amount_vnd: is_dca === true && dca_monthly_amount_vnd ? Number(dca_monthly_amount_vnd) : null,
       // Goal target only applies while DCA is on; cleared otherwise.

@@ -61,11 +61,11 @@ export default function SignupPage() {
       })
 
       if (error) {
-        if (error.message.toLowerCase().includes('already') || error.status === 422) {
-          setFormError(t('emailInUse'))
-        } else {
-          setFormError(t('cannotCreateAccount'))
-        }
+        // One neutral message for every signup failure so an attacker can't
+        // tell "email already registered" apart from other errors (user
+        // enumeration). Supabase project-level "email enumeration protection"
+        // is the server-side complement.
+        setFormError(t('cannotCreateAccount'))
         return
       }
 

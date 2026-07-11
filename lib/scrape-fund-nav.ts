@@ -1,4 +1,39 @@
 import https from 'https'
+import { ValidationError } from './validation'
+
+// The only hosts the NAV scraper is allowed to fetch. `nav_source_url` is
+// user-supplied and later fetched server-side (refresh-nav route + daily cron),
+// so this doubles as the SSRF allowlist.
+export const ALLOWED_NAV_HOSTS = ['vcbf.com', 'ssiam.com.vn', 'dragoncapital.com.vn', 'vinacapital.com'] as const
+
+// Exact host match (or a subdomain of an allowed host). Deliberately NOT a
+// substring check: `'evilvcbf.com'.includes('vcbf.com')` is true, which let an
+// attacker point an owned domain (with a private-IP DNS record) at the scraper.
+export function isAllowedNavHost(hostname: string): boolean {
+  const h = hostname.toLowerCase()
+  return ALLOWED_NAV_HOSTS.some((d) => h === d || h.endsWith('.' + d))
+}
+
+// Validate a user-supplied fund NAV source URL before storing it. Requires an
+// absolute https URL whose host is an allowed fund provider; empty → null.
+// Throws ValidationError (the write routes map that to HTTP 400).
+export function validateNavSourceUrl(raw: unknown): string | null {
+  if (raw == null) return null
+  if (typeof raw !== 'string') throw new ValidationError('nav_source_url must be a string')
+  const trimmed = raw.trim()
+  if (trimmed === '') return null
+  let u: URL
+  try {
+    u = new URL(trimmed)
+  } catch {
+    throw new ValidationError('nav_source_url must be a valid URL')
+  }
+  if (u.protocol !== 'https:') throw new ValidationError('nav_source_url must use https')
+  if (!isAllowedNavHost(u.hostname)) {
+    throw new ValidationError('nav_source_url must point to a supported fund provider')
+  }
+  return trimmed
+}
 
 export function parseVietnameseNumber(raw: string): number {
   const cleaned = raw.replace(/[^\d.,]/g, '').trim()
@@ -92,7 +127,6 @@ async function scrapeDragonCapital(url: string): Promise<number> {
     const apiUrl = `https://www.dragoncapital.com.vn/individual/vi/webruntime/api/apex/execute?${qs}`
     try {
       const text = await fetchWithNodeHttps(apiUrl, {
-        rejectUnauthorized: false,
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
           'Accept': 'application/json, text/plain, */*',
@@ -152,15 +186,18 @@ async function scrapeVinaCapital(url: string): Promise<number> {
 export async function scrapeFundNav(url: string): Promise<{ nav: number } | { error: string }> {
   try {
     const hostname = new URL(url).hostname.toLowerCase()
+    if (!isAllowedNavHost(hostname)) return { error: `Unsupported domain: ${hostname}` }
+
+    const matches = (d: string) => hostname === d || hostname.endsWith('.' + d)
     let nav: number
 
-    if (hostname.includes('vcbf.com')) {
+    if (matches('vcbf.com')) {
       nav = await scrapeVCBF(url)
-    } else if (hostname.includes('ssiam.com.vn')) {
+    } else if (matches('ssiam.com.vn')) {
       nav = await scrapeSSIAM(url)
-    } else if (hostname.includes('dragoncapital.com.vn')) {
+    } else if (matches('dragoncapital.com.vn')) {
       nav = await scrapeDragonCapital(url)
-    } else if (hostname.includes('vinacapital.com')) {
+    } else if (matches('vinacapital.com')) {
       nav = await scrapeVinaCapital(url)
     } else {
       return { error: `Unsupported domain: ${hostname}` }
