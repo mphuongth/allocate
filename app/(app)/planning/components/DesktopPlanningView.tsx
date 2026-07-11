@@ -959,7 +959,7 @@ export default function DesktopPlanningView({
                 <THead col1={isVI ? 'Mục tiêu / Khoản' : 'Goal / Allocation'} col2={isVI ? 'Tháng này' : 'This month'} />
                 <tbody>
                   {byGoal.length === 0 ? (
-                    <tr><td colSpan={3} style={{ padding: '16px', textAlign: 'center', color: 'var(--c-muted)', fontSize: 12 }}>{isVI ? 'Chưa có khoản đầu tư nào' : 'No investments yet'}</td></tr>
+                    <tr><td colSpan={3} style={{ padding: '16px', textAlign: 'center', color: 'var(--c-muted)', fontSize: 12 }}>{isVI ? 'Chưa có phân bổ nào' : 'No allocations yet'}</td></tr>
                   ) : byGoal.map(g => {
                     const pct = g.totalAllocated > 0 ? Math.min(100, Math.round(g.contributed / g.totalAllocated * 100)) : (g.contributed > 0 ? 100 : 0)
                     const met = g.totalAllocated > 0 && g.contributed >= g.totalAllocated
@@ -1044,7 +1044,7 @@ export default function DesktopPlanningView({
                 <THead col1={isVI ? 'Chi phí' : 'Expense'} col2={isVI ? 'Số tiền' : 'Amount'} />
                 <tbody>
                   {fixedExpenses.length === 0 ? (
-                    <tr><td colSpan={3} style={{ padding: '16px', textAlign: 'center', color: 'var(--c-muted)', fontSize: 12 }}>{isVI ? 'Chưa có chi phí cố định' : 'No fixed expenses'}</td></tr>
+                    <tr><td colSpan={3} style={{ padding: '16px', textAlign: 'center', color: 'var(--c-muted)', fontSize: 12 }}>{isVI ? 'Chưa có chi phí cố định nào' : 'No fixed expenses yet'}</td></tr>
                   ) : fixedExpenses.map((fe, i) => {
                     const skipped    = fe.override === 0
                     const isOverridden = !skipped && fe.override != null && fe.override !== fe.amount_vnd
@@ -1092,7 +1092,7 @@ export default function DesktopPlanningView({
                 />
                 <tbody>
                   {insuranceMembers.length === 0 ? (
-                    <tr><td colSpan={5} style={{ padding: '16px', textAlign: 'center', color: 'var(--c-muted)', fontSize: 12 }}>{isVI ? 'Chưa có bảo hiểm' : 'No insurance members'}</td></tr>
+                    <tr><td colSpan={5} style={{ padding: '16px', textAlign: 'center', color: 'var(--c-muted)', fontSize: 12 }}>{isVI ? 'Chưa có thành viên bảo hiểm nào' : 'No insurance members yet'}</td></tr>
                   ) : insuranceMembers.map((m, i) => {
                     const defaultMonthly = Math.round(m.annual_payment_vnd / 12)
                     const monthly    = m.monthlyOverride ?? defaultMonthly
@@ -1173,7 +1173,7 @@ export default function DesktopPlanningView({
         >
           <div style={{ display: 'grid', gap: 14 }}>
             <label style={{ display: 'grid', gap: 6 }}>
-              <span style={labelStyle}>{isVI ? 'Thu nhập tháng (₫)' : 'Monthly income (₫)'}</span>
+              <span style={labelStyle}>{isVI ? 'Thu nhập tháng (VND)' : 'Monthly income (VND)'}</span>
               <input
                 type="text"
                 inputMode="numeric"
@@ -1224,7 +1224,7 @@ export default function DesktopPlanningView({
           <div style={{ display: 'grid', gap: 14 }}>
             <div style={{ fontSize: 13, color: 'var(--c-muted)', fontWeight: 500 }}>{overrideModal.name}</div>
             <label style={{ display: 'grid', gap: 6 }}>
-              <span style={labelStyle}>{isVI ? 'Số tiền tháng này (₫)' : 'Amount this month (₫)'}</span>
+              <span style={labelStyle}>{isVI ? 'Số tiền tháng này (VND)' : 'Amount this month (VND)'}</span>
               <input type="text" inputMode="numeric" value={formatIntVN(overrideVal)} onChange={e => setOverrideVal(parseIntVN(e.target.value))} autoFocus className="cn-input tabular" />
             </label>
             {overrideVal && Number(overrideVal) > 0 && (
@@ -1257,7 +1257,7 @@ export default function DesktopPlanningView({
               <input value={otherDesc} onChange={e => setOtherDesc(e.target.value)} autoFocus placeholder={isVI ? 'VD. Mua laptop...' : 'e.g. Buy laptop...'} className="cn-input" />
             </label>
             <label style={{ display: 'grid', gap: 6 }}>
-              <span style={labelStyle}>{isVI ? 'Số tiền (₫)' : 'Amount (₫)'}</span>
+              <span style={labelStyle}>{isVI ? 'Số tiền (VND)' : 'Amount (VND)'}</span>
               <input type="text" inputMode="numeric" value={formatIntVN(otherAmt)} onChange={e => setOtherAmt(parseIntVN(e.target.value))} placeholder="0" className="cn-input tabular" />
             </label>
             {otherAmt && Number(otherAmt) > 0 && (

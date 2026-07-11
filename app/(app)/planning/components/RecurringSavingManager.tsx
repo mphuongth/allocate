@@ -303,7 +303,7 @@ export default function RecurringSavingManager({ goals, onChange, onToast, varia
         </div>
 
         <div>
-          <label htmlFor="rs-amount" style={labelStyle}>{isVI ? 'Số tiền hàng tháng (₫)' : 'Monthly amount (₫)'}</label>
+          <label htmlFor="rs-amount" style={labelStyle}>{isVI ? 'Số tiền hàng tháng (VND)' : 'Monthly amount (VND)'}</label>
           <input
             id="rs-amount"
             data-testid="rs-amount"
