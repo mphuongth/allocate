@@ -480,3 +480,33 @@ describe('DesktopPlanningView — summary strip & sections', () => {
     expect(screen.getByText('Insurance')).toBeInTheDocument()
   })
 })
+
+// Copy parity: the desktop and mobile views hardcode their own empty-state
+// strings, and they had drifted (e.g. goals said "No investments yet" on desktop
+// but "No allocations yet" on mobile). These lock the shared wording — the mobile
+// suite asserts the identical strings.
+describe('DesktopPlanningView — empty-state copy parity', () => {
+  it('goals empty state reads "No allocations yet"', () => {
+    render(<DesktopPlanningView {...defaultProps} plan={basePlan} />)
+    expect(screen.getByText('No allocations yet')).toBeInTheDocument()
+  })
+
+  it('fixed-expenses empty state reads "No fixed expenses yet"', () => {
+    render(<DesktopPlanningView {...defaultProps} plan={basePlan} />)
+    expect(screen.getByText('No fixed expenses yet')).toBeInTheDocument()
+  })
+
+  it('insurance empty state reads "No insurance members yet"', () => {
+    render(<DesktopPlanningView {...defaultProps} plan={basePlan} />)
+    expect(screen.getByText('No insurance members yet')).toBeInTheDocument()
+  })
+})
+
+describe('DesktopPlanningView — amount unit label uses (VND)', () => {
+  it('income modal labels the amount "(VND)", matching the app-wide form convention', async () => {
+    render(<DesktopPlanningView {...defaultProps} plan={basePlan} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Edit income' }))
+    expect(await screen.findByText('Monthly income (VND)')).toBeInTheDocument()
+    expect(screen.queryByText('Monthly income (₫)')).not.toBeInTheDocument()
+  })
+})

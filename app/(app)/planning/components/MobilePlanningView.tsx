@@ -198,7 +198,7 @@ function SalarySheet({
     <Sheet open={open} onClose={onClose} title={label}>
       <div style={{ display: 'grid', gap: 14 }}>
         <label style={{ fontSize: 13, color: 'var(--c-muted)', display: 'block' }}>
-          {isVI ? 'Thu nhập tháng (₫)' : 'Monthly income (₫)'}
+          {isVI ? 'Thu nhập tháng (VND)' : 'Monthly income (VND)'}
         </label>
         {error && <p style={{ color: 'var(--c-neg)', fontSize: 13 }}>{error}</p>}
         <input
@@ -376,7 +376,7 @@ function OtherExpenseSheet({
         </div>
         <div>
           <label style={{ fontSize: 13, color: 'var(--c-muted)', display: 'block', marginBottom: 4 }}>
-            {isVI ? 'Số tiền (₫)' : 'Amount (₫)'}
+            {isVI ? 'Số tiền (VND)' : 'Amount (VND)'}
           </label>
           <input
             type="text"
@@ -1402,7 +1402,7 @@ export default function MobilePlanningView({
             >
               {byGoal.length === 0 ? (
                 <div style={{ padding: '12px 14px', fontSize: 13, color: 'var(--c-muted)' }}>
-                  {isVI ? 'Chưa có phân bổ' : 'No allocations yet'}
+                  {isVI ? 'Chưa có phân bổ nào' : 'No allocations yet'}
                 </div>
               ) : (
                 byGoal.map((entry) => (
@@ -1446,7 +1446,7 @@ export default function MobilePlanningView({
               >
                 {fixedExpenses.length === 0 && (
                   <div style={{ padding: '14px', fontSize: 13, color: 'var(--c-muted)' }}>
-                    {isVI ? 'Chưa có chi phí cố định.' : 'No fixed expenses yet.'}
+                    {isVI ? 'Chưa có chi phí cố định nào' : 'No fixed expenses yet'}
                   </div>
                 )}
                 {fixedExpenses.map((fe, i) => {
@@ -1499,7 +1499,7 @@ export default function MobilePlanningView({
               >
                 {insuranceMembers.length === 0 && (
                   <div style={{ padding: '14px', fontSize: 13, color: 'var(--c-muted)' }}>
-                    {isVI ? 'Chưa có thành viên bảo hiểm.' : 'No insurance members yet.'}
+                    {isVI ? 'Chưa có thành viên bảo hiểm nào' : 'No insurance members yet'}
                   </div>
                 )}
                 {insuranceMembers.map((m, i) => {

@@ -734,3 +734,32 @@ describe('MobilePlanningView — overridden-item restore parity + recurring deep
     }
   })
 })
+
+// Copy parity: these must match the DesktopPlanningView suite's empty-state
+// strings byte-for-byte — the two views previously drifted (goals "No allocations
+// yet" vs "No investments yet"; a stray trailing period on the mobile ones).
+describe('MobilePlanningView — empty-state copy parity', () => {
+  it('goals empty state reads "No allocations yet"', () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} />)
+    expect(screen.getByText('No allocations yet')).toBeInTheDocument()
+  })
+
+  it('fixed-expenses empty state reads "No fixed expenses yet"', () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} />)
+    expect(screen.getByText('No fixed expenses yet')).toBeInTheDocument()
+  })
+
+  it('insurance empty state reads "No insurance members yet"', () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} />)
+    expect(screen.getByText('No insurance members yet')).toBeInTheDocument()
+  })
+})
+
+describe('MobilePlanningView — amount unit label uses (VND)', () => {
+  it('salary sheet labels the amount "(VND)", matching the app-wide form convention', async () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Edit income' }))
+    expect(await screen.findByText('Monthly income (VND)')).toBeInTheDocument()
+    expect(screen.queryByText('Monthly income (₫)')).not.toBeInTheDocument()
+  })
+})
