@@ -164,7 +164,7 @@ function TypeDropdown({ value, onChange }: { value: FundType; onChange: (v: Fund
 
 // ─── Sheet ───────────────────────────────────────────────────────────────────
 
-function Sheet({ open, onClose, testId, dismissOnBackdrop = true, children }: { open: boolean; onClose: () => void; testId: string; dismissOnBackdrop?: boolean; children: React.ReactNode }) {
+function Sheet({ open, onClose, testId, ariaLabel, dismissOnBackdrop = true, children }: { open: boolean; onClose: () => void; testId: string; ariaLabel: string; dismissOnBackdrop?: boolean; children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false)
   const sheetRef = useRef<HTMLDivElement>(null)
   useDialogA11y(sheetRef, open, onClose)
@@ -183,8 +183,12 @@ function Sheet({ open, onClose, testId, dismissOnBackdrop = true, children }: { 
     >
       <div
         ref={sheetRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={ariaLabel}
+        tabIndex={-1}
         data-testid={testId}
-        style={{ width: '100%', background: 'var(--c-card)', borderRadius: '16px 16px 0 0', paddingBottom: 'env(safe-area-inset-bottom,0)', animation: open ? 'slide-up 220ms cubic-bezier(0.2,0.8,0.2,1)' : 'slide-down 180ms ease forwards' }}
+        style={{ width: '100%', background: 'var(--c-card)', borderRadius: '16px 16px 0 0', outline: 'none', paddingBottom: 'env(safe-area-inset-bottom,0)', animation: open ? 'slide-up 220ms cubic-bezier(0.2,0.8,0.2,1)' : 'slide-down 180ms ease forwards' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ width: 36, height: 4, background: 'var(--c-line-strong)', borderRadius: 999, margin: '8px auto 0' }} />
@@ -810,7 +814,7 @@ export default function MobileFundLibraryView({ funds, setFunds, goals, loading,
       </div>
 
       {/* Add sheet */}
-      <Sheet open={addOpen} onClose={() => { setAddOpen(false); setFormError(null) }} testId="fund-sheet" dismissOnBackdrop={false}>
+      <Sheet open={addOpen} onClose={() => { setAddOpen(false); setFormError(null) }} testId="fund-sheet" ariaLabel={t('addModal')} dismissOnBackdrop={false}>
         <FundForm
           existing={null}
           title={t('addModal')}
@@ -822,7 +826,7 @@ export default function MobileFundLibraryView({ funds, setFunds, goals, loading,
       </Sheet>
 
       {/* Edit sheet */}
-      <Sheet open={!!editFund} onClose={() => { setEditFund(null); setFormError(null) }} testId="fund-sheet" dismissOnBackdrop={false}>
+      <Sheet open={!!editFund} onClose={() => { setEditFund(null); setFormError(null) }} testId="fund-sheet" ariaLabel={t('editModal')} dismissOnBackdrop={false}>
         {editFund && (
           <FundForm
             existing={editFund}
@@ -836,7 +840,7 @@ export default function MobileFundLibraryView({ funds, setFunds, goals, loading,
       </Sheet>
 
       {/* Delete sheet */}
-      <Sheet open={!!deleteFund} onClose={() => { if (!deleting) setDeleteFund(null) }} testId="delete-fund-sheet">
+      <Sheet open={!!deleteFund} onClose={() => { if (!deleting) setDeleteFund(null) }} testId="delete-fund-sheet" ariaLabel={t('deleteModal', { name: deleteFund?.code ?? '' })}>
         {deleteFund && (
           <div style={{ paddingTop: 14, display: 'grid', gap: 14 }}>
             <p style={{ margin: 0, fontWeight: 700, fontSize: 16, color: 'var(--c-ink)' }}>{t('deleteModal', { name: deleteFund.code })}</p>
@@ -848,7 +852,7 @@ export default function MobileFundLibraryView({ funds, setFunds, goals, loading,
               </button>
               <button onClick={handleDelete} disabled={deleting} style={{ flex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px 14px', fontSize: 13, fontWeight: 600, border: 'none', borderRadius: 10, background: 'var(--c-neg)', color: '#fff', cursor: deleting ? 'not-allowed' : 'pointer', opacity: deleting ? 0.6 : 1, fontFamily: 'inherit' }}>
                 <IconTrash size={14} color="#fff" />
-                {deleting ? tc('deleting') : tc('delete')}
+                {deleting ? tc('deleting') : t('deleteBtn')}
               </button>
             </div>
           </div>

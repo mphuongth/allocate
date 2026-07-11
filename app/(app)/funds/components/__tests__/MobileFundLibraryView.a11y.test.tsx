@@ -37,3 +37,21 @@ describe('MobileFundLibraryView — sheet a11y (Esc)', () => {
     await waitFor(() => expect(screen.queryByTestId('fund-sheet')).not.toBeInTheDocument())
   })
 })
+
+// The bottom sheets had focus-trap (useDialogA11y) but no dialog semantics — no
+// role="dialog"/aria-modal/aria-label — so AT didn't announce them as modals.
+describe('MobileFundLibraryView — sheet dialog semantics + names', () => {
+  it('the edit sheet is a role=dialog named by its title', async () => {
+    render(<Harness />)
+    await userEvent.click(screen.getByLabelText('editFund'))
+    expect(screen.getByRole('dialog', { name: 'editModal' })).toBeInTheDocument()
+  })
+
+  it('the delete sheet is a role=dialog with an accessible name', async () => {
+    render(<Harness />)
+    await userEvent.click(screen.getByLabelText('deleteBtn'))
+    const sheet = screen.getByTestId('delete-fund-sheet')
+    expect(sheet).toHaveAttribute('role', 'dialog')
+    expect(sheet.getAttribute('aria-label')).toBeTruthy()
+  })
+})
