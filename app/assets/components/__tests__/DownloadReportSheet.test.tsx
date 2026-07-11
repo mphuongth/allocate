@@ -88,6 +88,15 @@ describe('DownloadReportSheet — actions', () => {
     expect(onClose).toHaveBeenCalled()
   })
 
+  it('labels the close button "Close" consistently on both the desktop and mobile variants', () => {
+    // Regression: desktop used aria-label="Close" but mobile used "close".
+    const { unmount } = render(<DownloadReportSheet open desktop data={null} onClose={noop} onExport={noop} />)
+    expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument()
+    unmount()
+    render(<DownloadReportSheet open data={null} onClose={noop} onExport={noop} />)
+    expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument()
+  })
+
   it('renders Cancel button', () => {
     render(<DownloadReportSheet open data={null} onClose={noop} onExport={noop} />)
     expect(screen.getByRole('button', { name: /^cancel$/i })).toBeInTheDocument()
