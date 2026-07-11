@@ -35,7 +35,7 @@ describe('MobileFundLibraryView — delete of an in-use fund is hard-blocked wit
     render(<Harness reload={reload} />)
     await userEvent.click(screen.getByLabelText('deleteBtn'))
     const sheet = screen.getByTestId('delete-fund-sheet')
-    await userEvent.click(within(sheet).getByRole('button', { name: 'delete' }))
+    await userEvent.click(within(sheet).getByRole('button', { name: 'deleteBtn' }))
 
     expect(await screen.findByText('toastDeleteInUse')).toBeInTheDocument()
     expect(screen.queryByText('toastDeleted')).not.toBeInTheDocument()
@@ -47,9 +47,22 @@ describe('MobileFundLibraryView — delete of an in-use fund is hard-blocked wit
     render(<Harness reload={reload} />)
     await userEvent.click(screen.getByLabelText('deleteBtn'))
     const sheet = screen.getByTestId('delete-fund-sheet')
-    await userEvent.click(within(sheet).getByRole('button', { name: 'delete' }))
+    await userEvent.click(within(sheet).getByRole('button', { name: 'deleteBtn' }))
 
     await waitFor(() => expect(reload).toHaveBeenCalled())
     expect(await screen.findByText('toastDeleted')).toBeInTheDocument()
+  })
+})
+
+// #B — the mobile confirm button used the generic common `delete` ("Delete")
+// while desktop uses the fund-specific `deleteBtn` ("Delete fund"). Align them.
+describe('MobileFundLibraryView — delete-confirm label parity with desktop', () => {
+  it('labels the confirm button "Delete fund" (deleteBtn), not the generic "Delete"', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true, status: 204, json: () => Promise.resolve({}) })))
+    render(<Harness reload={reload} />)
+    await userEvent.click(screen.getByLabelText('deleteBtn'))
+    const sheet = screen.getByTestId('delete-fund-sheet')
+    expect(within(sheet).getByRole('button', { name: 'deleteBtn' })).toBeInTheDocument()
+    expect(within(sheet).queryByRole('button', { name: 'delete' })).not.toBeInTheDocument()
   })
 })

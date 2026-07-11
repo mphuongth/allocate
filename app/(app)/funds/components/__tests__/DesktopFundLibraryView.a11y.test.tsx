@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { useState } from 'react'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import DesktopFundLibraryView from '../DesktopFundLibraryView'
 import type { Fund } from '../useFundsData'
@@ -43,5 +43,30 @@ describe('DesktopFundLibraryView — dialog a11y (Esc + focus)', () => {
     await waitFor(() => expect(modal.contains(document.activeElement)).toBe(true))
     fireEvent.keyDown(document, { key: 'Escape' })
     await waitFor(() => expect(screen.queryByTestId('delete-fund-modal')).not.toBeInTheDocument())
+  })
+})
+
+// The dialogs set role="dialog" but had no accessible name, and the icon-only
+// close (X) button had no label — a screen reader announced "dialog" / "button".
+describe('DesktopFundLibraryView — dialog accessible names', () => {
+  it('the Add/Edit form modal is a dialog named by its title', async () => {
+    render(<Harness />)
+    await userEvent.click(screen.getByRole('button', { name: 'add' }))
+    expect(screen.getByRole('dialog', { name: 'addModal' })).toBeInTheDocument()
+  })
+
+  it('the form-modal close button has an accessible name', async () => {
+    render(<Harness />)
+    await userEvent.click(screen.getByRole('button', { name: 'add' }))
+    const modal = screen.getByTestId('fund-modal')
+    expect(within(modal).getByRole('button', { name: 'Close' })).toBeInTheDocument()
+  })
+
+  it('the delete modal has an accessible name and a labelled close button', async () => {
+    render(<Harness />)
+    await userEvent.click(screen.getByTestId('fund-delete-btn'))
+    const modal = screen.getByTestId('delete-fund-modal')
+    expect(modal.getAttribute('aria-label')).toBeTruthy()
+    expect(within(modal).getByRole('button', { name: 'Close' })).toBeInTheDocument()
   })
 })

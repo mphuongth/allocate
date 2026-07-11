@@ -91,13 +91,14 @@ function DModal({ open, onClose, title, width = 460, dismissOnBackdrop = true, c
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
+        aria-label={title}
         data-testid="fund-modal"
         onClick={e => e.stopPropagation()}
         style={{ width, maxWidth: '100%', background: 'var(--c-card)', borderRadius: 'var(--r-card)', boxShadow: '0 20px 60px rgba(0,0,0,0.18)', animation: 'pop-in 180ms ease', overflow: 'hidden' }}
       >
         <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--c-line)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span data-testid="fund-modal-title" style={{ fontSize: 15, fontWeight: 600 }}>{title}</span>
-          <button onClick={onClose} className="cn-btn ghost" style={{ padding: 6 }}>
+          <button onClick={onClose} aria-label="Close" className="cn-btn ghost" style={{ padding: 6 }}>
             <X size={16} />
           </button>
         </div>
@@ -124,13 +125,14 @@ function DeleteModal({ open, onClose, fundCode, onConfirm, deleting }: {
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
+        aria-label={t('deleteModal', { name: fundCode })}
         data-testid="delete-fund-modal"
         onClick={e => e.stopPropagation()}
         style={{ width: 400, maxWidth: '100%', background: 'var(--c-card)', borderRadius: 'var(--r-card)', boxShadow: '0 20px 60px rgba(0,0,0,0.18)', animation: 'pop-in 180ms ease', overflow: 'hidden' }}
       >
         <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--c-line)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontSize: 15, fontWeight: 600 }}>{t('deleteModal', { name: fundCode })}</span>
-          <button onClick={onClose} className="cn-btn ghost" style={{ padding: 6 }}>
+          <button onClick={onClose} aria-label="Close" className="cn-btn ghost" style={{ padding: 6 }}>
             <X size={16} />
           </button>
         </div>
