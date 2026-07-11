@@ -5,6 +5,7 @@ import ThemeProvider from './components/ThemeProvider'
 import ServiceWorkerRegistration from './components/ServiceWorkerRegistration'
 import { NextIntlClientProvider } from 'next-intl'
 import { getMessages, getLocale } from 'next-intl/server'
+import { headers } from 'next/headers'
 import './globals.css'
 import { cn } from "@/lib/utils";
 
@@ -46,11 +47,14 @@ export default async function RootLayout({
 }>) {
   const messages = await getMessages()
   const locale = await getLocale()
+  // Per-request CSP nonce set by middleware; undefined in dev (no CSP there), in
+  // which case React omits the attribute and the inline script runs unrestricted.
+  const nonce = (await headers()).get('x-nonce') ?? undefined
 
   return (
     <html lang={locale} suppressHydrationWarning className={cn("font-sans", beVietnamPro.variable, geist.variable)}>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: `try{var t=localStorage.getItem('theme');if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.classList.add('dark')}}catch(e){}` }} />
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: `try{var t=localStorage.getItem('theme');if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.classList.add('dark')}}catch(e){}` }} />
       </head>
       <body className={`${beVietnamPro.variable} font-sans antialiased bg-canvas dark:bg-gray-950 text-gray-900 dark:text-gray-100`}>
         <NextIntlClientProvider messages={messages} locale={locale}>
