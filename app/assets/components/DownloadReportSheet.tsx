@@ -67,7 +67,9 @@ export default function DownloadReportSheet({ open, onClose, data, onExport, des
     sections: 'Nội dung báo cáo',
     includes: ['Tổng quan tài sản ròng', 'Chi tiết từng mục tiêu', 'Phân bổ theo loại tài sản', 'Khoản chưa phân bổ', 'Lịch sử giao dịch'],
     export: 'Xuất báo cáo',
+    exporting: 'Đang xuất',
     cancel: 'Hủy',
+    close: 'Đóng',
     done: 'Đã xuất báo cáo',
     doneSub: 'Kiểm tra thư mục tải xuống của bạn',
   } : {
@@ -80,7 +82,9 @@ export default function DownloadReportSheet({ open, onClose, data, onExport, des
     sections: 'Report includes',
     includes: ['Net worth overview', 'Per-goal breakdown', 'Asset type allocation', 'Unallocated holdings', 'Transaction history'],
     export: 'Export report',
+    exporting: 'Exporting',
     cancel: 'Cancel',
+    close: 'Close',
     done: 'Report exported',
     doneSub: 'Check your downloads folder',
   }
@@ -175,7 +179,7 @@ export default function DownloadReportSheet({ open, onClose, data, onExport, des
               <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
                 <button
                   onClick={onClose}
-                  aria-label="cancel"
+                  aria-label={t.cancel}
                   style={{
                     flex: 1, padding: '11px 0', fontSize: 13, fontWeight: 500,
                     minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -190,7 +194,7 @@ export default function DownloadReportSheet({ open, onClose, data, onExport, des
                   onClick={handleExport}
                   disabled={exporting}
                   data-testid="export-report-btn"
-                  aria-label={exporting ? 'exporting' : t.export}
+                  aria-label={exporting ? t.exporting : t.export}
                   style={{
                     flex: 2, padding: '11px 0', fontSize: 13, fontWeight: 600,
                     minHeight: 44,
@@ -242,7 +246,7 @@ export default function DownloadReportSheet({ open, onClose, data, onExport, des
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px 14px', borderBottom: '1px solid var(--c-line)', flexShrink: 0 }}>
             <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em' }}>{t.title}</h3>
-            <button onClick={onClose} aria-label="Close" style={{ ...iconHit, border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', color: 'var(--c-muted)' }}><X size={18} /></button>
+            <button onClick={onClose} aria-label={t.close} style={{ ...iconHit, border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', color: 'var(--c-muted)' }}><X size={18} /></button>
           </div>
           <div style={{ flex: 1, padding: '18px 20px', overflowY: 'auto' }}>
             {body}
@@ -284,7 +288,7 @@ export default function DownloadReportSheet({ open, onClose, data, onExport, des
             <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600, color: 'var(--c-ink)' }}>{t.title}</h3>
             <button
               onClick={onClose}
-              aria-label="close"
+              aria-label={t.close}
               style={{
                 ...iconHit, background: 'transparent', border: 'none',
                 cursor: 'pointer', color: 'var(--c-muted)', borderRadius: 8,
