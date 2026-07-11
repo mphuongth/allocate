@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { validateNavSourceUrl } from '@/lib/scrape-fund-nav'
+import { ValidationError } from '@/lib/validation'
 
 const FUND_TYPES = ['balanced', 'equity', 'debt', 'gold'] as const
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -66,12 +68,22 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: 'Invalid goal' }, { status: 400 })
   }
 
+  // Validate the NAV source URL (https + exact vendor-host allowlist) before it
+  // is stored and later fetched server-side — prevents SSRF.
+  let cleanNavUrl: string | null
+  try {
+    cleanNavUrl = validateNavSourceUrl(nav_source_url)
+  } catch (e) {
+    if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
+    throw e
+  }
+
   const update: Record<string, unknown> = {
     name: name.trim(),
     code: code.trim().toUpperCase(),
     fund_type,
     nav: navNum,
-    nav_source_url: typeof nav_source_url === 'string' && nav_source_url.trim() ? nav_source_url.trim() : null,
+    nav_source_url: cleanNavUrl,
   }
   // DCA fields use partial-update semantics: only written when the caller
   // actually sends is_dca. The Add/Edit form omits them, so a name/NAV edit
