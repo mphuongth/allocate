@@ -9,7 +9,7 @@
 
 Plan, track, and visualize your financial journey — goals, investments, monthly budgets, insurance — all in one place. Bilingual (Vietnamese + English).
 
-**[Try the live app →](https://allocate-kohl.vercel.app/)**
+**[Try the live app →](https://cairn-money.vercel.app/)**
 
 </div>
 
