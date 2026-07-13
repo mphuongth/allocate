@@ -849,6 +849,17 @@
     "ctaSub": "Tham gia cùng những người dùng luôn biết chính xác mỗi đồng tiền đang đi đâu — và tại sao.",
     "ctaCta1": "Bắt đầu miễn phí",
     "ctaCta2": "Xem demo",
-    "footerCopy": "Cairn · © 2026"
+    "footerCopy": "Cairn · © 2026",
+    "mockUserName": "Minh Trần",
+    "mockUserFirstName": "Minh",
+    "mockGoalTarget": "Mục tiêu · {amount}",
+    "mockGoalRetirement": "Hưu trí",
+    "mockGoalHouse": "Mua nhà",
+    "mockGoalEmergency": "Quỹ dự phòng",
+    "mockGoalLaptop": "Laptop mới",
+    "mockPlanMonth": "Tháng 5, 2026",
+    "navFeatures": "Tính năng",
+    "navHow": "Cách hoạt động",
+    "navPlan": "Kế hoạch tháng"
   }
 }
