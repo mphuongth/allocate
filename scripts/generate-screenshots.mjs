@@ -1,129 +1,77 @@
-import sharp from 'sharp'
+// Regenerates the PWA manifest screenshots (public/screenshot-{desktop,mobile}.png).
+//
+// These used to be hand-drawn SVGs rendered through `sharp` — a picture of an app that
+// never existed. They drifted badly: the committed images still showed an "Asset Overview"
+// page with a green theme, English copy and a "C" logo, none of which the product has had
+// for months. A picture of the app has to *be* a picture of the app, so this drives a real
+// browser against a real signed-in session and captures the real Overview screen.
+//
+// Usage — with the app running (npm run dev) and an account that has some data on it:
+//
+//   SCREENSHOT_EMAIL=... SCREENSHOT_PASSWORD=... node scripts/generate-screenshots.mjs
+//
+// Optional: SCREENSHOT_BASE_URL   (default http://localhost:3000)
+//           PLAYWRIGHT_CHANNEL=msedge  (when the bundled Chromium is unavailable)
+//
+// Use a throwaway account: whatever is on screen ships publicly in the install prompt.
+
+import { chromium } from 'playwright'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const publicDir = resolve(__dirname, '../public')
 
-// Mobile screenshot — 390×844
-const mobileSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="390" height="844" viewBox="0 0 390 844">
-  <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#f8fafc"/>
-      <stop offset="100%" stop-color="#ecfdf5"/>
-    </linearGradient>
-  </defs>
-  <!-- Background -->
-  <rect width="390" height="844" fill="url(#bg)"/>
-  <!-- Status bar area -->
-  <rect width="390" height="52" fill="#0F2A4A"/>
-  <!-- App name in header -->
-  <text x="20" y="34" font-family="system-ui,sans-serif" font-weight="700" font-size="18" fill="white">Cairn</text>
-  <!-- Nav tabs -->
-  <rect y="52" width="390" height="48" fill="white"/>
-  <rect x="0" y="94" width="390" height="2" fill="#e2e8f0"/>
-  <text x="20" y="80" font-family="system-ui,sans-serif" font-size="13" font-weight="600" fill="#0F2A4A">Overview</text>
-  <text x="110" y="80" font-family="system-ui,sans-serif" font-size="13" fill="#9ca3af">Planning</text>
-  <text x="190" y="80" font-family="system-ui,sans-serif" font-size="13" fill="#9ca3af">Goals</text>
-  <!-- Net worth card -->
-  <rect x="16" y="110" width="358" height="110" rx="16" fill="#0F2A4A"/>
-  <text x="32" y="140" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">Portfolio Value</text>
-  <text x="32" y="172" font-family="system-ui,sans-serif" font-weight="700" font-size="28" fill="white">₫2,456,800,000</text>
-  <text x="32" y="200" font-family="system-ui,sans-serif" font-size="12" fill="#a5f3fc">↑ +12.4% this month</text>
-  <!-- Asset cards -->
-  <rect x="16" y="236" width="170" height="90" rx="12" fill="white"/>
-  <text x="30" y="262" font-family="system-ui,sans-serif" font-size="10" fill="#9ca3af">Mutual Funds</text>
-  <text x="30" y="290" font-family="system-ui,sans-serif" font-weight="700" font-size="16" fill="#111827">₫1,105M</text>
-  <text x="30" y="312" font-family="system-ui,sans-serif" font-size="10" fill="#10b981">↑ 45%</text>
-  <rect x="204" y="236" width="170" height="90" rx="12" fill="white"/>
-  <text x="218" y="262" font-family="system-ui,sans-serif" font-size="10" fill="#9ca3af">Bank Deposits</text>
-  <text x="218" y="290" font-family="system-ui,sans-serif" font-weight="700" font-size="16" fill="#111827">₫737M</text>
-  <text x="218" y="312" font-family="system-ui,sans-serif" font-size="10" fill="#6b7280">30%</text>
-  <!-- Goals section -->
-  <text x="20" y="358" font-family="system-ui,sans-serif" font-weight="600" font-size="15" fill="#111827">Savings Goals</text>
-  <rect x="16" y="370" width="358" height="72" rx="12" fill="white"/>
-  <text x="30" y="396" font-family="system-ui,sans-serif" font-size="13" font-weight="500" fill="#111827">Emergency Fund</text>
-  <rect x="30" y="406" width="280" height="6" rx="3" fill="#f3f4f6"/>
-  <rect x="30" y="406" width="224" height="6" rx="3" fill="#10b981"/>
-  <text x="320" y="416" font-family="system-ui,sans-serif" font-size="11" fill="#6b7280">80%</text>
-  <text x="30" y="432" font-family="system-ui,sans-serif" font-size="11" fill="#9ca3af">₫80M of ₫100M</text>
-  <rect x="16" y="452" width="358" height="72" rx="12" fill="white"/>
-  <text x="30" y="478" font-family="system-ui,sans-serif" font-size="13" font-weight="500" fill="#111827">House Down Payment</text>
-  <rect x="30" y="488" width="280" height="6" rx="3" fill="#f3f4f6"/>
-  <rect x="30" y="488" width="126" height="6" rx="3" fill="#10b981"/>
-  <text x="320" y="498" font-family="system-ui,sans-serif" font-size="11" fill="#6b7280">45%</text>
-  <text x="30" y="514" font-family="system-ui,sans-serif" font-size="11" fill="#9ca3af">₫450M of ₫1B</text>
-</svg>`
+const baseURL = process.env.SCREENSHOT_BASE_URL ?? 'http://localhost:3000'
+const email = process.env.SCREENSHOT_EMAIL
+const password = process.env.SCREENSHOT_PASSWORD
+const channel = process.env.PLAYWRIGHT_CHANNEL || undefined
 
-// Desktop screenshot — 1280×800
-const desktopSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="800" viewBox="0 0 1280 800">
-  <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#f9fafb"/>
-      <stop offset="100%" stop-color="#ecfdf5"/>
-    </linearGradient>
-  </defs>
-  <!-- Background -->
-  <rect width="1280" height="800" fill="url(#bg)"/>
-  <!-- Sidebar -->
-  <rect width="240" height="800" fill="white"/>
-  <rect x="240" width="1" height="800" fill="#e5e7eb"/>
-  <!-- Sidebar logo -->
-  <rect x="20" y="20" width="36" height="36" rx="8" fill="#0F2A4A"/>
-  <text x="38" y="44" font-family="system-ui,sans-serif" font-weight="700" font-size="18" fill="white" text-anchor="middle">C</text>
-  <text x="68" y="44" font-family="system-ui,sans-serif" font-weight="700" font-size="16" fill="#111827">Cairn</text>
-  <!-- Sidebar items -->
-  <rect x="12" y="76" width="216" height="36" rx="8" fill="#ecfdf5"/>
-  <text x="44" y="100" font-family="system-ui,sans-serif" font-size="13" font-weight="600" fill="#10b981">Asset Overview</text>
-  <text x="44" y="136" font-family="system-ui,sans-serif" font-size="13" fill="#6b7280">Monthly Plan</text>
-  <text x="44" y="172" font-family="system-ui,sans-serif" font-size="13" fill="#6b7280">Fund Library</text>
-  <text x="44" y="208" font-family="system-ui,sans-serif" font-size="13" fill="#6b7280">Settings</text>
-  <!-- Main content -->
-  <!-- Header -->
-  <rect x="240" width="1040" height="60" fill="white"/>
-  <rect x="240" y="60" width="1040" height="1" fill="#e5e7eb"/>
-  <text x="268" y="38" font-family="system-ui,sans-serif" font-weight="700" font-size="20" fill="#111827">Asset Overview</text>
-  <!-- Stat cards -->
-  <rect x="268" y="84" width="220" height="96" rx="12" fill="#0F2A4A"/>
-  <text x="288" y="110" font-family="system-ui,sans-serif" font-size="11" fill="#94a3b8">Portfolio Value</text>
-  <text x="288" y="140" font-family="system-ui,sans-serif" font-weight="700" font-size="20" fill="white">₫2,456,800,000</text>
-  <text x="288" y="164" font-family="system-ui,sans-serif" font-size="11" fill="#a5f3fc">↑ +12.4%</text>
-  <rect x="508" y="84" width="220" height="96" rx="12" fill="white"/>
-  <text x="528" y="110" font-family="system-ui,sans-serif" font-size="11" fill="#9ca3af">Total Invested</text>
-  <text x="528" y="140" font-family="system-ui,sans-serif" font-weight="700" font-size="20" fill="#111827">₫2,100,000,000</text>
-  <text x="528" y="164" font-family="system-ui,sans-serif" font-size="11" fill="#6b7280">Across 4 assets</text>
-  <rect x="748" y="84" width="220" height="96" rx="12" fill="white"/>
-  <text x="768" y="110" font-family="system-ui,sans-serif" font-size="11" fill="#9ca3af">Gain / Loss</text>
-  <text x="768" y="140" font-family="system-ui,sans-serif" font-weight="700" font-size="20" fill="#10b981">+₫356,800,000</text>
-  <text x="768" y="164" font-family="system-ui,sans-serif" font-size="11" fill="#10b981">+17.0%</text>
-  <!-- Goals grid -->
-  <text x="268" y="214" font-family="system-ui,sans-serif" font-weight="600" font-size="15" fill="#111827">Savings Goals</text>
-  <rect x="268" y="228" width="330" height="140" rx="12" fill="white"/>
-  <text x="288" y="256" font-family="system-ui,sans-serif" font-size="13" font-weight="500" fill="#111827">Emergency Fund</text>
-  <rect x="288" y="268" width="270" height="8" rx="4" fill="#f3f4f6"/>
-  <rect x="288" y="268" width="216" height="8" rx="4" fill="#10b981"/>
-  <text x="288" y="296" font-family="system-ui,sans-serif" font-size="12" fill="#9ca3af">₫80M of ₫100M · 80% complete</text>
-  <rect x="618" y="228" width="330" height="140" rx="12" fill="white"/>
-  <text x="638" y="256" font-family="system-ui,sans-serif" font-size="13" font-weight="500" fill="#111827">House Down Payment</text>
-  <rect x="638" y="268" width="270" height="8" rx="4" fill="#f3f4f6"/>
-  <rect x="638" y="268" width="121" height="8" rx="4" fill="#10b981"/>
-  <text x="638" y="296" font-family="system-ui,sans-serif" font-size="12" fill="#9ca3af">₫450M of ₫1B · 45% complete</text>
-  <!-- Allocation table -->
-  <text x="268" y="398" font-family="system-ui,sans-serif" font-weight="600" font-size="15" fill="#111827">Allocation</text>
-  <rect x="268" y="412" width="680" height="44" rx="0" fill="#f9fafb"/>
-  <text x="288" y="438" font-family="system-ui,sans-serif" font-size="12" font-weight="500" fill="#6b7280">Asset</text>
-  <text x="480" y="438" font-family="system-ui,sans-serif" font-size="12" font-weight="500" fill="#6b7280">Value</text>
-  <text x="620" y="438" font-family="system-ui,sans-serif" font-size="12" font-weight="500" fill="#6b7280">Gain/Loss</text>
-  <text x="780" y="438" font-family="system-ui,sans-serif" font-size="12" font-weight="500" fill="#6b7280">Share</text>
-  <rect x="268" y="456" width="680" height="1" fill="#e5e7eb"/>
-  <text x="288" y="484" font-family="system-ui,sans-serif" font-size="13" fill="#111827">Mutual Funds</text>
-  <text x="480" y="484" font-family="system-ui,sans-serif" font-size="13" fill="#111827">₫1,105,560,000</text>
-  <text x="620" y="484" font-family="system-ui,sans-serif" font-size="13" fill="#10b981">+₫205,560,000</text>
-  <text x="780" y="484" font-family="system-ui,sans-serif" font-size="13" fill="#6b7280">45%</text>
-</svg>`
+if (!email || !password) {
+  console.error('SCREENSHOT_EMAIL and SCREENSHOT_PASSWORD are required.')
+  process.exit(1)
+}
 
-await sharp(Buffer.from(mobileSvg)).png().toFile(resolve(publicDir, 'screenshot-mobile.png'))
-console.log('Generated public/screenshot-mobile.png')
+// Sizes must stay in step with the `screenshots` entries in app/manifest.ts.
+const TARGETS = [
+  { name: 'screenshot-desktop.png', width: 1280, height: 800 },
+  { name: 'screenshot-mobile.png', width: 390, height: 844 },
+]
 
-await sharp(Buffer.from(desktopSvg)).png().toFile(resolve(publicDir, 'screenshot-desktop.png'))
-console.log('Generated public/screenshot-desktop.png')
+const browser = await chromium.launch({ channel })
+
+try {
+  for (const { name, width, height } of TARGETS) {
+    const isMobile = width < 768
+    const context = await browser.newContext({
+      viewport: { width, height },
+      isMobile,
+      hasTouch: isMobile,
+    })
+    const page = await context.newPage()
+
+    await page.goto(`${baseURL}/auth/login`)
+    await page.locator('input[type=email]').fill(email)
+    await page.locator('input[type=password]').fill(password)
+    await page.locator('button[type=submit]').click()
+    await page.waitForURL('**/dashboard', { timeout: 30_000 })
+
+    // Overview renders its money only once the overview API resolves — screenshotting any
+    // earlier captures the loading skeleton (the Recent activity card is the slowest, and
+    // showed "0 giao dịch" + a skeleton row when we only waited on the net-worth figure).
+    await page.locator('text=/₫/').first().waitFor({ state: 'visible', timeout: 30_000 })
+    await page.waitForLoadState('networkidle', { timeout: 30_000 })
+    await page.waitForTimeout(1500)
+
+    // `next dev` paints a floating dev-tools button bottom-left. It is not part of the app
+    // and must not be baked into an image we ship in the install prompt.
+    await page.addStyleTag({ content: 'nextjs-portal, [data-nextjs-dev-tools-button] { display: none !important; }' })
+
+    await page.screenshot({ path: resolve(publicDir, name), scale: 'css' })
+    console.log(`Captured public/${name} (${width}×${height})`)
+
+    await context.close()
+  }
+} finally {
+  await browser.close()
+}
