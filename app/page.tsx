@@ -4,13 +4,14 @@ import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { getTranslations } from 'next-intl/server'
 import { ScrollRevealInit } from './components/ScrollRevealInit'
 import { LandingLangToggle } from './components/LandingLangToggle'
+import { LandingAppMockup } from './components/LandingAppMockup'
+import { LandingPlanMockup } from './components/LandingPlanMockup'
 
 const NAVY = '#0F2A4A'
 const LINE = '#e9e5dc'
 const CANVAS = '#faf8f4'
 const POS = '#047857'
 const POS_TINT = '#ecfdf5'
-const NAVY_TINT = '#eef2f8'
 const MUTED = '#78716c'
 const INK = '#18181b'
 const INK_2 = '#3f3f46'
@@ -121,13 +122,14 @@ html, body { overflow-x: clip; }
   .lp-mockup-chrome { padding: 8px 12px !important; }
   .lp-chrome-url { font-size: 9.5px !important; padding: 2px 8px !important; }
   .lp-mockup-app { height: 360px !important; }
-  .lp-m-sidebar { width: 44px !important; padding: 12px 0 !important; }
-  .lp-m-nav-item { width: 30px !important; height: 30px !important; }
-  .lp-m-content { padding: 14px 14px !important; }
+  /* Sidebar keeps its labels (that is the shell the app actually has); it just gets
+     narrower. Below ~380px the labels are dropped rather than wrapped — see below. */
+  .lp-m-sidebar { width: 92px !important; }
+  .lp-m-nav-item { padding: 6px !important; gap: 6px !important; }
+  .lp-m-content { padding: 12px 12px !important; }
   .lp-m-page-title { font-size: 14px !important; }
-  .lp-m-kpi-val { font-size: 15px !important; }
-  .lp-m-actions { display: none !important; }
-  .lp-m-page-header { padding-bottom: 10px !important; margin-bottom: 12px !important; }
+  .lp-m-kpi-val { font-size: 17px !important; }
+  .lp-m-page-header { padding-bottom: 10px !important; margin-bottom: 10px !important; }
 
   /* Section headers */
   .lp-features,
@@ -178,6 +180,14 @@ html, body { overflow-x: clip; }
   .lp-section-h2 { font-size: 26px !important; }
   .lp-cta-h2 { font-size: 28px !important; }
   .lp-mockup-app { height: 320px !important; }
+  /* Too narrow for the labelled sidebar — collapse it to the icon rail, which is exactly
+     what the real Sidebar does at its collapsed width. */
+  .lp-m-sidebar { width: 40px !important; }
+  .lp-m-nav-label,
+  .lp-m-wordmark,
+  .lp-m-user span:last-child { display: none !important; }
+  .lp-m-nav-item { justify-content: center !important; }
+  .lp-m-user { justify-content: center !important; }
 }
 `
 
@@ -249,7 +259,7 @@ export default async function HomePage() {
               <span className="lp-logo-wordmark" style={{ fontSize: 19, fontWeight: 700, color: '#fff', letterSpacing: '-0.03em' }}>Cairn</span>
             </Link>
             <div className="lp-nav-links" style={{ display: 'flex', gap: 28 }}>
-              {[['#features', 'Features'], ['#how', 'How it works'], ['#plan', 'Monthly plan']].map(([href, label]) => (
+              {[['#features', t('navFeatures')], ['#how', t('navHow')], ['#plan', t('navPlan')]].map(([href, label]) => (
                 <a key={href} href={href} style={{ fontSize: 13.5, fontWeight: 500, color: 'rgba(255,255,255,0.6)', textDecoration: 'none' }}
                   className="hover:!text-white transition-colors duration-150">{label}</a>
               ))}
@@ -299,86 +309,10 @@ export default async function HomePage() {
               </div>
             </div>
 
-            {/* App mockup */}
+            {/* App mockup — a still of the real Overview screen, built from the same i18n
+                keys and money formatter the app itself uses (see LandingAppMockup). */}
             <div className="lp-mockup-wrap" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-end' }}>
-              <div className="lp-mockup" style={{ width: 540, flexShrink: 0, background: '#fff', borderRadius: '12px 12px 0 0', boxShadow: '0 -8px 64px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.08)', overflow: 'hidden' }}>
-                {/* Browser chrome */}
-                <div className="lp-mockup-chrome" style={{ background: '#edeae2', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10, borderBottom: '1px solid #e0dcd2' }}>
-                  <div style={{ display: 'flex', gap: 5 }}>
-                    <span style={{ width: 11, height: 11, borderRadius: '50%', background: '#ff5f57', display: 'block' }}/>
-                    <span style={{ width: 11, height: 11, borderRadius: '50%', background: '#febc2e', display: 'block' }}/>
-                    <span style={{ width: 11, height: 11, borderRadius: '50%', background: '#28c840', display: 'block' }}/>
-                  </div>
-                  <div className="lp-chrome-url" style={{ flex: 1, textAlign: 'center', fontFamily: 'ui-monospace, monospace', fontSize: 10.5, color: '#78716c', background: '#e0dcd2', borderRadius: 5, padding: '3px 10px' }}>
-                    cairn.app/dashboard
-                  </div>
-                </div>
-                {/* App layout */}
-                <div className="lp-mockup-app" style={{ display: 'flex', height: 400, overflow: 'hidden' }}>
-                  {/* Sidebar */}
-                  <div className="lp-m-sidebar" style={{ width: 52, background: NAVY, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '14px 0', gap: 4 }}>
-                    <div style={{ marginBottom: 12 }}>
-                      <CairnLogo width={20} height={17} />
-                    </div>
-                    <div className="lp-m-nav-item" style={{ width: 34, height: 34, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.15)' }}>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12l9-9 9 9"/><path d="M5 10v10h14V10"/></svg>
-                    </div>
-                    <div className="lp-m-nav-item" style={{ width: 34, height: 34, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.38)" strokeWidth="2" strokeLinecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg>
-                    </div>
-                    <div className="lp-m-nav-item" style={{ width: 34, height: 34, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.38)" strokeWidth="2" strokeLinecap="round"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 16v-5M12 16V9M16 16v-3"/></svg>
-                    </div>
-                    <div className="lp-m-nav-item" style={{ width: 34, height: 34, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 'auto' }}>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.38)" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
-                    </div>
-                  </div>
-                  {/* Main content */}
-                  <div className="lp-m-content" style={{ flex: 1, background: '#faf8f4', padding: '16px 18px', overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 0 }}>
-                    <div className="lp-m-page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, borderBottom: '1px solid #e9e5dc', paddingBottom: 12 }}>
-                      <div>
-                        <div style={{ fontSize: 8.5, textTransform: 'uppercase', letterSpacing: '0.07em', color: MUTED, fontWeight: 600, marginBottom: 2 }}>Overview</div>
-                        <div className="lp-m-page-title" style={{ fontSize: 15, fontWeight: 700, color: INK, letterSpacing: '-0.025em' }}>Hi, Minh</div>
-                      </div>
-                      <div className="lp-m-actions" style={{ display: 'flex', gap: 5 }}>
-                        <div style={{ fontSize: 9, fontWeight: 600, padding: '4px 9px', borderRadius: 7, border: `1px solid ${LINE}`, background: '#fff', color: NAVY }}>+ Transaction</div>
-                        <div style={{ fontSize: 9, fontWeight: 600, padding: '4px 9px', borderRadius: 7, border: `1px solid ${NAVY}`, background: NAVY, color: '#fff' }}>+ New goal</div>
-                      </div>
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
-                      <div style={{ background: '#fff', border: `1px solid #e9e5dc`, borderRadius: 10, padding: '9px 12px' }}>
-                        <div style={{ fontSize: 8.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: MUTED, fontWeight: 600, marginBottom: 3 }}>Net worth</div>
-                        <div className="lp-m-kpi-val" style={{ fontSize: 17, fontWeight: 700, color: INK, letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums' }}>487.5M ₫</div>
-                      </div>
-                      <div style={{ background: '#fff', border: `1px solid #e9e5dc`, borderRadius: 10, padding: '9px 12px' }}>
-                        <div style={{ fontSize: 8.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: MUTED, fontWeight: 600, marginBottom: 3 }}>Total P/L</div>
-                        <div className="lp-m-kpi-val" style={{ fontSize: 17, fontWeight: 700, color: POS, letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums' }}>+41.3M ₫</div>
-                      </div>
-                    </div>
-                    <svg style={{ height: 28, display: 'block', marginBottom: 14, width: '100%' }} viewBox="0 0 460 28" preserveAspectRatio="none">
-                      <polyline points="0,22 38,20 76,21 114,18 152,16 190,13 228,11 266,8 304,7 342,4 380,2 418,1 460,0" fill="none" stroke={NAVY} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                      <polyline points="0,22 38,20 76,21 114,18 152,16 190,13 228,11 266,8 304,7 342,4 380,2 418,1 460,0 460,28 0,28" fill={NAVY_TINT} stroke="none"/>
-                    </svg>
-                    <div style={{ fontSize: 8.5, textTransform: 'uppercase', letterSpacing: '0.07em', color: MUTED, fontWeight: 600, marginBottom: 8 }}>Goals</div>
-                    {[
-                      { name: 'Retirement', meta: '215.4M ₫ · 10.8%', pct: 10.8, done: false },
-                      { name: 'House down payment', meta: '142.8M ₫ · 28.6%', pct: 28.6, done: false },
-                      { name: 'Emergency fund', meta: '85.0M ₫ · 85%', pct: 85, done: true },
-                      { name: 'New laptop', meta: '18.1M ₫ · 51.7%', pct: 51.7, done: false },
-                    ].map(g => (
-                      <div key={g.name} style={{ background: '#fff', border: `1px solid #e9e5dc`, borderRadius: 10, padding: '9px 12px', marginBottom: 6 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                          <div style={{ fontSize: 11, fontWeight: 600, color: INK }}>{g.name}</div>
-                          <div style={{ fontSize: 9.5, color: MUTED, fontVariantNumeric: 'tabular-nums' }}>{g.meta}</div>
-                        </div>
-                        <div style={{ height: 4, background: '#e9e5dc', borderRadius: 99, overflow: 'hidden' }}>
-                          <div style={{ height: '100%', borderRadius: 99, background: g.done ? POS : NAVY, width: `${g.pct}%` }}/>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
+              <LandingAppMockup />
             </div>
           </div>
         </section>
@@ -448,42 +382,9 @@ export default async function HomePage() {
               </div>
             </div>
 
-            {/* Plan mockup */}
-            <div className="reveal reveal-delay-2" style={{ background: '#fff', border: `1px solid ${LINE}`, borderRadius: 16, boxShadow: '0 8px 24px rgba(15,42,74,0.12)', overflow: 'hidden' }}>
-              <div style={{ background: CANVAS, borderBottom: `1px solid ${LINE}`, padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: INK, letterSpacing: '-0.02em' }}>May 2026</div>
-                <div style={{ fontSize: 11, color: MUTED, fontWeight: 500 }}>Monthly plan</div>
-              </div>
-              <div style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 0 }}>
-                {/* Summary bar */}
-                <div style={{ background: NAVY_TINT, borderRadius: 10, padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                  <div>
-                    <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: NAVY }}>Invest this month</div>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: NAVY, letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums' }}>22.8M ₫</div>
-                    <div style={{ fontSize: 10, color: 'rgba(15,42,74,0.6)', marginTop: 2 }}>of 45M ₫ salary · 4 goals</div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: NAVY }}>Remaining</div>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: NAVY, letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums' }}>12.2M ₫</div>
-                    <div style={{ fontSize: 10, color: 'rgba(15,42,74,0.6)', marginTop: 2 }}>after expenses</div>
-                  </div>
-                </div>
-                <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, color: MUTED, marginBottom: 8 }}>Contribution by goal</div>
-                {[
-                  { name: 'Retirement', sub: 'VFMVF1 + DCDS', amt: '8.0M ₫' },
-                  { name: 'House down payment', sub: 'VESAF + VCB Save', amt: '7.5M ₫' },
-                  { name: 'Emergency fund', sub: 'VCB Flex Save + MB Term 6M', amt: '4.0M ₫' },
-                  { name: 'New laptop', sub: 'MB Term 3M', amt: '3.3M ₫' },
-                ].map((row, i, arr) => (
-                  <div key={row.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 0', borderBottom: i < arr.length - 1 ? `1px solid ${LINE}` : 'none' }}>
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: INK }}>{row.name}</div>
-                      <div style={{ fontSize: 10, color: MUTED, marginTop: 1 }}>{row.sub}</div>
-                    </div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: INK, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>{row.amt}</div>
-                  </div>
-                ))}
-              </div>
+            {/* Plan mockup — a still of the real Monthly plan screen (see LandingPlanMockup) */}
+            <div className="reveal reveal-delay-2">
+              <LandingPlanMockup />
             </div>
           </div>
         </section>

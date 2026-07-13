@@ -68,7 +68,10 @@ test('hero Get started free CTA links to /auth/signup', async ({ page }) => {
 
 test('hero shows app mockup with browser chrome', async ({ page }) => {
   await page.goto('/')
-  await expect(page.locator('text=cairn.app/dashboard')).toBeVisible()
+  // The chrome shows the real production host. It used to read `cairn.app`, a domain we
+  // do not own; the shell it framed was a made-up icon rail. Both now mirror the app —
+  // the shell itself is pinned in LandingMockups.test.tsx, not here.
+  await expect(page.locator('text=cairn-money.vercel.app/dashboard')).toBeVisible()
 })
 
 // ─── Features section ────────────────────────────────────────────────────────

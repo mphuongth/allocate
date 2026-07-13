@@ -849,6 +849,17 @@
     "ctaSub": "Join users who always know exactly where every đồng is going — and why.",
     "ctaCta1": "Get started free",
     "ctaCta2": "View the demo",
-    "footerCopy": "Cairn · © 2026"
+    "footerCopy": "Cairn · © 2026",
+    "mockUserName": "Minh Tran",
+    "mockUserFirstName": "Minh",
+    "mockGoalTarget": "Target · {amount}",
+    "mockGoalRetirement": "Retirement",
+    "mockGoalHouse": "House down payment",
+    "mockGoalEmergency": "Emergency fund",
+    "mockGoalLaptop": "New laptop",
+    "mockPlanMonth": "May 2026",
+    "navFeatures": "Features",
+    "navHow": "How it works",
+    "navPlan": "Monthly plan"
   }
 }
