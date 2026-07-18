@@ -6,6 +6,7 @@ import { ScrollRevealInit } from './components/ScrollRevealInit'
 import { LandingLangToggle } from './components/LandingLangToggle'
 import { LandingAppMockup } from './components/LandingAppMockup'
 import { LandingPlanMockup } from './components/LandingPlanMockup'
+import { LandingProductTour } from './components/LandingProductTour'
 
 const NAVY = '#0F2A4A'
 const LINE = '#e9e5dc'
@@ -46,6 +47,7 @@ html, body { overflow-x: clip; }
 @media (max-width: 960px) {
   .lp-nav-inner,
   .lp-hero-inner,
+  .lp-tour-inner,
   .lp-features-grid,
   .lp-steps,
   .lp-spotlight-inner,
@@ -131,7 +133,35 @@ html, body { overflow-x: clip; }
   .lp-m-kpi-val { font-size: 17px !important; }
   .lp-m-page-header { padding-bottom: 10px !important; margin-bottom: 10px !important; }
 
+  /* Product tour — tabs stay on one scrollable row rather than wrapping to two,
+     which would push the screenshot below the fold on a phone. */
+  .lp-tour-inner { padding: 0 20px !important; }
+  .lp-tour-tabs {
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    justify-content: flex-start !important;
+    margin-bottom: 20px !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .lp-tour-tabs::-webkit-scrollbar { display: none; }
+  .lp-tour-tab { padding: 7px 14px !important; font-size: 12.5px !important; }
+  .lp-tour-caption { font-size: 13.5px !important; margin-top: 18px !important; }
+
+  /* Below this width the <picture> in LandingProductTour swaps to the app's real mobile
+     capture (the breakpoints are kept in sync — see MOBILE_BP there). A desktop browser
+     chrome bar wrapped around a phone screenshot reads as a mistake, so it goes; the
+     frame becomes a plain rounded card sized to the portrait shot. */
+  .lp-tour-chrome { display: none !important; }
+  .lp-tour-frame {
+    border-radius: 14px !important;
+    max-width: 320px !important;
+    margin: 0 auto !important;
+  }
+  .lp-tour-shot { aspect-ratio: 390 / 844 !important; }
+
   /* Section headers */
+  .lp-tour,
   .lp-features,
   .lp-how,
   .lp-spotlight { padding: 64px 0 !important; }
@@ -259,7 +289,7 @@ export default async function HomePage() {
               <span className="lp-logo-wordmark" style={{ fontSize: 19, fontWeight: 700, color: '#fff', letterSpacing: '-0.03em' }}>Cairn</span>
             </Link>
             <div className="lp-nav-links" style={{ display: 'flex', gap: 28 }}>
-              {[['#features', t('navFeatures')], ['#how', t('navHow')], ['#plan', t('navPlan')]].map(([href, label]) => (
+              {[['#tour', t('navTour')], ['#features', t('navFeatures')], ['#how', t('navHow')], ['#plan', t('navPlan')]].map(([href, label]) => (
                 <a key={href} href={href} style={{ fontSize: 13.5, fontWeight: 500, color: 'rgba(255,255,255,0.6)', textDecoration: 'none' }}
                   className="hover:!text-white transition-colors duration-150">{label}</a>
               ))}
@@ -316,6 +346,12 @@ export default async function HomePage() {
             </div>
           </div>
         </section>
+
+        {/* ── Product tour ────────────────────────────────────────────────────────
+            Real screenshots of the running app, one per screen. Sits directly under the
+            hero and keeps the navy backdrop so hero + tour read as one product block —
+            and so the light app UI in the captures pops off the page. */}
+        <LandingProductTour />
 
         {/* ── Features ────────────────────────────────────────────────────────── */}
         <section id="features" className="lp-features" style={{ padding: '96px 0', background: CANVAS }}>
@@ -403,11 +439,14 @@ export default async function HomePage() {
                 className="hover:opacity-90 transition-opacity duration-150">
                 {t('ctaCta1')}
               </Link>
-              <Link href="/auth/login"
+              {/* Was href="/auth/login" while the label promised a demo — a visitor who
+                  clicked to look before committing landed on the login form instead. It
+                  now goes where the product actually is on display. */}
+              <a href="#tour"
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.09)', color: 'rgba(255,255,255,0.82)', fontSize: 13.5, fontWeight: 500, padding: '9px 20px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.14)', textDecoration: 'none', whiteSpace: 'nowrap' }}
                 className="hover:!bg-white/[0.15] transition-colors duration-150">
                 {t('ctaCta2')}
-              </Link>
+              </a>
             </div>
           </div>
         </section>
