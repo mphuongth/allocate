@@ -115,6 +115,66 @@ run the Docker engine **inside WSL2** instead — same containers, still fully l
 `supabase/config.toml` disables services the app doesn't use (studio, analytics,
 realtime, storage, edge functions, inbucket) to keep the stack light.
 
+## Regenerating the product tour screenshots
+
+The landing page's product tour ships real screenshots of the app (`public/tour/*.png`),
+so they have to be re-taken whenever those screens change shape. Two scripts do it: one
+builds a throwaway demo account on a **local** Supabase stack, the other photographs it.
+Both need the local stack from [Running E2E locally](#running-e2e-locally) to be up.
+
+**Regenerating the tour means two seeds, not one.** The demo account's *content* has a
+language of its own — goal names, expense names, member names — and the landing hero sits
+directly above the tour rendering its own goal names from i18n. Seeding once and capturing
+both locales puts "Retirement" in the hero and "Hưu trí" in the image beneath it. So each
+locale gets its own seed pass:
+
+```bash
+# Run the app against the local stack first (NEXT_PUBLIC_SUPABASE_* → 127.0.0.1:54321)
+npm run dev
+
+# Shared env for both passes
+export DEMO_SUPABASE_URL=http://127.0.0.1:54321
+export DEMO_SUPABASE_SERVICE_ROLE_KEY=<service_role key from `supabase start`>
+export DEMO_EMAIL=demo@example.com
+export DEMO_PASSWORD='DemoPass123!'
+export DEMO_TODAY=2026-07-18
+
+# Pass 1 — Vietnamese
+DEMO_LOCALE=vi node scripts/seed-demo-account.mjs
+TOUR_LOCALES=vi node scripts/generate-tour-screenshots.mjs
+
+# Pass 2 — English
+DEMO_LOCALE=en node scripts/seed-demo-account.mjs
+TOUR_LOCALES=en node scripts/generate-tour-screenshots.mjs
+```
+
+The seed deletes and rebuilds the account each time, so re-running is safe and the second
+pass cleanly replaces the first. `DEMO_TODAY` (optional, defaults to today) pins every
+seeded date, so re-running months later still produces the same numbers rather than a
+quietly different set of screenshots — keep it identical across both passes. Each seed
+prints the net worth and goal percentages it just created; the two passes should print the
+same figures in different words.
+
+Fund names (`DC Trái phiếu Việt Nam`, …) stay Vietnamese in both locales — they are real
+funds, and translating them would be a lie.
+
+Together the two passes write **16 images** — 4 screens × 2 locales × 2 viewports:
+
+| | |
+|---|---|
+| Screens | `dashboard`, `planning`, `funds`, `settings` |
+| Locales | `vi`, `en` (interface via the `locale` cookie, see `i18n/request.ts`; content via `DEMO_LOCALE`) |
+| Desktop 1440×900 | `public/tour/{screen}-{locale}.png` |
+| Mobile 390×844 | `public/tour/{screen}-{locale}-mobile.png` |
+
+Both viewports are captured because the tour art-directs rather than scaling — a desktop
+capture shrunk into a phone frame is illegible, and the app has genuinely separate mobile
+components to show instead. The script waits for each screen's real content before firing,
+so a missing seed fails as a timeout rather than a screenshot of a loading skeleton.
+
+The same local stack also backs `npm run generate-screenshots`, which refreshes the two
+PWA install-prompt images (`public/screenshot-{desktop,mobile}.png`) from `/dashboard`.
+
 ## Tech stack
 
 | Concern | Choice |
