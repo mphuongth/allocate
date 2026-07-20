@@ -6,7 +6,7 @@ import ServiceWorkerRegistration from './components/ServiceWorkerRegistration'
 import { NextIntlClientProvider } from 'next-intl'
 import { getMessages, getLocale, getTranslations } from 'next-intl/server'
 import { headers } from 'next/headers'
-import { buildSiteMetadata } from '@/lib/seo'
+import { buildSiteMetadata, buildStructuredData } from '@/lib/seo'
 import './globals.css'
 import { cn } from "@/lib/utils";
 
@@ -47,10 +47,18 @@ export default async function RootLayout({
   // which case React omits the attribute and the inline script runs unrestricted.
   const nonce = (await headers()).get('x-nonce') ?? undefined
 
+  const tMeta = await getTranslations('meta')
+  // Escaped rather than interpolated raw: a `<` in the payload can terminate the <script>
+  // element early, and the strings come from a translation catalogue. Carries the nonce
+  // like the theme script above — browsers do not execute a JSON-LD data block, but the
+  // CSP applies to the element and there is no reason to make it an exception.
+  const structuredData = JSON.stringify(buildStructuredData(locale, tMeta)).replace(/</g, '\\u003c')
+
   return (
     <html lang={locale} suppressHydrationWarning className={cn("font-sans", beVietnamPro.variable, geist.variable)}>
       <head>
         <script nonce={nonce} dangerouslySetInnerHTML={{ __html: `try{var t=localStorage.getItem('theme');if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.classList.add('dark')}}catch(e){}` }} />
+        <script type="application/ld+json" nonce={nonce} dangerouslySetInnerHTML={{ __html: structuredData }} />
       </head>
       <body className={`${beVietnamPro.variable} font-sans antialiased bg-canvas dark:bg-gray-950 text-gray-900 dark:text-gray-100`}>
         <NextIntlClientProvider messages={messages} locale={locale}>
