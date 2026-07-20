@@ -394,7 +394,7 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
   return (
     <>
       <Shell open={open} onClose={onClose} title={t('ledgerTitle')} desktop={desktop} width={880} testId="tx-ledger">
-        <div style={{ display: 'grid', gap: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 14 }}>
           {/* Toolbar */}
           {desktop ? (
             /* Desktop: filters left, actions right */
@@ -431,7 +431,7 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
             </div>
           ) : (
             /* Mobile: actions on top, filters below */
-            <div style={{ display: 'grid', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 12 }}>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button data-testid="tx-ledger-import" onClick={() => { setShowImport(true); setImportRaw(''); setImportRows([]); setImportFundId('') }} className="cn-btn" style={{ flex: 1, minWidth: 0, justifyContent: 'center', fontSize: 12, gap: 5 }}>
                   <Download size={14} />{t('import')}
@@ -441,7 +441,7 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
                 </button>
               </div>
               {(total > 0 || hasFilters) && (
-                <div style={{ display: 'grid', gap: 8 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 8 }}>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <select value={filters.asset_type} onChange={(e) => setSelectFilter('asset_type', e.target.value)} className="cn-input" style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}>
                       <option value="">{t('filterAllAssets')}</option>
@@ -532,7 +532,7 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
                 </div>
               ) : (
                 /* Mobile list */
-                <div style={{ display: 'grid', gap: 8 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 8 }}>
                   {transactions.map((tx) => {
                     const m = dirMeta(tx)
                     return (

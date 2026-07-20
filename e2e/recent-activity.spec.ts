@@ -59,13 +59,22 @@ test.describe('Recent activity — mobile', () => {
   // "mm/dd/yyyy" placeholder like Chrome), so the date filters looked like two
   // empty boxes "off UI". They must carry visible From/To labels like desktop.
   test('mobile date filters show visible From/To labels', async ({ page }) => {
-    const tx = await api.createTransaction({
-      asset_type: 'bank',
-      amount_vnd: 5_000_000,
-      investment_date: new Date().toISOString().slice(0, 10),
-      interest_rate: 5,
-      notes: 'E2E 362 filter',
-    })
+    // Several rows, with names long enough to be worth eliding. The overflow this test
+    // guards is driven by the ROWS' min-content, so a single short-named transaction does
+    // not reproduce it — the assertion below used to pass or fail purely on how much data
+    // earlier specs happened to leave behind on the shared user. Seeding the condition
+    // makes it deterministic.
+    const txs = await Promise.all(
+      Array.from({ length: 6 }, (_, i) =>
+        api.createTransaction({
+          asset_type: 'bank',
+          amount_vnd: 5_000_000 + i,
+          investment_date: new Date().toISOString().slice(0, 10),
+          interest_rate: 5,
+          notes: `E2E 362 filter — long transaction label ${i}`,
+        }),
+      ),
+    )
     try {
       await page.goto('/dashboard')
       await page.waitForLoadState('networkidle')
@@ -84,16 +93,29 @@ test.describe('Recent activity — mobile', () => {
       await expect(ledger.getByText('dd/mm/yyyy')).toHaveCount(2)
       await dateInputs.first().fill('2026-06-19')
       await expect(ledger.getByText('dd/mm/yyyy')).toHaveCount(1)
-      // …and neither overflows the ledger to the right (the clipped 2nd field
-      // in the bug report). Chromium can't reproduce the iOS intrinsic-width
-      // overflow, but this guards the grid layout from gross breakage.
+      // …and nothing in the sheet overflows to the right.
+      //
+      // Widened past the two date fields on purpose. The regression this caught clipped
+      // the Add button and the goal select too: the sheet's grids had no explicit column,
+      // so the implicit `auto` track was floored at the ledger rows' min-content (~445px
+      // against a 358px sheet) and every sibling inherited that width. Measuring only the
+      // date fields understated it, and would miss the same class of break next time.
       const ledgerBox = await ledger.boundingBox()
-      for (let i = 0; i < 2; i++) {
-        const box = await dateInputs.nth(i).boundingBox()
-        expect(box!.x + box!.width).toBeLessThanOrEqual(ledgerBox!.x + ledgerBox!.width + 1)
+      const rightEdge = ledgerBox!.x + ledgerBox!.width + 1
+      const mustFit = [
+        ledger.getByTestId('tx-ledger-add'),
+        ledger.getByTestId('tx-ledger-import'),
+        ledger.locator('select').nth(0),
+        ledger.locator('select').nth(1),
+        dateInputs.nth(0),
+        dateInputs.nth(1),
+      ]
+      for (const el of mustFit) {
+        const box = await el.boundingBox()
+        expect(box!.x + box!.width).toBeLessThanOrEqual(rightEdge)
       }
     } finally {
-      await api.deleteTransactionCascade(tx.transaction_id)
+      for (const tx of txs) await api.deleteTransactionCascade(tx.transaction_id)
     }
   })
 })
