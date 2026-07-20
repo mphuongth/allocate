@@ -74,5 +74,9 @@ export const config = {
   // middleware there only adds a redundant getUser() round-trip to Supabase
   // Auth on each data fetch — and would wrongly redirect unauthenticated API
   // calls to the login HTML instead of returning a 401.
-  matcher: ['/((?!api|_next/static|_next/image|favicon\\.ico|sw\\.js|manifest\\.webmanifest|~offline|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+  // `robots.txt` and `sitemap.xml` are excluded for the same reason as sw.js and the
+  // manifest: they are files for machines, not routes for people. Without them here the
+  // middleware answered every crawler with a 307 to /auth/login, so the files were
+  // unreachable in production no matter what app/robots.ts emitted.
+  matcher: ['/((?!api|_next/static|_next/image|favicon\\.ico|sw\\.js|manifest\\.webmanifest|robots\\.txt|sitemap\\.xml|~offline|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
 }

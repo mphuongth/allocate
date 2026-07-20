@@ -1,4 +1,9 @@
 {
+  "meta": {
+    "title": "Cairn – Quản lý tài sản & lập kế hoạch tài chính cá nhân",
+    "description": "Theo dõi tài sản, quỹ mở, tiền gửi và vàng. Lập kế hoạch đầu tư, nghỉ hưu và đạt mục tiêu tài chính với một dashboard trực quan.",
+    "ogAlt": "Cairn — bảng tổng quan tài sản và tiến độ từng mục tiêu"
+  },
   "addTx": {
     "title": "Thêm giao dịch",
     "editTitle": "Sửa giao dịch",

@@ -1,4 +1,9 @@
 {
+  "meta": {
+    "title": "Cairn – Personal wealth tracking & financial planning",
+    "description": "Track your assets, mutual funds, deposits, and gold. Plan your investments, your retirement, and every financial goal from one clear dashboard.",
+    "ogAlt": "Cairn — net worth overview with per-goal progress"
+  },
   "addTx": {
     "title": "Add transaction",
     "editTitle": "Edit transaction",
