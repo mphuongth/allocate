@@ -46,7 +46,9 @@ test('desktop planning: a DCA fund is grouped under its goal with a Buy action a
 
   // Clicking Buy opens the canonical Add-Transaction sheet (pre-filled), not a
   // mini popup — the asset-type picker (Fund / Bank / Gold) is the giveaway.
-  // The asset-type labels are hard-coded English, so they're locale-proof in CI.
+  // The picker is localized (the app renders `isVi ? 'Vàng' : 'Gold'`), so match both;
+  // the old comment claimed these labels were hard-coded English and the assertion could
+  // not pass against the Vietnamese default locale.
   await desktop.getByRole('button', { name: /Record buy|Ghi nhận mua/i }).first().click()
-  await expect(page.getByRole('button', { name: 'Gold', exact: true })).toBeVisible({ timeout: 5_000 })
+  await expect(page.getByRole('button', { name: /^(Gold|Vàng)$/ })).toBeVisible({ timeout: 5_000 })
 })

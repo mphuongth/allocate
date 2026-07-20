@@ -87,16 +87,26 @@ test.describe('Maturity card — merge-cluster auto-detection', () => {
   test('surfaces the banner even when the close sibling is not itself due yet', async ({ page }) => {
     test.slow()
     const goal = await api.createGoal({ goal_name: 'E2E NotDue Goal', target_amount: 200_000_000 })
-    // D is matured (the only actionable deposit → the anchor). B matures in 4 days
-    // — NOT actionable (won't show its own Handle row), but within D's 7-day merge
-    // window, so it counts as a cluster sibling and the banner still fires.
+    // Two windows are in play and they are both 7 days, which is what the original
+    // fixture missed:
+    //   • actionable  — MATURITY_REMINDER_DAYS from TODAY (lib/maturity.ts)
+    //   • merge window — 7 days between the sibling's and the ANCHOR's maturity
+    // The original dates (D at -1, B at +4) made B 4 days out, i.e. inside the reminder
+    // window, so B was actionable too and the Handle count was always 2 — this test could
+    // never have passed. A matured anchor makes the case impossible: any sibling within 7
+    // days of it is also within 7 days of today. So the anchor is actionable-but-not-yet-
+    // matured instead, which pushes the sibling past the reminder window while keeping it
+    // inside the merge window.
+    //
+    // D at +6: actionable ('maturing'), the only Handle row → the anchor.
+    // B at +12: 12 > 7 so NOT actionable on its own, yet 6 days from D → cluster sibling.
     const D = await api.createTransaction({
       asset_type: 'bank', amount_vnd: 20_000_000, investment_date: iso(-380),
-      interest_rate: 6, expiry_date: iso(-1), goal_id: goal.goal_id, notes: 'E2E NotDue D',
+      interest_rate: 6, expiry_date: iso(6), goal_id: goal.goal_id, notes: 'E2E NotDue D',
     })
     const B = await api.createTransaction({
       asset_type: 'bank', amount_vnd: 7_000_000, investment_date: iso(-200),
-      interest_rate: 6, expiry_date: iso(4), goal_id: goal.goal_id, notes: 'E2E NotDue B',
+      interest_rate: 6, expiry_date: iso(12), goal_id: goal.goal_id, notes: 'E2E NotDue B',
     })
     try {
       await gotoFreshDashboard(page)

@@ -63,7 +63,16 @@ test.describe('Desktop overview layout', () => {
 
       // Shrink to mobile, then back to desktop. Selection should have been cleared,
       // so the right panel reverts to net worth instead of restoring the goal detail.
+      //
+      // The two resizes must not be back-to-back: with nothing awaited between them the
+      // browser can coalesce both into a single frame, so the app never observes the
+      // mobile breakpoint and never runs the clearing effect — the test then fails
+      // claiming a regression that isn't there. It only showed up when the dashboard
+      // carried enough data from earlier specs to slow the re-render down, which is why
+      // this file passed in isolation and failed in the full suite. Waiting for the
+      // mobile layout to actually render makes the crossing real.
       await page.setViewportSize({ width: 390, height: 844 })
+      await expect(page.getByTestId('desktop-overview')).not.toBeVisible({ timeout: 8_000 })
       await page.setViewportSize({ width: 1280, height: 800 })
 
       await expect(page.getByTestId('desktop-net-worth-panel')).toBeVisible({ timeout: 8_000 })
