@@ -33,6 +33,43 @@ export type Locale = (typeof LOCALES)[number]
 /** Open Graph wants a full locale tag, not a bare language code. */
 const OG_LOCALE: Record<Locale, string> = { vi: 'vi_VN', en: 'en_US' }
 
+/** BCP 47, which is what schema.org's inLanguage expects (OG uses underscores instead). */
+const BCP47: Record<Locale, string> = { vi: 'vi-VN', en: 'en-US' }
+
+export function normalizeLocale(locale: string): Locale {
+  return (LOCALES as readonly string[]).includes(locale) ? (locale as Locale) : 'vi'
+}
+
+/**
+ * schema.org JSON-LD for the landing page.
+ *
+ * Metadata tags say how to *display* the page; this says what it *is* — a free finance
+ * app, in this language, on these platforms — which is what earns a rich result rather
+ * than a plain blue link.
+ *
+ * `price: '0'` is deliberate and load-bearing: "is it free?" is the question a visitor has
+ * before signing up, and it is the one thing a search result can answer for them.
+ */
+export function buildStructuredData(locale: string, t: (key: string) => string) {
+  const loc = normalizeLocale(locale)
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'WebApplication',
+    name: 'Cairn',
+    url: `${SITE_URL}/`,
+    description: t('description'),
+    applicationCategory: 'FinanceApplication',
+    operatingSystem: 'Web, iOS, Android',
+    inLanguage: BCP47[loc],
+    image: `${SITE_URL}${OG_IMAGE}`,
+    offers: {
+      '@type': 'Offer',
+      price: '0',
+      priceCurrency: 'VND',
+    },
+  }
+}
+
 /**
  * Builds the site-wide metadata for a locale.
  *
@@ -40,7 +77,7 @@ const OG_LOCALE: Record<Locale, string> = { vi: 'vi_VN', en: 'en_US' }
  * the object is cheaper and catches more than booting Next and scraping its own <head>.
  */
 export function buildSiteMetadata(locale: string, t: (key: string) => string): Metadata {
-  const loc: Locale = (LOCALES as readonly string[]).includes(locale) ? (locale as Locale) : 'vi'
+  const loc = normalizeLocale(locale)
   const title = t('title')
   const description = t('description')
 
