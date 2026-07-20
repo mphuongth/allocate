@@ -11,8 +11,11 @@ test('fund library page shows funds list', async ({ page }) => {
   await page.goto('/funds')
   // Wait for content — don't use networkidle which resolves before React useEffect fires the API call
   // Empty state text is Vietnamese: "Chưa có quỹ nào"
+  // Matched by role rather than by tag: the empty state's heading is an <h3>
+  // (FundsEmptyState), so the old `h2` selector could never resolve and this only ever
+  // passed when the shared E2E user happened to have funds.
   const content = page.locator('table')
-    .or(page.locator('h2').filter({ hasText: /no funds yet|chưa có quỹ/i }))
+    .or(page.getByRole('heading', { name: /no funds yet|chưa có quỹ/i }))
     .or(page.getByText(/failed to load/i))
     .first()
   await expect(content).toBeVisible({ timeout: 20_000 })

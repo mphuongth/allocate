@@ -128,12 +128,15 @@ test.describe('Recent activity — rendered row', () => {
     const card = page.getByTestId('recent-activity')
     await expect(card).toBeVisible({ timeout: 10_000 })
 
-    // The most recent investment surfaces as a "+" signed amount (green), never
-    // a "−". fmtCompact renders 7,654,321 as "7.7M ₫".
-    const row = card.getByTestId('recent-activity-row').first()
+    // An investment surfaces as a "+" signed amount (green), never a "−".
+    // fmtCompact renders 7,654,321 as "7.7M ₫".
+    //
+    // Matched by amount rather than by taking `.first()`: this transaction is dated today,
+    // and so are several seeded by other specs, so "the top row is mine" only held when
+    // this file ran alone. The behaviour under test is the sign, not the ordering.
+    const row = card.getByTestId('recent-activity-row').filter({ hasText: /7\.7M/ })
     await expect(row).toBeVisible({ timeout: 5_000 })
     await expect(row).toContainText('+')
-    await expect(row).toContainText(/7\.7M/)
   })
 })
 
