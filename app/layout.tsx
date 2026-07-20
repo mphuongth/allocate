@@ -4,8 +4,9 @@ import { Toaster } from 'sonner'
 import ThemeProvider from './components/ThemeProvider'
 import ServiceWorkerRegistration from './components/ServiceWorkerRegistration'
 import { NextIntlClientProvider } from 'next-intl'
-import { getMessages, getLocale } from 'next-intl/server'
+import { getMessages, getLocale, getTranslations } from 'next-intl/server'
 import { headers } from 'next/headers'
+import { buildSiteMetadata } from '@/lib/seo'
 import './globals.css'
 import { cn } from "@/lib/utils";
 
@@ -26,18 +27,13 @@ export const viewport: Viewport = {
   ],
 }
 
-export const metadata: Metadata = {
-  title: { template: '%s | Cairn', default: 'Cairn' },
-  description: 'Personal finance, one stone at a time. Plan, track, and grow toward every goal.',
-  manifest: '/manifest.webmanifest',
-  appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Cairn' },
-  icons: {
-    icon: [
-      { url: '/favicon-32.png?v=3', sizes: '32x32', type: 'image/png' },
-      { url: '/icon-192.png?v=3',   sizes: '192x192', type: 'image/png' },
-    ],
-    apple: [{ url: '/apple-touch-icon.png?v=3', sizes: '180x180', type: 'image/png' }],
-  },
+// Localized, because this is the one page crawlers and link scrapers can actually read and
+// the site defaults to Vietnamese. The shape lives in lib/seo.ts so it can be unit-tested
+// without booting Next; see lib/__tests__/seo.test.ts.
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await getLocale()
+  const t = await getTranslations('meta')
+  return buildSiteMetadata(locale, t)
 }
 
 export default async function RootLayout({

@@ -175,6 +175,21 @@ so a missing seed fails as a timeout rather than a screenshot of a loading skele
 The same local stack also backs `npm run generate-screenshots`, which refreshes the two
 PWA install-prompt images (`public/screenshot-{desktop,mobile}.png`) from `/dashboard`.
 
+### The social card
+
+`public/og-image.png` — what Zalo, Messenger, Facebook and X render when someone shares a
+Cairn link — is built from `public/tour/dashboard-vi.png`, so **regenerate it whenever the
+tour is regenerated**:
+
+```bash
+node scripts/generate-og-image.mjs   # no dev server or database needed
+```
+
+It renders through a real browser rather than `next/og` because the copy is Vietnamese and
+the diacritics need proper font shaping with Be Vietnam Pro. The headline lives in the
+script and mirrors `meta.title` / `meta.description` in `messages/vi.json` — edit both
+together, since the script runs outside Next and can't read the catalogue.
+
 ## Tech stack
 
 | Concern | Choice |
