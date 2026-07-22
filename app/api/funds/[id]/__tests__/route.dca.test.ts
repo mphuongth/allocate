@@ -83,6 +83,22 @@ describe('PUT /api/funds/[id] — DCA fields use partial-update semantics (sibli
     expect(await res.json()).toEqual({ error: 'Failed to update fund' })
   })
 
+  it('404s a missing/foreign fund on the regular update path (PGRST116)', async () => {
+    // A zero-row .update().single() surfaces as an error, not null data, so the
+    // route must map it to 404 rather than fall through to a generic 500.
+    h.updateResult = { data: null, error: { code: 'PGRST116', message: 'no rows' } }
+    const res = await PUT(makeReq(baseBody), ctx)
+    expect(res.status).toBe(404)
+    expect(await res.json()).toEqual({ error: 'Fund not found' })
+  })
+
+  it('404s a missing/foreign fund on the disable path (P0002 no_data_found)', async () => {
+    h.rpcResult = { data: null, error: { code: 'P0002', message: 'Fund not found' } }
+    const res = await PUT(makeReq({ ...baseBody, is_dca: false }), ctx)
+    expect(res.status).toBe(404)
+    expect(await res.json()).toEqual({ error: 'Fund not found' })
+  })
+
   it.each([null, 'false', 0])('rejects a non-boolean is_dca value: %j', async (isDca) => {
     const res = await PUT(makeReq({ ...baseBody, is_dca: isDca }), ctx)
     expect(res.status).toBe(400)

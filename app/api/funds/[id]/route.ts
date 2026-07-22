@@ -144,6 +144,15 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (error.code === '23505') {
       return NextResponse.json({ error: 'Code already exists' }, { status: 409 })
     }
+    // Zero rows matched: the regular update path surfaces this as PGRST116 (from
+    // .single()), the disable RPC as P0002 (no_data_found). Both mean the fund
+    // doesn't exist or isn't the caller's — a 404, not a generic 500, and it
+    // avoids disclosing whether a foreign fund exists. (This is why the `if
+    // (!fund)` guard below never fires for the update path — .single() reports a
+    // zero-row result as an error, not null data.)
+    if (error.code === 'P0002' || error.code === 'PGRST116') {
+      return NextResponse.json({ error: 'Fund not found' }, { status: 404 })
+    }
     return NextResponse.json({ error: 'Failed to update fund' }, { status: 500 })
   }
 
