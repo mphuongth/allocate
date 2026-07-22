@@ -145,6 +145,18 @@ export async function POST(request: NextRequest) {
     if (!goal) return NextResponse.json({ error: "You don't have permission to access this goal." }, { status: 403 })
   }
 
+  // Verify fund ownership if provided — a valid UUID isn't proof of ownership,
+  // so a known foreign fund_id can't be linked to this user's transaction (#474).
+  if (cleanFundId) {
+    const { data: fund } = await supabase
+      .from('funds')
+      .select('id')
+      .eq('id', cleanFundId)
+      .eq('user_id', user.id)
+      .single()
+    if (!fund) return NextResponse.json({ error: "You don't have permission to access this fund." }, { status: 403 })
+  }
+
   // Verify plan ownership if provided
   if (cleanPlanId) {
     const { data: plan } = await supabase.from('monthly_plans').select('id').eq('id', cleanPlanId).eq('user_id', user.id).single()

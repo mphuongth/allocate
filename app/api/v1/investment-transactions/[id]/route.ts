@@ -112,6 +112,18 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (!goal) return NextResponse.json({ error: "You don't have permission to access this goal." }, { status: 403 })
   }
 
+  // Verify fund ownership if provided — a valid UUID isn't proof of ownership,
+  // so a known foreign fund_id can't be linked to this user's transaction (#474).
+  if (cleanFundId) {
+    const { data: fund } = await supabase
+      .from('funds')
+      .select('id')
+      .eq('id', cleanFundId)
+      .eq('user_id', user.id)
+      .single()
+    if (!fund) return NextResponse.json({ error: "You don't have permission to access this fund." }, { status: 403 })
+  }
+
   // An accumulating book shares goal + maturity across all tranches. Editing it
   // must update the whole group atomically — doing the row update and the cascade
   // as two separate statements risks a partial failure that splits the book across

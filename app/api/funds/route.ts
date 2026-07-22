@@ -90,6 +90,18 @@ export async function POST(request: NextRequest) {
     throw e
   }
 
+  // A valid-looking UUID isn't proof of ownership: verify the DCA goal is the
+  // caller's before linking it, so a known foreign goal_id can't be attached (#474).
+  if (is_dca === true && dca_goal_id) {
+    const { data: goal } = await supabase
+      .from('savings_goals')
+      .select('goal_id')
+      .eq('goal_id', dca_goal_id)
+      .eq('user_id', user.id)
+      .single()
+    if (!goal) return NextResponse.json({ error: "You don't have permission to access this goal." }, { status: 403 })
+  }
+
   const { data: fund, error } = await supabase
     .from('funds')
     .insert({
