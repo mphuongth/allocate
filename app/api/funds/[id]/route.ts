@@ -45,6 +45,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   const body = await request.json()
   const { name, code, fund_type, nav, nav_source_url, is_dca, dca_monthly_amount_vnd, dca_goal_id } = body
 
+  if (is_dca !== undefined && typeof is_dca !== 'boolean') {
+    return NextResponse.json({ error: 'is_dca must be a boolean' }, { status: 400 })
+  }
+
   if (!name || typeof name !== 'string' || name.trim().length === 0) {
     return NextResponse.json({ error: 'Name is required' }, { status: 400 })
   }
@@ -110,17 +114,44 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     update.dca_goal_id = is_dca === true && dca_goal_id ? dca_goal_id : null
   }
 
-  const { data: fund, error } = await supabase
-    .from('funds')
-    .update(update)
-    .eq('id', id)
-    .eq('user_id', user.id)
-    .select()
-    .single()
+  // Disabling is a cross-table state change: the fund config and every pending
+  // seeded allocation must commit (or roll back) together. The RPC also takes
+  // the same row lock used by plan seeding, so a concurrent plan load cannot
+  // commit a stale pending row after this cleanup finishes.
+  const disablingDca = is_dca === false
+  const result = disablingDca
+    ? await supabase
+        .rpc('disable_fund_dca', {
+          p_fund_id: id,
+          p_name: update.name,
+          p_code: update.code,
+          p_fund_type: update.fund_type,
+          p_nav: update.nav,
+          p_nav_source_url: update.nav_source_url,
+        })
+        .single()
+    : await supabase
+        .from('funds')
+        .update(update)
+        .eq('id', id)
+        .eq('user_id', user.id)
+        .select()
+        .single()
+
+  const { data: fund, error } = result
 
   if (error) {
     if (error.code === '23505') {
       return NextResponse.json({ error: 'Code already exists' }, { status: 409 })
+    }
+    // Zero rows matched: the regular update path surfaces this as PGRST116 (from
+    // .single()), the disable RPC as P0002 (no_data_found). Both mean the fund
+    // doesn't exist or isn't the caller's — a 404, not a generic 500, and it
+    // avoids disclosing whether a foreign fund exists. (This is why the `if
+    // (!fund)` guard below never fires for the update path — .single() reports a
+    // zero-row result as an error, not null data.)
+    if (error.code === 'P0002' || error.code === 'PGRST116') {
+      return NextResponse.json({ error: 'Fund not found' }, { status: 404 })
     }
     return NextResponse.json({ error: 'Failed to update fund' }, { status: 500 })
   }
