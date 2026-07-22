@@ -412,6 +412,20 @@ export async function getPlanDcaRows(planId: string, fundId: string) {
   return data ?? []
 }
 
+// Turn a pending seeded DCA row into a recorded purchase (units + unit_price),
+// mirroring what happens when the user records that month's buy. is_dca_seeded
+// stays true, matching the app's real recorded-DCA row.
+export async function recordDcaBuy(planId: string, fundId: string, units: number, unitPrice: number) {
+  await supabase
+    .from('investment_transactions')
+    .update({ units, unit_price: unitPrice })
+    .eq('plan_id', planId)
+    .eq('fund_id', fundId)
+    .eq('asset_type', 'fund')
+    .eq('is_dca_seeded', true)
+    .is('units', null)
+}
+
 export async function countPlanDcaRows(planId: string, fundId: string): Promise<number> {
   const { count } = await supabase
     .from('investment_transactions')

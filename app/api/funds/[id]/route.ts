@@ -129,6 +129,23 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: 'Fund not found' }, { status: 404 })
   }
 
+  // Turning DCA off must also retire the fund's pending (un-recorded) seeded
+  // allocations from every plan, or they keep counting toward planned totals
+  // even though the fund is no longer a DCA fund (#473). Recorded buys (units
+  // set) are financial history and are left intact. Mirrors the per-plan cleanup
+  // the DCA-skip endpoint does. Best-effort, like that endpoint.
+  const disablingDca = is_dca !== undefined && is_dca !== true
+  if (disablingDca) {
+    await supabase
+      .from('investment_transactions')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('fund_id', id)
+      .eq('asset_type', 'fund')
+      .eq('is_dca_seeded', true)
+      .is('units', null)
+  }
+
   return NextResponse.json(fund)
 }
 
