@@ -27,6 +27,15 @@ export async function GET(request: NextRequest) {
   if (!plan) return NextResponse.json({ error: 'Plan not found for this month' }, { status: 404 })
 
   if (searchParams.get('full') === 'true') {
+    // Auto-seed this plan's DCA rows and sync pending ones to the fund's current
+    // amount/goal — atomically, before we read anything. Folding it into one RPC
+    // (insert-on-conflict + update, in a single transaction) removes the old
+    // read-then-insert race that let two concurrent loads create duplicate DCA
+    // rows, and surfaces a failed write as a 500 instead of silently returning a
+    // half-seeded plan. Because it runs first, the reads below see the result. (#466)
+    const { error: seedError } = await supabase.rpc('seed_and_sync_plan_dca', { p_plan_id: plan.id })
+    if (seedError) return NextResponse.json({ error: 'Failed to seed DCA entries' }, { status: 500 })
+
     const planDateForActive = `${plan.year}-${String(plan.month).padStart(2, '0')}-01`
     const ym = `${plan.year}-${String(plan.month).padStart(2, '0')}`
     const [invRes, savRes, overridesRes, expRes, insRes, exclRes, insOverridesRes, goalsRes, fundsRes, otherExpRes, recSavRes, recSavOverridesRes, dcaSkipsRes, recFulfillmentsRes] = await Promise.all([
@@ -89,61 +98,6 @@ export async function GET(request: NextRequest) {
         .from('recurring_saving_fulfillments')
         .select('recurring_saving_id, amount_vnd, source').eq('user_id', user.id).eq('ym', ym),
     ])
-    // Auto-seed DCA fund entries and keep pending rows in sync with current DCA amount
-    const allFunds = fundsRes.data ?? []
-    const skippedFundIds = new Set((dcaSkipsRes.data ?? []).map((s) => s.fund_id))
-    // Skipped funds are excluded from seeding this month (the skip endpoint also
-    // removes any pending row), so they drop out of the plan until restored.
-    const dcaFunds = allFunds.filter((f) => f.is_dca && f.dca_monthly_amount_vnd && !skippedFundIds.has(f.id))
-    const existingInvestments = invRes.data ?? []
-
-    // Insert rows for DCA funds that have no entry yet for this plan
-    const existingFundIds = new Set(existingInvestments.map((i) => i.fund_id))
-    const missingDca = dcaFunds.filter((f) => !existingFundIds.has(f.id))
-    if (missingDca.length > 0) {
-      const firstOfMonth = `${plan.year}-${String(plan.month).padStart(2, '0')}-01`
-      await supabase.from('investment_transactions').insert(
-        missingDca.map((f) => ({
-          user_id: user.id,
-          plan_id: plan.id,
-          fund_id: f.id,
-          goal_id: f.dca_goal_id ?? null,
-          asset_type: 'fund',
-          amount_vnd: f.dca_monthly_amount_vnd,
-          units: null,
-          unit_price: null,
-          investment_date: firstOfMonth,
-          is_dca_seeded: true,
-        }))
-      )
-    }
-
-    // Keep pending DCA rows in sync with the fund's current DCA amount and goal
-    // (amount changes when DCA is re-toggled; goal changes when dca_goal_id is set).
-    const staleRows = existingInvestments.filter((inv) => {
-      if (!inv.is_dca_seeded || inv.units !== null) return false
-      const fund = dcaFunds.find((f) => f.id === inv.fund_id)
-      return fund && (fund.dca_monthly_amount_vnd !== inv.amount_vnd || (fund.dca_goal_id ?? null) !== (inv.goal_id ?? null))
-    })
-    if (staleRows.length > 0) {
-      await Promise.all(
-        staleRows.map((inv) => {
-          const fund = dcaFunds.find((f) => f.id === inv.fund_id)!
-          return supabase
-            .from('investment_transactions')
-            .update({ amount_vnd: fund.dca_monthly_amount_vnd, goal_id: fund.dca_goal_id ?? null })
-            .eq('transaction_id', inv.transaction_id)
-        })
-      )
-    }
-
-    if (missingDca.length > 0 || staleRows.length > 0) {
-      const { data: refreshed } = await supabase
-        .from('investment_transactions')
-        .select('transaction_id, plan_id, fund_id, goal_id, amount_vnd, units, unit_price, investment_date, is_dca_seeded, funds(name, nav), savings_goals(goal_name)')
-        .eq('plan_id', plan.id).eq('asset_type', 'fund')
-      invRes.data = refreshed
-    }
 
     return NextResponse.json({
       ...plan,
