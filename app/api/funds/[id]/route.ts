@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { validateNavSourceUrl } from '@/lib/scrape-fund-nav'
-import { ValidationError } from '@/lib/validation'
+import { ValidationError, validateAmount } from '@/lib/validation'
 
 const FUND_TYPES = ['balanced', 'equity', 'debt', 'gold'] as const
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -61,7 +61,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: 'Fund type is required' }, { status: 400 })
   }
   const navNum = Number(nav)
-  if (!nav || isNaN(navNum) || navNum < 0.01) {
+  // Number('Infinity') is Infinity and would slip past a bare `< 0.01` check —
+  // require a finite value so it can't reach the DB numeric column.
+  if (!Number.isFinite(navNum) || navNum < 0.01) {
     return NextResponse.json({ error: 'NAV must be greater than 0' }, { status: 400 })
   }
   if (dca_goal_id != null && dca_goal_id !== '' && (typeof dca_goal_id !== 'string' || !UUID_RE.test(dca_goal_id))) {
@@ -91,7 +93,19 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   // DCA toggle/amount/goal handlers always send is_dca, so they're unaffected.
   if (is_dca !== undefined) {
     update.is_dca = is_dca === true
-    update.dca_monthly_amount_vnd = is_dca === true && dca_monthly_amount_vnd ? Number(dca_monthly_amount_vnd) : null
+    // Validate the amount through the shared check (finite, safe integer, and
+    // positive) so junk is a 400, not a DB CHECK violation (500).
+    let dcaAmount: number | null = null
+    if (is_dca === true && dca_monthly_amount_vnd) {
+      try {
+        dcaAmount = validateAmount(dca_monthly_amount_vnd, 'dca_monthly_amount_vnd')
+        if (dcaAmount <= 0) throw new ValidationError('dca_monthly_amount_vnd must be positive')
+      } catch (e) {
+        if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
+        throw e
+      }
+    }
+    update.dca_monthly_amount_vnd = dcaAmount
     // Goal target only applies while DCA is on; cleared otherwise.
     update.dca_goal_id = is_dca === true && dca_goal_id ? dca_goal_id : null
   }

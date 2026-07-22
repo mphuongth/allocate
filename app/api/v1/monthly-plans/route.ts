@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { ValidationError, validateAmount } from '@/lib/validation'
+import { ValidationError, validateAmount, validateInteger } from '@/lib/validation'
 
 export async function GET(request: NextRequest) {
   const supabase = await createSupabaseServerClient()
@@ -15,12 +15,24 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'month and year are required' }, { status: 400 })
   }
 
+  let monthNum: number
+  let yearNum: number
+  try {
+    // Require the entire value to be a valid integer — parseInt('1abc') === 1
+    // would otherwise silently match the wrong plan.
+    monthNum = validateInteger(month, 'month', { min: 1, max: 12 })
+    yearNum = validateInteger(year, 'year', { min: 2000, max: 9999 })
+  } catch (e) {
+    if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
+    throw e
+  }
+
   const { data: plan, error } = await supabase
     .from('monthly_plans')
     .select('*')
     .eq('user_id', user.id)
-    .eq('month', parseInt(month))
-    .eq('year', parseInt(year))
+    .eq('month', monthNum)
+    .eq('year', yearNum)
     .maybeSingle()
 
   if (error) return NextResponse.json({ error: 'Failed to fetch plan' }, { status: 500 })
@@ -134,14 +146,9 @@ export async function POST(request: NextRequest) {
   let cleanSalary: number
 
   try {
-    monthNum = parseInt(month)
-    yearNum = parseInt(year)
-    if (!month || !Number.isFinite(monthNum) || monthNum < 1 || monthNum > 12) {
-      throw new ValidationError('Month must be between 1 and 12')
-    }
-    if (!year || !Number.isFinite(yearNum) || yearNum < 2000 || yearNum > 9999) {
-      throw new ValidationError('Invalid year')
-    }
+    // Whole-integer parse rejects '1abc' etc.; range mirrors the GET handler.
+    monthNum = validateInteger(month, 'month', { min: 1, max: 12 })
+    yearNum = validateInteger(year, 'year', { min: 2000, max: 9999 })
     cleanSalary = validateAmount(salary_vnd, 'salary_vnd')
     if (cleanSalary <= 0) throw new ValidationError('Salary must be positive')
   } catch (e) {

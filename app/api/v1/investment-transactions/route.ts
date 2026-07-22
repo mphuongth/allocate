@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { ValidationError, validateAmount, validateBankCode, validateDate, validateEnum, validateNotes, validateRate, validateUUID } from '@/lib/validation'
+import { ValidationError, validateAmount, validateBankCode, validateDate, validateEnum, validateNotes, validatePositiveIntParam, validateRate, validateUUID } from '@/lib/validation'
 import { isFutureInvestmentDate } from '@/lib/dates'
 
 const ASSET_TYPES = ['fund', 'bank', 'stock', 'gold'] as const
@@ -21,9 +21,17 @@ export async function GET(request: NextRequest) {
   // Renewal history snapshots are excluded by default (so Recent Activity and
   // any future consumer stay clean); the goal-detail History tab opts in.
   const includeHistory = searchParams.get('include_history') === 'true'
-  const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10))
-  const limitParam = parseInt(searchParams.get('limit') ?? '20', 10)
-  const limit = Math.min(Math.max(1, isNaN(limitParam) ? 20 : limitParam), 1000)
+  let page: number
+  let limit: number
+  try {
+    // Only finite positive integers; garbage (page=abc) is a 400, not a NaN
+    // range call. limit is clamped to the documented ceiling of 1000.
+    page = validatePositiveIntParam(searchParams.get('page'), 'page', { fallback: 1 })
+    limit = validatePositiveIntParam(searchParams.get('limit'), 'limit', { fallback: 20, max: 1000 })
+  } catch (e) {
+    if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
+    throw e
+  }
   const offset = (page - 1) * limit
 
   let query = supabase

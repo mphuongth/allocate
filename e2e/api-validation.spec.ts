@@ -109,6 +109,48 @@ test.describe('API input validation', () => {
     }
   })
 
+  // Pagination / month / DCA hardening (#471): junk inputs that used to reach
+  // the DB as NaN ranges, parseInt('1abc') → 1, or CHECK-violating amounts must
+  // now be a clean 400 at the route.
+  test('GET /api/v1/investment-transactions rejects non-integer page (400)', async ({ request }) => {
+    const res = await request.get('/api/v1/investment-transactions?page=abc')
+    expect(res.status()).toBe(400)
+  })
+
+  test('GET /api/v1/investment-transactions rejects a fractional limit (400)', async ({ request }) => {
+    const res = await request.get('/api/v1/investment-transactions?limit=2.5')
+    expect(res.status()).toBe(400)
+  })
+
+  test('GET /api/v1/monthly-plans rejects a mixed-string month (400)', async ({ request }) => {
+    const res = await request.get('/api/v1/monthly-plans?month=1abc&year=2026')
+    expect(res.status()).toBe(400)
+  })
+
+  test('POST /api/v1/monthly-plans rejects a mixed-string month (400)', async ({ request }) => {
+    const res = await request.post('/api/v1/monthly-plans', {
+      data: { month: '1abc', year: 2026, salary_vnd: 30_000_000 },
+    })
+    expect(res.status()).toBe(400)
+  })
+
+  test('POST /api/funds rejects an Infinity NAV (400)', async ({ request }) => {
+    const res = await request.post('/api/funds', {
+      data: { name: 'E2E Inf NAV', code: 'E2EINF', fund_type: 'equity', nav: 'Infinity' },
+    })
+    expect(res.status()).toBe(400)
+  })
+
+  test('POST /api/funds rejects a negative DCA amount (400)', async ({ request }) => {
+    const res = await request.post('/api/funds', {
+      data: {
+        name: 'E2E Neg DCA', code: 'E2ENEG', fund_type: 'equity', nav: 20_000,
+        is_dca: true, dca_monthly_amount_vnd: -5_000_000,
+      },
+    })
+    expect(res.status()).toBe(400)
+  })
+
   // The renewed cycle must have positive length: its new maturity has to fall
   // strictly after its start (investment) date. The client anchors the start to
   // the old maturity, so a hand-edited maturity on or before it must be rejected.
