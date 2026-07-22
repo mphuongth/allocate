@@ -26,13 +26,24 @@ function coerceNumber(val: unknown): number | null {
   return null
 }
 
-export function validateAmount(val: unknown, field: string): number {
+export function validateAmount(
+  val: unknown,
+  field: string,
+  opts: { positive?: boolean; integer?: boolean } = {}
+): number {
   const n = coerceNumber(val)
   if (n === null || !Number.isFinite(n)) {
     throw new ValidationError(`${field} must be a finite number`)
   }
-  if (n < 0) {
+  if (opts.positive) {
+    if (n <= 0) throw new ValidationError(`${field} must be positive`)
+  } else if (n < 0) {
     throw new ValidationError(`${field} must be non-negative`)
+  }
+  // For columns modeled as BIGINT (e.g. dca_monthly_amount_vnd): a fractional
+  // value would otherwise reach the DB and 500 instead of a clean 400.
+  if (opts.integer && !Number.isInteger(n)) {
+    throw new ValidationError(`${field} must be a whole number`)
   }
   if (n > Number.MAX_SAFE_INTEGER) {
     throw new ValidationError(`${field} exceeds maximum allowed value`)
@@ -130,6 +141,52 @@ export function validateYearMonth(val: unknown, field: string): string {
     throw new ValidationError(`${field} has an invalid month`)
   }
   return val
+}
+
+// A whole integer, given as a number or a fully-integer string. Rejects
+// anything parseInt would silently accept (e.g. "1abc" → 1), plus NaN, Infinity,
+// fractional, and unsafe-magnitude values. Optional inclusive [min, max] bounds.
+const INTEGER_RE = /^[+-]?\d+$/
+
+export function validateInteger(
+  val: unknown,
+  field: string,
+  opts: { min?: number; max?: number } = {}
+): number {
+  let n: number
+  if (typeof val === 'number') {
+    n = val
+  } else if (typeof val === 'string' && INTEGER_RE.test(val.trim())) {
+    n = Number(val.trim())
+  } else {
+    throw new ValidationError(`${field} must be an integer`)
+  }
+  if (!Number.isSafeInteger(n)) {
+    throw new ValidationError(`${field} must be an integer`)
+  }
+  if (opts.min !== undefined && n < opts.min) {
+    throw new ValidationError(`${field} must be at least ${opts.min}`)
+  }
+  if (opts.max !== undefined && n > opts.max) {
+    throw new ValidationError(`${field} must be at most ${opts.max}`)
+  }
+  return n
+}
+
+// A pagination-style query param: absent (null/undefined/blank) falls back to
+// `fallback`; a present value must be a positive integer (else ValidationError,
+// so garbage returns 400 rather than silently defaulting). When `max` is given
+// the value is clamped to it — the documented ceiling — instead of rejected.
+export function validatePositiveIntParam(
+  val: unknown,
+  field: string,
+  opts: { fallback: number; max?: number }
+): number {
+  if (val === null || val === undefined || (typeof val === 'string' && val.trim() === '')) {
+    return opts.fallback
+  }
+  const n = validateInteger(val, field, { min: 1 })
+  return opts.max !== undefined ? Math.min(n, opts.max) : n
 }
 
 export function validateEnum<T extends string>(

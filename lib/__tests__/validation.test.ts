@@ -9,6 +9,8 @@ import {
   validateYearMonth,
   validateEnum,
   validateBankCode,
+  validateInteger,
+  validatePositiveIntParam,
   ValidationError,
 } from '../validation'
 
@@ -75,6 +77,24 @@ describe('validateAmount', () => {
     } catch (e) {
       expect((e as ValidationError).message).toContain('salary_vnd')
     }
+  })
+
+  it('with { positive: true } rejects zero and negatives but accepts positives', () => {
+    expect(validateAmount(1, 'dca', { positive: true })).toBe(1)
+    expect(() => validateAmount(0, 'dca', { positive: true })).toThrow(ValidationError)
+    expect(() => validateAmount(-5, 'dca', { positive: true })).toThrow(ValidationError)
+  })
+
+  it('with { integer: true } rejects fractional values (BIGINT columns)', () => {
+    expect(validateAmount(2_000_000, 'dca', { integer: true })).toBe(2_000_000)
+    expect(() => validateAmount(1.5, 'dca', { integer: true })).toThrow(ValidationError)
+    expect(() => validateAmount('1.5', 'dca', { integer: true })).toThrow(ValidationError)
+  })
+
+  it('combines positive + integer for DCA-style amounts', () => {
+    expect(validateAmount('3000000', 'dca', { positive: true, integer: true })).toBe(3_000_000)
+    expect(() => validateAmount(0, 'dca', { positive: true, integer: true })).toThrow(ValidationError)
+    expect(() => validateAmount(1.5, 'dca', { positive: true, integer: true })).toThrow(ValidationError)
   })
 })
 
@@ -237,6 +257,101 @@ describe('validateEnum', () => {
 
   it('rejects non-string values', () => {
     expect(() => validateEnum(123, ['fund', 'bank'] as const, 'asset_type')).toThrow(ValidationError)
+  })
+})
+
+describe('validateInteger', () => {
+  it('accepts a whole number', () => {
+    expect(validateInteger(5, 'month')).toBe(5)
+  })
+
+  it('accepts a whole numeric string', () => {
+    expect(validateInteger('2026', 'year')).toBe(2026)
+  })
+
+  it('accepts a signed integer string and trims whitespace', () => {
+    expect(validateInteger(' -3 ', 'n')).toBe(-3)
+    expect(validateInteger('+7', 'n')).toBe(7)
+  })
+
+  it('rejects a mixed alphanumeric string (e.g. 1abc)', () => {
+    expect(() => validateInteger('1abc', 'month')).toThrow(ValidationError)
+    expect(() => validateInteger('abc', 'month')).toThrow(ValidationError)
+  })
+
+  it('rejects a fractional value (number or string)', () => {
+    expect(() => validateInteger(1.5, 'month')).toThrow(ValidationError)
+    expect(() => validateInteger('1.5', 'month')).toThrow(ValidationError)
+  })
+
+  it('rejects NaN and Infinity', () => {
+    expect(() => validateInteger(NaN, 'month')).toThrow(ValidationError)
+    expect(() => validateInteger(Infinity, 'month')).toThrow(ValidationError)
+    expect(() => validateInteger(-Infinity, 'month')).toThrow(ValidationError)
+    expect(() => validateInteger('Infinity', 'month')).toThrow(ValidationError)
+  })
+
+  it('rejects values beyond the safe-integer range', () => {
+    expect(() => validateInteger(Number.MAX_SAFE_INTEGER + 1, 'n')).toThrow(ValidationError)
+    expect(() => validateInteger('9007199254740993', 'n')).toThrow(ValidationError)
+  })
+
+  it('rejects null, undefined, empty string, and non-numeric types', () => {
+    expect(() => validateInteger(null, 'month')).toThrow(ValidationError)
+    expect(() => validateInteger(undefined, 'month')).toThrow(ValidationError)
+    expect(() => validateInteger('', 'month')).toThrow(ValidationError)
+    expect(() => validateInteger('  ', 'month')).toThrow(ValidationError)
+    expect(() => validateInteger(true, 'month')).toThrow(ValidationError)
+    expect(() => validateInteger({}, 'month')).toThrow(ValidationError)
+  })
+
+  it('enforces the min boundary', () => {
+    expect(validateInteger(1, 'month', { min: 1, max: 12 })).toBe(1)
+    expect(() => validateInteger(0, 'month', { min: 1, max: 12 })).toThrow(ValidationError)
+  })
+
+  it('enforces the max boundary', () => {
+    expect(validateInteger(12, 'month', { min: 1, max: 12 })).toBe(12)
+    expect(() => validateInteger(13, 'month', { min: 1, max: 12 })).toThrow(ValidationError)
+  })
+
+  it('mentions the field name in the error', () => {
+    expect(() => validateInteger('x', 'year')).toThrow(/year/)
+  })
+})
+
+describe('validatePositiveIntParam', () => {
+  it('returns the fallback when the param is absent or empty', () => {
+    expect(validatePositiveIntParam(null, 'page', { fallback: 1 })).toBe(1)
+    expect(validatePositiveIntParam(undefined, 'page', { fallback: 1 })).toBe(1)
+    expect(validatePositiveIntParam('', 'page', { fallback: 1 })).toBe(1)
+    expect(validatePositiveIntParam('   ', 'page', { fallback: 1 })).toBe(1)
+  })
+
+  it('accepts a positive integer string', () => {
+    expect(validatePositiveIntParam('3', 'page', { fallback: 1 })).toBe(3)
+  })
+
+  it('rejects non-integer garbage instead of silently defaulting', () => {
+    expect(() => validatePositiveIntParam('abc', 'page', { fallback: 1 })).toThrow(ValidationError)
+    expect(() => validatePositiveIntParam('1abc', 'page', { fallback: 1 })).toThrow(ValidationError)
+    expect(() => validatePositiveIntParam('NaN', 'page', { fallback: 1 })).toThrow(ValidationError)
+    expect(() => validatePositiveIntParam('Infinity', 'page', { fallback: 1 })).toThrow(ValidationError)
+    expect(() => validatePositiveIntParam('2.5', 'page', { fallback: 1 })).toThrow(ValidationError)
+  })
+
+  it('rejects zero and negative values (must be positive)', () => {
+    expect(() => validatePositiveIntParam('0', 'page', { fallback: 1 })).toThrow(ValidationError)
+    expect(() => validatePositiveIntParam('-5', 'page', { fallback: 1 })).toThrow(ValidationError)
+  })
+
+  it('clamps to the documented max when one is given', () => {
+    expect(validatePositiveIntParam('5000', 'limit', { fallback: 20, max: 1000 })).toBe(1000)
+    expect(validatePositiveIntParam('50', 'limit', { fallback: 20, max: 1000 })).toBe(50)
+  })
+
+  it('does not clamp when no max is given (page can be large)', () => {
+    expect(validatePositiveIntParam('999999', 'page', { fallback: 1 })).toBe(999999)
   })
 })
 

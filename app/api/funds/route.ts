@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { validateNavSourceUrl } from '@/lib/scrape-fund-nav'
-import { ValidationError } from '@/lib/validation'
+import { ValidationError, validateAmount } from '@/lib/validation'
 
 const FUND_TYPES = ['balanced', 'equity', 'debt', 'gold'] as const
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -59,11 +59,26 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Fund type is required' }, { status: 400 })
   }
   const navNum = Number(nav)
-  if (!nav || isNaN(navNum) || navNum < 0.01) {
+  // Number('Infinity') is Infinity and would slip past a bare `< 0.01` check —
+  // require a finite value so it can't reach the DB numeric column.
+  if (!Number.isFinite(navNum) || navNum < 0.01) {
     return NextResponse.json({ error: 'NAV must be greater than 0' }, { status: 400 })
   }
   if (dca_goal_id != null && dca_goal_id !== '' && (typeof dca_goal_id !== 'string' || !UUID_RE.test(dca_goal_id))) {
     return NextResponse.json({ error: 'Invalid goal' }, { status: 400 })
+  }
+  // DCA amount is only stored when DCA is on. Validate by *presence* (not
+  // truthiness) so a provided 0 is rejected rather than silently stored as null
+  // — a positive, whole (BIGINT) amount, else a 400 instead of a DB CHECK / type
+  // error (500). Absent leaves it null (DCA on, amount not yet set).
+  let dcaAmount: number | null = null
+  if (is_dca === true && dca_monthly_amount_vnd != null && dca_monthly_amount_vnd !== '') {
+    try {
+      dcaAmount = validateAmount(dca_monthly_amount_vnd, 'dca_monthly_amount_vnd', { positive: true, integer: true })
+    } catch (e) {
+      if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
+      throw e
+    }
   }
   // Validate the NAV source URL (https + exact vendor-host allowlist) before it
   // is stored and later fetched server-side — prevents SSRF.
@@ -85,7 +100,7 @@ export async function POST(request: NextRequest) {
       nav: navNum,
       nav_source_url: cleanNavUrl,
       is_dca: is_dca === true,
-      dca_monthly_amount_vnd: is_dca === true && dca_monthly_amount_vnd ? Number(dca_monthly_amount_vnd) : null,
+      dca_monthly_amount_vnd: dcaAmount,
       // Goal target only applies while DCA is on; cleared otherwise.
       dca_goal_id: is_dca === true && dca_goal_id ? dca_goal_id : null,
     })
