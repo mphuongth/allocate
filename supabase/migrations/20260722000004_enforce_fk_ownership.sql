@@ -19,6 +19,8 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+declare
+  v_ref uuid;
 begin
   if new.fund_id is not null and not exists (
     select 1 from public.funds where id = new.fund_id and user_id = new.user_id
@@ -32,13 +34,31 @@ begin
     raise exception 'goal_id % does not belong to the transaction owner', new.goal_id
       using errcode = 'check_violation';
   end if;
+  -- Transaction-to-transaction references must stay within one user too, or a
+  -- caller who knows a foreign transaction UUID could point their own row at it.
+  foreach v_ref in array array[
+    new.parent_transaction_id,
+    new.renewed_from_transaction_id,
+    new.merge_anchor_inv_id,
+    new.consumed_by_inv_id
+  ] loop
+    if v_ref is not null and not exists (
+      select 1 from public.investment_transactions where transaction_id = v_ref and user_id = new.user_id
+    ) then
+      raise exception 'referenced transaction % does not belong to the transaction owner', v_ref
+        using errcode = 'check_violation';
+    end if;
+  end loop;
   return new;
 end;
 $$;
 
 drop trigger if exists investment_transactions_fk_ownership on public.investment_transactions;
 create trigger investment_transactions_fk_ownership
-  before insert or update of fund_id, goal_id, user_id on public.investment_transactions
+  before insert or update of
+    fund_id, goal_id, user_id,
+    parent_transaction_id, renewed_from_transaction_id, merge_anchor_inv_id, consumed_by_inv_id
+  on public.investment_transactions
   for each row execute function public.enforce_investment_tx_fk_ownership();
 
 create or replace function public.enforce_funds_fk_ownership()

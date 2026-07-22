@@ -452,7 +452,7 @@ export async function countPlanDcaRows(planId: string, fundId: string): Promise<
 
 // Create a throwaway *second* user and a goal + fund they own, for cross-user
 // ownership tests. Deleting the user (deleteForeignUser) cascades their data.
-export async function createForeignOwned(): Promise<{ userId: string; goalId: string; fundId: string }> {
+export async function createForeignOwned(): Promise<{ userId: string; goalId: string; fundId: string; txId: string }> {
   const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   const { data, error } = await supabase.auth.admin.createUser({
     email: `e2e-foreign-${stamp}@test.invalid`,
@@ -476,7 +476,14 @@ export async function createForeignOwned(): Promise<{ userId: string; goalId: st
     .single()
   if (fundErr || !fund) throw fundErr ?? new Error('Failed to create foreign fund')
 
-  return { userId, goalId: goal.goal_id, fundId: fund.id }
+  const { data: tx, error: txErr } = await supabase
+    .from('investment_transactions')
+    .insert({ user_id: userId, asset_type: 'bank', transaction_type: 'investment', investment_date: '2026-01-01', amount_vnd: 5_000_000 })
+    .select('transaction_id')
+    .single()
+  if (txErr || !tx) throw txErr ?? new Error('Failed to create foreign transaction')
+
+  return { userId, goalId: goal.goal_id, fundId: fund.id, txId: tx.transaction_id }
 }
 
 export async function deleteForeignUser(userId: string) {

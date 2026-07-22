@@ -8,7 +8,7 @@ import * as api from './helpers/api'
 // the routes with the authenticated test user while referencing a *second*
 // user's records, and expect a 403.
 test.describe('FK ownership enforcement (#474)', () => {
-  let foreign: { userId: string; goalId: string; fundId: string }
+  let foreign: { userId: string; goalId: string; fundId: string; txId: string }
   let ownGoalId: string
   let ownFundId: string
 
@@ -59,6 +59,13 @@ test.describe('FK ownership enforcement (#474)', () => {
     } finally {
       await api.deleteTransaction(tx.transaction_id)
     }
+  })
+
+  test('POST /api/v1/investment-transactions rejects a cross-user parent_transaction_id (403)', async ({ request }) => {
+    const res = await request.post('/api/v1/investment-transactions', {
+      data: { transaction_type: 'withdrawal', parent_transaction_id: foreign.txId, amount_vnd: 500_000, principal_withdrawn: 500_000, investment_date: '2026-01-01' },
+    })
+    expect(res.status()).toBe(403)
   })
 
   // ---- funds: dca_goal_id ---------------------------------------------------

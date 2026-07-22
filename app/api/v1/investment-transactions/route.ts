@@ -157,6 +157,21 @@ export async function POST(request: NextRequest) {
     if (!fund) return NextResponse.json({ error: "You don't have permission to access this fund." }, { status: 403 })
   }
 
+  // Same for caller-supplied transaction references — a foreign parent/merge
+  // anchor UUID must not be linkable to this user's row (#474). The DB trigger is
+  // the backstop; this returns a clean 403 instead of a constraint error.
+  for (const refId of [cleanParentTxId, cleanMergeAnchorInvId]) {
+    if (refId) {
+      const { data: ref } = await supabase
+        .from('investment_transactions')
+        .select('transaction_id')
+        .eq('transaction_id', refId)
+        .eq('user_id', user.id)
+        .single()
+      if (!ref) return NextResponse.json({ error: "You don't have permission to access this transaction." }, { status: 403 })
+    }
+  }
+
   // Verify plan ownership if provided
   if (cleanPlanId) {
     const { data: plan } = await supabase.from('monthly_plans').select('id').eq('id', cleanPlanId).eq('user_id', user.id).single()
