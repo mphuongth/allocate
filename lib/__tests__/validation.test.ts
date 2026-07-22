@@ -78,6 +78,24 @@ describe('validateAmount', () => {
       expect((e as ValidationError).message).toContain('salary_vnd')
     }
   })
+
+  it('with { positive: true } rejects zero and negatives but accepts positives', () => {
+    expect(validateAmount(1, 'dca', { positive: true })).toBe(1)
+    expect(() => validateAmount(0, 'dca', { positive: true })).toThrow(ValidationError)
+    expect(() => validateAmount(-5, 'dca', { positive: true })).toThrow(ValidationError)
+  })
+
+  it('with { integer: true } rejects fractional values (BIGINT columns)', () => {
+    expect(validateAmount(2_000_000, 'dca', { integer: true })).toBe(2_000_000)
+    expect(() => validateAmount(1.5, 'dca', { integer: true })).toThrow(ValidationError)
+    expect(() => validateAmount('1.5', 'dca', { integer: true })).toThrow(ValidationError)
+  })
+
+  it('combines positive + integer for DCA-style amounts', () => {
+    expect(validateAmount('3000000', 'dca', { positive: true, integer: true })).toBe(3_000_000)
+    expect(() => validateAmount(0, 'dca', { positive: true, integer: true })).toThrow(ValidationError)
+    expect(() => validateAmount(1.5, 'dca', { positive: true, integer: true })).toThrow(ValidationError)
+  })
 })
 
 describe('validateRate', () => {

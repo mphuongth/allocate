@@ -26,13 +26,24 @@ function coerceNumber(val: unknown): number | null {
   return null
 }
 
-export function validateAmount(val: unknown, field: string): number {
+export function validateAmount(
+  val: unknown,
+  field: string,
+  opts: { positive?: boolean; integer?: boolean } = {}
+): number {
   const n = coerceNumber(val)
   if (n === null || !Number.isFinite(n)) {
     throw new ValidationError(`${field} must be a finite number`)
   }
-  if (n < 0) {
+  if (opts.positive) {
+    if (n <= 0) throw new ValidationError(`${field} must be positive`)
+  } else if (n < 0) {
     throw new ValidationError(`${field} must be non-negative`)
+  }
+  // For columns modeled as BIGINT (e.g. dca_monthly_amount_vnd): a fractional
+  // value would otherwise reach the DB and 500 instead of a clean 400.
+  if (opts.integer && !Number.isInteger(n)) {
+    throw new ValidationError(`${field} must be a whole number`)
   }
   if (n > Number.MAX_SAFE_INTEGER) {
     throw new ValidationError(`${field} exceeds maximum allowed value`)

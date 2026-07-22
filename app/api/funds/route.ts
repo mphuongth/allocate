@@ -67,14 +67,14 @@ export async function POST(request: NextRequest) {
   if (dca_goal_id != null && dca_goal_id !== '' && (typeof dca_goal_id !== 'string' || !UUID_RE.test(dca_goal_id))) {
     return NextResponse.json({ error: 'Invalid goal' }, { status: 400 })
   }
-  // DCA amount is only stored when DCA is on; validate it through the shared
-  // amount check (finite, safe integer) and require it positive, so a negative /
-  // Infinity / NaN value is a 400 rather than a DB CHECK violation (500).
+  // DCA amount is only stored when DCA is on. Validate by *presence* (not
+  // truthiness) so a provided 0 is rejected rather than silently stored as null
+  // — a positive, whole (BIGINT) amount, else a 400 instead of a DB CHECK / type
+  // error (500). Absent leaves it null (DCA on, amount not yet set).
   let dcaAmount: number | null = null
-  if (is_dca === true && dca_monthly_amount_vnd) {
+  if (is_dca === true && dca_monthly_amount_vnd != null && dca_monthly_amount_vnd !== '') {
     try {
-      dcaAmount = validateAmount(dca_monthly_amount_vnd, 'dca_monthly_amount_vnd')
-      if (dcaAmount <= 0) throw new ValidationError('dca_monthly_amount_vnd must be positive')
+      dcaAmount = validateAmount(dca_monthly_amount_vnd, 'dca_monthly_amount_vnd', { positive: true, integer: true })
     } catch (e) {
       if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
       throw e

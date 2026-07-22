@@ -93,13 +93,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   // DCA toggle/amount/goal handlers always send is_dca, so they're unaffected.
   if (is_dca !== undefined) {
     update.is_dca = is_dca === true
-    // Validate the amount through the shared check (finite, safe integer, and
-    // positive) so junk is a 400, not a DB CHECK violation (500).
+    // Validate by *presence* (not truthiness) so a provided 0 is rejected rather
+    // than silently stored as null — a positive, whole (BIGINT) amount, else a
+    // 400 instead of a DB CHECK / type error (500).
     let dcaAmount: number | null = null
-    if (is_dca === true && dca_monthly_amount_vnd) {
+    if (is_dca === true && dca_monthly_amount_vnd != null && dca_monthly_amount_vnd !== '') {
       try {
-        dcaAmount = validateAmount(dca_monthly_amount_vnd, 'dca_monthly_amount_vnd')
-        if (dcaAmount <= 0) throw new ValidationError('dca_monthly_amount_vnd must be positive')
+        dcaAmount = validateAmount(dca_monthly_amount_vnd, 'dca_monthly_amount_vnd', { positive: true, integer: true })
       } catch (e) {
         if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
         throw e

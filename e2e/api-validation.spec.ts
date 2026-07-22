@@ -151,6 +151,16 @@ test.describe('API input validation', () => {
     expect(res.status()).toBe(400)
   })
 
+  test('POST /api/funds rejects a fractional DCA amount — BIGINT column (400)', async ({ request }) => {
+    const res = await request.post('/api/funds', {
+      data: {
+        name: 'E2E Frac DCA', code: 'E2EFRC', fund_type: 'equity', nav: 20_000,
+        is_dca: true, dca_monthly_amount_vnd: 1.5,
+      },
+    })
+    expect(res.status()).toBe(400)
+  })
+
   // The renewed cycle must have positive length: its new maturity has to fall
   // strictly after its start (investment) date. The client anchors the start to
   // the old maturity, so a hand-edited maturity on or before it must be rejected.
