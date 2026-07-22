@@ -12,11 +12,39 @@
 -- states are gone.
 
 -- ---------------------------------------------------------------------------
--- 1) Heal any pre-existing duplicates so the unique index can be created.
---    A fund can legitimately have several *manual* transactions in one plan, so
---    we only touch auto-seeded rows (is_dca_seeded). Among duplicates for a
---    (plan_id, fund_id) we keep the row a user has actually recorded units into
---    if there is one, otherwise the earliest — the extras are the corruption.
+-- 1) Heal any pre-existing duplicates so the unique index can be created,
+--    WITHOUT deleting financial history. A fund can legitimately have several
+--    *manual* transactions in one plan, so we only touch auto-seeded rows
+--    (is_dca_seeded). Within each (plan_id, fund_id) group we keep exactly one
+--    row flagged is_dca_seeded — preferring a row the user has actually recorded
+--    units into (so a real purchase stays the DCA line), else the earliest.
+--
+--    The remaining duplicates are handled by *type*, never blindly deleted:
+--      - a still-pending duplicate (units IS NULL) carries no data and no
+--        withdrawal children, so it is removed;
+--      - a recorded duplicate (units IS NOT NULL) is a real purchase — it is
+--        preserved and merely un-flagged (is_dca_seeded = false), which drops it
+--        from the partial unique index while keeping the transaction (and any
+--        withdrawal referencing it) intact.
+
+-- 1a) Preserve recorded duplicates as ordinary transactions.
+update investment_transactions it
+   set is_dca_seeded = false,
+       updated_at = now()
+  from (
+    select transaction_id,
+           row_number() over (
+             partition by plan_id, fund_id
+             order by (units is not null) desc, created_at asc, transaction_id asc
+           ) as rn
+      from investment_transactions
+     where is_dca_seeded and asset_type = 'fund' and plan_id is not null
+  ) dup
+ where it.transaction_id = dup.transaction_id
+   and dup.rn > 1
+   and it.units is not null;
+
+-- 1b) Remove the leftover pending duplicates (no data, no dependents).
 delete from investment_transactions it
 using (
   select transaction_id,
@@ -25,12 +53,11 @@ using (
            order by (units is not null) desc, created_at asc, transaction_id asc
          ) as rn
     from investment_transactions
-   where is_dca_seeded
-     and asset_type = 'fund'
-     and plan_id is not null
+   where is_dca_seeded and asset_type = 'fund' and plan_id is not null
 ) dup
 where it.transaction_id = dup.transaction_id
-  and dup.rn > 1;
+  and dup.rn > 1
+  and it.units is null;
 
 -- ---------------------------------------------------------------------------
 -- 2) At most one auto-seeded DCA row per (plan, fund). Partial so it never

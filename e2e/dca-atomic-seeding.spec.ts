@@ -16,13 +16,25 @@ test.describe('atomic DCA seeding (#466)', () => {
   let planId: string
   let goalId: string
 
+  const FUND_PREFIX = 'E2E DCA Atomic Fund'
+  const PLAN_MONTH = 11
+  const PLAN_YEAR = 2099
+
   test.beforeEach(async () => {
+    // Sweep anything an interrupted prior run may have left behind, so this
+    // spec never trips over its own leftovers on the fixed plan date / a stale
+    // fund before it reaches the behavior under test.
+    await api.deleteFundsByNamePrefix(FUND_PREFIX)
+    await api.deleteMonthlyPlanByDate(PLAN_MONTH, PLAN_YEAR)
+
     const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
     const goal = await api.createGoal({ goal_name: `E2E DCA Atomic ${stamp}` })
     goalId = goal.goal_id
     const fund = await api.createFund({
-      name: `E2E DCA Atomic Fund ${stamp}`,
-      code: 'E2EDAT',
+      name: `${FUND_PREFIX} ${stamp}`,
+      // Randomized so a leftover fund from a failed teardown can't collide on
+      // the (user_id, code) uniqueness before the sweep above removes it.
+      code: `E2E${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
       fund_type: 'equity',
       nav: 20_000,
       is_dca: true,
@@ -32,7 +44,7 @@ test.describe('atomic DCA seeding (#466)', () => {
     fundId = fund.id
     // A far-future month keeps this plan clear of the shared test user's other
     // specs, which all key off 2026 dates (unique on user_id, month, year).
-    const plan = await api.createMonthlyPlan({ month: 11, year: 2099, salary_vnd: 50_000_000 })
+    const plan = await api.createMonthlyPlan({ month: PLAN_MONTH, year: PLAN_YEAR, salary_vnd: 50_000_000 })
     planId = plan.id
   })
 

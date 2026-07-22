@@ -380,6 +380,17 @@ export async function getFirstFund() {
   return data
 }
 
+export async function deleteFundsByNamePrefix(prefix: string) {
+  const userId = await getTestUserId()
+  const { data } = await supabase.from('funds').select('id').eq('user_id', userId).like('name', `${prefix}%`)
+  for (const f of data ?? []) await deleteFund(f.id)
+}
+
+export async function deleteMonthlyPlanByDate(month: number, year: number) {
+  const userId = await getTestUserId()
+  await supabase.from('monthly_plans').delete().eq('user_id', userId).eq('month', month).eq('year', year)
+}
+
 export async function setFundDca(
   fundId: string,
   patch: { is_dca?: boolean; dca_monthly_amount_vnd?: number | null; dca_goal_id?: string | null },
