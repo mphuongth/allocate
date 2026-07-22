@@ -53,14 +53,16 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   if (fetchError || !plan) return NextResponse.json({ error: 'Salary record not found' }, { status: 404 })
   if (plan.user_id !== user.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // Delete child records, then the plan
-  // investment_transactions.plan_id has ON DELETE SET NULL — no explicit delete needed
-  const overrideDel = await supabase.from('fixed_expense_overrides').delete().eq('plan_id', planId)
-
-  if (overrideDel.error) {
-    return NextResponse.json({ error: 'Failed to delete salary record. Please try again.' }, { status: 500 })
-  }
-
+  // Delete the plan in a single statement and let the database do the rest, so
+  // the whole operation is atomic — a failure rolls back with nothing orphaned.
+  // Every plan-scoped child FK is ON DELETE CASCADE and is retired automatically:
+  //   fixed_expense_overrides, plan_other_expenses, plan_dca_skips,
+  //   recurring_saving_overrides, plan_excluded_insurance_members,
+  //   plan_insurance_member_overrides.
+  // investment_transactions.plan_id is ON DELETE SET NULL, so recorded buys
+  // survive the plan (just unlinked). The old code hand-deleted overrides in a
+  // separate request first, which could lose them if the plan delete then failed
+  // (#472).
   const { error: planError } = await supabase
     .from('monthly_plans')
     .delete()
