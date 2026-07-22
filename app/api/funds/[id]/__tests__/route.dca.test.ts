@@ -1,29 +1,29 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// Capture the payload handed to supabase .update() and stub the auth + query chain.
+// Capture writes and RPC calls while stubbing auth + Supabase query chains.
 const h = vi.hoisted(() => ({
   captured: null as Record<string, unknown> | null,
   user: { id: 'user-1' } as { id: string } | null,
-  result: { data: { id: 'f1' }, error: null } as { data: unknown; error: unknown },
-  // The pending-row cleanup on DCA-disable issues a separate .delete() chain;
-  // capture its filters (null until a delete happens).
-  deleteFilters: null as Record<string, unknown> | null,
-  inDelete: false,
+  updateResult: { data: { id: 'f1' }, error: null } as { data: unknown; error: unknown },
+  rpcResult: { data: { id: 'f1' }, error: null } as { data: unknown; error: unknown },
+  rpcCalls: [] as Array<{ fn: string; args: Record<string, unknown> }>,
 }))
 
 vi.mock('@/lib/supabase-server', () => {
   const chain: Record<string, unknown> = {
     update: (payload: Record<string, unknown>) => { h.captured = payload; return chain },
-    delete: () => { h.inDelete = true; h.deleteFilters = {}; return chain },
     select: () => chain,
-    eq: (col: string, val: unknown) => { if (h.inDelete) h.deleteFilters![col] = val; return chain },
-    is: (col: string, val: unknown) => { if (h.inDelete) h.deleteFilters![col] = val; return chain },
-    single: async () => h.result,
+    eq: () => chain,
+    single: async () => h.updateResult,
   }
   return {
     createSupabaseServerClient: async () => ({
       auth: { getUser: async () => ({ data: { user: h.user } }) },
       from: () => chain,
+      rpc: (fn: string, args: Record<string, unknown>) => {
+        h.rpcCalls.push({ fn, args })
+        return { single: async () => h.rpcResult }
+      },
     }),
   }
 })
@@ -40,9 +40,9 @@ const baseBody = { name: 'VFMVF1 Equity', code: 'VFMVF1', fund_type: 'equity', n
 beforeEach(() => {
   h.captured = null
   h.user = { id: 'user-1' }
-  h.result = { data: { id: 'f1' }, error: null }
-  h.deleteFilters = null
-  h.inDelete = false
+  h.updateResult = { data: { id: 'f1' }, error: null }
+  h.rpcResult = { data: { id: 'f1' }, error: null }
+  h.rpcCalls = []
 })
 
 describe('PUT /api/funds/[id] — DCA fields use partial-update semantics (sibling of #411)', () => {
@@ -56,35 +56,47 @@ describe('PUT /api/funds/[id] — DCA fields use partial-update semantics (sibli
     expect(h.captured).not.toHaveProperty('dca_goal_id')
     expect(h.captured!.name).toBe('VFMVF1 Equity')
     expect(h.captured!.nav).toBe(36120)
-    // Not a disable, so no pending-row cleanup runs.
-    expect(h.deleteFilters).toBeNull()
+    expect(h.rpcCalls).toHaveLength(0)
   })
 
-  it('an explicit is_dca:false still clears the DCA columns', async () => {
-    await PUT(makeReq({ ...baseBody, is_dca: false }), ctx)
-    expect(h.captured!.is_dca).toBe(false)
-    expect(h.captured!.dca_monthly_amount_vnd).toBeNull()
-    expect(h.captured!.dca_goal_id).toBeNull()
+  it('an explicit is_dca:false atomically clears config and pending rows via RPC', async () => {
+    const res = await PUT(makeReq({ ...baseBody, is_dca: false }), ctx)
+    expect(res.status).toBe(200)
+    expect(h.captured).toBeNull()
+    expect(h.rpcCalls).toEqual([{
+      fn: 'disable_fund_dca',
+      args: {
+        p_fund_id: 'f1',
+        p_name: 'VFMVF1 Equity',
+        p_code: 'VFMVF1',
+        p_fund_type: 'equity',
+        p_nav: 36120,
+        p_nav_source_url: null,
+      },
+    }])
   })
 
-  it('disabling DCA retires the fund\'s pending seeded rows, sparing recorded buys (#473)', async () => {
-    await PUT(makeReq({ ...baseBody, is_dca: false }), ctx)
-    // A scoped delete of only this fund's un-recorded seeded rows for this user.
-    expect(h.deleteFilters).toEqual({
-      user_id: 'user-1',
-      fund_id: 'f1',
-      asset_type: 'fund',
-      is_dca_seeded: true,
-      units: null,
-    })
+  it('returns an error instead of reporting success when the atomic disable fails', async () => {
+    h.rpcResult = { data: null, error: { code: 'XX000', message: 'cleanup failed' } }
+    const res = await PUT(makeReq({ ...baseBody, is_dca: false }), ctx)
+    expect(res.status).toBe(500)
+    expect(await res.json()).toEqual({ error: 'Failed to update fund' })
   })
 
-  it('an explicit is_dca:true persists amount + goal and does not delete rows', async () => {
+  it.each([null, 'false', 0])('rejects a non-boolean is_dca value: %j', async (isDca) => {
+    const res = await PUT(makeReq({ ...baseBody, is_dca: isDca }), ctx)
+    expect(res.status).toBe(400)
+    expect(await res.json()).toEqual({ error: 'is_dca must be a boolean' })
+    expect(h.captured).toBeNull()
+    expect(h.rpcCalls).toHaveLength(0)
+  })
+
+  it('an explicit is_dca:true persists amount + goal without calling disable RPC', async () => {
     const goal = '11111111-1111-1111-1111-111111111111'
     await PUT(makeReq({ ...baseBody, is_dca: true, dca_monthly_amount_vnd: 2_000_000, dca_goal_id: goal }), ctx)
     expect(h.captured!.is_dca).toBe(true)
     expect(h.captured!.dca_monthly_amount_vnd).toBe(2_000_000)
     expect(h.captured!.dca_goal_id).toBe(goal)
-    expect(h.deleteFilters).toBeNull()
+    expect(h.rpcCalls).toHaveLength(0)
   })
 })

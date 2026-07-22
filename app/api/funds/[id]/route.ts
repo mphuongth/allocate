@@ -45,6 +45,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   const body = await request.json()
   const { name, code, fund_type, nav, nav_source_url, is_dca, dca_monthly_amount_vnd, dca_goal_id } = body
 
+  if (is_dca !== undefined && typeof is_dca !== 'boolean') {
+    return NextResponse.json({ error: 'is_dca must be a boolean' }, { status: 400 })
+  }
+
   if (!name || typeof name !== 'string' || name.trim().length === 0) {
     return NextResponse.json({ error: 'Name is required' }, { status: 400 })
   }
@@ -110,13 +114,31 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     update.dca_goal_id = is_dca === true && dca_goal_id ? dca_goal_id : null
   }
 
-  const { data: fund, error } = await supabase
-    .from('funds')
-    .update(update)
-    .eq('id', id)
-    .eq('user_id', user.id)
-    .select()
-    .single()
+  // Disabling is a cross-table state change: the fund config and every pending
+  // seeded allocation must commit (or roll back) together. The RPC also takes
+  // the same row lock used by plan seeding, so a concurrent plan load cannot
+  // commit a stale pending row after this cleanup finishes.
+  const disablingDca = is_dca === false
+  const result = disablingDca
+    ? await supabase
+        .rpc('disable_fund_dca', {
+          p_fund_id: id,
+          p_name: update.name,
+          p_code: update.code,
+          p_fund_type: update.fund_type,
+          p_nav: update.nav,
+          p_nav_source_url: update.nav_source_url,
+        })
+        .single()
+    : await supabase
+        .from('funds')
+        .update(update)
+        .eq('id', id)
+        .eq('user_id', user.id)
+        .select()
+        .single()
+
+  const { data: fund, error } = result
 
   if (error) {
     if (error.code === '23505') {
@@ -127,23 +149,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
   if (!fund) {
     return NextResponse.json({ error: 'Fund not found' }, { status: 404 })
-  }
-
-  // Turning DCA off must also retire the fund's pending (un-recorded) seeded
-  // allocations from every plan, or they keep counting toward planned totals
-  // even though the fund is no longer a DCA fund (#473). Recorded buys (units
-  // set) are financial history and are left intact. Mirrors the per-plan cleanup
-  // the DCA-skip endpoint does. Best-effort, like that endpoint.
-  const disablingDca = is_dca !== undefined && is_dca !== true
-  if (disablingDca) {
-    await supabase
-      .from('investment_transactions')
-      .delete()
-      .eq('user_id', user.id)
-      .eq('fund_id', id)
-      .eq('asset_type', 'fund')
-      .eq('is_dca_seeded', true)
-      .is('units', null)
   }
 
   return NextResponse.json(fund)

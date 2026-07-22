@@ -85,4 +85,43 @@ test.describe('disabling DCA removes pending plan allocations (#473)', () => {
     expect(await api.countPlanDcaRows(planPendingId, fundId)).toBe(1)
     expect(await api.countPlanDcaRows(planRecordedId, fundId)).toBe(1)
   })
+
+  test('a concurrent plan seed cannot leave a stale pending row after disable', async ({ request }) => {
+    // Repeat the race with an empty plan. The database row lock makes either
+    // ordering safe: disable cleans a row seeded first, or seed observes the
+    // already-disabled fund and inserts nothing.
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const on = await request.put(`/api/funds/${fundId}`, {
+        data: { ...fundBody, is_dca: true, dca_monthly_amount_vnd: 2_000_000, dca_goal_id: goalId },
+      })
+      expect(on.ok()).toBeTruthy()
+      await api.deletePendingDcaRows(planPendingId, fundId)
+
+      const [seed, off] = await Promise.all([
+        api.rpcSeedPlanDca(planPendingId),
+        request.put(`/api/funds/${fundId}`, { data: { ...fundBody, is_dca: false } }),
+      ])
+
+      expect(seed.error).toBeNull()
+      expect(off.ok()).toBeTruthy()
+      expect(await api.countPlanDcaRows(planPendingId, fundId)).toBe(0)
+    }
+  })
+
+  test('seeding self-heals stale pending rows created before the atomic fix', async () => {
+    // Bypass the route to emulate historical inconsistent state: disabled fund,
+    // but an old pending seeded allocation still exists.
+    await api.setFundDca(fundId, {
+      is_dca: false,
+      dca_monthly_amount_vnd: null,
+      dca_goal_id: null,
+    })
+    expect(await api.countPlanDcaRows(planPendingId, fundId)).toBe(1)
+
+    const seed = await api.rpcSeedPlanDca(planPendingId)
+    expect(seed.error).toBeNull()
+    expect(await api.countPlanDcaRows(planPendingId, fundId)).toBe(0)
+    // A recorded purchase is historical data and must never be reconciled away.
+    expect(await api.countPlanDcaRows(planRecordedId, fundId)).toBe(1)
+  })
 })

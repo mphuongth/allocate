@@ -402,6 +402,20 @@ export async function rpcSeedPlanDca(planId: string) {
   return await supabase.rpc('seed_and_sync_plan_dca', { p_plan_id: planId })
 }
 
+export async function deletePendingDcaRows(planId: string, fundId: string) {
+  const userId = await getTestUserId()
+  const { error } = await supabase
+    .from('investment_transactions')
+    .delete()
+    .eq('user_id', userId)
+    .eq('plan_id', planId)
+    .eq('fund_id', fundId)
+    .eq('asset_type', 'fund')
+    .eq('is_dca_seeded', true)
+    .is('units', null)
+  if (error) throw error
+}
+
 export async function getPlanDcaRows(planId: string, fundId: string) {
   const { data } = await supabase
     .from('investment_transactions')
