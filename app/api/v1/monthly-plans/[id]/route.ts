@@ -60,9 +60,12 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   //   recurring_saving_overrides, plan_excluded_insurance_members,
   //   plan_insurance_member_overrides.
   // investment_transactions.plan_id is ON DELETE SET NULL, so recorded buys
-  // survive the plan (just unlinked). The old code hand-deleted overrides in a
-  // separate request first, which could lose them if the plan delete then failed
-  // (#472).
+  // survive the plan (just unlinked), while a BEFORE DELETE trigger on
+  // monthly_plans removes the plan's *pending* seeded DCA rows (is_dca_seeded,
+  // units IS NULL) — planning state that must not outlive the plan. Both run in
+  // the same transaction as the delete, so the whole thing stays atomic. The old
+  // code hand-deleted overrides in a separate request first, which could lose
+  // them if the plan delete then failed (#472).
   const { error: planError } = await supabase
     .from('monthly_plans')
     .delete()
