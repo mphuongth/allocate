@@ -379,3 +379,45 @@ export async function getFirstFund() {
   if (error) return null
   return data
 }
+
+export async function deleteFundsByNamePrefix(prefix: string) {
+  const userId = await getTestUserId()
+  const { data } = await supabase.from('funds').select('id').eq('user_id', userId).like('name', `${prefix}%`)
+  for (const f of data ?? []) await deleteFund(f.id)
+}
+
+export async function deleteMonthlyPlanByDate(month: number, year: number) {
+  const userId = await getTestUserId()
+  await supabase.from('monthly_plans').delete().eq('user_id', userId).eq('month', month).eq('year', year)
+}
+
+export async function setFundDca(
+  fundId: string,
+  patch: { is_dca?: boolean; dca_monthly_amount_vnd?: number | null; dca_goal_id?: string | null },
+) {
+  await supabase.from('funds').update(patch).eq('id', fundId)
+}
+
+export async function rpcSeedPlanDca(planId: string) {
+  return await supabase.rpc('seed_and_sync_plan_dca', { p_plan_id: planId })
+}
+
+export async function getPlanDcaRows(planId: string, fundId: string) {
+  const { data } = await supabase
+    .from('investment_transactions')
+    .select('transaction_id, amount_vnd, goal_id, is_dca_seeded, units')
+    .eq('plan_id', planId)
+    .eq('fund_id', fundId)
+    .eq('asset_type', 'fund')
+  return data ?? []
+}
+
+export async function countPlanDcaRows(planId: string, fundId: string): Promise<number> {
+  const { count } = await supabase
+    .from('investment_transactions')
+    .select('transaction_id', { count: 'exact', head: true })
+    .eq('plan_id', planId)
+    .eq('fund_id', fundId)
+    .eq('asset_type', 'fund')
+  return count ?? 0
+}
