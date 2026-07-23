@@ -5,6 +5,39 @@
 // the two surfaces keep their own confirm-UI / toast copy while the request
 // logic lives once.
 
+// Edit-goal save. Unlike the boolean helpers below, both edit forms show the
+// server's error message inline, so this returns the response-body `error` (and a
+// `networkError` flag for a thrown fetch). `date` is optional: the mobile form has
+// no date field and omits it, so `target_date` must be left out of the body
+// entirely in that case — passing it as null would clear an existing date.
+export type GoalUpdateResult = { ok: boolean; error?: string; networkError?: boolean }
+
+export async function updateGoal(
+  goalId: string,
+  fields: { name: string; target: number | null; date?: string | null },
+): Promise<GoalUpdateResult> {
+  const body: Record<string, unknown> = { goal_name: fields.name, target_amount: fields.target }
+  if (fields.date !== undefined) body.target_date = fields.date
+  try {
+    const res = await fetch(`/api/v1/savings-goals/${goalId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) {
+      try {
+        const { error } = await res.json()
+        return { ok: false, error: typeof error === 'string' ? error : undefined }
+      } catch {
+        return { ok: false }
+      }
+    }
+    return { ok: true }
+  } catch {
+    return { ok: false, networkError: true }
+  }
+}
+
 export async function deleteGoal(goalId: string): Promise<boolean> {
   try {
     const res = await fetch(`/api/v1/savings-goals/${goalId}`, { method: 'DELETE' })

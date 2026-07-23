@@ -19,7 +19,7 @@ import { fmtTxDate, txKind } from './transactionUtils'
 import { TxRowsSkeleton } from './Skeletons'
 import LoadError from './LoadError'
 import { useGoalDetailData } from './useGoalDetailData'
-import { deleteGoal, unholdTransaction, unassignInvestment } from './goalActions'
+import { deleteGoal, unholdTransaction, unassignInvestment, updateGoal } from './goalActions'
 import { invToSellItem } from './invToSellItem'
 
 interface Props {
@@ -280,22 +280,9 @@ function EditGoalSheet({
     if (!name.trim()) { setError(isVI ? 'Tên mục tiêu là bắt buộc' : 'Goal name is required'); return }
     setSaving(true)
     setError('')
-    try {
-      const res = await fetch(`/api/v1/savings-goals/${goal.goalId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ goal_name: name.trim(), target_amount: target ? Number(target) : null }),
-      })
-      if (!res.ok) {
-        const { error: e } = await res.json()
-        setError(e ?? (isVI ? 'Không thể lưu' : 'Could not save'))
-      } else {
-        onSaved()
-        onClose()
-      }
-    } catch {
-      setError(isVI ? 'Lỗi kết nối' : 'Connection error')
-    }
+    const r = await updateGoal(goal.goalId, { name: name.trim(), target: target ? Number(target) : null })
+    if (!r.ok) setError(r.networkError ? (isVI ? 'Lỗi kết nối' : 'Connection error') : (r.error ?? (isVI ? 'Không thể lưu' : 'Could not save')))
+    else { onSaved(); onClose() }
     setSaving(false)
   }
 
