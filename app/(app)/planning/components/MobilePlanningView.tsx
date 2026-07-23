@@ -18,6 +18,7 @@ import { useDialogA11y, useCloseOnScroll } from './useDialogA11y'
 import { type GoalRow, type GoalItem } from '@/lib/planning'
 import { usePlanningDerivations } from '../usePlanningDerivations'
 import { usePlanningActions, buildBuyEdit, buildContributionPrefill } from '../usePlanningActions'
+import { saveIncome, deletePlan, saveOtherExpense } from '../planActions'
 import { relationshipLabel } from '@/app/assets/components/insuranceShared'
 import { MobilePlanningSkeleton } from './PlanningSkeleton'
 import type {
@@ -153,29 +154,20 @@ function SalarySheet({
     if (!value || isNaN(num) || num <= 0) { setError(isVI ? 'Vui lòng nhập thu nhập hợp lệ' : 'Please enter a valid income'); return }
     setError('')
     setSaving(true)
-    try {
-      if (plan) {
-        const res = await fetch(`/api/v1/monthly-plans/${plan.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ salary_vnd: num }),
-        })
-        if (!res.ok) { const { error: e } = await res.json(); setError(e ?? 'Error'); setSaving(false); return }
-        onRefresh()
-        onToast(isVI ? 'Đã lưu thu nhập' : 'Income saved')
-      } else {
-        const res = await fetch('/api/v1/monthly-plans', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ month, year, salary_vnd: num }),
-        })
-        if (!res.ok) { const { error: e } = await res.json(); setError(e ?? 'Error'); setSaving(false); return }
-        const newPlan = await res.json()
-        onPlanCreated(newPlan)
-        onToast(isVI ? 'Đã thêm thu nhập' : 'Income set')
-      }
-      onClose()
-    } catch { setError(isVI ? 'Lỗi kết nối' : 'Connection error') }
+    const r = await saveIncome({ planId: plan?.id, month, year, salaryVnd: num })
+    if (!r.ok) {
+      setError(r.networkError ? (isVI ? 'Lỗi kết nối' : 'Connection error') : (r.error ?? 'Error'))
+      setSaving(false)
+      return
+    }
+    if (plan) {
+      onRefresh()
+      onToast(isVI ? 'Đã lưu thu nhập' : 'Income saved')
+    } else {
+      onPlanCreated(r.data as MonthlyPlan)
+      onToast(isVI ? 'Đã thêm thu nhập' : 'Income set')
+    }
+    onClose()
     setSaving(false)
   }
 
@@ -247,10 +239,8 @@ function DeletePlanSheet({
 
   async function handleDelete() {
     setDeleting(true)
-    try {
-      const res = await fetch(`/api/v1/monthly-plans/${planId}`, { method: 'DELETE' })
-      if (res.ok) { onPlanDeleted(); onClose(); onToast(isVI ? 'Đã xoá kế hoạch' : 'Plan deleted') }
-    } catch {}
+    const r = await deletePlan(planId)
+    if (r.ok) { onPlanDeleted(); onClose(); onToast(isVI ? 'Đã xoá kế hoạch' : 'Plan deleted') }
     setDeleting(false)
   }
 
@@ -322,20 +312,15 @@ function OtherExpenseSheet({
     if (!amount || isNaN(num) || num <= 0) { setError(isVI ? 'Vui lòng nhập số tiền hợp lệ' : 'Please enter a valid amount'); return }
     setError('')
     setSaving(true)
-    const url = existing
-      ? `/api/v1/monthly-plans/${planId}/other-expenses/${existing.id}`
-      : `/api/v1/monthly-plans/${planId}/other-expenses`
-    try {
-      const res = await fetch(url, {
-        method: existing ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ description: desc.trim(), amount_vnd: num }),
-      })
-      if (!res.ok) { const { error: e } = await res.json(); setError(e ?? 'Error'); setSaving(false); return }
-      onRefresh()
-      onToast(existing ? (isVI ? 'Đã cập nhật' : 'Updated') : (isVI ? 'Đã thêm' : 'Added'))
-      onClose()
-    } catch { setError(isVI ? 'Lỗi kết nối' : 'Connection error') }
+    const r = await saveOtherExpense({ planId, id: existing?.id, description: desc.trim(), amountVnd: num })
+    if (!r.ok) {
+      setError(r.networkError ? (isVI ? 'Lỗi kết nối' : 'Connection error') : (r.error ?? 'Error'))
+      setSaving(false)
+      return
+    }
+    onRefresh()
+    onToast(existing ? (isVI ? 'Đã cập nhật' : 'Updated') : (isVI ? 'Đã thêm' : 'Added'))
+    onClose()
     setSaving(false)
   }
 
