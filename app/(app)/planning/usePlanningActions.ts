@@ -116,12 +116,16 @@ export function usePlanningActions(ctx: PlanningActionsCtx) {
     const res = await fetch(`/api/v1/monthly-plans/${plan.id}/excluded-insurance/${member.member_id}`, { method: 'DELETE' }).catch(() => null)
     if (!res?.ok) return fail()
     // Also drop any per-plan override so a restored member starts from its base
-    // premium rather than a stale overridden amount.
+    // premium rather than a stale overridden amount. A failure here must NOT
+    // report success — otherwise the member reads as restored while still using
+    // the old override (mirrors the fixed/recurring restore paths).
     const oRes = await fetch(`/api/v1/monthly-plans/${plan.id}/insurance-overrides`).catch(() => null)
-    if (oRes?.ok) {
-      const overrides: Array<{ id: string; member_id: string }> = await oRes.json()
-      const match = overrides.find(o => o.member_id === member.member_id)
-      if (match) await fetch(`/api/v1/monthly-plans/${plan.id}/insurance-overrides/${match.id}`, { method: 'DELETE' }).catch(() => null)
+    if (!oRes?.ok) return fail()
+    const overrides: Array<{ id: string; member_id: string }> = await oRes.json()
+    const match = overrides.find(o => o.member_id === member.member_id)
+    if (match) {
+      const del = await fetch(`/api/v1/monthly-plans/${plan.id}/insurance-overrides/${match.id}`, { method: 'DELETE' }).catch(() => null)
+      if (!del?.ok) return fail()
     }
     done(isVI ? `Đã khôi phục ${member.member_name}` : `Restored ${member.member_name}`)
   }

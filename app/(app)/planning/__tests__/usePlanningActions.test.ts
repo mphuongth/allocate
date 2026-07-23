@@ -82,6 +82,20 @@ describe('usePlanningActions (#467 shared planning actions)', () => {
     expect(onToast).toHaveBeenCalledWith('Restored Me')
   })
 
+  it('restoreInsurance fails (no success toast) when clearing the override errors', async () => {
+    const { actions, onRefresh, onToast } = setup()
+    mockFetch((url, init) => {
+      // Exclusion removal + the overrides GET succeed; the override DELETE fails.
+      if (url.includes('/insurance-overrides/') && init?.method === 'DELETE') return { ok: false }
+      if (url.includes('/insurance-overrides') && init?.method !== 'DELETE') return { ok: true, body: [{ id: 'io1', member_id: 'm1' }] }
+      return { ok: true }
+    })
+    await actions.restoreInsurance({ member_id: 'm1', member_name: 'Me' } as never)
+    expect(toastErrorMock).toHaveBeenCalled()
+    expect(onRefresh).not.toHaveBeenCalled()
+    expect(onToast).not.toHaveBeenCalled()
+  })
+
   it('saveOverride routes each type to its own endpoint and returns true', async () => {
     const { actions, onToast } = setup()
     const calls = mockFetch(() => ({ ok: true }))
