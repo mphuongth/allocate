@@ -13,6 +13,7 @@ import { fmtTxDate, txKind } from './transactionUtils'
 import { TxRowsSkeleton } from './Skeletons'
 import LoadError from './LoadError'
 import { useGoalDetailData } from './useGoalDetailData'
+import { deleteGoal, unholdTransaction, unassignInvestment } from './goalActions'
 import { todayIso } from '@/lib/dates'
 
 interface Props {
@@ -78,53 +79,27 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
 
   async function handleDelete() {
     setIsDeleting(true)
-    try {
-      const res = await fetch(`/api/v1/savings-goals/${goal.goalId}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('delete failed')
-      setDeleteOpen(false)
-      onDataChanged()
-    } catch {
+    const ok = await deleteGoal(goal.goalId)
+    setIsDeleting(false)
+    if (!ok) {
       // Keep the confirm modal open so the user can retry; don't claim success.
       toast.error(isVi ? 'Không thể xoá mục tiêu' : "Couldn't delete goal")
-    } finally {
-      setIsDeleting(false)
+      return
     }
+    setDeleteOpen(false)
+    onDataChanged()
   }
 
   async function handleUnassign() {
     if (!actionInv) return
     setUnassigning(true)
-    try {
-      if (actionInv.fund) {
-        const res = await fetch(`/api/v1/fund-investments?fund_id=${actionInv.fund.fundId}`)
-        if (!res.ok) throw new Error('fetch failed')
-        const data = await res.json() as { investments?: Array<{ id: string }> }
-        const investments = data.investments ?? []
-        const results = await Promise.all(investments.map((fi) =>
-          fetch(`/api/v1/fund-investments/${fi.id}/goal`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ goal_id: null }),
-          })
-        ))
-        if (results.some((r) => !r.ok)) throw new Error('unassign failed')
-      } else {
-        const res = await fetch(`/api/v1/investment-transactions/${actionInv.id}/assign`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ goal_id: null }),
-        })
-        if (!res.ok) throw new Error('unassign failed')
-      }
-      setUnassignedIds((prev) => [...prev, actionInv.id])
-      setShowUnassignConfirm(false)
-      setActionInv(null)
-      onDataChanged()
-    } catch {
-      toast.error(isVi ? 'Không thể huỷ liên kết' : "Couldn't unassign")
-    } finally {
-      setUnassigning(false)
-    }
+    const ok = await unassignInvestment(actionInv)
+    setUnassigning(false)
+    if (!ok) { toast.error(isVi ? 'Không thể huỷ liên kết' : "Couldn't unassign"); return }
+    setUnassignedIds((prev) => [...prev, actionInv.id])
+    setShowUnassignConfirm(false)
+    setActionInv(null)
+    onDataChanged()
   }
 
   const isPos = goal.profitLoss >= 0
@@ -160,15 +135,10 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
   const [unholdingId, setUnholdingId] = useState<string | null>(null)
   async function handleUnhold(heldTxId: string) {
     setUnholdingId(heldTxId)
-    try {
-      const res = await fetch(`/api/v1/investment-transactions/${heldTxId}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('unhold failed')
-      onDataChanged()
-    } catch {
-      toast.error(isVi ? 'Không thể bỏ chờ gộp' : "Couldn't cancel the merge hold")
-    } finally {
-      setUnholdingId(null)
-    }
+    const ok = await unholdTransaction(heldTxId)
+    setUnholdingId(null)
+    if (!ok) { toast.error(isVi ? 'Không thể bỏ chờ gộp' : "Couldn't cancel the merge hold"); return }
+    onDataChanged()
   }
 
   return (
