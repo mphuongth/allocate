@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo, useRef } from 'react'
+import React, { useState, useRef } from 'react'
 import {
   ChevronLeft, ChevronRight, ChevronDown, ChevronUp,
   Target, Shield, ShoppingCart,
@@ -17,7 +17,9 @@ import AddTransactionSheet, { type EditableTransaction, type PrefillTransaction 
 import RecurringBookTopUpSheet, { type BookTopUpTarget } from '@/app/assets/components/RecurringBookTopUpSheet'
 import AddInsuranceMemberModal from '@/app/assets/components/AddInsuranceMemberModal'
 import { useDialogA11y, useCloseOnScroll } from './useDialogA11y'
-import { buildByGoal, resolveRecurringSavings, DEPOSIT_BACKED_FULFILLMENT_SOURCES, type GoalItem } from '@/lib/planning'
+import { type GoalItem } from '@/lib/planning'
+import { usePlanningDerivations } from '../usePlanningDerivations'
+import { usePlanningActions, buildBuyEdit, buildContributionPrefill } from '../usePlanningActions'
 import { relationshipLabel } from '@/app/assets/components/insuranceShared'
 import type {
   MonthlyPlan, FundInvestment, DirectSaving, FixedExpense,
@@ -25,20 +27,6 @@ import type {
 } from '../PlanningClient'
 
 // ─── Pure helpers ─────────────────────────────────────────────────────────────
-
-function getFixedTotal(fixedExpenses: FixedExpense[]) {
-  return fixedExpenses.reduce((s, e) => {
-    if (e.override === 0) return s
-    return s + (e.override ?? e.amount_vnd)
-  }, 0)
-}
-
-function getInsTotal(insuranceMembers: InsuranceMember[]) {
-  return insuranceMembers.reduce((s, m) => {
-    if (m.excluded) return s
-    return s + (m.monthlyOverride ?? Math.round(m.annual_payment_vnd / 12))
-  }, 0)
-}
 
 const SHORT_MONTHS_EN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 const SHORT_MONTHS_VI = ['Th1','Th2','Th3','Th4','Th5','Th6','Th7','Th8','Th9','Th10','Th11','Th12']
@@ -488,48 +476,17 @@ export default function DesktopPlanningView({
   const [prefillTx, setPrefillTx] = useState<PrefillTransaction | null>(null)
   const [bookTopUp, setBookTopUp] = useState<BookTopUpTarget | null>(null)
 
-  // ── Derived values ──
-  const goalsById = useMemo(() => new Map(goals.map(g => [g.goal_id, g.goal_name])), [goals])
-  const resolvedRecurring = useMemo(
-    () => resolveRecurringSavings(recurringSavings, recurringSavingOverrides),
-    [recurringSavings, recurringSavingOverrides],
-  )
-  // Skipped DCA funds are no longer seeded as rows, so synthesize struck-through
-  // lines from the fund config + the plan's skip list.
-  const skippedDcaInvestments = useMemo(() => {
-    const skipped = new Set(dcaSkips.map(s => s.fund_id))
-    return funds
-      .filter(f => f.is_dca && f.dca_monthly_amount_vnd && skipped.has(f.id))
-      .map(f => ({
-        goal_id: f.dca_goal_id ?? null,
-        amount_vnd: f.dca_monthly_amount_vnd as number,
-        is_dca_seeded: true,
-        skipped: true,
-        fund_id: f.id,
-        funds: { name: f.name },
-      }))
-  }, [funds, dcaSkips])
-  const fulfillments = useMemo(
-    () => new Map(recurringFulfillments.map(f => [f.recurring_saving_id, {
-      amount: f.amount_vnd,
-      countedAsDeposit: DEPOSIT_BACKED_FULFILLMENT_SOURCES.has(f.source),
-    }])),
-    [recurringFulfillments],
-  )
-  const byGoal = useMemo(
-    () => buildByGoal([...investments, ...skippedDcaInvestments], savings, resolvedRecurring, goalsById, {
-      unallocated: isVI ? 'Chưa phân bổ' : 'Unallocated',
-    }, fulfillments),
-    [investments, skippedDcaInvestments, savings, resolvedRecurring, goalsById, isVI, fulfillments],
-  )
-  const totalGoalAmount = byGoal.reduce((s, g) => s + g.totalAllocated, 0)
-  const contributedTotal = byGoal.reduce((s, g) => s + g.contributed, 0)
-  const fixedTotal = useMemo(() => getFixedTotal(fixedExpenses), [fixedExpenses])
-  const insTotal   = useMemo(() => getInsTotal(insuranceMembers), [insuranceMembers])
-  const otherTotal = otherExpenses.reduce((s, o) => s + o.amount_vnd, 0)
-  const totalOutflow = totalGoalAmount + fixedTotal + insTotal + otherTotal
-  const remaining    = plan ? plan.salary_vnd - totalOutflow : 0
-  const savedPct     = plan && plan.salary_vnd > 0 ? Math.round(totalGoalAmount / plan.salary_vnd * 100) : 0
+  // ── Derived values ── (shared with the mobile view via usePlanningDerivations)
+  const {
+    byGoal,
+    totalGoals: totalGoalAmount, contributedTotal,
+    totalFixed: fixedTotal, totalInsurance: insTotal, totalOther: otherTotal,
+    totalOutflow, remaining,
+  } = usePlanningDerivations({
+    plan, investments, savings, fixedExpenses, insuranceMembers, otherExpenses,
+    recurringSavings, recurringSavingOverrides, recurringFulfillments, dcaSkips, funds, goals, isVI,
+  })
+  const savedPct = plan && plan.salary_vnd > 0 ? Math.round(totalGoalAmount / plan.salary_vnd * 100) : 0
 
   const shortMonths = isVI ? SHORT_MONTHS_VI : SHORT_MONTHS_EN
   const longMonths  = isVI ? LONG_MONTHS_VI  : LONG_MONTHS_EN
@@ -539,6 +496,9 @@ export default function DesktopPlanningView({
   const isCurrentMonth = month === todayD.getMonth() + 1 && year === todayD.getFullYear()
 
   // ── API handlers ──
+  // Skip/restore/override/record actions are shared with the mobile view via
+  // usePlanningActions so a fix lands on both surfaces (#467).
+  const actions = usePlanningActions({ plan, month, year, isVI, onRefresh, onToast })
 
   async function handleSetIncome() {
     const num = Number(incomeVal)
@@ -580,156 +540,34 @@ export default function DesktopPlanningView({
     } finally { setSaving(false) }
   }
 
-  async function handleFESkip(fe: FixedExpense) {
-    if (!plan) return
-    const res = await fetch(`/api/v1/monthly-plans/${plan.id}/fixed-expense-overrides`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fixed_expense_id: fe.expense_id, monthly_amount_override_vnd: 0 }),
-    }).catch(() => null)
-    if (!res?.ok) { toast.error(failMsg); return }
-    onRefresh(); onToast(isVI ? `Đã bỏ qua ${fe.expense_name}` : `Skipped ${fe.expense_name}`)
-  }
-
-  async function handleFERestore(fe: FixedExpense) {
-    if (!plan) return
-    const res = await fetch(`/api/v1/monthly-plans/${plan.id}/fixed-expense-overrides`).catch(() => null)
-    if (!res?.ok) { toast.error(failMsg); return }
-    const overrides: Array<{ id: string; fixed_expense_id: string }> = await res.json()
-    const match = overrides.find(o => o.fixed_expense_id === fe.expense_id)
-    if (match) {
-      const del = await fetch(`/api/v1/monthly-plans/${plan.id}/fixed-expense-overrides/${match.id}`, { method: 'DELETE' }).catch(() => null)
-      if (!del?.ok) { toast.error(failMsg); return }
-    }
-    onRefresh(); onToast(isVI ? `Đã khôi phục ${fe.expense_name}` : `Restored ${fe.expense_name}`)
-  }
-
-  async function handleInsSkip(m: InsuranceMember) {
-    if (!plan) return
-    const res = await fetch(`/api/v1/monthly-plans/${plan.id}/excluded-insurance`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: m.member_id }),
-    }).catch(() => null)
-    if (!res?.ok) { toast.error(failMsg); return }
-    onRefresh(); onToast(isVI ? `Đã bỏ qua ${m.member_name}` : `Skipped ${m.member_name}`)
-  }
-
-  async function handleInsRestore(m: InsuranceMember) {
-    if (!plan) return
-    const res = await fetch(`/api/v1/monthly-plans/${plan.id}/excluded-insurance/${m.member_id}`, { method: 'DELETE' }).catch(() => null)
-    if (!res?.ok) { toast.error(failMsg); return }
-    const oRes = await fetch(`/api/v1/monthly-plans/${plan.id}/insurance-overrides`)
-    if (oRes.ok) {
-      const overrides: Array<{ id: string; member_id: string }> = await oRes.json()
-      const match = overrides.find(o => o.member_id === m.member_id)
-      if (match) await fetch(`/api/v1/monthly-plans/${plan.id}/insurance-overrides/${match.id}`, { method: 'DELETE' })
-    }
-    onRefresh(); onToast(isVI ? `Đã khôi phục ${m.member_name}` : `Restored ${m.member_name}`)
-  }
-
-  async function handleRecSkip(item: { recurringId?: string; name: string }) {
-    if (!plan || !item.recurringId) return
-    const res = await fetch(`/api/v1/monthly-plans/${plan.id}/recurring-saving-overrides`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ recurring_saving_id: item.recurringId, monthly_amount_override_vnd: 0 }),
-    }).catch(() => null)
-    if (!res?.ok) { toast.error(failMsg); return }
-    onRefresh(); onToast(isVI ? `Đã bỏ qua ${item.name}` : `Skipped ${item.name}`)
-  }
-
-  async function handleRecRestore(item: { recurringId?: string; name: string }) {
-    if (!plan || !item.recurringId) return
-    const res = await fetch(`/api/v1/monthly-plans/${plan.id}/recurring-saving-overrides`).catch(() => null)
-    if (!res?.ok) { toast.error(failMsg); return }
-    const overrides: Array<{ id: string; recurring_saving_id: string }> = await res.json()
-    const match = overrides.find(o => o.recurring_saving_id === item.recurringId)
-    if (match) {
-      const del = await fetch(`/api/v1/monthly-plans/${plan.id}/recurring-saving-overrides/${match.id}`, { method: 'DELETE' }).catch(() => null)
-      if (!del?.ok) { toast.error(failMsg); return }
-    }
-    onRefresh(); onToast(isVI ? `Đã khôi phục ${item.name}` : `Restored ${item.name}`)
-  }
-
-  async function handleDcaSkip(item: { fundId?: string | null; name: string }) {
-    if (!plan || !item.fundId) return
-    const res = await fetch(`/api/v1/monthly-plans/${plan.id}/dca-skips`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fund_id: item.fundId }),
-    }).catch(() => null)
-    if (!res?.ok) { toast.error(failMsg); return }
-    onRefresh(); onToast(isVI ? `Đã bỏ qua ${item.name}` : `Skipped ${item.name}`)
-  }
-
-  async function handleDcaRestore(item: { fundId?: string | null; name: string }) {
-    if (!plan || !item.fundId) return
-    const res = await fetch(`/api/v1/monthly-plans/${plan.id}/dca-skips/${item.fundId}`, { method: 'DELETE' }).catch(() => null)
-    if (!res?.ok) { toast.error(failMsg); return }
-    onRefresh(); onToast(isVI ? `Đã khôi phục ${item.name}` : `Restored ${item.name}`)
-  }
+  const handleFESkip = actions.skipFixedExpense
+  const handleFERestore = actions.restoreFixedExpense
+  const handleInsSkip = actions.skipInsurance
+  const handleInsRestore = actions.restoreInsurance
+  const handleRecSkip = actions.skipRecurring
+  const handleRecRestore = actions.restoreRecurring
+  const handleDcaSkip = actions.skipDca
+  const handleDcaRestore = actions.restoreDca
 
   function openBuy(transactionId?: string) {
-    if (!transactionId) return
-    const inv = investments.find(i => i.transaction_id === transactionId)
-    if (!inv) return
-    setBuyEdit({
-      transaction_id: inv.transaction_id,
-      asset_type: 'fund',
-      investment_date: inv.investment_date ?? new Date().toISOString().slice(0, 10),
-      amount_vnd: inv.amount_vnd,
-      unit_price: inv.unit_price,
-      units: inv.units,
-      interest_rate: null,
-      expiry_date: null,
-      notes: null,
-      fund_id: inv.fund_id,
-      goal_id: inv.goal_id,
-    })
+    const edit = buildBuyEdit(transactionId, investments)
+    if (edit) setBuyEdit(edit)
   }
 
   // Open the Add-Transaction sheet in create mode, pre-filled toward a goal.
   // Used by the goal-header "+" (log any contribution) and the recurring-bank
   // "Saved" pill (record this month's deposit at the planned amount).
   function openContribution(g: { goalId: string; isUnallocated: boolean }, prefill?: Partial<PrefillTransaction>) {
-    setPrefillTx({
-      goal_id: g.isUnallocated ? null : g.goalId,
-      plan_id: plan?.id ?? null,
-      investment_date: new Date().toISOString().slice(0, 10),
-      ...prefill,
-    })
+    setPrefillTx(buildContributionPrefill(g, plan?.id ?? null, prefill))
   }
 
-  // The recurring "Saved" pill. If the recurring is linked to an accumulating
-  // book, open the prefilled top-up sheet (tranche + fulfillment). A MATURED book
-  // can't be topped up — steer the user to handle its maturity rather than silently
-  // logging an unrelated standalone deposit. Otherwise log a standalone contribution.
+  // The recurring "Saved" pill: the shared probe decides between opening the
+  // book top-up sheet, logging a standalone contribution, or (matured book) a
+  // steer-to-maturity toast.
   async function recordRecurring(g: { goalId: string; isUnallocated: boolean }, item: GoalItem) {
-    if (item.linkedDepositTxId && item.recurringId && plan) {
-      try {
-        const res = await fetch(`/api/v1/investment-transactions/${item.linkedDepositTxId}`)
-        if (res.ok) {
-          const dep = await res.json()
-          const isBookAnchor = dep.deposit_group_id && dep.deposit_group_id === dep.transaction_id
-          if (isBookAnchor) {
-            const matured = dep.expiry_date && dep.expiry_date < new Date().toISOString().slice(0, 10)
-            if (matured) {
-              onToast(isVI ? 'Sổ đã đáo hạn — hãy xử lý đáo hạn trước.' : 'This book has matured — handle its maturity first.')
-              return
-            }
-            setBookTopUp({
-              savingId: item.recurringId, bookId: dep.transaction_id,
-              bookName: dep.notes || (isVI ? 'Sổ ngân hàng' : 'Bank deposit'),
-              ym: `${year}-${String(month).padStart(2, '0')}`, planId: plan.id,
-              amount: item.amount, rate: dep.interest_rate ?? null,
-            })
-            return
-          }
-        }
-      } catch { /* fall through to the standard contribution */ }
-    }
-    openContribution(g, { asset_type: 'bank', amount_vnd: item.amount })
+    const result = await actions.probeRecurringRecord(item)
+    if (result.kind === 'book-topup') setBookTopUp(result.target)
+    else if (result.kind === 'contribution') openContribution(g, { asset_type: 'bank', amount_vnd: item.amount })
   }
 
   async function handleSaveOverride() {
@@ -738,20 +576,8 @@ export default function DesktopPlanningView({
     if (!overrideVal || isNaN(num) || num <= 0) return
     setSaving(true)
     try {
-      const url = overrideModal.type === 'fe'
-        ? `/api/v1/monthly-plans/${plan.id}/fixed-expense-overrides`
-        : overrideModal.type === 'rec'
-          ? `/api/v1/monthly-plans/${plan.id}/recurring-saving-overrides`
-          : `/api/v1/monthly-plans/${plan.id}/insurance-overrides`
-      const body = overrideModal.type === 'fe'
-        ? { fixed_expense_id: overrideModal.id, monthly_amount_override_vnd: num }
-        : overrideModal.type === 'rec'
-          ? { recurring_saving_id: overrideModal.id, monthly_amount_override_vnd: num }
-          : { member_id: overrideModal.id, monthly_amount_override_vnd: num }
-      const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => null)
-      if (!res?.ok) { toast.error(failMsg); return }
-      setOverrideModal(null)
-      onRefresh(); onToast(isVI ? 'Đã lưu' : 'Saved')
+      const ok = await actions.saveOverride({ type: overrideModal.type, id: overrideModal.id, amount: num })
+      if (ok) setOverrideModal(null)
     } finally { setSaving(false) }
   }
 
