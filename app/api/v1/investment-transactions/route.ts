@@ -243,6 +243,18 @@ export async function POST(request: NextRequest) {
   if (cleanHeldForMerge && !resolvedHeldTargetGoalId) {
     return NextResponse.json({ error: 'A held-for-merge settlement must resolve a target goal.' }, { status: 400 })
   }
+  // The held target goal is an app-managed goal reference (no physical FK), so a
+  // caller-supplied merge_target_goal_id must be verified for ownership too — a
+  // foreign target would strand the parked cash in another user's goal (#474).
+  if (cleanHeldForMerge && resolvedHeldTargetGoalId) {
+    const { data: goal } = await supabase
+      .from('savings_goals')
+      .select('goal_id')
+      .eq('goal_id', resolvedHeldTargetGoalId)
+      .eq('user_id', user.id)
+      .single()
+    if (!goal) return NextResponse.json({ error: "You don't have permission to access this goal." }, { status: 403 })
+  }
 
   const { data: transaction, error } = await supabase
     .from('investment_transactions')

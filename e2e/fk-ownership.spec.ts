@@ -68,6 +68,13 @@ test.describe('FK ownership enforcement (#474)', () => {
     expect(res.status()).toBe(403)
   })
 
+  test('POST /api/v1/investment-transactions rejects a cross-user merge_target_goal_id (403)', async ({ request }) => {
+    const res = await request.post('/api/v1/investment-transactions', {
+      data: { transaction_type: 'withdrawal', held_for_merge: true, merge_target_goal_id: foreign.goalId, amount_vnd: 500_000, principal_withdrawn: 500_000, investment_date: '2026-01-01' },
+    })
+    expect(res.status()).toBe(403)
+  })
+
   // ---- funds: dca_goal_id ---------------------------------------------------
   test('POST /api/funds rejects a cross-user dca_goal_id (403)', async ({ request }) => {
     const res = await request.post('/api/funds', {

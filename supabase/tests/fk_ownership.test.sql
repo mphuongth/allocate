@@ -86,6 +86,24 @@ begin
     begin update public.investment_transactions set consumed_by_inv_id = v_tx_a where transaction_id = v_tx;
     exception when others then v_raised := true; end;
     if not v_raised then raise exception 'cross-user consumed_by_inv_id must be rejected'; end if;
+
+    -- merge_target_goal_id is an app-managed goal reference; A's goal is off-limits.
+    v_raised := false;
+    begin update public.investment_transactions set merge_target_goal_id = v_goal_a where transaction_id = v_tx;
+    exception when others then v_raised := true; end;
+    if not v_raised then raise exception 'cross-user merge_target_goal_id must be rejected'; end if;
+  end;
+
+  -- plan_id references monthly_plans; B's row must not point at A's plan.
+  declare v_plan_a uuid; v_tx2 uuid;
+  begin
+    insert into public.monthly_plans (user_id, month, year, salary_vnd) values (v_a, 5, 2099, 50000000) returning id into v_plan_a;
+    insert into public.investment_transactions (user_id, asset_type, transaction_type, investment_date, amount_vnd)
+      values (v_b, 'bank', 'investment', '2099-01-01', 1000000) returning transaction_id into v_tx2;
+    v_raised := false;
+    begin update public.investment_transactions set plan_id = v_plan_a where transaction_id = v_tx2;
+    exception when others then v_raised := true; end;
+    if not v_raised then raise exception 'cross-user plan_id must be rejected'; end if;
   end;
 
   -- 5) Legitimate same-owner references must succeed (no exception).

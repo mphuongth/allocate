@@ -28,12 +28,22 @@ begin
     raise exception 'fund_id % does not belong to the transaction owner', new.fund_id
       using errcode = 'check_violation';
   end if;
-  if new.goal_id is not null and not exists (
-    select 1 from public.savings_goals where goal_id = new.goal_id and user_id = new.user_id
+  if new.plan_id is not null and not exists (
+    select 1 from public.monthly_plans where id = new.plan_id and user_id = new.user_id
   ) then
-    raise exception 'goal_id % does not belong to the transaction owner', new.goal_id
+    raise exception 'plan_id % does not belong to the transaction owner', new.plan_id
       using errcode = 'check_violation';
   end if;
+  -- goal_id and merge_target_goal_id are both savings-goal references (the latter
+  -- an app-managed one, not a physical FK) that must stay within one user.
+  foreach v_ref in array array[new.goal_id, new.merge_target_goal_id] loop
+    if v_ref is not null and not exists (
+      select 1 from public.savings_goals where goal_id = v_ref and user_id = new.user_id
+    ) then
+      raise exception 'goal reference % does not belong to the transaction owner', v_ref
+        using errcode = 'check_violation';
+    end if;
+  end loop;
   -- Transaction-to-transaction references must stay within one user too, or a
   -- caller who knows a foreign transaction UUID could point their own row at it.
   foreach v_ref in array array[
@@ -56,7 +66,7 @@ $$;
 drop trigger if exists investment_transactions_fk_ownership on public.investment_transactions;
 create trigger investment_transactions_fk_ownership
   before insert or update of
-    fund_id, goal_id, user_id,
+    fund_id, goal_id, merge_target_goal_id, plan_id, user_id,
     parent_transaction_id, renewed_from_transaction_id, merge_anchor_inv_id, consumed_by_inv_id
   on public.investment_transactions
   for each row execute function public.enforce_investment_tx_fk_ownership();
