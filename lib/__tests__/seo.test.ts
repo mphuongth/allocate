@@ -67,7 +67,9 @@ describe('buildSiteMetadata — social sharing', () => {
   })
 
   it('carries a Twitter summary card', () => {
-    const tw = buildSiteMetadata('vi', translator('vi')).twitter!
+    // Next's `Twitter` type is a union whose base member has no `card`; narrow to
+    // the discriminated card shape the builder actually produces.
+    const tw = buildSiteMetadata('vi', translator('vi')).twitter as { card: string; title?: unknown }
     expect(tw.card).toBe('summary_large_image')
     expect(tw.title).toBeTruthy()
   })

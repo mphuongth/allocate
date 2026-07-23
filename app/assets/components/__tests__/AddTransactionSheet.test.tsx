@@ -11,7 +11,7 @@ vi.mock('next-intl', () => ({
 beforeEach(() => {
   mockLocale = 'en'
   document.body.style.overflow = ''
-  vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ json: () => Promise.resolve([]) })))
+  vi.stubGlobal('fetch', vi.fn((_url?: string, _init?: RequestInit) => Promise.resolve({ json: () => Promise.resolve([]) })))
 })
 
 describe('AddTransactionSheet — background scroll lock (issue #219)', () => {
@@ -58,7 +58,7 @@ describe('AddTransactionSheet — background scroll lock (issue #219)', () => {
 
 describe('AddTransactionSheet — sell holdings load error vs empty', () => {
   it('shows a retry state (not "no holdings") when the holdings fetch fails', async () => {
-    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: false, json: () => Promise.resolve({}) })))
+    vi.stubGlobal('fetch', vi.fn((_url?: string, _init?: RequestInit) => Promise.resolve({ ok: false, json: () => Promise.resolve({}) })))
 
     render(<AddTransactionSheet open onClose={vi.fn()} />)
     fireEvent.click(screen.getByRole('button', { name: 'sell' }))
@@ -71,7 +71,7 @@ describe('AddTransactionSheet — sell holdings load error vs empty', () => {
     // Key off the overview URL — the sheet fires other fetches on open that
     // would otherwise consume a blind call counter.
     let overviewCalls = 0
-    vi.stubGlobal('fetch', vi.fn((url: string) => {
+    vi.stubGlobal('fetch', vi.fn((url: string, _init?: RequestInit) => {
       if (String(url).includes('/dashboard/overview')) {
         overviewCalls += 1
         if (overviewCalls === 1) return Promise.resolve({ ok: false, json: () => Promise.resolve({}) })
@@ -97,7 +97,7 @@ describe('AddTransactionSheet — goal selector (issue #232)', () => {
   // /api/v1/savings-goals returns { goals: [...] }, not a bare array — the goal
   // selector must read that shape or it stays empty/hidden.
   it('populates the goal select from the { goals } API shape', async () => {
-    const fetchMock = vi.fn((url: string) => {
+    const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
       if (String(url).includes('/savings-goals')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ goals: [{ goal_id: 'g1', goal_name: 'House Fund' }] }) })
       }
@@ -117,7 +117,7 @@ describe('AddTransactionSheet — sell flow (issue #232)', () => {
       goals: [{ goalName: 'Goal A', funds: [{ fundId: 'f1', fundName: 'VESAF', quantity: 100, currentNAV: 20000, currentValue: 2_000_000, purchasePrice: 18000, profitLossPercentage: 11.11 }] }],
       unallocated: { funds: [], nonFunds: [] },
     }
-    const fetchMock = vi.fn((url: string) => {
+    const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
       if (String(url).includes('/dashboard/overview')) return Promise.resolve({ ok: true, json: () => Promise.resolve(overview) })
       if (String(url).includes('/savings-goals')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ goals: [] }) })
       return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
@@ -151,7 +151,7 @@ describe('AddTransactionSheet — fund sell units field (two-way linked)', () =>
       goals: [{ goalName: 'Goal A', funds: [{ fundId: 'f1', fundName: 'VESAF', quantity: 100, currentNAV: 20000, currentValue: 2_000_000, purchasePrice: 18000, profitLossPercentage: 11.11 }] }],
       unallocated: { funds: [], nonFunds: [] },
     }
-    const fetchMock = vi.fn((url: string) => {
+    const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
       if (String(url).includes('/dashboard/overview')) return Promise.resolve({ ok: true, json: () => Promise.resolve(overview) })
       if (String(url).includes('/savings-goals')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ goals: [] }) })
       return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
@@ -183,7 +183,7 @@ describe('AddTransactionSheet — bank withdraw (received + principal portion)',
       goals: [{ goalName: 'Goal A', funds: [], nonFunds: [{ transactionId: 't1', type: 'bank', amount: 5_000_000, currentValue: 5_200_000, interestRate: 6, units: null, notes: 'Techcombank' }] }],
       unallocated: { funds: [], nonFunds: [] },
     }
-    const fetchMock = vi.fn((url: string) => {
+    const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
       if (String(url).includes('/dashboard/overview')) return Promise.resolve({ ok: true, json: () => Promise.resolve(overview) })
       if (String(url).includes('/savings-goals')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ goals: [] }) })
       return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
@@ -216,7 +216,7 @@ describe('AddTransactionSheet — sell lists goal-allocated bank/gold (issue #23
       goals: [{ goalName: 'Goal A', funds: [], nonFunds: [{ transactionId: 't1', type: 'bank', amount: 5_000_000, currentValue: 5_200_000, interestRate: 6, units: null, notes: 'Techcombank' }] }],
       unallocated: { funds: [], nonFunds: [] },
     }
-    const fetchMock = vi.fn((url: string) => {
+    const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
       if (String(url).includes('/dashboard/overview')) return Promise.resolve({ ok: true, json: () => Promise.resolve(overview) })
       if (String(url).includes('/savings-goals')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ goals: [] }) })
       return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
@@ -238,7 +238,7 @@ describe('AddTransactionSheet — gold sell (quantity × price) (issue #232)', (
       goals: [],
       unallocated: { funds: [], nonFunds: [{ transactionId: 'g1', type: 'gold', amount: 9_000_000, currentValue: 9_200_000, interestRate: null, units: 1, notes: 'PNJ' }] },
     }
-    const fetchMock = vi.fn((url: string) => {
+    const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
       if (String(url).includes('/dashboard/overview')) return Promise.resolve({ ok: true, json: () => Promise.resolve(overview) })
       if (String(url).includes('/savings-goals')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ goals: [] }) })
       return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
@@ -268,7 +268,7 @@ describe('AddTransactionSheet — gold sell (quantity × price) (issue #232)', (
 })
 
 describe('AddTransactionSheet — editable NAV on a fund buy', () => {
-  const fundsAndGoals = (url: string) => {
+  const fundsAndGoals = (url: string, _init?: RequestInit) => {
     if (String(url).includes('/funds')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve([{ id: 'f1', name: 'VESAF', nav: 20000, code: 'VES', fund_type: 'equity' }]) })
     }
@@ -330,7 +330,7 @@ describe('AddTransactionSheet — bank term interest receivable (issue #245)', (
   // The box should show the interest the user actually receives by maturity,
   // prorated over the deposit term — not the full-year interest.
   it('prorates interest to the maturity date instead of showing interest/yr', () => {
-    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve([]) }))
+    const fetchMock = vi.fn((_url?: string, _init?: RequestInit) => Promise.resolve({ ok: true, json: () => Promise.resolve([]) }))
     vi.stubGlobal('fetch', fetchMock)
 
     const { container } = render(<AddTransactionSheet open onClose={vi.fn()} />)
@@ -354,7 +354,7 @@ describe('AddTransactionSheet — bank term interest receivable (issue #245)', (
   })
 
   it('hides the interest box until a maturity date is set', () => {
-    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve([]) }))
+    const fetchMock = vi.fn((_url?: string, _init?: RequestInit) => Promise.resolve({ ok: true, json: () => Promise.resolve([]) }))
     vi.stubGlobal('fetch', fetchMock)
 
     render(<AddTransactionSheet open onClose={vi.fn()} />)
@@ -370,7 +370,7 @@ describe('AddTransactionSheet — bank term interest receivable (issue #245)', (
 describe('AddTransactionSheet — gold unit (issue #232)', () => {
   // Gold is valued per chỉ, so a lượng entry must be normalized: 1 lượng = 10 chỉ.
   it('normalizes a lượng entry to chỉ on save', async () => {
-    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve([]) }))
+    const fetchMock = vi.fn((_url?: string, _init?: RequestInit) => Promise.resolve({ ok: true, json: () => Promise.resolve([]) }))
     vi.stubGlobal('fetch', fetchMock)
 
     render(<AddTransactionSheet open onClose={vi.fn()} onSaved={vi.fn()} />)
@@ -499,7 +499,7 @@ describe('AddTransactionSheet — structured bank (bank_code)', () => {
 
 describe('AddTransactionSheet — prefill create mode (plan contribution)', () => {
   it('posts a new bank deposit carrying plan_id and goal_id', async () => {
-    const fetchMock = vi.fn((url: string) => {
+    const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
       if (String(url).includes('/savings-goals')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ goals: [{ goal_id: 'g1', goal_name: 'Retirement' }] }) })
       return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
     })

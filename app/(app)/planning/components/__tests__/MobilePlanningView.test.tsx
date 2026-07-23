@@ -445,7 +445,7 @@ describe('MobilePlanningView — recurring savings in By goal', () => {
 
   it('opens the full Add-Transaction sheet (not the mini popup) when Buy is clicked', async () => {
     // The canonical Add-Transaction sheet fetches funds + goals on open.
-    const fetchMock = vi.fn((url: string) =>
+    const fetchMock = vi.fn((url: string, _init?: RequestInit) =>
       Promise.resolve({
         ok: true,
         json: () => Promise.resolve(String(url).includes('savings-goals') ? { goals: [] } : []),
@@ -478,7 +478,7 @@ describe('MobilePlanningView — recurring savings in By goal', () => {
   })
 
   it('opens the Add-Transaction sheet when the goal "+" is clicked', async () => {
-    const fetchMock = vi.fn((url: string) =>
+    const fetchMock = vi.fn((url: string, _init?: RequestInit) =>
       Promise.resolve({
         ok: true,
         json: () => Promise.resolve(String(url).includes('savings-goals') ? { goals: [] } : []),
@@ -552,7 +552,7 @@ describe('MobilePlanningView — save error feedback (no false success)', () => 
   ]
 
   it('fixed-expense override failure shows an error toast and keeps the sheet open', async () => {
-    const fetchMock = vi.fn(() => Promise.resolve({ ok: false, json: () => Promise.resolve({ error: 'boom' }) }))
+    const fetchMock = vi.fn((_url?: string, _init?: RequestInit) => Promise.resolve({ ok: false, json: () => Promise.resolve({ error: 'boom' }) }))
     vi.stubGlobal('fetch', fetchMock)
     toastErrorMock.mockClear()
     const onToast = vi.fn()
@@ -571,7 +571,7 @@ describe('MobilePlanningView — save error feedback (no false success)', () => 
   })
 
   it('skip failure shows an error toast and does not report success', async () => {
-    const fetchMock = vi.fn(() => Promise.resolve({ ok: false, json: () => Promise.resolve({ error: 'boom' }) }))
+    const fetchMock = vi.fn((_url?: string, _init?: RequestInit) => Promise.resolve({ ok: false, json: () => Promise.resolve({ error: 'boom' }) }))
     vi.stubGlobal('fetch', fetchMock)
     toastErrorMock.mockClear()
     const onToast = vi.fn()
@@ -587,7 +587,7 @@ describe('MobilePlanningView — save error feedback (no false success)', () => 
   })
 
   it('recurring override writes once to the correct endpoint (not the insurance endpoint)', async () => {
-    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }))
+    const fetchMock = vi.fn((_url?: string, _init?: RequestInit) => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }))
     vi.stubGlobal('fetch', fetchMock)
     const onToast = vi.fn()
     try {
@@ -688,7 +688,7 @@ describe('MobilePlanningView — overridden-item restore parity + recurring deep
     const recurringSavings = [
       { saving_id: 'rs1', name: 'VCB Savings', goal_id: 'g1', amount_vnd: 2_000_000, effective_from: null, effective_to: null, savings_goals: { goal_name: 'Retirement' } },
     ]
-    const fetchMock = vi.fn((url: string) => {
+    const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
       const u = String(url)
       if (u.includes('/api/v1/recurring-savings')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ savings: [{ saving_id: 'rs1', name: 'VCB Savings', goal_id: 'g1', amount_vnd: 2_000_000, effective_from: null, effective_to: null, linked_deposit_tx_id: null }] }) })
@@ -714,7 +714,7 @@ describe('MobilePlanningView — overridden-item restore parity + recurring deep
     const recurringSavings = [
       { saving_id: 'rs1', name: 'VCB Savings', goal_id: 'g1', amount_vnd: 2_000_000, effective_from: null, effective_to: null, savings_goals: { goal_name: 'Retirement' } },
     ]
-    const fetchMock = vi.fn((url: string) => {
+    const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
       const u = String(url)
       if (u.includes('/api/v1/recurring-savings')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ savings: [{ saving_id: 'rs1', name: 'VCB Savings', goal_id: 'g1', amount_vnd: 2_000_000, effective_from: null, effective_to: null, linked_deposit_tx_id: null }] }) })

@@ -31,6 +31,11 @@ const eslintConfig = defineConfig([
       // error.
       "react-hooks/set-state-in-effect": "warn",
       "react-hooks/immutability": "warn",
+      // Honor the `_`-prefix convention for intentionally-unused bindings. Test
+      // fetch mocks must declare `(url, init)` so `mock.calls[i]` is typed as the
+      // full [url, init] tuple (the assertions read `calls[i][1]`), even when the
+      // mock body ignores those args — prefixing with `_` marks that as deliberate.
+      "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
     },
   },
 ]);

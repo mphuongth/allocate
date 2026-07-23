@@ -1,0 +1,14 @@
+{
+  // Deterministic typecheck config for `npm run typecheck` and CI (#468).
+  //
+  // The base tsconfig.json includes `.next/types/**` so the editor and `next build`
+  // pick up generated typed-route definitions. Those files are a build artifact:
+  // whether they exist, and which routes they reference, depends on the last build —
+  // a stale `.next` can inject phantom "route removed" errors into a plain `tsc` run.
+  // This config extends the base but drops `.next` from discovery entirely, so the
+  // command's result depends only on committed source. Typed-route checking still
+  // happens where it belongs — inside `next build`.
+  "extends": "./tsconfig.json",
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", "**/*.mts"],
+  "exclude": ["node_modules", "e2e", ".next"]
+}
