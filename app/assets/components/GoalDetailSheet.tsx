@@ -819,9 +819,9 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
   // fund-investment under the same fund, non-fund rows correspond to a
   // single investment_transactions row.
   async function handleUnassignConfirm() {
-    if (!actionInv) return
+    if (!actionInv || !goal) return
     setUnassigning(true)
-    const ok = await unassignInvestment(actionInv)
+    const ok = await unassignInvestment(actionInv, goal.goalId)
     setUnassigning(false)
     if (!ok) { toast.error(isVI ? 'Không thể huỷ liên kết' : "Couldn't unassign"); return }
     setUnassignedIds((prev) => [...prev, actionInv.id])

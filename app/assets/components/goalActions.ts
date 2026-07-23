@@ -24,15 +24,19 @@ export async function unholdTransaction(heldTxId: string): Promise<boolean> {
   }
 }
 
-// Unassign an investment from its goal. A fund row aggregates every
-// fund-investment under the same fund (PATCH each back to goal_id=null); a
-// non-fund row is a single investment_transactions row (PUT assign goal_id=null).
+// Unassign an investment from a specific goal. A fund row aggregates every
+// fund-investment of that fund UNDER THIS GOAL (PATCH each back to goal_id=null);
+// a non-fund row is a single investment_transactions row (PUT assign goal_id=null).
 export async function unassignInvestment(
   inv: { id: string; fund?: { fundId: string } | null },
+  goalId: string,
 ): Promise<boolean> {
   try {
     if (inv.fund) {
-      const res = await fetch(`/api/v1/fund-investments?fund_id=${inv.fund.fundId}`)
+      // Scope to this goal: the same fund can be split across goals, so an
+      // unfiltered fund_id query would clear the OTHER goals' rows too. The route
+      // filters by goal_id when supplied.
+      const res = await fetch(`/api/v1/fund-investments?fund_id=${inv.fund.fundId}&goal_id=${goalId}`)
       if (!res.ok) return false
       // GET /fund-investments returns a bare array (see the route handler) — the
       // old `data.investments` read undefined, so Promise.all([]) sent no PATCH

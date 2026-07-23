@@ -41,13 +41,15 @@ describe('goalActions (#467)', () => {
 
   // GET /fund-investments returns a BARE ARRAY (matches the real route), not
   // { investments: [...] } — a wrong mock here would hide the #467 no-op bug.
-  it('unassignInvestment (fund) PATCHes every fund-investment back to null', async () => {
+  it('unassignInvestment (fund) scopes the query to the goal and PATCHes each row back to null', async () => {
     const calls = mockFetch((url, init) => {
       if (url.includes('/fund-investments?fund_id=')) return { ok: true, body: [{ id: 'fi1' }, { id: 'fi2' }] }
       if (init?.method === 'PATCH') return { ok: true }
       return { ok: false }
     })
-    expect(await unassignInvestment({ id: 'row1', fund: { fundId: 'f1' } })).toBe(true)
+    expect(await unassignInvestment({ id: 'row1', fund: { fundId: 'f1' } }, 'goal-1')).toBe(true)
+    // Scoped to the goal so a fund split across goals isn't cleared elsewhere.
+    expect(calls[0].url).toBe('/api/v1/fund-investments?fund_id=f1&goal_id=goal-1')
     const patched = calls.filter(c => c.init?.method === 'PATCH').map(c => c.url)
     expect(patched).toEqual(['/api/v1/fund-investments/fi1/goal', '/api/v1/fund-investments/fi2/goal'])
     expect(JSON.parse(String(calls.find(c => c.init?.method === 'PATCH')!.init!.body))).toEqual({ goal_id: null })
@@ -59,12 +61,12 @@ describe('goalActions (#467)', () => {
       if (init?.method === 'PATCH') return { ok: url.includes('fi1') }
       return { ok: false }
     })
-    expect(await unassignInvestment({ id: 'row1', fund: { fundId: 'f1' } })).toBe(false)
+    expect(await unassignInvestment({ id: 'row1', fund: { fundId: 'f1' } }, 'goal-1')).toBe(false)
   })
 
   it('unassignInvestment (single tx) PUTs assign goal_id=null', async () => {
     const calls = mockFetch(() => ({ ok: true }))
-    expect(await unassignInvestment({ id: 'tx1', fund: null })).toBe(true)
+    expect(await unassignInvestment({ id: 'tx1', fund: null }, 'goal-1')).toBe(true)
     expect(calls[0].url).toBe('/api/v1/investment-transactions/tx1/assign')
     expect(calls[0].init?.method).toBe('PUT')
     expect(JSON.parse(String(calls[0].init?.body))).toEqual({ goal_id: null })
@@ -72,6 +74,6 @@ describe('goalActions (#467)', () => {
 
   it('unassignInvestment (fund) returns false when the fund-investments fetch fails', async () => {
     mockFetch(() => ({ ok: false }))
-    expect(await unassignInvestment({ id: 'row1', fund: { fundId: 'f1' } })).toBe(false)
+    expect(await unassignInvestment({ id: 'row1', fund: { fundId: 'f1' } }, 'goal-1')).toBe(false)
   })
 })

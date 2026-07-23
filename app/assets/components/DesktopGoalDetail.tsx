@@ -93,7 +93,7 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
   async function handleUnassign() {
     if (!actionInv) return
     setUnassigning(true)
-    const ok = await unassignInvestment(actionInv)
+    const ok = await unassignInvestment(actionInv, goal.goalId)
     setUnassigning(false)
     if (!ok) { toast.error(isVi ? 'Không thể huỷ liên kết' : "Couldn't unassign"); return }
     setUnassignedIds((prev) => [...prev, actionInv.id])
