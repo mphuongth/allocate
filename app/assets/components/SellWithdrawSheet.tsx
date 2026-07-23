@@ -9,7 +9,6 @@ import { todayIso } from '@/lib/dates'
 import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
 import { CairnLoader } from '@/app/components/ui/CairnLoader'
 import { AffectsProgressControl } from './goalDetailShared'
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const fmtVND = (n: number, _locale?: string) => fmt(n)
 
 export interface SellItem {

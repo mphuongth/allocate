@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import type { Mock } from 'vitest'
 import { useState } from 'react'
 import { render, screen, within, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -24,7 +25,7 @@ function Harness({ reload }: { reload: () => Promise<void> }) {
   return <DesktopFundLibraryView funds={funds} setFunds={setFunds} goals={[]} loading={false} error={false} reload={reload} />
 }
 
-let reload: ReturnType<typeof vi.fn>
+let reload: Mock<() => Promise<void>>
 afterEach(() => vi.unstubAllGlobals())
 beforeEach(() => { reload = vi.fn(() => Promise.resolve()) })
 

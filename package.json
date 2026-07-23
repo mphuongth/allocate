@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
     "generate-icons": "node scripts/generate-icons.mjs",
     "generate-screenshots": "node scripts/generate-screenshots.mjs",
     "test": "vitest",

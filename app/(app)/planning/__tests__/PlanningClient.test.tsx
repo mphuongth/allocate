@@ -49,7 +49,7 @@ describe('PlanningClient — error vs empty on plan fetch', () => {
   })
 
   it('shows the empty state on 404 (no plan yet), not the error state', async () => {
-    const fetchMock = vi.fn((url: string) => {
+    const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
       const u = String(url)
       if (u.includes('/api/v1/monthly-plans?')) {
         return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({ error: 'Plan not found for this month' }) })
@@ -82,7 +82,7 @@ describe('PlanningClient — error vs empty on plan fetch', () => {
 
   it('retry refetches and renders the plan once the request succeeds', async () => {
     let call = 0
-    const fetchMock = vi.fn((url: string) => {
+    const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
       const u = String(url)
       if (u.includes('/api/v1/monthly-plans?')) {
         call += 1
@@ -107,7 +107,7 @@ describe('PlanningClient — error vs empty on plan fetch', () => {
 
 describe('PlanningClient — toast delivery', () => {
   it('surfaces a confirmation toast (via sonner) after a successful income edit', async () => {
-    const fetchMock = vi.fn((url: string) => {
+    const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
       const u = String(url)
       // GET the full monthly plan (initial load + refetch after save).
       if (u.includes('/api/v1/monthly-plans?')) {
@@ -139,7 +139,7 @@ describe('PlanningClient — toast delivery', () => {
   // failed silently with the error toast. Mobile already used PUT — this pins
   // desktop to the same method so both views hit a real handler.
   it('updates an existing plan with PUT (not PATCH → 405) from the desktop income editor', async () => {
-    const fetchMock = vi.fn((url: string) => {
+    const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
       const u = String(url)
       if (u.includes('/api/v1/monthly-plans?')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(FULL_PLAN) })

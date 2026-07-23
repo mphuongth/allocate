@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import type { Mock } from 'vitest'
 import { useState } from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -52,7 +53,7 @@ function Harness({ initial, reload }: { initial: Fund[]; reload: () => Promise<v
 }
 
 let fetchMock: ReturnType<typeof vi.fn>
-let reload: ReturnType<typeof vi.fn>
+let reload: Mock<() => Promise<void>>
 
 beforeEach(() => {
   fetchMock = vi.fn(() => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) }))

@@ -54,6 +54,8 @@ const defaultProps = {
   funds: [],
   goals: [],
   loading: false,
+  error: false,
+  onRetry: vi.fn(),
   onPrev: vi.fn(),
   onNext: vi.fn(),
   onToday: vi.fn(),

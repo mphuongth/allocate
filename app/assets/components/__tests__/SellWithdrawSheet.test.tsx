@@ -9,12 +9,12 @@ vi.mock('next-intl', () => ({
 
 beforeEach(() => {
   document.body.style.overflow = ''
-  vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) })))
+  vi.stubGlobal('fetch', vi.fn((_url?: string, _init?: RequestInit) => Promise.resolve({ ok: true, json: () => Promise.resolve({}) })))
 })
 
 describe('SellWithdrawSheet — bank withdraw (received + principal portion)', () => {
   it('defaults received to current value and posts received + principal portion', async () => {
-    const fetchMock = vi.fn(() =>
+    const fetchMock = vi.fn((_url?: string, _init?: RequestInit) =>
       Promise.resolve({ ok: true, json: () => Promise.resolve({}) }))
     vi.stubGlobal('fetch', fetchMock)
 
@@ -42,7 +42,7 @@ describe('SellWithdrawSheet — bank withdraw (received + principal portion)', (
 
 describe('SellWithdrawSheet — links the withdrawal to its goal (issue #261)', () => {
   it('posts goal_id when withdrawing in a goal context', async () => {
-    const fetchMock = vi.fn(() =>
+    const fetchMock = vi.fn((_url?: string, _init?: RequestInit) =>
       Promise.resolve({ ok: true, json: () => Promise.resolve({}) }))
     vi.stubGlobal('fetch', fetchMock)
 
@@ -65,7 +65,7 @@ describe('SellWithdrawSheet — links the withdrawal to its goal (issue #261)', 
   })
 
   it('keeps goal_id null in the unallocated context', async () => {
-    const fetchMock = vi.fn(() =>
+    const fetchMock = vi.fn((_url?: string, _init?: RequestInit) =>
       Promise.resolve({ ok: true, json: () => Promise.resolve({}) }))
     vi.stubGlobal('fetch', fetchMock)
 
@@ -112,7 +112,7 @@ describe('SellWithdrawSheet — count toward goal progress toggle', () => {
   }
 
   it('shows the toggle in goal context and posts affects_progress=true by default', async () => {
-    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }))
+    const fetchMock = vi.fn((_url?: string, _init?: RequestInit) => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }))
     vi.stubGlobal('fetch', fetchMock)
 
     render(<SellWithdrawSheet item={bankItem} open context="goal" goalId="g1" goalCurrentValue={20_000_000} goalTargetAmount={50_000_000} onClose={vi.fn()} onSuccess={vi.fn()} />)
@@ -130,7 +130,7 @@ describe('SellWithdrawSheet — count toward goal progress toggle', () => {
   })
 
   it('posts affects_progress=false after toggling the switch off', async () => {
-    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }))
+    const fetchMock = vi.fn((_url?: string, _init?: RequestInit) => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }))
     vi.stubGlobal('fetch', fetchMock)
 
     render(<SellWithdrawSheet item={bankItem} open context="goal" goalId="g1" goalCurrentValue={20_000_000} goalTargetAmount={50_000_000} onClose={vi.fn()} onSuccess={vi.fn()} />)
@@ -154,7 +154,7 @@ describe('SellWithdrawSheet — count toward goal progress toggle', () => {
 
 describe('SellWithdrawSheet — gold sell (quantity × price) (issue #232)', () => {
   it('prefills the price and posts proceeds + cost basis', async () => {
-    const fetchMock = vi.fn(() =>
+    const fetchMock = vi.fn((_url?: string, _init?: RequestInit) =>
       Promise.resolve({ ok: true, json: () => Promise.resolve({}) }))
     vi.stubGlobal('fetch', fetchMock)
 
@@ -186,7 +186,7 @@ describe('SellWithdrawSheet — error path shows a real message (not a raw i18n 
   // Regression: the catch/!res.ok paths used useTranslations('Dashboard').t('sellError'),
   // but that namespace/key never existed → the error path leaked a raw key or threw.
   it('renders a localized error when the withdrawal fails without a server message', async () => {
-    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: false, json: () => Promise.resolve({}) })))
+    vi.stubGlobal('fetch', vi.fn((_url?: string, _init?: RequestInit) => Promise.resolve({ ok: false, json: () => Promise.resolve({}) })))
 
     const item = {
       type: 'bank' as const, name: 'Techcombank',
