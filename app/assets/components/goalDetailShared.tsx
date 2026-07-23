@@ -50,6 +50,40 @@ export function calcDeadlineMonths(targetDate: string | null): number {
   return Math.max(1, (ty - now.getFullYear()) * 12 + (tm - 1 - now.getMonth()))
 }
 
+export interface GoalCalculator {
+  remaining: number
+  monthsLeft: number
+  neededPerMonth: number
+  monthsToGoal: number | null
+  projectedDate: Date | null
+  isOnTrack: boolean
+  gap: number
+}
+
+// The "what will it take" projection shown under both goal-detail surfaces (#467).
+// The two views parse their own input differently (mobile from a comma-formatted
+// string, desktop from a plain number), so `monthlyInput` arrives already parsed;
+// everything downstream — how much is left, the minimum per month to hit the
+// deadline, when this pace reaches the goal, and whether it's on track — is shared.
+// `monthsToGoal` is null when there's nothing to project (no input or goal met);
+// the mobile view maps that to its 0-based `projectedMonths` at the call site.
+export function computeGoalCalculator(
+  goal: { targetAmount?: number | null; targetDate?: string | null; currentValue: number },
+  monthlyInput: number,
+): GoalCalculator {
+  const remaining = Math.max(0, (goal.targetAmount ?? 0) - goal.currentValue)
+  const monthsLeft = calcDeadlineMonths(goal.targetDate ?? null)
+  const neededPerMonth = remaining > 0 ? remaining / monthsLeft : 0
+  const input = Math.max(0, monthlyInput || 0)
+  const monthsToGoal = input > 0 && remaining > 0 ? Math.ceil(remaining / input) : null
+  const projectedDate = monthsToGoal != null
+    ? (() => { const d = new Date(); d.setMonth(d.getMonth() + monthsToGoal); return d })()
+    : null
+  const isOnTrack = input > 0 && input >= neededPerMonth
+  const gap = Math.abs(neededPerMonth - input)
+  return { remaining, monthsLeft, neededPerMonth, monthsToGoal, projectedDate, isOnTrack, gap }
+}
+
 export function TypeIcon({ type, size = 16 }: { type: string; size?: number }) {
   if (type === 'fund') return <TrendingUp size={size} />
   if (type === 'bank') return <Building size={size} />
