@@ -112,6 +112,17 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     update.dca_monthly_amount_vnd = dcaAmount
     // Goal target only applies while DCA is on; cleared otherwise.
     update.dca_goal_id = is_dca === true && dca_goal_id ? dca_goal_id : null
+    // A valid-looking UUID isn't proof of ownership: verify the DCA goal is the
+    // caller's before linking it (#474).
+    if (update.dca_goal_id) {
+      const { data: goal } = await supabase
+        .from('savings_goals')
+        .select('goal_id')
+        .eq('goal_id', update.dca_goal_id)
+        .eq('user_id', user.id)
+        .single()
+      if (!goal) return NextResponse.json({ error: "You don't have permission to access this goal." }, { status: 403 })
+    }
   }
 
   // Disabling is a cross-table state change: the fund config and every pending

@@ -145,6 +145,33 @@ export async function POST(request: NextRequest) {
     if (!goal) return NextResponse.json({ error: "You don't have permission to access this goal." }, { status: 403 })
   }
 
+  // Verify fund ownership if provided — a valid UUID isn't proof of ownership,
+  // so a known foreign fund_id can't be linked to this user's transaction (#474).
+  if (cleanFundId) {
+    const { data: fund } = await supabase
+      .from('funds')
+      .select('id')
+      .eq('id', cleanFundId)
+      .eq('user_id', user.id)
+      .single()
+    if (!fund) return NextResponse.json({ error: "You don't have permission to access this fund." }, { status: 403 })
+  }
+
+  // Same for caller-supplied transaction references — a foreign parent/merge
+  // anchor UUID must not be linkable to this user's row (#474). The DB trigger is
+  // the backstop; this returns a clean 403 instead of a constraint error.
+  for (const refId of [cleanParentTxId, cleanMergeAnchorInvId]) {
+    if (refId) {
+      const { data: ref } = await supabase
+        .from('investment_transactions')
+        .select('transaction_id')
+        .eq('transaction_id', refId)
+        .eq('user_id', user.id)
+        .single()
+      if (!ref) return NextResponse.json({ error: "You don't have permission to access this transaction." }, { status: 403 })
+    }
+  }
+
   // Verify plan ownership if provided
   if (cleanPlanId) {
     const { data: plan } = await supabase.from('monthly_plans').select('id').eq('id', cleanPlanId).eq('user_id', user.id).single()
@@ -215,6 +242,18 @@ export async function POST(request: NextRequest) {
   const resolvedHeldTargetGoalId = cleanMergeTargetGoalId ?? effectiveGoalId
   if (cleanHeldForMerge && !resolvedHeldTargetGoalId) {
     return NextResponse.json({ error: 'A held-for-merge settlement must resolve a target goal.' }, { status: 400 })
+  }
+  // The held target goal is an app-managed goal reference (no physical FK), so a
+  // caller-supplied merge_target_goal_id must be verified for ownership too — a
+  // foreign target would strand the parked cash in another user's goal (#474).
+  if (cleanHeldForMerge && resolvedHeldTargetGoalId) {
+    const { data: goal } = await supabase
+      .from('savings_goals')
+      .select('goal_id')
+      .eq('goal_id', resolvedHeldTargetGoalId)
+      .eq('user_id', user.id)
+      .single()
+    if (!goal) return NextResponse.json({ error: "You don't have permission to access this goal." }, { status: 403 })
   }
 
   const { data: transaction, error } = await supabase
