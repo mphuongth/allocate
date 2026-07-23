@@ -18,30 +18,7 @@ import { GD_COLORS, buildCompositionSegments, calcDeadlineMonths, TypeIcon, Unli
 import { fmtTxDate, txKind } from './transactionUtils'
 import { TxRowsSkeleton } from './Skeletons'
 import LoadError from './LoadError'
-
-interface InvestmentTx {
-  transaction_id: string
-  transaction_type: string
-  asset_type: string
-  fund_id: string | null
-  fund_name: string | null
-  fund_code: string | null
-  parent_transaction_id: string | null
-  investment_date: string
-  amount_vnd: number
-  units: number | null
-  unit_price: number | null
-  interest_rate: number | null
-  expiry_date: string | null
-  notes: string | null
-  principal_withdrawn: number | null
-  units_withdrawn: number | null
-  renewed_from_transaction_id?: string | null
-  interest_earned_vnd?: number | null
-  is_recurring?: boolean
-  held_for_merge?: boolean | null
-  consumed_by_inv_id?: string | null
-}
+import { useGoalDetailData } from './useGoalDetailData'
 
 interface Props {
   goal: GoalData | null
@@ -771,10 +748,6 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
   const isVI = useLocale() === 'vi'
   const [mounted, setMounted] = useState(false)
   const [activeTab, setActiveTab] = useState<'investments' | 'calculator' | 'history'>('investments')
-  const [transactions, setTransactions] = useState<InvestmentTx[]>([])
-  const [goldPricePerChi, setGoldPricePerChi] = useState<number | null>(null)
-  const [txLoading, setTxLoading] = useState(false)
-  const [txError, setTxError] = useState(false)
   // Bumped by the retry button to re-run the transactions fetch.
   const [txReload, setTxReload] = useState(0)
   const [actionsOpen, setActionsOpen] = useState(false)
@@ -788,6 +761,15 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
   const [unassignConfirmOpen, setUnassignConfirmOpen] = useState(false)
   const [unassigning, setUnassigning] = useState(false)
   const [unassignedIds, setUnassignedIds] = useState<string[]>([])
+  // Transactions + gold price load (shared with DesktopGoalDetail, #467). The
+  // sheet only loads while open; each load clears the optimistic unassign filter.
+  const { transactions, txLoading, txError, goldPricePerChi } = useGoalDetailData({
+    goalId: goal?.goalId,
+    enabled: open && !!goal,
+    refreshKey,
+    txReload,
+    onLoadStart: () => setUnassignedIds([]),
+  })
   const [fundDetailId, setFundDetailId] = useState<string | null>(null)
   const [purchaseHistory, setPurchaseHistory] = useState<PurchaseHistoryRow[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
@@ -804,43 +786,6 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
       return () => clearTimeout(t)
     }
   }, [open])
-
-  useEffect(() => {
-    if (!open || !goal) return
-    setTxLoading(true)
-    setTxError(false)
-    // The new server response is the source of truth — drop any locally
-    // hidden tx IDs from the unassign flow so a re-assigned tx isn't stuck
-    // behind the optimistic filter on subsequent refreshes.
-    setUnassignedIds([])
-    // cache: 'no-store' — without it the browser can serve a stale list when
-    // an investment was just (re)assigned to this goal in the same session.
-    // Recurring savings are plan-only (no investment_transactions row), so fetch
-    // their realized contributions separately and merge into the history list.
-    Promise.all([
-      // The investments list is built from these rows — a failed fetch must
-      // surface a retry, not render as "No investments yet".
-      fetch(`/api/v1/investment-transactions?goal_id=${goal.goalId}&limit=200&include_history=true`, { cache: 'no-store' })
-        .then((r) => { if (!r.ok) throw new Error('load failed'); return r.json() }),
-      // Recurring contributions are supplementary — degrade to empty on failure.
-      fetch(`/api/v1/savings-goals/${goal.goalId}/recurring-contributions`, { cache: 'no-store' })
-        .then((r) => r.ok ? r.json() : { contributions: [] })
-        .catch(() => ({ contributions: [] })),
-    ])
-      .then(([txRes, recRes]) => {
-        const merged: InvestmentTx[] = [...(txRes.transactions ?? []), ...(recRes.contributions ?? [])]
-        merged.sort((a, b) => (a.investment_date < b.investment_date ? 1 : a.investment_date > b.investment_date ? -1 : 0))
-        setTransactions(merged)
-      })
-      .catch(() => { setTransactions([]); setTxError(true) })
-      .finally(() => setTxLoading(false))
-    // Gold is valued at the live market price per chỉ, not its purchase cost —
-    // without this the sell sheet would prefill the stale buy price (issue #251).
-    fetch('/api/v1/gold-price', { cache: 'no-store' })
-      .then((r) => r.ok ? r.json() : null)
-      .then((res) => setGoldPricePerChi(res?.price_per_chi ?? null))
-      .catch(() => setGoldPricePerChi(null))
-  }, [open, goal, refreshKey, txReload])
 
   async function handleDelete() {
     if (!goal) return
