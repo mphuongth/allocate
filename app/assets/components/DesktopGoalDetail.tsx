@@ -12,29 +12,8 @@ import { MaturityResolveModal } from './MaturityResolveSheet'
 import { fmtTxDate, txKind } from './transactionUtils'
 import { TxRowsSkeleton } from './Skeletons'
 import LoadError from './LoadError'
+import { useGoalDetailData } from './useGoalDetailData'
 import { todayIso } from '@/lib/dates'
-
-interface InvestmentTx {
-  transaction_id: string
-  transaction_type: string
-  asset_type: string
-  fund_id: string | null
-  fund_name: string | null
-  parent_transaction_id: string | null
-  investment_date: string
-  amount_vnd: number
-  units: number | null
-  interest_rate: number | null
-  expiry_date: string | null
-  notes: string | null
-  principal_withdrawn: number | null
-  units_withdrawn: number | null
-  renewed_from_transaction_id?: string | null
-  interest_earned_vnd?: number | null
-  is_recurring?: boolean
-  held_for_merge?: boolean | null
-  consumed_by_inv_id?: string | null
-}
 
 interface Props {
   goal: GoalData
@@ -64,10 +43,6 @@ interface Props {
 export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged, onRenewed, refreshKey, onAddToGoal }: Props) {
   const isVi = locale === 'vi'
   const [tab, setTab] = useState<'investments' | 'calculator' | 'history'>('investments')
-  const [transactions, setTransactions] = useState<InvestmentTx[]>([])
-  const [goldPricePerChi, setGoldPricePerChi] = useState<number | null>(null)
-  const [txLoading, setTxLoading] = useState(false)
-  const [txError, setTxError] = useState(false)
   // Bumped by the retry button to re-run the transactions fetch.
   const [txReload, setTxReload] = useState(0)
   const [actionsOpen, setActionsOpen] = useState(false)
@@ -85,41 +60,16 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
   const [unassigning, setUnassigning] = useState(false)
   const [unassignedIds, setUnassignedIds] = useState<string[]>([])
 
-  useEffect(() => {
-    setTxLoading(true)
-    setTxError(false)
-    // The new server response is the source of truth — drop any locally
-    // hidden tx IDs from the unassign flow so a re-assigned tx isn't stuck
-    // behind the optimistic filter on subsequent refreshes.
-    setUnassignedIds([])
-    // cache: 'no-store' — same reason as GoalDetailSheet: prevent the browser
-    // from serving a stale list after an assign-from-Unallocated.
-    // Recurring savings are plan-only (no investment_transactions row), so fetch
-    // their realized contributions separately and merge into the history list.
-    Promise.all([
-      // The investments list is built from these rows — a failed fetch must
-      // surface a retry, not render as "No investments yet".
-      fetch(`/api/v1/investment-transactions?goal_id=${goal.goalId}&limit=200&include_history=true`, { cache: 'no-store' })
-        .then((r) => { if (!r.ok) throw new Error('load failed'); return r.json() }),
-      // Recurring contributions are supplementary — degrade to empty on failure.
-      fetch(`/api/v1/savings-goals/${goal.goalId}/recurring-contributions`, { cache: 'no-store' })
-        .then((r) => r.ok ? r.json() : { contributions: [] })
-        .catch(() => ({ contributions: [] })),
-    ])
-      .then(([txRes, recRes]) => {
-        const merged: InvestmentTx[] = [...(txRes.transactions ?? []), ...(recRes.contributions ?? [])]
-        merged.sort((a, b) => (a.investment_date < b.investment_date ? 1 : a.investment_date > b.investment_date ? -1 : 0))
-        setTransactions(merged)
-      })
-      .catch(() => { setTransactions([]); setTxError(true) })
-      .finally(() => setTxLoading(false))
-    // Gold is valued at the live market price per chỉ, not its purchase cost —
-    // without this the sell modal would prefill the stale buy price (issue #251).
-    fetch('/api/v1/gold-price', { cache: 'no-store' })
-      .then((r) => r.ok ? r.json() : null)
-      .then((res) => setGoldPricePerChi(res?.price_per_chi ?? null))
-      .catch(() => setGoldPricePerChi(null))
-  }, [goal.goalId, refreshKey, txReload])
+  // Transactions + gold price load (shared with GoalDetailSheet, #467). The
+  // panel is always mounted, so it always loads; each load clears the optimistic
+  // unassign filter.
+  const { transactions, txLoading, txError, goldPricePerChi } = useGoalDetailData({
+    goalId: goal.goalId,
+    enabled: true,
+    refreshKey,
+    txReload,
+    onLoadStart: () => setUnassignedIds([]),
+  })
 
   // Reset tab when the selected goal itself changes.
   useEffect(() => {
