@@ -323,7 +323,8 @@ describe('GoalDetailSheet — unassign from goal', () => {
         return Promise.resolve({ ok: true, json: async () => ({ transactions: [mockTx] }) })
       }
       if (url.includes('/api/v1/fund-investments?fund_id=')) {
-        return Promise.resolve({ ok: true, json: async () => ({ investments: [{ id: 'fi-1' }, { id: 'fi-2' }] }) })
+        // Bare array — matches the real route (the object shape hid the #467 no-op).
+        return Promise.resolve({ ok: true, json: async () => [{ id: 'fi-1' }, { id: 'fi-2' }] })
       }
       if (url.includes('/api/v1/fund-investments/') && init?.method === 'PATCH') {
         return Promise.resolve({ ok: true, json: async () => ({}) })
@@ -687,7 +688,7 @@ describe('GoalDetailSheet — refreshKey triggers refetch', () => {
         })
       }
       if (url.includes('/api/v1/fund-investments?fund_id=')) {
-        return Promise.resolve({ ok: true, json: async () => ({ investments: [{ id: 'fi-1' }] }) })
+        return Promise.resolve({ ok: true, json: async () => [{ id: 'fi-1' }] })
       }
       if (url.includes('/api/v1/fund-investments/') && init?.method === 'PATCH') {
         // Simulate that the unassign succeeded: the next GET will omit the tx

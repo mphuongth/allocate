@@ -39,9 +39,11 @@ describe('goalActions (#467)', () => {
     expect(calls[0].init?.method).toBe('DELETE')
   })
 
+  // GET /fund-investments returns a BARE ARRAY (matches the real route), not
+  // { investments: [...] } — a wrong mock here would hide the #467 no-op bug.
   it('unassignInvestment (fund) PATCHes every fund-investment back to null', async () => {
     const calls = mockFetch((url, init) => {
-      if (url.includes('/fund-investments?fund_id=')) return { ok: true, body: { investments: [{ id: 'fi1' }, { id: 'fi2' }] } }
+      if (url.includes('/fund-investments?fund_id=')) return { ok: true, body: [{ id: 'fi1' }, { id: 'fi2' }] }
       if (init?.method === 'PATCH') return { ok: true }
       return { ok: false }
     })
@@ -53,7 +55,7 @@ describe('goalActions (#467)', () => {
 
   it('unassignInvestment (fund) returns false when any PATCH fails', async () => {
     mockFetch((url, init) => {
-      if (url.includes('/fund-investments?fund_id=')) return { ok: true, body: { investments: [{ id: 'fi1' }, { id: 'fi2' }] } }
+      if (url.includes('/fund-investments?fund_id=')) return { ok: true, body: [{ id: 'fi1' }, { id: 'fi2' }] }
       if (init?.method === 'PATCH') return { ok: url.includes('fi1') }
       return { ok: false }
     })

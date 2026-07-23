@@ -34,9 +34,11 @@ export async function unassignInvestment(
     if (inv.fund) {
       const res = await fetch(`/api/v1/fund-investments?fund_id=${inv.fund.fundId}`)
       if (!res.ok) return false
-      const data = await res.json() as { investments?: Array<{ id: string }> }
-      const investments = data.investments ?? []
-      const results = await Promise.all(investments.map((fi) =>
+      // GET /fund-investments returns a bare array (see the route handler) — the
+      // old `data.investments` read undefined, so Promise.all([]) sent no PATCH
+      // yet reported success, silently no-op'ing the fund unassign (#467).
+      const investments = await res.json() as Array<{ id: string }>
+      const results = await Promise.all((investments ?? []).map((fi) =>
         fetch(`/api/v1/fund-investments/${fi.id}/goal`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
