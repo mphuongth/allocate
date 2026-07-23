@@ -19,6 +19,7 @@ import { fmtTxDate, txKind } from './transactionUtils'
 import { TxRowsSkeleton } from './Skeletons'
 import LoadError from './LoadError'
 import { useGoalDetailData } from './useGoalDetailData'
+import { deleteGoal, unholdTransaction, unassignInvestment } from './goalActions'
 
 interface Props {
   goal: GoalData | null
@@ -790,18 +791,16 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
   async function handleDelete() {
     if (!goal) return
     setIsDeleting(true)
-    try {
-      const res = await fetch(`/api/v1/savings-goals/${goal.goalId}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('delete failed')
-      onDataChanged()
-      onClose()
-      setActionsOpen(false)
-    } catch {
+    const ok = await deleteGoal(goal.goalId)
+    setIsDeleting(false)
+    if (!ok) {
       // Keep the confirm sheet open so the user can retry; don't claim success.
       toast.error(isVI ? 'Không thể xoá mục tiêu' : "Couldn't delete goal")
-    } finally {
-      setIsDeleting(false)
+      return
     }
+    onDataChanged()
+    onClose()
+    setActionsOpen(false)
   }
 
   // "Bỏ chờ gộp" — delete the held settlement row, which restores the original
@@ -810,54 +809,25 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
   const [unholdingId, setUnholdingId] = useState<string | null>(null)
   async function handleUnhold(heldTxId: string) {
     setUnholdingId(heldTxId)
-    try {
-      const res = await fetch(`/api/v1/investment-transactions/${heldTxId}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('unhold failed')
-      onDataChanged()
-    } catch {
-      toast.error(isVI ? 'Không thể bỏ chờ gộp' : "Couldn't cancel the merge hold")
-    } finally {
-      setUnholdingId(null)
-    }
+    const ok = await unholdTransaction(heldTxId)
+    setUnholdingId(null)
+    if (!ok) { toast.error(isVI ? 'Không thể bỏ chờ gộp' : "Couldn't cancel the merge hold"); return }
+    onDataChanged()
   }
 
   // Mirror of DesktopGoalDetail.handleUnassign — fund rows aggregate every
   // fund-investment under the same fund, non-fund rows correspond to a
   // single investment_transactions row.
   async function handleUnassignConfirm() {
-    if (!actionInv) return
+    if (!actionInv || !goal) return
     setUnassigning(true)
-    try {
-      if (actionInv.fund) {
-        const res = await fetch(`/api/v1/fund-investments?fund_id=${actionInv.fund.fundId}`)
-        if (!res.ok) throw new Error('fetch failed')
-        const data = await res.json() as { investments?: Array<{ id: string }> }
-        const investments = data.investments ?? []
-        const results = await Promise.all(investments.map((fi) =>
-          fetch(`/api/v1/fund-investments/${fi.id}/goal`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ goal_id: null }),
-          })
-        ))
-        if (results.some((r) => !r.ok)) throw new Error('unassign failed')
-      } else {
-        const res = await fetch(`/api/v1/investment-transactions/${actionInv.id}/assign`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ goal_id: null }),
-        })
-        if (!res.ok) throw new Error('unassign failed')
-      }
-      setUnassignedIds((prev) => [...prev, actionInv.id])
-      setUnassignConfirmOpen(false)
-      setActionInv(null)
-      onDataChanged()
-    } catch {
-      toast.error(isVI ? 'Không thể huỷ liên kết' : "Couldn't unassign")
-    } finally {
-      setUnassigning(false)
-    }
+    const ok = await unassignInvestment(actionInv, goal.goalId)
+    setUnassigning(false)
+    if (!ok) { toast.error(isVI ? 'Không thể huỷ liên kết' : "Couldn't unassign"); return }
+    setUnassignedIds((prev) => [...prev, actionInv.id])
+    setUnassignConfirmOpen(false)
+    setActionInv(null)
+    onDataChanged()
   }
 
   async function openFundDetail(fund: FundBreakdownItem) {
