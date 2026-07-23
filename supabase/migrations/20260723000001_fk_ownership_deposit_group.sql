@@ -57,11 +57,13 @@ begin
         using errcode = 'check_violation';
     end if;
   end loop;
-  -- deposit_group_id — same rule, but a self-grouping anchor
+  -- deposit_group_id — same rule. The self-grouping anchor
   -- (deposit_group_id = its own transaction_id) references a row that doesn't
-  -- exist yet on INSERT, so allow it.
+  -- exist yet, so bypass the lookup ONLY on INSERT. On UPDATE the anchor row
+  -- already exists, so it's checked normally against NEW.user_id — which rejects
+  -- moving an owner-changed anchor away from its still-original-owner tranches.
   if new.deposit_group_id is not null
-     and new.deposit_group_id is distinct from new.transaction_id
+     and not (tg_op = 'INSERT' and new.deposit_group_id = new.transaction_id)
      and not exists (
        select 1 from public.investment_transactions where transaction_id = new.deposit_group_id and user_id = new.user_id
      ) then
