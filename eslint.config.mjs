@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Gitignored local git worktrees (stale repo copies checked out by other
+    // Claude sessions) — don't lint their sources as if they were ours (#469).
+    ".claude/**",
   ]),
   {
     rules: {
