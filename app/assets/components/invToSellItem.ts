@@ -26,6 +26,8 @@ export function invToSellItem(inv: InvRow): SellItem {
     units: inv.units ?? undefined,
     navPerUnit,
     gainPct: inv.gainPct ?? undefined,
+    // The deposit rate drives the sheet's summary / early-withdrawal context.
+    interestRate: inv.interestRate ?? undefined,
     transactionId: inv.id, // for a book this is the anchor (= deposit_group_id)
     purchasePrice: inv.principal ?? inv.value,
     depositGroupId: inv.depositGroupId ?? null,

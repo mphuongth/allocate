@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ChevronLeft, X, MoreHorizontal, Edit2, Trash2, ChevronRight, ArrowDownRight, ArrowUpRight, Target, CalendarDays, Check, Shield, RefreshCw, PiggyBank, GitMerge, Plus } from 'lucide-react'
+import { ChevronLeft, X, MoreHorizontal, Edit2, Trash2, ChevronRight, ArrowDownRight, ArrowUpRight, Target, CalendarDays, RefreshCw, PiggyBank, GitMerge, Plus } from 'lucide-react'
 import { iconHit } from './iconHit'
 import { toast } from 'sonner'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
@@ -16,7 +16,6 @@ import { useGoalDetailData } from './useGoalDetailData'
 import { deleteGoal, unholdTransaction, unassignInvestment } from './goalActions'
 import { SellWithdrawSheet } from './SellWithdrawSheet'
 import { invToSellItem } from './invToSellItem'
-import { todayIso } from '@/lib/dates'
 
 interface Props {
   goal: GoalData

@@ -32,4 +32,9 @@ describe('invToSellItem', () => {
     expect(invToSellItem(inv).depositGroupId).toBe('anchor')
     expect(invToSellItem(inv).navPerUnit).toBeUndefined()
   })
+
+  it('carries the bank deposit interest rate (drives the sheet summary)', () => {
+    const inv = { id: 'd1', type: 'bank', name: 'Term deposit', value: 20_000_000, units: null, gainPct: null, principal: 20_000_000, interestRate: 6.5, depositGroupId: null, fund: null } as unknown as InvRow
+    expect(invToSellItem(inv).interestRate).toBe(6.5)
+  })
 })
