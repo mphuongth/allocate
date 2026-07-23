@@ -6,6 +6,9 @@ import type { GoalData } from '../../DashboardClient'
 
 const { toastErrorMock } = vi.hoisted(() => ({ toastErrorMock: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { error: toastErrorMock, success: vi.fn() } }))
+// The desktop sell/withdraw flow now renders the shared SellWithdrawSheet, which
+// reads useLocale() — provide the same intl mock its own tests use (#467).
+vi.mock('next-intl', () => ({ useLocale: () => 'en', useTranslations: () => (key: string) => key }))
 
 const mockGoal: GoalData = {
   goalId: 'goal-1',

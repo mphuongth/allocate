@@ -12,7 +12,7 @@ import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
 import type { GoalData, FundBreakdownItem } from '../DashboardClient'
 import TransactionHistorySheet, { type PurchaseHistoryRow } from './TransactionHistorySheet'
-import { SellWithdrawSheet, type SellItem } from './SellWithdrawSheet'
+import { SellWithdrawSheet } from './SellWithdrawSheet'
 import { MaturityResolveSheet } from './MaturityResolveSheet'
 import { GD_COLORS, buildCompositionSegments, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, buildRenewalSummary, BankInfoStrip, TopUpControl, RenewalSummaryLine, needsMaturityAction, needsBookMaturityAction, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
 import { fmtTxDate, txKind } from './transactionUtils'
@@ -20,6 +20,7 @@ import { TxRowsSkeleton } from './Skeletons'
 import LoadError from './LoadError'
 import { useGoalDetailData } from './useGoalDetailData'
 import { deleteGoal, unholdTransaction, unassignInvestment } from './goalActions'
+import { invToSellItem } from './invToSellItem'
 
 interface Props {
   goal: GoalData | null
@@ -388,35 +389,6 @@ function EditGoalSheet({
       </div>
     </div>
   )
-}
-
-// Mirror of DashboardClient.openSellFund / openSellNonFund so the goal-detail
-// sell flow submits the same payload the SellWithdrawSheet expects.
-function invToSellItem(inv: InvRow): SellItem {
-  if (inv.fund) {
-    return {
-      type: 'fund',
-      name: inv.fund.fundName,
-      currentValue: inv.fund.currentValue,
-      units: inv.fund.quantity,
-      navPerUnit: inv.fund.currentNAV,
-      gainPct: inv.fund.profitLossPercentage,
-      fundId: inv.fund.fundId,
-      purchasePrice: inv.fund.purchasePrice,
-    }
-  }
-  const navPerUnit = inv.units && inv.units > 0 ? inv.value / inv.units : undefined
-  return {
-    type: inv.type as 'bank' | 'gold' | 'stock',
-    name: inv.name,
-    currentValue: inv.value,
-    units: inv.units ?? undefined,
-    navPerUnit,
-    gainPct: inv.gainPct ?? undefined,
-    transactionId: inv.id, // for a book this is the anchor (= deposit_group_id)
-    purchasePrice: inv.principal ?? inv.value,
-    depositGroupId: inv.depositGroupId ?? null,
-  }
 }
 
 function InvestmentActionSheet({
