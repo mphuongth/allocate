@@ -104,6 +104,35 @@ begin
     begin update public.investment_transactions set plan_id = v_plan_a where transaction_id = v_tx2;
     exception when others then v_raised := true; end;
     if not v_raised then raise exception 'cross-user plan_id must be rejected'; end if;
+
+    -- deposit_group_id pointing at A's transaction must be rejected.
+    v_raised := false;
+    begin update public.investment_transactions set deposit_group_id = v_tx_a where transaction_id = v_tx2;
+    exception when others then v_raised := true; end;
+    if not v_raised then raise exception 'cross-user deposit_group_id must be rejected'; end if;
+  end;
+
+  -- A self-grouping book anchor (deposit_group_id = its own transaction_id) is
+  -- allowed on INSERT even though that row doesn't exist yet — but the self
+  -- bypass must NOT extend to UPDATE, or a privileged owner-change would move the
+  -- anchor to another user while its tranches keep pointing at it.
+  declare v_anchor uuid := gen_random_uuid();
+  begin
+    insert into public.investment_transactions (transaction_id, user_id, asset_type, transaction_type, investment_date, amount_vnd, deposit_group_id)
+      values (v_anchor, v_b, 'bank', 'investment', '2099-01-01', 1000000, v_anchor);
+    -- A tranche in the same book (owned by B).
+    insert into public.investment_transactions (user_id, asset_type, transaction_type, investment_date, amount_vnd, deposit_group_id)
+      values (v_b, 'bank', 'investment', '2099-02-01', 500000, v_anchor);
+    -- Moving the anchor to A must be rejected (it would orphan B's tranches onto
+    -- a now-foreign anchor).
+    v_raised := false;
+    begin update public.investment_transactions set user_id = v_a where transaction_id = v_anchor;
+    exception when others then v_raised := true; end;
+    if not v_raised then raise exception 'changing a grouped anchor owner must be rejected'; end if;
+    -- The group stays single-owner.
+    if exists (select 1 from public.investment_transactions where deposit_group_id = v_anchor and user_id <> v_b) then
+      raise exception 'grouped book must remain single-owner';
+    end if;
   end;
 
   -- 5) Legitimate same-owner references must succeed (no exception).
