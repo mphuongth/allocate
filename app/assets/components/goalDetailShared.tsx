@@ -4,12 +4,12 @@
 // investment-row valuation live here to stay in sync.
 
 import { useState, type CSSProperties } from 'react'
-import { TrendingUp, Building, Coins, BarChart2, Target, RefreshCw, Plus } from 'lucide-react'
+import { TrendingUp, Building, Coins, BarChart2, Target, RefreshCw, Plus, PiggyBank, GitMerge, ArrowDownRight, ArrowUpRight, type LucideIcon } from 'lucide-react'
 import { fmtCompact } from '@/lib/formatters'
 import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
 import { calcProjectedInterest } from '@/lib/finance'
 import { blendedRate } from '@/lib/accumulating'
-import { fmtTxDate } from './transactionUtils'
+import { fmtTxDate, txKind, type TxKind, type TxKindFields } from './transactionUtils'
 import { isTermDeposit, depositMaturityState, isMaturityActionable, isActionableAccumulatingBook } from '@/lib/maturity'
 import type { FundBreakdownItem } from '../DashboardClient'
 
@@ -41,6 +41,36 @@ export function buildCompositionSegments(
     segs.push({ label: isVi ? 'Chờ gộp' : 'For merge', value: heldValue, color: 'var(--c-muted)' })
   }
   return segs
+}
+
+export interface HistoryRowDescriptor {
+  kind: TxKind
+  ink: string
+  fill: string
+  Icon: LucideIcon
+  sign: string
+  name: string
+}
+
+// How a transaction-history row presents (#467): its kind → colour tokens, icon,
+// amount sign and display name. A held/merged settlement or a renewed row reads
+// NEUTRALLY (muted, no red "−") because the cash was parked/rolled forward, not
+// spent. Byte-identical inline in both goal-detail surfaces before this; each now
+// calls it and only maps the icon size + chrome in its own JSX.
+export function describeHistoryRow(
+  tx: TxKindFields & { fund_name?: string | null; notes?: string | null },
+  isRenewed: boolean,
+  isVi: boolean,
+): HistoryRowDescriptor {
+  const kind = txKind(tx)
+  const isWithdraw = kind === 'withdrawal'
+  const neutral = isRenewed || kind === 'held' || kind === 'consumed'
+  const ink = neutral ? 'var(--c-muted)' : isWithdraw ? 'var(--c-neg)' : 'var(--c-pos)'
+  const fill = neutral ? 'var(--c-card-2)' : isWithdraw ? 'var(--c-neg-tint)' : 'var(--c-pos-tint)'
+  const Icon = isRenewed ? RefreshCw : kind === 'held' ? PiggyBank : kind === 'consumed' ? GitMerge : isWithdraw ? ArrowDownRight : ArrowUpRight
+  const sign = isWithdraw ? '-' : kind === 'investment' ? '+' : ''
+  const name = tx.fund_name ?? tx.notes ?? (isVi ? 'Khoản đầu tư' : 'Investment')
+  return { kind, ink, fill, Icon, sign, name }
 }
 
 export function calcDeadlineMonths(targetDate: string | null): number {

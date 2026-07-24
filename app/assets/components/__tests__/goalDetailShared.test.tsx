@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { buildInvRows, buildRenewalSummary, calcDeadlineMonths, computeGoalCalculator, fmtMaturity, type GoalDetailTx } from '../goalDetailShared'
+import { buildInvRows, buildRenewalSummary, calcDeadlineMonths, computeGoalCalculator, describeHistoryRow, fmtMaturity, type GoalDetailTx } from '../goalDetailShared'
 import type { FundBreakdownItem } from '../../DashboardClient'
+import { ArrowUpRight, ArrowDownRight, PiggyBank, GitMerge, RefreshCw } from 'lucide-react'
 
 // A YYYY-MM-DD string `n` days from today (deterministic regardless of run date).
 function daysFromNow(n: number): string {
@@ -342,5 +343,61 @@ describe('computeGoalCalculator', () => {
     const c = computeGoalCalculator({ targetAmount: null, targetDate: null, currentValue: 10_000_000 }, 1_000_000)
     expect(c.remaining).toBe(0)
     expect(c.neededPerMonth).toBe(0)
+  })
+})
+
+
+// The transaction-history row's classifier (#467): kind → colour tokens, icon,
+// amount sign and display name. Was byte-identical inline in GoalDetailSheet and
+// DesktopGoalDetail; both now call this so the two surfaces can't drift.
+describe('describeHistoryRow', () => {
+  it('an investment reads positive (green, up-arrow, +)', () => {
+    const d = describeHistoryRow({ transaction_type: 'investment', fund_name: 'VESAF' }, false, false)
+    expect(d.kind).toBe('investment')
+    expect(d.ink).toBe('var(--c-pos)')
+    expect(d.fill).toBe('var(--c-pos-tint)')
+    expect(d.Icon).toBe(ArrowUpRight)
+    expect(d.sign).toBe('+')
+    expect(d.name).toBe('VESAF')
+  })
+
+  it('a real withdrawal reads negative (red, down-arrow, -)', () => {
+    const d = describeHistoryRow({ transaction_type: 'withdrawal', notes: 'Sell' }, false, false)
+    expect(d.kind).toBe('withdrawal')
+    expect(d.ink).toBe('var(--c-neg)')
+    expect(d.fill).toBe('var(--c-neg-tint)')
+    expect(d.Icon).toBe(ArrowDownRight)
+    expect(d.sign).toBe('-')
+    expect(d.name).toBe('Sell')
+  })
+
+  it('a held-for-merge settlement reads neutral (muted, piggy-bank, no sign)', () => {
+    const d = describeHistoryRow({ transaction_type: 'withdrawal', held_for_merge: true }, false, false)
+    expect(d.kind).toBe('held')
+    expect(d.ink).toBe('var(--c-muted)')
+    expect(d.fill).toBe('var(--c-card-2)')
+    expect(d.Icon).toBe(PiggyBank)
+    expect(d.sign).toBe('')
+  })
+
+  it('a consumed (merged) settlement uses the merge icon, still neutral', () => {
+    const d = describeHistoryRow({ transaction_type: 'withdrawal', held_for_merge: true, consumed_by_inv_id: 'x' }, false, false)
+    expect(d.kind).toBe('consumed')
+    expect(d.Icon).toBe(GitMerge)
+    expect(d.ink).toBe('var(--c-muted)')
+    expect(d.sign).toBe('')
+  })
+
+  it('a renewed row reads neutral with the renew icon but keeps its + sign', () => {
+    const d = describeHistoryRow({ transaction_type: 'investment', fund_name: 'VESAF' }, true, false)
+    expect(d.Icon).toBe(RefreshCw)
+    expect(d.ink).toBe('var(--c-muted)')   // renewed → neutral
+    expect(d.sign).toBe('+')               // still an investment
+  })
+
+  it('falls back name to notes then a localized default', () => {
+    expect(describeHistoryRow({ transaction_type: 'investment', notes: 'Cash' }, false, false).name).toBe('Cash')
+    expect(describeHistoryRow({ transaction_type: 'investment' }, false, false).name).toBe('Investment')
+    expect(describeHistoryRow({ transaction_type: 'investment' }, false, true).name).toBe('Khoản đầu tư')
   })
 })
