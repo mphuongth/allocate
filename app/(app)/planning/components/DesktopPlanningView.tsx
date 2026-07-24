@@ -20,6 +20,7 @@ import { useDialogA11y, useCloseOnScroll } from './useDialogA11y'
 import { type GoalItem } from '@/lib/planning'
 import { usePlanningDerivations } from '../usePlanningDerivations'
 import { usePlanningActions, buildBuyEdit, buildContributionPrefill } from '../usePlanningActions'
+import { saveIncome, deletePlan, saveOtherExpense } from '../planActions'
 import { relationshipLabel } from '@/app/assets/components/insuranceShared'
 import type {
   MonthlyPlan, FundInvestment, DirectSaving, FixedExpense,
@@ -505,35 +506,24 @@ export default function DesktopPlanningView({
     if (!incomeVal || isNaN(num) || num <= 0) return
     setSaving(true)
     try {
+      const r = await saveIncome({ planId: plan?.id, month, year, salaryVnd: num })
+      if (!r.ok) { toast.error(failMsg); return }
       if (plan) {
-        const res = await fetch(`/api/v1/monthly-plans/${plan.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ salary_vnd: num }),
-        })
-        if (res.ok) { setShowIncome(false); onRefresh(); onToast(isVI ? 'Đã cập nhật thu nhập' : 'Income updated') }
-        else { toast.error(failMsg) }
+        setShowIncome(false); onRefresh(); onToast(isVI ? 'Đã cập nhật thu nhập' : 'Income updated')
       } else {
-        const res = await fetch('/api/v1/monthly-plans', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ month, year, salary_vnd: num }),
-        })
-        if (res.ok) {
-          const p = await res.json()
-          setShowIncome(false)
-          onPlanCreated({ id: p.id, month: p.month, year: p.year, salary_vnd: p.salary_vnd })
-        } else { toast.error(failMsg) }
+        const p = r.data as MonthlyPlan
+        setShowIncome(false)
+        onPlanCreated({ id: p.id, month: p.month, year: p.year, salary_vnd: p.salary_vnd })
       }
-    } catch { toast.error(failMsg) } finally { setSaving(false) }
+    } finally { setSaving(false) }
   }
 
   async function handleDeletePlan() {
     if (!plan) return
     setSaving(true)
     try {
-      const res = await fetch(`/api/v1/monthly-plans/${plan.id}`, { method: 'DELETE' }).catch(() => null)
-      if (!res?.ok) { toast.error(failMsg); return }
+      const r = await deletePlan(plan.id)
+      if (!r.ok) { toast.error(failMsg); return }
       setShowDelete(false)
       onPlanDeleted()
       onToast(isVI ? `Đã xoá kế hoạch ${monthLabel}` : `Plan for ${monthLabel} deleted`)
@@ -592,15 +582,13 @@ export default function DesktopPlanningView({
     setSaving(true)
     try {
       const isEdit = otherModal && 'id' in otherModal && otherModal.id
-      const url = isEdit
-        ? `/api/v1/monthly-plans/${plan.id}/other-expenses/${(otherModal as OtherExpense).id}`
-        : `/api/v1/monthly-plans/${plan.id}/other-expenses`
-      const res = await fetch(url, {
-        method: isEdit ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ description: otherDesc.trim(), amount_vnd: Number(otherAmt) }),
-      }).catch(() => null)
-      if (!res?.ok) { toast.error(failMsg); return }
+      const r = await saveOtherExpense({
+        planId: plan.id,
+        id: isEdit ? (otherModal as OtherExpense).id : null,
+        description: otherDesc.trim(),
+        amountVnd: Number(otherAmt),
+      })
+      if (!r.ok) { toast.error(failMsg); return }
       setOtherModal(null)
       onRefresh()
       onToast(isVI ? 'Đã lưu' : 'Saved')
