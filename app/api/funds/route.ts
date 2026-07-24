@@ -6,6 +6,12 @@ import { ValidationError, validateAmount } from '@/lib/validation'
 const FUND_TYPES = ['balanced', 'equity', 'debt', 'gold'] as const
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
+// Canonical funds-list contract (#470): GET /api/funds → `{ funds: Fund[] }`,
+// each a full fund row (`select('*')`), ordered by name. Every consumer reads
+// `data.funds` — the fund library (useFundsData), the ledger filter
+// (TransactionLedgerSheet), and the add-transaction sheet. The old
+// `GET /api/v1/funds` (a bare array with a smaller field set) was removed; its
+// only consumer now uses this contract.
 export async function GET() {
   const supabase = await createSupabaseServerClient()
   const {

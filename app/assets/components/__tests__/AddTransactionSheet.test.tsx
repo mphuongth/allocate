@@ -270,7 +270,8 @@ describe('AddTransactionSheet — gold sell (quantity × price) (issue #232)', (
 describe('AddTransactionSheet — editable NAV on a fund buy', () => {
   const fundsAndGoals = (url: string, _init?: RequestInit) => {
     if (String(url).includes('/funds')) {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve([{ id: 'f1', name: 'VESAF', nav: 20000, code: 'VES', fund_type: 'equity' }]) })
+      // Canonical funds-list contract: GET /api/funds → { funds: [...] } (#470).
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ funds: [{ id: 'f1', name: 'VESAF', nav: 20000, code: 'VES', fund_type: 'equity' }] }) })
     }
     if (String(url).includes('/savings-goals')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ goals: [] }) })
