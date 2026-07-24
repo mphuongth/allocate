@@ -22,6 +22,13 @@ export const moneyInput: React.CSSProperties = {
   borderRadius: 10, color: 'var(--c-ink)', outline: 'none',
 }
 
+// A native <input type=date> on iOS Safari sizes to its intrinsic content width and
+// ignores width:100%, so maxWidth:100% + minWidth:0 pin it to its cell.
+export const dateInput: React.CSSProperties = {
+  ...moneyInput, maxWidth: '100%', minWidth: 0,
+  WebkitAppearance: 'none', appearance: 'none',
+}
+
 export function MoneyInputCore({ value, onChange, testId, style, compact }: {
   value: string; onChange: (v: string) => void; testId?: string;
   style?: React.CSSProperties; compact?: boolean

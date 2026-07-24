@@ -21,9 +21,10 @@
 import { useState, useEffect } from 'react'
 import { RefreshCw, Pencil, ArrowDownToLine, AlertTriangle, Check, Building2, X, Plus, PiggyBank } from 'lucide-react'
 import { fmt, fmtCompact } from '@/lib/formatters'
-import { fieldLabel, moneyInput, MoneyField, WithdrawSection, HeldPoolSection } from './maturityResolveFields'
+import { fieldLabel, moneyInput, dateInput, MoneyField, WithdrawSection, HeldPoolSection } from './maturityResolveFields'
 import { MergeSourcesSection } from './maturityResolveMergeSources'
 import { RecurringRedepositSection } from './maturityResolveRecurring'
+import { CombineNewCycleSection } from './maturityResolveNewCycle'
 import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
 import { iconHit } from './iconHit'
 import { SUCCESS_FLASH_MS } from '../successFlash'
@@ -47,11 +48,6 @@ type Mode = RenewMode | 'withdraw' | 'combine'
 // wider than the viewport — letting it be dragged sideways (#439). Clamp it like
 // the ledger's date filters (#362): appearance:none trims the intrinsic width,
 // maxWidth:100% + minWidth:0 pin it to its cell.
-const dateInput: React.CSSProperties = {
-  ...moneyInput, maxWidth: '100%', minWidth: 0,
-  WebkitAppearance: 'none', appearance: 'none',
-}
-
 // Money entry core: a digit-grouped amount field (₫ suffix). Reused by every
 // money input in the maturity flow so large VND amounts stay readable
 // (e.g. "37,030,000" rather than "37030000"). `AmountInput` keeps the value raw
@@ -782,61 +778,18 @@ export function MaturityResolveBody({
               t={{ heldSectionTitle: t.heldSectionTitle, heldSectionHint: t.heldSectionHint, heldUnholdHint: t.heldUnholdHint }} />
           )}
 
-          {/* New term + rate */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <div>
-              <div style={fieldLabel}>{t.newTerm}</div>
-              <div style={{ position: 'relative' }}>
-                <input type="text" inputMode="numeric" value={formatIntVN(term)} onChange={(e) => setTerm(parseIntVN(e.target.value))} style={moneyInput} />
-                <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--c-muted)', pointerEvents: 'none' }}>{t.mo}</span>
-              </div>
-            </div>
-            <div>
-              <div style={fieldLabel}>{t.newRate}</div>
-              <div style={{ position: 'relative' }}>
-                <input type="text" inputMode="decimal" value={formatDecimalVN(rate)} onChange={(e) => setRate(parseDecimalVN(e.target.value))} style={moneyInput} />
-                <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--c-muted)', pointerEvents: 'none' }}>%/{t.perYr}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* New maturity date — same anchor (old maturity + term) as a renewal */}
-          <div>
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 }}>
-              <span style={{ ...fieldLabel, marginBottom: 0 }}>{t.newMaturityLabel}</span>
-              {dateTouched && (
-                <button type="button" onClick={() => setMaturityOverride(null)}
-                  style={{ fontSize: 11, fontWeight: 600, color: 'var(--c-navy)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>
-                  {t.resetDate}
-                </button>
-              )}
-            </div>
-            <input data-testid="maturity-combine-date" type="date" value={newMaturity} min={baseDate} onChange={(e) => setMaturityOverride(e.target.value)} style={dateInput} />
-            {!maturityValid && <p style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--c-neg)', lineHeight: 1.4 }}>{t.maturityTooEarly}</p>}
-          </div>
-
-          {/* Mark this month's recurring as deposited (prevents double-count) */}
-          {linkedAmt > 0 && pickedCand && (
-            <label style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '10px 12px', background: 'var(--c-pos-tint)', borderRadius: 10, fontSize: 12.5, color: 'var(--c-ink)', lineHeight: 1.4, cursor: 'pointer' }}>
-              <input data-testid="maturity-mark-fulfilled" type="checkbox" checked={markFulfilled} onChange={(e) => setMarkFulfilled(e.target.checked)} style={{ accentColor: 'var(--c-pos)', width: 16, height: 16, flexShrink: 0 }} />
-              <span>{t.markDeposited(fmtCompact(linkedAmt))}</span>
-            </label>
-          )}
-
-          {/* Preview */}
-          <div style={{ border: '1px solid var(--c-line)', borderRadius: 12, overflow: 'hidden' }}>
-            <div style={{ padding: '10px 14px', background: 'var(--c-navy-tint)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--c-navy)' }}>{t.newCycle}</span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span data-testid="maturity-new-principal" style={{ fontSize: 16, fontWeight: 700, color: 'var(--c-navy)', fontVariantNumeric: 'tabular-nums' }}>{fmt(newPrincipal)}</span>
-                {rate !== '' && <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 999, background: 'var(--c-card)', color: 'var(--c-navy)' }}>{rate}%/{t.perYr}</span>}
-              </span>
-            </div>
-            <div style={{ background: 'var(--c-card)', padding: '9px 12px' }}>
-              <div style={{ fontSize: 10, color: 'var(--c-muted)' }}>{t.newMaturityLabel}</div>
-              <div data-testid="maturity-new-date" style={{ fontSize: 13, fontWeight: 600, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>{newMaturityFmt}</div>
-            </div>
-          </div>
+          <CombineNewCycleSection
+            term={term} setTerm={setTerm} rate={rate} setRate={setRate}
+            newMaturity={newMaturity} newMaturityFmt={newMaturityFmt} baseDate={baseDate}
+            setMaturityOverride={setMaturityOverride} dateTouched={dateTouched} maturityValid={maturityValid}
+            linkedAmt={linkedAmt} pickedCand={pickedCand} markFulfilled={markFulfilled} setMarkFulfilled={setMarkFulfilled}
+            newPrincipal={newPrincipal}
+            t={{
+              newTerm: t.newTerm, newRate: t.newRate, mo: t.mo, perYr: t.perYr,
+              newMaturityLabel: t.newMaturityLabel, resetDate: t.resetDate, maturityTooEarly: t.maturityTooEarly,
+              markDeposited: t.markDeposited, newCycle: t.newCycle,
+            }}
+          />
         </div>
       )}
 
