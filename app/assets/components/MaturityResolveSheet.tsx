@@ -19,9 +19,9 @@
 // (the parent wires `onWithdraw`).
 
 import { useState, useEffect } from 'react'
-import { RefreshCw, Pencil, ArrowDownToLine, AlertTriangle, Check, Building2, X, Plus, Wallet, Lock, SlidersHorizontal, PiggyBank, GitMerge } from 'lucide-react'
+import { RefreshCw, Pencil, ArrowDownToLine, AlertTriangle, Check, Building2, X, Plus, Wallet, Lock, SlidersHorizontal, PiggyBank } from 'lucide-react'
 import { fmt, fmtCompact } from '@/lib/formatters'
-import { fieldLabel, moneyInput, MoneyInputCore, MoneyField, WithdrawSection } from './maturityResolveFields'
+import { fieldLabel, moneyInput, MoneyInputCore, MoneyField, WithdrawSection, HeldPoolSection } from './maturityResolveFields'
 import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
 import { iconHit } from './iconHit'
 import { SUCCESS_FLASH_MS } from '../successFlash'
@@ -909,32 +909,8 @@ export function MaturityResolveBody({
               one just leaves it in the pool; restoring the deposit is the holdings
               chip's "Bỏ chờ gộp" action. Shown even with no live siblings. */}
           {!isBook && pooledHeld.length > 0 && (
-            <div data-testid="merge-held-pool" style={{ border: '1px solid var(--c-line)', borderRadius: 12, padding: '11px 13px', display: 'grid', gap: 9 }}>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                  <GitMerge size={14} color="var(--c-navy)" style={{ flexShrink: 0 }} />
-                  <div style={{ ...fieldLabel, marginBottom: 0 }}>{t.heldSectionTitle}</div>
-                </div>
-                <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--c-muted)', lineHeight: 1.45 }}>{t.heldSectionHint}</p>
-              </div>
-              <div style={{ display: 'grid', gap: 7 }}>
-                {pooledHeld.map((h) => {
-                  const sel = isHeldSelected(h.id)
-                  return (
-                    <button key={h.id} type="button" data-testid={`merge-held-${h.id}`} onClick={() => setHeldSel((prev) => ({ ...prev, [h.id]: !sel }))}
-                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 11px', borderRadius: 10, cursor: 'pointer', textAlign: 'left',
-                        border: `1.5px solid ${sel ? 'var(--c-navy)' : 'var(--c-line)'}`, background: sel ? 'var(--c-navy-tint)' : 'var(--c-card)', fontFamily: 'inherit' }}>
-                      <span style={{ width: 18, height: 18, borderRadius: 9, flexShrink: 0, border: `1.5px solid ${sel ? 'var(--c-btn-primary)' : 'var(--c-line-strong)'}`, background: sel ? 'var(--c-btn-primary)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        {sel && <Check size={11} color="#fff" strokeWidth={3} />}
-                      </span>
-                      <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.name ?? (isVi ? 'Sổ chờ gộp' : 'Held deposit')}</span>
-                      <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(h.amount)}</span>
-                    </button>
-                  )
-                })}
-              </div>
-              <p style={{ margin: 0, fontSize: 11, color: 'var(--c-muted)', lineHeight: 1.45 }}>{t.heldUnholdHint}</p>
-            </div>
+            <HeldPoolSection pooledHeld={pooledHeld} isHeldSelected={isHeldSelected} setHeldSel={setHeldSel} isVi={isVi}
+              t={{ heldSectionTitle: t.heldSectionTitle, heldSectionHint: t.heldSectionHint, heldUnholdHint: t.heldUnholdHint }} />
           )}
 
           {/* New term + rate */}
