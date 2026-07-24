@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import {
   ChevronLeft, ChevronRight, MoreHorizontal,
-  Edit2, Trash2, Calendar, Download, ArrowDownRight, ArrowUpRight, Target, RefreshCw, PiggyBank, GitMerge, Plus,
+  Edit2, Trash2, Calendar, Download, ArrowDownRight, Target, RefreshCw, PiggyBank, Plus,
 } from 'lucide-react'
 import { iconHit } from './iconHit'
 import { useLocale } from 'next-intl'
@@ -14,8 +14,8 @@ import type { GoalData, FundBreakdownItem } from '../DashboardClient'
 import TransactionHistorySheet, { type PurchaseHistoryRow } from './TransactionHistorySheet'
 import { SellWithdrawSheet } from './SellWithdrawSheet'
 import { MaturityResolveSheet } from './MaturityResolveSheet'
-import { GD_COLORS, buildCompositionSegments, computeGoalCalculator, TypeIcon, UnlinkSvg, buildInvRows, buildRenewalSummary, BankInfoStrip, TopUpControl, RenewalSummaryLine, needsMaturityAction, needsBookMaturityAction, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
-import { fmtTxDate, txKind } from './transactionUtils'
+import { GD_COLORS, buildCompositionSegments, computeGoalCalculator, describeHistoryRow, TypeIcon, UnlinkSvg, buildInvRows, buildRenewalSummary, BankInfoStrip, TopUpControl, RenewalSummaryLine, needsMaturityAction, needsBookMaturityAction, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
+import { fmtTxDate } from './transactionUtils'
 import { TxRowsSkeleton } from './Skeletons'
 import LoadError from './LoadError'
 import { useGoalDetailData } from './useGoalDetailData'
@@ -1262,16 +1262,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
               )}
               {!txLoading && transactions.map((tx, i) => {
                 const isRenewed = !!tx.renewed_from_transaction_id
-                // Held/merged settlements parked their cash — render neutral (like a
-                // snapshot), never the red "−" of a real withdrawal.
-                const kind = txKind(tx)
-                const isWithdraw = kind === 'withdrawal'
-                const neutral = isRenewed || kind === 'held' || kind === 'consumed'
-                const ink = neutral ? 'var(--c-muted)' : isWithdraw ? 'var(--c-neg)' : 'var(--c-pos)'
-                const fill = neutral ? 'var(--c-card-2)' : isWithdraw ? 'var(--c-neg-tint)' : 'var(--c-pos-tint)'
-                const DirIcon = isRenewed ? RefreshCw : kind === 'held' ? PiggyBank : kind === 'consumed' ? GitMerge : isWithdraw ? ArrowDownRight : ArrowUpRight
-                const sign = isWithdraw ? '-' : kind === 'investment' ? '+' : ''
-                const name = tx.fund_name ?? tx.notes ?? (isVI ? 'Khoản đầu tư' : 'Investment')
+                const { kind, ink, fill, Icon, sign, name } = describeHistoryRow(tx, isRenewed, isVI)
                 return (
                   <div
                     key={tx.transaction_id}
@@ -1288,7 +1279,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
                       background: fill, color: ink,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}>
-                      <DirIcon size={14} strokeWidth={2.2} />
+                      <Icon size={14} strokeWidth={2.2} />
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--c-ink)', display: 'flex', alignItems: 'center', gap: 6 }}>
