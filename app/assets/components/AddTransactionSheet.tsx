@@ -8,7 +8,7 @@ import { CairnLoader } from '@/app/components/ui/CairnLoader'
 import { todayIso } from '@/lib/dates'
 import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
 import LoadError from './LoadError'
-import { computeFundPricing, computeSellPreview } from './addTransactionModel'
+import { computeFundPricing, computeSellPreview, buildBuyPayload, buildEditPayload, buildSellPayload, type TxForm } from './addTransactionModel'
 
 interface Fund { id: string; name: string; nav: number; code: string | null; fund_type?: string }
 interface Goal { goal_id: string; goal_name: string }
@@ -364,209 +364,54 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
     }
   }, [dir, assetType, holdingKey, sellNav])
 
-  async function handleSave() {
-    setError('')
-
-    // ── Edit an existing investment (PUT) ──────────────────────────────────
-    if (existing) {
-      let payload: Record<string, unknown>
-      if (assetType === 'fund') {
-        const amt = Number(amount.replace(/\./g, ''))
-        if (!fundId) { setError(t('fundRequired')); return }
-        if (!amt) { setError(t('amountRequired')); return }
-        const navV = Number(nav) || selectedFund?.nav || null
-        const u = units ? Number(units) : (navV ? amt / navV : null)
-        payload = {
-          asset_type: 'fund', fund_id: fundId, investment_date: date,
-          amount_vnd: amt, units: u,
-          unit_price: navV,
-          goal_id: goalId || null, notes: note || null,
-        }
-      } else if (assetType === 'bank') {
-        const amt = Number(bankAmount.replace(/\./g, ''))
-        if (!amt) { setError(t('amountRequired')); return }
-        payload = {
-          asset_type: 'bank', fund_id: null, investment_date: date, amount_vnd: amt,
-          interest_rate: rate ? Number(rate) : null, expiry_date: maturity || null,
-          goal_id: goalId || null, notes: selectedBankName || note || null,
-          bank_code: bankCode || null,
-        }
-      } else {
-        const qty = Number(goldQty)
-        const price = Number(goldPrice.replace(/\./g, ''))
-        if (!qty || !price) { setError(t('amountRequired')); return }
-        const unitsInChi = goldUnit === 'luong' ? qty * 10 : qty
-        const pricePerChi = goldUnit === 'luong' ? Math.round(price / 10) : price
-        payload = {
-          asset_type: 'gold', fund_id: null, investment_date: date,
-          amount_vnd: Math.round(qty * price), units: unitsInChi, unit_price: pricePerChi,
-          goal_id: goalId || null, notes: goldProvider || null,
-        }
-      }
-      setSaving(true)
-      try {
-        const res = await fetch(`/api/v1/investment-transactions/${existing.transaction_id}`, {
-          method: 'PUT', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        })
-        if (!res.ok) {
-          const d = await res.json()
-          setError(d.error ?? tc('error'))
-        } else {
-          onClose()
-          onSaved?.()
-        }
-      } catch {
-        setError(tc('error'))
-      } finally {
-        setSaving(false)
-      }
-      return
-    }
-
-    // ── Sell / withdraw: pull from the chosen holding ──────────────────────
-    if (dir === 'sell') {
-      if (!selectedHolding) { setError(t('holdingRequired')); return }
-
-      let sellBody: Record<string, unknown>
-      if (selectedHolding.type === 'gold' && selectedHolding.transactionId) {
-        // Gold: quantity (chỉ) × sale price. amount = proceeds, units = chỉ sold,
-        // principal = cost basis of the sold quantity.
-        if (numGoldSellQty <= 0) { setError(t('amountRequired')); return }
-        if (isOverUnits) { setError(t('exceedsBalance')); return }
-        sellBody = {
-          transaction_type: 'withdrawal', asset_type: 'gold',
-          parent_transaction_id: selectedHolding.transactionId,
-          investment_date: date, amount_vnd: goldProceeds,
-          units_withdrawn: parseFloat(numGoldSellQty.toFixed(4)),
-          principal_withdrawn: goldCost ?? goldProceeds, goal_id: null, notes: note || null,
-        }
-      } else if (selectedHolding.type === 'fund' && selectedHolding.fundId) {
-        if (!numSell) { setError(t('amountRequired')); return }
-        if (sellOverMax) { setError(t('exceedsBalance')); return }
-        const principalWithdrawn = selectedHolding.purchasePrice
-          ? Math.round((numSell / selectedHolding.currentValue) * (selectedHolding.purchasePrice * (selectedHolding.units ?? 0)))
-          : Math.round(numSell)
-        const unitsWithdrawn = sellNav ? numSell / sellNav : (selectedHolding.units ?? 0)
-        sellBody = {
-          transaction_type: 'withdrawal', asset_type: 'fund', fund_id: selectedHolding.fundId,
-          investment_date: date, amount_vnd: Math.round(numSell),
-          units_withdrawn: parseFloat(unitsWithdrawn.toFixed(4)),
-          principal_withdrawn: principalWithdrawn, goal_id: null, notes: note || null,
-        }
-      } else if (selectedHolding.transactionId) {
-        if (!numSell) { setError(t('amountRequired')); return }
-        if (sellOverMax) { setError(t('exceedsBalance')); return }
-        // Bank: cash received is what the user gets; principal portion is what leaves
-        // the deposit's principal, so the gain/loss is recorded accurately.
-        const isBankSell = selectedHolding.type === 'bank'
-        if (isBankSell && numReceived <= 0) { setError(t('amountRequired')); return }
-        sellBody = {
-          transaction_type: 'withdrawal', asset_type: selectedHolding.type,
-          parent_transaction_id: selectedHolding.transactionId,
-          investment_date: date,
-          amount_vnd: isBankSell ? Math.round(numReceived) : Math.round(numSell),
-          principal_withdrawn: isBankSell ? bankPrincipalPortion : Math.round(numSell),
-          goal_id: null, notes: note || null,
-        }
-      } else {
-        setError(t('holdingRequired')); return
-      }
-
-      setSaving(true)
-      try {
-        const res = await fetch('/api/v1/investment-transactions', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(sellBody),
-        })
-        if (!res.ok) {
-          const data = await res.json()
-          setError(data.error ?? tc('error'))
-        } else {
-          onClose()
-          onSaved?.()
-        }
-      } catch {
-        setError(tc('error'))
-      } finally {
-        setSaving(false)
-      }
-      return
-    }
-
-    let body: Record<string, unknown> = {
-      asset_type: assetType,
-      transaction_type: 'investment',
-      investment_date: date,
-      notes: note || null,
-      goal_id: goalId || null,
-      // Logging from the Plan page ties the transaction to the month's plan so
-      // the By-goal view counts it as contributed.
-      plan_id: prefill?.plan_id ?? null,
-    }
-
-    if (assetType === 'fund') {
-      const amt = Number(amount.replace(/\./g, ''))
-      if (!fundId) { setError(t('fundRequired')); return }
-      if (!amt) { setError(t('amountRequired')); return }
-      const navV = Number(nav) || selectedFund?.nav || null
-      body = {
-        ...body,
-        fund_id: fundId,
-        amount_vnd: amt,
-        units: units ? Number(units) : (navV ? amt / navV : null),
-        unit_price: navV,
-      }
-    } else if (assetType === 'bank') {
-      const amt = Number(bankAmount.replace(/\./g, ''))
-      if (!amt) { setError(t('amountRequired')); return }
-      body = {
-        ...body,
-        amount_vnd: amt,
-        notes: selectedBankName || note || null,
-        bank_code: bankCode || null,
-        interest_rate: rate ? Number(rate) : null,
-        expiry_date: maturity || null,
-        // An accumulating book: the route self-groups this anchor row so it can
-        // be topped up later. Term/flex stay ungrouped (one-off holdings).
-        ...(depositType === 'accumulating' ? { accumulating: true } : {}),
-      }
-    } else {
-      // gold — qty/price are in the selected unit; normalize to chỉ for storage
-      // since gold is valued per chỉ.
-      const qty = Number(goldQty)
-      const price = Number(goldPrice.replace(/\./g, ''))
-      if (!qty || !price) { setError(t('amountRequired')); return }
-      const unitsInChi = goldUnit === 'luong' ? qty * 10 : qty
-      const pricePerChi = goldUnit === 'luong' ? Math.round(price / 10) : price
-      body = {
-        ...body,
-        amount_vnd: Math.round(qty * price),
-        units: unitsInChi,
-        unit_price: pricePerChi,
-        notes: goldProvider || null,
-      }
-    }
-
+  async function submitTransaction(url: string, method: 'POST' | 'PUT', payload: Record<string, unknown>) {
     setSaving(true)
     try {
-      const res = await fetch('/api/v1/investment-transactions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+      const res = await fetch(url, {
+        method, headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       })
-      if (!res.ok) {
-        const data = await res.json()
-        setError(data.error ?? tc('error'))
-      } else {
-        onClose()
-        onSaved?.()
-      }
+      if (!res.ok) { const d = await res.json(); setError(d.error ?? tc('error')); return }
+      onClose()
+      onSaved?.()
     } catch {
       setError(tc('error'))
     } finally {
       setSaving(false)
     }
+  }
+
+  async function handleSave() {
+    setError('')
+    const form: TxForm = {
+      assetType, date, goalId, note,
+      fundId, amount, units, nav, selectedFundNav: selectedFund?.nav,
+      bankCode, selectedBankName, depositType, bankAmount, rate, maturity,
+      goldProvider, goldUnit, goldQty, goldPrice,
+    }
+
+    // Edit an existing investment (PUT).
+    if (existing) {
+      const r = buildEditPayload(form)
+      if (!r.ok) { setError(t(r.errorKey)); return }
+      await submitTransaction(`/api/v1/investment-transactions/${existing.transaction_id}`, 'PUT', r.payload)
+      return
+    }
+
+    // Sell / withdraw from the chosen holding (POST).
+    if (dir === 'sell') {
+      const r = buildSellPayload(selectedHolding, {
+        numSell, sellOverMax, sellNav, numGoldSellQty, isOverUnits, goldProceeds, goldCost, numReceived, bankPrincipalPortion,
+      }, { date, note })
+      if (!r.ok) { setError(t(r.errorKey)); return }
+      await submitTransaction('/api/v1/investment-transactions', 'POST', r.payload)
+      return
+    }
+
+    // Buy / create a new investment (POST).
+    const r = buildBuyPayload(form, prefill?.plan_id ?? null)
+    if (!r.ok) { setError(t(r.errorKey)); return }
+    await submitTransaction('/api/v1/investment-transactions', 'POST', r.payload)
   }
 
   if (desktop ? !open : !mounted) return null
