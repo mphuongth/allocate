@@ -8,6 +8,7 @@ import { CairnLoader } from '@/app/components/ui/CairnLoader'
 import { todayIso } from '@/lib/dates'
 import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
 import LoadError from './LoadError'
+import { computeFundPricing, computeSellPreview } from './addTransactionModel'
 
 interface Fund { id: string; name: string; nav: number; code: string | null; fund_type?: string }
 interface Goal { goal_id: string; goal_name: string }
@@ -342,56 +343,19 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
     setError('')
   }
 
-  // Fund pricing: NAV is editable (the actual purchase price). It falls back to
-  // the fund's current NAV, and units derive from amount ÷ NAV (two-way linked).
+  // Fund buy pricing + all sell-side preview math live in addTransactionModel (#467);
+  // destructured back into the same names the summary UI and handleSave read.
   const selectedFund = funds.find(f => f.id === fundId)
-  const navNum = Number(nav) || selectedFund?.nav || 0
-  const displayNav = nav !== '' ? nav : (selectedFund ? String(selectedFund.nav) : '')
-  const navIsCurrent = !!selectedFund && (nav === '' || Number(nav) === selectedFund.nav)
-  const autoUnits = navNum > 0 && amount && !units
-    ? (Number(amount.replace(/\./g, '')) / navNum).toFixed(2)
-    : units
+  const { navNum, displayNav, navIsCurrent, autoUnits } = computeFundPricing({ nav, amount, units, currentNav: selectedFund?.nav })
 
-  // ── Sell derived state ──────────────────────────────────────────────────
   const sellHoldings = holdings.filter(h => h.type === assetType)
   const selectedHolding = sellHoldings.find(h => h.key === holdingKey) ?? sellHoldings[0] ?? null
-  const sellMax = selectedHolding?.currentValue ?? 0
-  const numSell = Number(sellAmount) || 0
-  const sellOverMax = numSell > sellMax && sellMax > 0
-  const sellRemaining = Math.max(0, sellMax - numSell)
-  const sellNav = selectedHolding?.navPerUnit ?? null
-  const sellGainLoss = (numSell && assetType === 'fund' && selectedHolding?.gainPct != null)
-    ? numSell * selectedHolding.gainPct / (100 + selectedHolding.gainPct) : null
-  const sellTax = assetType === 'fund' && numSell > 0 ? Math.round(numSell * 0.001) : null
-
-  // Bank withdrawal: the cash received is editable (early withdrawal can cut interest).
-  // We split the principal out of the withdrawn amount so the summary can show gain/loss.
-  const numReceived = Number(received) || 0
-  const bankPrincipal = selectedHolding?.purchasePrice ?? sellMax
-  const bankFraction = sellMax > 0 ? Math.min(1, numSell / sellMax) : 0
-  const bankPrincipalPortion = Math.round(bankPrincipal * bankFraction)
-  const bankGain = assetType === 'bank' && numReceived > 0 && numSell > 0 ? numReceived - bankPrincipalPortion : null
-
-  // Gold sells are quantity-based: enter chỉ to sell + the sale price per chỉ.
-  const goldMaxUnits = selectedHolding?.units ?? 0
-  const numGoldSellQty = Number(goldSellQty) || 0
-  const numGoldSellPrice = Number(goldSellPrice) || 0
-  const goldBuyUnit = selectedHolding?.units && selectedHolding.units > 0 && selectedHolding.purchasePrice != null
-    ? Math.round(selectedHolding.purchasePrice / selectedHolding.units) : null
-  const goldProceeds = Math.round(numGoldSellQty * numGoldSellPrice)
-  const goldCost = goldBuyUnit != null ? Math.round(numGoldSellQty * goldBuyUnit) : null
-  const goldProfit = goldProceeds > 0 && goldCost != null ? goldProceeds - goldCost : null
-  const goldRemUnits = selectedHolding?.units != null ? selectedHolding.units - numGoldSellQty : null
-  const isOverUnits = numGoldSellQty > goldMaxUnits && goldMaxUnits > 0
-
-  const sellDisabled = dir === 'sell' && (
-    !selectedHolding ||
-    (assetType === 'gold'
-      ? (numGoldSellQty <= 0 || isOverUnits)
-      : assetType === 'bank'
-        ? (numSell <= 0 || sellOverMax || numReceived <= 0)
-        : (numSell <= 0 || sellOverMax))
-  )
+  const {
+    sellMax, numSell, sellOverMax, sellRemaining, sellNav, sellGainLoss, sellTax,
+    numReceived, bankFraction, bankPrincipalPortion, bankGain,
+    goldMaxUnits, numGoldSellQty, numGoldSellPrice, goldBuyUnit, goldProceeds, goldCost,
+    goldProfit, goldRemUnits, isOverUnits, sellDisabled,
+  } = computeSellPreview({ assetType, dir, holding: selectedHolding, sellAmount, received, goldSellQty, goldSellPrice })
 
   // Prefill the gold sale price with the holding's current price per chỉ.
   useEffect(() => {
