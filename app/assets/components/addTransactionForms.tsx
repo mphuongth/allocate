@@ -5,8 +5,11 @@
 // orchestration (state, effects, dir/assetType gating, submit) and passes the
 // relevant state down. Business math stays in addTransactionModel.ts.
 import { useTranslations } from 'next-intl'
+import { X, Wallet, TrendingUp, Building2, Coins, ArrowDownToLine, Shield } from 'lucide-react'
 import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
-import type { Fund, Bank } from './AddTransactionSheet'
+import LoadError from './LoadError'
+import type { Fund, Bank, Holding } from './AddTransactionSheet'
+import type { SellPreview, AssetType } from './addTransactionModel'
 
 const GOLD_PROVIDERS = ['PNJ', 'DOJI', 'SJC', 'Bảo Tín']
 
@@ -331,5 +334,314 @@ export function BuyGoldFields({
         </div>
       )}
     </>
+  )
+}
+
+// The sell / withdraw workflow for AddTransactionSheet (#467): a shared
+// holding-picker + amount shell with per-asset inserts (fund units, bank received,
+// gold qty/price) and summaries. Renders from the full SellPreview the sheet
+// computes; the sheet keeps the submit + payload logic.
+export function SellForm({
+  sell, assetType, isVI,
+  holdingsError, setHoldingsError, setHoldingsReload,
+  sellHoldings, selectedHolding, setHoldingKey,
+  sellAmount, setSellAmount, fundSellUnits, setFundSellUnits,
+  received, setReceived, goldSellQty, setGoldSellQty, goldSellPrice, setGoldSellPrice,
+  inputStyle, labelStyle,
+}: {
+  sell: SellPreview
+  assetType: AssetType
+  isVI: boolean
+  holdingsError: boolean
+  setHoldingsError: (v: boolean) => void
+  setHoldingsReload: (fn: (n: number) => number) => void
+  sellHoldings: Holding[]
+  selectedHolding: Holding | null
+  setHoldingKey: (v: string) => void
+  sellAmount: string
+  setSellAmount: (v: string) => void
+  fundSellUnits: string
+  setFundSellUnits: (v: string) => void
+  received: string
+  setReceived: (v: string) => void
+  goldSellQty: string
+  setGoldSellQty: (v: string) => void
+  goldSellPrice: string
+  setGoldSellPrice: (v: string) => void
+  inputStyle: React.CSSProperties
+  labelStyle: React.CSSProperties
+}) {
+  const t = useTranslations('addTx')
+  const {
+    sellMax, numSell, sellOverMax, sellRemaining, sellNav, sellGainLoss, sellTax,
+    numReceived, bankFraction, bankPrincipalPortion, bankGain,
+    goldMaxUnits, numGoldSellQty, numGoldSellPrice, goldBuyUnit, goldProceeds, goldCost,
+    goldProfit, goldRemUnits, isOverUnits,
+  } = sell
+  return (
+            holdingsError ? (
+              <div style={{ padding: '8px 16px', background: 'var(--c-card-2)', borderRadius: 12, border: '1px dashed var(--c-line)' }}>
+                <LoadError isVI={isVI} onRetry={() => { setHoldingsError(false); setHoldingsReload((n) => n + 1) }} compact />
+              </div>
+            ) : sellHoldings.length === 0 ? (
+              <div style={{ padding: '24px 16px', textAlign: 'center', background: 'var(--c-card-2)', borderRadius: 12, border: '1px dashed var(--c-line)' }}>
+                <div style={{ width: 40, height: 40, borderRadius: 20, background: 'var(--c-card)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'var(--c-muted)', marginBottom: 10 }}>
+                  <Wallet size={18} />
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{t('noHoldings')}</div>
+                <div style={{ fontSize: 11, color: 'var(--c-muted)', lineHeight: 1.5 }}>{t('switchToBuy')}</div>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <label style={labelStyle}>{t('pickHolding')}</label>
+                  <select
+                    value={selectedHolding?.key ?? ''}
+                    onChange={(e) => { setHoldingKey(e.target.value); setSellAmount(''); setFundSellUnits(''); setReceived('') }}
+                    style={inputStyle}
+                  >
+                    {sellHoldings.map(h => (
+                      <option key={h.key} value={h.key}>
+                        {h.name} · {h.currentValue.toLocaleString('vi-VN')} ₫ · {h.source}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {selectedHolding && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: 'var(--c-card-2)', borderRadius: 12 }}>
+                    <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--c-card)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: assetType === 'fund' ? '#2563eb' : assetType === 'bank' ? '#047857' : '#b45309', border: '1px solid var(--c-line)', flexShrink: 0 }}>
+                      {assetType === 'fund' ? <TrendingUp size={18} /> : assetType === 'bank' ? <Building2 size={18} /> : <Coins size={18} />}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedHolding.name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 2, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                        <span>{t('available')}: <span style={{ fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>{selectedHolding.currentValue.toLocaleString('vi-VN')} ₫</span></span>
+                        {selectedHolding.units != null && <span style={{ fontVariantNumeric: 'tabular-nums' }}>{selectedHolding.units.toLocaleString('vi-VN')} {t('unitsShort')}</span>}
+                        {assetType === 'bank' && selectedHolding.interestRate != null && <span>{selectedHolding.interestRate}%/yr</span>}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {assetType !== 'gold' ? (
+                  <>
+                    <div>
+                      <label style={labelStyle}>{assetType === 'bank' ? t('amountToWithdraw') : t('amountToSell')}</label>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'var(--c-card)', border: `1.5px solid ${sellOverMax ? 'var(--c-neg)' : 'var(--c-navy)'}`, borderRadius: 10 }}>
+                          <span style={{ fontSize: 14, color: 'var(--c-muted)' }}>₫</span>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={formatIntVN(sellAmount)}
+                            onChange={(e) => {
+                              const v = parseIntVN(e.target.value)
+                              setSellAmount(v)
+                              const n = Number(v) || 0
+                              if (assetType === 'fund') setFundSellUnits(sellNav && n ? (n / sellNav).toFixed(2) : '')
+                              if (assetType === 'bank') setReceived(n ? String(Math.round(n)) : '')
+                            }}
+                            placeholder="0"
+                            style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', fontSize: 16, fontWeight: 600, fontFamily: 'inherit', background: 'transparent', color: sellOverMax ? 'var(--c-neg)' : 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}
+                          />
+                        </div>
+                        <button type="button" onClick={() => {
+                          setSellAmount(String(Math.round(sellMax)))
+                          if (assetType === 'fund') setFundSellUnits(selectedHolding?.units != null ? selectedHolding.units.toFixed(2) : '')
+                          if (assetType === 'bank') setReceived(String(Math.round(sellMax)))
+                        }} style={{ padding: '8px 12px', background: 'var(--c-navy-tint)', color: 'var(--c-navy)', border: '1px solid var(--c-navy-tint)', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit' }}>{t('all')}</button>
+                      </div>
+                      {sellOverMax && (
+                        <div style={{ fontSize: 11, color: 'var(--c-neg)', marginTop: 5, display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <X size={12} strokeWidth={2.5} /> {t('exceedsBalance')} · {t('max')} {Math.round(sellMax).toLocaleString('vi-VN')} ₫
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Fund: units to sell, two-way linked with the amount above */}
+                    {assetType === 'fund' && (
+                      <div>
+                        <label style={labelStyle}>{t('unitsToSell')}</label>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'var(--c-card)', border: '1.5px solid var(--c-navy)', borderRadius: 10 }}>
+                          <input
+                            data-testid="sell-fund-units-input"
+                            type="text"
+                            inputMode="decimal"
+                            value={formatDecimalVN(fundSellUnits)}
+                            onChange={(e) => {
+                              const v = parseDecimalVN(e.target.value)
+                              setFundSellUnits(v)
+                              const u = Number(v) || 0
+                              setSellAmount(sellNav && u ? String(Math.round(u * sellNav)) : '')
+                            }}
+                            placeholder="0,00"
+                            style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', fontSize: 16, fontWeight: 600, fontFamily: 'inherit', background: 'transparent', color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}
+                          />
+                          <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{t('unitsShort')}</span>
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 4 }}>{t('navLinkHint')}</div>
+                      </div>
+                    )}
+
+                    {/* Bank: editable cash received (early withdrawal can cut interest) */}
+                    {assetType === 'bank' && (
+                      <div>
+                        <label style={labelStyle}>{t('amountReceived')}</label>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'var(--c-card)', border: '1.5px solid var(--c-navy)', borderRadius: 10 }}>
+                          <span style={{ fontSize: 14, color: 'var(--c-muted)' }}>₫</span>
+                          <input
+                            data-testid="sell-bank-received-input"
+                            type="text"
+                            inputMode="numeric"
+                            value={formatIntVN(received)}
+                            onChange={(e) => setReceived(parseIntVN(e.target.value))}
+                            placeholder="0"
+                            style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', fontSize: 16, fontWeight: 600, fontFamily: 'inherit', background: 'transparent', color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}
+                          />
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 4 }}>{t('receivedHint')}</div>
+                      </div>
+                    )}
+
+                    {/* Fund summary: remaining / gain-loss / tax */}
+                    {assetType === 'fund' && numSell > 0 && !sellOverMax && (
+                      <div style={{ background: 'var(--c-card-2)', borderRadius: 12, overflow: 'hidden' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid var(--c-line)' }}>
+                          <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{t('remainingAfter')}</span>
+                          <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{sellRemaining.toLocaleString('vi-VN')} ₫</span>
+                        </div>
+                        {sellGainLoss != null && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: sellTax ? '1px solid var(--c-line)' : 'none' }}>
+                            <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{t('estGainLoss')}</span>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: sellGainLoss >= 0 ? 'var(--c-pos)' : 'var(--c-neg)', fontVariantNumeric: 'tabular-nums' }}>{sellGainLoss >= 0 ? '+' : ''}{Math.round(sellGainLoss).toLocaleString('vi-VN')} ₫</span>
+                          </div>
+                        )}
+                        {sellTax != null && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px' }}>
+                            <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{t('incomeTax')}</span>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-muted)', fontVariantNumeric: 'tabular-nums' }}>−{sellTax.toLocaleString('vi-VN')} ₫</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Bank summary: principal portion / received / gain-loss / remaining */}
+                    {assetType === 'bank' && numSell > 0 && !sellOverMax && numReceived > 0 && (
+                      <div style={{ background: 'var(--c-card-2)', borderRadius: 12, overflow: 'hidden' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid var(--c-line)' }}>
+                          <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{t('principalPortion')}{bankFraction < 0.999 && <span style={{ opacity: 0.7 }}> · {Math.round(bankFraction * 100)}%</span>}</span>
+                          <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{bankPrincipalPortion.toLocaleString('vi-VN')} ₫</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid var(--c-line)' }}>
+                          <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{t('amountReceived')}</span>
+                          <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{numReceived.toLocaleString('vi-VN')} ₫</span>
+                        </div>
+                        {bankGain != null && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 14px', borderBottom: '1px solid var(--c-line)' }}>
+                            <span style={{ fontSize: 12, fontWeight: 600 }}>{t('gainLoss')}</span>
+                            <span style={{ fontSize: 15, fontWeight: 700, color: bankGain >= 0 ? 'var(--c-pos)' : 'var(--c-neg)', fontVariantNumeric: 'tabular-nums' }}>{bankGain >= 0 ? '+' : '−'}{Math.abs(bankGain).toLocaleString('vi-VN')} ₫</span>
+                          </div>
+                        )}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px' }}>
+                          <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{t('remainingAfter')}</span>
+                          <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{sellRemaining.toLocaleString('vi-VN')} ₫</span>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {/* Gold: quantity (chỉ) to sell */}
+                    <div>
+                      <label style={labelStyle}>{t('quantityToSell')}</label>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'var(--c-card)', border: `1.5px solid ${isOverUnits ? 'var(--c-neg)' : 'var(--c-navy)'}`, borderRadius: 10 }}>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={formatDecimalVN(goldSellQty)}
+                            onChange={(e) => setGoldSellQty(parseDecimalVN(e.target.value))}
+                            placeholder="0,00"
+                            style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', fontSize: 16, fontWeight: 600, fontFamily: 'inherit', background: 'transparent', color: isOverUnits ? 'var(--c-neg)' : 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}
+                          />
+                          <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{t('chiShort')}</span>
+                        </div>
+                        <button type="button" onClick={() => setGoldSellQty(String(goldMaxUnits))} style={{ padding: '8px 12px', background: 'var(--c-navy-tint)', color: 'var(--c-navy)', border: '1px solid var(--c-navy-tint)', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit' }}>{t('all')}</button>
+                      </div>
+                      {isOverUnits && (
+                        <div style={{ fontSize: 11, color: 'var(--c-neg)', marginTop: 5, display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <X size={12} strokeWidth={2.5} /> {t('exceedsQty')} · {t('max')} {goldMaxUnits} {t('chiShort')}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Gold: sale price per chỉ (prefilled with current price) */}
+                    <div>
+                      <label style={labelStyle}>{t('salePricePerChi')}</label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 10 }}>
+                        <span style={{ fontSize: 14, color: 'var(--c-muted)' }}>₫</span>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={formatIntVN(goldSellPrice)}
+                          onChange={(e) => setGoldSellPrice(parseIntVN(e.target.value))}
+                          placeholder="0"
+                          style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', fontSize: 16, fontWeight: 600, fontFamily: 'inherit', background: 'transparent', color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}
+                        />
+                        <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>/{t('chiShort')}</span>
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 4 }}>{t('salePriceHint')}</div>
+                    </div>
+
+                    {/* Gold summary: proceeds / cost / P&L / remaining */}
+                    {numGoldSellQty > 0 && !isOverUnits && numGoldSellPrice > 0 && (
+                      <div style={{ background: 'var(--c-card-2)', borderRadius: 12, overflow: 'hidden' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid var(--c-line)' }}>
+                          <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{t('totalReceived')}<span style={{ opacity: 0.7 }}> · {numGoldSellQty.toLocaleString('vi-VN')} {t('chiShort')} × {numGoldSellPrice.toLocaleString('vi-VN')}</span></span>
+                          <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{goldProceeds.toLocaleString('vi-VN')} ₫</span>
+                        </div>
+                        {goldCost != null && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid var(--c-line)' }}>
+                            <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{t('yourCost')}{goldBuyUnit != null && <span style={{ opacity: 0.7 }}> · {numGoldSellQty.toLocaleString('vi-VN')} {t('chiShort')} × {goldBuyUnit.toLocaleString('vi-VN')}</span>}</span>
+                            <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{goldCost.toLocaleString('vi-VN')} ₫</span>
+                          </div>
+                        )}
+                        {goldProfit != null && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 14px', borderBottom: '1px solid var(--c-line)' }}>
+                            <span style={{ fontSize: 12, fontWeight: 600 }}>{t('profitLoss')}</span>
+                            <span style={{ fontSize: 15, fontWeight: 700, color: goldProfit >= 0 ? 'var(--c-pos)' : 'var(--c-neg)', fontVariantNumeric: 'tabular-nums' }}>{goldProfit >= 0 ? '+' : '−'}{Math.abs(goldProfit).toLocaleString('vi-VN')} ₫</span>
+                          </div>
+                        )}
+                        {goldRemUnits != null && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px' }}>
+                            <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{t('remainingAfter')}</span>
+                            <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{Math.max(0, goldRemUnits).toLocaleString('vi-VN')} {t('chiShort')}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {assetType === 'bank' && (
+                  <div style={{ display: 'flex', gap: 10, padding: '10px 12px', background: 'var(--c-warn-tint)', borderRadius: 10, border: '1px solid rgba(180,83,9,0.15)' }}>
+                    <Shield size={16} color="var(--c-warn)" style={{ flexShrink: 0, marginTop: 1 }} />
+                    <p style={{ margin: 0, fontSize: 12, color: 'var(--c-warn)', lineHeight: 1.5 }}>{t('earlyWithdrawWarn')}</p>
+                  </div>
+                )}
+
+                <div style={{ display: 'grid', gap: 6 }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '9px 12px', background: 'var(--c-card-2)', borderRadius: 8 }}>
+                    <Wallet size={14} color="var(--c-muted)" style={{ marginTop: 1, flexShrink: 0 }} />
+                    <span style={{ fontSize: 11, color: 'var(--c-muted)', lineHeight: 1.5 }}>{t('proceedsUnallocated')}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '9px 12px', background: 'var(--c-card-2)', borderRadius: 8 }}>
+                    <ArrowDownToLine size={14} color="var(--c-muted)" style={{ marginTop: 1, flexShrink: 0 }} />
+                    <span style={{ fontSize: 11, color: 'var(--c-muted)', lineHeight: 1.5 }}>{assetType === 'fund' ? t('settlementFund') : assetType === 'bank' ? t('settlementBank') : t('settlementGold')}</span>
+                  </div>
+                </div>
+              </>
+            )
   )
 }
