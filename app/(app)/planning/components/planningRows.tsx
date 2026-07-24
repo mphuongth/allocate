@@ -352,4 +352,3 @@ function MenuItem({ icon, label, onClick, danger, noBorder }: {
     </button>
   )
 }
-
