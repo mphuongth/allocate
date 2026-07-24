@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { deleteGoal, unholdTransaction, unassignInvestment } from '../goalActions'
+import { deleteGoal, unholdTransaction, unassignInvestment, updateGoal } from '../goalActions'
 
 // Shared goal-detail mutations (#467) — both surfaces call these, so the cases
 // pin the parity: right endpoint/method, and the fund vs single-tx unassign flow.
@@ -75,5 +75,45 @@ describe('goalActions (#467)', () => {
   it('unassignInvestment (fund) returns false when the fund-investments fetch fails', async () => {
     mockFetch(() => ({ ok: false }))
     expect(await unassignInvestment({ id: 'row1', fund: { fundId: 'f1' } }, 'goal-1')).toBe(false)
+  })
+})
+
+// updateGoal was duplicated in EditGoalSheet (mobile) + EditGoalModal (desktop);
+// desktop additionally sends target_date. Callers pass `date` only when they own a
+// date field, so the request must omit target_date entirely when it's absent.
+describe('goalActions.updateGoal (#467)', () => {
+  it('PATCHes goal_name + target_amount (mobile shape omits target_date)', async () => {
+    const calls = mockFetch(() => ({ ok: true }))
+    const r = await updateGoal('g1', { name: 'House', target: 500_000_000 })
+    expect(r).toEqual({ ok: true })
+    expect(calls[0].url).toBe('/api/v1/savings-goals/g1')
+    expect(calls[0].init?.method).toBe('PATCH')
+    expect(JSON.parse(String(calls[0].init?.body))).toEqual({ goal_name: 'House', target_amount: 500_000_000 })
+  })
+
+  it('includes target_date when the caller supplies a date (desktop shape)', async () => {
+    const calls = mockFetch(() => ({ ok: true }))
+    await updateGoal('g1', { name: 'House', target: 500_000_000, date: '2027-06-01' })
+    expect(JSON.parse(String(calls[0].init?.body))).toEqual({
+      goal_name: 'House', target_amount: 500_000_000, target_date: '2027-06-01',
+    })
+  })
+
+  it('sends target_amount null and target_date null when cleared', async () => {
+    const calls = mockFetch(() => ({ ok: true }))
+    await updateGoal('g1', { name: 'House', target: null, date: null })
+    expect(JSON.parse(String(calls[0].init?.body))).toEqual({
+      goal_name: 'House', target_amount: null, target_date: null,
+    })
+  })
+
+  it('surfaces the server error body on a non-OK response', async () => {
+    mockFetch(() => ({ ok: false, body: { error: 'Name already used' } }))
+    expect(await updateGoal('g1', { name: 'House', target: null })).toEqual({ ok: false, error: 'Name already used' })
+  })
+
+  it('flags a network error when fetch throws', async () => {
+    global.fetch = vi.fn(async () => { throw new Error('offline') }) as unknown as typeof fetch
+    expect(await updateGoal('g1', { name: 'House', target: null })).toEqual({ ok: false, networkError: true })
   })
 })
