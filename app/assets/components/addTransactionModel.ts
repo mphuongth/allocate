@@ -129,3 +129,192 @@ export function computeSellPreview(input: {
     goldProfit, goldRemUnits, isOverUnits, sellDisabled,
   }
 }
+
+// ── DB-write payload builders ────────────────────────────────────────────────
+// Pure `form → { payload } | { errorKey }` transforms for the three write paths
+// (#467). They own all the money math that persists — gold luông→chỉ normalization,
+// `units = amount ÷ NAV`, the fund sell's proportional `principal_withdrawn` split —
+// while the component keeps the fetch/`setError(t(errorKey))`. `errorKey` values are
+// the sheet's existing i18n keys.
+
+export type BuildResult =
+  | { ok: true; payload: Record<string, unknown> }
+  | { ok: false; errorKey: string }
+
+// Every form field the buy/edit builders read. The sheet keeps fund `amount` and
+// bank `bankAmount` as separate inputs, mirrored here.
+export interface TxForm {
+  assetType: AssetType
+  date: string
+  goalId: string
+  note: string
+  fundId: string
+  amount: string
+  units: string
+  nav: string
+  selectedFundNav?: number | null
+  bankCode: string
+  selectedBankName: string
+  depositType: 'term' | 'flex' | 'accumulating'
+  bankAmount: string
+  rate: string
+  maturity: string
+  goldProvider: string
+  goldUnit: 'chi' | 'luong'
+  goldQty: string
+  goldPrice: string
+}
+
+// Fund units: an explicit entry wins; otherwise derive amount ÷ NAV when NAV known.
+function fundUnits(units: string, amount: number, navV: number | null): number | null {
+  return units ? Number(units) : (navV ? amount / navV : null)
+}
+
+// Gold qty/price are in the selected unit; normalize to chỉ for storage (gold is
+// valued per chỉ). Returns null when qty or price is missing/zero.
+function normalizeGold(goldQty: string, goldPrice: string, goldUnit: 'chi' | 'luong'):
+  { amountVnd: number; unitsInChi: number; pricePerChi: number } | null {
+  const qty = Number(goldQty)
+  const price = Number(goldPrice.replace(/\./g, ''))
+  if (!qty || !price) return null
+  const unitsInChi = goldUnit === 'luong' ? qty * 10 : qty
+  const pricePerChi = goldUnit === 'luong' ? Math.round(price / 10) : price
+  return { amountVnd: Math.round(qty * price), unitsInChi, pricePerChi }
+}
+
+// Edit an existing investment (PUT). No transaction_type / plan_id; bank & gold
+// carry an explicit fund_id: null.
+export function buildEditPayload(form: TxForm): BuildResult {
+  const { assetType, date, goalId, note } = form
+  if (assetType === 'fund') {
+    const amt = Number(form.amount.replace(/\./g, ''))
+    if (!form.fundId) return { ok: false, errorKey: 'fundRequired' }
+    if (!amt) return { ok: false, errorKey: 'amountRequired' }
+    const navV = Number(form.nav) || form.selectedFundNav || null
+    return { ok: true, payload: {
+      asset_type: 'fund', fund_id: form.fundId, investment_date: date,
+      amount_vnd: amt, units: fundUnits(form.units, amt, navV), unit_price: navV,
+      goal_id: goalId || null, notes: note || null,
+    } }
+  }
+  if (assetType === 'bank') {
+    const amt = Number(form.bankAmount.replace(/\./g, ''))
+    if (!amt) return { ok: false, errorKey: 'amountRequired' }
+    return { ok: true, payload: {
+      asset_type: 'bank', fund_id: null, investment_date: date, amount_vnd: amt,
+      interest_rate: form.rate ? Number(form.rate) : null, expiry_date: form.maturity || null,
+      goal_id: goalId || null, notes: form.selectedBankName || note || null,
+      bank_code: form.bankCode || null,
+    } }
+  }
+  const gold = normalizeGold(form.goldQty, form.goldPrice, form.goldUnit)
+  if (!gold) return { ok: false, errorKey: 'amountRequired' }
+  return { ok: true, payload: {
+    asset_type: 'gold', fund_id: null, investment_date: date,
+    amount_vnd: gold.amountVnd, units: gold.unitsInChi, unit_price: gold.pricePerChi,
+    goal_id: goalId || null, notes: form.goldProvider || null,
+  } }
+}
+
+// Buy / create a new investment (POST). Adds the transaction_type + plan_id envelope
+// (logging from the Plan page ties it to the month's plan).
+export function buildBuyPayload(form: TxForm, planId: string | null): BuildResult {
+  const { assetType, date, goalId, note } = form
+  const base = {
+    asset_type: assetType, transaction_type: 'investment', investment_date: date,
+    notes: note || null, goal_id: goalId || null, plan_id: planId,
+  }
+  if (assetType === 'fund') {
+    const amt = Number(form.amount.replace(/\./g, ''))
+    if (!form.fundId) return { ok: false, errorKey: 'fundRequired' }
+    if (!amt) return { ok: false, errorKey: 'amountRequired' }
+    const navV = Number(form.nav) || form.selectedFundNav || null
+    return { ok: true, payload: {
+      ...base, fund_id: form.fundId, amount_vnd: amt,
+      units: fundUnits(form.units, amt, navV), unit_price: navV,
+    } }
+  }
+  if (assetType === 'bank') {
+    const amt = Number(form.bankAmount.replace(/\./g, ''))
+    if (!amt) return { ok: false, errorKey: 'amountRequired' }
+    return { ok: true, payload: {
+      ...base, amount_vnd: amt, notes: form.selectedBankName || note || null,
+      bank_code: form.bankCode || null, interest_rate: form.rate ? Number(form.rate) : null,
+      expiry_date: form.maturity || null,
+      // An accumulating book: the route self-groups this anchor row for later top-ups.
+      ...(form.depositType === 'accumulating' ? { accumulating: true } : {}),
+    } }
+  }
+  const gold = normalizeGold(form.goldQty, form.goldPrice, form.goldUnit)
+  if (!gold) return { ok: false, errorKey: 'amountRequired' }
+  return { ok: true, payload: {
+    ...base, amount_vnd: gold.amountVnd, units: gold.unitsInChi, unit_price: gold.pricePerChi,
+    notes: form.goldProvider || null,
+  } }
+}
+
+// The subset of a holding the sell builder needs (superset-compatible with the
+// sheet's Holding).
+export interface SellHolding {
+  type: AssetType
+  transactionId?: string
+  fundId?: string
+  purchasePrice?: number | null
+  currentValue: number
+  units?: number | null
+}
+
+// Sell / withdraw from a holding (POST). Reuses the already-computed SellPreview so
+// the derived figures (proceeds, cost basis, principal portions) aren't re-derived.
+export function buildSellPayload(
+  holding: SellHolding | null,
+  preview: Pick<SellPreview,
+    'numSell' | 'sellOverMax' | 'sellNav' | 'numGoldSellQty' | 'isOverUnits' |
+    'goldProceeds' | 'goldCost' | 'numReceived' | 'bankPrincipalPortion'>,
+  opts: { date: string; note: string },
+): BuildResult {
+  const { date, note } = opts
+  if (!holding) return { ok: false, errorKey: 'holdingRequired' }
+
+  if (holding.type === 'gold' && holding.transactionId) {
+    if (preview.numGoldSellQty <= 0) return { ok: false, errorKey: 'amountRequired' }
+    if (preview.isOverUnits) return { ok: false, errorKey: 'exceedsBalance' }
+    return { ok: true, payload: {
+      transaction_type: 'withdrawal', asset_type: 'gold',
+      parent_transaction_id: holding.transactionId,
+      investment_date: date, amount_vnd: preview.goldProceeds,
+      units_withdrawn: parseFloat(preview.numGoldSellQty.toFixed(4)),
+      principal_withdrawn: preview.goldCost ?? preview.goldProceeds, goal_id: null, notes: note || null,
+    } }
+  }
+  if (holding.type === 'fund' && holding.fundId) {
+    if (!preview.numSell) return { ok: false, errorKey: 'amountRequired' }
+    if (preview.sellOverMax) return { ok: false, errorKey: 'exceedsBalance' }
+    const principalWithdrawn = holding.purchasePrice
+      ? Math.round((preview.numSell / holding.currentValue) * (holding.purchasePrice * (holding.units ?? 0)))
+      : Math.round(preview.numSell)
+    const unitsWithdrawn = preview.sellNav ? preview.numSell / preview.sellNav : (holding.units ?? 0)
+    return { ok: true, payload: {
+      transaction_type: 'withdrawal', asset_type: 'fund', fund_id: holding.fundId,
+      investment_date: date, amount_vnd: Math.round(preview.numSell),
+      units_withdrawn: parseFloat(unitsWithdrawn.toFixed(4)),
+      principal_withdrawn: principalWithdrawn, goal_id: null, notes: note || null,
+    } }
+  }
+  if (holding.transactionId) {
+    if (!preview.numSell) return { ok: false, errorKey: 'amountRequired' }
+    if (preview.sellOverMax) return { ok: false, errorKey: 'exceedsBalance' }
+    // Bank: received cash is what the user gets; principal portion is what leaves the
+    // deposit's principal, so the gain/loss is recorded accurately.
+    const isBankSell = holding.type === 'bank'
+    if (isBankSell && preview.numReceived <= 0) return { ok: false, errorKey: 'amountRequired' }
+    return { ok: true, payload: {
+      transaction_type: 'withdrawal', asset_type: holding.type,
+      parent_transaction_id: holding.transactionId, investment_date: date,
+      amount_vnd: isBankSell ? Math.round(preview.numReceived) : Math.round(preview.numSell),
+      principal_withdrawn: isBankSell ? preview.bankPrincipalPortion : Math.round(preview.numSell),
+      goal_id: null, notes: note || null,
+    } }
+  }
+  return { ok: false, errorKey: 'holdingRequired' }
+}
