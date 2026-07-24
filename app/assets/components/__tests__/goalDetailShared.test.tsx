@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { buildInvRows, buildRenewalSummary, calcDeadlineMonths, computeGoalCalculator, describeHistoryRow, fmtMaturity, type GoalDetailTx } from '../goalDetailShared'
+import { buildInvRows, buildRenewalSummary, fmtMaturity, type GoalDetailTx } from '../goalDetailShared'
+import { calcDeadlineMonths, computeGoalCalculator, describeHistoryRow } from '../goalDetailModel'
 import type { FundBreakdownItem } from '../../DashboardClient'
 import { ArrowUpRight, ArrowDownRight, PiggyBank, GitMerge, RefreshCw } from 'lucide-react'
 
