@@ -30,10 +30,10 @@ import {
   depositMaturityState,
   addMonths,
   monthsBetween,
-  renewalPrincipal,
   allocateCumulative,
   type RenewMode,
 } from '@/lib/maturity'
+import { computeNewPrincipal, renewEndpoint, buildRenewBody } from './maturityResolveModel'
 import { linkedSavingFor, type RecurringLinkCandidate, type RecurringLinkResult } from '@/lib/recurringLink'
 import { classifyMergeSources, type MergeBlockReason } from '@/lib/mergeEligibility'
 import { todayIso } from '@/lib/dates'
@@ -391,11 +391,7 @@ export function MaturityResolveBody({
   // recurring); the merged-in sibling cash is added ON TOP for the new principal.
   // Submit sends the BASE and the per-source received list — the RPC re-sums
   // Σ(received) server-side, so the net-worth invariant can't drift.
-  const newPrincipal = mode === 'withdraw'
-    ? principal
-    : mode === 'combine'
-      ? redepositNum + mergeReceivedTotal + heldReceivedTotal
-      : renewalPrincipal(mode, principal, iNum, newAmountNum)
+  const newPrincipal = computeNewPrincipal(mode, { principal, iNum, newAmountNum, redepositNum, mergeReceivedTotal, heldReceivedTotal })
 
   // Suggested re-deposit = principal + interest + this month's recurring, until
   // the user edits it (their bank's actual figure may differ).
@@ -631,49 +627,17 @@ export function MaturityResolveBody({
       // route; a single term deposit rolls forward via /renew. The collapse route
       // values each tranche's interest itself (one TS formula → the per-tranche
       // history snapshots), so — unlike /renew — it takes no interest_earned_vnd.
-      const endpoint = isBook ? 'collapse' : 'renew'
+      // Body construction (per-mode amount, book vs single, merge/held/fulfillment
+      // folding) lives in maturityResolveModel — see buildRenewBody's doc for the
+      // combine-sends-BASE and book-omits-interest rules.
+      const endpoint = renewEndpoint(isBook)
       const res = await fetch(`/api/v1/investment-transactions/${inv.id}/${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          // Merge combine sends the BASE (re-deposit field), NOT base + Σreceived:
-          // the RPC adds the received cash so client and server can't disagree.
-          // Every other path sends the full new principal.
-          amount_vnd: mode === 'combine' ? Math.round(redepositNum) : Math.round(newPrincipal),
-          interest_rate: Number(rate),
-          expiry_date: newMaturity,
-          // Anchor the new cycle's accrual to the OLD maturity date (baseDate) so
-          // the value calc restarts where the closed cycle ended — overdue days
-          // are not lost. Renewal is gated to matured (or ≤ tomorrow) deposits
-          // (see tooEarlyToRenew), so baseDate is in the past or within the
-          // route's +1 day future-date tolerance and is never rejected. The route
-          // rolls the active row forward in place and appends a history snapshot
-          // of the cycle that just closed.
-          investment_date: baseDate,
-          // Realized interest for the cycle that just closed — recorded
-          // permanently on the snapshot for the renewal-history summary. A book's
-          // collapse route derives this per tranche, so only send it for /renew.
-          ...(isBook ? {} : { interest_earned_vnd: iNum }),
-          // Combine flow: mark this month's recurring saving fulfilled inside the
-          // same transaction, so its amount (now folded into the principal above)
-          // is not also counted as a separate synthesized contribution.
-          fulfill_recurring: mode === 'combine' && pickedCand && markFulfilled
-            ? { saving_id: pickedCand.saving_id, ym: fulfillYm, amount: linkedAmt }
-            : undefined,
-          // Merge combine: the sibling deposits being settled early and folded in.
-          // The route closes each (full withdrawal) and adds its received to D.
-          merge_sources: mode === 'combine' && selectedSources.length > 0
-            ? selectedSources.map((s) => ({ tx_id: s.id, received: Math.round(Number(mergeRecv[s.id]) || 0) }))
-            : undefined,
-          // Destination bank for the combined re-deposit (multi-source merge only).
-          // '' (no bank picked) → null; the RPC leaves the existing bank untouched.
-          bank_code: mode === 'combine' && selectedSources.length > 0 ? (destBank || null) : undefined,
-          // "Ví chờ gộp": pooled holdings to consume. The RPC stamps each
-          // consumed and folds its parked cash into D — no second withdrawal.
-          held_sources: mode === 'combine' && selectedHeld.length > 0
-            ? selectedHeld.map((h) => h.id)
-            : undefined,
-        }),
+        body: JSON.stringify(buildRenewBody({
+          mode, isBook, newPrincipal, redepositNum, rate, newMaturity, baseDate, iNum,
+          pickedCand, markFulfilled, fulfillYm, linkedAmt, selectedSources, mergeRecv, destBank, selectedHeld,
+        })),
       })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
