@@ -196,11 +196,12 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
       setMounted(true)
       // Fetch funds + goals in parallel
       Promise.all([
-        fetch('/api/v1/funds').then(r => r.json()),
+        fetch('/api/funds').then(r => r.json()),
         fetch('/api/v1/savings-goals').then(r => r.json()),
         fetch('/api/v1/banks').then(r => r.json()).catch(() => []),
       ]).then(([fundsData, goalsData, banksData]) => {
-        const fundList: Fund[] = Array.isArray(fundsData) ? fundsData : []
+        // Canonical funds-list contract: GET /api/funds → { funds: [...] } (#470).
+        const fundList: Fund[] = Array.isArray(fundsData?.funds) ? fundsData.funds : []
         // /api/v1/savings-goals returns { goals: [...] }, not a bare array.
         const goalList: Goal[] = Array.isArray(goalsData)
           ? goalsData
