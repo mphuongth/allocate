@@ -5,8 +5,8 @@
 // fields and the hold-vs-cash fork live in a focused module; the sheet keeps the
 // state and passes it in. The renew/combine sections still live in the sheet and
 // import the field primitives from here.
-import { PiggyBank, ArrowDownToLine, Check } from 'lucide-react'
-import { fmt } from '@/lib/formatters'
+import { PiggyBank, ArrowDownToLine, Check, GitMerge } from 'lucide-react'
+import { fmt, fmtCompact } from '@/lib/formatters'
 import AmountInput from '@/app/components/ui/AmountInput'
 
 export const fieldLabel: React.CSSProperties = {
@@ -117,5 +117,47 @@ export function WithdrawSection({
             <span style={{ fontSize: 16, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{fmt(payout)}</span>
           </div>
         </div>
+  )
+}
+
+// The "Ví chờ gộp" held-settlement pool inside the combine flow (#467): pick which
+// parked settlements to fold into this re-deposit. Rendered only when the deposit
+// isn't a book and the pool is non-empty (the sheet guards that).
+export function HeldPoolSection({
+  pooledHeld, isHeldSelected, setHeldSel, isVi, t,
+}: {
+  pooledHeld: { id: string; name: string | null; amount: number }[]
+  isHeldSelected: (id: string) => boolean
+  setHeldSel: (updater: (prev: Record<string, boolean>) => Record<string, boolean>) => void
+  isVi: boolean
+  t: { heldSectionTitle: string; heldSectionHint: string; heldUnholdHint: string }
+}) {
+  return (
+            <div data-testid="merge-held-pool" style={{ border: '1px solid var(--c-line)', borderRadius: 12, padding: '11px 13px', display: 'grid', gap: 9 }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <GitMerge size={14} color="var(--c-navy)" style={{ flexShrink: 0 }} />
+                  <div style={{ ...fieldLabel, marginBottom: 0 }}>{t.heldSectionTitle}</div>
+                </div>
+                <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--c-muted)', lineHeight: 1.45 }}>{t.heldSectionHint}</p>
+              </div>
+              <div style={{ display: 'grid', gap: 7 }}>
+                {pooledHeld.map((h) => {
+                  const sel = isHeldSelected(h.id)
+                  return (
+                    <button key={h.id} type="button" data-testid={`merge-held-${h.id}`} onClick={() => setHeldSel((prev) => ({ ...prev, [h.id]: !sel }))}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 11px', borderRadius: 10, cursor: 'pointer', textAlign: 'left',
+                        border: `1.5px solid ${sel ? 'var(--c-navy)' : 'var(--c-line)'}`, background: sel ? 'var(--c-navy-tint)' : 'var(--c-card)', fontFamily: 'inherit' }}>
+                      <span style={{ width: 18, height: 18, borderRadius: 9, flexShrink: 0, border: `1.5px solid ${sel ? 'var(--c-btn-primary)' : 'var(--c-line-strong)'}`, background: sel ? 'var(--c-btn-primary)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {sel && <Check size={11} color="#fff" strokeWidth={3} />}
+                      </span>
+                      <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.name ?? (isVi ? 'Sổ chờ gộp' : 'Held deposit')}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(h.amount)}</span>
+                    </button>
+                  )
+                })}
+              </div>
+              <p style={{ margin: 0, fontSize: 11, color: 'var(--c-muted)', lineHeight: 1.45 }}>{t.heldUnholdHint}</p>
+            </div>
   )
 }
