@@ -7,7 +7,7 @@ import { toast } from 'sonner'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
 import type { GoalData } from '../DashboardClient'
-import { GD_COLORS, buildCompositionSegments, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, buildRenewalSummary, BankInfoStrip, TopUpControl, RenewalSummaryLine, needsMaturityAction, needsBookMaturityAction, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
+import { GD_COLORS, buildCompositionSegments, computeGoalCalculator, TypeIcon, UnlinkSvg, buildInvRows, buildRenewalSummary, BankInfoStrip, TopUpControl, RenewalSummaryLine, needsMaturityAction, needsBookMaturityAction, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
 import { MaturityResolveModal } from './MaturityResolveSheet'
 import { fmtTxDate, txKind } from './transactionUtils'
 import { TxRowsSkeleton } from './Skeletons'
@@ -119,15 +119,10 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
   const segs = buildCompositionSegments(invRows, heldCompValue, isVi)
   const segsTotal = segs.reduce((a, x) => a + x.value, 0)
 
-  // Calculator
-  const remaining = Math.max(0, (goal.targetAmount ?? 0) - goal.currentValue)
-  const monthsLeft = calcDeadlineMonths(goal.targetDate)
-  const neededPerMonth = remaining > 0 ? remaining / monthsLeft : 0
+  // Calculator (shared projection math — #467). `calcInput` is parsed here (plain
+  // number on this surface) and drives the shared derivation.
   const calcInput = Math.max(0, Number(calcAmount) || 0)
-  const monthsToGoal = calcInput > 0 && remaining > 0 ? Math.ceil(remaining / calcInput) : null
-  const projectedDate = monthsToGoal != null ? (() => { const d = new Date(); d.setMonth(d.getMonth() + monthsToGoal); return d })() : null
-  const isOnTrack = calcInput > 0 && calcInput >= neededPerMonth
-  const gap = Math.abs(neededPerMonth - calcInput)
+  const { remaining, monthsLeft, neededPerMonth, monthsToGoal, projectedDate, isOnTrack, gap } = computeGoalCalculator(goal, calcInput)
 
   const visibleInvRows = invRows.filter((inv) => !unassignedIds.includes(inv.id))
 

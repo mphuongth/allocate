@@ -14,7 +14,7 @@ import type { GoalData, FundBreakdownItem } from '../DashboardClient'
 import TransactionHistorySheet, { type PurchaseHistoryRow } from './TransactionHistorySheet'
 import { SellWithdrawSheet } from './SellWithdrawSheet'
 import { MaturityResolveSheet } from './MaturityResolveSheet'
-import { GD_COLORS, buildCompositionSegments, calcDeadlineMonths, TypeIcon, UnlinkSvg, buildInvRows, buildRenewalSummary, BankInfoStrip, TopUpControl, RenewalSummaryLine, needsMaturityAction, needsBookMaturityAction, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
+import { GD_COLORS, buildCompositionSegments, computeGoalCalculator, TypeIcon, UnlinkSvg, buildInvRows, buildRenewalSummary, BankInfoStrip, TopUpControl, RenewalSummaryLine, needsMaturityAction, needsBookMaturityAction, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
 import { fmtTxDate, txKind } from './transactionUtils'
 import { TxRowsSkeleton } from './Skeletons'
 import LoadError from './LoadError'
@@ -829,17 +829,11 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
   const invRows: InvRow[] = buildInvRows(transactions, goal.funds, goldPricePerChi, isVI)
     .filter((row) => !unassignedIds.includes(row.id))
 
-  // Calculator
-  const remaining = goal.targetAmount ? Math.max(goal.targetAmount - goal.currentValue, 0) : 0
-  const monthsLeft = calcDeadlineMonths(goal.targetDate)
-  const neededPerMonth = remaining > 0 ? remaining / monthsLeft : 0
+  // Calculator (shared projection math — #467). `monthly` is parsed here (the
+  // input is comma-formatted on this surface) and drives the shared derivation.
   const monthly = Math.max(0, parseFloat(monthlyContrib.replace(/,/g, '')) || 0)
-  const projectedMonths = monthly > 0 && remaining > 0 ? Math.ceil(remaining / monthly) : 0
-  const projectedDate = projectedMonths > 0
-    ? (() => { const d = new Date(); d.setMonth(d.getMonth() + projectedMonths); return d })()
-    : null
-  const isOnTrack = monthly > 0 && monthly >= neededPerMonth
-  const gap = Math.abs(neededPerMonth - monthly)
+  const { remaining, monthsLeft, neededPerMonth, monthsToGoal, projectedDate, isOnTrack, gap } = computeGoalCalculator(goal, monthly)
+  const projectedMonths = monthsToGoal ?? 0
 
   const detailFund = fundDetailId ? (fundMap.get(fundDetailId) ?? null) : null
 

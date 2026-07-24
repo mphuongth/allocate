@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildInvRows, buildRenewalSummary, calcDeadlineMonths, fmtMaturity, type GoalDetailTx } from '../goalDetailShared'
+import { buildInvRows, buildRenewalSummary, calcDeadlineMonths, computeGoalCalculator, fmtMaturity, type GoalDetailTx } from '../goalDetailShared'
 import type { FundBreakdownItem } from '../../DashboardClient'
 
 // A YYYY-MM-DD string `n` days from today (deterministic regardless of run date).
@@ -300,5 +300,47 @@ describe('calcDeadlineMonths', () => {
   })
   it('never returns below 1', () => {
     expect(calcDeadlineMonths('2000-01')).toBe(1)
+  })
+})
+
+// The projection math the mobile sheet and desktop panel both ran inline (#467).
+// targetDate:null pins monthsLeft to 12 so every assertion below is deterministic.
+describe('computeGoalCalculator', () => {
+  it('derives remaining, min-per-month, and projection from the monthly input', () => {
+    const c = computeGoalCalculator({ targetAmount: 120_000_000, targetDate: null, currentValue: 0 }, 10_000_000)
+    expect(c.remaining).toBe(120_000_000)
+    expect(c.monthsLeft).toBe(12)
+    expect(c.neededPerMonth).toBe(10_000_000)   // 120M / 12
+    expect(c.monthsToGoal).toBe(12)             // ceil(120M / 10M)
+    expect(c.projectedDate).toBeInstanceOf(Date)
+    expect(c.isOnTrack).toBe(true)              // 10M >= 10M needed
+    expect(c.gap).toBe(0)
+  })
+
+  it('flags behind-schedule when the input is under the needed monthly amount', () => {
+    const c = computeGoalCalculator({ targetAmount: 120_000_000, targetDate: null, currentValue: 0 }, 5_000_000)
+    expect(c.monthsToGoal).toBe(24)             // ceil(120M / 5M)
+    expect(c.isOnTrack).toBe(false)             // 5M < 10M
+    expect(c.gap).toBe(5_000_000)
+  })
+
+  it('returns no projection (null) when the input is zero', () => {
+    const c = computeGoalCalculator({ targetAmount: 120_000_000, targetDate: null, currentValue: 0 }, 0)
+    expect(c.monthsToGoal).toBeNull()
+    expect(c.projectedDate).toBeNull()
+    expect(c.isOnTrack).toBe(false)
+  })
+
+  it('clamps remaining/needed to zero once the goal is already met', () => {
+    const c = computeGoalCalculator({ targetAmount: 50_000_000, targetDate: null, currentValue: 80_000_000 }, 1_000_000)
+    expect(c.remaining).toBe(0)
+    expect(c.neededPerMonth).toBe(0)
+    expect(c.monthsToGoal).toBeNull()           // nothing left to project
+  })
+
+  it('treats a missing target amount as no remaining', () => {
+    const c = computeGoalCalculator({ targetAmount: null, targetDate: null, currentValue: 10_000_000 }, 1_000_000)
+    expect(c.remaining).toBe(0)
+    expect(c.neededPerMonth).toBe(0)
   })
 })
