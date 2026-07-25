@@ -111,6 +111,33 @@ export async function GET(request: NextRequest) {
         .select('recurring_saving_id, amount_vnd, source').eq('user_id', user.id).eq('ym', ym),
     ])
 
+    // Fail closed: every child query above feeds the plan the client renders.
+    // Without this check a transient DB failure would fall through the
+    // `data ?? []` defaults below and return HTTP 200 with real data missing —
+    // indistinguishable from a genuinely empty plan (#514). Log which source(s)
+    // failed for server-side diagnosis, but return a generic error to the client.
+    const childErrors: [string, { message?: string } | null][] = [
+      ['fund_investments', invRes.error],
+      ['direct_savings', savRes.error],
+      ['fixed_expense_overrides', overridesRes.error],
+      ['fixed_expenses', expRes.error],
+      ['insurance_members', insRes.error],
+      ['excluded_insurance', exclRes.error],
+      ['insurance_overrides', insOverridesRes.error],
+      ['goals', goalsRes.error],
+      ['funds', fundsRes.error],
+      ['other_expenses', otherExpRes.error],
+      ['recurring_savings', recSavRes.error],
+      ['recurring_saving_overrides', recSavOverridesRes.error],
+      ['dca_skips', dcaSkipsRes.error],
+      ['recurring_fulfillments', recFulfillmentsRes.error],
+    ]
+    const failedSources = childErrors.filter(([, e]) => e).map(([name]) => name)
+    if (failedSources.length > 0) {
+      console.error(`[monthly-plans] plan ${plan.id}: child query failed for ${failedSources.join(', ')}`)
+      return NextResponse.json({ error: 'Failed to fetch plan data' }, { status: 500 })
+    }
+
     return NextResponse.json({
       ...plan,
       fund_investments:        invRes.data ?? [],
