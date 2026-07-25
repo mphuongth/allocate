@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest'
-import {  } from '../goalDetailShared'
 import { buildCompositionSegments } from '../goalDetailRows'
 
 // The goal-detail "Cơ cấu / Composition" segments are built from the active
