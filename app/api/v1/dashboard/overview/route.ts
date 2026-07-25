@@ -126,7 +126,34 @@ export async function GET() {
     supabase.from('recurring_saving_fulfillments').select('recurring_saving_id, ym').eq('user_id', user.id),
   ])
 
-  if (goalsRes.error || txRes.error || insuranceRes.error) {
+  // Every source below feeds the net-worth / contribution totals. A silent
+  // failure here doesn't just understate the dashboard — because the computed
+  // total is upserted into net_worth_snapshots at the end, a transient read
+  // error would overwrite today's snapshot with an incomplete value, turning a
+  // recoverable read failure into persisted financial-history corruption (#513).
+  // So any required-source error fails the whole request with a 500 (which also
+  // short-circuits before the snapshot write below).
+  const requiredErrors = [
+    plansRes.error,
+    goalsRes.error,
+    txRes.error,
+    insuranceRes.error,
+    insuranceSavingsRes.error,
+    recSavingsRes.error,
+    snapshotRes.error,
+    insExclusionsRes.error,
+    insOverridesRes.error,
+    recOverridesRes.error,
+    recFulfillmentsRes.error,
+  ]
+  // gold_price_settings uses .single(): a missing row surfaces as PGRST116 and
+  // is legitimate (the user simply hasn't set a gold price → null, valued as 0).
+  // Any other error is a real failure that would understate a gold holder's
+  // total, so it IS required.
+  if (goldPriceRes.error && goldPriceRes.error.code !== 'PGRST116') {
+    requiredErrors.push(goldPriceRes.error)
+  }
+  if (requiredErrors.some(Boolean)) {
     return NextResponse.json({ error: 'Failed to fetch dashboard data' }, { status: 500 })
   }
 
