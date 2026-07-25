@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { mapWithConcurrency } from '../concurrency'
+import { mapWithConcurrency, Semaphore } from '../concurrency'
 
 describe('mapWithConcurrency', () => {
   it('returns results in input order regardless of completion order', async () => {
@@ -51,5 +51,33 @@ describe('mapWithConcurrency', () => {
         return n
       }),
     ).rejects.toThrow('boom')
+  })
+})
+
+describe('Semaphore', () => {
+  it('never runs more than `permits` operations at once, even across nested fan-out', async () => {
+    const sem = new Semaphore(2)
+    let inFlight = 0
+    let peak = 0
+    // 10 tasks contend for 2 permits (mimics Dragon's 15-way fan-out under a cap)
+    await Promise.all(
+      Array.from({ length: 10 }, () =>
+        sem.run(async () => {
+          inFlight++
+          peak = Math.max(peak, inFlight)
+          await new Promise((r) => setTimeout(r, 5))
+          inFlight--
+        }),
+      ),
+    )
+    expect(peak).toBe(2)
+    expect(inFlight).toBe(0)
+  })
+
+  it('releases the permit even when the wrapped op throws', async () => {
+    const sem = new Semaphore(1)
+    await expect(sem.run(async () => { throw new Error('boom') })).rejects.toThrow('boom')
+    // If the permit leaked, this second run would hang forever.
+    await expect(sem.run(async () => 'ok')).resolves.toBe('ok')
   })
 })

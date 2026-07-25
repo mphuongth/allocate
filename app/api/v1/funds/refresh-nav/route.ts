@@ -5,7 +5,8 @@ import { mapWithConcurrency } from '@/lib/concurrency'
 
 // Bound the user-triggered NAV refresh fan-out (#515): rate-limit per user,
 // de-duplicate by provider URL, and cap outbound scrape concurrency.
-const RATE_LIMIT_MAX = 5
+// The rate-limit policy (5 req / 60 s) is hardcoded inside the RPC, not passed
+// from here, so a client calling the RPC directly can't weaken it.
 const RATE_LIMIT_WINDOW_SECONDS = 60
 const SCRAPE_CONCURRENCY = 4
 
@@ -23,25 +24,25 @@ export async function POST() {
 
   // Durable per-user rate limit (atomic fixed window in Postgres). One account
   // must not be able to repeatedly trigger the whole scrape fan-out.
-  const { data: rl, error: rlError } = await supabase.rpc('check_nav_refresh_rate_limit', {
-    p_max: RATE_LIMIT_MAX,
-    p_window_seconds: RATE_LIMIT_WINDOW_SECONDS,
-  })
-  if (rlError) {
-    // Fail open: a transient error (or the RPC not being migrated yet) shouldn't
-    // take down a low-criticality refresh. The per-call fan-out is still bounded
-    // by de-dup + concurrency + timeouts below; only the cross-call rate cap is
-    // skipped for this request. Log it so it's visible if it starts happening.
-    console.error('[refresh-nav] rate-limit check failed, proceeding without limit:', rlError)
-  } else {
-    const verdict = Array.isArray(rl) ? rl[0] : rl
-    if (verdict && verdict.allowed === false) {
-      const retryAfter = verdict.retry_after_seconds ?? RATE_LIMIT_WINDOW_SECONDS
-      return NextResponse.json(
-        { error: 'Too many refresh requests. Please wait and try again.', retryAfter },
-        { status: 429, headers: { 'Retry-After': String(retryAfter) } }
-      )
-    }
+  const { data: rl, error: rlError } = await supabase.rpc('check_nav_refresh_rate_limit')
+  const verdict = Array.isArray(rl) ? rl[0] : rl
+  if (rlError || !verdict) {
+    // Fail CLOSED: if we can't verify the rate limit (RPC error, missing verdict,
+    // or the migration not yet applied), refuse rather than let the scrape fan-out
+    // run uncapped exactly when the DB is unhealthy. Refresh is non-essential, so
+    // a 503 the client can retry is the safe default.
+    console.error('[refresh-nav] rate-limit check unavailable:', rlError)
+    return NextResponse.json(
+      { error: 'Rate limit check unavailable. Please try again shortly.' },
+      { status: 503, headers: { 'Retry-After': String(RATE_LIMIT_WINDOW_SECONDS) } }
+    )
+  }
+  if (verdict.allowed === false) {
+    const retryAfter = verdict.retry_after_seconds ?? RATE_LIMIT_WINDOW_SECONDS
+    return NextResponse.json(
+      { error: 'Too many refresh requests. Please wait and try again.', retryAfter },
+      { status: 429, headers: { 'Retry-After': String(retryAfter) } }
+    )
   }
 
   // Fetch all funds that have a nav_source_url

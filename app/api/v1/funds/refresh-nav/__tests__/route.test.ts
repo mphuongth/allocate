@@ -91,15 +91,23 @@ describe('POST /api/v1/funds/refresh-nav — rate limit (#515)', () => {
     expect(h.scrapeCalls).toHaveLength(0)
   })
 
-  it('fails open (still refreshes) when the rate-limit RPC errors', async () => {
-    // e.g. the RPC not migrated yet, or a transient DB error. The fan-out is
-    // still bounded by de-dup + concurrency below, so we proceed rather than 500.
+  it('fails CLOSED (503 + Retry-After, no scrape) when the rate-limit RPC errors', async () => {
+    // e.g. the RPC not migrated yet, or a transient DB error. We must not let the
+    // scrape fan out uncapped when we can't verify the limit.
     h.rateError = { message: 'function does not exist' }
     h.funds = [{ id: 'a', name: 'A', code: 'A', nav_source_url: 'https://vcbf.com/ok' }]
     h.scrapeByUrl = { 'https://vcbf.com/ok': { nav: 10 } }
     const res = await POST()
-    expect(res.status).toBe(200)
-    expect(h.scrapeCalls).toHaveLength(1)
+    expect(res.status).toBe(503)
+    expect(res.headers.get('Retry-After')).toBeTruthy()
+    expect(h.scrapeCalls).toHaveLength(0)
+  })
+
+  it('fails CLOSED (503) when the RPC returns no verdict row', async () => {
+    h.rate = undefined as unknown as { allowed: boolean; retry_after_seconds: number }
+    const res = await POST()
+    expect(res.status).toBe(503)
+    expect(h.scrapeCalls).toHaveLength(0)
   })
 
   it('returns 401 when unauthenticated (before any rate-limit/scrape work)', async () => {

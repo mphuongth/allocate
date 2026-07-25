@@ -29,25 +29,29 @@ revoke all on public.nav_refresh_rate_limit from anon, authenticated;
 -- their own row. A blocked attempt still increments the count (so hammering keeps
 -- you blocked) but never advances window_start, so the lockout is bounded by the
 -- window length.
-create or replace function public.check_nav_refresh_rate_limit(
-  p_max int,
-  p_window_seconds int
-)
+--
+-- The policy (max requests, window length) is HARDCODED, not passed in: the
+-- function is grantable to `authenticated` so the client's supabase-js can call
+-- it, which means an attacker could otherwise invoke it directly with a
+-- degenerate window (e.g. 0 seconds) to reset their own counter before every
+-- refresh and defeat the limit entirely.
+create or replace function public.check_nav_refresh_rate_limit()
 returns table (allowed boolean, retry_after_seconds int)
 language plpgsql
 security definer
 set search_path = ''
 as $$
 declare
+  v_max    constant int := 5;
+  v_window constant interval := interval '60 seconds';
   v_user   uuid := auth.uid();
-  v_window interval := make_interval(secs => p_window_seconds);
   v_now    timestamptz := now();
   v_start  timestamptz;
   v_count  int;
 begin
   if v_user is null then
     allowed := false;
-    retry_after_seconds := p_window_seconds;
+    retry_after_seconds := 60;
     return next;
     return;
   end if;
@@ -60,7 +64,7 @@ begin
         updated_at    = v_now
   returning r.window_start, r.request_count into v_start, v_count;
 
-  if v_count <= p_max then
+  if v_count <= v_max then
     allowed := true;
     retry_after_seconds := 0;
   else
@@ -71,4 +75,7 @@ begin
 end;
 $$;
 
-grant execute on function public.check_nav_refresh_rate_limit(int, int) to authenticated;
+-- Lock down execution: EXECUTE is granted to PUBLIC by default, so revoke it and
+-- grant only to authenticated (anon has no user to scope to anyway).
+revoke all on function public.check_nav_refresh_rate_limit() from public;
+grant execute on function public.check_nav_refresh_rate_limit() to authenticated;
