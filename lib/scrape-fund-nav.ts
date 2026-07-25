@@ -1,5 +1,72 @@
 import https from 'https'
 import { ValidationError } from './validation'
+import { Semaphore } from './concurrency'
+
+// Every outbound provider request is bounded so a slow or oversized upstream
+// can't hang a serverless function or exhaust its memory (#515).
+const SCRAPE_TIMEOUT_MS = 10_000
+const SCRAPE_MAX_BYTES = 2 * 1024 * 1024 // 2 MB — fund pages are tens of KB
+
+// Process-wide cap on the number of concurrent outbound provider requests. This
+// bounds the TRUE fan-out regardless of how it nests: the route already limits
+// how many URLs scrape at once, but one Dragon Capital scrape alone issues ~15
+// requests via Promise.all, so without a per-request cap a handful of scrapes
+// could still open hundreds of sockets at once. Every fetch below goes through
+// this gate.
+const MAX_CONCURRENT_HTTP = 6
+const httpSemaphore = new Semaphore(MAX_CONCURRENT_HTTP)
+
+// Normalize a NAV source URL for de-duplication: lowercase the host (case-
+// insensitive) but PRESERVE the path/query case — the Dragon Capital and
+// VinaCapital scrapers derive the fund code from the last path segment and
+// upper-case it, so lowercasing the whole URL would break them. Drops the
+// fragment and any trailing slash so trivially-different URLs collapse to one
+// scrape.
+export function normalizeNavUrl(raw: string): string {
+  try {
+    const u = new URL(raw.trim())
+    u.hostname = u.hostname.toLowerCase()
+    u.hash = ''
+    if (u.pathname.length > 1) u.pathname = u.pathname.replace(/\/+$/, '')
+    return u.toString()
+  } catch {
+    return raw.trim()
+  }
+}
+
+// fetch(url).text() with an abort timeout and a hard byte cap on the streamed
+// body. Throws on timeout or when the response exceeds the cap; scrapeFundNav's
+// try/catch turns either into a per-fund { error } instead of a hung request.
+async function boundedFetchText(
+  url: string,
+  init: RequestInit & { timeoutMs?: number; maxBytes?: number } = {},
+): Promise<string> {
+  const { timeoutMs = SCRAPE_TIMEOUT_MS, maxBytes = SCRAPE_MAX_BYTES, ...rest } = init
+  return httpSemaphore.run(async () => {
+  const res = await fetch(url, { ...rest, signal: AbortSignal.timeout(timeoutMs) })
+  const reader = res.body?.getReader()
+  if (!reader) return res.text()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    total += value.byteLength
+    if (total > maxBytes) {
+      await reader.cancel()
+      throw new Error(`Response exceeded ${maxBytes} bytes`)
+    }
+    chunks.push(value)
+  }
+  const merged = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    merged.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return new TextDecoder().decode(merged)
+  })
+}
 
 // The only hosts the NAV scraper is allowed to fetch. `nav_source_url` is
 // user-supplied and later fetched server-side (refresh-nav route + daily cron),
@@ -43,8 +110,12 @@ export function parseVietnameseNumber(raw: string): number {
   return parseFloat(cleaned.replace(/,/g, ''))
 }
 
-function fetchWithNodeHttps(url: string, options: { rejectUnauthorized?: boolean; headers?: Record<string, string> } = {}): Promise<string> {
-  return new Promise((resolve, reject) => {
+// Exported for tests: exercises the Node-https path's absolute deadline and the
+// shared outbound-request semaphore without going through a full Dragon scrape.
+export function fetchWithNodeHttps(url: string, options: { rejectUnauthorized?: boolean; headers?: Record<string, string>; timeoutMs?: number; maxBytes?: number } = {}): Promise<string> {
+  const timeoutMs = options.timeoutMs ?? SCRAPE_TIMEOUT_MS
+  const maxBytes = options.maxBytes ?? SCRAPE_MAX_BYTES
+  return httpSemaphore.run(() => new Promise<string>((resolve, reject) => {
     const agent = new https.Agent({ rejectUnauthorized: options.rejectUnauthorized ?? true })
     const parsedUrl = new URL(url)
     const reqOptions = {
@@ -53,16 +124,37 @@ function fetchWithNodeHttps(url: string, options: { rejectUnauthorized?: boolean
       headers: options.headers,
       agent,
     }
-    https.get(reqOptions, (res) => {
+    const req = https.get(reqOptions, (res) => {
       let data = ''
-      res.on('data', (chunk) => { data += chunk })
-      res.on('end', () => resolve(data))
-    }).on('error', reject)
-  })
+      let total = 0
+      res.on('data', (chunk) => {
+        total += chunk.length
+        if (total > maxBytes) {
+          req.destroy(new Error(`Response exceeded ${maxBytes} bytes`))
+          return
+        }
+        data += chunk
+      })
+      res.on('end', () => settle(resolve, data))
+    })
+    req.on('error', (err) => settle(reject, err))
+    // Absolute deadline for the whole request, not a per-socket inactivity
+    // timeout: req.setTimeout() resets on every chunk, so a slow drip could keep
+    // the request alive indefinitely. This timer fires once, timeoutMs after the
+    // request starts, and is cleared the moment the request settles.
+    const deadline = setTimeout(() => req.destroy(new Error('Request timed out')), timeoutMs)
+    let settled = false
+    function settle(fn: (v: never) => void, value: unknown) {
+      if (settled) return
+      settled = true
+      clearTimeout(deadline)
+      fn(value as never)
+    }
+  }))
 }
 
 async function scrapeVCBF(url: string): Promise<number> {
-  const html = await fetch(url).then(r => r.text())
+  const html = await boundedFetchText(url)
   const match = html.match(/var dataJson\s*=\s*JSON\.parse\('(.+?)'\)/)
   if (!match) throw new Error('VCBF: dataJson not found')
   const data = JSON.parse(match[1])
@@ -83,12 +175,12 @@ async function scrapeVCBF(url: string): Promise<number> {
 }
 
 async function scrapeSSIAM(url: string): Promise<number> {
-  const html = await fetch(url, {
+  const html = await boundedFetchText(url, {
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
       'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
     },
-  }).then(r => r.text())
+  })
 
   const navLabelMatch = html.match(/NAV\/CCQ[\s\S]{0,300}?([\d]{1,3}[.,][\d]{3}[.,][\d]{2})/)
   if (navLabelMatch) return parseVietnameseNumber(navLabelMatch[1])
@@ -161,7 +253,7 @@ async function scrapeVinaCapital(url: string): Promise<number> {
   body.append('action', 'getchartfundnav')
   body.append('fundname', fundName)
 
-  const res = await fetch('https://vinacapital.com/wp-admin/admin-ajax.php', {
+  const html = await boundedFetchText('https://vinacapital.com/wp-admin/admin-ajax.php', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
@@ -172,7 +264,6 @@ async function scrapeVinaCapital(url: string): Promise<number> {
     body: body.toString(),
   })
 
-  const html = await res.text()
   if (!html || !html.includes('rpfundnavcontent')) {
     throw new Error(`VinaCapital: no fund data for "${fundName}". May be behind Cloudflare.`)
   }
