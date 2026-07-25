@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { isAllowedNavHost, validateNavSourceUrl, scrapeFundNav } from '../scrape-fund-nav'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { isAllowedNavHost, validateNavSourceUrl, scrapeFundNav, normalizeNavUrl } from '../scrape-fund-nav'
 import { ValidationError } from '../validation'
 
 // SSRF guard: nav_source_url is user-supplied and later fetched server-side (by
@@ -68,5 +68,40 @@ describe('scrapeFundNav — rejects disallowed hosts before any fetch', () => {
   it('returns an Unsupported-domain error for a substring-bypass host (no network hit)', async () => {
     const res = await scrapeFundNav('https://evilvcbf.com/x')
     expect(res).toEqual({ error: expect.stringMatching(/unsupported domain/i) })
+  })
+})
+
+describe('normalizeNavUrl — de-dup key', () => {
+  it('lowercases the host but preserves path case (Dragon/VinaCapital fund codes)', () => {
+    expect(normalizeNavUrl('https://WWW.DragonCapital.com.vn/individual/vi/x/VEOF'))
+      .toBe('https://www.dragoncapital.com.vn/individual/vi/x/VEOF')
+  })
+
+  it('collapses trailing slash and fragment so trivially-different URLs share one scrape', () => {
+    const a = normalizeNavUrl('https://vcbf.com/quy/vcbf-fif/')
+    const b = normalizeNavUrl('https://vcbf.com/quy/vcbf-fif#nav')
+    expect(a).toBe(b)
+  })
+
+  it('returns the trimmed input unchanged when it is not a valid URL', () => {
+    expect(normalizeNavUrl('  not a url  ')).toBe('not a url')
+  })
+})
+
+describe('scrapeFundNav — bounded provider fetch (timeout + size cap)', () => {
+  afterEach(() => { vi.unstubAllGlobals() })
+
+  it('turns an oversized response body into a per-fund error, not a hang', async () => {
+    // 3 MB body exceeds the 2 MB cap → boundedFetchText throws → { error }.
+    const huge = 'x'.repeat(3 * 1024 * 1024)
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(huge)))
+    const res = await scrapeFundNav('https://vcbf.com/quy/vcbf-fif')
+    expect(res).toHaveProperty('error')
+  })
+
+  it('turns a fetch/timeout rejection into a per-fund error', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('The operation was aborted due to timeout') }))
+    const res = await scrapeFundNav('https://vcbf.com/quy/vcbf-fif')
+    expect(res).toEqual({ error: expect.stringMatching(/timeout|abort/i) })
   })
 })
