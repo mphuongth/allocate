@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { buildInvRows, buildRenewalSummary, type GoalDetailTx } from '../goalDetailShared'
+import { type GoalDetailTx } from '../goalDetailShared'
+import { buildInvRows, buildRenewalSummary } from '../goalDetailRows'
 import { fmtMaturity } from '../goalDetailMaturity'
 import { calcDeadlineMonths, computeGoalCalculator, describeHistoryRow } from '../goalDetailModel'
 import type { FundBreakdownItem } from '../../DashboardClient'

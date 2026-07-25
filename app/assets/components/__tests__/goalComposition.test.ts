@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildCompositionSegments } from '../goalDetailShared'
+import { buildCompositionSegments } from '../goalDetailRows'
 
 // The goal-detail "Cơ cấu / Composition" segments are built from the active
 // investment rows. Held-for-merge cash CLOSED its source deposit, so it is absent
