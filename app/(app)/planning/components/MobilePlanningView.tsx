@@ -96,7 +96,7 @@ export default function MobilePlanningView({
 
   // Derived model shared with the desktop view via usePlanningDerivations (#467).
   const {
-    goalsById, resolvedRecurring, skippedDcaInvestments, fulfillments, byGoal,
+    byGoal,
     totalGoals, contributedTotal, totalFixed, totalInsurance, totalOther, totalOutflow, remaining,
   } = usePlanningDerivations({
     plan, investments, savings, fixedExpenses, insuranceMembers, otherExpenses,
