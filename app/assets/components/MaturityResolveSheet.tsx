@@ -28,7 +28,8 @@ import { CombineNewCycleSection } from './maturityResolveNewCycle'
 import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
 import { iconHit } from './iconHit'
 import { SUCCESS_FLASH_MS } from '../successFlash'
-import { fmtMaturity, type InvRow } from './goalDetailShared'
+import { type InvRow } from './goalDetailShared'
+import { fmtMaturity } from './goalDetailMaturity'
 import {
   depositMaturityState,
   addMonths,
