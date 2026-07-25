@@ -35,6 +35,13 @@ revoke all on public.nav_refresh_rate_limit from anon, authenticated;
 -- it, which means an attacker could otherwise invoke it directly with a
 -- degenerate window (e.g. 0 seconds) to reset their own counter before every
 -- refresh and defeat the limit entirely.
+--
+-- Drop the earlier parameterized overload explicitly. `create or replace` keys
+-- on the argument signature, so it would leave a previously-applied
+-- (int, int) version in place and still callable (and still bypassable) — this
+-- removes it in any environment where an earlier revision of this migration ran.
+drop function if exists public.check_nav_refresh_rate_limit(int, int);
+
 create or replace function public.check_nav_refresh_rate_limit()
 returns table (allowed boolean, retry_after_seconds int)
 language plpgsql
@@ -75,7 +82,9 @@ begin
 end;
 $$;
 
--- Lock down execution: EXECUTE is granted to PUBLIC by default, so revoke it and
--- grant only to authenticated (anon has no user to scope to anyway).
+-- Lock down execution: EXECUTE is granted to PUBLIC by default, so revoke it
+-- (which covers anon + authenticated) and re-grant only to authenticated. anon
+-- is revoked explicitly too, in case any prior grant targeted it directly.
 revoke all on function public.check_nav_refresh_rate_limit() from public;
+revoke all on function public.check_nav_refresh_rate_limit() from anon;
 grant execute on function public.check_nav_refresh_rate_limit() to authenticated;
