@@ -1,16 +1,18 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import { scrapeFundNav } from '@/lib/scrape-fund-nav'
 import { verifyCronAuth } from '@/lib/cron-auth'
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 
 export async function GET(request: Request) {
   if (!verifyCronAuth(request.headers.get('Authorization'), process.env.CRON_SECRET)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // Built here, not at module scope, so the build never needs the service-role
+  // secret (#536).
+  const supabaseAdmin = createSupabaseAdminClient()
+  if (!supabaseAdmin) {
+    return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 })
   }
 
   const { data: funds, error: fetchError } = await supabaseAdmin

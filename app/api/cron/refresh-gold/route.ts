@@ -1,16 +1,19 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import { scrapeGoldPrice } from '@/lib/scrape-gold'
 import { verifyCronAuth } from '@/lib/cron-auth'
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 
 export async function GET(request: Request) {
   if (!verifyCronAuth(request.headers.get('Authorization'), process.env.CRON_SECRET)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // Built here, not at module scope, so the build never needs the service-role
+  // secret (#536). Resolved before the scrape: if we can't persist the result
+  // there's no reason to hit DOJI at all.
+  const supabaseAdmin = createSupabaseAdminClient()
+  if (!supabaseAdmin) {
+    return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 })
   }
 
   let price: number
