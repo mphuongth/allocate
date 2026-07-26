@@ -38,11 +38,19 @@ export async function GET(request: NextRequest) {
   // offering (and double-folding) a recurring that's already been folded in.
   if (month && year && savings && savings.length > 0) {
     const ym = `${year}-${String(month).padStart(2, '0')}`
-    const { data: fulfilled } = await supabase
+    const { data: fulfilled, error: fulfilledError } = await supabase
       .from('recurring_saving_fulfillments')
       .select('recurring_saving_id')
       .eq('user_id', user.id)
       .eq('ym', ym)
+    // Fail closed rather than default every saving to unfulfilled (#533). The
+    // combine picker reads this flag to avoid re-folding a recurring that is
+    // already folded into a renewed deposit, so the "safe-looking" fallback is
+    // in fact the unsafe one: it re-offers settled savings and double-counts.
+    if (fulfilledError) {
+      console.error('recurring-savings: failed to read fulfillments', fulfilledError.message)
+      return NextResponse.json({ error: 'Failed to fetch recurring savings' }, { status: 500 })
+    }
     const fulfilledSet = new Set((fulfilled ?? []).map((f) => f.recurring_saving_id))
     return NextResponse.json({
       savings: savings.map((s) => ({ ...s, fulfilled: fulfilledSet.has(s.saving_id) })),

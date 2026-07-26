@@ -25,6 +25,25 @@ export async function GET() {
       .maybeSingle(),
   ])
 
+  // Both sources are required to compute a truthful maximum. Skipping a failed
+  // one silently reports the surviving source's older timestamp — or "never
+  // synced" — as the answer, which reads as a stale/absent sync rather than as
+  // the outage it is (#533). Both queries use maybeSingle(), so a user who owns
+  // no funds or has no gold settings is `data: null, error: null` and still gets
+  // a legitimate 200.
+  if (funds.error || gold.error) {
+    console.error(
+      'prices/last-sync: failed to read —',
+      [
+        funds.error && `funds: ${funds.error.message}`,
+        gold.error && `gold_price_settings: ${gold.error.message}`,
+      ]
+        .filter(Boolean)
+        .join('; '),
+    )
+    return NextResponse.json({ error: 'Failed to fetch last sync time' }, { status: 500 })
+  }
+
   const times = [funds.data?.updated_at, gold.data?.updated_at].filter(Boolean) as string[]
   const lastSync = times.length
     ? times.reduce((a, b) => (new Date(a) > new Date(b) ? a : b))

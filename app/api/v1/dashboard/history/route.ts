@@ -40,7 +40,7 @@ export async function GET(request: Request) {
   // Not enough snapshots yet — synthesize monthly history from investment transactions only.
   // Withdrawals are intentionally excluded: they are recorded at market value which can exceed
   // original cost, driving the cumulative negative and causing a visual cliff.
-  const { data: txData } = await supabase
+  const { data: txData, error: txError } = await supabase
     // Snapshot-free view: a renewal history row is an `investment` carrying the
     // OLD principal, so summing it here would double-count it into the cumulative
     // invested chart. The view keeps it out.
@@ -49,6 +49,14 @@ export async function GET(request: Request) {
     .eq('user_id', user.id)
     .eq('transaction_type', 'investment')
     .order('investment_date', { ascending: true })
+
+  // The `!txData` branch below treats "no transactions" as an empty history.
+  // A failed read reaches it with the same shape, so without this check an
+  // outage renders as a flat/empty net-worth chart on a funded account (#533).
+  if (txError) {
+    console.error('dashboard/history: failed to read transactions', txError.message)
+    return NextResponse.json({ error: 'Failed to fetch history' }, { status: 500 })
+  }
 
   if (!txData || txData.length === 0) {
     // Return whatever snapshots we have (may be 0 or 1)
