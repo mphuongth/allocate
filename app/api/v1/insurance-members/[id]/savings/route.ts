@@ -49,6 +49,14 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   if (memberRes.error || !memberRes.data) return NextResponse.json({ error: 'Insurance member not found' }, { status: 404 })
   if (memberRes.data.user_id !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   if (savingsRes.error) return NextResponse.json({ error: 'Failed to fetch savings' }, { status: 500 })
+  // Plans drive the auto-accrued half of the history and of totalSaved, so a
+  // failed read is not "this member has no planning data" — it silently drops
+  // real contributions behind a 200 and desyncs this total from the dashboard's
+  // "Saved" amount, which is computed from the same sources (#529).
+  if (plansRes.error) {
+    console.error('insurance savings history: failed to read monthly plans', plansRes.error.message)
+    return NextResponse.json({ error: 'Failed to fetch savings' }, { status: 500 })
+  }
 
   const annualPremium = memberRes.data.annual_payment_vnd ?? 0
   const lastPaymentDate = memberRes.data.last_payment_date ?? null
@@ -59,11 +67,29 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const [exclRes, ovrRes] = await Promise.all([
     planIds.length > 0
       ? supabase.from('plan_excluded_insurance_members').select('plan_id, member_id').in('plan_id', planIds)
-      : Promise.resolve({ data: [] as { plan_id: string; member_id: string }[] }),
+      : Promise.resolve({ data: [] as { plan_id: string; member_id: string }[], error: null }),
     planIds.length > 0
       ? supabase.from('plan_insurance_member_overrides').select('plan_id, member_id, monthly_amount_override_vnd').in('plan_id', planIds)
-      : Promise.resolve({ data: [] as { plan_id: string; member_id: string; monthly_amount_override_vnd: number }[] }),
+      : Promise.resolve({ data: [] as { plan_id: string; member_id: string; monthly_amount_override_vnd: number }[], error: null }),
   ])
+
+  // Both refine the plan accruals: an exclusion drops a month entirely, an
+  // override changes its amount. Defaulting either to [] on failure doesn't
+  // return "less detail", it returns a different — wrong — number (#529). The
+  // no-plans short circuits above carry `error: null`, so this only fires on a
+  // real query failure.
+  if (exclRes.error || ovrRes.error) {
+    console.error(
+      'insurance savings history: failed to read plan refinements —',
+      [
+        exclRes.error && `plan_excluded_insurance_members: ${exclRes.error.message}`,
+        ovrRes.error && `plan_insurance_member_overrides: ${ovrRes.error.message}`,
+      ]
+        .filter(Boolean)
+        .join('; '),
+    )
+    return NextResponse.json({ error: 'Failed to fetch savings' }, { status: 500 })
+  }
 
   const excludedSet = new Set((exclRes.data ?? []).map((e) => `${e.plan_id}::${e.member_id}`))
   const overrideMap = new Map((ovrRes.data ?? []).map((o) => [`${o.plan_id}::${o.member_id}`, o.monthly_amount_override_vnd]))
