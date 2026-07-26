@@ -803,6 +803,8 @@
     "checkEmailTitle": "Check your email",
     "checkEmailMessage": "We sent a confirmation link to your email. Click it to activate your account, then come back to sign in.",
     "goToLogin": "Go to sign in",
+    "oauthErrorTitle": "Authentication failed",
+    "oauthErrorMessage": "We couldn't complete your sign in. Please try again.",
     "logoutSuccess": "Signed out successfully",
     "logoutFailed": "Sign out failed. Please try again.",
     "retryLabel": "Try again",

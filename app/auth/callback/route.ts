@@ -32,29 +32,11 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Show error page with 2-second redirect to login
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Authentication Failed</title>
-  <style>
-    body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #f9fafb; font-family: sans-serif; }
-    .card { background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 2rem; text-align: center; max-width: 400px; }
-    p { color: #dc2626; font-size: 0.875rem; }
-  </style>
-  <script>setTimeout(() => { window.location.href = '/auth/login'; }, 2000);</script>
-</head>
-<body>
-  <div class="card">
-    <p>Authentication failed. Redirecting to login...</p>
-  </div>
-</body>
-</html>`
-
-  return new NextResponse(html, {
-    status: 200,
-    headers: { 'Content-Type': 'text/html' },
-  })
+  // Code exchange failed (or no code was returned). Navigate with a plain
+  // server-side redirect to a dedicated error page rather than returning raw
+  // HTML with an inline <script> redirect: production CSP is nonce-based
+  // (`script-src` has no 'unsafe-inline'), so that script was blocked and the
+  // user got stuck on the error page. The error page carries a normal link back
+  // to login, so it works with JavaScript fully disabled too (#516).
+  return NextResponse.redirect(`${origin}/auth/auth-code-error`)
 }

@@ -803,6 +803,8 @@
     "checkEmailTitle": "Kiểm tra email",
     "checkEmailMessage": "Chúng tôi đã gửi liên kết xác nhận đến email của bạn. Nhấp vào đó để kích hoạt tài khoản, sau đó quay lại đăng nhập.",
     "goToLogin": "Đi đến đăng nhập",
+    "oauthErrorTitle": "Xác thực thất bại",
+    "oauthErrorMessage": "Chúng tôi không thể hoàn tất đăng nhập của bạn. Vui lòng thử lại.",
     "logoutSuccess": "Đã đăng xuất thành công",
     "logoutFailed": "Đăng xuất thất bại. Vui lòng thử lại.",
     "retryLabel": "Thử lại",
