@@ -76,6 +76,27 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       .eq('user_id', user.id),
   ])
 
+  // All three refine the synthesized rows, and two of them do so by SUPPRESSING
+  // one: a logged deposit means the user already recorded the real transfer, a
+  // fulfillment means the amount is already inside a renewed deposit's
+  // principal. Defaulting either to [] on failure doesn't lose history — it
+  // emits the duplicate they exist to cancel, so the goal shows the same
+  // contribution twice. A failed overrides read just computes the wrong
+  // amount. None of that may hide behind a 200 (#532).
+  if (overridesRes.error || depositsRes.error || fulfillmentsRes.error) {
+    console.error(
+      'recurring contributions: failed to read reconciliation sources —',
+      [
+        overridesRes.error && `recurring_saving_overrides: ${overridesRes.error.message}`,
+        depositsRes.error && `investment_transactions: ${depositsRes.error.message}`,
+        fulfillmentsRes.error && `recurring_saving_fulfillments: ${fulfillmentsRes.error.message}`,
+      ]
+        .filter(Boolean)
+        .join('; '),
+    )
+    return NextResponse.json({ error: 'Failed to fetch recurring contributions' }, { status: 500 })
+  }
+
   const loggedDeposits = (depositsRes.data ?? []).map((d) => ({
     month: String(d.investment_date).slice(0, 7),
     goalId: d.goal_id,
