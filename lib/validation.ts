@@ -199,3 +199,46 @@ export function validateEnum<T extends string>(
   }
   return val as T
 }
+
+export interface PlanMonthFilter {
+  month: number
+  year: number
+  ym: string       // YYYY-MM
+  planDate: string // YYYY-MM-01
+}
+
+// The optional ?month=&year= filter shared by the fixed-expenses and
+// recurring-savings list endpoints. Both narrow to the rows active in a plan
+// month by interpolating the value into a PostgREST `.or(...)` filter STRING,
+// where a comma starts a new term — so an unvalidated value can rewrite the
+// expression rather than be compared against it. RLS still scopes the rows to
+// one user, but the query must be built from values we've actually checked
+// (#534).
+//
+// Returns null when neither param is supplied (the plain unfiltered list).
+// Supplying only one is rejected rather than silently ignored: a caller asking
+// for ?month=6 and getting every row back cannot tell that the filter was
+// dropped — it looks like a filter that matched everything.
+//
+// The returned ym/planDate are rebuilt from the parsed integers, so nothing the
+// caller typed reaches the query even when it happens to be valid. Same
+// month/year bounds as the monthly-plan routes, which this deliberately mirrors.
+export function validatePlanMonthFilter(
+  month: unknown,
+  year: unknown
+): PlanMonthFilter | null {
+  const supplied = (v: unknown) =>
+    v !== null && v !== undefined && !(typeof v === 'string' && v.trim() === '')
+
+  const hasMonth = supplied(month)
+  const hasYear = supplied(year)
+  if (!hasMonth && !hasYear) return null
+  if (!hasMonth || !hasYear) {
+    throw new ValidationError('month and year must be supplied together')
+  }
+
+  const m = validateInteger(month, 'month', { min: 1, max: 12 })
+  const y = validateInteger(year, 'year', { min: 2000, max: 9999 })
+  const ym = `${y}-${String(m).padStart(2, '0')}`
+  return { month: m, year: y, ym, planDate: `${ym}-01` }
+}

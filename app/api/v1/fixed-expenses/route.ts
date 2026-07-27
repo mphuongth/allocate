@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { ValidationError, validateAmount, validateText, validateYearMonth } from '@/lib/validation'
+import { ValidationError, validateAmount, validatePlanMonthFilter, validateText, validateYearMonth, type PlanMonthFilter } from '@/lib/validation'
 
 function toDateCol(ym: string | undefined | null): string | null {
   if (!ym) return null
@@ -14,8 +14,15 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url)
   const category = searchParams.get('category')
-  const month = searchParams.get('month')
-  const year = searchParams.get('year')
+
+  // Validate before the value can reach the `.or(...)` filter string below.
+  let planMonth: PlanMonthFilter | null
+  try {
+    planMonth = validatePlanMonthFilter(searchParams.get('month'), searchParams.get('year'))
+  } catch (e) {
+    if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
+    throw e
+  }
 
   let query = supabase
     .from('fixed_expenses')
@@ -25,11 +32,10 @@ export async function GET(request: NextRequest) {
 
   if (category) query = query.eq('category', category)
 
-  if (month && year) {
-    const planDate = `${year}-${String(month).padStart(2, '0')}-01`
+  if (planMonth) {
     query = query
-      .or(`effective_from.is.null,effective_from.lte.${planDate}`)
-      .or(`effective_to.is.null,effective_to.gte.${planDate}`)
+      .or(`effective_from.is.null,effective_from.lte.${planMonth.planDate}`)
+      .or(`effective_to.is.null,effective_to.gte.${planMonth.planDate}`)
   }
 
   const { data: expenses, error } = await query
