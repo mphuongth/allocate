@@ -194,6 +194,30 @@ describe('GET /api/v1/savings-goals/[id]/recurring-contributions', () => {
     await expect(res.json()).resolves.toEqual({ contributions: [] })
   })
 
+  it('returns an empty list when every plan month is still in the future, even if a reconciliation read errors', async () => {
+    seedHappyPath()
+    // Year 2999 is deliberately absurd: an assertion about "not yet realized"
+    // must not start failing as the calendar moves.
+    h.results.monthly_plans = { data: [{ id: PLAN_ID, month: 1, year: 2999 }], error: null }
+    h.results.recurring_saving_fulfillments = { data: null, error: { message: 'timeout' } }
+    const res = await call()
+    expect(res.status).toBe(200)
+    await expect(res.json()).resolves.toEqual({ contributions: [] })
+  })
+
+  // The precheck must not swallow the case it exists to protect: once a single
+  // realized plan month is present, a reconciliation failure can change the
+  // answer and must still fail closed.
+  it('still fails closed when a realized plan month exists alongside future ones', async () => {
+    seedHappyPath()
+    h.results.monthly_plans = {
+      data: [{ id: PLAN_ID, month: 1, year: 2999 }, { id: 'plan-past', month: 1, year: 2026 }],
+      error: null,
+    }
+    h.results.recurring_saving_fulfillments = { data: null, error: { message: 'timeout' } }
+    expect((await call()).status).toBe(500)
+  })
+
   it('does not leak the database message to the client', async () => {
     seedHappyPath()
     h.results.recurring_saving_fulfillments = {

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateUUID } from '@/lib/validation'
-import { realizedRecurringContributions } from '@/lib/finance'
+import { isPlanMonthRealized, realizedRecurringContributions } from '@/lib/finance'
 
 // Recurring savings are plan definitions, not logged transactions, so they never
 // appear in investment_transactions. This endpoint synthesizes read-only history
@@ -44,12 +44,21 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const plans = (plansRes.data ?? []) as { id: string; month: number; year: number }[]
   const planIds = plans.map((p) => p.id)
 
-  // realizedRecurringContributions iterates plans × savings, so with either side
-  // empty the result is definitively [] and none of the three reconciliation
-  // sources can change it. Return before reading them: it saves three queries,
-  // and it keeps failing closed from over-reaching into a 500 on a request whose
-  // correct answer is already known.
-  if (savings.length === 0 || plans.length === 0) {
+  // realizedRecurringContributions iterates *realized* plan months × savings, so
+  // if either side contributes nothing the result is definitively [] and none of
+  // the three reconciliation sources can change it. Return before reading them:
+  // it saves three queries, and it keeps failing closed from over-reaching into a
+  // 500 on a request whose correct answer is already known.
+  //
+  // The plan side is narrowed with the same isPlanMonthRealized the library
+  // applies, so a goal whose only plans are still in the future is answered
+  // without them. The saving side is deliberately checked for emptiness only:
+  // narrowing it further (effective_from/effective_to vs. each realized month)
+  // would mean re-implementing the library's window logic here, and any drift
+  // between the two copies would silently return an empty history — the exact
+  // failure this endpoint is being fixed for. Between the two wrong answers, an
+  // over-strict 500 beats a confidently empty one.
+  if (savings.length === 0 || !plans.some((p) => isPlanMonthRealized(p.year, p.month))) {
     return NextResponse.json({ contributions: [] })
   }
 
