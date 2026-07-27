@@ -41,14 +41,38 @@ describe('boundedFetchText', () => {
 
   // Without this, a 404/500 error page is handed to the price parser, which then
   // reports a confusing "price row not found" instead of "the site is down".
-  it('rejects a non-2xx response before reading the body', async () => {
-    const res = new Response(streamOf([enc.encode('<html>Not Found</html>')]), { status: 404 })
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(res)
+  it('rejects a non-2xx response with the status, not a parse error', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(streamOf([enc.encode('<html>Not Found</html>')]), { status: 404 }),
+    )
+    // The error names the status, so the caller can tell an outage from a layout
+    // change — the error page is never handed to a price parser.
     await expect(boundedFetchText('https://example.test')).rejects.toThrow(/404/)
-    // `bodyUsed` is the honest signal: a stream's start/pull callbacks both run
-    // eagerly at construction, so instrumenting them would report a read that
-    // never happened. This flips only once something actually consumes the body.
-    expect(res.bodyUsed).toBe(false)
+  })
+
+  // Throwing without cancelling leaves the transfer open while the semaphore
+  // permit is already released, so a run of error responses can hold more than
+  // the cap's worth of sockets — quietly defeating the process-wide limit this
+  // helper exists to enforce.
+  it('cancels the error response body instead of leaving the transfer open', async () => {
+    let cancelled = false
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) { controller.enqueue(enc.encode('x')) }, // never ends on its own
+      cancel() { cancelled = true },
+    })
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(stream, { status: 500 }))
+    await expect(boundedFetchText('https://example.test')).rejects.toThrow(/500/)
+    expect(cancelled).toBe(true)
+  })
+
+  it('still reports the status when cancelling the body itself fails', async () => {
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) { controller.enqueue(enc.encode('x')) },
+      cancel() { throw new Error('socket already gone') },
+    })
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(stream, { status: 502 }))
+    // The cancel failure must not mask the actual problem.
+    await expect(boundedFetchText('https://example.test')).rejects.toThrow(/502/)
   })
 
   it('rejects a 500 as well as a 404', async () => {

@@ -40,6 +40,13 @@ export async function boundedFetchText(
   return httpSemaphore.run(async () => {
     const res = await fetch(url, { ...rest, signal: AbortSignal.timeout(timeoutMs) })
     if (!res.ok) {
+      // Cancel before throwing. The semaphore permit is released as soon as this
+      // callback returns, so an un-cancelled error body would keep its transfer
+      // open past the permit — and a run of error responses could then hold more
+      // than MAX_CONCURRENT_HTTP sockets, defeating the very cap this helper
+      // exists to enforce. Swallow a cancel failure: it isn't actionable and
+      // must not mask the status, which is the real problem.
+      await res.body?.cancel().catch(() => {})
       throw new Error(`Upstream responded ${res.status} for ${new URL(url).host}`)
     }
 
