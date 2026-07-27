@@ -132,6 +132,35 @@ describe('boundedFetchText', () => {
     await expect(boundedFetchText('https://example.test', { timeoutMs: 20 })).rejects.toThrow()
   })
 
+  // The deadline must cover the wait for a permit, not just the request. One
+  // Dragon Capital scrape queues ~15 requests behind a cap of 6, so a gold
+  // refresh can sit in that queue — and a timeout that only starts on
+  // acquisition makes the real bound "queue time + 10s", not 10s.
+  it('applies the deadline to the wait for a permit, not just the fetch', async () => {
+    const { httpSemaphore } = await import('../boundedFetch')
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(streamOf([enc.encode('ok')]), { status: 200 }),
+    )
+
+    // Occupy every permit so the call below can only queue.
+    let releaseAll: () => void = () => {}
+    const blockers = Array.from({ length: 6 }, () =>
+      httpSemaphore.run(() => new Promise<void>((r) => {
+        const prev = releaseAll
+        releaseAll = () => { prev(); r() }
+      })),
+    )
+
+    await expect(
+      boundedFetchText('https://example.test', { timeoutMs: 20 }),
+    ).rejects.toThrow()
+    // Never even reached the request: it gave up while queued.
+    expect(fetchSpy).not.toHaveBeenCalled()
+
+    releaseAll()
+    await Promise.all(blockers)
+  })
+
   it('forwards caller headers to the upstream request', async () => {
     let init: RequestInit | undefined
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, i) => {

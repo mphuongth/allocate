@@ -80,4 +80,60 @@ describe('Semaphore', () => {
     // If the permit leaked, this second run would hang forever.
     await expect(sem.run(async () => 'ok')).resolves.toBe('ok')
   })
+
+  // Waiting for a permit is part of an operation's elapsed time. Without an
+  // abortable wait, a caller's "absolute" deadline only starts once it reaches
+  // the front of the queue, so the real bound is queue time + deadline (#530).
+  describe('abortable acquisition', () => {
+    it('rejects a queued caller when its signal aborts, and never runs its op', async () => {
+      const sem = new Semaphore(1)
+      let ran = false
+      let releaseFirst: () => void = () => {}
+      const first = sem.run(() => new Promise<void>((r) => { releaseFirst = () => r() }))
+
+      const controller = new AbortController()
+      const queued = sem.run(async () => { ran = true }, controller.signal)
+      controller.abort(new Error('deadline exceeded'))
+
+      await expect(queued).rejects.toThrow('deadline exceeded')
+      expect(ran).toBe(false)
+
+      releaseFirst()
+      await first
+    })
+
+    it('does not run the op at all when the signal is already aborted', async () => {
+      const sem = new Semaphore(1)
+      let ran = false
+      await expect(
+        sem.run(async () => { ran = true }, AbortSignal.abort(new Error('too late'))),
+      ).rejects.toThrow('too late')
+      expect(ran).toBe(false)
+    })
+
+    it('leaves the queue usable for everyone else after an abort', async () => {
+      const sem = new Semaphore(1)
+      let releaseFirst: () => void = () => {}
+      const first = sem.run(() => new Promise<void>((r) => { releaseFirst = () => r() }))
+
+      const controller = new AbortController()
+      const abandoned = sem.run(async () => 'never', controller.signal)
+      const waiting = sem.run(async () => 'ran')
+
+      controller.abort(new Error('gone'))
+      await expect(abandoned).rejects.toThrow('gone')
+
+      releaseFirst()
+      await first
+      // The abandoned waiter must not have consumed the permit it never got.
+      await expect(waiting).resolves.toBe('ran')
+    })
+
+    it('is unaffected by a signal that never aborts', async () => {
+      const sem = new Semaphore(1)
+      const controller = new AbortController()
+      await expect(sem.run(async () => 'ok', controller.signal)).resolves.toBe('ok')
+      await expect(sem.run(async () => 'ok again')).resolves.toBe('ok again')
+    })
+  })
 })

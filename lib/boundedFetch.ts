@@ -37,8 +37,17 @@ export async function boundedFetchText(
   init: RequestInit & { timeoutMs?: number; maxBytes?: number } = {},
 ): Promise<string> {
   const { timeoutMs = SCRAPE_TIMEOUT_MS, maxBytes = SCRAPE_MAX_BYTES, ...rest } = init
+
+  // The clock starts HERE, before queuing for a permit — not inside the
+  // callback. Waiting is part of the elapsed time: one Dragon Capital scrape
+  // queues ~15 requests behind a cap of 6, so a deadline that only started on
+  // acquisition made the real bound "queue time + timeoutMs" rather than the
+  // absolute one it advertises. The same signal aborts the wait, the request and
+  // the body read, so it bounds the whole operation.
+  const signal = AbortSignal.timeout(timeoutMs)
+
   return httpSemaphore.run(async () => {
-    const res = await fetch(url, { ...rest, signal: AbortSignal.timeout(timeoutMs) })
+    const res = await fetch(url, { ...rest, signal })
     if (!res.ok) {
       // Cancel before throwing. The semaphore permit is released as soon as this
       // callback returns, so an un-cancelled error body would keep its transfer
@@ -73,5 +82,5 @@ export async function boundedFetchText(
       offset += chunk.byteLength
     }
     return new TextDecoder().decode(merged)
-  })
+  }, signal)
 }
