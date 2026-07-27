@@ -15,25 +15,19 @@ export async function POST() {
     return NextResponse.json({ error: msg }, { status: 502 })
   }
 
-  // Read current price before overwriting so we can store it as previous
-  const { data: existing } = await supabase
-    .from('gold_price_settings')
-    .select('price_per_chi')
-    .eq('user_id', user.id)
-    .single()
-
+  // One statement does the read, the carry-over and the write. Reading the
+  // current price separately used to leave a gap on both sides: the read's error
+  // was discarded, so a transient failure stored previous = null and erased the
+  // comparison point behind a 200; and a concurrent refresh landing in the gap
+  // produced a mismatched previous/current pair. The RPC's INSERT … ON CONFLICT
+  // DO UPDATE has no read to fail and takes a row lock, so concurrent refreshes
+  // serialize into a valid chain (#528).
   const { data, error } = await supabase
-    .from('gold_price_settings')
-    .upsert({
-      user_id: user.id,
-      price_per_chi: price,
-      previous_price_per_chi: existing?.price_per_chi ?? null,
-      updated_at: new Date().toISOString(),
-    })
-    .select('price_per_chi, previous_price_per_chi, updated_at')
+    .rpc('refresh_gold_price', { p_price: price })
     .single()
 
   if (error || !data) {
+    console.error('gold-price refresh: atomic refresh failed', error?.message)
     return NextResponse.json({ error: 'Failed to save gold price' }, { status: 500 })
   }
 
