@@ -435,6 +435,7 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
   const [syncing, setSyncing] = useState(false)
   const [syncDone, setSyncDone] = useState(false)
   const [syncFailed, setSyncFailed] = useState(false)
+  const [syncLimited, setSyncLimited] = useState(false)
   // undefined = loading, null = never synced, otherwise the last-sync ISO time.
   const [lastSyncIso, setLastSyncIso] = useState<string | null | undefined>(undefined)
   useEffect(() => { fetchLastSync().then(setLastSyncIso) }, [])
@@ -456,12 +457,17 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
     setSyncing(true)
     setSyncDone(false)
     setSyncFailed(false)
-    const ok = await refreshPrices()
+    setSyncLimited(false)
+    const result = await refreshPrices()
     setSyncing(false)
-    if (ok) {
+    if (result.ok) {
       setSyncDone(true)
       setLastSyncIso(new Date().toISOString())
       setTimeout(() => setSyncDone(false), 3000)
+    } else if (result.reason === 'rate-limited') {
+      // Distinct from a failure: nothing is broken, the user just has to wait.
+      setSyncLimited(true)
+      setTimeout(() => setSyncLimited(false), 3000)
     } else {
       setSyncFailed(true)
       setTimeout(() => setSyncFailed(false), 3000)
@@ -505,7 +511,12 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
     ? t('appearanceLight')
     : t('appearanceSystem')
 
-  const syncStatusColor = syncDone ? 'var(--c-pos)' : syncFailed ? 'var(--c-neg)' : 'var(--c-muted)'
+  // Rate-limited is neutral, not negative: nothing failed, the user is early.
+  const syncStatusColor = syncDone
+    ? 'var(--c-pos)'
+    : syncFailed
+    ? 'var(--c-neg)'
+    : 'var(--c-muted)'
 
   return (
     <>
@@ -584,6 +595,8 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
                     ? t('syncUpdating')
                     : syncDone
                     ? t('syncUpdated')
+                    : syncLimited
+                    ? t('syncRateLimited')
                     : syncFailed
                     ? t('syncFailed')
                     : `${t('lastSyncedPrefix')}${formatLastSync(lastSyncIso, locale)}`}

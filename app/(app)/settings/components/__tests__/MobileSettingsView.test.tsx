@@ -370,13 +370,56 @@ describe('MobileSettingsView — price sync section', () => {
   })
 
   it('shows a failure status (not "Updated") when a refresh endpoint errors', async () => {
-    // Both fetches resolve not-ok → refreshPrices returns false.
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response('{}', { status: 500 })
     )
     render(<MobileSettingsView {...defaultProps} />)
     await userEvent.click(screen.getByRole('button', { name: /sync now/i }))
     await waitFor(() => expect(screen.getByText(/sync failed/i)).toBeInTheDocument())
+    expect(screen.queryByText(/updated/i)).not.toBeInTheDocument()
+    fetchSpy.mockRestore()
+  })
+
+  // The success path was never asserted here, which is how #552 survived: the
+  // button had reported "Sync failed" for every user since it was wired to the
+  // cron routes, and only the failure branch was covered.
+  it('shows "Updated" when both refreshes succeed', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('{}', { status: 200 })
+    )
+    render(<MobileSettingsView {...defaultProps} />)
+    await userEvent.click(screen.getByRole('button', { name: /sync now/i }))
+    await waitFor(() => expect(screen.getByText(/updated/i)).toBeInTheDocument())
+    expect(screen.queryByText(/sync failed/i)).not.toBeInTheDocument()
+    fetchSpy.mockRestore()
+  })
+
+  it('calls the user-scoped endpoints rather than the cron routes', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('{}', { status: 200 })
+    )
+    render(<MobileSettingsView {...defaultProps} />)
+    await userEvent.click(screen.getByRole('button', { name: /sync now/i }))
+    await waitFor(() => expect(screen.getByText(/updated/i)).toBeInTheDocument())
+    const urls = fetchSpy.mock.calls.map((c) => String(c[0]))
+    expect(urls).toEqual(expect.arrayContaining([
+      '/api/v1/funds/refresh-nav',
+      '/api/v1/gold-price/refresh',
+    ]))
+    expect(urls.some((u) => u.includes('/api/cron/'))).toBe(false)
+    fetchSpy.mockRestore()
+  })
+
+  // "Sync failed" would send the user looking for a broken app; the real
+  // instruction is to wait a moment.
+  it('distinguishes a rate-limited sync from a failure', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('{}', { status: 429, headers: { 'Retry-After': '30' } })
+    )
+    render(<MobileSettingsView {...defaultProps} />)
+    await userEvent.click(screen.getByRole('button', { name: /sync now/i }))
+    await waitFor(() => expect(screen.getByText(/too many|wait/i)).toBeInTheDocument())
+    expect(screen.queryByText(/sync failed/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/updated/i)).not.toBeInTheDocument()
     fetchSpy.mockRestore()
   })

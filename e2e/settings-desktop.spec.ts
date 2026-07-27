@@ -8,7 +8,8 @@ import { test, expect } from '@playwright/test'
 // app/(app)/settings/components/__tests__/DesktopSettingsView.test.tsx. Only the two
 // real round-trips that a component test (which mocks Supabase/fetch) cannot prove
 // stay here: a profile save propagating to the live desktop sidebar via
-// NavigationContext, and Sync now hitting the real cron endpoints.
+// NavigationContext, and Sync now reaching the real user-scoped refresh endpoints
+// with a session the server accepts.
 test.use({ viewport: { width: 1280, height: 800 } })
 
 test.beforeEach(async ({ page }) => {
@@ -19,14 +20,39 @@ test.beforeEach(async ({ page }) => {
   await page.waitForLoadState('networkidle')
 })
 
-test('desktop: clicking Sync now triggers cron API calls', async ({ page }) => {
-  const syncResponse = page.waitForResponse(
-    r => r.url().includes('/api/cron/refresh'),
-    { timeout: 15_000 }
+// Both views shared the same broken wiring, so both specs asserted the cron URL
+// and both stayed green while the button reported "Sync failed" (#552). The
+// mobile spec carries the fuller coverage; this keeps the desktop view honest
+// about the one thing that differs — its own handler.
+test('desktop: Sync now calls the user-scoped endpoints and is authenticated', async ({ page }) => {
+  const navResponse = page.waitForResponse(
+    r => r.url().includes('/api/v1/funds/refresh-nav'),
+    { timeout: 20_000 }
+  )
+  const goldResponse = page.waitForResponse(
+    r => r.url().includes('/api/v1/gold-price/refresh'),
+    { timeout: 20_000 }
   )
   await page.getByRole('button', { name: /sync now/i }).click()
-  await syncResponse
-  await expect(page.getByRole('button', { name: /sync now/i })).toBeEnabled({ timeout: 5_000 })
+  const [nav, gold] = await Promise.all([navResponse, goldResponse])
+
+  // 401 is exactly what the cron routes returned to a browser.
+  expect(nav.status(), 'NAV refresh must not reject the session').not.toBe(401)
+  expect(gold.status(), 'gold refresh must not reject the session').not.toBe(401)
+
+  await expect(page.getByRole('button', { name: /sync now/i })).toBeEnabled({ timeout: 10_000 })
+})
+
+test('desktop: Sync now reports success when both refreshes succeed', async ({ page }) => {
+  await page.route('**/api/v1/funds/refresh-nav', r =>
+    r.fulfill({ status: 200, contentType: 'application/json', body: '{"updated":0}' }))
+  await page.route('**/api/v1/gold-price/refresh', r =>
+    r.fulfill({ status: 200, contentType: 'application/json', body: '{"price_per_chi":8500000}' }))
+
+  await page.getByRole('button', { name: /sync now/i }).click()
+
+  await expect(page.getByText(/updated/i).first()).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByText(/sync failed/i)).toHaveCount(0)
 })
 
 test('desktop: saving a new name updates the sidebar avatar/name without a refresh', async ({ page }) => {

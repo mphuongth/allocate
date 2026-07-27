@@ -27,18 +27,52 @@ export function setLocaleCookie(next: string): void {
   document.cookie = `locale=${next};path=/;max-age=31536000;SameSite=Lax`
 }
 
-// Kick both price refreshers. Returns true only when both endpoints responded
-// ok, so callers can surface a failure instead of always reporting success.
-// Network/parse errors resolve to false rather than throwing (best-effort).
-export async function refreshPrices(): Promise<boolean> {
+export type SyncResult =
+  | { ok: true }
+  | { ok: false; reason: 'rate-limited'; retryAfterSeconds: number }
+  | { ok: false; reason: 'error' }
+
+// Fallback when a 429 arrives without a usable Retry-After. Both limiters use a
+// 60-second fixed window, so this is the longest a caller could need to wait.
+const DEFAULT_RETRY_AFTER_SECONDS = 60
+
+// Kick both price refreshers for the CURRENT USER.
+//
+// These used to be the cron routes (/api/cron/refresh-*), which gate on
+// CRON_SECRET in an Authorization header a browser fetch doesn't send — so every
+// click returned 401 and the button reported "Sync failed" (#552). The v1
+// endpoints authenticate by session cookie, act on the caller's own funds and
+// gold settings rather than every row in the table, and are rate-limited so a
+// button can't be used to hammer the upstream providers.
+//
+// A 429 is reported separately from a generic failure: it's the user's own doing
+// and clears itself, so "wait a moment" is actionable in a way "Sync failed"
+// isn't. Network/parse errors resolve to an error result rather than throwing.
+export async function refreshPrices(): Promise<SyncResult> {
   try {
     const results = await Promise.all([
-      fetch('/api/cron/refresh-navs'),
-      fetch('/api/cron/refresh-gold'),
+      fetch('/api/v1/funds/refresh-nav', { method: 'POST' }),
+      fetch('/api/v1/gold-price/refresh', { method: 'POST' }),
     ])
-    return results.every((r) => r.ok)
+
+    if (results.every((r) => r.ok)) return { ok: true }
+
+    // Rate limiting wins over a generic failure when both happen: it's the one
+    // the user can do something about.
+    const limited = results.filter((r) => r.status === 429)
+    if (limited.length > 0) {
+      const retryAfterSeconds = Math.max(
+        ...limited.map((r) => {
+          const header = Number(r.headers.get('Retry-After'))
+          return Number.isFinite(header) && header > 0 ? header : DEFAULT_RETRY_AFTER_SECONDS
+        }),
+      )
+      return { ok: false, reason: 'rate-limited', retryAfterSeconds }
+    }
+
+    return { ok: false, reason: 'error' }
   } catch {
-    return false
+    return { ok: false, reason: 'error' }
   }
 }
 

@@ -47,27 +47,88 @@ describe('setLocaleCookie', () => {
   })
 })
 
+// "Sync now" used to call /api/cron/refresh-navs and /api/cron/refresh-gold from
+// the browser. Those routes gate on CRON_SECRET in an Authorization header a
+// browser fetch never sends, so both returned 401 and the button reported
+// "Sync failed" on every click, for every user (#552).
+//
+// The previous tests here asserted those exact cron URLs — encoding the broken
+// wiring rather than catching it, because a URL assertion can't see that the
+// request is unauthenticated. These assert the user-scoped endpoints instead,
+// which authenticate by session cookie and act on the caller's own data.
+const ok = (status = 200) => ({ ok: true, status, headers: new Headers() })
+const notOk = (status: number, headers: Record<string, string> = {}) =>
+  ({ ok: false, status, headers: new Headers(headers) })
+
 describe('refreshPrices', () => {
   afterEach(() => vi.restoreAllMocks())
 
-  it('calls both refresh endpoints and reports success', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true })
+  it('calls the user-scoped refresh endpoints, not the cron routes', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(ok())
     vi.stubGlobal('fetch', fetchMock)
-    await expect(refreshPrices()).resolves.toBe(true)
-    expect(fetchMock).toHaveBeenCalledWith('/api/cron/refresh-navs')
-    expect(fetchMock).toHaveBeenCalledWith('/api/cron/refresh-gold')
+    await refreshPrices()
+
+    const urls = fetchMock.mock.calls.map((c) => c[0])
+    expect(urls).toEqual(
+      expect.arrayContaining(['/api/v1/funds/refresh-nav', '/api/v1/gold-price/refresh']),
+    )
+    expect(urls.some((u: string) => u.includes('/api/cron/'))).toBe(false)
   })
 
-  it('reports failure when an endpoint responds not-ok', async () => {
+  it('posts, since both endpoints write', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(ok())
+    vi.stubGlobal('fetch', fetchMock)
+    await refreshPrices()
+    for (const call of fetchMock.mock.calls) {
+      expect(call[1]?.method).toBe('POST')
+    }
+  })
+
+  it('reports success when both endpoints succeed', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok()))
+    await expect(refreshPrices()).resolves.toEqual({ ok: true })
+  })
+
+  it('reports a plain failure when an endpoint errors', async () => {
     vi.stubGlobal('fetch', vi.fn()
-      .mockResolvedValueOnce({ ok: true })
-      .mockResolvedValueOnce({ ok: false }))
-    await expect(refreshPrices()).resolves.toBe(false)
+      .mockResolvedValueOnce(ok())
+      .mockResolvedValueOnce(notOk(500)))
+    await expect(refreshPrices()).resolves.toEqual({ ok: false, reason: 'error' })
+  })
+
+  // A rate-limited sync is the user's own doing and clears itself — telling them
+  // to wait is actionable in a way "Sync failed" isn't.
+  it('distinguishes a rate-limited sync and carries Retry-After', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(ok())
+      .mockResolvedValueOnce(notOk(429, { 'Retry-After': '42' })))
+    await expect(refreshPrices()).resolves.toEqual({
+      ok: false,
+      reason: 'rate-limited',
+      retryAfterSeconds: 42,
+    })
+  })
+
+  it('prefers the rate-limit reason when one endpoint is limited and the other fails', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(notOk(500))
+      .mockResolvedValueOnce(notOk(429, { 'Retry-After': '30' })))
+    const res = await refreshPrices()
+    expect(res).toMatchObject({ ok: false, reason: 'rate-limited' })
+  })
+
+  it('falls back to a sane retry window when Retry-After is missing', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(ok())
+      .mockResolvedValueOnce(notOk(429)))
+    const res = await refreshPrices()
+    expect(res).toMatchObject({ ok: false, reason: 'rate-limited' })
+    expect((res as { retryAfterSeconds: number }).retryAfterSeconds).toBeGreaterThan(0)
   })
 
   it('reports failure (without throwing) on a network error', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network')))
-    await expect(refreshPrices()).resolves.toBe(false)
+    await expect(refreshPrices()).resolves.toEqual({ ok: false, reason: 'error' })
   })
 })
 
