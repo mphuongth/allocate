@@ -139,6 +139,49 @@ describe('refreshPrices', () => {
     await expect(refreshPrices()).resolves.toEqual({ ok: false, reason: 'error' })
   })
 
+  // The two endpoints have different limits by design (NAV 5/min, gold 10/min),
+  // so a rapid sixth sync limits NAV while gold still persists a new price.
+  // Calling that "rate-limited" would deny work that happened, and would leave
+  // the dashboard cache stale on top of it.
+  describe('mixed outcomes across the two endpoints', () => {
+    beforeEach(() => localStorage.setItem('dashboardOverviewCache_user-1', '{"data":{},"ts":1}'))
+    afterEach(() => localStorage.clear())
+
+    it('reports partial when NAV is rate-limited but gold succeeds', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (url: string) =>
+        url.includes('refresh-nav') ? notOk(429, { 'Retry-After': '30' }) : ok()))
+      await expect(refreshPrices()).resolves.toEqual({ ok: true, partial: true })
+    })
+
+    it('busts the caches when only gold succeeded', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (url: string) =>
+        url.includes('refresh-nav') ? notOk(429, { 'Retry-After': '30' }) : ok()))
+      await refreshPrices()
+      expect(localStorage.getItem('dashboardOverviewCache_user-1')).toBeNull()
+    })
+
+    it('reports partial when gold fails but funds updated', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (url: string) =>
+        url.includes('refresh-nav') ? navOk(2) : notOk(502)))
+      await expect(refreshPrices()).resolves.toEqual({ ok: true, partial: true })
+    })
+
+    it('reports rate-limited only when neither endpoint persisted anything', async () => {
+      vi.stubGlobal('fetch', vi.fn(async () => notOk(429, { 'Retry-After': '30' })))
+      await expect(refreshPrices()).resolves.toEqual({
+        ok: false, reason: 'rate-limited', retryAfterSeconds: 30,
+      })
+      expect(localStorage.getItem('dashboardOverviewCache_user-1')).not.toBeNull()
+    })
+
+    // No funds to price + gold refused: nothing moved, so this is not "partial".
+    it('reports rate-limited when the user has no funds and gold is limited', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (url: string) =>
+        url.includes('refresh-nav') ? ok({ results: [] }) : notOk(429, { 'Retry-After': '30' })))
+      await expect(refreshPrices()).resolves.toMatchObject({ ok: false, reason: 'rate-limited' })
+    })
+  })
+
   // refresh-nav answers 200 with per-fund results even when every scrape failed,
   // so HTTP status alone would report "Updated" over completely stale NAVs — and
   // stamp a fresh "last synced" time on top of it.

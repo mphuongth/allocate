@@ -59,24 +59,35 @@ function bustPriceDependentCaches(): void {
 // 60-second fixed window, so this is the longest a caller could need to wait.
 const DEFAULT_RETRY_AFTER_SECONDS = 60
 
-// Did every fund NAV update cleanly?
+// What did the NAV refresh actually do?
+//
+//   'updated'  — every fund it tried came back with a new NAV
+//   'partial'  — some funds updated, some errored
+//   'nothing'  — the user has no priced funds; nothing to do, nothing broken
+//   'failed'   — the request failed, every fund errored, or the body is unreadable
 //
 // /api/v1/funds/refresh-nav returns 200 with `{ results: [...] }`, where each
 // entry is either an updated fund or `{ error }` — including when every single
 // one failed. So HTTP status can't answer this on its own.
 //
-// A user with no priced funds gets `results: []`: nothing to do, which is clean
-// rather than partial. A body we can't read counts as not-clean — claiming a
-// full success we can't verify is exactly the habit this endpoint's status
-// already encourages.
-async function navFullyUpdated(navRes: Response): Promise<boolean> {
+// 'nothing' is kept distinct from 'updated' because it persisted nothing: if
+// gold is also refused, the sync moved nothing at all and shouldn't read as
+// partly successful. An unreadable body counts as failed — claiming success we
+// can't verify is exactly the habit this endpoint's status already encourages.
+type NavOutcome = 'updated' | 'partial' | 'nothing' | 'failed'
+
+async function readNavOutcome(navRes: Response): Promise<NavOutcome> {
+  if (!navRes.ok) return 'failed'
   try {
     const body = await navRes.json()
     const results = body?.results
-    if (!Array.isArray(results)) return false
-    return results.every((r: { error?: unknown }) => !r?.error)
+    if (!Array.isArray(results)) return 'failed'
+    if (results.length === 0) return 'nothing'
+    const failures = results.filter((r: { error?: unknown }) => r?.error).length
+    if (failures === 0) return 'updated'
+    return failures === results.length ? 'failed' : 'partial'
   } catch {
-    return false
+    return 'failed'
   }
 }
 
@@ -100,22 +111,30 @@ export async function refreshPrices(): Promise<SyncResult> {
     ])
     const results = [navRes, goldRes]
 
-    if (results.every((r) => r.ok)) {
-      // A 200 from refresh-nav doesn't mean the NAVs moved: it answers with
-      // per-fund results and stays 200 even when every scrape failed. Reporting
-      // a clean "Updated" then — and stamping a fresh "last synced" over stale
-      // NAVs — is the same lie in a different place.
-      //
-      // But gold reaching here DID persist a new price, so this is never a
-      // failure either: it's partial. Both a wholly-failed NAV run and a
-      // half-failed one land here, which keeps the two consistent — previously
-      // "some funds failed" was a success and "all funds failed" was a failure.
+    // Judge the two independently. They fail independently in practice — the
+    // limits differ on purpose (NAV 5/min, gold 10/min), so a rapid sixth sync
+    // limits NAV while gold still persists a new price — and a shared verdict
+    // would report that as rate-limited, denying work that happened and leaving
+    // the dashboard cache stale on top of it.
+    const nav = await readNavOutcome(navRes)
+    const goldSucceeded = goldRes.ok
+
+    // A 200 from refresh-nav doesn't mean the NAVs moved: it answers with
+    // per-fund results and stays 200 even when every scrape failed.
+    const allClean = nav !== 'failed' && nav !== 'partial' && goldSucceeded
+    const anythingPersisted = nav === 'updated' || nav === 'partial' || goldSucceeded
+
+    if (allClean) {
       bustPriceDependentCaches()
-      return (await navFullyUpdated(navRes)) ? { ok: true } : { ok: true, partial: true }
+      return { ok: true }
+    }
+    if (anythingPersisted) {
+      bustPriceDependentCaches()
+      return { ok: true, partial: true }
     }
 
-    // Rate limiting wins over a generic failure when both happen: it's the one
-    // the user can do something about.
+    // Nothing moved. Rate limiting wins over a generic failure: it's the one the
+    // user can do something about.
     const limited = results.filter((r) => r.status === 429)
     if (limited.length > 0) {
       const retryAfterSeconds = Math.max(
