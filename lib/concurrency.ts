@@ -37,12 +37,31 @@ export class Semaphore {
     this.available = Math.max(1, Math.floor(permits) || 1)
   }
 
-  private async acquire(): Promise<void> {
+  // Waiting for a permit is part of an operation's elapsed time, so a caller
+  // with a deadline has to be able to give up while queued. Without this, an
+  // "absolute" timeout created by the caller only starts once it reaches the
+  // front of the queue, and the real bound becomes queue time + timeout (#530).
+  private async acquire(signal?: AbortSignal): Promise<void> {
+    if (signal?.aborted) throw signal.reason
     if (this.available > 0) {
       this.available--
       return
     }
-    await new Promise<void>((resolve) => this.waiters.push(resolve))
+    await new Promise<void>((resolve, reject) => {
+      const waiter = () => {
+        signal?.removeEventListener('abort', onAbort)
+        resolve()
+      }
+      const onAbort = () => {
+        // Drop out of the queue so release() never hands a permit to a waiter
+        // that has already given up — that permit would be lost.
+        const i = this.waiters.indexOf(waiter)
+        if (i !== -1) this.waiters.splice(i, 1)
+        reject(signal!.reason)
+      }
+      this.waiters.push(waiter)
+      signal?.addEventListener('abort', onAbort, { once: true })
+    })
   }
 
   private release(): void {
@@ -51,9 +70,10 @@ export class Semaphore {
     else this.available++
   }
 
-  // Run `fn` once a permit is free, always releasing it (even on throw).
-  async run<T>(fn: () => Promise<T>): Promise<T> {
-    await this.acquire()
+  // Run `fn` once a permit is free, always releasing it (even on throw). Pass a
+  // signal to abandon the wait — `fn` then never runs and no permit is consumed.
+  async run<T>(fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+    await this.acquire(signal)
     try {
       return await fn()
     } finally {

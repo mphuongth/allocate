@@ -2,10 +2,37 @@ import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { scrapeGoldPrice } from '@/lib/scrape-gold'
 
+// Mirrors the window hardcoded in check_gold_refresh_rate_limit; used only as
+// the Retry-After fallback when the RPC can't tell us a precise one.
+const RATE_LIMIT_WINDOW_SECONDS = 60
+
 export async function POST() {
   const supabase = await createSupabaseServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  // Durable per-user rate limit (atomic fixed window in Postgres), checked
+  // before the scrape so a refused call costs DOJI nothing (#530).
+  const { data: rl, error: rlError } = await supabase.rpc('check_gold_refresh_rate_limit')
+  const verdict = Array.isArray(rl) ? rl[0] : rl
+  if (rlError || !verdict) {
+    // Fail CLOSED: if the limit can't be verified (RPC error, missing verdict, or
+    // the migration not yet applied), refuse rather than let the scrape run
+    // uncapped exactly when the database is unhealthy. Refresh is non-essential,
+    // so a retryable 503 is the safe default.
+    console.error('[gold-price refresh] rate-limit check unavailable:', rlError)
+    return NextResponse.json(
+      { error: 'Rate limit check unavailable. Please try again shortly.' },
+      { status: 503, headers: { 'Retry-After': String(RATE_LIMIT_WINDOW_SECONDS) } },
+    )
+  }
+  if (verdict.allowed === false) {
+    const retryAfter = verdict.retry_after_seconds ?? RATE_LIMIT_WINDOW_SECONDS
+    return NextResponse.json(
+      { error: 'Too many refresh requests. Please wait and try again.', retryAfter },
+      { status: 429, headers: { 'Retry-After': String(retryAfter) } },
+    )
+  }
 
   let price: number
   try {

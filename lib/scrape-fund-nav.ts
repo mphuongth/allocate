@@ -1,20 +1,16 @@
 import https from 'https'
 import { ValidationError } from './validation'
-import { Semaphore } from './concurrency'
+import {
+  boundedFetchText,
+  httpSemaphore,
+  SCRAPE_MAX_BYTES,
+  SCRAPE_TIMEOUT_MS,
+} from './boundedFetch'
 
-// Every outbound provider request is bounded so a slow or oversized upstream
-// can't hang a serverless function or exhaust its memory (#515).
-const SCRAPE_TIMEOUT_MS = 10_000
-const SCRAPE_MAX_BYTES = 2 * 1024 * 1024 // 2 MB — fund pages are tens of KB
-
-// Process-wide cap on the number of concurrent outbound provider requests. This
-// bounds the TRUE fan-out regardless of how it nests: the route already limits
-// how many URLs scrape at once, but one Dragon Capital scrape alone issues ~15
-// requests via Promise.all, so without a per-request cap a handful of scrapes
-// could still open hundreds of sockets at once. Every fetch below goes through
-// this gate.
-const MAX_CONCURRENT_HTTP = 6
-const httpSemaphore = new Semaphore(MAX_CONCURRENT_HTTP)
+// The bounded fetch, its timeout/size limits and the process-wide outbound
+// semaphore moved to lib/boundedFetch so the gold scraper shares one
+// implementation instead of a second copy (#530). The Node-https path below
+// still runs through that same semaphore, so the concurrency cap stays global.
 
 // Normalize a NAV source URL for de-duplication: lowercase the host (case-
 // insensitive) but PRESERVE the path/query case — the Dragon Capital and
@@ -32,40 +28,6 @@ export function normalizeNavUrl(raw: string): string {
   } catch {
     return raw.trim()
   }
-}
-
-// fetch(url).text() with an abort timeout and a hard byte cap on the streamed
-// body. Throws on timeout or when the response exceeds the cap; scrapeFundNav's
-// try/catch turns either into a per-fund { error } instead of a hung request.
-async function boundedFetchText(
-  url: string,
-  init: RequestInit & { timeoutMs?: number; maxBytes?: number } = {},
-): Promise<string> {
-  const { timeoutMs = SCRAPE_TIMEOUT_MS, maxBytes = SCRAPE_MAX_BYTES, ...rest } = init
-  return httpSemaphore.run(async () => {
-  const res = await fetch(url, { ...rest, signal: AbortSignal.timeout(timeoutMs) })
-  const reader = res.body?.getReader()
-  if (!reader) return res.text()
-  const chunks: Uint8Array[] = []
-  let total = 0
-  for (;;) {
-    const { done, value } = await reader.read()
-    if (done) break
-    total += value.byteLength
-    if (total > maxBytes) {
-      await reader.cancel()
-      throw new Error(`Response exceeded ${maxBytes} bytes`)
-    }
-    chunks.push(value)
-  }
-  const merged = new Uint8Array(total)
-  let offset = 0
-  for (const chunk of chunks) {
-    merged.set(chunk, offset)
-    offset += chunk.byteLength
-  }
-  return new TextDecoder().decode(merged)
-  })
 }
 
 // The only hosts the NAV scraper is allowed to fetch. `nav_source_url` is
