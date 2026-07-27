@@ -27,35 +27,54 @@ export function setLocaleCookie(next: string): void {
   document.cookie = `locale=${next};path=/;max-age=31536000;SameSite=Lax`
 }
 
+// `partial` means something synced but not everything — gold updated while some
+// or all fund NAVs failed. It stays `ok: true` deliberately: prices did move, so
+// the last-sync timestamp should advance and the caches should be busted. Only
+// the wording differs.
 export type SyncResult =
-  | { ok: true }
+  | { ok: true; partial?: true }
   | { ok: false; reason: 'rate-limited'; retryAfterSeconds: number }
   | { ok: false; reason: 'error' }
+
+// Caches built from the prices a sync changes. The dashboard overview is served
+// from localStorage for 2 minutes (OVERVIEW_CACHE_TTL), so without this a user
+// who viewed the dashboard just before syncing returns to the same stale numbers
+// and the sync looks like it did nothing. The transaction ledger busts the same
+// cache after its own mutations.
+//
+// Scoped to price-dependent caches only: goals, plans and expenses can't be
+// changed by a price refresh, and dropping them would make every sync re-fetch
+// the whole app for nothing.
+const PRICE_DEPENDENT_CACHE_PREFIXES = ['dashboardOverviewCache', 'fundLibraryCache']
+
+function bustPriceDependentCaches(): void {
+  try {
+    Object.keys(localStorage)
+      .filter((k) => PRICE_DEPENDENT_CACHE_PREFIXES.some((p) => k.startsWith(p)))
+      .forEach((k) => localStorage.removeItem(k))
+  } catch { /* ignore — a failed cache bust must not fail the sync */ }
+}
 
 // Fallback when a 429 arrives without a usable Retry-After. Both limiters use a
 // 60-second fixed window, so this is the longest a caller could need to wait.
 const DEFAULT_RETRY_AFTER_SECONDS = 60
 
-// Did the NAV refresh actually move anything?
+// Did every fund NAV update cleanly?
 //
 // /api/v1/funds/refresh-nav returns 200 with `{ results: [...] }`, where each
 // entry is either an updated fund or `{ error }` — including when every single
 // one failed. So HTTP status can't answer this on its own.
 //
-// A user with no priced funds gets `results: []`, which is nothing to do rather
-// than a failure. A body we can't read counts as failure: claiming success we
-// can't verify is exactly the habit this endpoint's status already encourages.
-//
-// Partial failures still count as success — some prices did move. Surfacing
-// "3 of 5 funds updated" needs a UI state and wording of its own, so it's left
-// for a follow-up rather than guessed at here.
-async function navUpdatedSomething(navRes: Response): Promise<boolean> {
+// A user with no priced funds gets `results: []`: nothing to do, which is clean
+// rather than partial. A body we can't read counts as not-clean — claiming a
+// full success we can't verify is exactly the habit this endpoint's status
+// already encourages.
+async function navFullyUpdated(navRes: Response): Promise<boolean> {
   try {
     const body = await navRes.json()
     const results = body?.results
     if (!Array.isArray(results)) return false
-    if (results.length === 0) return true
-    return results.some((r: { error?: unknown }) => !r?.error)
+    return results.every((r: { error?: unknown }) => !r?.error)
   } catch {
     return false
   }
@@ -84,9 +103,15 @@ export async function refreshPrices(): Promise<SyncResult> {
     if (results.every((r) => r.ok)) {
       // A 200 from refresh-nav doesn't mean the NAVs moved: it answers with
       // per-fund results and stays 200 even when every scrape failed. Reporting
-      // "Updated" then — and stamping a fresh "last synced" over stale NAVs — is
-      // the same lie in a different place, so check what actually happened.
-      return (await navUpdatedSomething(navRes)) ? { ok: true } : { ok: false, reason: 'error' }
+      // a clean "Updated" then — and stamping a fresh "last synced" over stale
+      // NAVs — is the same lie in a different place.
+      //
+      // But gold reaching here DID persist a new price, so this is never a
+      // failure either: it's partial. Both a wholly-failed NAV run and a
+      // half-failed one land here, which keeps the two consistent — previously
+      // "some funds failed" was a success and "all funds failed" was a failure.
+      bustPriceDependentCaches()
+      return (await navFullyUpdated(navRes)) ? { ok: true } : { ok: true, partial: true }
     }
 
     // Rate limiting wins over a generic failure when both happen: it's the one

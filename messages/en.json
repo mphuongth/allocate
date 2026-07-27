@@ -156,6 +156,7 @@
     "syncUpdated": "✓ Updated",
     "syncFailed": "✗ Sync failed",
     "syncRateLimited": "⏳ Too many syncs — please wait a moment",
+    "syncPartial": "◐ Partly updated — some prices failed",
     "lastSyncedPrefix": "Last synced: ",
     "syncNow": "Sync now",
     "syncingShort": "Syncing…",

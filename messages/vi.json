@@ -156,6 +156,7 @@
     "syncUpdated": "✓ Đã cập nhật",
     "syncFailed": "✗ Đồng bộ thất bại",
     "syncRateLimited": "⏳ Đồng bộ quá nhiều — vui lòng đợi một lát",
+    "syncPartial": "◐ Cập nhật một phần — vài giá lỗi",
     "lastSyncedPrefix": "Lần cuối: ",
     "syncNow": "Đồng bộ",
     "syncingShort": "Đang…",

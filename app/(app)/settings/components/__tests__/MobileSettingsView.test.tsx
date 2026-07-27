@@ -416,6 +416,21 @@ describe('MobileSettingsView — price sync section', () => {
     fetchSpy.mockRestore()
   })
 
+  // Gold moved but the funds didn't. "Updated" would hide the stale NAVs and
+  // "Sync failed" would deny the price that did change.
+  it('reports a partial sync when some prices failed', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) =>
+      String(url).includes('refresh-nav')
+        ? new Response(JSON.stringify({ results: [{ id: 'f1', error: 'Provider timeout' }] }), { status: 200 })
+        : new Response(JSON.stringify({ price_per_chi: 8500000 }), { status: 200 })
+    )
+    render(<MobileSettingsView {...defaultProps} />)
+    await userEvent.click(screen.getByRole('button', { name: /sync now/i }))
+    await waitFor(() => expect(screen.getByText(/partly updated/i)).toBeInTheDocument())
+    expect(screen.queryByText(/sync failed/i)).not.toBeInTheDocument()
+    fetchSpy.mockRestore()
+  })
+
   // "Sync failed" would send the user looking for a broken app; the real
   // instruction is to wait a moment.
   it('distinguishes a rate-limited sync from a failure', async () => {

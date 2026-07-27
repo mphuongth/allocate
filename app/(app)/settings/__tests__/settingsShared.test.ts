@@ -143,17 +143,27 @@ describe('refreshPrices', () => {
   // so HTTP status alone would report "Updated" over completely stale NAVs — and
   // stamp a fresh "last synced" time on top of it.
   describe('NAV results inspection', () => {
-    it('reports failure when every fund failed, despite the 200', async () => {
+    // Gold still persisted a new price and moved the server's timestamp, so
+    // calling the whole thing a failure would be its own lie — and would leave
+    // the displayed last-sync behind the real one. It isn't a clean success
+    // either, so it's neither.
+    it('reports a partial sync when every fund failed but gold succeeded', async () => {
       vi.stubGlobal('fetch', vi.fn(async (url: string) =>
         url.includes('refresh-nav') ? navAllFailed() : ok()))
-      await expect(refreshPrices()).resolves.toEqual({ ok: false, reason: 'error' })
+      await expect(refreshPrices()).resolves.toEqual({ ok: true, partial: true })
     })
 
-    it('reports success when at least one fund updated', async () => {
+    it('reports a partial sync when only some funds failed', async () => {
       vi.stubGlobal('fetch', vi.fn(async (url: string) =>
         url.includes('refresh-nav')
           ? ok({ results: [{ id: 'f0', nav: 10_000 }, { id: 'f1', error: 'Provider timeout' }] })
           : ok()))
+      await expect(refreshPrices()).resolves.toEqual({ ok: true, partial: true })
+    })
+
+    it('reports a clean success only when nothing errored', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (url: string) =>
+        url.includes('refresh-nav') ? navOk(2) : ok()))
       await expect(refreshPrices()).resolves.toEqual({ ok: true })
     })
 
@@ -169,20 +179,63 @@ describe('refreshPrices', () => {
       await expect(refreshPrices()).resolves.toEqual({ ok: true })
     })
 
-    // Can't verify what we can't read — claiming success would be the same
-    // mistake in a different costume.
-    it('reports failure when the NAV body cannot be read', async () => {
+    // Can't verify what we can't read — so it can't be reported as clean.
+    it('reports a partial sync when the NAV body cannot be read', async () => {
       vi.stubGlobal('fetch', vi.fn(async (url: string) =>
         url.includes('refresh-nav')
           ? { ok: true, status: 200, headers: new Headers(), json: async () => { throw new Error('bad json') } }
           : ok()))
-      await expect(refreshPrices()).resolves.toEqual({ ok: false, reason: 'error' })
+      await expect(refreshPrices()).resolves.toEqual({ ok: true, partial: true })
     })
 
     it('still reports rate limiting ahead of a NAV result failure', async () => {
       vi.stubGlobal('fetch', vi.fn(async (url: string) =>
         url.includes('refresh-nav') ? navAllFailed() : notOk(429, { 'Retry-After': '15' })))
       await expect(refreshPrices()).resolves.toMatchObject({ ok: false, reason: 'rate-limited' })
+    })
+  })
+
+  // A sync changes the NAV and gold values the dashboard overview is built from,
+  // but the overview is served from a 2-minute localStorage cache. Without
+  // busting it, a user who looked at the dashboard just before syncing goes back
+  // to the same stale numbers — the sync appears to have done nothing. The
+  // ledger already busts this cache after its own mutations.
+  describe('cache invalidation', () => {
+    beforeEach(() => {
+      localStorage.setItem('dashboardOverviewCache_user-1', '{"data":{},"ts":1}')
+      localStorage.setItem('fundLibraryCache_user-1', '{}')
+      localStorage.setItem('savingsGoalsCache_user-1', '{}')
+    })
+    afterEach(() => localStorage.clear())
+
+    it('busts the price-dependent caches after a successful sync', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (url: string) =>
+        url.includes('refresh-nav') ? navOk(1) : ok()))
+      await refreshPrices()
+      expect(localStorage.getItem('dashboardOverviewCache_user-1')).toBeNull()
+      expect(localStorage.getItem('fundLibraryCache_user-1')).toBeNull()
+    })
+
+    it('busts them on a partial sync too, since some prices did move', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (url: string) =>
+        url.includes('refresh-nav') ? navAllFailed() : ok()))
+      await refreshPrices()
+      expect(localStorage.getItem('dashboardOverviewCache_user-1')).toBeNull()
+    })
+
+    // Only price-dependent ones: goals, plans and expenses didn't change, and
+    // dropping them would make every sync re-fetch the whole app for nothing.
+    it('leaves caches a price refresh cannot affect', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (url: string) =>
+        url.includes('refresh-nav') ? navOk(1) : ok()))
+      await refreshPrices()
+      expect(localStorage.getItem('savingsGoalsCache_user-1')).not.toBeNull()
+    })
+
+    it('leaves the caches alone when nothing synced', async () => {
+      vi.stubGlobal('fetch', vi.fn(async () => notOk(429, { 'Retry-After': '10' })))
+      await refreshPrices()
+      expect(localStorage.getItem('dashboardOverviewCache_user-1')).not.toBeNull()
     })
   })
 })
