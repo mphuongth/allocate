@@ -56,9 +56,17 @@ describe('setLocaleCookie', () => {
 // wiring rather than catching it, because a URL assertion can't see that the
 // request is unauthenticated. These assert the user-scoped endpoints instead,
 // which authenticate by session cookie and act on the caller's own data.
-const ok = (status = 200) => ({ ok: true, status, headers: new Headers() })
+// /api/v1/funds/refresh-nav answers 200 with per-fund results even when every
+// scrape failed, so a body is needed to tell "synced" from "nothing synced".
+const ok = (body: unknown = { results: [] }, status = 200) =>
+  ({ ok: true, status, headers: new Headers(), json: async () => body })
 const notOk = (status: number, headers: Record<string, string> = {}) =>
-  ({ ok: false, status, headers: new Headers(headers) })
+  ({ ok: false, status, headers: new Headers(headers), json: async () => ({}) })
+
+const navOk = (count = 1) =>
+  ok({ results: Array.from({ length: count }, (_, i) => ({ id: `f${i}`, nav: 10_000 })) })
+const navAllFailed = (count = 2) =>
+  ok({ results: Array.from({ length: count }, (_, i) => ({ id: `f${i}`, error: 'Provider timeout' })) })
 
 describe('refreshPrices', () => {
   afterEach(() => vi.restoreAllMocks())
@@ -129,6 +137,53 @@ describe('refreshPrices', () => {
   it('reports failure (without throwing) on a network error', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network')))
     await expect(refreshPrices()).resolves.toEqual({ ok: false, reason: 'error' })
+  })
+
+  // refresh-nav answers 200 with per-fund results even when every scrape failed,
+  // so HTTP status alone would report "Updated" over completely stale NAVs — and
+  // stamp a fresh "last synced" time on top of it.
+  describe('NAV results inspection', () => {
+    it('reports failure when every fund failed, despite the 200', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (url: string) =>
+        url.includes('refresh-nav') ? navAllFailed() : ok()))
+      await expect(refreshPrices()).resolves.toEqual({ ok: false, reason: 'error' })
+    })
+
+    it('reports success when at least one fund updated', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (url: string) =>
+        url.includes('refresh-nav')
+          ? ok({ results: [{ id: 'f0', nav: 10_000 }, { id: 'f1', error: 'Provider timeout' }] })
+          : ok()))
+      await expect(refreshPrices()).resolves.toEqual({ ok: true })
+    })
+
+    it('treats a user with no priced funds as a success, not a failure', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (url: string) =>
+        url.includes('refresh-nav') ? ok({ results: [] }) : ok()))
+      await expect(refreshPrices()).resolves.toEqual({ ok: true })
+    })
+
+    it('reports success for a normal all-updated response', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (url: string) =>
+        url.includes('refresh-nav') ? navOk(3) : ok()))
+      await expect(refreshPrices()).resolves.toEqual({ ok: true })
+    })
+
+    // Can't verify what we can't read — claiming success would be the same
+    // mistake in a different costume.
+    it('reports failure when the NAV body cannot be read', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (url: string) =>
+        url.includes('refresh-nav')
+          ? { ok: true, status: 200, headers: new Headers(), json: async () => { throw new Error('bad json') } }
+          : ok()))
+      await expect(refreshPrices()).resolves.toEqual({ ok: false, reason: 'error' })
+    })
+
+    it('still reports rate limiting ahead of a NAV result failure', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (url: string) =>
+        url.includes('refresh-nav') ? navAllFailed() : notOk(429, { 'Retry-After': '15' })))
+      await expect(refreshPrices()).resolves.toMatchObject({ ok: false, reason: 'rate-limited' })
+    })
   })
 })
 

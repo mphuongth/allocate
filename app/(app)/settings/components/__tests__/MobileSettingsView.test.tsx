@@ -384,8 +384,14 @@ describe('MobileSettingsView — price sync section', () => {
   // button had reported "Sync failed" for every user since it was wired to the
   // cron routes, and only the failure branch was covered.
   it('shows "Updated" when both refreshes succeed', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response('{}', { status: 200 })
+    // refresh-nav's body matters: it answers 200 even when every fund failed, so
+    // the helper reads `results` to tell a real sync from an empty one.
+    //
+    // mockImplementation, not mockResolvedValue: a Response body can only be
+    // read once, and the mount-time fetchLastSync would otherwise consume the
+    // single shared instance before refreshPrices could parse it.
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
+      new Response(JSON.stringify({ results: [{ id: 'f1', nav: 10000 }] }), { status: 200 })
     )
     render(<MobileSettingsView {...defaultProps} />)
     await userEvent.click(screen.getByRole('button', { name: /sync now/i }))
@@ -395,8 +401,8 @@ describe('MobileSettingsView — price sync section', () => {
   })
 
   it('calls the user-scoped endpoints rather than the cron routes', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response('{}', { status: 200 })
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
+      new Response(JSON.stringify({ results: [{ id: 'f1', nav: 10000 }] }), { status: 200 })
     )
     render(<MobileSettingsView {...defaultProps} />)
     await userEvent.click(screen.getByRole('button', { name: /sync now/i }))

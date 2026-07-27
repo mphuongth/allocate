@@ -45,7 +45,7 @@ test('desktop: Sync now calls the user-scoped endpoints and is authenticated', a
 
 test('desktop: Sync now reports success when both refreshes succeed', async ({ page }) => {
   await page.route('**/api/v1/funds/refresh-nav', r =>
-    r.fulfill({ status: 200, contentType: 'application/json', body: '{"updated":0}' }))
+    r.fulfill({ status: 200, contentType: 'application/json', body: '{"results":[{"id":"f1","nav":10000}]}' }))
   await page.route('**/api/v1/gold-price/refresh', r =>
     r.fulfill({ status: 200, contentType: 'application/json', body: '{"price_per_chi":8500000}' }))
 

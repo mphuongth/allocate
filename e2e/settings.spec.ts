@@ -66,7 +66,7 @@ test('Sync now reports success when both refreshes succeed', async ({ page }) =>
   // Stubbed so the assertion is about the app's own success path rather than
   // whether DOJI and the fund providers happen to be reachable right now.
   await page.route('**/api/v1/funds/refresh-nav', r =>
-    r.fulfill({ status: 200, contentType: 'application/json', body: '{"updated":0}' }))
+    r.fulfill({ status: 200, contentType: 'application/json', body: '{"results":[{"id":"f1","nav":10000}]}' }))
   await page.route('**/api/v1/gold-price/refresh', r =>
     r.fulfill({ status: 200, contentType: 'application/json', body: '{"price_per_chi":8500000}' }))
 
@@ -78,7 +78,7 @@ test('Sync now reports success when both refreshes succeed', async ({ page }) =>
 
 test('Sync now distinguishes a rate-limited sync from a failure', async ({ page }) => {
   await page.route('**/api/v1/funds/refresh-nav', r =>
-    r.fulfill({ status: 200, contentType: 'application/json', body: '{"updated":0}' }))
+    r.fulfill({ status: 200, contentType: 'application/json', body: '{"results":[{"id":"f1","nav":10000}]}' }))
   await page.route('**/api/v1/gold-price/refresh', r =>
     r.fulfill({
       status: 429,
