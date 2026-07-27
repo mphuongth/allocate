@@ -9,6 +9,7 @@ import { todayIso } from '@/lib/dates'
 import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
 import { CairnLoader } from '@/app/components/ui/CairnLoader'
 import { AffectsProgressControl } from './goalDetailShared'
+import { useDialogMount, useResetOnOpen } from '@/app/(app)/planning/components/useDialogMount'
 const fmtVND = (n: number, _locale?: string) => fmt(n)
 
 export interface SellItem {
@@ -77,27 +78,21 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
   const [confirmed, setConfirmed] = useState(false)
   const [soldAmount, setSoldAmount] = useState(0)
   const [affectsProgress, setAffectsProgress] = useState(true)
-  const [mounted, setMounted] = useState(open)
+  const mounted = useDialogMount(open)
 
-  useEffect(() => {
-    if (open) {
-      setMounted(true)
-    } else {
-      const timer = setTimeout(() => {
-        setMounted(false)
-        setAmount('')
-        setUnits('')
-        setReceived('')
-        setSalePrice('')
-        setSaving(false)
-        setError('')
-        setConfirmed(false)
-        setSoldAmount(0)
-        setAffectsProgress(true)
-      }, 220) // matches slide-down animation duration
-      return () => clearTimeout(timer)
-    }
-  }, [open, item?.name])
+  // The form used to be wiped after the exit animation finished; clearing it on
+  // the way back in is equivalent to the user and doesn't need its own timer.
+  useResetOnOpen(open, () => {
+    setAmount('')
+    setUnits('')
+    setReceived('')
+    setSalePrice('')
+    setSaving(false)
+    setError('')
+    setConfirmed(false)
+    setSoldAmount(0)
+    setAffectsProgress(true)
+  })
 
   const isFund = item?.type === 'fund'
   const isGold = item?.type === 'gold'

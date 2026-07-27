@@ -14,6 +14,7 @@ import { GD_COLORS, TypeIcon, UnlinkSvg, BankInfoStrip, TopUpControl, RenewalSum
 import { needsMaturityAction, needsBookMaturityAction } from './goalDetailMaturity'
 import { buildRenewalSummary } from './goalDetailRows'
 import { updateGoal } from './goalActions'
+import { useDialogMount, useResetOnOpen } from '@/app/(app)/planning/components/useDialogMount'
 
 export function GoalActionsSheet({
   open,
@@ -29,11 +30,7 @@ export function GoalActionsSheet({
   isDeleting: boolean
 }) {
   const isVI = useLocale() === 'vi'
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => {
-    if (open) setMounted(true)
-    else { const t = setTimeout(() => setMounted(false), 220); return () => clearTimeout(t) }
-  }, [open])
+  const mounted = useDialogMount(open)
   if (!mounted) return null
 
   const t = isVI ? {
@@ -153,11 +150,7 @@ export function DeleteGoalConfirmSheet({
   onConfirm: () => void
 }) {
   const isVI = useLocale() === 'vi'
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => {
-    if (open) setMounted(true)
-    else { const t = setTimeout(() => setMounted(false), 220); return () => clearTimeout(t) }
-  }, [open])
+  const mounted = useDialogMount(open)
   if (!mounted) return null
 
   return (
@@ -241,16 +234,19 @@ export function EditGoalSheet({
   onSaved: () => void
 }) {
   const isVI = useLocale() === 'vi'
-  const [mounted, setMounted] = useState(false)
+  const mounted = useDialogMount(open)
   const [name, setName] = useState(goal.goalName)
   const [target, setTarget] = useState(goal.targetAmount ? String(goal.targetAmount) : '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  useEffect(() => {
-    if (open) { setName(goal.goalName); setTarget(goal.targetAmount ? String(goal.targetAmount) : ''); setError(''); setMounted(true) }
-    else { const t = setTimeout(() => setMounted(false), 220); return () => clearTimeout(t) }
-  }, [open, goal])
+  // Reloading the goal's values during render means reopening on a different
+  // goal never paints the previous one's name for a frame.
+  useResetOnOpen(open, () => {
+    setName(goal.goalName)
+    setTarget(goal.targetAmount ? String(goal.targetAmount) : '')
+    setError('')
+  })
 
   async function handleSave() {
     if (!name.trim()) { setError(isVI ? 'Tên mục tiêu là bắt buộc' : 'Goal name is required'); return }
@@ -376,11 +372,7 @@ export function InvestmentActionSheet({
   onChanged: () => void
 }) {
   const isVI = useLocale() === 'vi'
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => {
-    if (open) setMounted(true)
-    else { const t = setTimeout(() => setMounted(false), 220); return () => clearTimeout(t) }
-  }, [open])
+  const mounted = useDialogMount(open)
   if (!mounted || !inv) return null
 
   const typeColor = GD_COLORS[inv.type] ?? 'var(--c-muted)'
@@ -583,11 +575,7 @@ export function UnassignConfirmSheet({
   unassigning: boolean
 }) {
   const isVI = useLocale() === 'vi'
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => {
-    if (open) setMounted(true)
-    else { const t = setTimeout(() => setMounted(false), 220); return () => clearTimeout(t) }
-  }, [open])
+  const mounted = useDialogMount(open)
   if (!mounted || !inv) return null
 
   const t = isVI ? {

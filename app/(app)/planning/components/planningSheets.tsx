@@ -12,15 +12,12 @@ import { useDialogA11y } from './useDialogA11y'
 import { TrashIcon } from './planningIcons'
 import { saveIncome, deletePlan, saveOtherExpense } from '../planActions'
 import type { MonthlyPlan, OtherExpense } from '../PlanningClient'
+import { useDialogMount, useResetOnOpen } from './useDialogMount'
 
 export function Sheet({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode }) {
-  const [mounted, setMounted] = useState(false)
+  const mounted = useDialogMount(open)
   const dialogRef = useRef<HTMLDivElement>(null)
   useDialogA11y(dialogRef, open && mounted, onClose)
-  useEffect(() => {
-    if (open) setMounted(true)
-    else { const t = setTimeout(() => setMounted(false), 220); return () => clearTimeout(t) }
-  }, [open])
   if (!mounted) return null
 
   return (
@@ -78,7 +75,7 @@ export function SalarySheet({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  useEffect(() => { if (open) setValue(plan ? String(plan.salary_vnd) : '') }, [open, plan])
+  useResetOnOpen(open, () => setValue(plan ? String(plan.salary_vnd) : ''))
 
   async function handleSave() {
     const num = Number(value)

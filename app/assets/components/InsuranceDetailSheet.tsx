@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import type { InsuranceData } from '../DashboardClient'
 import DesktopInsuranceDetail from './DesktopInsuranceDetail'
+import { useDialogMount } from '@/app/(app)/planning/components/useDialogMount'
 
 interface Props {
   ins: InsuranceData | null
@@ -19,16 +20,8 @@ interface Props {
  * details instead of doing nothing.
  */
 export default function InsuranceDetailSheet({ ins, open, locale, onClose, onChanged }: Props) {
-  const [mounted, setMounted] = useState(open)
-
-  useEffect(() => {
-    if (open) {
-      setMounted(true)
-    } else {
-      const t = setTimeout(() => setMounted(false), 200)
-      return () => clearTimeout(t)
-    }
-  }, [open])
+  // 200ms here, not the 220 default — this sheet's exit animation is shorter.
+  const mounted = useDialogMount(open, 200)
 
   useEffect(() => {
     if (!open) return

@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useRef } from 'react'
 import { Check, Download, X } from 'lucide-react'
 import { iconHit } from './iconHit'
 import { useLocale } from 'next-intl'
 import { fmt } from '@/lib/formatters'
 import { CairnLoader } from '@/app/components/ui/CairnLoader'
 import { useDialogA11y } from '@/app/(app)/planning/components/useDialogA11y'
+import { useDialogMount, useResetOnOpen } from '@/app/(app)/planning/components/useDialogMount'
 
 interface Props {
   open: boolean
@@ -18,7 +19,7 @@ interface Props {
 
 export default function DownloadReportSheet({ open, onClose, data, onExport, desktop }: Props) {
   const isVI = useLocale() === 'vi'
-  const [mounted, setMounted] = useState(false)
+  const mounted = useDialogMount(open)
   const [exporting, setExporting] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
@@ -28,17 +29,11 @@ export default function DownloadReportSheet({ open, onClose, data, onExport, des
   // close-animation past `open`, the desktop variant unmounts immediately).
   useDialogA11y(dialogRef, desktop ? open : (open && mounted), onClose)
 
-  useEffect(() => {
-    if (open) {
-      setMounted(true)
-      setSuccess(false)
-      setExporting(false)
-      setError('')
-    } else {
-      const t = setTimeout(() => setMounted(false), 220)
-      return () => clearTimeout(t)
-    }
-  }, [open])
+  useResetOnOpen(open, () => {
+    setSuccess(false)
+    setExporting(false)
+    setError('')
+  })
 
   async function handleExport() {
     setExporting(true)

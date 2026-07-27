@@ -15,6 +15,7 @@ import { useNavigation } from '@/app/components/navigation/NavigationContext'
 import DownloadReportSheet from '@/app/assets/components/DownloadReportSheet'
 import type { DashboardData } from '@/app/assets/DashboardClient'
 import { clearAppCaches, setLocaleCookie, refreshPrices, fetchOverview, exportPortfolioReport, fetchLastSync, formatLastSync } from '../settingsShared'
+import { useDialogMount } from '@/app/(app)/planning/components/useDialogMount'
 
 interface Props {
   email: string
@@ -44,19 +45,10 @@ function BottomSheet({ open, onClose, title, dismissOnBackdrop = true, children 
   dismissOnBackdrop?: boolean
   children: React.ReactNode
 }) {
-  const [mounted, setMounted] = useState(false)
+  const mounted = useDialogMount(open)
   const dialogRef = useRef<HTMLDivElement>(null)
   // Esc-to-close, focus-trap and focus-restore — same hook the Plan page sheets use.
   useDialogA11y(dialogRef, open && mounted, onClose)
-
-  useEffect(() => {
-    if (open) {
-      setMounted(true)
-    } else {
-      const t = setTimeout(() => setMounted(false), 220)
-      return () => clearTimeout(t)
-    }
-  }, [open])
 
   if (!mounted) return null
 

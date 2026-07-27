@@ -6,6 +6,7 @@ import { iconHit } from './iconHit'
 import { useLocale } from 'next-intl'
 import { fmt, fmtCompact } from '@/lib/formatters'
 import LoadError from './LoadError'
+import { useDialogMount, useResetOnOpen } from '@/app/(app)/planning/components/useDialogMount'
 
 interface GoalOption {
   id: string
@@ -44,7 +45,6 @@ const TYPE_COLOR: Record<string, string> = {
 
 export default function AssignGoalSheet({ open, onClose, onConfirm, item, desktop }: Props) {
   const isVI = useLocale() === 'vi'
-  const [mounted, setMounted] = useState(false)
   const [goals, setGoals] = useState<GoalOption[]>([])
   const [goalsLoading, setGoalsLoading] = useState(false)
   const [goalsError, setGoalsError] = useState(false)
@@ -75,17 +75,18 @@ export default function AssignGoalSheet({ open, onClose, onConfirm, item, deskto
       .finally(() => setGoalsLoading(false))
   }, [])
 
+  const mounted = useDialogMount(open)
+
+  // Clearing the previous selection happens during render, so the old choice
+  // never flashes on reopen. Loading the goals is I/O and stays in an effect.
+  useResetOnOpen(open, () => {
+    setSelected(null)
+    setError('')
+    setSuccess(false)
+  })
+
   useEffect(() => {
-    if (open) {
-      setMounted(true)
-      setSelected(null)
-      setError('')
-      setSuccess(false)
-      loadGoals()
-    } else {
-      const t = setTimeout(() => setMounted(false), 220)
-      return () => clearTimeout(t)
-    }
+    if (open) loadGoals()
   }, [open, loadGoals])
 
   async function handleConfirm() {

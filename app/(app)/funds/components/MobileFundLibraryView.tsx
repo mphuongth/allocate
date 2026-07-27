@@ -14,6 +14,7 @@ import { useDialogA11y } from '@/app/(app)/planning/components/useDialogA11y'
 import { FundsEmptyState } from './FundsEmptyState'
 import { FundNavAge } from './FundNavAge'
 import type { Fund, Goal, FundType, FundsData } from './useFundsData'
+import { useDialogMount } from '@/app/(app)/planning/components/useDialogMount'
 
 // Matches the design's exact icon paths (stroke-based, strokeWidth 1.75)
 const IconEdit = ({ size = 14, color = 'currentColor' }: { size?: number; color?: string }) => (
@@ -165,13 +166,9 @@ function TypeDropdown({ value, onChange }: { value: FundType; onChange: (v: Fund
 // ─── Sheet ───────────────────────────────────────────────────────────────────
 
 function Sheet({ open, onClose, testId, ariaLabel, dismissOnBackdrop = true, children }: { open: boolean; onClose: () => void; testId: string; ariaLabel: string; dismissOnBackdrop?: boolean; children: React.ReactNode }) {
-  const [mounted, setMounted] = useState(false)
+  const mounted = useDialogMount(open)
   const sheetRef = useRef<HTMLDivElement>(null)
   useDialogA11y(sheetRef, open, onClose)
-  useEffect(() => {
-    if (open) setMounted(true)
-    else { const t = setTimeout(() => setMounted(false), 220); return () => clearTimeout(t) }
-  }, [open])
   if (!mounted) return null
 
   return (
