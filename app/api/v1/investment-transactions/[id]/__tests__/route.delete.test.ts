@@ -140,18 +140,43 @@ describe('DELETE /api/v1/investment-transactions/[id]', () => {
     expect((await call()).status).toBe(500)
   })
 
-  // The mirror image of the guard. consumed_by_inv_id has no ON DELETE action,
-  // so deleting the ANCHOR while a consumed source still points at it raises a
-  // foreign-key violation. That is a conflict with existing data the user can
-  // resolve (undo the merge first), not a server fault — it must not read as a
-  // generic 500.
-  it('returns 409 when the row is still referenced by a merged settlement', async () => {
+  // The mirror image of the guard. Two columns reference this table with no
+  // ON DELETE action, so deleting a deposit that either points at raises 23503 —
+  // a conflict the user can resolve, not a server fault. But the two need
+  // DIFFERENT remedies, so one catch-all message would misdirect half of them.
+  it('returns 409 naming the merge when a consumed settlement references the row', async () => {
     h.deleteResult = {
       data: null,
       error: { code: '23503', message: 'violates foreign key constraint "investment_transactions_consumed_by_inv_id_fkey"' },
     }
     const res = await call()
     expect(res.status).toBe(409)
+    expect((await res.json()).error).toMatch(/undo the merge/i)
+  })
+
+  // merge_anchor_inv_id is stamped when a settlement is HELD — before any merge
+  // happens. Telling this caller to undo a merge sends them looking for
+  // something that doesn't exist; the fix is to cancel the pending settlement.
+  it('returns 409 naming the pending settlement when only a held one references the row', async () => {
+    h.deleteResult = {
+      data: null,
+      error: { code: '23503', message: 'violates foreign key constraint "investment_transactions_merge_anchor_inv_id_fkey"' },
+    }
+    const res = await call()
+    expect(res.status).toBe(409)
+    const { error } = await res.json()
+    expect(error).toMatch(/pending|waiting/i)
+    expect(error).not.toMatch(/undo the merge/i)
+  })
+
+  it('returns a generic 409 for an unrecognised foreign-key reference', async () => {
+    h.deleteResult = {
+      data: null,
+      error: { code: '23503', message: 'violates foreign key constraint "some_future_fkey"' },
+    }
+    const res = await call()
+    expect(res.status).toBe(409)
+    expect((await res.json()).error).toBeTruthy()
   })
 
   it('does not leak the database message to the client', async () => {

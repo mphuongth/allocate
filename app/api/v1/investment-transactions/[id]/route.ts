@@ -233,13 +233,33 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     .select('transaction_id')
 
   if (error) {
-    // The mirror image of the guard above: consumed_by_inv_id has no ON DELETE
-    // action, so deleting the ANCHOR while a consumed source still references it
-    // raises a foreign-key violation. That's a conflict the user can resolve —
-    // undo the merge first — not a server fault, so it must not read as a 500.
+    // The mirror image of the guard above. Two columns reference this table with
+    // no ON DELETE action, so deleting a deposit that either one points at raises
+    // a foreign-key violation — a conflict the user can resolve, not a server
+    // fault, so it must not read as a 500.
+    //
+    // The two need different remedies, which is why this doesn't collapse into
+    // one message: consumed_by_inv_id means a merge already happened and must be
+    // undone, while merge_anchor_inv_id is stamped when a settlement is HELD —
+    // before any merge — so telling that caller to undo a merge sends them
+    // looking for something that doesn't exist. Postgres names the violated
+    // constraint in the error, which is where the distinction comes from.
     if (error.code === '23503') {
+      const violation = `${error.message ?? ''} ${error.details ?? ''}`
+      if (violation.includes('consumed_by_inv_id')) {
+        return NextResponse.json(
+          { error: 'Another settlement has been merged into this deposit. Undo the merge before removing it.' },
+          { status: 409 },
+        )
+      }
+      if (violation.includes('merge_anchor_inv_id')) {
+        return NextResponse.json(
+          { error: 'A settlement is waiting to be merged into this deposit. Cancel that pending settlement before removing it.' },
+          { status: 409 },
+        )
+      }
       return NextResponse.json(
-        { error: 'Another settlement has been merged into this deposit. Undo the merge before removing it.' },
+        { error: 'Another record still references this transaction. Remove that reference before deleting it.' },
         { status: 409 },
       )
     }
