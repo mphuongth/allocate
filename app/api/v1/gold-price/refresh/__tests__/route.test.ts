@@ -20,8 +20,10 @@ const h = vi.hoisted(() => ({
   scrapeError: null as Error | null,
   price: 8_600_000,
   rpcResult: { data: null as unknown, error: null as unknown },
+  rateLimit: { data: [{ allowed: true, retry_after_seconds: 0 }] as unknown, error: null as unknown },
   rpcCalls: [] as { name: string; args: unknown }[],
   tableReads: [] as string[],
+  scrapeCalls: 0,
 }))
 
 vi.mock('@/lib/supabase-server', () => ({
@@ -40,15 +42,21 @@ vi.mock('@/lib/supabase-server', () => ({
       }
       return c
     },
+    // Two RPCs are involved: the rate-limit check is awaited directly, the
+    // refresh goes through .single(). One object serves both shapes.
     rpc: (name: string, args: unknown) => {
       h.rpcCalls.push({ name, args })
-      return { single: async () => h.rpcResult }
+      return {
+        single: async () => h.rpcResult,
+        then: (resolve: (v: unknown) => void) => resolve(h.rateLimit),
+      }
     },
   }),
 }))
 
 vi.mock('@/lib/scrape-gold', () => ({
   scrapeGoldPrice: async () => {
+    h.scrapeCalls++
     if (h.scrapeError) throw h.scrapeError
     return h.price
   },
@@ -65,8 +73,10 @@ describe('POST /api/v1/gold-price/refresh', () => {
     h.scrapeError = null
     h.price = 8_600_000
     h.rpcResult = { data: LATER_REFRESH, error: null }
+    h.rateLimit = { data: [{ allowed: true, retry_after_seconds: 0 }], error: null }
     h.rpcCalls = []
     h.tableReads = []
+    h.scrapeCalls = 0
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
 
@@ -85,7 +95,9 @@ describe('POST /api/v1/gold-price/refresh', () => {
     h.scrapeError = new Error('Doji: NHẪN TRÒN price row not found')
     const res = await POST()
     expect(res.status).toBe(502)
-    expect(h.rpcCalls).toEqual([])
+    // The rate-limit check runs first and legitimately spends a slot — a failed
+    // scrape still consumed an upstream request. What must not happen is a write.
+    expect(h.rpcCalls.map((c) => c.name)).toEqual(['check_gold_refresh_rate_limit'])
   })
 
   // The structural guarantee: no read-then-write gap can exist if there is no read.
@@ -96,7 +108,52 @@ describe('POST /api/v1/gold-price/refresh', () => {
 
   it('delegates the whole refresh to the atomic RPC', async () => {
     await POST()
-    expect(h.rpcCalls).toEqual([{ name: 'refresh_gold_price', args: { p_price: 8_600_000 } }])
+    expect(h.rpcCalls).toContainEqual({ name: 'refresh_gold_price', args: { p_price: 8_600_000 } })
+  })
+
+  // ── per-user rate limit (#530) ───────────────────────────────────────────────
+  it('checks the rate limit before scraping', async () => {
+    await POST()
+    expect(h.rpcCalls[0].name).toBe('check_gold_refresh_rate_limit')
+  })
+
+  it('returns 429 with Retry-After when the limit is exceeded', async () => {
+    h.rateLimit = { data: [{ allowed: false, retry_after_seconds: 42 }], error: null }
+    const res = await POST()
+    expect(res.status).toBe(429)
+    expect(res.headers.get('Retry-After')).toBe('42')
+  })
+
+  // The whole point of the limit is sparing the upstream site — a refused call
+  // that still scrapes would protect nothing.
+  it('does not scrape or write when the limit is exceeded', async () => {
+    h.rateLimit = { data: [{ allowed: false, retry_after_seconds: 42 }], error: null }
+    await POST()
+    expect(h.scrapeCalls).toBe(0)
+    expect(h.rpcCalls.map((c) => c.name)).toEqual(['check_gold_refresh_rate_limit'])
+  })
+
+  // Fail CLOSED: if the limit can't be verified, refusing is safer than letting
+  // the scrape run uncapped exactly when the database is unhealthy. Refresh is
+  // non-essential, so a retryable 503 is the right default.
+  it('returns 503 with Retry-After when the limit cannot be verified', async () => {
+    h.rateLimit = { data: null, error: { message: 'timeout' } }
+    const res = await POST()
+    expect(res.status).toBe(503)
+    expect(res.headers.get('Retry-After')).toBeTruthy()
+    expect(h.scrapeCalls).toBe(0)
+  })
+
+  it('fails closed when the limiter returns no verdict at all', async () => {
+    h.rateLimit = { data: [], error: null }
+    const res = await POST()
+    expect(res.status).toBe(503)
+    expect(h.scrapeCalls).toBe(0)
+  })
+
+  it('accepts a non-array verdict shape', async () => {
+    h.rateLimit = { data: { allowed: true, retry_after_seconds: 0 }, error: null }
+    expect((await POST()).status).toBe(200)
   })
 
   it('returns the stored pair for an existing settings row', async () => {
