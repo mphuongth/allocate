@@ -92,12 +92,22 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 
   const trancheIds = tranches.map((t) => t.transaction_id)
-  const { data: withdrawals } = await supabase
+  const { data: withdrawals, error: wdErr } = await supabase
     .from('investment_transactions')
     .select('parent_transaction_id, principal_withdrawn')
     .eq('user_id', user.id)
     .eq('transaction_type', 'withdrawal')
     .in('parent_transaction_id', trancheIds)
+  // A failed read and a book with no withdrawals both arrive as an empty list,
+  // and the difference is the whole valuation: netting nothing leaves every
+  // tranche at its ORIGINAL principal, so the interest below is computed on
+  // money that is no longer in the deposit. Stop here rather than hand an
+  // inflated figure to the RPC — this route WRITES, and the snapshot it
+  // persists becomes permanent financial history that no retry undoes (#527).
+  if (wdErr) {
+    console.error('collapse: failed to read partial withdrawals', wdErr.message)
+    return NextResponse.json({ error: 'Failed to collapse book' }, { status: 500 })
+  }
   const wdByParent = new Map<string, number>()
   for (const w of withdrawals ?? []) {
     if (!w.parent_transaction_id) continue
