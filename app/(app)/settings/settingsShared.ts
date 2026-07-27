@@ -105,19 +105,21 @@ async function readNavOutcome(navRes: Response): Promise<NavOutcome> {
 // isn't. Network/parse errors resolve to an error result rather than throwing.
 export async function refreshPrices(): Promise<SyncResult> {
   try {
-    const [navRes, goldRes] = await Promise.all([
+    // allSettled, not all: these are two independent operations and either can
+    // die on its own — a transport-level rejection on one would otherwise throw
+    // away what the other already persisted, exactly as a shared HTTP verdict
+    // did. The limits differ on purpose too (NAV 5/min, gold 10/min), so a rapid
+    // sixth sync limits NAV while gold still writes a new price.
+    const [navSettled, goldSettled] = await Promise.allSettled([
       fetch('/api/v1/funds/refresh-nav', { method: 'POST' }),
       fetch('/api/v1/gold-price/refresh', { method: 'POST' }),
     ])
-    const results = [navRes, goldRes]
+    const navRes = navSettled.status === 'fulfilled' ? navSettled.value : null
+    const goldRes = goldSettled.status === 'fulfilled' ? goldSettled.value : null
+    const results = [navRes, goldRes].filter((r): r is Response => r !== null)
 
-    // Judge the two independently. They fail independently in practice — the
-    // limits differ on purpose (NAV 5/min, gold 10/min), so a rapid sixth sync
-    // limits NAV while gold still persists a new price — and a shared verdict
-    // would report that as rate-limited, denying work that happened and leaving
-    // the dashboard cache stale on top of it.
-    const nav = await readNavOutcome(navRes)
-    const goldSucceeded = goldRes.ok
+    const nav = navRes ? await readNavOutcome(navRes) : 'failed'
+    const goldSucceeded = goldRes?.ok === true
 
     // A 200 from refresh-nav doesn't mean the NAVs moved: it answers with
     // per-fund results and stays 200 even when every scrape failed.

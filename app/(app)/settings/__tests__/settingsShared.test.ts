@@ -180,6 +180,46 @@ describe('refreshPrices', () => {
         url.includes('refresh-nav') ? ok({ results: [] }) : notOk(429, { 'Retry-After': '30' })))
       await expect(refreshPrices()).resolves.toMatchObject({ ok: false, reason: 'rate-limited' })
     })
+
+    // Transport-level rejection is the same situation one layer down: one
+    // request dying must not erase what the other already persisted.
+    it('reports partial when the gold request rejects but funds updated', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+        if (url.includes('refresh-nav')) return navOk(2)
+        throw new Error('network')
+      }))
+      await expect(refreshPrices()).resolves.toEqual({ ok: true, partial: true })
+    })
+
+    it('reports partial when the NAV request rejects but gold updated', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+        if (url.includes('refresh-nav')) throw new Error('network')
+        return ok()
+      }))
+      await expect(refreshPrices()).resolves.toEqual({ ok: true, partial: true })
+    })
+
+    it('busts the caches when the peer request rejected but one side persisted', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+        if (url.includes('refresh-nav')) throw new Error('network')
+        return ok()
+      }))
+      await refreshPrices()
+      expect(localStorage.getItem('dashboardOverviewCache_user-1')).toBeNull()
+    })
+
+    it('reports a plain failure when both requests reject', async () => {
+      vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('network') }))
+      await expect(refreshPrices()).resolves.toEqual({ ok: false, reason: 'error' })
+    })
+
+    it('still reports rate-limited when one request rejects and the other is limited', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+        if (url.includes('refresh-nav')) throw new Error('network')
+        return notOk(429, { 'Retry-After': '20' })
+      }))
+      await expect(refreshPrices()).resolves.toMatchObject({ ok: false, reason: 'rate-limited' })
+    })
   })
 
   // refresh-nav answers 200 with per-fund results even when every scrape failed,
@@ -235,6 +275,76 @@ describe('refreshPrices', () => {
       vi.stubGlobal('fetch', vi.fn(async (url: string) =>
         url.includes('refresh-nav') ? navAllFailed() : notOk(429, { 'Retry-After': '15' })))
       await expect(refreshPrices()).resolves.toMatchObject({ ok: false, reason: 'rate-limited' })
+    })
+  })
+
+  // Four review rounds on this helper all found the same shape of bug: one
+  // verdict applied to work that can partly succeed. Rather than keep patching
+  // cells, this pins the whole matrix — every combination of what each endpoint
+  // can do, and the single answer the UI should give for it.
+  //
+  // The rule underneath: clean only when both sides came back clean, partial
+  // whenever either side persisted something, failure only when nothing moved.
+  describe('outcome matrix', () => {
+    const REJECT = 'reject' as const
+    type NavCase = 'reject' | 'limited' | 'error500' | 'updated' | 'partial' | 'allFailed' | 'noFunds' | 'unreadable'
+    type GoldCase = 'reject' | 'limited' | 'error502' | 'ok'
+
+    const navFor = (c: NavCase) => {
+      switch (c) {
+        case 'reject': throw new Error('network')
+        case 'limited': return notOk(429, { 'Retry-After': '30' })
+        case 'error500': return notOk(500)
+        case 'updated': return navOk(2)
+        case 'partial': return ok({ results: [{ id: 'a', nav: 1 }, { id: 'b', error: 'x' }] })
+        case 'allFailed': return navAllFailed()
+        case 'noFunds': return ok({ results: [] })
+        case 'unreadable': return { ok: true, status: 200, headers: new Headers(), json: async () => { throw new Error('bad') } }
+      }
+    }
+    const goldFor = (c: GoldCase) => {
+      switch (c) {
+        case 'reject': throw new Error('network')
+        case 'limited': return notOk(429, { 'Retry-After': '30' })
+        case 'error502': return notOk(502)
+        case 'ok': return ok()
+      }
+    }
+
+    const CASES: Array<[NavCase, GoldCase, 'clean' | 'partial' | 'rate-limited' | 'error']> = [
+      // both sides clean
+      ['updated', 'ok', 'clean'],
+      ['noFunds', 'ok', 'clean'],
+      // one side persisted, the other didn't
+      ['partial', 'ok', 'partial'],
+      ['allFailed', 'ok', 'partial'],
+      ['unreadable', 'ok', 'partial'],
+      ['limited', 'ok', 'partial'],
+      ['error500', 'ok', 'partial'],
+      [REJECT, 'ok', 'partial'],
+      ['updated', 'limited', 'partial'],
+      ['updated', 'error502', 'partial'],
+      ['updated', REJECT, 'partial'],
+      ['partial', REJECT, 'partial'],
+      // nothing moved at all
+      ['limited', 'limited', 'rate-limited'],
+      ['noFunds', 'limited', 'rate-limited'],
+      ['allFailed', 'limited', 'rate-limited'],
+      [REJECT, 'limited', 'rate-limited'],
+      ['limited', 'error502', 'rate-limited'],
+      ['allFailed', 'error502', 'error'],
+      ['error500', 'error502', 'error'],
+      [REJECT, REJECT, 'error'],
+      ['noFunds', 'error502', 'error'],
+    ]
+
+    it.each(CASES)('nav=%s + gold=%s → %s', async (navCase, goldCase, expected) => {
+      vi.stubGlobal('fetch', vi.fn(async (url: string) =>
+        url.includes('refresh-nav') ? navFor(navCase) : goldFor(goldCase)))
+      const res = await refreshPrices()
+      if (expected === 'clean') expect(res).toEqual({ ok: true })
+      else if (expected === 'partial') expect(res).toEqual({ ok: true, partial: true })
+      else expect(res).toMatchObject({ ok: false, reason: expected })
     })
   })
 
