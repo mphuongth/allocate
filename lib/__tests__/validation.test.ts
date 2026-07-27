@@ -11,6 +11,7 @@ import {
   validateBankCode,
   validateInteger,
   validatePositiveIntParam,
+  validatePlanMonthFilter,
   ValidationError,
 } from '../validation'
 
@@ -352,6 +353,69 @@ describe('validatePositiveIntParam', () => {
 
   it('does not clamp when no max is given (page can be large)', () => {
     expect(validatePositiveIntParam('999999', 'page', { fallback: 1 })).toBe(999999)
+  })
+})
+
+describe('validatePlanMonthFilter', () => {
+  it('returns null when neither param is supplied (the unfiltered list)', () => {
+    expect(validatePlanMonthFilter(null, null)).toBeNull()
+  })
+
+  it('treats blank strings as absent', () => {
+    expect(validatePlanMonthFilter('', '')).toBeNull()
+    expect(validatePlanMonthFilter('  ', '  ')).toBeNull()
+  })
+
+  it('derives both the plan date and the ym from validated integers', () => {
+    expect(validatePlanMonthFilter('6', '2026')).toEqual({
+      month: 6,
+      year: 2026,
+      ym: '2026-06',
+      planDate: '2026-06-01',
+    })
+  })
+
+  it('accepts a zero-padded month', () => {
+    expect(validatePlanMonthFilter('06', '2026')?.planDate).toBe('2026-06-01')
+  })
+
+  it('accepts numbers as well as strings', () => {
+    expect(validatePlanMonthFilter(12, 2026)?.ym).toBe('2026-12')
+  })
+
+  // Silently dropping the filter for a half-supplied pair returns every row,
+  // which looks exactly like a filter that ran and matched everything.
+  it('rejects a month without a year', () => {
+    expect(() => validatePlanMonthFilter('6', null)).toThrow(ValidationError)
+  })
+
+  it('rejects a year without a month', () => {
+    expect(() => validatePlanMonthFilter(null, '2026')).toThrow(ValidationError)
+  })
+
+  it('rejects a month outside 1-12', () => {
+    expect(() => validatePlanMonthFilter('0', '2026')).toThrow(ValidationError)
+    expect(() => validatePlanMonthFilter('13', '2026')).toThrow(ValidationError)
+    expect(() => validatePlanMonthFilter('-1', '2026')).toThrow(ValidationError)
+  })
+
+  it('rejects a year outside the supported range', () => {
+    expect(() => validatePlanMonthFilter('6', '1999')).toThrow(ValidationError)
+    expect(() => validatePlanMonthFilter('6', '10000')).toThrow(ValidationError)
+  })
+
+  it('rejects a partially numeric value rather than parsing a prefix', () => {
+    expect(() => validatePlanMonthFilter('6abc', '2026')).toThrow(ValidationError)
+    expect(() => validatePlanMonthFilter('6', '2026abc')).toThrow(ValidationError)
+    expect(() => validatePlanMonthFilter('6.5', '2026')).toThrow(ValidationError)
+  })
+
+  // The reason this validation exists: these values are interpolated into a
+  // PostgREST `.or(...)` filter string, where a comma or a dot starts a new
+  // term and could rewrite the expression.
+  it('rejects a value carrying PostgREST filter syntax', () => {
+    expect(() => validatePlanMonthFilter('6', '2026,effective_from.gte.1900-01-01')).toThrow(ValidationError)
+    expect(() => validatePlanMonthFilter('6),or=(user_id.eq.0', '2026')).toThrow(ValidationError)
   })
 })
 

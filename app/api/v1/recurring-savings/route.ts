@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { ValidationError, validateAmount, validateText, validateUUID, validateYearMonth } from '@/lib/validation'
+import { ValidationError, validateAmount, validatePlanMonthFilter, validateText, validateUUID, validateYearMonth, type PlanMonthFilter } from '@/lib/validation'
 import { validateLinkedDeposit } from './linkValidation'
 
 function toDateCol(ym: string | undefined | null): string | null {
@@ -14,8 +14,15 @@ export async function GET(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { searchParams } = new URL(request.url)
-  const month = searchParams.get('month')
-  const year = searchParams.get('year')
+
+  // Validate before the value can reach the `.or(...)` filter string below.
+  let planMonth: PlanMonthFilter | null
+  try {
+    planMonth = validatePlanMonthFilter(searchParams.get('month'), searchParams.get('year'))
+  } catch (e) {
+    if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
+    throw e
+  }
 
   let query = supabase
     .from('recurring_savings')
@@ -23,11 +30,10 @@ export async function GET(request: NextRequest) {
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
 
-  if (month && year) {
-    const planDate = `${year}-${String(month).padStart(2, '0')}-01`
+  if (planMonth) {
     query = query
-      .or(`effective_from.is.null,effective_from.lte.${planDate}`)
-      .or(`effective_to.is.null,effective_to.gte.${planDate}`)
+      .or(`effective_from.is.null,effective_from.lte.${planMonth.planDate}`)
+      .or(`effective_to.is.null,effective_to.gte.${planMonth.planDate}`)
   }
 
   const { data: savings, error } = await query
@@ -36,13 +42,12 @@ export async function GET(request: NextRequest) {
   // When a specific month is requested, flag the ones already settled for it via
   // a maturity-combine renewal — the maturity "combine" picker uses this to avoid
   // offering (and double-folding) a recurring that's already been folded in.
-  if (month && year && savings && savings.length > 0) {
-    const ym = `${year}-${String(month).padStart(2, '0')}`
+  if (planMonth && savings && savings.length > 0) {
     const { data: fulfilled, error: fulfilledError } = await supabase
       .from('recurring_saving_fulfillments')
       .select('recurring_saving_id')
       .eq('user_id', user.id)
-      .eq('ym', ym)
+      .eq('ym', planMonth.ym)
     // Fail closed rather than default every saving to unfulfilled (#533). The
     // combine picker reads this flag to avoid re-folding a recurring that is
     // already folded into a renewed deposit, so the "safe-looking" fallback is

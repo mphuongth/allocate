@@ -119,6 +119,45 @@ describe('GET /api/v1/recurring-savings', () => {
     expect(body.savings).toBeUndefined()
   })
 
+  // ── month/year are interpolated into a PostgREST .or(...) filter (#534) ──────
+  it('rejects a malformed month before querying', async () => {
+    h.results.recurring_savings = { data: [SAVING], error: null }
+    const res = await GET(req('?month=6abc&year=2026'))
+    expect(res.status).toBe(400)
+  })
+
+  it('rejects a month outside 1-12', async () => {
+    const res = await GET(req('?month=13&year=2026'))
+    expect(res.status).toBe(400)
+  })
+
+  it('rejects a year outside the supported range', async () => {
+    const res = await GET(req('?month=6&year=1999'))
+    expect(res.status).toBe(400)
+  })
+
+  it('rejects a value carrying PostgREST filter syntax', async () => {
+    const res = await GET(req('?month=6&year=2026,effective_from.gte.1900-01-01'))
+    expect(res.status).toBe(400)
+  })
+
+  it('rejects month without year rather than silently dropping the filter', async () => {
+    h.results.recurring_savings = { data: [SAVING], error: null }
+    const res = await GET(req('?month=6'))
+    expect(res.status).toBe(400)
+  })
+
+  it('rejects year without month', async () => {
+    const res = await GET(req('?year=2026'))
+    expect(res.status).toBe(400)
+  })
+
+  it('still serves the unfiltered list when neither is supplied', async () => {
+    h.results.recurring_savings = { data: [SAVING], error: null }
+    const res = await GET(req())
+    expect(res.status).toBe(200)
+  })
+
   it('fails closed with 500 when the savings read errors', async () => {
     h.results.recurring_savings = { data: null, error: { message: 'timeout' } }
     const res = await GET(req())
