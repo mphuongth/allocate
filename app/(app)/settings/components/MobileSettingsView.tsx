@@ -435,6 +435,8 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
   const [syncing, setSyncing] = useState(false)
   const [syncDone, setSyncDone] = useState(false)
   const [syncFailed, setSyncFailed] = useState(false)
+  const [syncLimited, setSyncLimited] = useState(false)
+  const [syncPartial, setSyncPartial] = useState(false)
   // undefined = loading, null = never synced, otherwise the last-sync ISO time.
   const [lastSyncIso, setLastSyncIso] = useState<string | null | undefined>(undefined)
   useEffect(() => { fetchLastSync().then(setLastSyncIso) }, [])
@@ -456,12 +458,20 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
     setSyncing(true)
     setSyncDone(false)
     setSyncFailed(false)
-    const ok = await refreshPrices()
+    setSyncLimited(false)
+    setSyncPartial(false)
+    const result = await refreshPrices()
     setSyncing(false)
-    if (ok) {
+    if (result.ok) {
+      // Partial still advances the timestamp — prices did move, just not all.
       setSyncDone(true)
+      if (result.partial) setSyncPartial(true)
       setLastSyncIso(new Date().toISOString())
-      setTimeout(() => setSyncDone(false), 3000)
+      setTimeout(() => { setSyncDone(false); setSyncPartial(false) }, 3000)
+    } else if (result.reason === 'rate-limited') {
+      // Distinct from a failure: nothing is broken, the user just has to wait.
+      setSyncLimited(true)
+      setTimeout(() => setSyncLimited(false), 3000)
     } else {
       setSyncFailed(true)
       setTimeout(() => setSyncFailed(false), 3000)
@@ -505,7 +515,15 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
     ? t('appearanceLight')
     : t('appearanceSystem')
 
-  const syncStatusColor = syncDone ? 'var(--c-pos)' : syncFailed ? 'var(--c-neg)' : 'var(--c-muted)'
+  // Rate-limited and partial are neutral, not negative: nothing is broken —
+  // the user is early, or some prices moved and some didn't.
+  const syncStatusColor = syncPartial
+    ? 'var(--c-muted)'
+    : syncDone
+    ? 'var(--c-pos)'
+    : syncFailed
+    ? 'var(--c-neg)'
+    : 'var(--c-muted)'
 
   return (
     <>
@@ -582,8 +600,12 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
                 <div style={{ fontSize: 11, color: syncStatusColor, marginTop: 2, transition: 'color 200ms' }}>
                   {syncing
                     ? t('syncUpdating')
+                    : syncPartial
+                    ? t('syncPartial')
                     : syncDone
                     ? t('syncUpdated')
+                    : syncLimited
+                    ? t('syncRateLimited')
                     : syncFailed
                     ? t('syncFailed')
                     : `${t('lastSyncedPrefix')}${formatLastSync(lastSyncIso, locale)}`}

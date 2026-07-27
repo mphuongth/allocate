@@ -47,27 +47,349 @@ describe('setLocaleCookie', () => {
   })
 })
 
+// "Sync now" used to call /api/cron/refresh-navs and /api/cron/refresh-gold from
+// the browser. Those routes gate on CRON_SECRET in an Authorization header a
+// browser fetch never sends, so both returned 401 and the button reported
+// "Sync failed" on every click, for every user (#552).
+//
+// The previous tests here asserted those exact cron URLs — encoding the broken
+// wiring rather than catching it, because a URL assertion can't see that the
+// request is unauthenticated. These assert the user-scoped endpoints instead,
+// which authenticate by session cookie and act on the caller's own data.
+// /api/v1/funds/refresh-nav answers 200 with per-fund results even when every
+// scrape failed, so a body is needed to tell "synced" from "nothing synced".
+const ok = (body: unknown = { results: [] }, status = 200) =>
+  ({ ok: true, status, headers: new Headers(), json: async () => body })
+const notOk = (status: number, headers: Record<string, string> = {}) =>
+  ({ ok: false, status, headers: new Headers(headers), json: async () => ({}) })
+
+const navOk = (count = 1) =>
+  ok({ results: Array.from({ length: count }, (_, i) => ({ id: `f${i}`, nav: 10_000 })) })
+const navAllFailed = (count = 2) =>
+  ok({ results: Array.from({ length: count }, (_, i) => ({ id: `f${i}`, error: 'Provider timeout' })) })
+
 describe('refreshPrices', () => {
   afterEach(() => vi.restoreAllMocks())
 
-  it('calls both refresh endpoints and reports success', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true })
+  it('calls the user-scoped refresh endpoints, not the cron routes', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(ok())
     vi.stubGlobal('fetch', fetchMock)
-    await expect(refreshPrices()).resolves.toBe(true)
-    expect(fetchMock).toHaveBeenCalledWith('/api/cron/refresh-navs')
-    expect(fetchMock).toHaveBeenCalledWith('/api/cron/refresh-gold')
+    await refreshPrices()
+
+    const urls = fetchMock.mock.calls.map((c) => c[0])
+    expect(urls).toEqual(
+      expect.arrayContaining(['/api/v1/funds/refresh-nav', '/api/v1/gold-price/refresh']),
+    )
+    expect(urls.some((u: string) => u.includes('/api/cron/'))).toBe(false)
   })
 
-  it('reports failure when an endpoint responds not-ok', async () => {
+  it('posts, since both endpoints write', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(ok())
+    vi.stubGlobal('fetch', fetchMock)
+    await refreshPrices()
+    for (const call of fetchMock.mock.calls) {
+      expect(call[1]?.method).toBe('POST')
+    }
+  })
+
+  it('reports success when both endpoints succeed', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok()))
+    await expect(refreshPrices()).resolves.toEqual({ ok: true })
+  })
+
+  it('reports a plain failure when an endpoint errors', async () => {
     vi.stubGlobal('fetch', vi.fn()
-      .mockResolvedValueOnce({ ok: true })
-      .mockResolvedValueOnce({ ok: false }))
-    await expect(refreshPrices()).resolves.toBe(false)
+      .mockResolvedValueOnce(ok())
+      .mockResolvedValueOnce(notOk(500)))
+    await expect(refreshPrices()).resolves.toEqual({ ok: false, reason: 'error' })
+  })
+
+  // A rate-limited sync is the user's own doing and clears itself — telling them
+  // to wait is actionable in a way "Sync failed" isn't.
+  it('distinguishes a rate-limited sync and carries Retry-After', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(ok())
+      .mockResolvedValueOnce(notOk(429, { 'Retry-After': '42' })))
+    await expect(refreshPrices()).resolves.toEqual({
+      ok: false,
+      reason: 'rate-limited',
+      retryAfterSeconds: 42,
+    })
+  })
+
+  it('prefers the rate-limit reason when one endpoint is limited and the other fails', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(notOk(500))
+      .mockResolvedValueOnce(notOk(429, { 'Retry-After': '30' })))
+    const res = await refreshPrices()
+    expect(res).toMatchObject({ ok: false, reason: 'rate-limited' })
+  })
+
+  it('falls back to a sane retry window when Retry-After is missing', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(ok())
+      .mockResolvedValueOnce(notOk(429)))
+    const res = await refreshPrices()
+    expect(res).toMatchObject({ ok: false, reason: 'rate-limited' })
+    expect((res as { retryAfterSeconds: number }).retryAfterSeconds).toBeGreaterThan(0)
   })
 
   it('reports failure (without throwing) on a network error', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network')))
-    await expect(refreshPrices()).resolves.toBe(false)
+    await expect(refreshPrices()).resolves.toEqual({ ok: false, reason: 'error' })
+  })
+
+  // The two endpoints have different limits by design (NAV 5/min, gold 10/min),
+  // so a rapid sixth sync limits NAV while gold still persists a new price.
+  // Calling that "rate-limited" would deny work that happened, and would leave
+  // the dashboard cache stale on top of it.
+  describe('mixed outcomes across the two endpoints', () => {
+    beforeEach(() => localStorage.setItem('dashboardOverviewCache_user-1', '{"data":{},"ts":1}'))
+    afterEach(() => localStorage.clear())
+
+    it('reports partial when NAV is rate-limited but gold succeeds', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (url: string) =>
+        url.includes('refresh-nav') ? notOk(429, { 'Retry-After': '30' }) : ok()))
+      await expect(refreshPrices()).resolves.toEqual({ ok: true, partial: true })
+    })
+
+    it('busts the caches when only gold succeeded', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (url: string) =>
+        url.includes('refresh-nav') ? notOk(429, { 'Retry-After': '30' }) : ok()))
+      await refreshPrices()
+      expect(localStorage.getItem('dashboardOverviewCache_user-1')).toBeNull()
+    })
+
+    it('reports partial when gold fails but funds updated', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (url: string) =>
+        url.includes('refresh-nav') ? navOk(2) : notOk(502)))
+      await expect(refreshPrices()).resolves.toEqual({ ok: true, partial: true })
+    })
+
+    it('reports rate-limited only when neither endpoint persisted anything', async () => {
+      vi.stubGlobal('fetch', vi.fn(async () => notOk(429, { 'Retry-After': '30' })))
+      await expect(refreshPrices()).resolves.toEqual({
+        ok: false, reason: 'rate-limited', retryAfterSeconds: 30,
+      })
+      expect(localStorage.getItem('dashboardOverviewCache_user-1')).not.toBeNull()
+    })
+
+    // No funds to price + gold refused: nothing moved, so this is not "partial".
+    it('reports rate-limited when the user has no funds and gold is limited', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (url: string) =>
+        url.includes('refresh-nav') ? ok({ results: [] }) : notOk(429, { 'Retry-After': '30' })))
+      await expect(refreshPrices()).resolves.toMatchObject({ ok: false, reason: 'rate-limited' })
+    })
+
+    // Transport-level rejection is the same situation one layer down: one
+    // request dying must not erase what the other already persisted.
+    it('reports partial when the gold request rejects but funds updated', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+        if (url.includes('refresh-nav')) return navOk(2)
+        throw new Error('network')
+      }))
+      await expect(refreshPrices()).resolves.toEqual({ ok: true, partial: true })
+    })
+
+    it('reports partial when the NAV request rejects but gold updated', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+        if (url.includes('refresh-nav')) throw new Error('network')
+        return ok()
+      }))
+      await expect(refreshPrices()).resolves.toEqual({ ok: true, partial: true })
+    })
+
+    it('busts the caches when the peer request rejected but one side persisted', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+        if (url.includes('refresh-nav')) throw new Error('network')
+        return ok()
+      }))
+      await refreshPrices()
+      expect(localStorage.getItem('dashboardOverviewCache_user-1')).toBeNull()
+    })
+
+    it('reports a plain failure when both requests reject', async () => {
+      vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('network') }))
+      await expect(refreshPrices()).resolves.toEqual({ ok: false, reason: 'error' })
+    })
+
+    it('still reports rate-limited when one request rejects and the other is limited', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+        if (url.includes('refresh-nav')) throw new Error('network')
+        return notOk(429, { 'Retry-After': '20' })
+      }))
+      await expect(refreshPrices()).resolves.toMatchObject({ ok: false, reason: 'rate-limited' })
+    })
+  })
+
+  // refresh-nav answers 200 with per-fund results even when every scrape failed,
+  // so HTTP status alone would report "Updated" over completely stale NAVs — and
+  // stamp a fresh "last synced" time on top of it.
+  describe('NAV results inspection', () => {
+    // Gold still persisted a new price and moved the server's timestamp, so
+    // calling the whole thing a failure would be its own lie — and would leave
+    // the displayed last-sync behind the real one. It isn't a clean success
+    // either, so it's neither.
+    it('reports a partial sync when every fund failed but gold succeeded', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (url: string) =>
+        url.includes('refresh-nav') ? navAllFailed() : ok()))
+      await expect(refreshPrices()).resolves.toEqual({ ok: true, partial: true })
+    })
+
+    it('reports a partial sync when only some funds failed', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (url: string) =>
+        url.includes('refresh-nav')
+          ? ok({ results: [{ id: 'f0', nav: 10_000 }, { id: 'f1', error: 'Provider timeout' }] })
+          : ok()))
+      await expect(refreshPrices()).resolves.toEqual({ ok: true, partial: true })
+    })
+
+    it('reports a clean success only when nothing errored', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (url: string) =>
+        url.includes('refresh-nav') ? navOk(2) : ok()))
+      await expect(refreshPrices()).resolves.toEqual({ ok: true })
+    })
+
+    it('treats a user with no priced funds as a success, not a failure', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (url: string) =>
+        url.includes('refresh-nav') ? ok({ results: [] }) : ok()))
+      await expect(refreshPrices()).resolves.toEqual({ ok: true })
+    })
+
+    it('reports success for a normal all-updated response', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (url: string) =>
+        url.includes('refresh-nav') ? navOk(3) : ok()))
+      await expect(refreshPrices()).resolves.toEqual({ ok: true })
+    })
+
+    // Can't verify what we can't read — so it can't be reported as clean.
+    it('reports a partial sync when the NAV body cannot be read', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (url: string) =>
+        url.includes('refresh-nav')
+          ? { ok: true, status: 200, headers: new Headers(), json: async () => { throw new Error('bad json') } }
+          : ok()))
+      await expect(refreshPrices()).resolves.toEqual({ ok: true, partial: true })
+    })
+
+    it('still reports rate limiting ahead of a NAV result failure', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (url: string) =>
+        url.includes('refresh-nav') ? navAllFailed() : notOk(429, { 'Retry-After': '15' })))
+      await expect(refreshPrices()).resolves.toMatchObject({ ok: false, reason: 'rate-limited' })
+    })
+  })
+
+  // Four review rounds on this helper all found the same shape of bug: one
+  // verdict applied to work that can partly succeed. Rather than keep patching
+  // cells, this pins the whole matrix — every combination of what each endpoint
+  // can do, and the single answer the UI should give for it.
+  //
+  // The rule underneath: clean only when both sides came back clean, partial
+  // whenever either side persisted something, failure only when nothing moved.
+  describe('outcome matrix', () => {
+    const REJECT = 'reject' as const
+    type NavCase = 'reject' | 'limited' | 'error500' | 'updated' | 'partial' | 'allFailed' | 'noFunds' | 'unreadable'
+    type GoldCase = 'reject' | 'limited' | 'error502' | 'ok'
+
+    const navFor = (c: NavCase) => {
+      switch (c) {
+        case 'reject': throw new Error('network')
+        case 'limited': return notOk(429, { 'Retry-After': '30' })
+        case 'error500': return notOk(500)
+        case 'updated': return navOk(2)
+        case 'partial': return ok({ results: [{ id: 'a', nav: 1 }, { id: 'b', error: 'x' }] })
+        case 'allFailed': return navAllFailed()
+        case 'noFunds': return ok({ results: [] })
+        case 'unreadable': return { ok: true, status: 200, headers: new Headers(), json: async () => { throw new Error('bad') } }
+      }
+    }
+    const goldFor = (c: GoldCase) => {
+      switch (c) {
+        case 'reject': throw new Error('network')
+        case 'limited': return notOk(429, { 'Retry-After': '30' })
+        case 'error502': return notOk(502)
+        case 'ok': return ok()
+      }
+    }
+
+    const CASES: Array<[NavCase, GoldCase, 'clean' | 'partial' | 'rate-limited' | 'error']> = [
+      // both sides clean
+      ['updated', 'ok', 'clean'],
+      ['noFunds', 'ok', 'clean'],
+      // one side persisted, the other didn't
+      ['partial', 'ok', 'partial'],
+      ['allFailed', 'ok', 'partial'],
+      ['unreadable', 'ok', 'partial'],
+      ['limited', 'ok', 'partial'],
+      ['error500', 'ok', 'partial'],
+      [REJECT, 'ok', 'partial'],
+      ['updated', 'limited', 'partial'],
+      ['updated', 'error502', 'partial'],
+      ['updated', REJECT, 'partial'],
+      ['partial', REJECT, 'partial'],
+      // nothing moved at all
+      ['limited', 'limited', 'rate-limited'],
+      ['noFunds', 'limited', 'rate-limited'],
+      ['allFailed', 'limited', 'rate-limited'],
+      [REJECT, 'limited', 'rate-limited'],
+      ['limited', 'error502', 'rate-limited'],
+      ['allFailed', 'error502', 'error'],
+      ['error500', 'error502', 'error'],
+      [REJECT, REJECT, 'error'],
+      ['noFunds', 'error502', 'error'],
+    ]
+
+    it.each(CASES)('nav=%s + gold=%s → %s', async (navCase, goldCase, expected) => {
+      vi.stubGlobal('fetch', vi.fn(async (url: string) =>
+        url.includes('refresh-nav') ? navFor(navCase) : goldFor(goldCase)))
+      const res = await refreshPrices()
+      if (expected === 'clean') expect(res).toEqual({ ok: true })
+      else if (expected === 'partial') expect(res).toEqual({ ok: true, partial: true })
+      else expect(res).toMatchObject({ ok: false, reason: expected })
+    })
+  })
+
+  // A sync changes the NAV and gold values the dashboard overview is built from,
+  // but the overview is served from a 2-minute localStorage cache. Without
+  // busting it, a user who looked at the dashboard just before syncing goes back
+  // to the same stale numbers — the sync appears to have done nothing. The
+  // ledger already busts this cache after its own mutations.
+  describe('cache invalidation', () => {
+    beforeEach(() => {
+      localStorage.setItem('dashboardOverviewCache_user-1', '{"data":{},"ts":1}')
+      localStorage.setItem('fundLibraryCache_user-1', '{}')
+      localStorage.setItem('savingsGoalsCache_user-1', '{}')
+    })
+    afterEach(() => localStorage.clear())
+
+    it('busts the price-dependent caches after a successful sync', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (url: string) =>
+        url.includes('refresh-nav') ? navOk(1) : ok()))
+      await refreshPrices()
+      expect(localStorage.getItem('dashboardOverviewCache_user-1')).toBeNull()
+      expect(localStorage.getItem('fundLibraryCache_user-1')).toBeNull()
+    })
+
+    it('busts them on a partial sync too, since some prices did move', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (url: string) =>
+        url.includes('refresh-nav') ? navAllFailed() : ok()))
+      await refreshPrices()
+      expect(localStorage.getItem('dashboardOverviewCache_user-1')).toBeNull()
+    })
+
+    // Only price-dependent ones: goals, plans and expenses didn't change, and
+    // dropping them would make every sync re-fetch the whole app for nothing.
+    it('leaves caches a price refresh cannot affect', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (url: string) =>
+        url.includes('refresh-nav') ? navOk(1) : ok()))
+      await refreshPrices()
+      expect(localStorage.getItem('savingsGoalsCache_user-1')).not.toBeNull()
+    })
+
+    it('leaves the caches alone when nothing synced', async () => {
+      vi.stubGlobal('fetch', vi.fn(async () => notOk(429, { 'Retry-After': '10' })))
+      await refreshPrices()
+      expect(localStorage.getItem('dashboardOverviewCache_user-1')).not.toBeNull()
+    })
   })
 })
 
