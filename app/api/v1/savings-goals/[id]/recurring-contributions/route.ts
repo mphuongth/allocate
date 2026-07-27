@@ -40,16 +40,24 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Failed to fetch recurring contributions' }, { status: 500 })
   }
 
+  const savings = savingsRes.data ?? []
   const plans = (plansRes.data ?? []) as { id: string; month: number; year: number }[]
   const planIds = plans.map((p) => p.id)
 
+  // realizedRecurringContributions iterates plans × savings, so with either side
+  // empty the result is definitively [] and none of the three reconciliation
+  // sources can change it. Return before reading them: it saves three queries,
+  // and it keeps failing closed from over-reaching into a 500 on a request whose
+  // correct answer is already known.
+  if (savings.length === 0 || plans.length === 0) {
+    return NextResponse.json({ contributions: [] })
+  }
+
   const [overridesRes, depositsRes, fulfillmentsRes] = await Promise.all([
-    planIds.length > 0
-      ? supabase
-          .from('recurring_saving_overrides')
-          .select('plan_id, recurring_saving_id, monthly_amount_override_vnd')
-          .in('plan_id', planIds)
-      : Promise.resolve({ data: [], error: null }),
+    supabase
+      .from('recurring_saving_overrides')
+      .select('plan_id, recurring_saving_id, monthly_amount_override_vnd')
+      .in('plan_id', planIds),
     // Real bank deposits logged toward this goal — used to suppress the
     // synthesized recurring row when the user has recorded the actual deposit
     // (otherwise the History tab would show both). Exclude renewal snapshots
@@ -104,7 +112,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   }))
 
   const contributions = realizedRecurringContributions(
-    savingsRes.data ?? [],
+    savings,
     plans,
     overridesRes.data ?? [],
     loggedDeposits,

@@ -172,6 +172,28 @@ describe('GET /api/v1/savings-goals/[id]/recurring-contributions', () => {
     expect(body.contributions).toBeUndefined()
   })
 
+  // Failing closed must not over-reach. realizedRecurringContributions iterates
+  // plans × savings, so with either side empty the answer is definitively [] —
+  // no reconciliation source can change it. 500-ing on those reads would refuse
+  // a request whose correct answer is already known.
+  it('returns an empty list for a goal with no plans, even if a reconciliation read errors', async () => {
+    seedHappyPath()
+    h.results.monthly_plans = { data: [], error: null }
+    h.results.recurring_saving_fulfillments = { data: null, error: { message: 'timeout' } }
+    const res = await call()
+    expect(res.status).toBe(200)
+    await expect(res.json()).resolves.toEqual({ contributions: [] })
+  })
+
+  it('returns an empty list for a goal with no savings, even if a reconciliation read errors', async () => {
+    seedHappyPath()
+    h.results.recurring_savings = { data: [], error: null }
+    h.results.investment_transactions = { data: null, error: { message: 'timeout' } }
+    const res = await call()
+    expect(res.status).toBe(200)
+    await expect(res.json()).resolves.toEqual({ contributions: [] })
+  })
+
   it('does not leak the database message to the client', async () => {
     seedHappyPath()
     h.results.recurring_saving_fulfillments = {
