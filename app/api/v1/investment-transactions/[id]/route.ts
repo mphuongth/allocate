@@ -216,28 +216,61 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   //   • live: the plain withdrawal the merge RPC opens for a sibling source.
   // Both carry consumed_by_inv_id, so the guard keys on that marker alone (not on
   // held_for_merge). The UI hides the affordances once consumed, but a stale tab or
-  // the ledger's per-row delete (shown on every row) must not get through — guard
-  // server-side with a 409 rather than trusting the UI. (One cheap SELECT.)
-  const { data: folded } = await supabase
-    .from('investment_transactions')
-    .select('consumed_by_inv_id')
-    .eq('transaction_id', txId)
-    .eq('user_id', user.id)
-    .not('consumed_by_inv_id', 'is', null)
-    .maybeSingle()
-  if (folded) {
-    return NextResponse.json(
-      { error: 'This settlement has already been merged into another deposit. Undo the merge before removing it.' },
-      { status: 409 },
-    )
-  }
-
-  const { error } = await supabase
+  // the ledger's per-row delete (shown on every row) must not get through.
+  //
+  // The guard is the DELETE's own WHERE clause, not a SELECT before it (#526).
+  // As two statements there was a window a merge could commit into, and the
+  // SELECT's dropped error fell through to an unguarded DELETE. As one statement
+  // there is nothing to race: a concurrent merge either commits first — Postgres
+  // re-evaluates the predicate against the updated row and deletes nothing — or
+  // finds the row already gone.
+  const { data: deleted, error } = await supabase
     .from('investment_transactions')
     .delete()
     .eq('transaction_id', txId)
     .eq('user_id', user.id)
+    .is('consumed_by_inv_id', null)
+    .select('transaction_id')
 
-  if (error) return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
-  return NextResponse.json({ message: 'Transaction deleted.' })
+  if (error) {
+    // The mirror image of the guard above: consumed_by_inv_id has no ON DELETE
+    // action, so deleting the ANCHOR while a consumed source still references it
+    // raises a foreign-key violation. That's a conflict the user can resolve —
+    // undo the merge first — not a server fault, so it must not read as a 500.
+    if (error.code === '23503') {
+      return NextResponse.json(
+        { error: 'Another settlement has been merged into this deposit. Undo the merge before removing it.' },
+        { status: 409 },
+      )
+    }
+    console.error('investment-transactions delete: statement failed', error.message)
+    return NextResponse.json({ error: 'Failed to delete transaction' }, { status: 500 })
+  }
+  if (deleted && deleted.length > 0) {
+    return NextResponse.json({ message: 'Transaction deleted.' })
+  }
+
+  // Nothing matched: either the row is gone, or it survived the guard. Only a
+  // read can tell those apart, and it runs strictly AFTER the delete — it can no
+  // longer influence whether anything is removed.
+  const { data: surviving, error: lookupErr } = await supabase
+    .from('investment_transactions')
+    .select('transaction_id')
+    .eq('transaction_id', txId)
+    .eq('user_id', user.id)
+    .maybeSingle()
+
+  if (lookupErr) {
+    // Don't guess: 404 would claim the settlement is gone when it may still be
+    // there, and 409 would block a delete that legitimately found nothing.
+    console.error('investment-transactions delete: could not classify a no-op delete', lookupErr.message)
+    return NextResponse.json({ error: 'Failed to delete transaction' }, { status: 500 })
+  }
+  if (!surviving) return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
+
+  // The row is still there, so the guard is what stopped the delete.
+  return NextResponse.json(
+    { error: 'This settlement has already been merged into another deposit. Undo the merge before removing it.' },
+    { status: 409 },
+  )
 }
