@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateUUID } from '@/lib/validation'
-import { realizedRecurringContributions } from '@/lib/finance'
+import { isPlanMonthRealized, realizedRecurringContributions } from '@/lib/finance'
 
 // Recurring savings are plan definitions, not logged transactions, so they never
 // appear in investment_transactions. This endpoint synthesizes read-only history
@@ -40,16 +40,33 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Failed to fetch recurring contributions' }, { status: 500 })
   }
 
+  const savings = savingsRes.data ?? []
   const plans = (plansRes.data ?? []) as { id: string; month: number; year: number }[]
   const planIds = plans.map((p) => p.id)
 
+  // realizedRecurringContributions iterates *realized* plan months × savings, so
+  // if either side contributes nothing the result is definitively [] and none of
+  // the three reconciliation sources can change it. Return before reading them:
+  // it saves three queries, and it keeps failing closed from over-reaching into a
+  // 500 on a request whose correct answer is already known.
+  //
+  // The plan side is narrowed with the same isPlanMonthRealized the library
+  // applies, so a goal whose only plans are still in the future is answered
+  // without them. The saving side is deliberately checked for emptiness only:
+  // narrowing it further (effective_from/effective_to vs. each realized month)
+  // would mean re-implementing the library's window logic here, and any drift
+  // between the two copies would silently return an empty history — the exact
+  // failure this endpoint is being fixed for. Between the two wrong answers, an
+  // over-strict 500 beats a confidently empty one.
+  if (savings.length === 0 || !plans.some((p) => isPlanMonthRealized(p.year, p.month))) {
+    return NextResponse.json({ contributions: [] })
+  }
+
   const [overridesRes, depositsRes, fulfillmentsRes] = await Promise.all([
-    planIds.length > 0
-      ? supabase
-          .from('recurring_saving_overrides')
-          .select('plan_id, recurring_saving_id, monthly_amount_override_vnd')
-          .in('plan_id', planIds)
-      : Promise.resolve({ data: [], error: null }),
+    supabase
+      .from('recurring_saving_overrides')
+      .select('plan_id, recurring_saving_id, monthly_amount_override_vnd')
+      .in('plan_id', planIds),
     // Real bank deposits logged toward this goal — used to suppress the
     // synthesized recurring row when the user has recorded the actual deposit
     // (otherwise the History tab would show both). Exclude renewal snapshots
@@ -76,6 +93,27 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       .eq('user_id', user.id),
   ])
 
+  // All three refine the synthesized rows, and two of them do so by SUPPRESSING
+  // one: a logged deposit means the user already recorded the real transfer, a
+  // fulfillment means the amount is already inside a renewed deposit's
+  // principal. Defaulting either to [] on failure doesn't lose history — it
+  // emits the duplicate they exist to cancel, so the goal shows the same
+  // contribution twice. A failed overrides read just computes the wrong
+  // amount. None of that may hide behind a 200 (#532).
+  if (overridesRes.error || depositsRes.error || fulfillmentsRes.error) {
+    console.error(
+      'recurring contributions: failed to read reconciliation sources —',
+      [
+        overridesRes.error && `recurring_saving_overrides: ${overridesRes.error.message}`,
+        depositsRes.error && `investment_transactions: ${depositsRes.error.message}`,
+        fulfillmentsRes.error && `recurring_saving_fulfillments: ${fulfillmentsRes.error.message}`,
+      ]
+        .filter(Boolean)
+        .join('; '),
+    )
+    return NextResponse.json({ error: 'Failed to fetch recurring contributions' }, { status: 500 })
+  }
+
   const loggedDeposits = (depositsRes.data ?? []).map((d) => ({
     month: String(d.investment_date).slice(0, 7),
     goalId: d.goal_id,
@@ -83,7 +121,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   }))
 
   const contributions = realizedRecurringContributions(
-    savingsRes.data ?? [],
+    savings,
     plans,
     overridesRes.data ?? [],
     loggedDeposits,
