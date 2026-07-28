@@ -184,6 +184,24 @@ test.describe('FK ownership enforcement — plan-scoped and user-scoped (#525)',
     expect(res.status()).toBe(403)
   })
 
+  // Create and update have to answer the same way. Without a check on the PUT
+  // path the trigger fires mid-write and this route's catch-all reports it as
+  // "not found" — a 404 about a row that is right there.
+  test('recurring-savings PUT rejects a move to a cross-user goal_id (403)', async ({ request }) => {
+    const saving = await api.createRecurringSaving({
+      name: `E2E FK Put Recurring ${Date.now()}`,
+      amount_vnd: 1_000_000,
+    })
+    try {
+      const res = await request.put(`/api/v1/recurring-savings/${saving.saving_id}`, {
+        data: { goal_id: foreign.goalId },
+      })
+      expect(res.status()).toBe(403)
+    } finally {
+      await api.deleteRecurringSaving(saving.saving_id)
+    }
+  })
+
   // The same guard must not get in the way of a legitimate write.
   test('a plan override against the caller’s own record still succeeds', async ({ request }) => {
     const member = await api.createInsuranceMember({

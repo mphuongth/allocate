@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validateUUID } from '@/lib/validation'
-import { isOwnedBy } from '@/lib/assertOwned'
+import { ownershipError } from '@/lib/assertOwned'
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -58,9 +58,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // The referenced record must belong to the plan's owner too. A valid UUID
   // isn't proof of ownership, and the DB trigger that enforces this (#525)
   // fires mid-write — checking here turns that into a clear 403.
-  if (!(await isOwnedBy(supabase, 'insurance_members', 'member_id', cleanMemberId, user.id))) {
-    return NextResponse.json({ error: "You don't have permission to access this insurance member." }, { status: 403 })
-  }
+  const ownErr = await ownershipError(supabase, 'insurance_members', 'member_id', cleanMemberId, user.id, 'insurance member')
+  if (ownErr) return ownErr
 
   const { data, error } = await supabase
     .from('plan_insurance_member_overrides')
