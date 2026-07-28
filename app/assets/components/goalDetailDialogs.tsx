@@ -241,12 +241,14 @@ export function EditGoalSheet({
   const [error, setError] = useState('')
 
   // Reloading the goal's values during render means reopening on a different
-  // goal never paints the previous one's name for a frame.
+  // goal never paints the previous one's name for a frame. `goal` is the sync
+  // key so a refresh landing while the dialog is open re-seeds the form rather
+  // than letting a save overwrite the newer values.
   useResetOnOpen(open, () => {
     setName(goal.goalName)
     setTarget(goal.targetAmount ? String(goal.targetAmount) : '')
     setError('')
-  })
+  }, goal)
 
   async function handleSave() {
     if (!name.trim()) { setError(isVI ? 'Tên mục tiêu là bắt buộc' : 'Goal name is required'); return }

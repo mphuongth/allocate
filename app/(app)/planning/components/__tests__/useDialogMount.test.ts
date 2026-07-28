@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
-import { useDialogMount } from '../useDialogMount'
+import { useDialogMount, useResetOnOpen } from '../useDialogMount'
 
 // Every sheet and dialog in the app keeps itself in the DOM for ~220ms after
 // `open` goes false so its exit animation can play. That was hand-rolled in ten
@@ -102,3 +102,72 @@ describe('useDialogMount', () => {
     clearSpy.mockRestore()
   })
 })
+
+// The dialogs that seed a form from a prop used to depend on that prop as well
+// as `open` — `[open, plan]`, `[open, goal]`. Planning renders from a 2-minute
+// localStorage cache while it refetches in the background, so the sheet can be
+// opened against cached data and have the fresh value land underneath it. If the
+// form doesn't re-sync, saving writes the stale value back over the server's.
+describe('useResetOnOpen', () => {
+  it('runs the reset when open flips true', () => {
+    const reset = vi.fn()
+    const { rerender } = renderHook(({ open }) => useResetOnOpen(open, reset), {
+      initialProps: { open: false },
+    })
+    expect(reset).not.toHaveBeenCalled()
+    rerender({ open: true })
+    expect(reset).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not run it on close', () => {
+    const reset = vi.fn()
+    const { rerender } = renderHook(({ open }) => useResetOnOpen(open, reset), {
+      initialProps: { open: true },
+    })
+    reset.mockClear()
+    rerender({ open: false })
+    expect(reset).not.toHaveBeenCalled()
+  })
+
+  it('does not re-run while open with an unchanged key', () => {
+    const reset = vi.fn()
+    const { rerender } = renderHook(({ open, k }) => useResetOnOpen(open, reset, k), {
+      initialProps: { open: true, k: 'a' },
+    })
+    reset.mockClear()
+    rerender({ open: true, k: 'a' })
+    rerender({ open: true, k: 'a' })
+    expect(reset).not.toHaveBeenCalled()
+  })
+
+  // The regression this parameter exists for.
+  it('re-syncs while open when the source data changes underneath', () => {
+    const reset = vi.fn()
+    const { rerender } = renderHook(({ open, k }) => useResetOnOpen(open, reset, k), {
+      initialProps: { open: true, k: 'cached' },
+    })
+    reset.mockClear()
+    rerender({ open: true, k: 'fresh-from-server' })
+    expect(reset).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not reset while closed, however much the source changes', () => {
+    const reset = vi.fn()
+    const { rerender } = renderHook(({ open, k }) => useResetOnOpen(open, reset, k), {
+      initialProps: { open: false, k: 'a' },
+    })
+    rerender({ open: false, k: 'b' })
+    rerender({ open: false, k: 'c' })
+    expect(reset).not.toHaveBeenCalled()
+  })
+
+  it('resets once when it opens onto data that also changed', () => {
+    const reset = vi.fn()
+    const { rerender } = renderHook(({ open, k }) => useResetOnOpen(open, reset, k), {
+      initialProps: { open: false, k: 'a' },
+    })
+    rerender({ open: true, k: 'b' })
+    expect(reset).toHaveBeenCalledTimes(1)
+  })
+})
+

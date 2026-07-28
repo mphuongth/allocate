@@ -75,7 +75,11 @@ export function SalarySheet({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  useResetOnOpen(open, () => setValue(plan ? String(plan.salary_vnd) : ''))
+  // `plan` is the sync key, not just an initial seed: the planning screen renders
+  // from cache and refetches in the background, so the sheet can be opened on a
+  // cached salary and have the server's land underneath it. Re-seeding then is
+  // what stops a save writing the stale number back.
+  useResetOnOpen(open, () => setValue(plan ? String(plan.salary_vnd) : ''), plan)
 
   async function handleSave() {
     const num = Number(value)

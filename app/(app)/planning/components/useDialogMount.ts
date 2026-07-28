@@ -49,21 +49,32 @@ export function useDialogMount(open: boolean, exitMs: number = EXIT_MS): boolean
   return open || closing
 }
 
-// Run `reset` in the render where `open` flips false → true.
+// Run `reset` in the render where `open` flips false → true, and again while
+// open whenever `syncKey` changes.
 //
 // Dialogs stay mounted through their exit animation, so their form state
 // survives a close and has to be cleared on the way back in. Doing that in an
 // effect means the stale values render for a frame first — the user sees the
 // previous record's data flash — and it's the set-state-in-effect shape (#537).
 //
+// `syncKey` is not optional decoration. A dialog seeded from a prop has to
+// re-seed if that prop changes underneath it: planning renders from a 2-minute
+// localStorage cache while it refetches in the background, so the salary sheet
+// can be opened against cached data and have the fresh value land a moment
+// later. Without re-syncing, saving writes the stale cached number back over the
+// server's. Pass the source object (the old effects' `[open, plan]` /
+// `[open, goal]` dependency); omit it only when nothing but `open` matters.
+//
 // Adjusting during render is React's documented answer for "reset state when a
 // prop changes": the re-render happens before the browser paints, so nothing
 // stale is ever shown. `reset` is called during render and must therefore only
 // set state — no fetching, no subscriptions.
-export function useResetOnOpen(open: boolean, reset: () => void): void {
-  const [wasOpen, setWasOpen] = useState(open)
-  if (wasOpen !== open) {
-    setWasOpen(open)
+export function useResetOnOpen(open: boolean, reset: () => void, syncKey?: unknown): void {
+  const [prev, setPrev] = useState({ open, syncKey })
+  if (prev.open !== open || !Object.is(prev.syncKey, syncKey)) {
+    setPrev({ open, syncKey })
+    // Only while open: a key that churns behind a closed dialog is nothing to
+    // react to, and resetting then would fight whatever opens it next.
     if (open) reset()
   }
 }
