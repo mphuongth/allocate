@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
 import { ChevronLeft, ArrowUpRight, ArrowDownRight, Plus } from 'lucide-react'
 import { useLocale } from 'next-intl'
 import { fmtCompact, fmtNav, fmtPct, fmtUnits } from '@/lib/formatters'
 import { TxRowsSkeleton } from './Skeletons'
 import LoadError from './LoadError'
+import { useDialogMount } from '@/app/(app)/planning/components/useDialogMount'
 
 export interface PurchaseHistoryRow {
   purchase_date: string
@@ -37,15 +37,7 @@ export default function TransactionHistorySheet({
   profitLoss, profitLossPercentage, purchaseHistory, loading, error, onRetry, onAddTransaction,
 }: Props) {
   const isVI = useLocale() === 'vi'
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    if (open) setMounted(true)
-    else {
-      const t = setTimeout(() => setMounted(false), 220)
-      return () => clearTimeout(t)
-    }
-  }, [open])
+  const mounted = useDialogMount(open)
 
   if (!mounted) return null
 

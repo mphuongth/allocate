@@ -12,15 +12,12 @@ import { useDialogA11y } from './useDialogA11y'
 import { TrashIcon } from './planningIcons'
 import { saveIncome, deletePlan, saveOtherExpense } from '../planActions'
 import type { MonthlyPlan, OtherExpense } from '../PlanningClient'
+import { useDialogMount, useResetOnOpen } from './useDialogMount'
 
 export function Sheet({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode }) {
-  const [mounted, setMounted] = useState(false)
+  const mounted = useDialogMount(open)
   const dialogRef = useRef<HTMLDivElement>(null)
   useDialogA11y(dialogRef, open && mounted, onClose)
-  useEffect(() => {
-    if (open) setMounted(true)
-    else { const t = setTimeout(() => setMounted(false), 220); return () => clearTimeout(t) }
-  }, [open])
   if (!mounted) return null
 
   return (
@@ -78,7 +75,11 @@ export function SalarySheet({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  useEffect(() => { if (open) setValue(plan ? String(plan.salary_vnd) : '') }, [open, plan])
+  // `plan` is the sync key, not just an initial seed: the planning screen renders
+  // from cache and refetches in the background, so the sheet can be opened on a
+  // cached salary and have the server's land underneath it. Re-seeding then is
+  // what stops a save writing the stale number back.
+  useResetOnOpen(open, () => setValue(plan ? String(plan.salary_vnd) : ''), plan)
 
   async function handleSave() {
     const num = Number(value)
@@ -233,9 +234,11 @@ export function OtherExpenseSheet({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  useEffect(() => {
-    if (open) { setDesc(existing?.description ?? ''); setAmount(existing?.amount_vnd ? String(existing.amount_vnd) : ''); setError('') }
-  }, [open, existing])
+  useResetOnOpen(open, () => {
+    setDesc(existing?.description ?? '')
+    setAmount(existing?.amount_vnd ? String(existing.amount_vnd) : '')
+    setError('')
+  }, existing)
 
   async function handleSave() {
     if (!desc.trim()) { setError(isVI ? 'Vui lòng nhập mô tả' : 'Description is required'); return }
@@ -340,7 +343,7 @@ export function SimpleOverrideSheet({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  useEffect(() => { if (open) { setValue(String(defaultAmount)); setError('') } }, [open, defaultAmount])
+  useResetOnOpen(open, () => { setValue(String(defaultAmount)); setError('') }, defaultAmount)
 
   async function handleSave() {
     const num = Number(value)

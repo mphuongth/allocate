@@ -7,6 +7,7 @@ import { iconHit } from './iconHit'
 import { fmt } from '@/lib/formatters'
 import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
 import { CairnLoader } from '@/app/components/ui/CairnLoader'
+import { useDialogMount, useResetOnOpen } from '@/app/(app)/planning/components/useDialogMount'
 
 interface Props {
   open: boolean
@@ -43,25 +44,19 @@ export function CreateGoalSheet({ open, onClose, onSuccess, desktop }: Props) {
   const [priority, setPriority] = useState<PriorityKey>('med')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [mounted, setMounted] = useState(open)
+  const mounted = useDialogMount(open)
 
-  useEffect(() => {
-    if (open) {
-      setMounted(true)
-    } else {
-      const timer = setTimeout(() => {
-        setMounted(false)
-        setName('')
-        setTarget('100000000')
-        setTargetDate('')
-        setIcon('target')
-        setPriority('med')
-        setSaving(false)
-        setError('')
-      }, 220)
-      return () => clearTimeout(timer)
-    }
-  }, [open])
+  // The form used to be wiped after the exit animation finished; clearing it on
+  // the way back in is equivalent to the user and doesn't need its own timer.
+  useResetOnOpen(open, () => {
+    setName('')
+    setTarget('100000000')
+    setTargetDate('')
+    setIcon('target')
+    setPriority('med')
+    setSaving(false)
+    setError('')
+  })
 
   const perMonth = (() => {
     const amount = Number(target)
