@@ -36,6 +36,25 @@ function readThemeChoice(fallback: ThemeChoice): ThemeChoice {
   return (v === 'light' || v === 'dark') ? v : 'system'
 }
 
+// A status flash can outlive the sheet that started it. Keep one timeout per
+// owner and clear it on unmount so React never receives a late setState after a
+// route change or a test has torn the view down.
+function useManagedTimeout() {
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => () => {
+    if (timeoutRef.current !== null) clearTimeout(timeoutRef.current)
+  }, [])
+
+  return (callback: () => void, delay: number) => {
+    if (timeoutRef.current !== null) clearTimeout(timeoutRef.current)
+    timeoutRef.current = setTimeout(() => {
+      timeoutRef.current = null
+      callback()
+    }, delay)
+  }
+}
+
 // ─── Bottom sheet wrapper ──────────────────────────────────────────────────────
 
 function BottomSheet({ open, onClose, title, dismissOnBackdrop = true, children }: {
@@ -108,6 +127,7 @@ function ProfileSheet({ open, onClose, onSave, displayName, email }: {
   const t = useTranslations('settings')
   const [name, setName] = useState(displayName)
   const [saved, setSaved] = useState(false)
+  const scheduleTimeout = useManagedTimeout()
 
   useResetOnOpen(open, () => { setName(displayName); setSaved(false) }, displayName)
 
@@ -117,7 +137,7 @@ function ProfileSheet({ open, onClose, onSave, displayName, email }: {
     const ok = await onSave(name)
     if (!ok) return
     setSaved(true)
-    setTimeout(() => { setSaved(false); onClose() }, SAVE_FLASH_MS)
+    scheduleTimeout(() => { setSaved(false); onClose() }, SAVE_FLASH_MS)
   }
 
   return (
@@ -427,6 +447,7 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
   const [syncFailed, setSyncFailed] = useState(false)
   const [syncLimited, setSyncLimited] = useState(false)
   const [syncPartial, setSyncPartial] = useState(false)
+  const scheduleSyncStatusReset = useManagedTimeout()
   // undefined = loading, null = never synced, otherwise the last-sync ISO time.
   const [lastSyncIso, setLastSyncIso] = useState<string | null | undefined>(undefined)
   useEffect(() => { fetchLastSync().then(setLastSyncIso) }, [])
@@ -457,14 +478,14 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
       setSyncDone(true)
       if (result.partial) setSyncPartial(true)
       setLastSyncIso(new Date().toISOString())
-      setTimeout(() => { setSyncDone(false); setSyncPartial(false) }, 3000)
+      scheduleSyncStatusReset(() => { setSyncDone(false); setSyncPartial(false) }, 3000)
     } else if (result.reason === 'rate-limited') {
       // Distinct from a failure: nothing is broken, the user just has to wait.
       setSyncLimited(true)
-      setTimeout(() => setSyncLimited(false), 3000)
+      scheduleSyncStatusReset(() => setSyncLimited(false), 3000)
     } else {
       setSyncFailed(true)
-      setTimeout(() => setSyncFailed(false), 3000)
+      scheduleSyncStatusReset(() => setSyncFailed(false), 3000)
     }
   }
 

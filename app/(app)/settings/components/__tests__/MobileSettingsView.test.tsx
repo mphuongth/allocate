@@ -400,6 +400,22 @@ describe('MobileSettingsView — price sync section', () => {
     fetchSpy.mockRestore()
   })
 
+  it('cleans the success-status timer when the view unmounts', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
+      new Response(JSON.stringify({ results: [{ id: 'f1', nav: 10000 }] }), { status: 200 })
+    )
+    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout')
+    const { unmount } = render(<MobileSettingsView {...defaultProps} />)
+
+    await userEvent.click(screen.getByRole('button', { name: /sync now/i }))
+    await waitFor(() => expect(screen.getByText(/updated/i)).toBeInTheDocument())
+    unmount()
+
+    expect(clearTimeoutSpy).toHaveBeenCalled()
+    clearTimeoutSpy.mockRestore()
+    fetchSpy.mockRestore()
+  })
+
   it('calls the user-scoped endpoints rather than the cron routes', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
       new Response(JSON.stringify({ results: [{ id: 'f1', nav: 10000 }] }), { status: 200 })

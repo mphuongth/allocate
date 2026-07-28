@@ -26,6 +26,8 @@ vi.mock('@supabase/supabase-js', () => ({
     if (!key) throw new Error('supabaseKey is required.')
     h.clients.push({ url, key })
     return {
+      rpc: (name: string) =>
+        Promise.resolve(h.results[`rpc:${name}`] ?? { data: null, error: null }),
       // Minimal PostgREST chain. `funds` is both read and written by the NAV
       // cron, so results are keyed by table *and* operation.
       from: (table: string) => {
@@ -60,7 +62,7 @@ const ROUTES = [
     name: 'refresh-gold',
     load: () => import('../refresh-gold/route'),
     seedSuccess: () => {
-      h.results['gold_price_settings:update'] = { data: [{ user_id: 'user-1' }], error: null }
+      h.results['rpc:refresh_gold_price_all'] = { data: 1, error: null }
     },
     scraperCalls: () => h.goldCalls,
   },
