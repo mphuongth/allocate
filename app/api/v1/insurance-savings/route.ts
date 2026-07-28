@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validateUUID } from '@/lib/validation'
+import { ownershipError } from '@/lib/assertOwned'
 
 export async function POST(request: NextRequest) {
   const supabase = await createSupabaseServerClient()
@@ -28,6 +29,13 @@ export async function POST(request: NextRequest) {
     if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
     throw e
   }
+
+  // A valid UUID isn't proof of ownership: without this, a caller who knew a
+  // foreign member_id could log savings against someone else's policy. The DB
+  // trigger (#525) is the backstop; this makes it a clear 403 rather than a 500
+  // from mid-write.
+  const ownErr = await ownershipError(supabase, 'insurance_members', 'member_id', cleanMemberId, user.id, 'insurance member')
+  if (ownErr) return ownErr
 
   const { data, error } = await supabase
     .from('insurance_savings')

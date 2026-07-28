@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validateText, validateUUID, validateYearMonth } from '@/lib/validation'
 import { validateLinkedDeposit } from '../linkValidation'
+import { ownershipError } from '@/lib/assertOwned'
 
 function toDateCol(ym: string | undefined | null): string | null {
   if (!ym) return null
@@ -52,6 +53,17 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   const toDate = (updates.effective_to ?? null) as string | null
   if (fromDate && toDate && fromDate > toDate) {
     return NextResponse.json({ error: '"Active from" must be before "Active until".' }, { status: 400 })
+  }
+
+  // Same check the POST does. Without it, moving an existing saving onto a
+  // foreign goal reaches the DB trigger, and the catch-all at the end of this
+  // route reports that as "Recurring saving not found" — so creating with a
+  // foreign goal says 403 while updating to one says 404 about a row that is
+  // right there. The link path below only covers linked_deposit_tx_id, and only
+  // when a link survives the update.
+  if (updates.goal_id) {
+    const ownErr = await ownershipError(supabase, 'savings_goals', 'goal_id', updates.goal_id as string, user.id, 'goal')
+    if (ownErr) return ownErr
   }
 
   // Keep the deposit link consistent with the (possibly changed) goal. Only

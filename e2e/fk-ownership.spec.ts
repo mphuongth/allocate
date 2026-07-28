@@ -109,3 +109,113 @@ test.describe('FK ownership enforcement (#474)', () => {
     }
   })
 })
+
+// #474 covered investment_transactions and funds. #525 extended the same
+// guarantee to the plan-scoped override tables and the insurance/recurring
+// references — nine relationships that previously validated only the row's own
+// scope, so a caller who knew a foreign UUID could attach it.
+//
+// Each route is hit with the authenticated test user's own plan while pointing
+// at a *second* user's record. The DB triggers are the authoritative backstop
+// (supabase/tests/fk_ownership_all.test.sql drives all nine directly); these
+// assert the API turns that into a 403 instead of a 500 from mid-write.
+test.describe('FK ownership enforcement — plan-scoped and user-scoped (#525)', () => {
+  let foreign: Awaited<ReturnType<typeof api.createForeignOwned>>
+  let planId: string
+
+  test.beforeAll(async () => {
+    foreign = await api.createForeignOwned()
+    // A month of its own so this can't collide with the planning specs' fixtures.
+    const plan = await api.createMonthlyPlan({ month: 3, year: 2031, salary_vnd: 50_000_000 })
+    planId = plan.id
+  })
+
+  test.afterAll(async () => {
+    if (planId) await api.deleteMonthlyPlan(planId)
+    if (foreign) await api.deleteForeignUser(foreign.userId)
+  })
+
+  test('insurance-overrides rejects a cross-user member_id (403)', async ({ request }) => {
+    const res = await request.post(`/api/v1/monthly-plans/${planId}/insurance-overrides`, {
+      data: { member_id: foreign.memberId, monthly_amount_override_vnd: 500_000 },
+    })
+    expect(res.status()).toBe(403)
+  })
+
+  test('excluded-insurance rejects a cross-user member_id (403)', async ({ request }) => {
+    const res = await request.post(`/api/v1/monthly-plans/${planId}/excluded-insurance`, {
+      data: { member_id: foreign.memberId },
+    })
+    expect(res.status()).toBe(403)
+  })
+
+  test('fixed-expense-overrides rejects a cross-user fixed_expense_id (403)', async ({ request }) => {
+    const res = await request.post(`/api/v1/monthly-plans/${planId}/fixed-expense-overrides`, {
+      data: { fixed_expense_id: foreign.expenseId, monthly_amount_override_vnd: 500_000 },
+    })
+    expect(res.status()).toBe(403)
+  })
+
+  test('recurring-saving-overrides rejects a cross-user recurring_saving_id (403)', async ({ request }) => {
+    const res = await request.post(`/api/v1/monthly-plans/${planId}/recurring-saving-overrides`, {
+      data: { recurring_saving_id: foreign.recurringId, monthly_amount_override_vnd: 500_000 },
+    })
+    expect(res.status()).toBe(403)
+  })
+
+  test('dca-skips rejects a cross-user fund_id (403)', async ({ request }) => {
+    const res = await request.post(`/api/v1/monthly-plans/${planId}/dca-skips`, {
+      data: { fund_id: foreign.fundId },
+    })
+    expect(res.status()).toBe(403)
+  })
+
+  test('insurance-savings rejects a cross-user insurance_member_id (403)', async ({ request }) => {
+    const res = await request.post('/api/v1/insurance-savings', {
+      data: { insurance_member_id: foreign.memberId, amount_saved_vnd: 1_000_000 },
+    })
+    expect(res.status()).toBe(403)
+  })
+
+  test('recurring-savings rejects a cross-user goal_id (403)', async ({ request }) => {
+    const res = await request.post('/api/v1/recurring-savings', {
+      data: { name: `E2E FK Recurring ${Date.now()}`, amount_vnd: 1_000_000, goal_id: foreign.goalId },
+    })
+    expect(res.status()).toBe(403)
+  })
+
+  // Create and update have to answer the same way. Without a check on the PUT
+  // path the trigger fires mid-write and this route's catch-all reports it as
+  // "not found" — a 404 about a row that is right there.
+  test('recurring-savings PUT rejects a move to a cross-user goal_id (403)', async ({ request }) => {
+    const saving = await api.createRecurringSaving({
+      name: `E2E FK Put Recurring ${Date.now()}`,
+      amount_vnd: 1_000_000,
+    })
+    try {
+      const res = await request.put(`/api/v1/recurring-savings/${saving.saving_id}`, {
+        data: { goal_id: foreign.goalId },
+      })
+      expect(res.status()).toBe(403)
+    } finally {
+      await api.deleteRecurringSaving(saving.saving_id)
+    }
+  })
+
+  // The same guard must not get in the way of a legitimate write.
+  test('a plan override against the caller’s own record still succeeds', async ({ request }) => {
+    const member = await api.createInsuranceMember({
+      member_name: `E2E FK Own Member ${Date.now()}`,
+      relationship: 'self',
+      annual_payment_vnd: 12_000_000,
+    })
+    try {
+      const res = await request.post(`/api/v1/monthly-plans/${planId}/insurance-overrides`, {
+        data: { member_id: member.member_id, monthly_amount_override_vnd: 500_000 },
+      })
+      expect(res.ok()).toBe(true)
+    } finally {
+      await api.deleteInsuranceMember(member.member_id)
+    }
+  })
+})

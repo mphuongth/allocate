@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validatePlanMonthFilter, validateText, validateUUID, validateYearMonth, type PlanMonthFilter } from '@/lib/validation'
 import { validateLinkedDeposit } from './linkValidation'
+import { ownershipError } from '@/lib/assertOwned'
 
 function toDateCol(ym: string | undefined | null): string | null {
   if (!ym) return null
@@ -97,6 +98,14 @@ export async function POST(request: NextRequest) {
   const toDate = toDateCol(cleanToYm)
   if (fromDate && toDate && fromDate > toDate) {
     return NextResponse.json({ error: '"Active from" must be before "Active until".' }, { status: 400 })
+  }
+
+  // linked_deposit_tx_id was already ownership-checked by validateLinkedDeposit;
+  // goal_id was not — a valid UUID isn't proof of ownership, so a known foreign
+  // goal_id could be attached here. The DB trigger (#525) is the backstop.
+  if (cleanGoalId) {
+    const ownErr = await ownershipError(supabase, 'savings_goals', 'goal_id', cleanGoalId, user.id, 'goal')
+    if (ownErr) return ownErr
   }
 
   if (cleanLinkedTxId) {

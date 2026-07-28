@@ -452,7 +452,7 @@ export async function countPlanDcaRows(planId: string, fundId: string): Promise<
 
 // Create a throwaway *second* user and a goal + fund they own, for cross-user
 // ownership tests. Deleting the user (deleteForeignUser) cascades their data.
-export async function createForeignOwned(): Promise<{ userId: string; goalId: string; fundId: string; txId: string }> {
+export async function createForeignOwned(): Promise<{ userId: string; goalId: string; fundId: string; txId: string; memberId: string; expenseId: string; recurringId: string }> {
   const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   const { data, error } = await supabase.auth.admin.createUser({
     email: `e2e-foreign-${stamp}@test.invalid`,
@@ -483,7 +483,38 @@ export async function createForeignOwned(): Promise<{ userId: string; goalId: st
     .single()
   if (txErr || !tx) throw txErr ?? new Error('Failed to create foreign transaction')
 
-  return { userId, goalId: goal.goal_id, fundId: fund.id, txId: tx.transaction_id }
+  // #525 widened the guard to the plan-scoped and insurance/recurring tables, so
+  // the foreign fixture needs one row of each kind to point at.
+  const { data: member, error: memberErr } = await supabase
+    .from('insurance_members')
+    .insert({ user_id: userId, member_name: `Foreign Member ${stamp}`, relationship: 'self', annual_payment_vnd: 12_000_000 })
+    .select('member_id')
+    .single()
+  if (memberErr || !member) throw memberErr ?? new Error('Failed to create foreign insurance member')
+
+  const { data: expense, error: expenseErr } = await supabase
+    .from('fixed_expenses')
+    .insert({ user_id: userId, expense_name: `Foreign Expense ${stamp}`, amount_vnd: 1_000_000, category: 'other' })
+    .select('expense_id')
+    .single()
+  if (expenseErr || !expense) throw expenseErr ?? new Error('Failed to create foreign fixed expense')
+
+  const { data: recurring, error: recurringErr } = await supabase
+    .from('recurring_savings')
+    .insert({ user_id: userId, name: `Foreign Recurring ${stamp}`, amount_vnd: 1_000_000 })
+    .select('saving_id')
+    .single()
+  if (recurringErr || !recurring) throw recurringErr ?? new Error('Failed to create foreign recurring saving')
+
+  return {
+    userId,
+    goalId: goal.goal_id,
+    fundId: fund.id,
+    txId: tx.transaction_id,
+    memberId: member.member_id,
+    expenseId: expense.expense_id,
+    recurringId: recurring.saving_id,
+  }
 }
 
 export async function deleteForeignUser(userId: string) {
