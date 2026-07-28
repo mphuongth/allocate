@@ -1,3 +1,4 @@
+import { deleteTransaction, type DeleteResult } from './deleteTransaction'
 // Goal-detail mutation network calls shared by GoalDetailSheet (mobile) and
 // DesktopGoalDetail (#467). These were byte-identical in both — the desktop
 // unassign even carried a "Mirror of ..." comment. Plain async functions (no
@@ -48,13 +49,13 @@ export async function deleteGoal(goalId: string): Promise<boolean> {
 }
 
 // "Bỏ chờ gộp" — delete the held settlement row, restoring the original deposit.
-export async function unholdTransaction(heldTxId: string): Promise<boolean> {
-  try {
-    const res = await fetch(`/api/v1/investment-transactions/${heldTxId}`, { method: 'DELETE' })
-    return res.ok
-  } catch {
-    return false
-  }
+//
+// Returns the same discriminated result as the ledger's delete so the caller can
+// say why it was refused. It used to return a bare `res.ok`, which threw away
+// the one thing the user needed (#550) — and a held settlement is exactly the
+// row the server refuses once a merge has consumed it.
+export async function unholdTransaction(heldTxId: string): Promise<DeleteResult> {
+  return deleteTransaction(heldTxId)
 }
 
 // Unassign an investment from a specific goal. A fund row aggregates every

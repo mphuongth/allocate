@@ -11,6 +11,8 @@ import { fmtCompact, fmtNav, fmtUnits } from '@/lib/formatters'
 import { parseExcelPaste, type ParsedRow } from '@/lib/parseExcelPaste'
 import AddTransactionSheet from './AddTransactionSheet'
 import { ASSET_TYPES, type AssetType, type LedgerTransaction, isWithdrawal, txKind, txPrimaryName, fmtTxDate } from './transactionUtils'
+import { toast } from 'sonner'
+import { deleteTransaction } from './deleteTransaction'
 
 interface Goal { goal_id: string; goal_name: string }
 interface Fund { id: string; name: string; code: string; nav: number }
@@ -134,6 +136,7 @@ interface Props {
 export default function TransactionLedgerSheet({ open, desktop, locale, onClose, onChanged }: Props) {
   const t = useTranslations('transactions')
   const tc = useTranslations('common')
+  const td = useTranslations('deleteTransaction')
 
   const [transactions, setTransactions] = useState<LedgerTransaction[]>([])
   const [goals, setGoals] = useState<Goal[]>([])
@@ -326,11 +329,17 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
 
   async function handleDelete(tx: LedgerTransaction) {
     setDeletingId(tx.transaction_id)
-    const res = await fetch(`/api/v1/investment-transactions/${tx.transaction_id}`, { method: 'DELETE' })
-    if (res.ok) {
+    const result = await deleteTransaction(tx.transaction_id)
+    if (result.ok) {
       setConfirmTx(null)
       await fetchTransactions()
       notifyChanged()
+    } else {
+      // Close the dialog and let the toast carry the explanation. Leaving it
+      // open would sit there unchanged with no indication of what happened —
+      // which is what it did before, for every refusal (#550).
+      setConfirmTx(null)
+      toast.error(td(result.code))
     }
     setDeletingId(null)
   }

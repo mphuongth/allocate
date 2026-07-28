@@ -19,6 +19,7 @@ import { useGoalDetailData } from './useGoalDetailData'
 import { deleteGoal, unholdTransaction, unassignInvestment, updateGoal } from './goalActions'
 import { SellWithdrawSheet } from './SellWithdrawSheet'
 import { invToSellItem } from './invToSellItem'
+import { useTranslations } from 'next-intl'
 
 interface Props {
   goal: GoalData
@@ -47,6 +48,7 @@ interface Props {
 
 export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged, onRenewed, refreshKey, onAddToGoal }: Props) {
   const isVi = locale === 'vi'
+  const td = useTranslations('deleteTransaction')
   const [tab, setTab] = useState<'investments' | 'calculator' | 'history'>('investments')
   // Bumped by the retry button to re-run the transactions fetch.
   const [txReload, setTxReload] = useState(0)
@@ -134,9 +136,12 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
   const [unholdingId, setUnholdingId] = useState<string | null>(null)
   async function handleUnhold(heldTxId: string) {
     setUnholdingId(heldTxId)
-    const ok = await unholdTransaction(heldTxId)
+    const result = await unholdTransaction(heldTxId)
     setUnholdingId(null)
-    if (!ok) { toast.error(isVi ? 'Không thể bỏ chờ gộp' : "Couldn't cancel the merge hold"); return }
+    // Each refusal has its own remedy — "undo the merge" vs "cancel the pending
+    // settlement" send the user to different places, so one generic message
+    // isn't enough (#550).
+    if (!result.ok) { toast.error(td(result.code)); return }
     onDataChanged()
   }
 
