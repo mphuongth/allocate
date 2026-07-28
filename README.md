@@ -7,228 +7,49 @@
 
 ### Personal finance, one stone at a time.
 
-Plan, track, and visualize your financial journey — goals, investments, monthly budgets, insurance — all in one place. Bilingual (Vietnamese + English).
+Cairn brings your goals, investments, monthly plans, and insurance together in one clear view.
 
-**[Try the live app →](https://cairn-money.vercel.app/)**
+**[Try Cairn →](https://cairn-money.vercel.app/)**
+
+Available in Vietnamese and English.
 
 </div>
 
 ---
 
-> A cairn is a stack of stones that marks a trail. Every saving, every fund, every monthly plan is a stone on your financial journey.
+## See where your money is going
 
-## What Cairn does
+Cairn is a personal finance app that helps you understand what you own, what you are saving for, and how today's decisions affect your longer-term goals.
 
-Cairn is a personal-finance webapp that turns the mental gymnastics of "where does my money go?" into a clear, visual trail. You set goals, log investments, and plan each month — Cairn shows you how every choice moves you forward.
+Instead of managing separate notes and spreadsheets, you can see your financial journey in one place.
 
-## What you'll get
+![Cairn overview](public/tour/dashboard-en.png)
 
-- **A single dashboard for your net worth** — see funds, bank deposits, gold, and stocks side by side with allocation breakdown and a sparkline of your portfolio history.
-- **Goals you can actually track** — set targets (house, retirement, emergency), assign transactions to them, and watch progress bars fill as you save.
-- **Monthly planning that doesn't break** — Cairn pulls your fixed expenses and insurance fees into each month's plan automatically. Override anything for a specific month without losing the defaults.
-- **Investment tracking across every asset type** — fund NAV updates, bank deposits with interest projections, gold by chỉ at live prices, stocks. Buy and sell flows for each.
-- **Insurance you don't dread** — family policies with annual-to-monthly fee calculations and per-member payment tracking.
-- **A real desktop + mobile experience** — fully redesigned layouts for both, not just a stretched mobile view. Dark mode included.
-- **Installable & offline-ready** — Cairn is a PWA: install it to your home screen and it keeps working (with a graceful offline page) when the network drops.
-- **Exportable portfolio report** — download a PDF snapshot of your net worth and holdings.
-- **Vietnamese & English** — every label, every plural, every currency format.
+## What you can do
 
-## Quick start
+- **See your net worth at a glance** across funds, bank deposits, gold, and stocks.
+- **Create financial goals** and track how each investment moves you closer to them.
+- **Plan each month** with income, fixed expenses, insurance, investments, and recurring savings.
+- **Track investments** including purchases, withdrawals, interest, maturity dates, and current values.
+- **Manage insurance plans** for yourself and your family, with payment and savings progress.
+- **Review your portfolio over time** through allocation breakdowns and net-worth history.
+- **Export a portfolio report** when you need a shareable snapshot.
 
-```bash
-# 1. Clone and install
-git clone https://github.com/mphuongth/allocate.git
-cd allocate
-npm install
+## How it works
 
-# 2. Configure Supabase
-cp .env.example .env.local
-# edit .env.local with your Supabase project URL + anon key
+1. Create an account and choose your preferred language.
+2. Add your current investments, savings goals, and insurance plans.
+3. Build a monthly plan for how you want to use your income.
+4. Return to the overview to follow your progress and record new activity.
 
-# 3. Run the dev server
-npm run dev
-```
+## Designed for everyday use
 
-Open <http://localhost:3000>.
+Cairn works on desktop and mobile, supports light and dark themes, and can be installed as an app on supported devices.
 
-> The first time you sign up, Cairn will create the schema for your account via Supabase migrations. Make sure your Supabase project has run the migrations in `supabase/migrations/`.
+Your finances may be complex. The view of them should not be.
 
-## Environment variables
+<div align="center">
 
-| Variable | Purpose | Required |
-|---|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL | yes |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anonymous key | yes |
+**[Open Cairn](https://cairn-money.vercel.app/)**
 
-## Scripts
-
-| Command | What it does |
-|---|---|
-| `npm run dev` | Start dev server (Turbopack) on port 3000 |
-| `npm run build` | Production build |
-| `npm run start` | Start production server (after `build`) |
-| `npm run lint` | ESLint |
-| `npm test` | Unit tests (Vitest, watch mode) |
-| `npm test -- --run` | Unit tests once |
-| `npm run test:coverage` | Coverage report |
-| `npm run test:e2e` | End-to-end tests (Playwright) |
-| `npm run test:e2e:ui` | Playwright UI mode |
-| `npm run test:e2e:headed` | Playwright in a headed browser |
-
-## Running E2E locally
-
-E2E tests (Playwright) run **locally**, not in CI — the dedicated test Supabase project is a small instance whose Disk IO budget can't sustain the suite's write load. Run them against a **local Supabase stack** (Docker) so there's no IO throttling and no risk of touching production:
-
-```bash
-supabase start            # boots local Postgres + replays all migrations
-```
-
-Then create **`.env.e2e`** (gitignored, loaded by `playwright.config.ts` for non-CI
-runs) pointing both the app and the harness at the local stack, using the keys
-`supabase start` (or `supabase status -o env`) prints:
-
-```
-NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key from `supabase start`>
-E2E_SUPABASE_URL=http://127.0.0.1:54321
-E2E_SUPABASE_SERVICE_ROLE_KEY=<service_role key from `supabase start`>
-```
-
-```bash
-npm run test:e2e          # or: npm run test:e2e:ui
-```
-
-The guard in `e2e/helpers/guard.ts` refuses to run against the production project, so a misconfigured env can't churn prod. The suite shares one auth user, so it runs serially (`workers: 1`).
-
-### Windows / WSL2 (no Docker Desktop)
-
-On Windows where Docker Desktop can't be installed (e.g. LTSC builds below 19045),
-run the Docker engine **inside WSL2** instead — same containers, still fully local:
-
-1. `wsl --install` (reboot), then complete Ubuntu's first-run user setup.
-2. Inside WSL: install Docker Engine (`get.docker.com`) and the Supabase CLI, then
-   run `supabase start` from this repo via `/mnt/...`. WSL2 forwards
-   `127.0.0.1:54321` to Windows localhost, so the app + Playwright run on Windows.
-3. If Playwright's bundled Chromium download stalls, add `PLAYWRIGHT_CHANNEL=msedge`
-   to `.env.e2e` to run against system-installed Edge (see `playwright.config.ts`).
-
-`supabase/config.toml` disables services the app doesn't use (studio, analytics,
-realtime, storage, edge functions, inbucket) to keep the stack light.
-
-## Regenerating the product tour screenshots
-
-The landing page's product tour ships real screenshots of the app (`public/tour/*.png`),
-so they have to be re-taken whenever those screens change shape. Two scripts do it: one
-builds a throwaway demo account on a **local** Supabase stack, the other photographs it.
-Both need the local stack from [Running E2E locally](#running-e2e-locally) to be up.
-
-**Regenerating the tour means two seeds, not one.** The demo account's *content* has a
-language of its own — goal names, expense names, member names — and the landing hero sits
-directly above the tour rendering its own goal names from i18n. Seeding once and capturing
-both locales puts "Retirement" in the hero and "Hưu trí" in the image beneath it. So each
-locale gets its own seed pass:
-
-```bash
-# Run the app against the local stack first (NEXT_PUBLIC_SUPABASE_* → 127.0.0.1:54321)
-npm run dev
-
-# Shared env for both passes
-export DEMO_SUPABASE_URL=http://127.0.0.1:54321
-export DEMO_SUPABASE_SERVICE_ROLE_KEY=<service_role key from `supabase start`>
-export DEMO_EMAIL=demo@example.com
-export DEMO_PASSWORD='DemoPass123!'
-export DEMO_TODAY=2026-07-18
-
-# Pass 1 — Vietnamese
-DEMO_LOCALE=vi node scripts/seed-demo-account.mjs
-TOUR_LOCALES=vi node scripts/generate-tour-screenshots.mjs
-
-# Pass 2 — English
-DEMO_LOCALE=en node scripts/seed-demo-account.mjs
-TOUR_LOCALES=en node scripts/generate-tour-screenshots.mjs
-```
-
-The seed deletes and rebuilds the account each time, so re-running is safe and the second
-pass cleanly replaces the first. `DEMO_TODAY` (optional, defaults to today) pins every
-seeded date, so re-running months later still produces the same numbers rather than a
-quietly different set of screenshots — keep it identical across both passes. Each seed
-prints the net worth and goal percentages it just created; the two passes should print the
-same figures in different words.
-
-Fund names (`DC Trái phiếu Việt Nam`, …) stay Vietnamese in both locales — they are real
-funds, and translating them would be a lie.
-
-Together the two passes write **16 images** — 4 screens × 2 locales × 2 viewports:
-
-| | |
-|---|---|
-| Screens | `dashboard`, `planning`, `funds`, `settings` |
-| Locales | `vi`, `en` (interface via the `locale` cookie, see `i18n/request.ts`; content via `DEMO_LOCALE`) |
-| Desktop 1440×900 | `public/tour/{screen}-{locale}.png` |
-| Mobile 390×844 | `public/tour/{screen}-{locale}-mobile.png` |
-
-Both viewports are captured because the tour art-directs rather than scaling — a desktop
-capture shrunk into a phone frame is illegible, and the app has genuinely separate mobile
-components to show instead. The script waits for each screen's real content before firing,
-so a missing seed fails as a timeout rather than a screenshot of a loading skeleton.
-
-The same local stack also backs `npm run generate-screenshots`, which refreshes the two
-PWA install-prompt images (`public/screenshot-{desktop,mobile}.png`) from `/dashboard`.
-
-### The social card
-
-`public/og-image.png` — what Zalo, Messenger, Facebook and X render when someone shares a
-Cairn link — is built from `public/tour/dashboard-vi.png`, so **regenerate it whenever the
-tour is regenerated**:
-
-```bash
-node scripts/generate-og-image.mjs   # no dev server or database needed
-```
-
-It renders through a real browser rather than `next/og` because the copy is Vietnamese and
-the diacritics need proper font shaping with Be Vietnam Pro. The headline lives in the
-script and mirrors `meta.title` / `meta.description` in `messages/vi.json` — edit both
-together, since the script runs outside Next and can't read the catalogue.
-
-## Tech stack
-
-| Concern | Choice |
-|---|---|
-| Framework | Next.js 16 (App Router, Turbopack) |
-| Language | TypeScript |
-| Styling | Tailwind CSS 4 (custom component set, `lucide-react` icons) |
-| Toasts | Sonner |
-| PDF reports | `@react-pdf/renderer` |
-| Database & Auth | Supabase (PostgreSQL + Auth) |
-| Charts | Recharts |
-| i18n | next-intl |
-| Unit tests | Vitest + Testing Library |
-| E2E | Playwright |
-| Deployment | Vercel |
-
-## Project structure
-
-```
-app/
-├── page.tsx                  # Landing page (redirects to /dashboard if logged in)
-├── (app)/                    # Protected routes (require auth)
-│   ├── dashboard/            # "Overview" — net worth, goals, unallocated, insurance
-│   ├── funds/                # Fund library with NAV refresh
-│   ├── planning/             # "Plan" — monthly planning + allocation summary
-│   └── settings/             # Preferences (profile, theme, language)
-├── assets/                   # Dashboard client + its components (goals, insurance, transactions)
-├── auth/                     # Login / signup / OAuth callback
-├── api/v1/                   # Authenticated REST API
-├── ~offline/                 # PWA offline fallback page
-└── components/               # Layouts, navigation, theme, shared UI primitives
-
-components/report/            # Portfolio PDF report
-lib/                          # Supabase clients, formatters, finance helpers
-messages/                     # en.json + vi.json (next-intl)
-supabase/migrations/          # Database schema migrations
-e2e/                          # Playwright specs
-```
-
-## Contributing
-
-Cairn follows a strict branch-and-PR workflow — never push directly to `main`. Every change goes through a feature branch, PR, and Vercel preview review. See `CLAUDE.md` for the full development methodology (TDD + PR isolation).
+</div>
