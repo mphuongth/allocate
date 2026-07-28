@@ -13,6 +13,7 @@ import AddTransactionSheet from './AddTransactionSheet'
 import { ASSET_TYPES, type AssetType, type LedgerTransaction, isWithdrawal, txKind, txPrimaryName, fmtTxDate } from './transactionUtils'
 import { toast } from 'sonner'
 import { deleteTransaction } from './deleteTransaction'
+import { useDialogMount } from '@/app/(app)/planning/components/useDialogMount'
 
 interface Goal { goal_id: string; goal_name: string }
 interface Fund { id: string; name: string; code: string; nav: number }
@@ -84,12 +85,7 @@ function Shell({ open, onClose, title, desktop, width = 520, testId, children }:
   testId?: string
   children: React.ReactNode
 }) {
-  const [mounted, setMounted] = useState(open)
-  useEffect(() => {
-    if (open) { setMounted(true); return }
-    const t = setTimeout(() => setMounted(false), 220)
-    return () => clearTimeout(t)
-  }, [open])
+  const mounted = useDialogMount(open)
   if (desktop ? !open : !mounted) return null
 
   const header = (
@@ -200,7 +196,13 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
   }, [page, filters])
 
   // Load only while open — avoids fetching for every dashboard render.
+  // Both fetchers set their loading flag before awaiting. Opening the ledger is
+  // the trigger for the request, and the result can't be derived from anything
+  // already rendered, so an effect is the right home even though the rule can't
+  // tell this from a state sync.
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- data load; see above
   useEffect(() => { if (open) { fetchGoals(); fetchFunds() } }, [open, fetchGoals, fetchFunds])
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- data load; see above
   useEffect(() => { if (open) fetchTransactions() }, [open, fetchTransactions])
 
   // Lock background scroll while the ledger is open. Re-assert when a nested

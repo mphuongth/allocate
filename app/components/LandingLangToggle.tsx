@@ -3,6 +3,7 @@
 import { useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { useLocale } from 'next-intl'
+import { setLocaleCookie } from '@/lib/locale'
 
 export function LandingLangToggle() {
   const locale = useLocale()
@@ -10,7 +11,7 @@ export function LandingLangToggle() {
   const router = useRouter()
 
   function switchLocale(next: string) {
-    document.cookie = `locale=${next};path=/;max-age=31536000;SameSite=Lax`
+    setLocaleCookie(next)
     startTransition(() => router.refresh())
   }
 

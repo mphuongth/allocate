@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { X, Mountain, Home, Shield, ShoppingCart, Target } from 'lucide-react'
 import { iconHit } from './iconHit'

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { useLocale } from 'next-intl'
 import { ArrowDownRight, ArrowDownToLine, Building, Check, Coins, Shield, TrendingUp, Wallet, X } from 'lucide-react'
 import { iconHit } from './iconHit'
@@ -72,7 +72,14 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
   const [amount, setAmount] = useState('')
   const [units, setUnits] = useState('')
   const [received, setReceived] = useState('') // bank: cash actually received
-  const [salePrice, setSalePrice] = useState('') // gold: sale price per chỉ
+  // Seeded lazily as well as synced below: useResetOnOpen fires on a *transition*
+  // into open, so a sheet that mounts already open — which is how it renders when
+  // the parent shows it in the same commit — would otherwise never get its gold
+  // prefill. Reads item directly because isGold/navPerUnit are derived further
+  // down the component.
+  const [salePrice, setSalePrice] = useState(
+    () => (item?.type === 'gold' && item?.navPerUnit ? String(Math.round(item.navPerUnit)) : ''),
+  ) // gold: sale price per chỉ
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [confirmed, setConfirmed] = useState(false)
@@ -148,10 +155,13 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
 
   const showUnits = isFund && item?.units != null
 
-  // Gold: prefill the sale price with the current market price when the sheet opens.
-  useEffect(() => {
-    if (open && isGold && navPerUnit) setSalePrice(String(Math.round(navPerUnit)))
-  }, [open, isGold, navPerUnit])
+  // Gold: prefill the sale price with the current market price when the sheet
+  // opens. navPerUnit is the sync key as well, so a price arriving after the
+  // sheet is already open still lands in the field — the old effect listed it as
+  // a dependency for exactly that reason.
+  useResetOnOpen(open, () => {
+    if (isGold && navPerUnit) setSalePrice(String(Math.round(navPerUnit)))
+  }, navPerUnit)
 
   function handleAmountChange(val: string) {
     const raw = parseIntVN(val)

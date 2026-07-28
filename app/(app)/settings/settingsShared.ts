@@ -22,10 +22,9 @@ export function clearAppCaches(): void {
     .forEach((k) => localStorage.removeItem(k))
 }
 
-// Persist the chosen locale for a year; callers refresh the router afterward.
-export function setLocaleCookie(next: string): void {
-  document.cookie = `locale=${next};path=/;max-age=31536000;SameSite=Lax`
-}
+// Moved to lib/locale so the landing page's toggle can share it; re-exported
+// here because both settings views already import it from this module.
+export { setLocaleCookie } from '@/lib/locale'
 
 // `partial` means something synced but not everything — gold updated while some
 // or all fund NAVs failed. It stays `ok: true` deliberately: prices did move, so

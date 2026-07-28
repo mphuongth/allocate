@@ -255,6 +255,12 @@ export default function PlanningClient() {
     setLoading(false)
   }, [month, year])
 
+  // fetchPlan raises its own loading flag before awaiting, which is what the
+  // rule sees. Fetching on mount is the effect's job, and there is nothing to
+  // derive from: the answer only exists after the request. Hoisting the flag to
+  // render time would mean rendering a loading state for a fetch that hasn't
+  // been issued.
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- data load; see above
   useEffect(() => { fetchPlan() }, [fetchPlan])
 
   const refetch = useCallback(() => fetchPlan({ force: true }), [fetchPlan])

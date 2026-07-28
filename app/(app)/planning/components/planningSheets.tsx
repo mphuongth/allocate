@@ -4,7 +4,7 @@
 // wrapper and the salary / delete-plan / other-expense / simple-override sheets.
 // The income/delete/other-expense writes go through planActions; the override sheet
 // hands its amount up to the parent. Layout + local form state only.
-import { useState, useEffect, useRef } from 'react'
+import { useState, useRef } from 'react'
 import { useLocale } from 'next-intl'
 import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
 import { fmtCompact } from '@/lib/formatters'

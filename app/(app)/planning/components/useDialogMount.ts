@@ -69,6 +69,17 @@ export function useDialogMount(open: boolean, exitMs: number = EXIT_MS): boolean
 // prop changes": the re-render happens before the browser paints, so nothing
 // stale is ever shown. `reset` is called during render and must therefore only
 // set state — no fetching, no subscriptions.
+// Run `reset` in the render where `key` changes — the same adjustment as
+// useResetOnOpen, for state that tracks a prop on an always-visible surface
+// (the desktop goal panel has no `open`; switching goals is the whole event).
+export function useResetOnChange(key: unknown, reset: () => void): void {
+  const [prev, setPrev] = useState(key)
+  if (!Object.is(prev, key)) {
+    setPrev(key)
+    reset()
+  }
+}
+
 export function useResetOnOpen(open: boolean, reset: () => void, syncKey?: unknown): void {
   const [prev, setPrev] = useState({ open, syncKey })
   if (prev.open !== open || !Object.is(prev.syncKey, syncKey)) {

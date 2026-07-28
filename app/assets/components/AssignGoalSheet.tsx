@@ -91,7 +91,11 @@ export default function AssignGoalSheet({ open, onClose, onConfirm, item, deskto
     setGoalsLoading(true)
   })
 
+  // The loading flag itself is already raised during render by the reset above,
+  // so the first frame shows "Loading…". This effect only issues the request —
+  // loadGoals re-raises the flag for a retry, which is what the rule sees.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- data load; see above
     if (open) loadGoals()
   }, [open, loadGoals])
 

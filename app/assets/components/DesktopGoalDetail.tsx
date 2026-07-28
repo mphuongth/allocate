@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { ChevronLeft, X, MoreHorizontal, Edit2, Trash2, ChevronRight, ArrowDownRight, Target, CalendarDays, RefreshCw, PiggyBank, Plus } from 'lucide-react'
 import { iconHit } from './iconHit'
 import { toast } from 'sonner'
@@ -20,6 +20,7 @@ import { deleteGoal, unholdTransaction, unassignInvestment, updateGoal } from '.
 import { SellWithdrawSheet } from './SellWithdrawSheet'
 import { invToSellItem } from './invToSellItem'
 import { useTranslations } from 'next-intl'
+import { useResetOnOpen, useResetOnChange } from '@/app/(app)/planning/components/useDialogMount'
 
 interface Props {
   goal: GoalData
@@ -78,10 +79,9 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
     onLoadStart: () => setUnassignedIds([]),
   })
 
-  // Reset tab when the selected goal itself changes.
-  useEffect(() => {
-    setTab('investments')
-  }, [goal.goalId])
+  // Reset the tab when the selected goal changes. During render, so switching
+  // goals never paints the previous goal's tab for a frame.
+  useResetOnChange(goal.goalId, () => setTab('investments'))
 
   async function handleDelete() {
     setIsDeleting(true)
@@ -871,14 +871,12 @@ function EditGoalModal({ open, onClose, goal, onSaved, isVi }: {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  useEffect(() => {
-    if (open) {
-      setName(goal.goalName)
-      setTarget(goal.targetAmount ? String(goal.targetAmount) : '')
-      setDate(goal.targetDate ? goal.targetDate.slice(0, 7) : '')
-      setError('')
-    }
-  }, [open, goal])
+  useResetOnOpen(open, () => {
+    setName(goal.goalName)
+    setTarget(goal.targetAmount ? String(goal.targetAmount) : '')
+    setDate(goal.targetDate ? goal.targetDate.slice(0, 7) : '')
+    setError('')
+  }, goal)
 
   const monthsTo = (() => {
     if (!date) return 1

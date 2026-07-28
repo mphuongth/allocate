@@ -59,8 +59,13 @@ export function useGoalDetailData(opts: {
   const onLoadStartRef = useRef(opts.onLoadStart)
   useEffect(() => { onLoadStartRef.current = opts.onLoadStart })
 
+  // A fetch keyed on goalId/refreshKey: the flags mark a request that is about
+  // to be issued, not state derived from props, so there is nothing to move to
+  // render time. Clearing the error alongside is what keeps a retry from showing
+  // the previous failure while the new attempt is in flight.
   useEffect(() => {
     if (!enabled || !goalId) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- data load; see above
     setTxLoading(true)
     setTxError(false)
     // The new server response is the source of truth — let the caller drop any
