@@ -34,7 +34,10 @@ export async function GET(request: Request) {
     .rpc('refresh_gold_price_all', { p_price: price })
 
   if (error || typeof data !== 'number') {
-    console.error('gold cron: atomic refresh failed', error?.message)
+    console.error(
+      'gold cron: atomic refresh failed',
+      error?.message ?? `unexpected result: ${JSON.stringify(data)}`,
+    )
     return NextResponse.json({ error: 'Failed to update gold price' }, { status: 500 })
   }
 

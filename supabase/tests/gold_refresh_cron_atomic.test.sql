@@ -44,8 +44,12 @@ begin
     (v_user_b, 8300000, null);
 
   -- One bulk statement updates both users while preserving each distinct prior
-  -- current value.
+  -- current value. Execute it as the same role the production cron uses: the
+  -- function is SECURITY INVOKER, so a superuser-only test would miss broken
+  -- table grants or RLS behavior even if the function grant itself looked right.
+  execute 'set local role service_role';
   select public.refresh_gold_price_all(8700000) into v_updated;
+  execute 'reset role';
   if v_updated <> 2 then
     raise exception 'expected two updated rows, got %', v_updated;
   end if;
@@ -64,7 +68,9 @@ begin
 
   -- An unchanged scrape is still an observation. Both fields become equal so a
   -- consumer can render a truthful 0% change, matching the manual refresh.
+  execute 'set local role service_role';
   select public.refresh_gold_price_all(8700000) into v_updated;
+  execute 'reset role';
   if v_updated <> 2 then
     raise exception 'unchanged refresh must still report two rows, got %', v_updated;
   end if;
@@ -79,10 +85,13 @@ begin
 
   -- Invalid scraped values must not destroy the last good pair.
   begin
+    execute 'set local role service_role';
     perform public.refresh_gold_price_all(0);
+    execute 'reset role';
     raise exception 'zero price must be rejected';
   exception
     when check_violation then
+      execute 'reset role';
       null; -- expected
   end;
 

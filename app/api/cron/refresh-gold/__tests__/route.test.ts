@@ -65,5 +65,9 @@ describe('GET /api/cron/refresh-gold — atomic carry-over (#547)', () => {
     const res = await GET(new Request('https://app.test/api/cron/refresh-gold'))
 
     expect(res.status).toBe(500)
+    expect(console.error).toHaveBeenCalledWith(
+      'gold cron: atomic refresh failed',
+      'unexpected result: null',
+    )
   })
 })

@@ -31,8 +31,7 @@ begin
   update public.gold_price_settings
      set previous_price_per_chi = price_per_chi,
          price_per_chi          = p_price,
-         updated_at             = now()
-   where user_id is not null;
+         updated_at             = now();
 
   get diagnostics v_updated = row_count;
   return v_updated;
