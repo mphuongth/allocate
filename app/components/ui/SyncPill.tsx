@@ -24,5 +24,3 @@ export function SyncPill({ label, show }: SyncPillProps) {
     </div>
   )
 }
-
-export default SyncPill

@@ -32,7 +32,7 @@ export type AssetType = (typeof ASSET_TYPES)[number]
 
 // The funds relation can come back as an object or a single-element array
 // depending on the Supabase join shape — normalize to the fund name.
-export function fundNameOf(tx: LedgerTransaction): string | null {
+function fundNameOf(tx: LedgerTransaction): string | null {
   const f = tx.funds
   if (!f) return null
   const fund = Array.isArray(f) ? f[0] : f
@@ -81,13 +81,6 @@ export function txDir(tx: TxKindFields): TxDir {
   return { kind, tone: 'muted', sign: '' } // held / consumed — neutral, parked cash
 }
 
-// Per the data model (decision: match real schema), every row is either an
-// investment (positive, +) or a withdrawal (negative, −). Returns the sign and
-// the semantic color so the card and ledger render identically.
-export function txSign(tx: LedgerTransaction): { sign: '+' | '−'; positive: boolean } {
-  const positive = !isWithdrawal(tx)
-  return { sign: positive ? '+' : '−', positive }
-}
 
 // Primary label shown in a row: the fund name for funds, otherwise the notes,
 // falling back to the asset-type label provided by the caller (i18n lives in

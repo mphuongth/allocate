@@ -27,7 +27,7 @@ const OG_IMAGE = '/og-image.png'
 const OG_IMAGE_W = 1200
 const OG_IMAGE_H = 630
 
-export const LOCALES = ['vi', 'en'] as const
+const LOCALES = ['vi', 'en'] as const
 export type Locale = (typeof LOCALES)[number]
 
 /** Open Graph wants a full locale tag, not a bare language code. */

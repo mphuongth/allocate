@@ -9,7 +9,7 @@ import { Wallet, RefreshCw, Plus, ChevronUp, ChevronDown, Calendar } from 'lucid
 import { fmt, fmtCompact } from '@/lib/formatters'
 import { EditIcon, TrashIcon } from './planningIcons'
 
-export function StackedBar({ segments, total, height = 8 }: {
+function StackedBar({ segments, total, height = 8 }: {
   segments: Array<{ value: number; color: string }>
   total: number
   height?: number

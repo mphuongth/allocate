@@ -22,5 +22,3 @@ export function Skeleton({ width, height, round, card, className, style }: Skele
   const cls = ['sk', round && 'round', card && 'card', className].filter(Boolean).join(' ')
   return <div className={cls} aria-hidden="true" style={{ width, height, ...style }} />
 }
-
-export default Skeleton

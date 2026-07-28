@@ -33,7 +33,7 @@ export function normalizeNavUrl(raw: string): string {
 // The only hosts the NAV scraper is allowed to fetch. `nav_source_url` is
 // user-supplied and later fetched server-side (refresh-nav route + daily cron),
 // so this doubles as the SSRF allowlist.
-export const ALLOWED_NAV_HOSTS = ['vcbf.com', 'ssiam.com.vn', 'dragoncapital.com.vn', 'vinacapital.com'] as const
+const ALLOWED_NAV_HOSTS = ['vcbf.com', 'ssiam.com.vn', 'dragoncapital.com.vn', 'vinacapital.com'] as const
 
 // Exact host match (or a subdomain of an allowed host). Deliberately NOT a
 // substring check: `'evilvcbf.com'.includes('vcbf.com')` is true, which let an

@@ -27,5 +27,3 @@ export function CairnLoader({ size = 24, variant = '', label = 'Loading', classN
     </span>
   )
 }
-
-export default CairnLoader
