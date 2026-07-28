@@ -881,8 +881,8 @@
     "navPlan": "Monthly plan"
   },
   "deleteTransaction": {
-    "settlement_consumed": "This settlement has already been merged into another deposit. Undo the merge before removing it.",
-    "merge_target": "Another settlement has been merged into this deposit. Undo the merge before removing it.",
+    "settlement_consumed": "This settlement is part of a completed merge, so it can’t be removed.",
+    "merge_target": "Another settlement has been merged into this deposit, so it can’t be removed.",
     "settlement_pending": "A settlement is waiting to be merged into this deposit. Cancel that pending settlement first.",
     "referenced": "Another record still references this transaction. Remove that reference before deleting it.",
     "not_found": "This transaction no longer exists.",

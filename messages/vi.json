@@ -881,8 +881,8 @@
     "navPlan": "Kế hoạch tháng"
   },
   "deleteTransaction": {
-    "settlement_consumed": "Khoản tất toán này đã được gộp vào một sổ khác. Hãy huỷ gộp trước khi xoá.",
-    "merge_target": "Một khoản tất toán đã được gộp vào sổ này. Hãy huỷ gộp trước khi xoá.",
+    "settlement_consumed": "Khoản tất toán này thuộc một lần gộp đã hoàn tất nên không thể xoá.",
+    "merge_target": "Đã có khoản tất toán được gộp vào sổ này nên không thể xoá.",
     "settlement_pending": "Có khoản tất toán đang chờ gộp vào sổ này. Hãy huỷ khoản chờ gộp trước.",
     "referenced": "Bản ghi khác vẫn tham chiếu tới giao dịch này. Hãy gỡ tham chiếu đó trước khi xoá.",
     "not_found": "Giao dịch này không còn tồn tại.",

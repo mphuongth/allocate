@@ -340,6 +340,14 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
       // which is what it did before, for every refusal (#550).
       setConfirmTx(null)
       toast.error(td(result.code))
+      // not_found isn't a refusal: the row really is gone (a stale tab, or
+      // another surface removed it). Keeping it on screen would leave the user
+      // retrying a delete against something that only exists in this render, so
+      // adopt the server's view instead.
+      if (result.code === 'not_found') {
+        await fetchTransactions()
+        notifyChanged()
+      }
     }
     setDeletingId(null)
   }

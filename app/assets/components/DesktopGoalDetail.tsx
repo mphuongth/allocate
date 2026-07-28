@@ -138,10 +138,15 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
     setUnholdingId(heldTxId)
     const result = await unholdTransaction(heldTxId)
     setUnholdingId(null)
-    // Each refusal has its own remedy — "undo the merge" vs "cancel the pending
-    // settlement" send the user to different places, so one generic message
-    // isn't enough (#550).
-    if (!result.ok) { toast.error(td(result.code)); return }
+    // Each refusal reads differently — a completed merge can't be undone, while a
+    // pending settlement can be cancelled — so one generic message isn't enough
+    // (#550). not_found is the exception: the row really is gone, so refresh
+    // rather than leave it on screen for another doomed attempt.
+    if (!result.ok) {
+      toast.error(td(result.code))
+      if (result.code === 'not_found') onDataChanged()
+      return
+    }
     onDataChanged()
   }
 

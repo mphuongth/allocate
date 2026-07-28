@@ -248,7 +248,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
       const violation = `${error.message ?? ''} ${error.details ?? ''}`
       if (violation.includes('consumed_by_inv_id')) {
         return NextResponse.json(
-          { error: 'Another settlement has been merged into this deposit. Undo the merge before removing it.', code: 'merge_target' },
+          { error: 'Another settlement has been merged into this deposit, so it cannot be removed.', code: 'merge_target' },
           { status: 409 },
         )
       }
@@ -290,7 +290,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
 
   // The row is still there, so the guard is what stopped the delete.
   return NextResponse.json(
-    { error: 'This settlement has already been merged into another deposit. Undo the merge before removing it.', code: 'settlement_consumed' },
+    { error: 'This settlement is part of a completed merge, so it cannot be removed.', code: 'settlement_consumed' },
     { status: 409 },
   )
 }

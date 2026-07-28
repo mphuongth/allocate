@@ -127,3 +127,45 @@ describe('TransactionLedgerSheet — a refused delete says why', () => {
     expect(toastError).not.toHaveBeenCalled()
   })
 })
+
+// not_found isn't an ordinary refusal — the row really is gone (a stale tab, or
+// another surface deleted it). Toasting and leaving it on screen means every
+// retry hits the same 404 against a row that only exists in this render.
+describe('TransactionLedgerSheet — a not_found delete reconciles the list', () => {
+  const tx = {
+    transaction_id: 'x1', asset_type: 'bank', investment_date: '2026-06-01',
+    amount_vnd: 10_000_000, transaction_type: 'investment',
+    savings_goals: { goal_name: 'House' },
+  }
+
+  it('refetches and notifies the parent, so the stale row disappears', async () => {
+    let listCalls = 0
+    global.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (init?.method === 'DELETE') {
+        return Promise.resolve({ ok: false, status: 404, json: async () => ({ error: 'gone', code: 'not_found' }) })
+      }
+      if (url.includes('savings-goals')) return Promise.resolve({ ok: true, json: async () => ({ goals: [] }) })
+      if (url.includes('/api/funds')) return Promise.resolve({ ok: true, json: async () => ({ funds: [] }) })
+      if (url.includes('investment-transactions')) {
+        listCalls++
+        // Gone on the refetch — the server's view, which the UI must adopt.
+        const list = listCalls === 1 ? [tx] : []
+        return Promise.resolve({ ok: true, json: async () => ({ transactions: list, total: list.length }) })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+
+    const onChanged = vi.fn()
+    render(<TransactionLedgerSheet open desktop locale="en" onClose={() => {}} onChanged={onChanged} />)
+
+    const del = await screen.findByTestId('tx-ledger-delete')
+    del.click()
+    const confirm = await screen.findByTestId('tx-ledger-delete-confirm')
+    confirm.click()
+
+    await vi.waitFor(() => expect(onChanged).toHaveBeenCalled())
+    expect(listCalls).toBeGreaterThan(1)
+    await vi.waitFor(() => expect(screen.queryByTestId('tx-ledger-delete')).toBeNull())
+  })
+})
+
