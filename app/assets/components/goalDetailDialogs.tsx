@@ -4,7 +4,7 @@
 // delete/edit-goal sheets, and the per-investment action + unassign-confirm sheets.
 // Prop-driven — GoalDetailSheet owns the data + orchestration and passes handlers
 // down. The edit-goal write goes through goalActions.updateGoal.
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useLocale } from 'next-intl'
 import { ChevronRight, RefreshCw, Trash2, Edit2, Download, Calendar, ArrowDownRight } from 'lucide-react'
 import { fmtCompact, fmtPct } from '@/lib/formatters'
