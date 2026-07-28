@@ -20,5 +20,3 @@ export function SparkDraw({ color = 'var(--c-pos)' }: SparkDrawProps) {
     </svg>
   )
 }
-
-export default SparkDraw

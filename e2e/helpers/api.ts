@@ -17,7 +17,7 @@ const supabase = createClient(
 
 let _testUserId: string | null = null
 
-export async function getTestUserId(): Promise<string> {
+async function getTestUserId(): Promise<string> {
   if (_testUserId) return _testUserId
   const { userId } = JSON.parse(fs.readFileSync(USER_FILE, 'utf-8'))
   _testUserId = userId
@@ -304,11 +304,6 @@ export async function findGoalByName(name: string) {
   return data
 }
 
-export async function findTransactionLast(assetType: string) {
-  const userId = await getTestUserId()
-  const { data } = await supabase.from('investment_transactions').select('transaction_id').eq('user_id', userId).eq('asset_type', assetType).order('created_at', { ascending: false }).limit(1).single()
-  return data
-}
 
 export async function findInsuranceMemberByName(name: string) {
   const userId = await getTestUserId()
@@ -368,17 +363,6 @@ export async function deleteFund(fundId: string) {
   await supabase.from('funds').delete().eq('id', fundId)
 }
 
-export async function getFirstFund() {
-  const userId = await getTestUserId()
-  const { data, error } = await supabase
-    .from('funds')
-    .select('id, name, code, nav, fund_type')
-    .eq('user_id', userId)
-    .limit(1)
-    .maybeSingle()
-  if (error) return null
-  return data
-}
 
 export async function deleteFundsByNamePrefix(prefix: string) {
   const userId = await getTestUserId()

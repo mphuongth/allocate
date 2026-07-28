@@ -13,14 +13,14 @@ import type {
 // Effective monthly totals. A `override === 0` fixed expense is skipped for the
 // month; an `excluded` insurance member is skipped; otherwise the override (if
 // any) wins over the base amount. Shared verbatim by both planning views.
-export function getFixedTotal(fixedExpenses: FixedExpense[]) {
+function getFixedTotal(fixedExpenses: FixedExpense[]) {
   return fixedExpenses.reduce((s, e) => {
     if (e.override === 0) return s
     return s + (e.override ?? e.amount_vnd)
   }, 0)
 }
 
-export function getInsTotal(insuranceMembers: InsuranceMember[]) {
+function getInsTotal(insuranceMembers: InsuranceMember[]) {
   return insuranceMembers.reduce((s, m) => {
     if (m.excluded) return s
     return s + (m.monthlyOverride ?? Math.round(m.annual_payment_vnd / 12))

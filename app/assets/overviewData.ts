@@ -2,9 +2,9 @@ import type { DashboardData } from './DashboardClient'
 
 const OVERVIEW_ENDPOINT = '/api/v1/dashboard/overview'
 
-export const OVERVIEW_CACHE_TTL = 2 * 60 * 1000 // 2 minutes
+const OVERVIEW_CACHE_TTL = 2 * 60 * 1000 // 2 minutes
 
-export function overviewCacheKey(userId: string) {
+function overviewCacheKey(userId: string) {
   return `dashboardOverviewCache_${userId}`
 }
 
