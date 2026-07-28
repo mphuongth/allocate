@@ -15,7 +15,7 @@ import { useNavigation } from '@/app/components/navigation/NavigationContext'
 import DownloadReportSheet from '@/app/assets/components/DownloadReportSheet'
 import type { DashboardData } from '@/app/assets/DashboardClient'
 import { clearAppCaches, setLocaleCookie, refreshPrices, fetchOverview, exportPortfolioReport, fetchLastSync, formatLastSync } from '../settingsShared'
-import { useDialogMount } from '@/app/(app)/planning/components/useDialogMount'
+import { useDialogMount, useResetOnOpen } from '@/app/(app)/planning/components/useDialogMount'
 
 interface Props {
   email: string
@@ -109,9 +109,7 @@ function ProfileSheet({ open, onClose, onSave, displayName, email }: {
   const [name, setName] = useState(displayName)
   const [saved, setSaved] = useState(false)
 
-  useEffect(() => {
-    if (open) { setName(displayName); setSaved(false) }
-  }, [open, displayName])
+  useResetOnOpen(open, () => { setName(displayName); setSaved(false) }, displayName)
 
   async function handleSave() {
     // Only flash "Saved" and close once the persist actually succeeded — a

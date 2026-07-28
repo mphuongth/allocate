@@ -77,12 +77,18 @@ export default function AssignGoalSheet({ open, onClose, onConfirm, item, deskto
 
   const mounted = useDialogMount(open)
 
-  // Clearing the previous selection happens during render, so the old choice
-  // never flashes on reopen. Loading the goals is I/O and stays in an effect.
+  // Clearing during render means the previous selection — and the previous
+  // account's goal list — never paint on reopen. The loading flag is set here
+  // too, not in the effect below: the sheet is now mounted on the same commit
+  // that opens it, so a flag raised in a passive effect would arrive one painted
+  // frame late and the stale list would show first.
   useResetOnOpen(open, () => {
     setSelected(null)
     setError('')
     setSuccess(false)
+    setGoals([])
+    setGoalsError(false)
+    setGoalsLoading(true)
   })
 
   useEffect(() => {

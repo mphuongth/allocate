@@ -234,9 +234,11 @@ export function OtherExpenseSheet({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  useEffect(() => {
-    if (open) { setDesc(existing?.description ?? ''); setAmount(existing?.amount_vnd ? String(existing.amount_vnd) : ''); setError('') }
-  }, [open, existing])
+  useResetOnOpen(open, () => {
+    setDesc(existing?.description ?? '')
+    setAmount(existing?.amount_vnd ? String(existing.amount_vnd) : '')
+    setError('')
+  }, existing)
 
   async function handleSave() {
     if (!desc.trim()) { setError(isVI ? 'Vui lòng nhập mô tả' : 'Description is required'); return }
@@ -341,7 +343,7 @@ export function SimpleOverrideSheet({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  useEffect(() => { if (open) { setValue(String(defaultAmount)); setError('') } }, [open, defaultAmount])
+  useResetOnOpen(open, () => { setValue(String(defaultAmount)); setError('') }, defaultAmount)
 
   async function handleSave() {
     const num = Number(value)
