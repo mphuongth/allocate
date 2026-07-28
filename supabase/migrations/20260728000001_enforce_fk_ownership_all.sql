@@ -182,6 +182,82 @@ begin
 end;
 $$;
 
+-- ─── existing rows ────────────────────────────────────────────────────────────
+-- BEFORE INSERT/UPDATE triggers never look at rows that already exist. A
+-- cross-owner reference written before this migration would survive it intact —
+-- and a later delete of the referenced record would still cascade into the other
+-- user's data, which is the condition this whole migration is meant to remove.
+-- "Enforced from now on" is not the guarantee #525 asks for.
+--
+-- Kept as a function rather than inlined so the check is repeatable: it's how
+-- the DB test proves the scan actually finds a violation, and it can be run
+-- against production at any time without re-running the migration.
+create or replace function public.count_fk_ownership_violations()
+returns bigint
+language plpgsql
+as $$
+declare
+  -- child table, fk column, owner expression for the child, parent table, parent pk
+  v_checks text[][] := array[
+    ['plan_insurance_member_overrides', 'member_id',           'p.user_id', 'insurance_members',       'member_id'],
+    ['plan_excluded_insurance_members', 'member_id',           'p.user_id', 'insurance_members',       'member_id'],
+    ['fixed_expense_overrides',         'fixed_expense_id',    'p.user_id', 'fixed_expenses',          'expense_id'],
+    ['recurring_saving_overrides',      'recurring_saving_id', 'p.user_id', 'recurring_savings',       'saving_id'],
+    ['plan_dca_skips',                  'fund_id',             'p.user_id', 'funds',                   'id'],
+    ['insurance_savings',               'insurance_member_id', 'c.user_id', 'insurance_members',       'member_id'],
+    ['recurring_savings',               'goal_id',             'c.user_id', 'savings_goals',           'goal_id'],
+    ['recurring_savings',               'linked_deposit_tx_id','c.user_id', 'investment_transactions', 'transaction_id'],
+    ['recurring_saving_fulfillments',   'recurring_saving_id', 'c.user_id', 'recurring_savings',       'saving_id']
+  ];
+  v_total bigint := 0;
+  v_n     bigint;
+  i       int;
+begin
+  for i in 1 .. array_length(v_checks, 1) loop
+    if v_checks[i][3] = 'p.user_id' then
+      execute format(
+        'select count(*) from public.%I c
+           join public.monthly_plans p on p.id = c.plan_id
+           join public.%I r on r.%I = c.%I
+          where r.user_id <> p.user_id',
+        v_checks[i][1], v_checks[i][4], v_checks[i][5], v_checks[i][2]
+      ) into v_n;
+    else
+      execute format(
+        'select count(*) from public.%I c
+           join public.%I r on r.%I = c.%I
+          where r.user_id <> c.user_id',
+        v_checks[i][1], v_checks[i][4], v_checks[i][5], v_checks[i][2]
+      ) into v_n;
+    end if;
+
+    if v_n > 0 then
+      raise warning 'fk ownership: % row(s) in %.% reference another user', v_n, v_checks[i][1], v_checks[i][2];
+      v_total := v_total + v_n;
+    end if;
+  end loop;
+  return v_total;
+end;
+$$;
+
+-- Fail the deploy rather than claim an invariant the data doesn't hold. If this
+-- fires, the warnings above name the table and column for each offender; they
+-- need a decision (null the reference, or delete the row) before the guarantee
+-- is real. Expected to be a no-op: the API paths that write these all scope to
+-- the caller, so a violation would take a deliberate call with a foreign UUID.
+do $$
+declare
+  v_total bigint := public.count_fk_ownership_violations();
+begin
+  if v_total > 0 then
+    raise exception 'refusing to enforce FK ownership: % pre-existing cross-owner reference(s) — see the warnings above (#525)', v_total;
+  end if;
+end;
+$$;
+
+comment on function public.count_fk_ownership_violations() is
+  'Counts existing rows whose referenced record belongs to a different user. Run before trusting the #525 triggers — they only guard future writes.';
+
 comment on function public.reject_owner_change() is
   'Rejects any change to a row''s user_id. Ownership is set once at insert; letting it move would break the same-owner FK invariant from the parent side (#525).';
 

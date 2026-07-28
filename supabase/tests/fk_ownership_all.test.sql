@@ -193,6 +193,24 @@ begin
   update public.monthly_plans set salary_vnd = 2000 where id = plan_a;
   update public.insurance_members set annual_payment_vnd = 240 where member_id = mem_a;
 
+  -- ── the validator has to actually find a violation ─────────────────────────
+  -- BEFORE INSERT/UPDATE triggers never look at rows that already exist, so a
+  -- cross-owner reference written before this migration would survive it. The
+  -- migration therefore runs a scan as well — and this proves the scan works by
+  -- planting a violation behind the triggers' backs and expecting it to be seen.
+  alter table public.plan_dca_skips disable trigger plan_dca_skips_fk_ownership;
+  insert into public.plan_dca_skips (plan_id, fund_id) values (plan_a, fund_b);
+  alter table public.plan_dca_skips enable trigger plan_dca_skips_fk_ownership;
+
+  if public.count_fk_ownership_violations() = 0 then
+    raise exception 'the violation scan missed a planted cross-owner row';
+  end if;
+
+  delete from public.plan_dca_skips where plan_id = plan_a and fund_id = fund_b;
+  if public.count_fk_ownership_violations() <> 0 then
+    raise exception 'the violation scan reports a violation on clean data';
+  end if;
+
   -- ── nulls stay allowed: these references are optional ───────────────────────
   insert into public.recurring_savings (user_id, name, amount_vnd, goal_id, linked_deposit_tx_id)
     values (ua, 'unassigned', 10, null, null);
