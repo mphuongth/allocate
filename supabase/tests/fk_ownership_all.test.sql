@@ -48,7 +48,7 @@ begin
   insert into auth.users (id, email) values (gen_random_uuid(), 'fkall-b@test.invalid') returning id into ub;
 
   insert into public.monthly_plans (user_id, month, year, salary_vnd) values (ua, 1, 2026, 1000) returning id into plan_a;
-  insert into public.monthly_plans (user_id, month, year, salary_vnd) values (ub, 1, 2026, 1000) returning id into plan_b;
+  insert into public.monthly_plans (user_id, month, year, salary_vnd) values (ub, 2, 2026, 1000) returning id into plan_b;
 
   insert into public.insurance_members (user_id, member_name, relationship, annual_payment_vnd) values (ua, 'A', 'self', 120) returning member_id into mem_a;
   insert into public.insurance_members (user_id, member_name, relationship, annual_payment_vnd) values (ub, 'B', 'self', 120) returning member_id into mem_b;
@@ -164,6 +164,34 @@ begin
     update public.plan_dca_skips set fund_id = fund_b where plan_id = plan_a;
   exception when check_violation then ok := true; end;
   if not ok then raise exception 'plan_dca_skips.fund_id accepted a foreign fund on UPDATE'; end if;
+
+  -- ── the other side of the invariant: an owner can't move ───────────────────
+  -- The triggers above guard the REFERENCING row. They can't see the referenced
+  -- row — or a plan — being handed to another user, which would break the same
+  -- invariant from the other direction and leave the children pointing at the
+  -- previous owner's records. Nothing in the app ever reassigns user_id, so it's
+  -- immutable rather than re-validated.
+  ok := false;
+  begin
+    update public.monthly_plans set user_id = ub where id = plan_a;
+  exception when check_violation then ok := true; end;
+  if not ok then raise exception 'monthly_plans.user_id must be immutable'; end if;
+
+  ok := false;
+  begin
+    update public.insurance_members set user_id = ub where member_id = mem_a;
+  exception when check_violation then ok := true; end;
+  if not ok then raise exception 'insurance_members.user_id must be immutable'; end if;
+
+  ok := false;
+  begin
+    update public.savings_goals set user_id = ub where goal_id = goal_a;
+  exception when check_violation then ok := true; end;
+  if not ok then raise exception 'savings_goals.user_id must be immutable'; end if;
+
+  -- …while ordinary updates to those rows keep working.
+  update public.monthly_plans set salary_vnd = 2000 where id = plan_a;
+  update public.insurance_members set annual_payment_vnd = 240 where member_id = mem_a;
 
   -- ── nulls stay allowed: these references are optional ───────────────────────
   insert into public.recurring_savings (user_id, name, amount_vnd, goal_id, linked_deposit_tx_id)

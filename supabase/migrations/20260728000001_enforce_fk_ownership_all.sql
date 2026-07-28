@@ -133,6 +133,58 @@ create trigger recurring_saving_fulfillments_fk_ownership
   before insert or update of recurring_saving_id, user_id on public.recurring_saving_fulfillments
   for each row execute function public.enforce_user_scoped_fk_ownership('recurring_saving_id', 'recurring_savings', 'saving_id');
 
+-- ─── the other side of the invariant ──────────────────────────────────────────
+-- The triggers above guard the REFERENCING row. They can't see the referenced
+-- row — or a plan — being handed to a different user, which breaks the same
+-- invariant from the other direction: the children keep pointing at the previous
+-- owner's records, and a later cascade from those records reaches into the new
+-- owner's data.
+--
+-- Re-validating every child on an ownership change would mean five lookups per
+-- plan transfer and an equivalent sweep for each referenced table. Immutability
+-- is both cheaper and closer to the truth: nothing in this app ever reassigns
+-- user_id. Rows are created by their owner and removed with them via
+-- `on delete cascade`. An operator who genuinely needs to move data between
+-- accounts has to drop this deliberately — a reasonable speed bump for an
+-- operation that would otherwise silently corrupt ownership.
+create or replace function public.reject_owner_change()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.user_id is distinct from old.user_id then
+    raise exception '%.user_id is immutable (#525)', tg_table_name
+      using errcode = 'check_violation';
+  end if;
+  return new;
+end;
+$$;
+
+do $$
+declare
+  t text;
+begin
+  foreach t in array array[
+    -- the plan-scoped parent
+    'monthly_plans',
+    -- referenced by the nine relationships
+    'insurance_members', 'fixed_expenses', 'funds', 'savings_goals',
+    'investment_transactions', 'recurring_savings',
+    -- referencing rows that carry their own owner
+    'insurance_savings', 'recurring_saving_fulfillments'
+  ] loop
+    execute format('drop trigger if exists %I on public.%I', t || '_owner_immutable', t);
+    execute format(
+      'create trigger %I before update of user_id on public.%I for each row execute function public.reject_owner_change()',
+      t || '_owner_immutable', t
+    );
+  end loop;
+end;
+$$;
+
+comment on function public.reject_owner_change() is
+  'Rejects any change to a row''s user_id. Ownership is set once at insert; letting it move would break the same-owner FK invariant from the parent side (#525).';
+
 comment on function public.enforce_plan_scoped_fk_ownership() is
   'Rejects a plan-scoped row whose referenced record belongs to a different user than the plan owner (#525).';
 comment on function public.enforce_user_scoped_fk_ownership() is
