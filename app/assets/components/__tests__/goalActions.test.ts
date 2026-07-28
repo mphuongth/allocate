@@ -34,9 +34,18 @@ describe('goalActions (#467)', () => {
 
   it('unholdTransaction DELETEs the held row', async () => {
     const calls = mockFetch(() => ({ ok: true }))
-    expect(await unholdTransaction('tx1')).toBe(true)
+    // Returns a result object now, not a boolean: a refused unhold has to carry
+    // *why* so the caller can say something useful (#550). Both call sites did
+    // `const ok = await unholdTransaction(...)` — with an object that is always
+    // truthy, so their error branch would silently never run.
+    expect(await unholdTransaction('tx1')).toEqual({ ok: true })
     expect(calls[0].url).toBe('/api/v1/investment-transactions/tx1')
     expect(calls[0].init?.method).toBe('DELETE')
+  })
+
+  it('unholdTransaction reports the refusal code', async () => {
+    mockFetch(() => ({ ok: false, body: { error: 'already merged', code: 'settlement_consumed' } }))
+    expect(await unholdTransaction('tx1')).toEqual({ ok: false, code: 'settlement_consumed' })
   })
 
   // GET /fund-investments returns a BARE ARRAY (matches the real route), not

@@ -879,5 +879,15 @@
     "navFeatures": "Features",
     "navHow": "How it works",
     "navPlan": "Monthly plan"
+  },
+  "deleteTransaction": {
+    "settlement_consumed": "This settlement is part of a completed merge, so it can’t be removed.",
+    "merge_target": "Another settlement has been merged into this deposit, so it can’t be removed.",
+    "settlement_pending": "A settlement is waiting to be merged into this deposit. Cancel that pending settlement first.",
+    "referenced": "Another record still references this transaction. Remove that reference before deleting it.",
+    "not_found": "This transaction no longer exists.",
+    "delete_failed": "Couldn’t delete this transaction. Please try again.",
+    "network": "Connection problem — the transaction wasn’t deleted.",
+    "unknown": "Couldn’t delete this transaction."
   }
 }

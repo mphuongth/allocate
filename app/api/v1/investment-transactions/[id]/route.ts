@@ -248,23 +248,23 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
       const violation = `${error.message ?? ''} ${error.details ?? ''}`
       if (violation.includes('consumed_by_inv_id')) {
         return NextResponse.json(
-          { error: 'Another settlement has been merged into this deposit. Undo the merge before removing it.' },
+          { error: 'Another settlement has been merged into this deposit, so it cannot be removed.', code: 'merge_target' },
           { status: 409 },
         )
       }
       if (violation.includes('merge_anchor_inv_id')) {
         return NextResponse.json(
-          { error: 'A settlement is waiting to be merged into this deposit. Cancel that pending settlement before removing it.' },
+          { error: 'A settlement is waiting to be merged into this deposit. Cancel that pending settlement before removing it.', code: 'settlement_pending' },
           { status: 409 },
         )
       }
       return NextResponse.json(
-        { error: 'Another record still references this transaction. Remove that reference before deleting it.' },
+        { error: 'Another record still references this transaction. Remove that reference before deleting it.', code: 'referenced' },
         { status: 409 },
       )
     }
     console.error('investment-transactions delete: statement failed', error.message)
-    return NextResponse.json({ error: 'Failed to delete transaction' }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to delete transaction', code: 'delete_failed' }, { status: 500 })
   }
   if (deleted && deleted.length > 0) {
     return NextResponse.json({ message: 'Transaction deleted.' })
@@ -284,13 +284,13 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     // Don't guess: 404 would claim the settlement is gone when it may still be
     // there, and 409 would block a delete that legitimately found nothing.
     console.error('investment-transactions delete: could not classify a no-op delete', lookupErr.message)
-    return NextResponse.json({ error: 'Failed to delete transaction' }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to delete transaction', code: 'delete_failed' }, { status: 500 })
   }
-  if (!surviving) return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
+  if (!surviving) return NextResponse.json({ error: 'Transaction not found', code: 'not_found' }, { status: 404 })
 
   // The row is still there, so the guard is what stopped the delete.
   return NextResponse.json(
-    { error: 'This settlement has already been merged into another deposit. Undo the merge before removing it.' },
+    { error: 'This settlement is part of a completed merge, so it cannot be removed.', code: 'settlement_consumed' },
     { status: 409 },
   )
 }

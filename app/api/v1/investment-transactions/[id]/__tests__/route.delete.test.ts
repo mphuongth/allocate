@@ -142,8 +142,10 @@ describe('DELETE /api/v1/investment-transactions/[id]', () => {
 
   // The mirror image of the guard. Two columns reference this table with no
   // ON DELETE action, so deleting a deposit that either points at raises 23503 —
-  // a conflict the user can resolve, not a server fault. But the two need
-  // DIFFERENT remedies, so one catch-all message would misdirect half of them.
+  // a conflict the caller has to resolve differently in each case, so one
+  // catch-all message would misdirect half of them. The wording says what IS the
+  // case rather than prescribing an undo — there is no unmerge route or UI, so
+  // "undo the merge first" pointed at an action nobody can perform (#550).
   it('returns 409 naming the merge when a consumed settlement references the row', async () => {
     h.deleteResult = {
       data: null,
@@ -151,7 +153,12 @@ describe('DELETE /api/v1/investment-transactions/[id]', () => {
     }
     const res = await call()
     expect(res.status).toBe(409)
-    expect((await res.json()).error).toMatch(/undo the merge/i)
+    const body = await res.json()
+    expect(body.code).toBe('merge_target')
+    expect(body.error).toMatch(/merged into this deposit/i)
+    // Must not converge with the pending-settlement wording, which is a
+    // different situation with a different (and actually available) remedy.
+    expect(body.error).not.toMatch(/waiting|pending/i)
   })
 
   // merge_anchor_inv_id is stamped when a settlement is HELD — before any merge
