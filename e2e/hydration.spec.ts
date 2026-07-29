@@ -43,16 +43,26 @@ test('cached pages hydrate without a mismatch', async ({ page }) => {
     if (HYDRATION_RE.test(err.message)) errors.push(err.message)
   })
 
-  for (const path of ['/funds', '/planning']) {
+  // Each page must be checked against *its own* key. An "either key is present"
+  // check passes on /planning purely because /funds ran first and left
+  // fundLibraryCache behind — so a planning page that cached nothing would sail
+  // through the guard and the reload would prove nothing, which is precisely the
+  // failure this guard exists to prevent.
+  const CACHE_KEY: Record<string, string> = {
+    '/funds': 'fundLibraryCache',
+    '/planning': `planningCache_${MONTH}_${YEAR}`,
+  }
+
+  for (const path of Object.keys(CACHE_KEY)) {
     await page.goto(path)
     await page.waitForLoadState('networkidle')
 
-    // Nothing to hydrate against unless the first load actually cached something.
+    // Nothing to hydrate against unless this page actually cached something.
     const cached = await page.evaluate(() => Object.keys(localStorage))
     expect(
-      cached.some((k) => k.startsWith('fundLibraryCache') || k.startsWith('planningCache_')),
-      `${path} did not warm a cache, so the reload would prove nothing`,
-    ).toBe(true)
+      cached,
+      `${path} did not write ${CACHE_KEY[path]}, so the reload would prove nothing`,
+    ).toContain(CACHE_KEY[path])
 
     errors.length = 0
     await page.reload()
