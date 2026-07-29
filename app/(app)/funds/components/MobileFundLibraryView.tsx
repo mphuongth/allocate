@@ -14,6 +14,7 @@ import { useDialogA11y } from '@/app/(app)/planning/components/useDialogA11y'
 import { FundsEmptyState } from './FundsEmptyState'
 import { FundNavAge } from './FundNavAge'
 import type { Fund, Goal, FundType, FundsData } from './useFundsData'
+import { useFundMutations } from './useFundMutations'
 import { useDialogMount } from '@/app/(app)/planning/components/useDialogMount'
 
 // Matches the design's exact icon paths (stroke-based, strokeWidth 1.75)
@@ -468,7 +469,6 @@ export default function MobileFundLibraryView({ funds, setFunds, goals, loading,
   // already-saved amount" (a no-op cancel — the server still has DCA on, so
   // flipping the local card off would desync until the next reload) (#2).
   const [dcaEditIsNew, setDcaEditIsNew] = useState(false)
-  const [togglingIds, setTogglingIds] = useState<Set<string>>(new Set())
 
   // Toasts
   const [toasts, setToasts] = useState<Toast[]>([])
@@ -480,6 +480,17 @@ export default function MobileFundLibraryView({ funds, setFunds, goals, loading,
     setToasts((prev) => [...prev, { id, message, type }])
     setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 3000)
   }, [])
+
+  // Shared with the desktop view (#573). Only the toast shape differs, so that
+  // is the one thing injected — this view's takes a string, the desktop's a
+  // boolean. `deleteFund` is renamed: the confirmation sheet's state already
+  // owns that name here.
+  const { togglingIds, disableDca, saveDcaAmount, setDcaGoal, deleteFund: runDelete } =
+    useFundMutations({
+      setFunds,
+      reload,
+      notify: useCallback((message: string, ok: boolean) => addToast(message, ok ? 'success' : 'error'), [addToast]),
+    })
 
   const handleRefreshNav = useCallback(async () => {
     setRefreshing(true)
@@ -577,48 +588,27 @@ export default function MobileFundLibraryView({ funds, setFunds, goals, loading,
     if (!deleteFund) return
     setDeleting(true)
     try {
-      const res = await fetch(`/api/funds/${deleteFund.id}`, { method: 'DELETE' })
-      // Hard-block: a fund used in a monthly plan can't be deleted (#1). Show a
-      // specific, actionable message instead of the generic failure toast.
-      if (res.status === 409) {
-        setDeleteFund(null)
-        addToast(t('toastDeleteInUse'), 'error')
-        return
-      }
-      if (!res.ok && res.status !== 204) throw new Error()
-      setDeleteFund(null)
-      await reload()
-      addToast(t('toastDeleted'))
-    } catch {
-      addToast(t('toastDeleteFailed'), 'error')
-      setDeleteFund(null)
+      await runDelete(deleteFund)
     } finally {
+      // Dismissed on every outcome, and only once the answer is known — the
+      // sheet stays up showing its busy state while the request is in flight.
+      // That includes the in-use refusal, which the toast explains.
+      setDeleteFund(null)
       setDeleting(false)
     }
   }
 
+  // Turning DCA *on* persists nothing — it opens the inline editor and waits for
+  // an amount, which is why this half stays in the view.
   async function handleToggleDca(fund: Fund) {
-    const turningOn = !fund.is_dca
-    setFunds((prev) => prev.map((f) => f.id === fund.id ? { ...f, is_dca: turningOn, dca_monthly_amount_vnd: turningOn ? f.dca_monthly_amount_vnd : null } : f))
-
-    if (turningOn) {
+    if (!fund.is_dca) {
+      setFunds((prev) => prev.map((f) => f.id === fund.id ? { ...f, is_dca: true } : f))
       setDcaEditId(fund.id)
       setDcaEditValue('')
       setDcaEditIsNew(true)
       return
     }
-
-    setTogglingIds((prev) => new Set([...prev, fund.id]))
-    try {
-      const res = await fetch(`/api/funds/${fund.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: fund.name, code: fund.code, fund_type: fund.fund_type, nav: fund.nav, nav_source_url: fund.nav_source_url, is_dca: false, dca_monthly_amount_vnd: null }) })
-      if (!res.ok) throw new Error()
-      await reload()
-    } catch {
-      setFunds((prev) => prev.map((f) => f.id === fund.id ? { ...f, is_dca: true } : f))
-      addToast(t('toastDcaFailed'), 'error')
-    } finally {
-      setTogglingIds((prev) => { const s = new Set(prev); s.delete(fund.id); return s })
-    }
+    await disableDca(fund)
   }
 
   async function handleSaveDcaAmount(fund: Fund, val: string) {
@@ -637,17 +627,7 @@ export default function MobileFundLibraryView({ funds, setFunds, goals, loading,
     }
 
     setDcaEditIsNew(false)
-    setTogglingIds((prev) => new Set([...prev, fund.id]))
-    try {
-      const res = await fetch(`/api/funds/${fund.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: fund.name, code: fund.code, fund_type: fund.fund_type, nav: fund.nav, nav_source_url: fund.nav_source_url, is_dca: true, dca_monthly_amount_vnd: amount, dca_goal_id: fund.dca_goal_id }) })
-      if (!res.ok) throw new Error()
-      await reload()
-    } catch {
-      setFunds((prev) => prev.map((f) => f.id === fund.id ? { ...f, is_dca: false, dca_monthly_amount_vnd: null } : f))
-      addToast(t('toastDcaFailed'), 'error')
-    } finally {
-      setTogglingIds((prev) => { const s = new Set(prev); s.delete(fund.id); return s })
-    }
+    await saveDcaAmount(fund, amount)
   }
 
   // Abandon an inline amount edit (Escape). A brand-new enable reverts to off;
@@ -661,19 +641,7 @@ export default function MobileFundLibraryView({ funds, setFunds, goals, loading,
   }
 
   async function handleSetDcaGoal(fund: Fund, goalId: string | null) {
-    const prevGoalId = fund.dca_goal_id
-    setFunds((prev) => prev.map((f) => f.id === fund.id ? { ...f, dca_goal_id: goalId } : f))
-    setTogglingIds((prev) => new Set([...prev, fund.id]))
-    try {
-      const res = await fetch(`/api/funds/${fund.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: fund.name, code: fund.code, fund_type: fund.fund_type, nav: fund.nav, nav_source_url: fund.nav_source_url, is_dca: true, dca_monthly_amount_vnd: fund.dca_monthly_amount_vnd, dca_goal_id: goalId }) })
-      if (!res.ok) throw new Error()
-      await reload()
-    } catch {
-      setFunds((prev) => prev.map((f) => f.id === fund.id ? { ...f, dca_goal_id: prevGoalId } : f))
-      addToast(t('toastGoalFailed'), 'error')
-    } finally {
-      setTogglingIds((prev) => { const s = new Set(prev); s.delete(fund.id); return s })
-    }
+    await setDcaGoal(fund, goalId)
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
