@@ -72,6 +72,23 @@ describe('readJsonBody', () => {
       if (!result.ok) expect(result.response.status).toBe(400)
     })
 
+    it('counts only JSON whitespace as empty', async () => {
+      expect(await read(' \t\r\n ')).toEqual({ ok: true, body: {} })
+    })
+
+    // `String.trim()` strips Unicode whitespace, but JSON allows only space,
+    // tab, CR and LF — so a body of U+00A0 would look empty here while
+    // JSON.parse rejects it, and mark-paid would run the mutation on a body it
+    // could not read. A BOM is deliberately absent from this list: `text()`
+    // strips it while decoding, so such a body really is empty by then.
+    it('rejects Unicode whitespace that JSON does not accept', async () => {
+      for (const raw of ['\u00A0', '\u2028', '\u000B']) {
+        const result = await read(raw)
+        expect(result.ok, JSON.stringify(raw)).toBe(false)
+        if (!result.ok) expect(result.response.status).toBe(400)
+      }
+    })
+
     it('still rejects JSON that is not an object', async () => {
       const result = await read('"2026-01-01"')
       expect(result.ok).toBe(false)

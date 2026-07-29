@@ -31,6 +31,12 @@ export type JsonBodyResult<T> =
 
 const badRequest = (error: string) => NextResponse.json({ error }, { status: 400 })
 
+// "Nothing but whitespace" by JSON's definition, which is only space, tab, LF
+// and CR. `String.trim()` uses the much wider Unicode set, so it would call a
+// body of U+00A0 or a BOM empty — and an optional route would accept that as
+// `{}` and mutate, on a body JSON.parse cannot read.
+const JSON_BLANK = /^[ \t\n\r]*$/
+
 export async function readJsonBody<T = JsonBody>(
   request: Request,
   /**
@@ -50,7 +56,7 @@ export async function readJsonBody<T = JsonBody>(
     return { ok: false, response: badRequest('Request body could not be read') }
   }
 
-  if (raw.trim() === '') {
+  if (JSON_BLANK.test(raw)) {
     if (optional) return { ok: true, body: {} as T }
     return { ok: false, response: badRequest('Request body must be valid JSON') }
   }
