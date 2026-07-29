@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
+import { useAdoptCacheOnce } from '@/lib/useHydrated'
 
 // ─── Shared types ─────────────────────────────────────────────────────────────
 
@@ -63,10 +64,26 @@ function bustCache() {
 // read the same shared state, so the old cross-view 'cairn:funds-updated' event
 // (and its _suppressNotify guard) is no longer needed (#10).
 export function useFundsData(): FundsData {
-  const [funds, setFunds] = useState<Fund[]>(() => getCache() ?? [])
-  const [loading, setLoading] = useState(() => !getCache())
+  // Start where the server starts. These used to seed from getCache(), but a
+  // useState initialiser runs during the *hydration* render, and the server has
+  // no localStorage — so a warm cache made the client render "1 quỹ" over server
+  // HTML that said "0 quỹ" and React threw the whole subtree away (#560).
+  const [funds, setFunds] = useState<Fund[]>([])
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [goals, setGoals] = useState<Goal[]>([])
+
+  // Adopt the cached list on the first render after hydration, keeping what the
+  // cache was for — no loading flash while the refetch is in flight — without
+  // rendering from localStorage during hydration itself. The hook snapshots the
+  // cache before mount effects run, which matters here because reload()'s first
+  // act is bustCache().
+  useAdoptCacheOnce(getCache, (cached) => {
+    // Functional update: a refetch that has already landed must win over the
+    // older cached list, whichever order the two happen to settle in.
+    setFunds((current) => (current.length > 0 ? current : cached))
+    setLoading(false)
+  })
 
   const reload = useCallback(async () => {
     bustCache()
