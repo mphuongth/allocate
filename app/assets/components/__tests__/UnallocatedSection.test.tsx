@@ -127,7 +127,12 @@ describe('UnallocatedSection — desktop assign success flash', () => {
     expect(onAssigned).not.toHaveBeenCalled()
   })
 
-  it('drops the pending flash timer when the section unmounts', async () => {
+  // Crossing the 768px breakpoint mid-flash swaps DashboardClient's desktop tree
+  // for the mobile one and unmounts this section. The assignment has already
+  // been written by then, so cancelling the refresh would leave the other layout
+  // rendering the item as unallocated — the flash is what gets abandoned, not
+  // the refresh.
+  it('still asks for the refresh when the section unmounts mid-flash', async () => {
     const onAssigned = vi.fn()
     const { unmount } = await openAssignFlow({
       onDesktopAssign: vi.fn(async () => {}),
@@ -135,8 +140,32 @@ describe('UnallocatedSection — desktop assign success flash', () => {
     })
     expect(screen.getByText(/assigned to/i)).toBeInTheDocument()
 
-    unmount()
+    await act(async () => { unmount() })
+
+    expect(onAssigned).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves no pending timer behind after unmounting mid-flash', async () => {
+    const onAssigned = vi.fn()
+    const { unmount } = await openAssignFlow({
+      onDesktopAssign: vi.fn(async () => {}),
+      onDesktopAssigned: onAssigned,
+    })
+    await act(async () => { unmount() })
+
     await act(async () => { vi.advanceTimersByTime(SUCCESS_FLASH_MS * 2) })
+
+    expect(onAssigned).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not ask for a refresh when nothing was assigned', async () => {
+    const onAssigned = vi.fn()
+    const { unmount } = render(
+      <UnallocatedSection {...baseProps} nonFunds={[item]} desktopCard
+        onDesktopAssign={vi.fn(async () => {})} onDesktopAssigned={onAssigned} />
+    )
+
+    await act(async () => { unmount() })
 
     expect(onAssigned).not.toHaveBeenCalled()
   })

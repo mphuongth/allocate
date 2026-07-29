@@ -181,9 +181,22 @@ export default function UnallocatedSection({
   const [assignError, setAssignError] = useState('')
   const [assignSuccess, setAssignSuccess] = useState(false)
   const [assignSuccessName, setAssignSuccessName] = useState('')
-  // Held so an unmount mid-flash can't fire a refresh for a section that's gone.
+  // The flash is a UI courtesy; the refresh it gates is not optional, because by
+  // then the assignment has already been written. Crossing the 768px breakpoint
+  // swaps DashboardClient's desktop tree for the mobile one and unmounts this
+  // section mid-flash — so unmounting abandons the flash and releases the
+  // refresh immediately, rather than cancelling both. The callback belongs to
+  // the still-mounted dashboard, so running it here is safe.
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  useEffect(() => () => { if (flashTimer.current) clearTimeout(flashTimer.current) }, [])
+  const pendingRefresh = useRef<(() => void) | null>(null)
+  useEffect(() => () => {
+    if (!flashTimer.current) return
+    clearTimeout(flashTimer.current)
+    flashTimer.current = null
+    const refresh = pendingRefresh.current
+    pendingRefresh.current = null
+    refresh?.()
+  }, [])
 
   const typeLabelMap: Record<string, string> = {
     fund:  tt('assetFund'),
@@ -238,8 +251,10 @@ export default function UnallocatedSection({
       // One timer ends the flash and releases the refresh, in that order. Two
       // timers of the same length — one here, one on the dashboard — raced, and
       // the refresh could unmount this section before the flash had been seen.
+      pendingRefresh.current = () => onDesktopAssigned?.()
       flashTimer.current = setTimeout(() => {
         flashTimer.current = null
+        pendingRefresh.current = null
         closeAction()
         onDesktopAssigned?.()
       }, SUCCESS_FLASH_MS)
