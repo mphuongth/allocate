@@ -7,6 +7,7 @@ import { createBrowserClient } from '@supabase/ssr'
 import { useTranslations } from 'next-intl'
 import { Eye, EyeOff } from 'lucide-react'
 import { AuthLayout } from '../AuthLayout'
+import { announceCacheOwner } from '@/lib/clientCache'
 
 const fieldLabelStyle: React.CSSProperties = {
   fontSize: 11,
@@ -73,6 +74,11 @@ export default function SignupPage() {
         setConfirmSent(true)
         return
       }
+
+      // Take over the service worker's cache ownership before leaving this page,
+      // so a stale owner left by an earlier account on this machine can't answer
+      // the new account's first failed request (#565). Never block signup on it.
+      await announceCacheOwner(data.user?.id ?? '').catch(() => {})
 
       router.push('/dashboard')
       router.refresh()

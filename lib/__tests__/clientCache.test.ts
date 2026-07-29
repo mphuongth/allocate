@@ -16,7 +16,7 @@ function stubCacheStorage(names: string[]) {
  * @param acks whether the fake worker replies on the port it is handed, the way
  *   public/sw.js does once the purge has finished.
  */
-function stubServiceWorker({ controlled, acks = true }: { controlled: boolean; acks?: boolean }) {
+function stubServiceWorker({ controlled, acks = true, registered = true }: { controlled: boolean; acks?: boolean; registered?: boolean }) {
   const worker = {
     postMessage: (...args: [unknown, Transferable[]?]) => {
       postMessage(...args)
@@ -26,7 +26,13 @@ function stubServiceWorker({ controlled, acks = true }: { controlled: boolean; a
   }
   Object.defineProperty(navigator, 'serviceWorker', {
     configurable: true,
-    value: { controller: controlled ? worker : null, ready: Promise.resolve({ active: worker }) },
+    value: {
+      controller: controlled ? worker : null,
+      getRegistration: async () => (registered ? { active: worker } : undefined),
+      // Present but never settling, as in a browser with nothing registered —
+      // touching this must not hang the caller.
+      ready: new Promise(() => {}),
+    },
   })
 }
 
@@ -147,6 +153,16 @@ describe('announceCacheOwner', () => {
 
     await expect(pending).resolves.toBeUndefined()
     vi.useRealTimers()
+  })
+
+  // Nothing is registered in development, and nothing is registered on the very
+  // first production load either. `ready` never settles in that state, so the
+  // sign-in that awaits this before navigating would hang forever.
+  it('returns promptly when no worker is registered', async () => {
+    stubServiceWorker({ controlled: false, registered: false })
+
+    await expect(announceCacheOwner('user-a')).resolves.toBeUndefined()
+    expect(postMessage).not.toHaveBeenCalled()
   })
 
   it('is a no-op without service-worker support', async () => {

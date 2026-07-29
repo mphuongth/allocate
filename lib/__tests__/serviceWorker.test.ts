@@ -22,6 +22,10 @@ class FakeHeaders {
   set(key: string, value: string) { this.map.set(key.toLowerCase(), value) }
 }
 
+// Lets a test suspend a response mid-read, to land an owner switch inside the
+// window between the worker checking ownership and completing the cache write.
+const blobGate: { promise: Promise<void> | null } = { promise: null }
+
 class FakeResponse {
   status: number
   statusText: string
@@ -33,7 +37,7 @@ class FakeResponse {
   }
   get ok() { return this.status >= 200 && this.status < 300 }
   clone() { return new FakeResponse(this.body, { status: this.status, statusText: this.statusText, headers: this.headers }) }
-  async blob() { return this.body }
+  async blob() { if (blobGate.promise) await blobGate.promise; return this.body }
   async text() { return typeof this.body === 'string' ? this.body : JSON.stringify(this.body) }
   async json() { return typeof this.body === 'string' ? JSON.parse(this.body) : this.body }
 }
@@ -124,6 +128,9 @@ function loadWorker(networkHandler: (req: FakeRequest) => Promise<FakeResponse>)
     async install() {
       await dispatch('install', { waitUntil: (p: Promise<unknown>) => { pending.push(p) } })
     },
+    async activate() {
+      await dispatch('activate', { waitUntil: (p: Promise<unknown>) => { pending.push(p) } })
+    },
   }
 }
 
@@ -148,6 +155,10 @@ function makeNetwork() {
   return { state, handler }
 }
 
+/** Authenticated API cache partitions currently in storage. */
+const apiPartitions = (sw: ReturnType<typeof loadWorker>) =>
+  [...sw.cacheStorage.caches.keys()].filter((name) => name.startsWith('api-v1-'))
+
 function deferred() {
   let release: () => void = () => {}
   const promise = new Promise<void>((resolve) => { release = resolve })
@@ -159,9 +170,12 @@ describe('service worker — authenticated cache isolation', () => {
   let sw: ReturnType<typeof loadWorker>
 
   beforeEach(() => {
+    blobGate.promise = null
     net = makeNetwork()
     sw = loadWorker(net.handler)
   })
+
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
 
   it('serves user A their own cached API response while offline', async () => {
     await sw.message({ type: 'SET_CACHE_OWNER', userId: 'user-a' })
@@ -288,6 +302,30 @@ describe('service worker — authenticated cache isolation', () => {
     expect(await offline!.text()).not.toContain('user-a-dashboard')
   })
 
+  // Checking ownership and then writing are separated by asynchronous work
+  // (reading the body), so a check-then-write design still has a window where
+  // the account can change in between. Ownership must decide *where* the write
+  // goes, not merely whether it is allowed.
+  it('does not store a response under the new account when ownership changes while the write is prepared', async () => {
+    await sw.message({ type: 'SET_CACHE_OWNER', userId: 'user-a' })
+
+    const gate = deferred()
+    blobGate.promise = gate.promise
+    const inFlight = sw.request({ url: OVERVIEW_URL })
+    await flush() // let the response land and the worker reach the body read
+
+    await sw.message({ type: 'SET_CACHE_OWNER', userId: 'user-b' })
+    gate.release()
+    blobGate.promise = null
+    await inFlight
+
+    net.state.online = false
+    const offline = await sw.request({ url: OVERVIEW_URL })
+
+    expect(offline!.status).toBe(503)
+    expect(await offline!.text()).not.toContain('user-a')
+  })
+
   // lib/clientCache.ts waits on this reply before treating the swap as done, so
   // it must arrive only after the previous account's entries are gone.
   it('acknowledges an ownership change on the reply port, after the purge', async () => {
@@ -297,13 +335,40 @@ describe('service worker — authenticated cache isolation', () => {
     const replies: unknown[] = []
     const port = {
       postMessage: (value: unknown) => {
-        // Snapshot at reply time: the API cache must already be gone.
-        replies.push({ value, apiCacheStillPresent: sw.cacheStorage.caches.has('api-v1-v8') })
+        // Snapshot at reply time: user A's partition must already be swept.
+        replies.push({ value, apiPartitionsLeft: apiPartitions(sw).length })
       },
     }
     await sw.message({ type: 'SET_CACHE_OWNER', userId: 'user-b' }, [port])
 
-    expect(replies).toEqual([{ value: { ok: true }, apiCacheStillPresent: false }])
+    expect(replies).toEqual([{ value: { ok: true }, apiPartitionsLeft: 0 }])
+  })
+
+  it('sweeps the previous account partition instead of accumulating one per switch', async () => {
+    for (const userId of ['user-a', 'user-b', 'user-c']) {
+      await sw.message({ type: 'SET_CACHE_OWNER', userId })
+      await sw.request({ url: OVERVIEW_URL })
+    }
+
+    expect(apiPartitions(sw)).toHaveLength(1)
+  })
+
+  it('names partitions opaquely, so cache names do not enumerate the accounts used here', async () => {
+    await sw.message({ type: 'SET_CACHE_OWNER', userId: 'user-a' })
+    await sw.request({ url: OVERVIEW_URL })
+
+    expect(apiPartitions(sw)).toHaveLength(1)
+    expect(apiPartitions(sw).join()).not.toContain('user-a')
+  })
+
+  it('drops the unattributed caches left by the previous worker version on activate', async () => {
+    sw.cacheStorage.caches.set('api-v1-v7', new FakeCache())
+    sw.cacheStorage.caches.set('pages-v7', new FakeCache())
+
+    await sw.activate()
+
+    expect(await sw.cacheStorage.has('api-v1-v7')).toBe(false)
+    expect(await sw.cacheStorage.has('pages-v7')).toBe(false)
   })
 
   it('keeps static assets cached across accounts — they carry no user data', async () => {

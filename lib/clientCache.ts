@@ -52,8 +52,11 @@ export async function announceCacheOwner(userId: string): Promise<void> {
   if (!container) return
 
   // Before the first activation the page isn't controlled yet, so fall back to
-  // the registration's active worker once it's ready.
-  const worker = container.controller ?? (await container.ready).active
+  // the registration's active worker. Deliberately `getRegistration()` and not
+  // `ready`: `ready` never settles when nothing is registered, which is every
+  // page load in development and the first one in production — awaiting it
+  // would hang the sign-in that calls this before navigating.
+  const worker = container.controller ?? (await container.getRegistration())?.active
   if (!worker) return
 
   const channel = new MessageChannel()
