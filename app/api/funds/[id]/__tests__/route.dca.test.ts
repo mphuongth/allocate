@@ -30,8 +30,16 @@ vi.mock('@/lib/supabase-server', () => {
 
 import { PUT } from '../route'
 
+// A real Request, not a `{ json }` stand-in: the route reads the body through
+// readJsonBody, which reads it as text so an empty body is distinguishable from
+// an unparseable one (#566). A stub that only implements `json()` isn't the
+// shape the handler actually receives.
 function makeReq(body: Record<string, unknown>) {
-  return { json: async () => body } as unknown as Parameters<typeof PUT>[0]
+  return new Request('http://localhost/api/funds/f1', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }) as unknown as Parameters<typeof PUT>[0]
 }
 const ctx = { params: Promise.resolve({ id: 'f1' }) }
 

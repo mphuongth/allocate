@@ -6,6 +6,7 @@ import { createElement } from 'react'
 import type { ReactElement } from 'react'
 import { PortfolioReport } from '@/components/report/PortfolioReport'
 import type { DashboardData } from '@/app/assets/DashboardClient'
+import { readJsonBody } from '@/lib/apiBody'
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,7 +14,11 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { data, locale }: { data: DashboardData; locale: string } = await req.json()
+    // Parsed before the render so a malformed body is a 400, not swallowed by
+    // the catch below and reported as a PDF generation failure (#566).
+    const parsed = await readJsonBody<{ data: DashboardData; locale: string }>(req)
+    if (!parsed.ok) return parsed.response
+    const { data, locale } = parsed.body
     const element = createElement(PortfolioReport, { data, locale }) as ReactElement<DocumentProps>
 
     const buffer = await renderToBuffer(element)

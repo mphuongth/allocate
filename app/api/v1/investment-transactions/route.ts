@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validateBankCode, validateDate, validateEnum, validateNotes, validatePositiveIntParam, validateRate, validateUUID } from '@/lib/validation'
 import { isFutureInvestmentDate } from '@/lib/dates'
+import { readJsonBody } from '@/lib/apiBody'
 
 const ASSET_TYPES = ['fund', 'bank', 'stock', 'gold'] as const
 
@@ -62,7 +63,9 @@ export async function POST(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const body = await request.json()
+  const parsed = await readJsonBody(request)
+  if (!parsed.ok) return parsed.response
+  const body = parsed.body
   const { goal_id, asset_type, transaction_type = 'investment', investment_date, amount_vnd, unit_price, units, interest_rate, notes, fund_id, plan_id, expiry_date, parent_transaction_id, principal_withdrawn, units_withdrawn, affects_progress, accumulating, tops_up_deposit_id, bank_code, held_for_merge, merge_target_goal_id, merge_anchor_inv_id } = body
 
   const isWithdrawal = transaction_type === 'withdrawal'

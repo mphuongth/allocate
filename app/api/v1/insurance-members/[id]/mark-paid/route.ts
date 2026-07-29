@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateUUID, validateDate } from '@/lib/validation'
+import { readJsonBody } from '@/lib/apiBody'
 
 function err(status: number, code: string, message: string) {
   return NextResponse.json({ error: code, message }, { status })
@@ -36,8 +37,13 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   // date other than today. Defaults to today when absent.
   const now = new Date()
   let paidISO = now.toISOString().split('T')[0]
-  const body = await _req.json().catch(() => null)
-  if (body && body.paid_date != null && body.paid_date !== '') {
+  // Optional: no body at all is the documented "paid today" case. A body that is
+  // present but unparseable is a client mistake, and used to be swallowed into
+  // that same default rather than reported (#566).
+  const parsed = await readJsonBody(_req, { optional: true })
+  if (!parsed.ok) return parsed.response
+  const body = parsed.body
+  if (body.paid_date != null && body.paid_date !== '') {
     try {
       paidISO = validateDate(body.paid_date, 'paid_date')
     } catch (e) {

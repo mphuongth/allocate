@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validatePlanMonthFilter, validateText, validateYearMonth, type PlanMonthFilter } from '@/lib/validation'
+import { readJsonBody } from '@/lib/apiBody'
 
 function toDateCol(ym: string | undefined | null): string | null {
   if (!ym) return null
@@ -48,7 +49,9 @@ export async function POST(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const body = await request.json()
+  const parsed = await readJsonBody(request)
+  if (!parsed.ok) return parsed.response
+  const body = parsed.body
   const { expense_name, amount_vnd, category, effective_from, effective_to } = body
 
   let cleanName: string

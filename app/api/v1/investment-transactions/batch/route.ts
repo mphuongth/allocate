@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validateDate, validateUUID } from '@/lib/validation'
+import { readJsonBody } from '@/lib/apiBody'
 
 interface BatchTransaction {
   fund_id: string
@@ -15,7 +16,9 @@ export async function POST(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const body = await request.json()
+  const parsed = await readJsonBody(request)
+  if (!parsed.ok) return parsed.response
+  const body = parsed.body
   const { transactions } = body as { transactions: BatchTransaction[] }
 
   if (!Array.isArray(transactions) || transactions.length === 0) {

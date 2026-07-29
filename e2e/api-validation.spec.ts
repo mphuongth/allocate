@@ -191,4 +191,43 @@ test.describe('API input validation', () => {
       await api.deleteTransactionCascade(term.transaction_id)
     }
   })
+
+  // A malformed body is a client mistake, not a server failure. These used to
+  // throw an uncaught SyntaxError out of `await request.json()` and surface as
+  // 500s (#566). One canonical endpoint is enough here — the shared helper every
+  // write route now goes through is unit-tested in lib/__tests__/apiBody.test.ts.
+  //
+  // `Buffer`, not a string: Playwright JSON-encodes a string `data`, so the
+  // route would receive a perfectly valid JSON *string* and reject it in its own
+  // validators — 400 for the wrong reason, passing against the old code too.
+  // A Buffer is sent as raw bytes, which is what actually reproduces the 500.
+  const rawPost = (request: import('@playwright/test').APIRequestContext, raw: string) =>
+    request.post('/api/v1/savings-goals', {
+      headers: { 'Content-Type': 'application/json' },
+      data: Buffer.from(raw),
+    })
+
+  test('POST /api/v1/savings-goals rejects a syntactically invalid body (400)', async ({ request }) => {
+    const res = await rawPost(request, '{"goal_name": ')
+    expect(res.status()).toBe(400)
+  })
+
+  test('POST /api/v1/savings-goals rejects an empty body (400)', async ({ request }) => {
+    const res = await rawPost(request, '')
+    expect(res.status()).toBe(400)
+  })
+
+  test('POST /api/v1/savings-goals rejects a body that is not a JSON object (400)', async ({ request }) => {
+    const res = await rawPost(request, '"just a string"')
+    expect(res.status()).toBe(400)
+  })
+
+  test('POST /api/v1/savings-goals still validates a well-formed body the same way (400)', async ({ request }) => {
+    // Guards the other half of the change: valid JSON must still reach the
+    // route's own validators rather than being turned away by the new parser.
+    const res = await request.post('/api/v1/savings-goals', {
+      data: { goal_name: '' },
+    })
+    expect(res.status()).toBe(400)
+  })
 })

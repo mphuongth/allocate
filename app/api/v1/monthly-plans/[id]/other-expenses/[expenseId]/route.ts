@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validateText, validateUUID } from '@/lib/validation'
+import { readJsonBody } from '@/lib/apiBody'
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string; expenseId: string }> }) {
   const supabase = await createSupabaseServerClient()
@@ -8,7 +9,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id, expenseId } = await params
-  const body = await req.json()
+  const parsed = await readJsonBody(req)
+  if (!parsed.ok) return parsed.response
+  const body = parsed.body
   const { description, amount_vnd } = body
 
   let planId: string

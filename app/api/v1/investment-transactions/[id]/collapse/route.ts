@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validateDate, validateRate, validateUUID } from '@/lib/validation'
 import { isFutureInvestmentDate } from '@/lib/dates'
 import { buildCollapsePlan, type CollapseTrancheInput } from '@/lib/accumulating'
+import { readJsonBody } from '@/lib/apiBody'
 
 // Collapse an accumulating ("Loại 2") book at maturity into ONE fresh term
 // deposit (the book-level renewal). `id` is the deposit_group_id (= the anchor
@@ -23,7 +24,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const body = await request.json()
+  const parsed = await readJsonBody(request)
+  if (!parsed.ok) return parsed.response
+  const body = parsed.body
   const { amount_vnd, interest_rate, expiry_date, investment_date, fulfill_recurring } = body
 
   let groupId: string
