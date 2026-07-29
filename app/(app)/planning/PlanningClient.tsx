@@ -7,7 +7,7 @@ import { useTranslations, useLocale } from 'next-intl'
 import { useNavigation } from '@/app/components/navigation/NavigationContext'
 import MobilePlanningView from './components/MobilePlanningView'
 import DesktopPlanningView from './components/DesktopPlanningView'
-import { useHydrated } from '@/lib/useHydrated'
+import { useAdoptCacheOnce } from '@/lib/useHydrated'
 
 export interface MonthlyPlan {
   id: string
@@ -153,18 +153,19 @@ export default function PlanningClient() {
   const [goals, setGoals] = useState<Goal[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Adopt the cache on the first render after hydration. This preserves what the
-  // cache was for — no skeleton flash while the refetch is in flight — and costs
-  // nothing net, since a mismatch regenerated this tree anyway. Done as a
-  // render-phase adjustment rather than an effect, which is the pattern React
-  // documents for this and which the effect form trips
-  // (react-hooks/set-state-in-effect).
-  const hydrated = useHydrated()
-  const [cacheAdopted, setCacheAdopted] = useState(false)
-  if (hydrated && !cacheAdopted) {
-    setCacheAdopted(true)
-    const cached = getPlanCache(initialMonth, initialYear)
-    if (cached) {
+  // Adopt the cached month on the first render after hydration. This preserves
+  // what the cache was for — no skeleton flash while the refetch is in flight —
+  // and costs nothing net, since a mismatch regenerated this tree anyway.
+  //
+  // The `loading` guard is what keeps a settled fetch from being overwritten by
+  // the older cache. Unlike the fund library, fetchPlan() does not bust on mount,
+  // but it can still land first; and once it has settled, its answer is the right
+  // one even when that answer is "this month has no plan" (404) — showing the
+  // stale month back would be a lie.
+  useAdoptCacheOnce(
+    () => getPlanCache(initialMonth, initialYear),
+    (cached) => {
+      if (!loading) return
       setPlan(cached.plan ?? null)
       setInvestments(cached.investments ?? [])
       setSavings(cached.savings ?? [])
@@ -178,8 +179,8 @@ export default function PlanningClient() {
       setFunds(cached.funds ?? [])
       setGoals(cached.goals ?? [])
       setLoading(false)
-    }
-  }
+    },
+  )
   // A failed load (≠ 404) must not masquerade as the legit "no plan yet" empty
   // state — the API returns 404 only when the month genuinely has no plan.
   const [loadError, setLoadError] = useState(false)

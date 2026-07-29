@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
-import { useHydrated } from '@/lib/useHydrated'
+import { useAdoptCacheOnce } from '@/lib/useHydrated'
 
 // ─── Shared types ─────────────────────────────────────────────────────────────
 
@@ -73,23 +73,17 @@ export function useFundsData(): FundsData {
   const [error, setError] = useState(false)
   const [goals, setGoals] = useState<Goal[]>([])
 
-  // Adopt the cache on the first render after hydration. This keeps what the
-  // cache was for — no loading flash while the refetch is in flight — and costs
-  // nothing net: a mismatch regenerated this tree on the client anyway. Done as
-  // a render-phase adjustment rather than an effect, which is the pattern React
-  // documents for this and which the effect form trips
-  // (react-hooks/set-state-in-effect). It also runs before the reload effect
-  // below, so it still sees the cache that reload() is about to bust.
-  const hydrated = useHydrated()
-  const [cacheAdopted, setCacheAdopted] = useState(false)
-  if (hydrated && !cacheAdopted) {
-    setCacheAdopted(true)
-    const cached = getCache()
-    if (cached) {
-      setFunds(cached)
-      setLoading(false)
-    }
-  }
+  // Adopt the cached list on the first render after hydration, keeping what the
+  // cache was for — no loading flash while the refetch is in flight — without
+  // rendering from localStorage during hydration itself. The hook snapshots the
+  // cache before mount effects run, which matters here because reload()'s first
+  // act is bustCache().
+  useAdoptCacheOnce(getCache, (cached) => {
+    // Functional update: a refetch that has already landed must win over the
+    // older cached list, whichever order the two happen to settle in.
+    setFunds((current) => (current.length > 0 ? current : cached))
+    setLoading(false)
+  })
 
   const reload = useCallback(async () => {
     bustCache()
