@@ -40,10 +40,10 @@ test('login page h1 says Welcome back', async ({ page }) => {
   await expect(page.locator('h1').first()).toContainText('Welcome back')
 })
 
-test('login page shows Forgot password button', async ({ page }) => {
-  await page.goto('/auth/login')
-  await expect(page.getByRole('button', { name: /forgot password/i })).toBeVisible()
-})
+// The "Forgot password?" button was removed in #568 — it had no handler and no
+// reset flow, and this spec asserted only that it was visible, so the dead
+// control passed. Its absence is now asserted where it belongs, in
+// app/auth/login/__tests__/LoginPage.test.tsx.
 
 // ─── Login behaviour ────────────────────────────────────────────────────────
 
