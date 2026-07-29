@@ -109,7 +109,14 @@ test.describe('Desktop assign-to-goal two-step modal (PR #199)', () => {
     await expect(sheet.getByRole('button', { name: /confirm assignment|xác nhận gán/i })).not.toBeDisabled()
   })
 
-  test('confirming shows "Assigned to" success state with the goal name', async ({ page }) => {
+  // This used to assert the "Assigned to" flash itself, and flaked under a full
+  // suite run: the flash is a SUCCESS_FLASH_MS transient, so whether Playwright
+  // observes it depends on how loaded the machine is, not on the code (#567).
+  // The flash's lifecycle is now pinned deterministically with fake timers in
+  // app/assets/components/__tests__/UnallocatedSection.test.tsx; what genuinely
+  // needs E2E is the round trip this assertion makes instead — confirm really
+  // writes the assignment, and the dashboard really reflects it.
+  test('confirming assigns the item to the goal and closes the modal', async ({ page }) => {
     const goal = await api.createGoal({ goal_name: 'E2E Success State Goal', target_amount: 50_000_000 })
     // Goal cleanup alone is enough: ON DELETE SET NULL on goal_id FK returns the seed tx to unallocated
     cleanup.add(() => api.deleteGoal(goal.goal_id))
@@ -123,9 +130,11 @@ test.describe('Desktop assign-to-goal two-step modal (PR #199)', () => {
     await sheet.getByText('E2E Success State Goal').click()
     await sheet.getByRole('button', { name: /confirm assignment|xác nhận gán/i }).click()
 
-    // Success state: "Assigned to" + goal name
-    await expect(sheet.getByText(/assigned to|đã gán vào/i)).toBeVisible({ timeout: 8_000 })
-    await expect(sheet.getByText('E2E Success State Goal')).toBeVisible({ timeout: 5_000 })
+    // The section closes its own modal once the flash ends, then asks for the
+    // refresh — so the goal holding the transaction is the settled end state.
+    await expect(sheet).not.toBeVisible({ timeout: 10_000 })
+    await expect(page.getByRole('button', { name: /E2E Success State Goal/ }))
+      .toContainText(/1 (transaction|giao dịch)/i, { timeout: 10_000 })
   })
 
   test('backdrop click closes the Options modal', async ({ page }) => {

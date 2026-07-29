@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { ChevronDown, ChevronUp, ChevronRight, Target, Building, Coins, TrendingUp, BarChart2, Clock, ArrowDownToLine, ArrowDownRight, ArrowRight, Wallet, Check, X } from 'lucide-react'
 import { iconHit } from './iconHit'
 import { SUCCESS_FLASH_MS } from '../successFlash'
@@ -147,6 +147,13 @@ interface Props {
   onSellNonFund: (item: NonFundUnallocatedItem) => void
   /** Desktop-only: called when user confirms assignment in the inline two-step modal */
   onDesktopAssign?: (kind: 'fund' | 'nonFund', id: string, goalId: string) => Promise<void>
+  /**
+   * Desktop-only: the assignment is done *and* its success flash has finished, so
+   * it is safe to refresh. This section owns that timing — a refresh drops the
+   * assigned row and unmounts it, which used to tear the success state down
+   * early when the dashboard ran its own timer of the same length (#567).
+   */
+  onDesktopAssigned?: () => void
   desktopCard?: boolean
 }
 
@@ -155,6 +162,7 @@ export default function UnallocatedSection({
   onFundClick, onAssignToGoal, onSellFund,
   onAssignNonFundToGoal, onSellNonFund,
   onDesktopAssign,
+  onDesktopAssigned,
   desktopCard = false,
 }: Props) {
   const t = useTranslations('dashboard')
@@ -173,6 +181,9 @@ export default function UnallocatedSection({
   const [assignError, setAssignError] = useState('')
   const [assignSuccess, setAssignSuccess] = useState(false)
   const [assignSuccessName, setAssignSuccessName] = useState('')
+  // Held so an unmount mid-flash can't fire a refresh for a section that's gone.
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => { if (flashTimer.current) clearTimeout(flashTimer.current) }, [])
 
   const typeLabelMap: Record<string, string> = {
     fund:  tt('assetFund'),
@@ -224,7 +235,14 @@ export default function UnallocatedSection({
       const goalName = assignGoals.find((g) => g.id === assignSelected)?.name ?? ''
       setAssignSuccessName(goalName)
       setAssignSuccess(true)
-      setTimeout(() => closeAction(), SUCCESS_FLASH_MS)
+      // One timer ends the flash and releases the refresh, in that order. Two
+      // timers of the same length — one here, one on the dashboard — raced, and
+      // the refresh could unmount this section before the flash had been seen.
+      flashTimer.current = setTimeout(() => {
+        flashTimer.current = null
+        closeAction()
+        onDesktopAssigned?.()
+      }, SUCCESS_FLASH_MS)
     } catch (e: unknown) {
       setAssignError(e instanceof Error ? e.message : (isVI ? 'Lỗi kết nối' : 'Connection error'))
     }
