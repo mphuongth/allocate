@@ -137,6 +137,10 @@ self.addEventListener('fetch', (event) => {
 // ── Handlers ──────────────────────────────────────────────────────────────────
 
 async function navigateHandler(event, request) {
+  // Captured before the fetch: a response belongs to whoever was signed in when
+  // it was requested, and the account can change while it is in flight.
+  const ownerAtRequest = await readCacheOwner()
+
   try {
     const response = await fetch(request)
     // Clone BEFORE returning the response — once the browser starts reading
@@ -145,9 +149,10 @@ async function navigateHandler(event, request) {
       const clone = response.clone()
       event.waitUntil(
         readCacheOwner().then((owner) => {
-          // Unattributable page: don't store it rather than risk serving it to
-          // whoever signs in next.
-          if (!owner) return
+          // Store only if the page is still owned by the account that asked for
+          // it. No owner means unattributable; a different owner means the
+          // account switched mid-flight and this is the previous user's HTML.
+          if (!owner || owner !== ownerAtRequest) return
           return caches.open(PAGE_CACHE).then((cache) => cache.put(request.url, clone))
         })
       )
@@ -176,7 +181,8 @@ async function navigateHandler(event, request) {
  * Cached responses expire after 24 h (checked on retrieval).
  */
 async function networkFirst(event, request, cacheName, timeoutMs) {
-  const cache = await caches.open(cacheName)
+  // Captured before the fetch — see navigateHandler.
+  const ownerAtRequest = await readCacheOwner()
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
 
@@ -184,9 +190,10 @@ async function networkFirst(event, request, cacheName, timeoutMs) {
     const response = await fetch(request, { signal: controller.signal })
     clearTimeout(timeoutId)
 
-    // Only cache what can be attributed to the signed-in account, so a response
-    // fetched before the page announced itself can never outlive that session.
-    if (response.ok && (await readCacheOwner())) {
+    // Only cache what can still be attributed to the account that asked for it,
+    // so a response fetched before the page announced itself — or one that
+    // outlived its own session — can never be filed under the next account.
+    if (response.ok && ownerAtRequest && (await readCacheOwner()) === ownerAtRequest) {
       const blob = await response.clone().blob()
       const headers = new Headers(response.headers)
       headers.set('sw-cached-at', Date.now().toString())
@@ -195,12 +202,15 @@ async function networkFirst(event, request, cacheName, timeoutMs) {
         statusText: response.statusText,
         headers,
       })
-      // Extend SW lifetime so the cache write finishes before idle
-      event.waitUntil(cache.put(request, timestamped))
+      // Opened here rather than up front: a cache handle taken before an owner
+      // switch refers to the deleted cache, so the write would vanish silently.
+      // Extend SW lifetime so it finishes before idle.
+      event.waitUntil(caches.open(cacheName).then((cache) => cache.put(request, timestamped)))
     }
     return response
   } catch {
     clearTimeout(timeoutId)
+    const cache = await caches.open(cacheName)
     const cached = (await readCacheOwner()) ? await cache.match(request) : null
     if (cached) {
       const cachedAt = Number(cached.headers.get('sw-cached-at') ?? 0)

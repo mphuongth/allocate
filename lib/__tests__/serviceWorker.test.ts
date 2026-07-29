@@ -130,15 +130,28 @@ function loadWorker(networkHandler: (req: FakeRequest) => Promise<FakeResponse>)
 const OVERVIEW_URL = 'https://cairn.app/api/v1/dashboard/overview'
 const DASHBOARD_URL = 'https://cairn.app/dashboard'
 
-/** Network that serves per-account payloads, and can be switched offline. */
+/** Network that serves per-account payloads, can go offline, and can be held mid-request. */
 function makeNetwork() {
-  const state = { online: true, body: 'user-a-portfolio', page: '<html>user-a-dashboard</html>' }
+  const state = {
+    online: true,
+    body: 'user-a-portfolio',
+    page: '<html>user-a-dashboard</html>',
+    /** When set, responses wait on this — lets a test interleave a message with an in-flight fetch. */
+    hold: null as Promise<void> | null,
+  }
   const handler = async (req: FakeRequest) => {
     if (!state.online) throw new Error('offline')
+    if (state.hold) await state.hold
     const isPage = req.mode === 'navigate'
     return new FakeResponse(isPage ? state.page : state.body, { status: 200 })
   }
   return { state, handler }
+}
+
+function deferred() {
+  let release: () => void = () => {}
+  const promise = new Promise<void>((resolve) => { release = resolve })
+  return { promise, release }
 }
 
 describe('service worker — authenticated cache isolation', () => {
@@ -234,6 +247,45 @@ describe('service worker — authenticated cache isolation', () => {
     const offline = await sw.request({ url: OVERVIEW_URL })
 
     expect(await offline!.text()).toBe('user-a-portfolio')
+  })
+
+  // A request issued under user A can still be in flight when user B announces
+  // themselves. Checking only that *some* owner exists once the response lands
+  // would file A's data under B's ownership.
+  it('does not store a response fetched for the previous account when the owner changes mid-request', async () => {
+    await sw.message({ type: 'SET_CACHE_OWNER', userId: 'user-a' })
+
+    const gate = deferred()
+    net.state.hold = gate.promise
+    const inFlight = sw.request({ url: OVERVIEW_URL })       // user A's fetch, not yet resolved
+    await sw.message({ type: 'SET_CACHE_OWNER', userId: 'user-b' })
+    gate.release()
+    await inFlight
+
+    net.state.hold = null
+    net.state.online = false
+    const offline = await sw.request({ url: OVERVIEW_URL })
+
+    expect(offline!.status).toBe(503)
+    expect(await offline!.text()).not.toContain('user-a')
+  })
+
+  it('does not store page HTML fetched for the previous account when the owner changes mid-request', async () => {
+    await sw.install()
+    await sw.message({ type: 'SET_CACHE_OWNER', userId: 'user-a' })
+
+    const gate = deferred()
+    net.state.hold = gate.promise
+    const inFlight = sw.request({ url: DASHBOARD_URL, mode: 'navigate' })
+    await sw.message({ type: 'SET_CACHE_OWNER', userId: 'user-b' })
+    gate.release()
+    await inFlight
+
+    net.state.hold = null
+    net.state.online = false
+    const offline = await sw.request({ url: DASHBOARD_URL, mode: 'navigate' })
+
+    expect(await offline!.text()).not.toContain('user-a-dashboard')
   })
 
   // lib/clientCache.ts waits on this reply before treating the swap as done, so
