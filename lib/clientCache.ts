@@ -25,6 +25,10 @@ const APP_CACHE_PREFIXES = [
 // purpose: chunks, images and fonts are identical for every account.
 const SW_USER_CACHE_PREFIXES = ['api-v1-', 'pages-', 'cache-owner-']
 
+// Which account the localStorage snapshots above belong to. Mirrors the worker's
+// own owner record, for the half of the caching the worker can't see.
+const LOCAL_OWNER_KEY = 'cairn.cacheOwner'
+
 function getServiceWorkerContainer(): ServiceWorkerContainer | null {
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return null
   return navigator.serviceWorker
@@ -46,8 +50,19 @@ function getServiceWorkerContainer(): ServiceWorkerContainer | null {
 export function buildCacheOwnerScript(userId: string): string {
   // Serialised as data, with `<` escaped so the payload can't close the script
   // element — the id reaches us from the session, not from source we control.
-  const payload = JSON.stringify({ type: 'SET_CACHE_OWNER', userId }).replace(/</g, '\\u003c')
-  return `try{navigator.serviceWorker.controller.postMessage(${payload})}catch(e){}`
+  const esc = (value: unknown) => JSON.stringify(value).replace(/</g, '\\u003c')
+
+  // Not every localStorage snapshot is keyed by user — `planningCache_${month}_${year}`
+  // is not — so an account takeover that runs no sign-out handler would leave the
+  // new account reading the previous one's data. Done synchronously here, ahead
+  // of any component that reads those keys.
+  return (
+    `try{var o=${esc(LOCAL_OWNER_KEY)},u=${esc(userId)},p=${esc(APP_CACHE_PREFIXES)};` +
+    `if(localStorage.getItem(o)!==u){` +
+    `Object.keys(localStorage).forEach(function(k){if(p.some(function(x){return k.indexOf(x)===0}))localStorage.removeItem(k)});` +
+    `localStorage.setItem(o,u)}}catch(e){}` +
+    `try{navigator.serviceWorker.controller.postMessage({type:"SET_CACHE_OWNER",userId:${esc(userId)}})}catch(e){}`
+  )
 }
 
 // How long to wait for the worker to confirm an ownership change before giving
@@ -68,6 +83,11 @@ const OWNER_ACK_TIMEOUT_MS = 3_000
  * taken effect yet.
  */
 export async function announceCacheOwner(userId: string): Promise<void> {
+  // The parse-time script does this for a page load; this covers an account
+  // change while the app stays open, e.g. signing in as someone else in another
+  // tab, where nothing reloads and the snapshots would otherwise linger.
+  adoptLocalOwner(userId)
+
   const container = getServiceWorkerContainer()
   if (!container) return
 
@@ -87,10 +107,15 @@ export async function announceCacheOwner(userId: string): Promise<void> {
 
   let timer: ReturnType<typeof setTimeout> | undefined
   try {
-    await Promise.race([
-      acknowledged,
-      new Promise<void>((resolve) => { timer = setTimeout(resolve, OWNER_ACK_TIMEOUT_MS) }),
+    const acked = await Promise.race([
+      acknowledged.then(() => true),
+      new Promise<boolean>((resolve) => { timer = setTimeout(() => resolve(false), OWNER_ACK_TIMEOUT_MS) }),
     ])
+    // A timeout is not a completed swap. Callers navigate as soon as this
+    // resolves, so rather than let them proceed under an owner that may still be
+    // the previous account, delete the authenticated caches outright — with no
+    // partition and no owner record there is nothing the worker can serve.
+    if (!acked) await clearServiceWorkerCaches()
   } finally {
     clearTimeout(timer)
     channel.port1.close()
@@ -117,6 +142,18 @@ function clearLocalAppCaches(): void {
   Object.keys(localStorage)
     .filter((k) => APP_CACHE_PREFIXES.some((p) => k.startsWith(p)))
     .forEach((k) => localStorage.removeItem(k))
+}
+
+/** Drop the localStorage snapshots if they belong to a different account. */
+function adoptLocalOwner(userId: string): void {
+  if (typeof localStorage === 'undefined') return
+  try {
+    if (localStorage.getItem(LOCAL_OWNER_KEY) === userId) return
+    clearLocalAppCaches()
+    localStorage.setItem(LOCAL_OWNER_KEY, userId)
+  } catch {
+    // Storage disabled or full; nothing cached means nothing to leak.
+  }
 }
 
 async function clearServiceWorkerCaches(): Promise<void> {

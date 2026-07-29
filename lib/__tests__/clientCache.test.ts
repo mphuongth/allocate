@@ -110,10 +110,38 @@ describe('clearAppCaches', () => {
 // fetch, and on flows no client code precedes, such as the email-confirmation
 // callback redirecting straight to /dashboard.
 describe('buildCacheOwnerScript', () => {
+  beforeEach(() => localStorage.clear())
+
   function run(script: string, controller: { postMessage: (v: unknown) => void } | null) {
     const nav = { serviceWorker: controller ? { controller } : undefined }
-    new Function('navigator', script)(nav)
+    new Function('navigator', 'localStorage', script)(nav, localStorage)
   }
+
+  // Not every localStorage snapshot is user-keyed — `planningCache_${month}_${year}`
+  // is not — so an account takeover that runs no sign-out handler (visiting
+  // /auth/login directly, or the old session expiring while the app was closed)
+  // would otherwise hand the new account the previous one's plan. This runs
+  // during parse, before anything reads those keys.
+  it('drops local snapshots when a different account takes over', () => {
+    localStorage.setItem('planningCache_6_2026', '1')
+    localStorage.setItem('savingsGoalsCache', '1')
+    localStorage.setItem('theme', 'dark') // unrelated, must survive
+
+    run(buildCacheOwnerScript('user-b'), null)
+
+    expect(localStorage.getItem('planningCache_6_2026')).toBeNull()
+    expect(localStorage.getItem('savingsGoalsCache')).toBeNull()
+    expect(localStorage.getItem('theme')).toBe('dark')
+  })
+
+  it('keeps local snapshots when the same account loads another page', () => {
+    run(buildCacheOwnerScript('user-a'), null)
+    localStorage.setItem('planningCache_6_2026', '1')
+
+    run(buildCacheOwnerScript('user-a'), null)
+
+    expect(localStorage.getItem('planningCache_6_2026')).toBe('1')
+  })
 
   it('claims ownership through the controlling worker', () => {
     const sent: unknown[] = []
@@ -142,8 +170,11 @@ describe('buildCacheOwnerScript', () => {
 })
 
 describe('announceCacheOwner', () => {
-  beforeEach(() => postMessage.mockClear())
-  afterEach(() => Reflect.deleteProperty(navigator, 'serviceWorker'))
+  beforeEach(() => { postMessage.mockClear(); localStorage.clear() })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    Reflect.deleteProperty(navigator, 'serviceWorker')
+  })
 
   it('announces the signed-in account to the controlling worker', async () => {
     stubServiceWorker({ controlled: true })
@@ -181,6 +212,9 @@ describe('announceCacheOwner', () => {
     expect(settled).toBe(true)
   })
 
+  // A timeout is not a completed swap. Callers navigate to the dashboard as
+  // soon as this resolves, so an unacknowledged change must leave nothing the
+  // worker could serve rather than look like success.
   it('gives up waiting rather than hanging when the worker never replies', async () => {
     vi.useFakeTimers()
     stubServiceWorker({ controlled: true, acks: false })
@@ -192,6 +226,31 @@ describe('announceCacheOwner', () => {
     vi.useRealTimers()
   })
 
+  it('deletes the authenticated caches when the swap is never acknowledged', async () => {
+    vi.useFakeTimers()
+    const deleted = stubCacheStorage(['api-v1-v8-tok', 'pages-v8-tok', 'cache-owner-v8', 'static-assets-v8'])
+    stubServiceWorker({ controlled: true, acks: false })
+
+    const pending = announceCacheOwner('user-a')
+    await vi.advanceTimersByTimeAsync(5_000)
+    await pending
+
+    expect(deleted).toContain('api-v1-v8-tok')
+    expect(deleted).toContain('pages-v8-tok')
+    expect(deleted).toContain('cache-owner-v8')
+    expect(deleted).not.toContain('static-assets-v8')
+    vi.useRealTimers()
+  })
+
+  it('leaves the caches alone when the swap is acknowledged', async () => {
+    const deleted = stubCacheStorage(['api-v1-v8-tok', 'pages-v8-tok'])
+    stubServiceWorker({ controlled: true })
+
+    await announceCacheOwner('user-a')
+
+    expect(deleted).toEqual([])
+  })
+
   // Nothing is registered in development, and nothing is registered on the very
   // first production load either. `ready` never settles in that state, so the
   // sign-in that awaits this before navigating would hang forever.
@@ -200,6 +259,25 @@ describe('announceCacheOwner', () => {
 
     await expect(announceCacheOwner('user-a')).resolves.toBeUndefined()
     expect(postMessage).not.toHaveBeenCalled()
+  })
+
+  // No reload happens when another tab swaps the account, so the parse-time
+  // script never runs and this is the only thing that notices.
+  it('drops local snapshots when the account changes without a page load', async () => {
+    localStorage.setItem('planningCache_6_2026', '1')
+
+    await announceCacheOwner('user-b')
+
+    expect(localStorage.getItem('planningCache_6_2026')).toBeNull()
+  })
+
+  it('keeps local snapshots when the same account re-announces', async () => {
+    await announceCacheOwner('user-a')
+    localStorage.setItem('planningCache_6_2026', '1')
+
+    await announceCacheOwner('user-a')
+
+    expect(localStorage.getItem('planningCache_6_2026')).toBe('1')
   })
 
   it('is a no-op without service-worker support', async () => {

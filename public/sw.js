@@ -33,8 +33,12 @@ const OWNER_KEY = '/__cache-owner__'
 const API_CACHE_PREFIX = `api-v1-${CACHE_VERSION}-`
 const PAGE_CACHE_PREFIX = `pages-${CACHE_VERSION}-`
 
-/** @returns {Promise<{userId: string, token: string} | null>} */
-async function readCacheOwner() {
+/**
+ * The recorded owner, without waiting for a transition. Only for use *inside* a
+ * transition, which would otherwise wait on itself.
+ * @returns {Promise<{userId: string, token: string} | null>}
+ */
+async function loadCacheOwner() {
   const cache = await caches.open(OWNER_CACHE)
   const record = await cache.match(OWNER_KEY)
   if (!record) return null
@@ -44,6 +48,12 @@ async function readCacheOwner() {
   } catch {
     return null
   }
+}
+
+/** The owner a request should use: settled with respect to any transition under way. */
+async function readCacheOwner() {
+  await ownerTransition
+  return loadCacheOwner()
 }
 
 const apiCacheFor = (owner) => (owner ? API_CACHE_PREFIX + owner.token : null)
@@ -67,7 +77,7 @@ async function sweepPartitions(keep) {
  * ordinary reload or token refresh costs nothing.
  */
 async function setCacheOwner(userId) {
-  const current = await readCacheOwner()
+  const current = await loadCacheOwner()
   if (current && current.userId === userId) {
     await sweepPartitions(current)
     return
@@ -95,6 +105,19 @@ function mintToken() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
 }
 
+// An ownership change is several Cache Storage operations, and nothing makes
+// the worker finish handling a message before it answers the fetch events that
+// follow it. Requests therefore wait on any transition in progress before
+// resolving their partition, so a page that announces itself and immediately
+// starts fetching can't read the outgoing account's cache. Transitions are
+// chained so they also can't interleave with each other.
+let ownerTransition = Promise.resolve()
+
+const runOwnerTransition = (work) => {
+  ownerTransition = ownerTransition.then(work, work)
+  return ownerTransition
+}
+
 // ── Messages ──────────────────────────────────────────────────────────────────
 // The page announces the signed-in account on load and on every auth-state
 // change, and clears it on sign-out — see lib/clientCache.ts.
@@ -103,8 +126,8 @@ self.addEventListener('message', (event) => {
   if (!data) return
 
   let work = null
-  if (data.type === 'SET_CACHE_OWNER') work = setCacheOwner(data.userId ?? null)
-  else if (data.type === 'CLEAR_CACHE_OWNER') work = clearCacheOwner()
+  if (data.type === 'SET_CACHE_OWNER') work = runOwnerTransition(() => setCacheOwner(data.userId ?? null))
+  else if (data.type === 'CLEAR_CACHE_OWNER') work = runOwnerTransition(() => clearCacheOwner())
   if (!work) return
 
   // Reply when asked, so the page can await the purge before routing to login.

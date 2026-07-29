@@ -46,12 +46,18 @@ type FakeRequest = { url: string; method: string; mode?: string; destination?: s
 
 const keyOf = (req: FakeRequest | string) => (typeof req === 'string' ? req : req.url)
 
+// Cache Storage writes are genuinely slow on real devices, which is what opens
+// the window between announcing an owner and that owner taking effect. Turning
+// this on makes that window real instead of relying on microtask luck.
+const slowWrites = { enabled: false }
+const storageWrite = () => (slowWrites.enabled ? new Promise((r) => setTimeout(r, 1)) : Promise.resolve())
+
 class FakeCache {
   store = new Map<string, FakeResponse>()
-  async put(req: FakeRequest | string, res: FakeResponse) { this.store.set(keyOf(req), res) }
+  async put(req: FakeRequest | string, res: FakeResponse) { await storageWrite(); this.store.set(keyOf(req), res) }
   async add(url: string) { this.store.set(url, new FakeResponse(`offline-fallback:${url}`, { status: 200 })) }
   async match(req: FakeRequest | string) { return this.store.get(keyOf(req)) }
-  async delete(req: FakeRequest | string) { return this.store.delete(keyOf(req)) }
+  async delete(req: FakeRequest | string) { await storageWrite(); return this.store.delete(keyOf(req)) }
 }
 
 class FakeCacheStorage {
@@ -172,6 +178,7 @@ describe('service worker — authenticated cache isolation', () => {
 
   beforeEach(() => {
     blobGate.promise = null
+    slowWrites.enabled = false
     net = makeNetwork()
     sw = loadWorker(net.handler)
   })
@@ -301,6 +308,24 @@ describe('service worker — authenticated cache isolation', () => {
     const offline = await sw.request({ url: DASHBOARD_URL, mode: 'navigate' })
 
     expect(await offline!.text()).not.toContain('user-a-dashboard')
+  })
+
+  // The announcement is a message; the requests that follow it are fetch events.
+  // Nothing makes the worker finish handling the first before answering the
+  // second, so the transition has to hold them itself.
+  it('holds requests behind an ownership change that is still in progress', async () => {
+    await sw.message({ type: 'SET_CACHE_OWNER', userId: 'user-a' })
+    await sw.request({ url: OVERVIEW_URL })
+
+    net.state.online = false
+    slowWrites.enabled = true
+    const swap = sw.message({ type: 'SET_CACHE_OWNER', userId: 'user-b' }) // not awaited
+    const duringSwap = sw.request({ url: OVERVIEW_URL })
+    const [, response] = await Promise.all([swap, duringSwap])
+    slowWrites.enabled = false
+
+    expect(response!.status).toBe(503)
+    expect(await response!.text()).not.toContain('user-a')
   })
 
   // The fallback leaks in the other direction too: a request issued by user A's
