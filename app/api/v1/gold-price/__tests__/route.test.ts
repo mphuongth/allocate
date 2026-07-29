@@ -15,6 +15,7 @@ const h = vi.hoisted(() => ({
   user: { id: 'user-1' } as { id: string } | null,
   row: null as Record<string, unknown> | null,
   dbError: null as { code?: string; message: string } | null,
+  selects: [] as string[],
 }))
 
 const PGRST116 = {
@@ -29,7 +30,10 @@ vi.mock('@/lib/supabase-server', () => {
     return { data: h.row, error: null }
   }
   const chain: Record<string, unknown> = {
-    select: () => chain,
+    select: (cols: string) => {
+      h.selects.push(cols)
+      return chain
+    },
     eq: () => chain,
     single: async () => settle('single'),
     maybeSingle: async () => settle('maybeSingle'),
@@ -55,6 +59,7 @@ describe('GET /api/v1/gold-price', () => {
     h.user = { id: 'user-1' }
     h.row = null
     h.dbError = null
+    h.selects = []
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
 
@@ -93,5 +98,22 @@ describe('GET /api/v1/gold-price', () => {
     h.dbError = { message: 'connection reset by peer' }
     const res = await GET()
     expect(JSON.stringify(await res.json())).not.toContain('connection reset')
+  })
+
+  // previous_price_per_chi has no consumer today — this route returns it and
+  // useGoalDetailData reads only price_per_chi. That absence is deliberate
+  // (#548, option 2), which is exactly what makes the field an inviting target
+  // for a "drop the unused column" cleanup.
+  //
+  // The response-body assertion above cannot protect it: the route could ask for
+  // price_per_chi alone and still pass, because it echoes back whatever the mock
+  // supplies regardless of what was requested. This pins the request instead.
+  // gold_price_previous_column.test.sql guards the column itself; this guards the
+  // only link between that column and the client.
+  it('asks the database for previous_price_per_chi even though no UI reads it yet', async () => {
+    h.row = PRICE_ROW
+    await GET()
+    expect(h.selects).toHaveLength(1)
+    expect(h.selects[0]).toContain('previous_price_per_chi')
   })
 })

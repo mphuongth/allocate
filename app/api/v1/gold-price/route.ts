@@ -11,6 +11,14 @@ export async function GET() {
   // would be indistinguishable from a real read failure the moment we start
   // failing closed on errors. With maybeSingle a missing row is `data: null,
   // error: null`, so `error` means only one thing (#533).
+  // previous_price_per_chi is returned but nothing renders it. The only client,
+  // useGoalDetailData, takes price_per_chi and drops the rest — there is no gold
+  // price card in the app; the price is a valuation input, not a displayed quote.
+  // That is a decision, not an oversight (#548, option 2): the column is kept so
+  // a change-since-last-sync indicator stays possible, and the route keeps asking
+  // for it so the field is one edit away from being usable. Removing it from this
+  // select is the cheapest way to silently break that — hence the guard in
+  // __tests__/route.test.ts pinning the request rather than the response.
   const { data, error } = await supabase
     .from('gold_price_settings')
     .select('price_per_chi, previous_price_per_chi, updated_at')

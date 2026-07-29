@@ -1,0 +1,32 @@
+-- Record that previous_price_per_chi is deliberately unrendered (#548, option 2).
+--
+-- The column has no consumer. Both endpoints return it — GET /api/v1/gold-price
+-- selects it, POST /api/v1/gold-price/refresh returns the RPC row whole — but
+-- useGoalDetailData reads only price_per_chi, and settingsShared inspects only
+-- res.ok. There is no gold price card anywhere in the app: the price is a
+-- valuation input (dashboard overview, goal detail rows) and an editable prefill
+-- on the sell form, never a displayed quote.
+--
+-- That makes the column look like dead weight, and three separate pieces of work
+-- already hang off it (#528/#546 atomic carry-over, #547 the cron, #542/#543 the
+-- missing migration). This comment exists so the next person reads the absence
+-- of a display as a decision rather than a bug.
+--
+-- Option 2 was chosen over dropping it because keeping it costs nothing — the
+-- two RPCs maintain the pair atomically and are covered by DB tests — while
+-- dropping it would mean a migration plus reverting merged work, to recover an
+-- effort that has already been spent.
+--
+-- The superseded comment from 20260727000001 said the column exists "to show the
+-- change since last sync". No such display was ever built; that phrasing is what
+-- this migration corrects. The original file is left untouched because it has
+-- already run everywhere.
+--
+-- Before any delta UI is built, note that the two writers disagree about what
+-- this value means. The cron runs daily, so it reads as "yesterday's price". The
+-- manual refresh is rate-limited at 10 per 60s, so it reads as "the price before
+-- my last tap" — pressing Sync now twice collapses the day-over-day baseline to
+-- a 0% change. Settle that first.
+
+comment on column public.gold_price_settings.previous_price_per_chi is
+  'Price per chi immediately before the most recent refresh; null on a user''s first refresh. Returned by GET /api/v1/gold-price and POST /api/v1/gold-price/refresh but deliberately not rendered by any UI (#548, option 2) — kept so a change-since-last-sync indicator remains possible. Maintained atomically by refresh_gold_price (per user) and refresh_gold_price_all (cron). Do not drop it as unused without reopening #548.';

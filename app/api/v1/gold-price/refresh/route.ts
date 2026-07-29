@@ -58,5 +58,9 @@ export async function POST() {
     return NextResponse.json({ error: 'Failed to save gold price' }, { status: 500 })
   }
 
+  // The RPC row is returned whole, so previous_price_per_chi reaches the client
+  // here too. Nothing consumes it: settingsShared's refreshPrices only inspects
+  // res.ok. Deliberate — see #548, option 2, and the column comment in
+  // 20260729000001_document_previous_price_intent.sql.
   return NextResponse.json(data)
 }
