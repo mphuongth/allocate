@@ -5,22 +5,11 @@
 
 import type { DashboardData } from '@/app/assets/DashboardClient'
 
-// localStorage cache keys cleared on sign-out so the next account never sees
-// the previous user's stale data.
-const APP_CACHE_PREFIXES = [
-  'dashboardOverviewCache',
-  'planningCache_',
-  'savingsGoalsCache',
-  'fixedExpensesCache',
-  'insuranceMembersCache',
-  'fundLibraryCache',
-]
-
-export function clearAppCaches(): void {
-  Object.keys(localStorage)
-    .filter((k) => APP_CACHE_PREFIXES.some((p) => k.startsWith(p)))
-    .forEach((k) => localStorage.removeItem(k))
-}
+// Moved to lib/clientCache so the sign-out in UserMenu shares one definition of
+// "this account's caches" — which now spans the service worker's Cache Storage,
+// not just localStorage. Re-exported here because both settings views already
+// import it from this module.
+export { clearAppCaches } from '@/lib/clientCache'
 
 // Moved to lib/locale so the landing page's toggle can share it; re-exported
 // here because both settings views already import it from this module.

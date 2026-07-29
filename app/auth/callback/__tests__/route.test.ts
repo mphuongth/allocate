@@ -26,11 +26,17 @@ beforeEach(() => {
 })
 
 describe('GET /auth/callback — CSP-safe failure navigation (#516)', () => {
-  it('redirects to /dashboard on a successful code exchange', async () => {
+  // Not straight to /dashboard: this is a server redirect, so nothing has told
+  // the service worker that the account changed. If a previous account still
+  // owned the caches, that dashboard navigation could be answered from their
+  // cached HTML — which carries *their* ownership claim and re-asserts it (#565).
+  // /auth/complete hands ownership over first, and has no cached entry of its
+  // own to be served from.
+  it('redirects through the ownership handoff on a successful code exchange', async () => {
     const res = await GET(req('http://localhost/auth/callback?code=good'))
     expect(res.status).toBeGreaterThanOrEqual(300)
     expect(res.status).toBeLessThan(400)
-    expect(res.headers.get('location')).toContain('/dashboard')
+    expect(res.headers.get('location')).toContain('/auth/complete')
   })
 
   it('redirects to the dedicated error page (no inline script) when the exchange fails', async () => {

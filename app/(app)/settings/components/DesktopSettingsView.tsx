@@ -251,7 +251,7 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
     if (error) {
       toast.error(t('signOutFailed'))
     } else {
-      clearAppCaches()
+      await clearAppCaches()
       router.push('/auth/login')
     }
   }

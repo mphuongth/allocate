@@ -1,8 +1,140 @@
-const CACHE_VERSION = 'v7'
-const API_CACHE = `api-v1-${CACHE_VERSION}`
+// Bumped from v7 with the cache-owner rules below: the old `api-v1-v7` /
+// `pages-v7` entries were written without any account attached, so they can't
+// be trusted once ownership matters. The version bump makes `activate` drop
+// them on first deploy.
+const CACHE_VERSION = 'v8'
 const STATIC_CACHE = `static-assets-${CACHE_VERSION}`
-const PAGE_CACHE = `pages-${CACHE_VERSION}`
 const OFFLINE_URL = '/~offline'
+
+// ── Cache ownership ───────────────────────────────────────────────────────────
+// API responses and page HTML are per-account, but they are keyed by URL alone —
+// on a shared browser profile user B could be served user A's cached dashboard
+// (#565). So authenticated responses are *partitioned*: each account gets its
+// own pair of caches, named after an opaque token minted when that account takes
+// ownership.
+//
+// Partitioning rather than a shared cache guarded by checks is what makes this
+// timing-independent. A response is written to the partition of whoever asked
+// for it, decided before the request goes out; reads only ever open the current
+// owner's partition. An account switch landing midway through a request can
+// therefore never misfile a response, however the awaits interleave — the worst
+// case is a write into a partition nobody will read again, which the next sweep
+// removes. With no owner recorded there is no partition at all, so the worker
+// fails closed: nothing is read and nothing is stored.
+//
+// The record has to survive the worker being killed and restarted, and a worker
+// has no localStorage, so it lives in its own Cache Storage entry. The token is
+// used instead of the user id so cache names, which are visible in devtools,
+// don't enumerate the accounts that have used this browser. STATIC_CACHE is
+// deliberately shared: chunks, images and fonts carry no user data.
+const OWNER_CACHE = `cache-owner-${CACHE_VERSION}`
+// Same-origin-shaped key; never fetched, only used as a Cache Storage index.
+const OWNER_KEY = '/__cache-owner__'
+const API_CACHE_PREFIX = `api-v1-${CACHE_VERSION}-`
+const PAGE_CACHE_PREFIX = `pages-${CACHE_VERSION}-`
+
+/**
+ * The recorded owner, without waiting for a transition. Only for use *inside* a
+ * transition, which would otherwise wait on itself.
+ * @returns {Promise<{userId: string, token: string} | null>}
+ */
+async function loadCacheOwner() {
+  const cache = await caches.open(OWNER_CACHE)
+  const record = await cache.match(OWNER_KEY)
+  if (!record) return null
+  try {
+    const owner = JSON.parse(await record.text())
+    return owner && owner.userId && owner.token ? owner : null
+  } catch {
+    return null
+  }
+}
+
+/** The owner a request should use: settled with respect to any transition under way. */
+async function readCacheOwner() {
+  await ownerTransition
+  return loadCacheOwner()
+}
+
+const apiCacheFor = (owner) => (owner ? API_CACHE_PREFIX + owner.token : null)
+const pageCacheFor = (owner) => (owner ? PAGE_CACHE_PREFIX + owner.token : null)
+
+/** Delete every authenticated partition except the one `keep` owns (all, if null). */
+async function sweepPartitions(keep) {
+  const keys = await caches.keys()
+  const mine = [apiCacheFor(keep), pageCacheFor(keep)]
+  await Promise.all(
+    keys
+      .filter((key) => key.startsWith(API_CACHE_PREFIX) || key.startsWith(PAGE_CACHE_PREFIX))
+      .filter((key) => !mine.includes(key))
+      .map((key) => caches.delete(key))
+  )
+}
+
+/**
+ * Adopt `userId` as the cache owner. A different account gets a fresh partition
+ * and the previous one is swept; the same account keeps its cache, so an
+ * ordinary reload or token refresh costs nothing.
+ */
+async function setCacheOwner(userId) {
+  const current = await loadCacheOwner()
+  if (current && current.userId === userId) {
+    await sweepPartitions(current)
+    return
+  }
+
+  const owner = userId ? { userId, token: mintToken() } : null
+  const cache = await caches.open(OWNER_CACHE)
+  // Record first: until this lands, reads still resolve to the old partition,
+  // and after it they resolve to a partition that is empty by construction.
+  if (owner) await cache.put(OWNER_KEY, new Response(JSON.stringify(owner)))
+  else await cache.delete(OWNER_KEY)
+  await sweepPartitions(owner)
+}
+
+/** Sign-out: drop every authenticated response and forget who they belonged to. */
+async function clearCacheOwner() {
+  // Forget first, so any request racing this one finds no owner and fails closed.
+  const cache = await caches.open(OWNER_CACHE)
+  await cache.delete(OWNER_KEY)
+  await sweepPartitions(null)
+}
+
+function mintToken() {
+  if (self.crypto && self.crypto.randomUUID) return self.crypto.randomUUID()
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+}
+
+// An ownership change is several Cache Storage operations, and nothing makes
+// the worker finish handling a message before it answers the fetch events that
+// follow it. Requests therefore wait on any transition in progress before
+// resolving their partition, so a page that announces itself and immediately
+// starts fetching can't read the outgoing account's cache. Transitions are
+// chained so they also can't interleave with each other.
+let ownerTransition = Promise.resolve()
+
+const runOwnerTransition = (work) => {
+  ownerTransition = ownerTransition.then(work, work)
+  return ownerTransition
+}
+
+// ── Messages ──────────────────────────────────────────────────────────────────
+// The page announces the signed-in account on load and on every auth-state
+// change, and clears it on sign-out — see lib/clientCache.ts.
+self.addEventListener('message', (event) => {
+  const data = event.data
+  if (!data) return
+
+  let work = null
+  if (data.type === 'SET_CACHE_OWNER') work = runOwnerTransition(() => setCacheOwner(data.userId ?? null))
+  else if (data.type === 'CLEAR_CACHE_OWNER') work = runOwnerTransition(() => clearCacheOwner())
+  if (!work) return
+
+  // Reply when asked, so the page can await the purge before routing to login.
+  const port = event.ports && event.ports[0]
+  const done = port ? work.then(() => port.postMessage({ ok: true })) : work
+  if (event.waitUntil) event.waitUntil(done)
+})
 
 // ── Install ───────────────────────────────────────────────────────────────────
 // Pre-cache the offline fallback page so it's always available.
@@ -14,19 +146,18 @@ self.addEventListener('install', (event) => {
 })
 
 // ── Activate ──────────────────────────────────────────────────────────────────
-// Remove stale caches from previous versions.
+// Remove stale caches from previous versions, along with any partition that is
+// not the current owner's — including the unpartitioned `api-v1-v7` / `pages-v7`
+// entries, which were written before ownership existed and can't be attributed.
 self.addEventListener('activate', (event) => {
-  const currentCaches = [API_CACHE, STATIC_CACHE, PAGE_CACHE]
   event.waitUntil(
-    caches
-      .keys()
-      .then((keys) =>
-        Promise.all(
-          keys
-            .filter((key) => !currentCaches.includes(key))
-            .map((key) => caches.delete(key))
-        )
-      )
+    readCacheOwner()
+      .then((owner) => {
+        const keep = [STATIC_CACHE, OWNER_CACHE, apiCacheFor(owner), pageCacheFor(owner)]
+        return caches
+          .keys()
+          .then((keys) => Promise.all(keys.filter((key) => !keep.includes(key)).map((key) => caches.delete(key))))
+      })
       .then(() => self.clients.claim())
   )
 })
@@ -46,7 +177,7 @@ self.addEventListener('fetch', (event) => {
   // dashboard overview). 10 s was too tight and surfaced spurious "Offline"
   // errors on good connections.
   if (url.pathname.startsWith('/api/v1/')) {
-    event.respondWith(networkFirst(event, request, API_CACHE, 30_000))
+    event.respondWith(networkFirst(event, request, apiCacheFor, 30_000))
     return
   }
 
@@ -72,21 +203,27 @@ self.addEventListener('fetch', (event) => {
 // ── Handlers ──────────────────────────────────────────────────────────────────
 
 async function navigateHandler(event, request) {
+  // Resolved before the fetch goes out: this page belongs to whoever was signed
+  // in when it was asked for, so that is the partition it may be written to,
+  // whatever happens to the current owner in the meantime.
+  const partition = pageCacheFor(await readCacheOwner())
+
   try {
     const response = await fetch(request)
     // Clone BEFORE returning the response — once the browser starts reading
     // the body the stream is disturbed and clone() silently produces an empty body.
-    if (response.status === 200) {
+    if (response.status === 200 && partition) {
       const clone = response.clone()
-      event.waitUntil(
-        caches.open(PAGE_CACHE).then((cache) => cache.put(request.url, clone))
-      )
+      event.waitUntil(caches.open(partition).then((cache) => cache.put(request.url, clone)))
     }
     return response
   } catch {
-    // Network failed — serve cached page by URL (no Vary check)
-    const pageCache = await caches.open(PAGE_CACHE)
-    const cached = await pageCache.match(request.url)
+    // Network failed — serve the cached page by URL (no Vary check) from the
+    // same partition the request was issued under, never from whichever account
+    // happens to own the cache now. With no partition (signed out, or a fresh
+    // worker) the offline fallback below is the safe answer, and a partition
+    // swept by an account switch is empty, so this fails closed either way.
+    const cached = partition ? await (await caches.open(partition)).match(request.url) : null
     if (cached) return cached
 
     // No cached page — show offline fallback
@@ -101,9 +238,12 @@ async function navigateHandler(event, request) {
 /**
  * NetworkFirst: try network with a timeout, fall back to cache.
  * Cached responses expire after 24 h (checked on retrieval).
+ *
+ * `partitionFor` maps a cache owner to the cache this request may use, so the
+ * response is filed under the account that asked for it — see navigateHandler.
  */
-async function networkFirst(event, request, cacheName, timeoutMs) {
-  const cache = await caches.open(cacheName)
+async function networkFirst(event, request, partitionFor, timeoutMs) {
+  const partition = partitionFor(await readCacheOwner())
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
 
@@ -111,7 +251,7 @@ async function networkFirst(event, request, cacheName, timeoutMs) {
     const response = await fetch(request, { signal: controller.signal })
     clearTimeout(timeoutId)
 
-    if (response.ok) {
+    if (response.ok && partition) {
       const blob = await response.clone().blob()
       const headers = new Headers(response.headers)
       headers.set('sw-cached-at', Date.now().toString())
@@ -121,12 +261,13 @@ async function networkFirst(event, request, cacheName, timeoutMs) {
         headers,
       })
       // Extend SW lifetime so the cache write finishes before idle
-      event.waitUntil(cache.put(request, timestamped))
+      event.waitUntil(caches.open(partition).then((cache) => cache.put(request, timestamped)))
     }
     return response
   } catch {
     clearTimeout(timeoutId)
-    const cached = await cache.match(request)
+    // Same partition the request was issued under — see navigateHandler.
+    const cached = partition ? await (await caches.open(partition)).match(request) : null
     if (cached) {
       const cachedAt = Number(cached.headers.get('sw-cached-at') ?? 0)
       const maxAge = 24 * 60 * 60 * 1000 // 24 h
@@ -143,10 +284,13 @@ async function networkFirst(event, request, cacheName, timeoutMs) {
  * CacheFirst: serve from cache if available, otherwise fetch and cache.
  */
 async function cacheFirst(request, cacheName) {
-  const cached = await caches.match(request)
+  // Scoped to the named cache rather than a global `caches.match`, which would
+  // search the account partitions too and could answer a static request from
+  // authenticated data.
+  const cache = await caches.open(cacheName)
+  const cached = await cache.match(request)
   if (cached) return cached
 
-  const cache = await caches.open(cacheName)
   try {
     const response = await fetch(request)
     if (response.ok) cache.put(request, response.clone())

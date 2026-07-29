@@ -14,28 +14,24 @@ vi.mock('@/lib/generateReport', () => ({
   downloadPortfolioPDF: (...args: unknown[]) => downloadPortfolioPDF(...args),
 }))
 
+// The behaviour now lives in lib/clientCache (it also clears the service
+// worker's caches) and is covered by lib/__tests__/clientCache.test.ts; the two
+// settings views import it from here, so only the re-export is asserted.
 describe('clearAppCaches', () => {
   beforeEach(() => localStorage.clear())
 
-  it('removes only app cache keys and leaves unrelated keys intact', () => {
-    localStorage.setItem('dashboardOverviewCache', '1')
-    localStorage.setItem('planningCache_2026-06', '1')
+  it('is re-exported for the settings views', async () => {
+    const { clearAppCaches: fromLib } = await import('@/lib/clientCache')
+    expect(clearAppCaches).toBe(fromLib)
+  })
+
+  it('removes app cache keys', async () => {
     localStorage.setItem('savingsGoalsCache', '1')
-    localStorage.setItem('fixedExpensesCache:bills', '1')
-    localStorage.setItem('insuranceMembersCache', '1')
-    localStorage.setItem('fundLibraryCache', '1')
-    localStorage.setItem('cairn.insuranceCoachDismissed', '1') // unrelated, must survive
     localStorage.setItem('theme', 'dark') // unrelated, must survive
 
-    clearAppCaches()
+    await clearAppCaches()
 
-    expect(localStorage.getItem('dashboardOverviewCache')).toBeNull()
-    expect(localStorage.getItem('planningCache_2026-06')).toBeNull()
     expect(localStorage.getItem('savingsGoalsCache')).toBeNull()
-    expect(localStorage.getItem('fixedExpensesCache:bills')).toBeNull()
-    expect(localStorage.getItem('insuranceMembersCache')).toBeNull()
-    expect(localStorage.getItem('fundLibraryCache')).toBeNull()
-    expect(localStorage.getItem('cairn.insuranceCoachDismissed')).toBe('1')
     expect(localStorage.getItem('theme')).toBe('dark')
   })
 })
