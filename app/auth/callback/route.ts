@@ -28,7 +28,13 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!error) {
-      return NextResponse.redirect(`${origin}/dashboard`)
+      // Via /auth/complete, not straight to /dashboard: this is a server
+      // redirect, so nothing has told the service worker the account changed.
+      // A dashboard navigation made while a previous account still owns the
+      // caches can be answered from their cached HTML, which re-asserts their
+      // ownership before anything corrects it (#565). /auth/complete hands
+      // ownership over first and has no cached entry of its own.
+      return NextResponse.redirect(`${origin}/auth/complete`)
     }
   }
 

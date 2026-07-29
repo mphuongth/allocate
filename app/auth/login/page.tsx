@@ -7,6 +7,7 @@ import { createBrowserClient } from '@supabase/ssr'
 import { useTranslations } from 'next-intl'
 import { Eye, EyeOff } from 'lucide-react'
 import { AuthLayout } from '../AuthLayout'
+import { announceCacheOwner } from '@/lib/clientCache'
 
 const fieldLabelStyle: React.CSSProperties = {
   fontSize: 11,
@@ -39,12 +40,19 @@ function LoginForm() {
     )
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) {
         setError(t('invalidCredentials'))
         setLoading(false)
       } else {
         setRedirecting(true)
+        // Hand the service worker this account before navigating. The navigation
+        // below reaches the worker before the authenticated layout can mount and
+        // announce, so without this a stale owner left by a session that expired
+        // while the app was closed would still be in force — and a failed
+        // request would be answered from that account's cached pages (#565).
+        // Never block the login on it: the worker is optional.
+        await announceCacheOwner(data?.user?.id ?? '').catch(() => {})
         // Full-page navigation rather than router.push(): this forces the
         // server (middleware in proxy.ts + the (app) layout) to re-read the
         // freshly-set auth cookies on a clean request. A soft client-side push

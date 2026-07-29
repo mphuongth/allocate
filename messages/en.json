@@ -788,6 +788,7 @@
     "forgotPassword": "Forgot password?",
     "loginBtn": "Sign in",
     "loggingIn": "Signing in…",
+    "completingSignIn": "Completing sign-in…",
     "redirecting": "Redirecting…",
     "signupBtn": "Sign up",
     "signingUp": "Creating account…",

@@ -10,6 +10,7 @@ import Header from '../navigation/Header'
 import MobileBottomTabs from '../navigation/MobileBottomTabs'
 import MobileTopBar from '../navigation/MobileTopBar'
 import OfflineBanner from '@/app/components/OfflineBanner'
+import CacheOwnerAnnouncer from '@/app/components/CacheOwnerAnnouncer'
 import AddTransactionSheet from '@/app/assets/components/AddTransactionSheet'
 
 function getInitials(email: string): string {
@@ -85,7 +86,7 @@ function AuthenticatedLayoutInner({ children, email, initials }: { children: Rea
   )
 }
 
-export default function AuthenticatedLayout({ children, email, displayName }: { children: React.ReactNode; email: string; displayName?: string }) {
+export default function AuthenticatedLayout({ children, userId, email, displayName }: { children: React.ReactNode; userId: string; email: string; displayName?: string }) {
   const router = useRouter()
 
   // Watch for session expiry (e.g. token revoked or expired)
@@ -110,6 +111,7 @@ export default function AuthenticatedLayout({ children, email, displayName }: { 
 
   return (
     <NavigationProvider userName={userName}>
+      <CacheOwnerAnnouncer userId={userId} />
       <AuthenticatedLayoutInner email={email} initials={initials}>
         {children}
       </AuthenticatedLayoutInner>
