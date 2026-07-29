@@ -131,16 +131,9 @@ function LoginForm() {
             </div>
           </div>
 
-          <button
-            type="button"
-            style={{
-              background: 'transparent', border: 'none', padding: '10px 0 0',
-              fontSize: 12, color: 'var(--c-navy)', fontWeight: 500, cursor: 'pointer',
-              fontFamily: 'inherit', textAlign: 'left',
-            }}
-          >
-            {t('forgotPassword')}
-          </button>
+          {/* A "Forgot password?" control used to sit here with nothing behind
+              it — no handler, no reset flow (#568). Removed until the feature
+              exists; restore it together with the reset route. */}
 
           <button
             type="submit"

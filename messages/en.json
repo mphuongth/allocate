@@ -785,7 +785,6 @@
     "passwordLabel": "Password",
     "fullNameLabel": "Full name",
     "confirmPasswordLabel": "Confirm password",
-    "forgotPassword": "Forgot password?",
     "loginBtn": "Sign in",
     "loggingIn": "Signing in…",
     "completingSignIn": "Completing sign-in…",

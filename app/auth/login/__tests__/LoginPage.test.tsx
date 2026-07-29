@@ -118,3 +118,31 @@ describe('LoginPage — navigation after successful sign-in', () => {
     expect(pushMock).not.toHaveBeenCalled()
   })
 })
+
+// The form used to render a "Forgot password?" button with no onClick, no href
+// and no reset flow behind it — clicking it did nothing (#568). There is no
+// password-reset feature yet, so the control is gone until there is one.
+describe('LoginPage — no dead controls', () => {
+  it('offers no password-reset control while the feature does not exist', () => {
+    render(<LoginPage />)
+
+    expect(screen.queryByRole('button', { name: /forgotPassword/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /forgotPassword/i })).not.toBeInTheDocument()
+  })
+
+  it('gives every non-submit button something to do when clicked', () => {
+    render(<LoginPage />)
+
+    // Guards against another decorative control creeping in. React attaches
+    // handlers through its own props object rather than the DOM `onclick`
+    // attribute, so read the props React stored on the element.
+    const inert = screen.getAllByRole('button').filter((button) => {
+      if (button.getAttribute('type') === 'submit') return false
+      const props = Object.entries(button)
+        .find(([key]) => key.startsWith('__reactProps$'))?.[1] as { onClick?: unknown } | undefined
+      return typeof props?.onClick !== 'function'
+    })
+
+    expect(inert.map((b) => b.textContent)).toEqual([])
+  })
+})
