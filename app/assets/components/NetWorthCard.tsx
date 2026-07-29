@@ -5,33 +5,10 @@ import { TrendingUp, TrendingDown } from 'lucide-react'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import { CairnLoader } from '@/app/components/ui/CairnLoader'
 import { TIME_RANGES, type TimeRange, type ChartPoint } from './netWorthHistory'
+import Sparkline from './Sparkline'
 
-// SVG sparkline — no recharts dependency
-function Sparkline({ data, positive }: { data: ChartPoint[]; positive: boolean }) {
-  if (data.length < 2) return null
-  const values = data.map((d) => d.value)
-  const rawMin = Math.min(...values)
-  const rawMax = Math.max(...values)
-  const pad = (rawMax - rawMin) * 0.15 || rawMax * 0.1 || 1
-  const min = Math.max(0, rawMin - pad)
-  const max = rawMax + pad
-  const range = max - min || 1
-  const W = 100
-  const H = 36
-  const points = values
-    .map((v, i) => {
-      const x = (i / (values.length - 1)) * W
-      const y = H - ((v - min) / range) * (H - 6) - 3
-      return `${x.toFixed(2)},${y.toFixed(2)}`
-    })
-    .join(' ')
-  const color = positive ? 'var(--c-pos)' : 'var(--c-neg)'
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: '100%', height: H, display: 'block' }}>
-      <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
-    </svg>
-  )
-}
+// Shorter than the desktop panel's — this card sits in a denser mobile stack.
+const SPARKLINE_HEIGHT = 36
 
 const ALLOC_COLORS = {
   fund:  '#2563eb',
@@ -201,7 +178,7 @@ export default function NetWorthCard({
       {/* Sparkline */}
       <div style={{ marginTop: 16, paddingBottom: 6 }}>
         {history.length > 1
-          ? <Sparkline data={history} positive={plPositive} />
+          ? <Sparkline data={history} positive={plPositive} height={SPARKLINE_HEIGHT} />
           : <div style={{ height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <span style={{ fontSize: 11, color: 'var(--c-muted)' }}>{t('noHistoryYet')}</span>
             </div>

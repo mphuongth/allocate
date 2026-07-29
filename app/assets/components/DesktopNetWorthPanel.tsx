@@ -1,48 +1,15 @@
 'use client'
 
 import { ArrowDownToLine } from 'lucide-react'
-import { fmtCompact, fmtPct } from '@/lib/formatters'
+import { fmtCompact, fmtPct, fmtTimeAgo } from '@/lib/formatters'
 import { CairnLoader } from '@/app/components/ui/CairnLoader'
 import type { DashboardData } from '../DashboardClient'
 import type { AllocationTotals } from '../overviewData'
 import { TIME_RANGES, type TimeRange, type ChartPoint } from './netWorthHistory'
+import Sparkline from './Sparkline'
 
-function fmtTimeAgo(isoString: string, locale: string): string {
-  const diffMs = Date.now() - new Date(isoString).getTime()
-  const mins = Math.floor(diffMs / 60_000)
-  const hours = Math.floor(mins / 60)
-  const days = Math.floor(hours / 24)
-  const isVi = locale === 'vi'
-  if (days > 0) return isVi ? `${days} ngày trước` : `${days}d ago`
-  if (hours > 0) return isVi ? `${hours} giờ trước` : `${hours}h ago`
-  return isVi ? `${mins} phút trước` : `${mins}m ago`
-}
-
-function Sparkline({ data, positive }: { data: ChartPoint[]; positive: boolean }) {
-  if (data.length < 2) return null
-  const values = data.map((d) => d.value)
-  const rawMin = Math.min(...values)
-  const rawMax = Math.max(...values)
-  const pad = (rawMax - rawMin) * 0.15 || rawMax * 0.1 || 1
-  const min = Math.max(0, rawMin - pad)
-  const max = rawMax + pad
-  const range = max - min || 1
-  const W = 100
-  const H = 40
-  const points = values
-    .map((v, i) => {
-      const x = (i / (values.length - 1)) * W
-      const y = H - ((v - min) / range) * (H - 6) - 3
-      return `${x.toFixed(2)},${y.toFixed(2)}`
-    })
-    .join(' ')
-  const color = positive ? 'var(--c-pos)' : 'var(--c-neg)'
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: '100%', height: H, display: 'block' }}>
-      <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
-    </svg>
-  )
-}
+// Taller than the mobile card's — the desktop panel has the room for it.
+const SPARKLINE_HEIGHT = 40
 
 const ALLOC_COLORS: Record<string, { color: string; label: string; labelVi: string }> = {
   fund:  { color: '#2563eb', label: 'Funds',   labelVi: 'Quỹ' },
@@ -134,7 +101,7 @@ export default function DesktopNetWorthPanel({ data, allocationTotals, goldUnits
         {/* Sparkline */}
         <div style={{ marginTop: 16, paddingBottom: 4 }}>
           {history.length > 1
-            ? <Sparkline data={history} positive={isPos} />
+            ? <Sparkline data={history} positive={isPos} height={SPARKLINE_HEIGHT} />
             : <div style={{ height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <span style={{ fontSize: 11, color: 'var(--c-muted)' }}>{isVi ? 'Không có dữ liệu' : 'No history yet'}</span>
               </div>

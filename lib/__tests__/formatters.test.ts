@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { fmt, fmtNav, fmtUnits, fmtPct } from '../formatters'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { fmt, fmtNav, fmtUnits, fmtPct, fmtTimeAgo } from '../formatters'
 
 describe('fmt', () => {
   it('formats whole VND amounts with vi-VN thousands separator', () => {
@@ -61,5 +61,66 @@ describe('fmtPct', () => {
   })
   it('always shows 2 decimal places', () => {
     expect(fmtPct(1)).toBe('+1.00%')
+  })
+})
+
+// The "NAV updated N ago" label under the net-worth figure. It was copied
+// byte-for-byte into DashboardClient and DesktopNetWorthPanel, so neither copy
+// had any coverage of its Vietnamese output (#569).
+describe('fmtTimeAgo', () => {
+  const NOW = new Date('2026-07-29T12:00:00Z')
+  const ago = (ms: number) => new Date(NOW.getTime() - ms).toISOString()
+  const MIN = 60_000
+  const HOUR = 60 * MIN
+  const DAY = 24 * HOUR
+
+  const withClock = (fn: () => void) => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+    fn()
+  }
+
+  afterEach(() => vi.useRealTimers())
+
+  it('reads minutes in English and Vietnamese', () => {
+    withClock(() => {
+      expect(fmtTimeAgo(ago(5 * MIN), 'en')).toBe('5m ago')
+      expect(fmtTimeAgo(ago(5 * MIN), 'vi')).toBe('5 phút trước')
+    })
+  })
+
+  it('reads hours in English and Vietnamese', () => {
+    withClock(() => {
+      expect(fmtTimeAgo(ago(3 * HOUR), 'en')).toBe('3h ago')
+      expect(fmtTimeAgo(ago(3 * HOUR), 'vi')).toBe('3 giờ trước')
+    })
+  })
+
+  it('reads days in English and Vietnamese', () => {
+    withClock(() => {
+      expect(fmtTimeAgo(ago(2 * DAY), 'en')).toBe('2d ago')
+      expect(fmtTimeAgo(ago(2 * DAY), 'vi')).toBe('2 ngày trước')
+    })
+  })
+
+  it('reports the largest whole unit, not a rounded one', () => {
+    withClock(() => {
+      // 90 minutes is an hour and a half — "1h ago", never "2h ago".
+      expect(fmtTimeAgo(ago(90 * MIN), 'en')).toBe('1h ago')
+      expect(fmtTimeAgo(ago(47 * HOUR), 'en')).toBe('1d ago')
+    })
+  })
+
+  it('falls back to minutes for anything under an hour, including just now', () => {
+    withClock(() => {
+      expect(fmtTimeAgo(ago(0), 'en')).toBe('0m ago')
+      expect(fmtTimeAgo(ago(59 * MIN), 'vi')).toBe('59 phút trước')
+    })
+  })
+
+  it('treats any locale that is not Vietnamese as English', () => {
+    withClock(() => {
+      expect(fmtTimeAgo(ago(5 * MIN), 'fr')).toBe('5m ago')
+    })
   })
 })

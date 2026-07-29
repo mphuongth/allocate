@@ -27,6 +27,7 @@ import { collapseUnallocatedBooks } from './unallocatedBooks'
 import type { InvRow } from './components/goalDetailShared'
 import { loadOverview, overviewErrorText, getCachedOverview, setCachedOverview, computeAllocationTotals } from './overviewData'
 import { fetchNetWorthHistory, type TimeRange, type ChartPoint } from './components/netWorthHistory'
+import { fmtTimeAgo } from '@/lib/formatters'
 
 import TransactionHistorySheet from './components/TransactionHistorySheet'
 import DesktopNetWorthPanel from './components/DesktopNetWorthPanel'
@@ -193,17 +194,6 @@ function SortDropdown({ value, onChange, options }: {
       )}
     </div>
   )
-}
-
-function fmtTimeAgo(isoString: string, locale: string): string {
-  const diffMs = Date.now() - new Date(isoString).getTime()
-  const mins = Math.floor(diffMs / 60_000)
-  const hours = Math.floor(mins / 60)
-  const days = Math.floor(hours / 24)
-  const isVi = locale === 'vi'
-  if (days > 0) return isVi ? `${days} ngày trước` : `${days}d ago`
-  if (hours > 0) return isVi ? `${hours} giờ trước` : `${hours}h ago`
-  return isVi ? `${mins} phút trước` : `${mins}m ago`
 }
 
 // Map a dashboard overview non-fund holding to the InvRow shape the maturity
