@@ -8,6 +8,24 @@ export const fmtUnits = (n: number) =>
 
 export const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`
 
+/**
+ * Coarse "N ago" for the NAV-updated label under the net-worth figure. Reports
+ * the largest whole unit and stops at days — this labels a price sync, so
+ * anything older than a few days reads the same to the user either way.
+ *
+ * Any locale that isn't Vietnamese renders in English.
+ */
+export function fmtTimeAgo(isoString: string, locale: string): string {
+  const diffMs = Date.now() - new Date(isoString).getTime()
+  const mins = Math.floor(diffMs / 60_000)
+  const hours = Math.floor(mins / 60)
+  const days = Math.floor(hours / 24)
+  const isVi = locale === 'vi'
+  if (days > 0) return isVi ? `${days} ngày trước` : `${days}d ago`
+  if (hours > 0) return isVi ? `${hours} giờ trước` : `${hours}h ago`
+  return isVi ? `${mins} phút trước` : `${mins}m ago`
+}
+
 // Compact money for dense lists: 15.5M ₫, 350K ₫, 1.2B ₫
 export const fmtCompact = (n: number) => {
   const abs = Math.abs(n)
