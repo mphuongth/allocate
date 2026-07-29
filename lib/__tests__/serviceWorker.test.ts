@@ -149,6 +149,7 @@ function makeNetwork() {
   const handler = async (req: FakeRequest) => {
     if (!state.online) throw new Error('offline')
     if (state.hold) await state.hold
+    if (!state.online) throw new Error('offline') // the network can die while held
     const isPage = req.mode === 'navigate'
     return new FakeResponse(isPage ? state.page : state.body, { status: 200 })
   }
@@ -300,6 +301,53 @@ describe('service worker — authenticated cache isolation', () => {
     const offline = await sw.request({ url: DASHBOARD_URL, mode: 'navigate' })
 
     expect(await offline!.text()).not.toContain('user-a-dashboard')
+  })
+
+  // The fallback leaks in the other direction too: a request issued by user A's
+  // still-open tab must not be answered from the partition of whoever owns the
+  // cache by the time that request gives up.
+  it('does not answer a request from the account that took over mid-request', async () => {
+    await sw.message({ type: 'SET_CACHE_OWNER', userId: 'user-a' })
+
+    const gate = deferred()
+    net.state.hold = gate.promise
+    const aInFlight = sw.request({ url: OVERVIEW_URL })   // user A's tab, held
+    await flush()
+    net.state.hold = null
+
+    // User B signs in on another tab and populates the same endpoint.
+    await sw.message({ type: 'SET_CACHE_OWNER', userId: 'user-b' })
+    net.state.body = 'user-b-portfolio'
+    await sw.request({ url: OVERVIEW_URL })
+
+    // A's request then fails, long after ownership moved on.
+    net.state.online = false
+    gate.release()
+    const aResponse = await aInFlight
+
+    expect(aResponse!.status).toBe(503)
+    expect(await aResponse!.text()).not.toContain('user-b')
+  })
+
+  it('does not answer a navigation from the account that took over mid-request', async () => {
+    await sw.install()
+    await sw.message({ type: 'SET_CACHE_OWNER', userId: 'user-a' })
+
+    const gate = deferred()
+    net.state.hold = gate.promise
+    const aInFlight = sw.request({ url: DASHBOARD_URL, mode: 'navigate' })
+    await flush()
+    net.state.hold = null
+
+    await sw.message({ type: 'SET_CACHE_OWNER', userId: 'user-b' })
+    net.state.page = '<html>user-b-dashboard</html>'
+    await sw.request({ url: DASHBOARD_URL, mode: 'navigate' })
+
+    net.state.online = false
+    gate.release()
+    const aResponse = await aInFlight
+
+    expect(await aResponse!.text()).not.toContain('user-b-dashboard')
   })
 
   // Checking ownership and then writing are separated by asynchronous work

@@ -30,6 +30,26 @@ function getServiceWorkerContainer(): ServiceWorkerContainer | null {
   return navigator.serviceWorker
 }
 
+/**
+ * Source for an inline script that claims cache ownership during HTML parsing.
+ *
+ * React effects cannot win this race: effects run child-first, so a page's data
+ * fetch starts before the layout's announcement. Running it as an inline script
+ * puts ownership in place before hydration and before any fetch — and covers
+ * entries no client code precedes, such as the email-confirmation callback
+ * redirecting straight to /dashboard (#565).
+ *
+ * Fire-and-forget: with no controller there is no worker holding a partition,
+ * so there is nothing to correct. The effect in CacheOwnerAnnouncer still runs
+ * and handles every later auth-state change.
+ */
+export function buildCacheOwnerScript(userId: string): string {
+  // Serialised as data, with `<` escaped so the payload can't close the script
+  // element — the id reaches us from the session, not from source we control.
+  const payload = JSON.stringify({ type: 'SET_CACHE_OWNER', userId }).replace(/</g, '\\u003c')
+  return `try{navigator.serviceWorker.controller.postMessage(${payload})}catch(e){}`
+}
+
 // How long to wait for the worker to confirm an ownership change before giving
 // up. Only a safety valve: the work is a couple of Cache Storage deletes, and a
 // worker that never replies must not leave the caller hanging.

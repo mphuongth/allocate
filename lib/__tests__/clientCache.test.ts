@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { clearAppCaches, announceCacheOwner } from '../clientCache'
+import { clearAppCaches, announceCacheOwner, buildCacheOwnerScript } from '../clientCache'
 
 const postMessage = vi.fn()
 
@@ -101,6 +101,43 @@ describe('clearAppCaches', () => {
     await expect(clearAppCaches()).resolves.toBeUndefined()
 
     expect(localStorage.getItem('savingsGoalsCache')).toBeNull()
+  })
+})
+
+// React effects can't win this race: effects run child-first, so the dashboard's
+// data fetch starts before the layout's announcement. An inline script in the
+// authenticated layout runs during HTML parsing — before hydration, before any
+// fetch, and on flows no client code precedes, such as the email-confirmation
+// callback redirecting straight to /dashboard.
+describe('buildCacheOwnerScript', () => {
+  function run(script: string, controller: { postMessage: (v: unknown) => void } | null) {
+    const nav = { serviceWorker: controller ? { controller } : undefined }
+    new Function('navigator', script)(nav)
+  }
+
+  it('claims ownership through the controlling worker', () => {
+    const sent: unknown[] = []
+    run(buildCacheOwnerScript('user-a'), { postMessage: (v) => sent.push(v) })
+
+    expect(sent).toEqual([{ type: 'SET_CACHE_OWNER', userId: 'user-a' }])
+  })
+
+  it('does nothing when the page is not controlled by a worker', () => {
+    expect(() => run(buildCacheOwnerScript('user-a'), null)).not.toThrow()
+  })
+
+  it('cannot break out of the script element', () => {
+    const script = buildCacheOwnerScript('</script><img onerror=alert(1)>')
+
+    expect(script).not.toContain('</script>')
+    expect(script).not.toContain('<')
+  })
+
+  it('embeds the id as data rather than interpolated source', () => {
+    const sent: unknown[] = []
+    run(buildCacheOwnerScript("'); alert(1); ('"), { postMessage: (v) => sent.push(v) })
+
+    expect(sent).toEqual([{ type: 'SET_CACHE_OWNER', userId: "'); alert(1); ('" }])
   })
 })
 

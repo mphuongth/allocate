@@ -196,10 +196,11 @@ async function navigateHandler(event, request) {
     return response
   } catch {
     // Network failed — serve the cached page by URL (no Vary check) from the
-    // current owner's partition. With no owner (signed out, or a fresh worker)
-    // there is no partition and the offline fallback below is the safe answer.
-    const current = pageCacheFor(await readCacheOwner())
-    const cached = current ? await (await caches.open(current)).match(request.url) : null
+    // same partition the request was issued under, never from whichever account
+    // happens to own the cache now. With no partition (signed out, or a fresh
+    // worker) the offline fallback below is the safe answer, and a partition
+    // swept by an account switch is empty, so this fails closed either way.
+    const cached = partition ? await (await caches.open(partition)).match(request.url) : null
     if (cached) return cached
 
     // No cached page — show offline fallback
@@ -242,8 +243,8 @@ async function networkFirst(event, request, partitionFor, timeoutMs) {
     return response
   } catch {
     clearTimeout(timeoutId)
-    const current = partitionFor(await readCacheOwner())
-    const cached = current ? await (await caches.open(current)).match(request) : null
+    // Same partition the request was issued under — see navigateHandler.
+    const cached = partition ? await (await caches.open(partition)).match(request) : null
     if (cached) {
       const cachedAt = Number(cached.headers.get('sw-cached-at') ?? 0)
       const maxAge = 24 * 60 * 60 * 1000 // 24 h
