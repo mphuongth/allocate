@@ -51,6 +51,34 @@ describe('readJsonBody', () => {
   // destructuring (another 500), and a primitive or array silently yields
   // undefined for every field, which reads as "missing required field" rather
   // than "you sent the wrong shape".
+  // A few routes take an optional body — mark-paid defaults the payment date to
+  // today when none is sent. "Nothing sent" and "sent something broken" are
+  // different mistakes, and only the second is the client's.
+  describe('optional bodies', () => {
+    const read = (body: BodyInit | null) => readJsonBody(post(body), { optional: true })
+
+    it('treats an absent body as an empty object', async () => {
+      expect(await read(null)).toEqual({ ok: true, body: {} })
+    })
+
+    it('treats an empty body as an empty object', async () => {
+      expect(await read('')).toEqual({ ok: true, body: {} })
+      expect(await read('   ')).toEqual({ ok: true, body: {} })
+    })
+
+    it('still rejects a malformed body with 400', async () => {
+      const result = await read('{"paid_date": ')
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.response.status).toBe(400)
+    })
+
+    it('still rejects JSON that is not an object', async () => {
+      const result = await read('"2026-01-01"')
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.response.status).toBe(400)
+    })
+  })
+
   it('rejects JSON that is not an object', async () => {
     for (const body of ['null', '5', '"text"', 'true', '[{"goal_name":"House"}]']) {
       const { status, payload } = await reject(body)

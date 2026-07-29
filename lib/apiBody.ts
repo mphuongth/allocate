@@ -33,10 +33,31 @@ const badRequest = (error: string) => NextResponse.json({ error }, { status: 400
 
 export async function readJsonBody<T = JsonBody>(
   request: Request,
+  /**
+   * `optional` is for the few routes whose body is genuinely optional — mark-paid
+   * defaults the payment date to today when none is sent. Sending nothing and
+   * sending something broken are different mistakes, and only the second is the
+   * client's, so an absent body yields `{}` while a malformed one is still a 400.
+   */
+  { optional = false }: { optional?: boolean } = {},
 ): Promise<JsonBodyResult<T>> {
+  // Read as text rather than calling `.json()`, so "empty" is distinguishable
+  // from "unparseable" instead of both arriving as the same SyntaxError.
+  let raw: string
+  try {
+    raw = await request.text()
+  } catch {
+    return { ok: false, response: badRequest('Request body could not be read') }
+  }
+
+  if (raw.trim() === '') {
+    if (optional) return { ok: true, body: {} as T }
+    return { ok: false, response: badRequest('Request body must be valid JSON') }
+  }
+
   let parsed: unknown
   try {
-    parsed = await request.json()
+    parsed = JSON.parse(raw)
   } catch {
     return { ok: false, response: badRequest('Request body must be valid JSON') }
   }
