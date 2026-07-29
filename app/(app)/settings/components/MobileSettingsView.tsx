@@ -514,7 +514,7 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
     if (error) {
       toast.error(t('signOutFailed'))
     } else {
-      clearAppCaches()
+      await clearAppCaches()
       router.push('/auth/login')
     }
   }

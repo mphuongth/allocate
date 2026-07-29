@@ -5,6 +5,7 @@ import { createBrowserClient } from '@supabase/ssr'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { useTranslations } from 'next-intl'
+import { clearAppCaches } from '@/lib/clientCache'
 
 export default function UserMenu() {
   const t = useTranslations('auth')
@@ -21,10 +22,9 @@ export default function UserMenu() {
         action: { label: t('retryLabel'), onClick: handleLogout },
       })
     } else {
-      // Clear all page caches on logout
-      Object.keys(localStorage)
-        .filter(k => k.startsWith('dashboardOverviewCache') || k.startsWith('planningCache_') || k.startsWith('savingsGoalsCache') || k.startsWith('fixedExpensesCache') || k.startsWith('insuranceMembersCache') || k.startsWith('fundLibraryCache'))
-        .forEach(k => localStorage.removeItem(k))
+      // Drop this account's caches — localStorage snapshots and the service
+      // worker's authenticated responses — before the next account can sign in.
+      await clearAppCaches()
       toast.success(t('logoutSuccess'))
       router.push('/auth/login')
     }

@@ -1,8 +1,73 @@
-const CACHE_VERSION = 'v7'
+// Bumped from v7 with the cache-owner rules below: the old `api-v1-v7` /
+// `pages-v7` entries were written without any account attached, so they can't
+// be trusted once ownership matters. The version bump makes `activate` drop
+// them on first deploy.
+const CACHE_VERSION = 'v8'
 const API_CACHE = `api-v1-${CACHE_VERSION}`
 const STATIC_CACHE = `static-assets-${CACHE_VERSION}`
 const PAGE_CACHE = `pages-${CACHE_VERSION}`
 const OFFLINE_URL = '/~offline'
+
+// ── Cache ownership ───────────────────────────────────────────────────────────
+// API responses and page HTML are per-account, but the caches above are keyed by
+// URL alone — on a shared browser profile user B could be served user A's cached
+// dashboard (#565). So the worker tracks which account the authenticated caches
+// belong to, and:
+//
+//   • only ever reads or writes them while an owner is known (fail closed), and
+//   • wipes them whenever the owner changes or is cleared.
+//
+// The record has to survive the worker being killed and restarted, and a worker
+// has no localStorage, so it lives in its own Cache Storage entry. STATIC_CACHE
+// is deliberately left alone: chunks, images and fonts carry no user data.
+const OWNER_CACHE = `cache-owner-${CACHE_VERSION}`
+// Same-origin-shaped key; never fetched, only used as a Cache Storage index.
+const OWNER_KEY = '/__cache-owner__'
+
+async function readCacheOwner() {
+  const cache = await caches.open(OWNER_CACHE)
+  const record = await cache.match(OWNER_KEY)
+  if (!record) return null
+  const owner = await record.text()
+  return owner || null
+}
+
+async function purgeUserCaches() {
+  await Promise.all([caches.delete(API_CACHE), caches.delete(PAGE_CACHE)])
+}
+
+/** Adopt `userId` as the cache owner, wiping the caches if it isn't the current one. */
+async function setCacheOwner(userId) {
+  if ((await readCacheOwner()) !== userId) await purgeUserCaches()
+  const cache = await caches.open(OWNER_CACHE)
+  if (userId) await cache.put(OWNER_KEY, new Response(userId))
+  else await cache.delete(OWNER_KEY)
+}
+
+/** Sign-out: drop every authenticated response and forget who they belonged to. */
+async function clearCacheOwner() {
+  await purgeUserCaches()
+  const cache = await caches.open(OWNER_CACHE)
+  await cache.delete(OWNER_KEY)
+}
+
+// ── Messages ──────────────────────────────────────────────────────────────────
+// The page announces the signed-in account on load and on every auth-state
+// change, and clears it on sign-out — see lib/clientCache.ts.
+self.addEventListener('message', (event) => {
+  const data = event.data
+  if (!data) return
+
+  let work = null
+  if (data.type === 'SET_CACHE_OWNER') work = setCacheOwner(data.userId ?? null)
+  else if (data.type === 'CLEAR_CACHE_OWNER') work = clearCacheOwner()
+  if (!work) return
+
+  // Reply when asked, so the page can await the purge before routing to login.
+  const port = event.ports && event.ports[0]
+  const done = port ? work.then(() => port.postMessage({ ok: true })) : work
+  if (event.waitUntil) event.waitUntil(done)
+})
 
 // ── Install ───────────────────────────────────────────────────────────────────
 // Pre-cache the offline fallback page so it's always available.
@@ -16,7 +81,7 @@ self.addEventListener('install', (event) => {
 // ── Activate ──────────────────────────────────────────────────────────────────
 // Remove stale caches from previous versions.
 self.addEventListener('activate', (event) => {
-  const currentCaches = [API_CACHE, STATIC_CACHE, PAGE_CACHE]
+  const currentCaches = [API_CACHE, STATIC_CACHE, PAGE_CACHE, OWNER_CACHE]
   event.waitUntil(
     caches
       .keys()
@@ -79,14 +144,22 @@ async function navigateHandler(event, request) {
     if (response.status === 200) {
       const clone = response.clone()
       event.waitUntil(
-        caches.open(PAGE_CACHE).then((cache) => cache.put(request.url, clone))
+        readCacheOwner().then((owner) => {
+          // Unattributable page: don't store it rather than risk serving it to
+          // whoever signs in next.
+          if (!owner) return
+          return caches.open(PAGE_CACHE).then((cache) => cache.put(request.url, clone))
+        })
       )
     }
     return response
   } catch {
-    // Network failed — serve cached page by URL (no Vary check)
-    const pageCache = await caches.open(PAGE_CACHE)
-    const cached = await pageCache.match(request.url)
+    // Network failed — serve cached page by URL (no Vary check), but only while
+    // an account owns the cache. With no owner (signed out, or a fresh worker)
+    // the offline fallback below is the safe answer.
+    const owner = await readCacheOwner()
+    const pageCache = owner ? await caches.open(PAGE_CACHE) : null
+    const cached = pageCache ? await pageCache.match(request.url) : null
     if (cached) return cached
 
     // No cached page — show offline fallback
@@ -111,7 +184,9 @@ async function networkFirst(event, request, cacheName, timeoutMs) {
     const response = await fetch(request, { signal: controller.signal })
     clearTimeout(timeoutId)
 
-    if (response.ok) {
+    // Only cache what can be attributed to the signed-in account, so a response
+    // fetched before the page announced itself can never outlive that session.
+    if (response.ok && (await readCacheOwner())) {
       const blob = await response.clone().blob()
       const headers = new Headers(response.headers)
       headers.set('sw-cached-at', Date.now().toString())
@@ -126,7 +201,7 @@ async function networkFirst(event, request, cacheName, timeoutMs) {
     return response
   } catch {
     clearTimeout(timeoutId)
-    const cached = await cache.match(request)
+    const cached = (await readCacheOwner()) ? await cache.match(request) : null
     if (cached) {
       const cachedAt = Number(cached.headers.get('sw-cached-at') ?? 0)
       const maxAge = 24 * 60 * 60 * 1000 // 24 h

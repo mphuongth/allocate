@@ -10,6 +10,7 @@ import Header from '../navigation/Header'
 import MobileBottomTabs from '../navigation/MobileBottomTabs'
 import MobileTopBar from '../navigation/MobileTopBar'
 import OfflineBanner from '@/app/components/OfflineBanner'
+import CacheOwnerAnnouncer from '@/app/components/CacheOwnerAnnouncer'
 import AddTransactionSheet from '@/app/assets/components/AddTransactionSheet'
 
 function getInitials(email: string): string {
@@ -110,6 +111,7 @@ export default function AuthenticatedLayout({ children, email, displayName }: { 
 
   return (
     <NavigationProvider userName={userName}>
+      <CacheOwnerAnnouncer />
       <AuthenticatedLayoutInner email={email} initials={initials}>
         {children}
       </AuthenticatedLayoutInner>
