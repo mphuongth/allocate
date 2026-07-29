@@ -1,20 +1,16 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef, useTransition } from 'react'
+import { useState, useRef } from 'react'
 import { useLocale, useTranslations } from 'next-intl'
-import { useRouter } from 'next/navigation'
-import { createBrowserClient } from '@supabase/ssr'
-import { useTheme, type ThemeChoice } from '@/app/components/ThemeProvider'
-import { useNavigation } from '@/app/components/navigation/NavigationContext'
+import { type ThemeChoice } from '@/app/components/ThemeProvider'
 import { useDialogA11y } from '@/app/(app)/planning/components/useDialogA11y'
 import {
   Sun, Moon, Settings, RefreshCw, TrendingUp,
   Coins, LogOut, Download, X, Check, Edit2,
 } from 'lucide-react'
-import { toast } from 'sonner'
 import DownloadReportSheet from '@/app/assets/components/DownloadReportSheet'
-import type { DashboardData } from '@/app/assets/DashboardClient'
-import { clearAppCaches, setLocaleCookie, refreshPrices, fetchOverview, exportPortfolioReport, fetchLastSync, formatLastSync } from '../settingsShared'
+import { useSettingsController } from '../useSettingsController'
+import { useManagedTimeout } from '../useManagedTimeout'
 
 interface Props {
   email: string
@@ -135,142 +131,38 @@ function SettingRow({ icon, label, onClick, last = false }: {
 export default function DesktopSettingsView({ email, initials, displayName }: Props) {
   const locale = useLocale()
   const t = useTranslations('settings')
-  const router = useRouter()
-  const [, startTransition] = useTransition()
-  const { theme: currentTheme, setTheme } = useTheme()
-  const { setUserName } = useNavigation()
+  const c = useSettingsController({ initials, displayName })
 
-  const supabase = useMemo(
-    () => createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    ),
-    []
-  )
-
-  const [localDisplayName, setLocalDisplayName] = useState(displayName)
-  const localInitials = localDisplayName
-    .split(/\s+/).slice(0, 2)
-    .map(w => w[0]?.toUpperCase() ?? '').join('') || initials
-
-  // Modals
+  // Modal state — the desktop's own chrome. The editor lives inline here rather
+  // than in a child component (mobile's ProfileSheet), so its draft and its
+  // success flash stay with the modal.
   const [showProfile, setShowProfile] = useState(false)
   const [profileSaved, setProfileSaved] = useState(false)
   const [profileName, setProfileName] = useState(displayName)
-
-  // Appearance — read from localStorage so it matches the actual active choice
-  const storedTheme = (): ThemeChoice => {
-    if (typeof localStorage === 'undefined') return currentTheme
-    const v = localStorage.getItem('theme')
-    return (v === 'light' || v === 'dark') ? v : 'system'
-  }
-  const [selectedTheme, setSelectedTheme] = useState<ThemeChoice>(currentTheme)
-  // Sync to the persisted theme after mount (kept in an effect to avoid an SSR
-  // hydration mismatch; both lint rules below are intentional for that reason).
-  useEffect(() => { setSelectedTheme(storedTheme()) }, []) // eslint-disable-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
-
-  // Price sync
-  const [syncing, setSyncing] = useState(false)
-  const [syncDone, setSyncDone] = useState(false)
-  const [syncFailed, setSyncFailed] = useState(false)
-  const [syncLimited, setSyncLimited] = useState(false)
-  const [syncPartial, setSyncPartial] = useState(false)
-  // undefined = loading, null = never synced, otherwise the last-sync ISO time.
-  const [lastSyncIso, setLastSyncIso] = useState<string | null | undefined>(undefined)
-  useEffect(() => { fetchLastSync().then(setLastSyncIso) }, [])
-
-  // Export
-  const [showReport, setShowReport] = useState(false)
-  const [overviewCache, setOverviewCache] = useState<DashboardData | null>(null)
-
-  function switchLocale(next: string) {
-    setLocaleCookie(next)
-    startTransition(() => router.refresh())
-  }
-
-  function handleTheme(v: ThemeChoice) {
-    setSelectedTheme(v)
-    setTheme(v)
-  }
-
-  async function handleSync() {
-    setSyncing(true)
-    setSyncDone(false)
-    setSyncFailed(false)
-    setSyncLimited(false)
-    setSyncPartial(false)
-    const result = await refreshPrices()
-    setSyncing(false)
-    if (result.ok) {
-      // Partial still advances the timestamp — prices did move, just not all.
-      setSyncDone(true)
-      if (result.partial) setSyncPartial(true)
-      setLastSyncIso(new Date().toISOString())
-      setTimeout(() => { setSyncDone(false); setSyncPartial(false) }, 3000)
-    } else if (result.reason === 'rate-limited') {
-      // Distinct from a failure: nothing is broken, the user just has to wait.
-      setSyncLimited(true)
-      setTimeout(() => setSyncLimited(false), 3000)
-    } else {
-      setSyncFailed(true)
-      setTimeout(() => setSyncFailed(false), 3000)
-    }
-  }
-
-  function handleOpenReport() {
-    setShowReport(true)
-    fetchOverview().then((json) => { if (json) setOverviewCache(json) })
-  }
-
-  async function handleExportReport() {
-    await exportPortfolioReport(overviewCache, locale)
-  }
+  const scheduleSaveFlashReset = useManagedTimeout()
 
   function handleOpenProfile() {
-    setProfileName(localDisplayName)
+    setProfileName(c.displayName)
     setProfileSaved(false)
     setShowProfile(true)
   }
 
   async function handleSaveProfile() {
-    // Persist first; only flash "Saved" once it succeeds. A failed update
-    // surfaces a toast and keeps the modal open instead of faking success.
-    const { error } = await supabase.auth.updateUser({ data: { display_name: profileName } })
-    if (error) {
-      toast.error(t('saveFailed'))
-      return
-    }
-    setLocalDisplayName(profileName)
-    setUserName(profileName)
+    // Only flash "Saved" and close once the persist succeeded — a failed update
+    // surfaces a toast (from saveProfile) and keeps the modal open.
+    const ok = await c.saveProfile(profileName)
+    if (!ok) return
     setProfileSaved(true)
-    setTimeout(() => { setProfileSaved(false); setShowProfile(false) }, SAVE_FLASH_MS)
+    scheduleSaveFlashReset(() => { setProfileSaved(false); setShowProfile(false) }, SAVE_FLASH_MS)
   }
 
-  async function handleSignOut() {
-    const { error } = await supabase.auth.signOut()
-    if (error) {
-      toast.error(t('signOutFailed'))
-    } else {
-      await clearAppCaches()
-      router.push('/auth/login')
-    }
-  }
+  const isSyncing = c.syncStatus === 'syncing'
 
   const themeOptions: { v: ThemeChoice; icon: React.ReactNode; label: string }[] = [
     { v: 'light',  icon: <Sun size={13} color="currentColor" />,      label: t('appearanceLight')  },
     { v: 'dark',   icon: <Moon size={13} color="currentColor" />,     label: t('appearanceDark')   },
     { v: 'system', icon: <Settings size={13} color="currentColor" />, label: t('appearanceSystem') },
   ]
-
-  // Rate-limited and partial are neutral, not negative: nothing is broken —
-  // the user is early, or some prices moved and some didn't.
-  const syncStatusColor = syncPartial
-    ? 'var(--c-muted)'
-    : syncDone
-    ? 'var(--c-pos)'
-    : syncFailed
-    ? 'var(--c-neg)'
-    : 'var(--c-muted)'
 
   return (
     <div data-testid="desktop-settings-view" className="hidden md:flex" style={{ flex: 1, flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
@@ -304,10 +196,10 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: 16, fontWeight: 700, letterSpacing: '0.02em', flexShrink: 0,
                 }}>
-                  {localInitials}
+                  {c.initials}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--c-ink)' }}>{localDisplayName}</div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--c-ink)' }}>{c.displayName}</div>
                   <div style={{ fontSize: 12, color: 'var(--c-muted)', marginTop: 2 }}>{email}</div>
                 </div>
                 <button
@@ -334,7 +226,7 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
                   {[{ v: 'en', l: t('languageEnglish') }, { v: 'vi', l: t('languageVietnamese') }].map(o => (
                     <button
                       key={o.v}
-                      onClick={() => switchLocale(o.v)}
+                      onClick={() => c.switchLocale(o.v)}
                       style={{
                         padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 500,
                         background: locale === o.v ? 'var(--c-btn-primary)' : 'var(--c-card-2)',
@@ -358,13 +250,13 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
                   {themeOptions.map(o => (
                     <button
                       key={o.v}
-                      onClick={() => handleTheme(o.v)}
+                      onClick={() => c.selectTheme(o.v)}
                       style={{
                         display: 'flex', alignItems: 'center', gap: 6,
                         padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 500,
-                        background: selectedTheme === o.v ? 'var(--c-navy-tint)' : 'var(--c-card-2)',
-                        color: selectedTheme === o.v ? 'var(--c-navy)' : 'var(--c-muted)',
-                        border: `1px solid ${selectedTheme === o.v ? 'var(--c-navy)' : 'var(--c-line)'}`,
+                        background: c.themeChoice === o.v ? 'var(--c-navy-tint)' : 'var(--c-card-2)',
+                        color: c.themeChoice === o.v ? 'var(--c-navy)' : 'var(--c-muted)',
+                        border: `1px solid ${c.themeChoice === o.v ? 'var(--c-navy)' : 'var(--c-line)'}`,
                         cursor: 'pointer', fontFamily: 'inherit', transition: 'all 120ms',
                       }}
                     >
@@ -378,7 +270,7 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
 
             {/* Sign out */}
             <button
-              onClick={handleSignOut}
+              onClick={c.signOut}
               aria-label={t('signOut')}
               style={{
                 width: '100%', padding: '12px 16px',
@@ -407,38 +299,28 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
               <CardLabel>{t('priceSync')}</CardLabel>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
                 <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--c-navy-tint)', color: 'var(--c-navy)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <RefreshCw size={15} style={{ animation: syncing ? 'spin 1s linear infinite' : 'none' }} />
+                  <RefreshCw size={15} style={{ animation: isSyncing ? 'spin 1s linear infinite' : 'none' }} />
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)' }}>
                     {t('syncAllPrices')}
                   </div>
-                  <div style={{ fontSize: 11, color: syncStatusColor, marginTop: 2, transition: 'color 200ms' }}>
-                    {syncing
-                      ? t('syncUpdating')
-                      : syncPartial
-                      ? t('syncPartial')
-                      : syncDone
-                      ? t('syncUpdated')
-                      : syncLimited
-                      ? t('syncRateLimited')
-                      : syncFailed
-                      ? t('syncFailed')
-                      : `${t('lastSyncedPrefix')}${formatLastSync(lastSyncIso, locale)}`}
+                  <div style={{ fontSize: 11, color: c.syncStatusColor, marginTop: 2, transition: 'color 200ms' }}>
+                    {c.syncStatusLabel}
                   </div>
                 </div>
                 <button
-                  onClick={handleSync}
-                  disabled={syncing}
+                  onClick={c.runSync}
+                  disabled={isSyncing}
                   aria-label={t('syncNow')}
                   style={{
                     padding: '7px 14px', fontSize: 12, fontWeight: 600,
                     background: 'var(--c-btn-primary)', border: 'none', borderRadius: 8,
-                    color: '#fff', cursor: syncing ? 'not-allowed' : 'pointer',
-                    fontFamily: 'inherit', opacity: syncing ? 0.6 : 1, transition: 'opacity 150ms',
+                    color: '#fff', cursor: isSyncing ? 'not-allowed' : 'pointer',
+                    fontFamily: 'inherit', opacity: isSyncing ? 0.6 : 1, transition: 'opacity 150ms',
                   }}
                 >
-                  {syncing ? t('syncingShort') : t('syncNow')}
+                  {isSyncing ? t('syncingShort') : t('syncNow')}
                 </button>
               </div>
               <div style={{ display: 'grid', gap: 10, paddingTop: 12, borderTop: '1px solid var(--c-line)' }}>
@@ -465,7 +347,7 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
               <SettingRow
                 icon={<Download size={15} />}
                 label={t('exportData')}
-                onClick={handleOpenReport}
+                onClick={c.openReport}
                 last
               />
             </Card>
@@ -544,16 +426,11 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
 
       {/* ─── Download report sheet ──────────────────────────────────────────── */}
       <DownloadReportSheet
-        open={showReport}
-        onClose={() => setShowReport(false)}
+        open={c.showReport}
+        onClose={c.closeReport}
         desktop
-        data={overviewCache ? {
-          netWorth: overviewCache.netWorth.netWorth,
-          currentValue: overviewCache.netWorth.currentValue,
-          totalPL: overviewCache.netWorth.overallProfitLoss,
-          goalCount: overviewCache.goals.length,
-        } : null}
-        onExport={handleExportReport}
+        data={c.reportSummary}
+        onExport={c.exportReport}
       />
     </div>
   )

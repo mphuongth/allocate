@@ -1,20 +1,17 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef, useTransition } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useLocale, useTranslations } from 'next-intl'
-import { useRouter } from 'next/navigation'
-import { createBrowserClient } from '@supabase/ssr'
-import { useTheme, type ThemeChoice } from '@/app/components/ThemeProvider'
+import { type ThemeChoice } from '@/app/components/ThemeProvider'
 import { useDialogA11y } from '@/app/(app)/planning/components/useDialogA11y'
 import {
   Globe, Sun, Moon, Settings, Download, RefreshCw,
   TrendingUp, Coins, LogOut, ChevronRight, Check,
 } from 'lucide-react'
-import { toast } from 'sonner'
 import { useNavigation } from '@/app/components/navigation/NavigationContext'
 import DownloadReportSheet from '@/app/assets/components/DownloadReportSheet'
-import type { DashboardData } from '@/app/assets/DashboardClient'
-import { clearAppCaches, setLocaleCookie, refreshPrices, fetchOverview, exportPortfolioReport, fetchLastSync, formatLastSync } from '../settingsShared'
+import { useSettingsController } from '../useSettingsController'
+import { useManagedTimeout } from '../useManagedTimeout'
 import { useDialogMount, useResetOnOpen } from '@/app/(app)/planning/components/useDialogMount'
 
 interface Props {
@@ -26,34 +23,6 @@ interface Props {
 // How long the "Saved" success flash stays up before the sheet/modal closes.
 // Kept in sync with DesktopSettingsView so both views feel identical.
 const SAVE_FLASH_MS = 1400
-
-// Read the persisted theme *choice* (not the resolved theme) from localStorage,
-// falling back to the resolved theme during SSR. 'system' is the absence of a
-// stored value. Mirrors DesktopSettingsView's storedTheme().
-function readThemeChoice(fallback: ThemeChoice): ThemeChoice {
-  if (typeof localStorage === 'undefined') return fallback
-  const v = localStorage.getItem('theme')
-  return (v === 'light' || v === 'dark') ? v : 'system'
-}
-
-// A status flash can outlive the sheet that started it. Keep one timeout per
-// owner and clear it on unmount so React never receives a late setState after a
-// route change or a test has torn the view down.
-function useManagedTimeout() {
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  useEffect(() => () => {
-    if (timeoutRef.current !== null) clearTimeout(timeoutRef.current)
-  }, [])
-
-  return (callback: () => void, delay: number) => {
-    if (timeoutRef.current !== null) clearTimeout(timeoutRef.current)
-    timeoutRef.current = setTimeout(() => {
-      timeoutRef.current = null
-      callback()
-    }, delay)
-  }
-}
 
 // ─── Bottom sheet wrapper ──────────────────────────────────────────────────────
 
@@ -224,18 +193,18 @@ function ProfileSheet({ open, onClose, onSave, displayName, email }: {
 
 // ─── Appearance sheet ──────────────────────────────────────────────────────────
 
-function AppearanceSheet({ open, onClose, onApply }: {
+function AppearanceSheet({ open, onClose, onApply, current }: {
   open: boolean
   onClose: () => void
   onApply: (choice: ThemeChoice) => void
+  current: ThemeChoice
 }) {
   const t = useTranslations('settings')
-  const { theme: currentTheme, setTheme } = useTheme()
 
-  const [selected, setSelected] = useState<ThemeChoice>(currentTheme)
+  const [selected, setSelected] = useState<ThemeChoice>(current)
 
   useEffect(() => {
-    if (open) setSelected(readThemeChoice(currentTheme))
+    if (open) setSelected(current)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
@@ -245,8 +214,9 @@ function AppearanceSheet({ open, onClose, onApply }: {
     { v: 'system', icon: <Settings size={18} />, label: t('appearanceSystem') },
   ]
 
+  // onApply is the controller's selectTheme — it both persists the choice and
+  // hands it to the theme provider, so the sheet doesn't touch either directly.
   function handleApply() {
-    setTheme(selected)
     onApply(selected)
     onClose()
   }
@@ -408,49 +378,13 @@ function SettingsRow({ icon, label, value, onClick, last = false }: {
 export default function MobileSettingsView({ email, initials, displayName }: Props) {
   const locale = useLocale()
   const t = useTranslations('settings')
-  const router = useRouter()
-  const [, startTransition] = useTransition()
-  const { setMobileTopBar, setUserName } = useNavigation()
-  const { theme: currentTheme } = useTheme()
+  const { setMobileTopBar } = useNavigation()
+  const c = useSettingsController({ initials, displayName })
 
-  const supabase = useMemo(
-    () => createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    ),
-    []
-  )
-
-  const [localDisplayName, setLocalDisplayName] = useState(displayName)
-
-  const localInitials = localDisplayName
-    .split(/\s+/)
-    .slice(0, 2)
-    .map(w => w[0]?.toUpperCase() ?? '')
-    .join('') || initials
-
+  // Sheet state — the mobile's own chrome.
   const [showProfile, setShowProfile] = useState(false)
   const [showLanguage, setShowLanguage] = useState(false)
   const [showAppearance, setShowAppearance] = useState(false)
-  const [showReport, setShowReport] = useState(false)
-  const [overviewCache, setOverviewCache] = useState<DashboardData | null>(null)
-
-  // Persisted theme choice, so the Appearance row reflects the real selection
-  // (light/dark/system) instead of a hardcoded label.
-  const [themeChoice, setThemeChoice] = useState<ThemeChoice>(currentTheme)
-  // Hydrate from the persisted choice after mount (avoids an SSR mismatch); the
-  // two lint rules below are intentional for that reason — same as DesktopSettingsView.
-  useEffect(() => { setThemeChoice(readThemeChoice(currentTheme)) }, []) // eslint-disable-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
-
-  const [syncing, setSyncing] = useState(false)
-  const [syncDone, setSyncDone] = useState(false)
-  const [syncFailed, setSyncFailed] = useState(false)
-  const [syncLimited, setSyncLimited] = useState(false)
-  const [syncPartial, setSyncPartial] = useState(false)
-  const scheduleSyncStatusReset = useManagedTimeout()
-  // undefined = loading, null = never synced, otherwise the last-sync ISO time.
-  const [lastSyncIso, setLastSyncIso] = useState<string | null | undefined>(undefined)
-  useEffect(() => { fetchLastSync().then(setLastSyncIso) }, [])
 
   useEffect(() => {
     setMobileTopBar({
@@ -460,81 +394,14 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
     return () => setMobileTopBar({ title: '' })
   }, [t, setMobileTopBar])
 
-  function switchLocale(next: string) {
-    setLocaleCookie(next)
-    startTransition(() => router.refresh())
-  }
-
-  async function handleSync() {
-    setSyncing(true)
-    setSyncDone(false)
-    setSyncFailed(false)
-    setSyncLimited(false)
-    setSyncPartial(false)
-    const result = await refreshPrices()
-    setSyncing(false)
-    if (result.ok) {
-      // Partial still advances the timestamp — prices did move, just not all.
-      setSyncDone(true)
-      if (result.partial) setSyncPartial(true)
-      setLastSyncIso(new Date().toISOString())
-      scheduleSyncStatusReset(() => { setSyncDone(false); setSyncPartial(false) }, 3000)
-    } else if (result.reason === 'rate-limited') {
-      // Distinct from a failure: nothing is broken, the user just has to wait.
-      setSyncLimited(true)
-      scheduleSyncStatusReset(() => setSyncLimited(false), 3000)
-    } else {
-      setSyncFailed(true)
-      scheduleSyncStatusReset(() => setSyncFailed(false), 3000)
-    }
-  }
-
-  function handleOpenReport() {
-    setShowReport(true)
-    fetchOverview().then((json) => { if (json) setOverviewCache(json) })
-  }
-
-  async function handleExportReport() {
-    await exportPortfolioReport(overviewCache, locale)
-  }
-
-  async function handleSaveProfile(name: string): Promise<boolean> {
-    const { error } = await supabase.auth.updateUser({ data: { display_name: name } })
-    if (error) {
-      toast.error(t('saveFailed'))
-      return false
-    }
-    setLocalDisplayName(name)
-    setUserName(name)
-    return true
-  }
-
-  async function handleSignOut() {
-    const { error } = await supabase.auth.signOut()
-    if (error) {
-      toast.error(t('signOutFailed'))
-    } else {
-      await clearAppCaches()
-      router.push('/auth/login')
-    }
-  }
+  const isSyncing = c.syncStatus === 'syncing'
 
   const localeLabel = locale === 'vi' ? t('languageVietnamese') : t('languageEnglish')
-  const appearanceLabel = themeChoice === 'dark'
+  const appearanceLabel = c.themeChoice === 'dark'
     ? t('appearanceDark')
-    : themeChoice === 'light'
+    : c.themeChoice === 'light'
     ? t('appearanceLight')
     : t('appearanceSystem')
-
-  // Rate-limited and partial are neutral, not negative: nothing is broken —
-  // the user is early, or some prices moved and some didn't.
-  const syncStatusColor = syncPartial
-    ? 'var(--c-muted)'
-    : syncDone
-    ? 'var(--c-pos)'
-    : syncFailed
-    ? 'var(--c-neg)'
-    : 'var(--c-muted)'
 
   return (
     <>
@@ -559,10 +426,10 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 16, fontWeight: 700, flexShrink: 0,
           }}>
-            {localInitials}
+            {c.initials}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--c-ink)' }}>{localDisplayName}</div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--c-ink)' }}>{c.displayName}</div>
             <div style={{ fontSize: 12, color: 'var(--c-muted)', marginTop: 2 }}>{email}</div>
           </div>
           <ChevronRight size={16} color="var(--c-muted)" />
@@ -602,40 +469,30 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
                 width: 32, height: 32, borderRadius: 8, background: 'var(--c-navy-tint)', color: 'var(--c-navy)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
               }}>
-                <RefreshCw size={16} style={{ animation: syncing ? 'spin 1s linear infinite' : 'none' }} />
+                <RefreshCw size={16} style={{ animation: isSyncing ? 'spin 1s linear infinite' : 'none' }} />
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)' }}>
                   {t('syncAllPrices')}
                 </div>
-                <div style={{ fontSize: 11, color: syncStatusColor, marginTop: 2, transition: 'color 200ms' }}>
-                  {syncing
-                    ? t('syncUpdating')
-                    : syncPartial
-                    ? t('syncPartial')
-                    : syncDone
-                    ? t('syncUpdated')
-                    : syncLimited
-                    ? t('syncRateLimited')
-                    : syncFailed
-                    ? t('syncFailed')
-                    : `${t('lastSyncedPrefix')}${formatLastSync(lastSyncIso, locale)}`}
+                <div style={{ fontSize: 11, color: c.syncStatusColor, marginTop: 2, transition: 'color 200ms' }}>
+                  {c.syncStatusLabel}
                 </div>
               </div>
               <button
-                onClick={handleSync}
-                disabled={syncing}
+                onClick={c.runSync}
+                disabled={isSyncing}
                 aria-label={t('syncNow')}
                 style={{
                   padding: '7px 14px', fontSize: 12, fontWeight: 600,
                   minHeight: 44, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                   background: 'var(--c-btn-primary)', border: 'none', borderRadius: 8,
-                  color: '#fff', cursor: syncing ? 'not-allowed' : 'pointer',
-                  fontFamily: 'inherit', opacity: syncing ? 0.6 : 1,
+                  color: '#fff', cursor: isSyncing ? 'not-allowed' : 'pointer',
+                  fontFamily: 'inherit', opacity: isSyncing ? 0.6 : 1,
                   transition: 'opacity 150ms',
                 }}
               >
-                {syncing ? t('syncingShort') : t('syncNow')}
+                {isSyncing ? t('syncingShort') : t('syncNow')}
               </button>
             </div>
 
@@ -681,7 +538,7 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
             <SettingsRow
               icon={<Download size={16} />}
               label={t('exportData')}
-              onClick={handleOpenReport}
+              onClick={c.openReport}
               last
             />
           </div>
@@ -689,7 +546,7 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
 
         {/* Sign out */}
         <button
-          onClick={handleSignOut}
+          onClick={c.signOut}
           aria-label={t('signOut')}
           style={{
             width: '100%', marginTop: 22, padding: '13px 14px', minHeight: 44,
@@ -714,31 +571,27 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
       <ProfileSheet
         open={showProfile}
         onClose={() => setShowProfile(false)}
-        onSave={handleSaveProfile}
-        displayName={localDisplayName}
+        onSave={c.saveProfile}
+        displayName={c.displayName}
         email={email}
       />
       <LanguageSheet
         open={showLanguage}
         onClose={() => setShowLanguage(false)}
-        onApply={switchLocale}
+        onApply={c.switchLocale}
         currentLocale={locale}
       />
       <AppearanceSheet
         open={showAppearance}
         onClose={() => setShowAppearance(false)}
-        onApply={setThemeChoice}
+        onApply={c.selectTheme}
+        current={c.themeChoice}
       />
       <DownloadReportSheet
-        open={showReport}
-        onClose={() => setShowReport(false)}
-        data={overviewCache ? {
-          netWorth: overviewCache.netWorth.netWorth,
-          currentValue: overviewCache.netWorth.currentValue,
-          totalPL: overviewCache.netWorth.overallProfitLoss,
-          goalCount: overviewCache.goals.length,
-        } : null}
-        onExport={handleExportReport}
+        open={c.showReport}
+        onClose={c.closeReport}
+        data={c.reportSummary}
+        onExport={c.exportReport}
       />
     </>
   )
