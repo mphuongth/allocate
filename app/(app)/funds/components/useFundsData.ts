@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
+import { useHydrated } from '@/lib/useHydrated'
 
 // ─── Shared types ─────────────────────────────────────────────────────────────
 
@@ -63,10 +64,32 @@ function bustCache() {
 // read the same shared state, so the old cross-view 'cairn:funds-updated' event
 // (and its _suppressNotify guard) is no longer needed (#10).
 export function useFundsData(): FundsData {
-  const [funds, setFunds] = useState<Fund[]>(() => getCache() ?? [])
-  const [loading, setLoading] = useState(() => !getCache())
+  // Start where the server starts. These used to seed from getCache(), but a
+  // useState initialiser runs during the *hydration* render, and the server has
+  // no localStorage — so a warm cache made the client render "1 quỹ" over server
+  // HTML that said "0 quỹ" and React threw the whole subtree away (#560).
+  const [funds, setFunds] = useState<Fund[]>([])
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [goals, setGoals] = useState<Goal[]>([])
+
+  // Adopt the cache on the first render after hydration. This keeps what the
+  // cache was for — no loading flash while the refetch is in flight — and costs
+  // nothing net: a mismatch regenerated this tree on the client anyway. Done as
+  // a render-phase adjustment rather than an effect, which is the pattern React
+  // documents for this and which the effect form trips
+  // (react-hooks/set-state-in-effect). It also runs before the reload effect
+  // below, so it still sees the cache that reload() is about to bust.
+  const hydrated = useHydrated()
+  const [cacheAdopted, setCacheAdopted] = useState(false)
+  if (hydrated && !cacheAdopted) {
+    setCacheAdopted(true)
+    const cached = getCache()
+    if (cached) {
+      setFunds(cached)
+      setLoading(false)
+    }
+  }
 
   const reload = useCallback(async () => {
     bustCache()

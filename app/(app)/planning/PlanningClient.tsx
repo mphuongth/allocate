@@ -7,6 +7,7 @@ import { useTranslations, useLocale } from 'next-intl'
 import { useNavigation } from '@/app/components/navigation/NavigationContext'
 import MobilePlanningView from './components/MobilePlanningView'
 import DesktopPlanningView from './components/DesktopPlanningView'
+import { useHydrated } from '@/lib/useHydrated'
 
 export interface MonthlyPlan {
   id: string
@@ -132,23 +133,53 @@ export default function PlanningClient() {
   const now = new Date()
   const initialMonth = now.getMonth() + 1
   const initialYear = now.getFullYear()
-  const [initialCache] = useState(() => getPlanCache(initialMonth, initialYear))
-
+  // Start where the server starts. These used to seed from getPlanCache(), but a
+  // useState initialiser runs during the *hydration* render and the server has no
+  // localStorage — so a warm cache made the client render the real cards over
+  // server HTML that held the skeleton, and React discarded the tree (#560).
   const [month, setMonth] = useState(initialMonth)
   const [year, setYear] = useState(initialYear)
-  const [plan, setPlan] = useState<MonthlyPlan | null>(initialCache?.plan ?? null)
-  const [investments, setInvestments] = useState<FundInvestment[]>(initialCache?.investments ?? [])
-  const [savings, setSavings] = useState<DirectSaving[]>(initialCache?.savings ?? [])
-  const [fixedExpenses, setFixedExpenses] = useState<FixedExpense[]>(initialCache?.fixedExpenses ?? [])
-  const [insuranceMembers, setInsuranceMembers] = useState<InsuranceMember[]>(initialCache?.insuranceMembers ?? [])
-  const [otherExpenses, setOtherExpenses] = useState<OtherExpense[]>(initialCache?.otherExpenses ?? [])
-  const [recurringSavings, setRecurringSavings] = useState<RecurringSaving[]>(initialCache?.recurringSavings ?? [])
-  const [recurringSavingOverrides, setRecurringSavingOverrides] = useState<RecurringSavingOverride[]>(initialCache?.recurringSavingOverrides ?? [])
-  const [dcaSkips, setDcaSkips] = useState<DcaSkip[]>(initialCache?.dcaSkips ?? [])
-  const [recurringFulfillments, setRecurringFulfillments] = useState<RecurringFulfillment[]>(initialCache?.recurringFulfillments ?? [])
-  const [funds, setFunds] = useState<Fund[]>(initialCache?.funds ?? [])
-  const [goals, setGoals] = useState<Goal[]>(initialCache?.goals ?? [])
-  const [loading, setLoading] = useState(!initialCache)
+  const [plan, setPlan] = useState<MonthlyPlan | null>(null)
+  const [investments, setInvestments] = useState<FundInvestment[]>([])
+  const [savings, setSavings] = useState<DirectSaving[]>([])
+  const [fixedExpenses, setFixedExpenses] = useState<FixedExpense[]>([])
+  const [insuranceMembers, setInsuranceMembers] = useState<InsuranceMember[]>([])
+  const [otherExpenses, setOtherExpenses] = useState<OtherExpense[]>([])
+  const [recurringSavings, setRecurringSavings] = useState<RecurringSaving[]>([])
+  const [recurringSavingOverrides, setRecurringSavingOverrides] = useState<RecurringSavingOverride[]>([])
+  const [dcaSkips, setDcaSkips] = useState<DcaSkip[]>([])
+  const [recurringFulfillments, setRecurringFulfillments] = useState<RecurringFulfillment[]>([])
+  const [funds, setFunds] = useState<Fund[]>([])
+  const [goals, setGoals] = useState<Goal[]>([])
+  const [loading, setLoading] = useState(true)
+
+  // Adopt the cache on the first render after hydration. This preserves what the
+  // cache was for — no skeleton flash while the refetch is in flight — and costs
+  // nothing net, since a mismatch regenerated this tree anyway. Done as a
+  // render-phase adjustment rather than an effect, which is the pattern React
+  // documents for this and which the effect form trips
+  // (react-hooks/set-state-in-effect).
+  const hydrated = useHydrated()
+  const [cacheAdopted, setCacheAdopted] = useState(false)
+  if (hydrated && !cacheAdopted) {
+    setCacheAdopted(true)
+    const cached = getPlanCache(initialMonth, initialYear)
+    if (cached) {
+      setPlan(cached.plan ?? null)
+      setInvestments(cached.investments ?? [])
+      setSavings(cached.savings ?? [])
+      setFixedExpenses(cached.fixedExpenses ?? [])
+      setInsuranceMembers(cached.insuranceMembers ?? [])
+      setOtherExpenses(cached.otherExpenses ?? [])
+      setRecurringSavings(cached.recurringSavings ?? [])
+      setRecurringSavingOverrides(cached.recurringSavingOverrides ?? [])
+      setDcaSkips(cached.dcaSkips ?? [])
+      setRecurringFulfillments(cached.recurringFulfillments ?? [])
+      setFunds(cached.funds ?? [])
+      setGoals(cached.goals ?? [])
+      setLoading(false)
+    }
+  }
   // A failed load (≠ 404) must not masquerade as the legit "no plan yet" empty
   // state — the API returns 404 only when the month genuinely has no plan.
   const [loadError, setLoadError] = useState(false)
