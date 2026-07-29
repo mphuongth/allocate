@@ -12,13 +12,21 @@ function stubCacheStorage(names: string[]) {
   return deleted
 }
 
-function stubServiceWorker({ controlled }: { controlled: boolean }) {
+/**
+ * @param acks whether the fake worker replies on the port it is handed, the way
+ *   public/sw.js does once the purge has finished.
+ */
+function stubServiceWorker({ controlled, acks = true }: { controlled: boolean; acks?: boolean }) {
+  const worker = {
+    postMessage: (...args: [unknown, Transferable[]?]) => {
+      postMessage(...args)
+      const port = args[1]?.[0] as MessagePort | undefined
+      if (acks && port) port.postMessage({ ok: true })
+    },
+  }
   Object.defineProperty(navigator, 'serviceWorker', {
     configurable: true,
-    value: {
-      controller: controlled ? { postMessage } : null,
-      ready: Promise.resolve({ active: { postMessage } }),
-    },
+    value: { controller: controlled ? worker : null, ready: Promise.resolve({ active: worker }) },
   })
 }
 
@@ -99,7 +107,10 @@ describe('announceCacheOwner', () => {
 
     await announceCacheOwner('user-a')
 
-    expect(postMessage).toHaveBeenCalledWith({ type: 'SET_CACHE_OWNER', userId: 'user-a' })
+    expect(postMessage).toHaveBeenCalledWith(
+      { type: 'SET_CACHE_OWNER', userId: 'user-a' },
+      expect.any(Array),
+    )
   })
 
   it('waits for the registration when the page is not yet controlled', async () => {
@@ -107,7 +118,35 @@ describe('announceCacheOwner', () => {
 
     await announceCacheOwner('user-b')
 
-    expect(postMessage).toHaveBeenCalledWith({ type: 'SET_CACHE_OWNER', userId: 'user-b' })
+    expect(postMessage).toHaveBeenCalledWith(
+      { type: 'SET_CACHE_OWNER', userId: 'user-b' },
+      expect.any(Array),
+    )
+  })
+
+  // The worker purges the previous account's caches while handling the message,
+  // so resolving on `postMessage` alone would let a caller believe the swap is
+  // done while the old entries are still readable.
+  it('resolves only once the worker acknowledges the swap', async () => {
+    stubServiceWorker({ controlled: true })
+    let settled = false
+
+    const pending = announceCacheOwner('user-a').then(() => { settled = true })
+    expect(settled).toBe(false)
+
+    await pending
+    expect(settled).toBe(true)
+  })
+
+  it('gives up waiting rather than hanging when the worker never replies', async () => {
+    vi.useFakeTimers()
+    stubServiceWorker({ controlled: true, acks: false })
+
+    const pending = announceCacheOwner('user-a')
+    await vi.advanceTimersByTimeAsync(5_000)
+
+    await expect(pending).resolves.toBeUndefined()
+    vi.useRealTimers()
   })
 
   it('is a no-op without service-worker support', async () => {

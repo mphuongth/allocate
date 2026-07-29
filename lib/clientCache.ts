@@ -30,11 +30,22 @@ function getServiceWorkerContainer(): ServiceWorkerContainer | null {
   return navigator.serviceWorker
 }
 
+// How long to wait for the worker to confirm an ownership change before giving
+// up. Only a safety valve: the work is a couple of Cache Storage deletes, and a
+// worker that never replies must not leave the caller hanging.
+const OWNER_ACK_TIMEOUT_MS = 3_000
+
 /**
- * Tell the service worker which account owns the authenticated caches. Called on
- * every auth-state change; the worker wipes those caches whenever the id differs
- * from the one it recorded, which covers logging in as a different user after a
- * session expiry (no sign-out ever runs in that flow).
+ * Tell the service worker which account owns the authenticated caches. Called as
+ * soon as the authenticated layout mounts and on every later auth-state change;
+ * the worker wipes those caches whenever the id differs from the one it
+ * recorded, which covers logging in as a different user after a session expiry
+ * (no sign-out ever runs in that flow).
+ *
+ * Resolves once the worker has *finished* the swap, not merely when the message
+ * is queued — the purge of the previous account's entries happens while the
+ * message is handled, so resolving earlier would report a swap that has not
+ * taken effect yet.
  */
 export async function announceCacheOwner(userId: string): Promise<void> {
   const container = getServiceWorkerContainer()
@@ -43,7 +54,24 @@ export async function announceCacheOwner(userId: string): Promise<void> {
   // Before the first activation the page isn't controlled yet, so fall back to
   // the registration's active worker once it's ready.
   const worker = container.controller ?? (await container.ready).active
-  worker?.postMessage({ type: 'SET_CACHE_OWNER', userId })
+  if (!worker) return
+
+  const channel = new MessageChannel()
+  const acknowledged = new Promise<void>((resolve) => {
+    channel.port1.onmessage = () => resolve()
+  })
+  worker.postMessage({ type: 'SET_CACHE_OWNER', userId }, [channel.port2])
+
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    await Promise.race([
+      acknowledged,
+      new Promise<void>((resolve) => { timer = setTimeout(resolve, OWNER_ACK_TIMEOUT_MS) }),
+    ])
+  } finally {
+    clearTimeout(timer)
+    channel.port1.close()
+  }
 }
 
 /**

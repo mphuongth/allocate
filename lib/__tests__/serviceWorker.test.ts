@@ -118,8 +118,8 @@ function loadWorker(networkHandler: (req: FakeRequest) => Promise<FakeResponse>)
       await Promise.all(pending.splice(0))
       return result
     },
-    async message(data: unknown) {
-      await dispatch('message', { data, waitUntil: (p: Promise<unknown>) => { pending.push(p) } })
+    async message(data: unknown, ports?: { postMessage: (v: unknown) => void }[]) {
+      await dispatch('message', { data, ports, waitUntil: (p: Promise<unknown>) => { pending.push(p) } })
     },
     async install() {
       await dispatch('install', { waitUntil: (p: Promise<unknown>) => { pending.push(p) } })
@@ -234,6 +234,24 @@ describe('service worker — authenticated cache isolation', () => {
     const offline = await sw.request({ url: OVERVIEW_URL })
 
     expect(await offline!.text()).toBe('user-a-portfolio')
+  })
+
+  // lib/clientCache.ts waits on this reply before treating the swap as done, so
+  // it must arrive only after the previous account's entries are gone.
+  it('acknowledges an ownership change on the reply port, after the purge', async () => {
+    await sw.message({ type: 'SET_CACHE_OWNER', userId: 'user-a' })
+    await sw.request({ url: OVERVIEW_URL })
+
+    const replies: unknown[] = []
+    const port = {
+      postMessage: (value: unknown) => {
+        // Snapshot at reply time: the API cache must already be gone.
+        replies.push({ value, apiCacheStillPresent: sw.cacheStorage.caches.has('api-v1-v8') })
+      },
+    }
+    await sw.message({ type: 'SET_CACHE_OWNER', userId: 'user-b' }, [port])
+
+    expect(replies).toEqual([{ value: { ok: true }, apiCacheStillPresent: false }])
   })
 
   it('keeps static assets cached across accounts — they carry no user data', async () => {

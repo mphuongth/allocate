@@ -11,7 +11,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const displayName = (meta.display_name || meta.full_name) as string | undefined
 
   return (
-    <AuthenticatedLayout email={user.email ?? ''} displayName={displayName}>
+    <AuthenticatedLayout userId={user.id} email={user.email ?? ''} displayName={displayName}>
       {children}
     </AuthenticatedLayout>
   )

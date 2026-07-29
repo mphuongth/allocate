@@ -86,7 +86,7 @@ function AuthenticatedLayoutInner({ children, email, initials }: { children: Rea
   )
 }
 
-export default function AuthenticatedLayout({ children, email, displayName }: { children: React.ReactNode; email: string; displayName?: string }) {
+export default function AuthenticatedLayout({ children, userId, email, displayName }: { children: React.ReactNode; userId: string; email: string; displayName?: string }) {
   const router = useRouter()
 
   // Watch for session expiry (e.g. token revoked or expired)
@@ -111,7 +111,7 @@ export default function AuthenticatedLayout({ children, email, displayName }: { 
 
   return (
     <NavigationProvider userName={userName}>
-      <CacheOwnerAnnouncer />
+      <CacheOwnerAnnouncer userId={userId} />
       <AuthenticatedLayoutInner email={email} initials={initials}>
         {children}
       </AuthenticatedLayoutInner>
