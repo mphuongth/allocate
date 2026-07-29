@@ -28,6 +28,7 @@ import type { InvRow } from './components/goalDetailShared'
 import { loadOverview, overviewErrorText, getCachedOverview, setCachedOverview, computeAllocationTotals } from './overviewData'
 import { fetchNetWorthHistory, type TimeRange, type ChartPoint } from './components/netWorthHistory'
 import { fmtTimeAgo } from '@/lib/formatters'
+import { assignInvestmentToGoal } from '@/lib/assignToGoal'
 
 import TransactionHistorySheet from './components/TransactionHistorySheet'
 import DesktopNetWorthPanel from './components/DesktopNetWorthPanel'
@@ -812,30 +813,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                       onAssignNonFundToGoal={(txId, name, value, type) => { setNonFundPickerTxId(txId); setNonFundPickerItem({ name, value, type }) }}
                       onSellNonFund={openSellNonFund}
                       desktopCard
-                      onDesktopAssign={async (kind, id, goalId) => {
-                        if (kind === 'fund') {
-                          const res = await fetch(`/api/v1/fund-investments?fund_id=${id}`)
-                          if (!res.ok) throw new Error('Failed to fetch fund investments')
-                          const investments = await res.json() as Array<{ id: string }>
-                          await Promise.all(investments.map((inv) =>
-                            fetch(`/api/v1/fund-investments/${inv.id}/goal`, {
-                              method: 'PATCH',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ goal_id: goalId }),
-                            }).then((r) => { if (!r.ok) throw new Error('Failed to assign') })
-                          ))
-                        } else {
-                          const res = await fetch(`/api/v1/investment-transactions/${id}/assign`, {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ goal_id: goalId }),
-                          })
-                          if (!res.ok) {
-                            const { error: e } = await res.json().catch(() => ({ error: 'Failed to assign' }))
-                            throw new Error(e ?? 'Failed to assign')
-                          }
-                        }
-                      }}
+                      onDesktopAssign={assignInvestmentToGoal}
                       // Refreshing drops the assigned row and unmounts the
                       // section showing the success flash, so the section decides
                       // when that is safe rather than both sides running their
@@ -1099,18 +1077,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
         desktop={isDesktop}
         onConfirm={async (goalId) => {
           if (!goalPickerFundId) return
-          const res = await fetch(`/api/v1/fund-investments?fund_id=${goalPickerFundId}`)
-          if (!res.ok) throw new Error('Failed to fetch fund investments')
-          const investments = await res.json() as Array<{ id: string }>
-          await Promise.all(
-            investments.map((inv) =>
-              fetch(`/api/v1/fund-investments/${inv.id}/goal`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ goal_id: goalId }),
-              }).then((r) => { if (!r.ok) throw new Error('Failed to assign') })
-            )
-          )
+          await assignInvestmentToGoal('fund', goalPickerFundId, goalId)
         }}
       />
 
@@ -1122,15 +1089,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
         desktop={isDesktop}
         onConfirm={async (goalId) => {
           if (!nonFundPickerTxId) return
-          const res = await fetch(`/api/v1/investment-transactions/${nonFundPickerTxId}/assign`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ goal_id: goalId }),
-          })
-          if (!res.ok) {
-            const { error: e } = await res.json().catch(() => ({ error: 'Failed to assign' }))
-            throw new Error(e ?? 'Failed to assign')
-          }
+          await assignInvestmentToGoal('nonFund', nonFundPickerTxId, goalId)
         }}
       />
 
