@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validateInteger } from '@/lib/validation'
+import { readJsonBody } from '@/lib/apiBody'
 
 export async function GET(request: NextRequest) {
   const supabase = await createSupabaseServerClient()
@@ -165,7 +166,9 @@ export async function POST(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const body = await request.json()
+  const parsed = await readJsonBody(request)
+  if (!parsed.ok) return parsed.response
+  const body = parsed.body
   const { month, year, salary_vnd } = body
 
   let monthNum: number

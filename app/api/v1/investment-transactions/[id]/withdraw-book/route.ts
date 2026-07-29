@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validateDate, validateUUID } from '@/lib/validation'
 import { isFutureInvestmentDate } from '@/lib/dates'
+import { readJsonBody } from '@/lib/apiBody'
 
 // Withdraw from an accumulating ("Loại 2") book. `id` is the book anchor
 // (= deposit_group_id). One atomic RPC spreads `withdraw_principal` across the live
@@ -13,7 +14,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const body = await request.json()
+  const parsed = await readJsonBody(request)
+  if (!parsed.ok) return parsed.response
+  const body = parsed.body
   const { withdraw_principal, total_received, investment_date, affects_progress } = body
 
   let bookId: string

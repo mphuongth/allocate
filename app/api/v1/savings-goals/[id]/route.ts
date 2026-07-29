@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validateEnum, validateText, validateUUID, validateYearMonth } from '@/lib/validation'
+import { readJsonBody } from '@/lib/apiBody'
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -39,7 +40,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   let cleanIcon: string = 'target'
   let cleanPriority: string = 'med'
 
-  const body = await request.json()
+  const parsed = await readJsonBody(request)
+  if (!parsed.ok) return parsed.response
+  const body = parsed.body
   const { goal_name, description, target_amount, target_date, icon, priority } = body
 
   try {
@@ -100,7 +103,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   let goalId: string
   const updates: Record<string, unknown> = {}
 
-  const body = await request.json()
+  const parsed = await readJsonBody(request)
+  if (!parsed.ok) return parsed.response
+  const body = parsed.body
 
   try {
     goalId = validateUUID(id, 'goal_id')

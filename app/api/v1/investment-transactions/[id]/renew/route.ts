@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validateBankCode, validateDate, validateRate, validateUUID } from '@/lib/validation'
 import { isFutureInvestmentDate } from '@/lib/dates'
 import { isTermDeposit } from '@/lib/maturity'
+import { readJsonBody } from '@/lib/apiBody'
 
 // Renew a bank term deposit.
 //
@@ -21,7 +22,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const body = await request.json()
+  const parsed = await readJsonBody(request)
+  if (!parsed.ok) return parsed.response
+  const body = parsed.body
   const { amount_vnd, interest_rate, expiry_date, investment_date, interest_earned_vnd, fulfill_recurring, merge_sources, bank_code, held_sources } = body
 
   let txId: string

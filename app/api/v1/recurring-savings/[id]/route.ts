@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validateText, validateUUID, validateYearMonth } from '@/lib/validation'
 import { validateLinkedDeposit } from '../linkValidation'
 import { ownershipError } from '@/lib/assertOwned'
+import { readJsonBody } from '@/lib/apiBody'
 
 function toDateCol(ym: string | undefined | null): string | null {
   if (!ym) return null
@@ -15,7 +16,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const body = await request.json()
+  const parsed = await readJsonBody(request)
+  if (!parsed.ok) return parsed.response
+  const body = parsed.body
   const { name, goal_id, amount_vnd, effective_from, effective_to, linked_deposit_tx_id } = body
 
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }

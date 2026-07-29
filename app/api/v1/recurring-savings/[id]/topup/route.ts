@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validateDate, validateRate, validateUUID, validateYearMonth } from '@/lib/validation'
 import { isFutureInvestmentDate } from '@/lib/dates'
+import { readJsonBody } from '@/lib/apiBody'
 
 // Record this month's recurring saving as a top-up into its linked accumulating
 // book: add a real tranche AND mark the recurring fulfilled for the month, in one
@@ -15,7 +16,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const body = await request.json()
+  const parsed = await readJsonBody(request)
+  if (!parsed.ok) return parsed.response
+  const body = parsed.body
   const { book_id, amount_vnd, interest_rate, investment_date, ym, plan_id } = body
 
   let savingId: string

@@ -4,6 +4,7 @@ import { ValidationError, validateAmount, validateEnum, validateText, validateYe
 // Shared bank-deposit valuation (simple interest, capped at maturity) so the
 // goals list matches the dashboard and goal detail.
 import { calcProjectedInterest } from '@/lib/finance'
+import { readJsonBody } from '@/lib/apiBody'
 
 export async function GET(request: NextRequest) {
   const supabase = await createSupabaseServerClient()
@@ -84,7 +85,9 @@ export async function POST(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const body = await request.json()
+  const parsed = await readJsonBody(request)
+  if (!parsed.ok) return parsed.response
+  const body = parsed.body
   const { goal_name, description, target_amount, target_date, icon, priority } = body
 
   let cleanGoalName: string
