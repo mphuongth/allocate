@@ -118,7 +118,8 @@ sale_dev as (
          abs(coalesce(w.principal_withdrawn, 0) - round(p.amount_vnd * w.units_withdrawn / p.units)) as dev,
          p.sells + 1 as base_tol,
          case when p.out_units >= p.units - 0.0001
-                then greatest(p.units - p.out_units, 0) * p.amount_vnd / p.units else 0 end as shortcut_tol
+                then least(abs(p.units - p.out_units), 0.0001) * p.amount_vnd / p.units else 0 end as shortcut_tol,
+         p.out_units >= p.units - 0.0001 as exhausted
     from wd w
     join parents p on p.transaction_id = w.parent_transaction_id
    where not w.fund_keyed and p.asset_type = 'gold' and coalesce(p.units, 0) > 0
@@ -133,7 +134,8 @@ sale_dev as (
          abs(coalesce(w.principal_withdrawn, 0) - round(b.basis * w.units_withdrawn / b.units)),
          b.sells + 1,
          case when b.out_units >= b.units - 0.0001
-                then greatest(b.units - b.out_units, 0) * b.basis / b.units else 0 end
+                then least(abs(b.units - b.out_units), 0.0001) * b.basis / b.units else 0 end,
+         b.out_units >= b.units - 0.0001
     from wd w
     join fund_buckets b
       on b.user_id = w.user_id and b.fund_id = w.fund_id and b.goal_id is not distinct from w.goal_id
@@ -151,14 +153,15 @@ sale_dev as (
 -- if two or more need the slack, the holding cannot be explained by any legal
 -- sequence and they are all reported; if just one does, it is allowed its value.
 --
--- Sub-epsilon slivers are left out of the count and never reported. A sale of
--- 0.0002 units or less can legitimately take a whole remaining basis in the tail
--- of an epsilon-exhausted holding, and which of those were legal depends on the
--- order they were written in — the same undecidable-from-state limit recorded in
--- the header, with the same bound on what it can hide.
+-- Sub-epsilon slivers are left out of the count, but only on a holding that ends
+-- EXHAUSTED. A sliver can take a whole remaining basis only if it closed the
+-- holding, and which slivers in that tail were legal depends on write order — the
+-- undecidable-from-state limit the header records. On a holding with units still
+-- unsold nothing closed anything, so a sliver there owes the flat rate like any
+-- other sale and is measured like one: 0.0002 units out of 1 closes nothing.
 sale_dev_ranked as (
   select d.*,
-         count(*) filter (where d.dev > d.base_tol and d.units_withdrawn > 0.0002)
+         count(*) filter (where d.dev > d.base_tol and not (d.exhausted and d.units_withdrawn <= 0.0002))
            over (partition by d.user_id, d.balance_key) as over_base
     from sale_dev d
 )
@@ -361,7 +364,11 @@ select 'fund_bucket_has_no_purchases', 'violation',
 --   sells   the ±1 allowance each sale may use, which the last sale inherits
 --   1       the two roundings between the flat rate and the invariant's expectation
 --   the value of the units left UNSOLD, and only on a holding that ends exhausted
---           at most one epsilon's worth, since that is as much as can be left. The clients round units to 4
+--           at most one epsilon's worth, since that is as much as can be over or
+--           under. The clients round units to 4 decimals in BOTH directions: a full
+--           sale of 4 chỉ posts as 3.9999 or 4.0001 with equal ease, and the
+--           invariant takes either for a full sale and hands it the whole basis, so
+--           the gap against the flat rate runs a thousand đồng each way. The clients round units to 4
 --           decimals, so "sell everything" routinely posts a hair UNDER the holding
 --           (4 chỉ leaves as 3.9999) and the invariant treats a sale within an
 --           epsilon of the rest as a FULL one, taking the whole basis. On an
@@ -385,7 +392,7 @@ select 'sale_basis_not_proportional', 'review',
        d.user_id, d.transaction_id, d.parent_transaction_id, d.fund_id, d.goal_id, d.detail
   from sale_dev_ranked d
  where d.dev > d.base_tol
-   and d.units_withdrawn > 0.0002
+   and not (d.exhausted and d.units_withdrawn <= 0.0002)
    and (d.over_base >= 2 or d.dev > d.base_tol + d.shortcut_tol)
 
 union all
@@ -401,7 +408,7 @@ select 'basis_not_proportional', 'review',
    and abs(p.out_principal
            - case when p.out_units >= p.units - 0.0001 then p.amount_vnd
                   else round(p.amount_vnd * p.out_units / p.units) end) > 2 * p.sells + case when p.out_units >= p.units - 0.0001
-                          then greatest(p.units - p.out_units, 0) * p.amount_vnd / p.units else 0 end
+                          then least(abs(p.units - p.out_units), 0.0001) * p.amount_vnd / p.units else 0 end
 
 union all
 select 'basis_not_proportional', 'review',
@@ -416,7 +423,7 @@ select 'basis_not_proportional', 'review',
    and abs(b.out_principal
            - case when b.out_units >= b.units - 0.0001 then b.basis
                   else round(b.basis * b.out_units / b.units) end) > 2 * b.sells + case when b.out_units >= b.units - 0.0001
-                          then greatest(b.units - b.out_units, 0) * b.basis / b.units else 0 end;
+                          then least(abs(b.units - b.out_units), 0.0001) * b.basis / b.units else 0 end;
 
 comment on view public.withdrawal_ledger_audit is
   'Read-only audit of existing withdrawal rows against the decision table enforced by check_withdrawal_balance. One row per finding: check_name, severity, and the holding it concerns (#609).';

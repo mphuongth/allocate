@@ -45,9 +45,11 @@ declare
   v_pair_src uuid; v_pair_a uuid; v_pair_b uuid;
   v_split_goal_src uuid; v_sg_a uuid; v_sg_b uuid;
   v_closer_src uuid; v_closer uuid;
+  v_sliver_src uuid; v_sliver_a uuid; v_sliver_b uuid;
   -- the clean half
   v_tol_goal  uuid;
   v_drift_src uuid; v_comp_src uuid; v_f7_src uuid; v_full_src uuid; v_tail_src uuid;
+  v_roundup_src uuid;
   v_tiny_fund uuid;
   v_ok_bank   uuid; v_ok_bank_w  uuid;
   v_ok_gold   uuid; v_ok_gold_w1 uuid; v_ok_gold_w2 uuid;
@@ -230,6 +232,18 @@ begin
   insert into public.investment_transactions
     (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
   values (v_user, v_goal_b, 'gold', 'withdrawal', '2026-04-01', 1, v_tail_src, 1, 0.0001);
+
+  -- The same 4-decimal rounding that posts 3.9999 for a full sale posts 4.0001 for
+  -- one just as often, and the invariant accepts both — the units cap allows the
+  -- epsilon, and the sale is a full one either way, so it takes the whole basis.
+  -- Measured against the flat rate that row is a thousand đồng UNDER, where the
+  -- 3.9999 one is a thousand over. A slack that only forgives the under-rounded
+  -- direction reports half the full gold sales in the ledger.
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal_b, 'gold', 'investment', '2026-01-01', 40000000, 4, 10000000) returning transaction_id into v_roundup_src;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_goal_b, 'gold', 'withdrawal', '2026-02-01', 48000000, v_roundup_src, 40000000, 4.0001);
 
   -- ═══ the planted violations ════════════════════════════════════════════════
   -- Disabling the user triggers is the only way in: these are precisely the shapes
@@ -467,6 +481,24 @@ begin
     (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
   values (v_user, v_goal, 'gold', 'withdrawal', '2026-03-01', 1, v_closer_src, 30000000, 3);
 
+  -- 23. two slivers that are the ONLY sales on the holding, taking 1 and 199 đồng
+  --     where each owes about 100. Their total is exactly proportional, so the
+  --     holding-level check is silent, and both are sub-epsilon so the sliver
+  --     exception hid them as well. But the exception is for the TAIL of an
+  --     exhausted holding — a sliver can only take a whole remaining basis if it
+  --     closed the holding, and 0.0002 of 1 unit closes nothing. Here 0.9998 units
+  --     are still unsold, so no ordering makes either row legal.
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal, 'gold', 'investment', '2026-01-01', 1000000, 1, 1000000) returning transaction_id into v_sliver_src;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-02-01', 1, v_sliver_src, 1, 0.0001)
+  returning transaction_id into v_sliver_a;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-03-01', 1, v_sliver_src, 199, 0.0001)
+  returning transaction_id into v_sliver_b;
+
   alter table public.investment_transactions enable trigger user;
 
   -- ═══ every planted row must be named, by the right check ═══════════════════
@@ -494,7 +526,9 @@ begin
         ('sale_basis_not_proportional',   v_pair_b),
         ('sale_basis_not_proportional',   v_sg_a),
         ('sale_basis_not_proportional',   v_sg_b),
-        ('sale_basis_not_proportional',   v_closer)
+        ('sale_basis_not_proportional',   v_closer),
+        ('sale_basis_not_proportional',   v_sliver_a),
+        ('sale_basis_not_proportional',   v_sliver_b)
       ) as x(name, tx)
   loop
     if v_count <> 1 then
@@ -555,7 +589,7 @@ begin
     from public.withdrawal_ledger_audit
    where transaction_id in (v_ok_bank_w, v_ok_gold_w1, v_ok_gold_w2, v_ok_sell1, v_ok_sell2,
                             v_ok_held, v_seed, v_seed_buy, v_seed_sell)
-      or parent_transaction_id in (v_ok_bank, v_ok_gold, v_drift_src, v_comp_src, v_f7_src, v_full_src, v_tail_src)
+      or parent_transaction_id in (v_ok_bank, v_ok_gold, v_drift_src, v_comp_src, v_f7_src, v_full_src, v_tail_src, v_roundup_src)
       or fund_id in (v_fund_ok, v_tiny_fund);
   if v_count <> 0 then
     raise exception 'the audit reported % row(s) against a ledger the invariant accepted', v_count;
