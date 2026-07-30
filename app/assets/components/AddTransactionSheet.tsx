@@ -34,6 +34,8 @@ export interface Holding {
   fundId?: string
   transactionId?: string
   purchasePrice?: number
+  /** Fund only: the bucket's remaining cost basis, which a sale draws from (#587). */
+  costBasis?: number
 }
 
 function collectHoldings(d: {
@@ -52,7 +54,7 @@ function collectHoldings(d: {
       key: `fund-${f.fundId}-${i}`, name: f.fundName, source, goalId, type: 'fund',
       currentValue: f.currentValue, units: f.quantity, navPerUnit: f.currentNAV,
       gainPct: f.profitLossPercentage, interestRate: null,
-      fundId: f.fundId, purchasePrice: f.purchasePrice,
+      fundId: f.fundId, purchasePrice: f.purchasePrice, costBasis: f.costBasis,
     })
   })
   // Bank / gold: also allocated to goals or unallocated.
@@ -74,7 +76,7 @@ function collectHoldings(d: {
   return out
 }
 
-interface FundLike { fundId: string; fundName: string; quantity: number; currentNAV: number; currentValue: number; purchasePrice: number; profitLossPercentage: number }
+interface FundLike { fundId: string; fundName: string; quantity: number; currentNAV: number; currentValue: number; purchasePrice: number; costBasis?: number; profitLossPercentage: number }
 interface NonFundLike { transactionId: string; type: string; amount: number; currentValue: number; interestRate: number | null; units: number | null; notes: string | null }
 
 // When set, the sheet opens in edit mode: fields are prefilled from this

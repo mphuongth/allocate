@@ -206,6 +206,58 @@ test.describe('withdrawal balance enforcement (#587)', () => {
     }
   })
 
+  // The basis a fund sale takes out now comes from the dashboard as a number
+  // (`costBasis`) instead of being reconstructed from the averaged purchase price.
+  // This drives the real DTO → helper → route → invariant path, on a bucket whose
+  // basis divides into no whole đồng per unit, which is where the old arithmetic
+  // landed a đồng above the holding and the invariant refused an ordinary sale.
+  test('the dashboard reports a fund cost basis a full sale can take exactly', async ({ request }) => {
+    const fund = await api.createFund({
+      name: `E2E WdBalance Basis ${Date.now()}`,
+      code: `WBB${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+      fund_type: 'equity',
+      nav: 20_000,
+    })
+    // 1,000,001 over 3 units: no third of it is a whole đồng.
+    const buy = await api.createTransaction({
+      asset_type: 'fund', fund_id: fund.id, goal_id: goalId,
+      amount_vnd: 1_000_001, units: 3, unit_price: 333_334, investment_date: '2026-01-01',
+    })
+    try {
+      const overview = await (await request.get('/api/v1/dashboard/overview')).json()
+      const bucket = (overview.goals as Array<{ goalId: string; funds: Array<{ fundId: string; costBasis: number; quantity: number }> }>)
+        .find((g) => g.goalId === goalId)!
+        .funds.find((f) => f.fundId === fund.id)!
+      // The DTO carries it, so no client has to rebuild it from an average.
+      expect(bucket.costBasis).toBe(1_000_001)
+
+      const sell = await request.post('/api/v1/investment-transactions', {
+        data: {
+          transaction_type: 'withdrawal', asset_type: 'fund', fund_id: fund.id,
+          investment_date: '2026-02-01', amount_vnd: 1_000_001,
+          units_withdrawn: bucket.quantity, principal_withdrawn: bucket.costBasis,
+          goal_id: goalId, notes: 'E2E wd balance fund',
+        },
+      })
+      expect(sell.status()).toBe(201)
+
+      // And a đồng more than the basis is still an overdraw.
+      const over = await request.post('/api/v1/investment-transactions', {
+        data: {
+          transaction_type: 'withdrawal', asset_type: 'fund', fund_id: fund.id,
+          investment_date: '2026-03-01', amount_vnd: 1000,
+          units_withdrawn: 0.0001, principal_withdrawn: 1000,
+          goal_id: goalId, notes: 'E2E wd balance fund',
+        },
+      })
+      expect(over.status()).toBe(400)
+    } finally {
+      await api.deleteTransactionCascade(buy.transaction_id)
+      await api.deleteAllTransactionsByNotes('E2E wd balance fund')
+      await api.deleteFund(fund.id)
+    }
+  })
+
   // A fund sell has no parent row: its balance is the (goal, fund) bucket the
   // dashboard aggregates. Units held for one goal must not fund another's sell.
   test('a fund sell draws only on the goal it was picked from', async ({ request }) => {

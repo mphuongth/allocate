@@ -114,7 +114,7 @@ describe('AddTransactionSheet — goal selector (issue #232)', () => {
 describe('AddTransactionSheet — sell flow (issue #232)', () => {
   it('lists holdings from the overview and posts a fund withdrawal on confirm', async () => {
     const overview = {
-      goals: [{ goalId: 'g-a', goalName: 'Goal A', funds: [{ fundId: 'f1', fundName: 'VESAF', quantity: 100, currentNAV: 20000, currentValue: 2_000_000, purchasePrice: 18000, profitLossPercentage: 11.11 }] }],
+      goals: [{ goalId: 'g-a', goalName: 'Goal A', funds: [{ fundId: 'f1', fundName: 'VESAF', quantity: 100, currentNAV: 20000, currentValue: 2_000_000, purchasePrice: 18000, costBasis: 1_800_000, profitLossPercentage: 11.11 }] }],
       unallocated: { funds: [], nonFunds: [] },
     }
     const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
@@ -151,7 +151,7 @@ describe('AddTransactionSheet — sell flow (issue #232)', () => {
 describe('AddTransactionSheet — fund sell units field (two-way linked)', () => {
   it('entering units fills the amount and posts the matching withdrawal', async () => {
     const overview = {
-      goals: [{ goalId: 'g-a', goalName: 'Goal A', funds: [{ fundId: 'f1', fundName: 'VESAF', quantity: 100, currentNAV: 20000, currentValue: 2_000_000, purchasePrice: 18000, profitLossPercentage: 11.11 }] }],
+      goals: [{ goalId: 'g-a', goalName: 'Goal A', funds: [{ fundId: 'f1', fundName: 'VESAF', quantity: 100, currentNAV: 20000, currentValue: 2_000_000, purchasePrice: 18000, costBasis: 1_800_000, profitLossPercentage: 11.11 }] }],
       unallocated: { funds: [], nonFunds: [] },
     }
     const fetchMock = vi.fn((url: string, _init?: RequestInit) => {

@@ -12,6 +12,7 @@ import { AffectsProgressControl } from './goalDetailShared'
 import { useDialogMount, useResetOnOpen } from '@/app/(app)/planning/components/useDialogMount'
 import { previewBankWithdrawal, estimateReceivedForPrincipal } from '@/lib/bankWithdrawal'
 import { goldCostBasis, goldUnitCost } from '@/lib/goldWithdrawal'
+import { fundCostBasis } from '@/lib/fundWithdrawal'
 const fmtVND = (n: number, _locale?: string) => fmt(n)
 
 export interface SellItem {
@@ -26,6 +27,8 @@ export interface SellItem {
   fundId?: string
   transactionId?: string
   purchasePrice?: number
+  /** Fund only: remaining cost basis of the bucket, which a sale draws from (#587). */
+  costBasis?: number
   // Set when this bank item is an accumulating book (its anchor id). Switches the
   // sheet to a FULL close: every tranche is withdrawn at once (no partial amount).
   depositGroupId?: string | null
@@ -266,10 +269,14 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
           return
         }
       } else if (isFund && item.fundId) {
-        const principalWithdrawn = item.purchasePrice
-          ? Math.round((numAmount / item.currentValue) * (item.purchasePrice * (item.units ?? 0)))
-          : Math.round(numAmount)
-        const unitsWithdrawn = navPerUnit ? numAmount / navPerUnit : (item.units ?? 0)
+        // The units posted are the ones the basis is allocated from, so round them
+        // FIRST — otherwise the two disagree at the 4th decimal and a full sale can
+        // claim a đồng the holding doesn't have (#587, lib/fundWithdrawal).
+        const unitsWithdrawn = parseFloat(
+          (navPerUnit ? numAmount / navPerUnit : (item.units ?? 0)).toFixed(4))
+        const principalWithdrawn = fundCostBasis({
+          totalBasis: item.costBasis, totalUnits: item.units, sellUnits: unitsWithdrawn,
+        }) ?? Math.round(numAmount)
         const res = await fetch('/api/v1/investment-transactions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -279,7 +286,7 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
             fund_id: item.fundId,
             investment_date: today,
             amount_vnd: Math.round(numAmount),
-            units_withdrawn: parseFloat(unitsWithdrawn.toFixed(4)),
+            units_withdrawn: unitsWithdrawn,
             principal_withdrawn: principalWithdrawn,
             goal_id: withdrawalGoalId,
             affects_progress: context === 'goal' ? affectsProgress : true,

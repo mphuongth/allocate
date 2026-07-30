@@ -18,6 +18,7 @@ function fund(fundType: string, currentValue: number): FundBreakdownItem {
     currentNAV: currentValue,
     currentValue,
     purchasePrice: currentValue,
+    costBasis: currentValue,
     profitLoss: 0,
     profitLossPercentage: 0,
     goalId: null,

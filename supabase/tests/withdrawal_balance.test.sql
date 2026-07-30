@@ -625,11 +625,11 @@ end;
 $$;
 
 -- ── a full fund sell must survive the two cost bases disagreeing ─────────────
--- The bucket's principal is measured as Σ amount_vnd; the sell builders derive
--- what they post from the NAV cost basis (Σ units × unit_price). Each stored
--- amount_vnd was itself rounded, so on a multi-purchase bucket the two differ by
--- a đồng or two — enough to refuse an ordinary "sell everything" without a slack
--- of exactly that size.
+-- The basis is Σ amount_vnd — what the purchases cost — because that is the
+-- accumulator dashboard/overview subtracts principal_withdrawn from. A full sale
+-- takes it exactly (lib/fundWithdrawal states it rather than deriving it), so the
+-- only drift left is between SUCCESSIVE PARTIAL sales, each of which rounded its
+-- own units-proportional slice. The slack covers exactly that, and no more.
 do $$
 declare
   v_user uuid;
@@ -639,28 +639,33 @@ begin
   insert into public.funds (user_id, name, code, fund_type, nav)
   values (v_user, 'Basis Fund', 'BSF', 'equity', 20000) returning id into v_fund;
 
-  -- Two purchases whose raw basis is 1,000,050.4 each: stored amount_vnd rounds
-  -- DOWN to 1,000,050, so Σ amount_vnd = 2,000,100 while the NAV cost the sheet
-  -- computes rounds to 2,000,101.
+  -- One purchase of 1,000,001 over 3 units: no third of it is a whole đồng.
   insert into public.investment_transactions (user_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
-  values (v_user, v_fund, 'fund', 'investment', '2026-01-01', 1000050, 50.0025, 20000);
-  insert into public.investment_transactions (user_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
-  values (v_user, v_fund, 'fund', 'investment', '2026-02-01', 1000050, 50.0025, 20000);
+  values (v_user, v_fund, 'fund', 'investment', '2026-01-01', 1000001, 3, 333334);
 
+  -- Three partial sales of one unit each: round(1,000,001 / 3) = 333,334 apiece,
+  -- which totals 1,000,002 — a đồng more than the bucket cost. That is the
+  -- rounding the slack exists for, and the LAST one is where it lands.
   insert into public.investment_transactions
     (user_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, principal_withdrawn, units_withdrawn)
-  values (v_user, v_fund, 'fund', 'withdrawal', '2026-03-01', 2000101, 2000101, 100.005);
+  values (v_user, v_fund, 'fund', 'withdrawal', '2026-02-01', 333334, 333334, 1);
+  insert into public.investment_transactions
+    (user_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, principal_withdrawn, units_withdrawn)
+  values (v_user, v_fund, 'fund', 'withdrawal', '2026-03-01', 333334, 333334, 1);
+  insert into public.investment_transactions
+    (user_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, principal_withdrawn, units_withdrawn)
+  values (v_user, v_fund, 'fund', 'withdrawal', '2026-04-01', 333334, 333334, 1);
 
-  -- The slack is bounded, not a licence: a thousand đồng over is still refused.
+  -- Bounded, not a licence: a thousand đồng over is still refused.
   begin
     insert into public.investment_transactions
       (user_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, principal_withdrawn, units_withdrawn)
-    values (v_user, v_fund, 'fund', 'withdrawal', '2026-04-01', 1000, 1000, 0.0001);
-    raise exception 'the cost-basis slack must not cover a real overdraw';
+    values (v_user, v_fund, 'fund', 'withdrawal', '2026-05-01', 1000, 1000, 0.0001);
+    raise exception 'the rounding slack must not cover a real overdraw';
   exception when sqlstate '23514' then null;
   end;
 
-  raise notice 'fund cost-basis slack: ok';
+  raise notice 'fund partial-sale rounding slack: ok';
 end;
 $$;
 
@@ -786,14 +791,14 @@ begin
 end;
 $$;
 
--- ── a purchase whose stored amount and NAV cost disagree outright ────────────
--- The POST route takes amount_vnd, units and unit_price as independent fields and
--- enforces no relationship between them, and the sheet lets units be typed by
--- hand. So a purchase can store 1,000,000 with 60 units at 20,000 — a NAV cost of
--- 1,200,000. The dashboard and the sell builders use the NAV basis, so a full sell
--- posts 1,200,000: measuring only against Σ amount_vnd refuses an ordinary sale.
--- The bound is whichever basis is larger; for funds, units are the load-bearing
--- check anyway.
+-- ── one authoritative basis: what the purchases cost ─────────────────────────
+-- amount_vnd, units and unit_price are independent fields on the POST route (and
+-- the sheet lets units be typed by hand), so a purchase can store 1,000,000 with
+-- 60 units at 20,000 — a NAV cost of 1,200,000. Only one of those can be the
+-- basis, and it is amount_vnd: dashboard/overview subtracts principal_withdrawn
+-- from Σ amount_vnd, while the NAV cost is reduced by units and only feeds the
+-- average entry price. lib/fundWithdrawal posts from the same number, so a sale
+-- above it is a real overdraw and is refused rather than accommodated.
 do $$
 declare
   v_user uuid;
@@ -806,11 +811,22 @@ begin
   insert into public.investment_transactions (user_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
   values (v_user, v_fund, 'fund', 'investment', '2026-01-01', 1000000, 60, 20000);
 
+  -- The NAV-derived figure the sheets used to post is above what the purchase
+  -- cost, so it is refused now that nothing produces it.
+  begin
+    insert into public.investment_transactions
+      (user_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, principal_withdrawn, units_withdrawn)
+    values (v_user, v_fund, 'fund', 'withdrawal', '2026-02-01', 1200000, 1200000, 60);
+    raise exception 'a sale above what the purchase cost must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- The whole basis, which is what a full sale now posts.
   insert into public.investment_transactions
     (user_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, principal_withdrawn, units_withdrawn)
-  values (v_user, v_fund, 'fund', 'withdrawal', '2026-02-01', 1200000, 1200000, 60);
+  values (v_user, v_fund, 'fund', 'withdrawal', '2026-02-01', 1200000, 1000000, 60);
 
-  raise notice 'fund principal bound takes the larger basis: ok';
+  raise notice 'one authoritative fund basis: ok';
 end;
 $$;
 

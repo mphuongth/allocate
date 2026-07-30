@@ -71,14 +71,11 @@ declare
   v_left_units    numeric;
   v_parent_type   text;
   v_parent_asset  text;
-  -- Purchases in the fund bucket, and the rounding slack they imply (below).
-  -- Null outside the fund branch, where the basis is one row's stored amount and
-  -- there is nothing to reconcile.
+  -- Purchases in the fund bucket (null outside it) and prior sales out of it —
+  -- the second bounds how much independent rounding the slack has to explain.
   v_rows          int;
+  v_out_rows      int;
   v_slack         bigint;
-  -- Σ(units × unit_price) for the fund bucket — the basis the dashboard's avg
-  -- entry price, and so the sell builders, work from. Null outside that branch.
-  v_nav_basis     numeric;
 begin
   if wd.transaction_type is distinct from 'withdrawal' then return; end if;
 
@@ -130,17 +127,19 @@ begin
      order by t.transaction_id      -- a stable lock order; concurrent sells can't deadlock
        for update;
 
-    -- Two bases exist for a fund's principal and they can disagree outright, not
-    -- just by rounding: amount_vnd, units and unit_price are independent fields on
-    -- the POST route (and the sheet lets units be typed by hand), so a purchase may
-    -- store 1,000,000 with 60 units at 20,000 — a NAV cost of 1,200,000. The
-    -- dashboard's avg entry price, and therefore what the sell builders post, uses
-    -- the NAV basis; Σ amount_vnd is what the row says it cost. Bound by whichever
-    -- is larger: refusing on the smaller one refuses an ordinary full sale, and for
-    -- funds the UNITS check below is the load-bearing one anyway.
-    select coalesce(sum(t.amount_vnd), 0), coalesce(sum(t.units), 0), count(*),
-           coalesce(sum(t.units * coalesce(t.unit_price, 0)), 0)
-      into v_principal, v_units, v_rows, v_nav_basis
+    -- ONE authoritative basis: Σ amount_vnd, what the purchases cost. That is
+    -- where the number lands — dashboard/overview does
+    --   acc.totalInvested -= Σ principal_withdrawn
+    -- against exactly this sum, while the NAV cost (Σ units × unit_price, fees
+    -- excluded) is reduced by units and only feeds the average entry price.
+    --
+    -- The sheets used to post a NAV-derived figure into that amount-based
+    -- accumulator, reconstructed through the averaged purchasePrice, and this check
+    -- grew a tolerance to accommodate it. lib/fundWithdrawal now takes the basis
+    -- from the dashboard directly (a full sale takes it exactly), so the two agree
+    -- and the tolerance below covers only what rounding can still explain.
+    select coalesce(sum(t.amount_vnd), 0), coalesce(sum(t.units), 0), count(*)
+      into v_principal, v_units, v_rows
       from public.investment_transactions t
      where t.user_id = wd.user_id
        and t.fund_id = wd.fund_id
@@ -150,8 +149,8 @@ begin
        and t.renewed_from_transaction_id is null
        and t.units is not null;
 
-    select coalesce(sum(w.principal_withdrawn), 0), coalesce(sum(w.units_withdrawn), 0)
-      into v_out_principal, v_out_units
+    select coalesce(sum(w.principal_withdrawn), 0), coalesce(sum(w.units_withdrawn), 0), count(*)
+      into v_out_principal, v_out_units, v_out_rows
       from public.investment_transactions w
      where w.user_id = wd.user_id
        and w.fund_id = wd.fund_id
@@ -241,18 +240,14 @@ begin
   end if;
 
   if coalesce(wd.principal_withdrawn, 0) > 0 then
-    -- For a fund bucket, take the larger of the two bases (see above).
-    v_left := greatest(coalesce(v_principal, 0), ceil(coalesce(v_nav_basis, 0))::bigint)
-              - v_out_principal;
-    -- A fund bucket's principal is measured as Σ amount_vnd, while the sell
-    -- builders derive what they post from the NAV cost basis (Σ units × unit_price,
-    -- via the dashboard's avg entry price). Each purchase's stored amount_vnd was
-    -- itself rounded, so the two bases can differ by under half a đồng per row —
-    -- and a FULL sell of a multi-purchase bucket could land a few đồng above
-    -- Σ amount_vnd and be refused. Allow exactly that slack: half a đồng per
-    -- purchase, plus one for the sell's own rounding. Nothing outside the fund
-    -- branch gets any (v_rows is null there — one row's stored amount IS the basis).
-    v_slack := case when v_rows is null then 0 else ceil((v_rows + 1) * 0.5) end;
+    v_left := coalesce(v_principal, 0) - v_out_principal;
+    -- What rounding can still explain, and nothing more. A fund bucket's basis is
+    -- allocated by units, so each PRIOR partial sale rounded its own slice
+    -- independently (≤ half a đồng each) and this one rounds its own. A single
+    -- deposit has no allocation to round — v_rows is null outside the fund branch —
+    -- so it gets none. Anything larger than this is a real overdraw, and the
+    -- arithmetic that used to need more than this now lives in lib/fundWithdrawal.
+    v_slack := case when v_rows is null then 0 else ceil((v_out_rows + 1) * 0.5) end;
     if wd.principal_withdrawn > v_left + v_slack then
       raise exception 'withdrawal invariant: % exceeds the remaining balance of % on this holding',
         wd.principal_withdrawn, v_left using errcode = 'check_violation';

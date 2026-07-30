@@ -7,6 +7,7 @@
 
 import { previewBankWithdrawal, estimateReceivedForPrincipal } from '@/lib/bankWithdrawal'
 import { goldCostBasis, goldUnitCost } from '@/lib/goldWithdrawal'
+import { fundCostBasis } from '@/lib/fundWithdrawal'
 
 export type AssetType = 'fund' | 'bank' | 'gold'
 
@@ -291,6 +292,12 @@ export interface SellHolding {
    */
   goalId?: string | null
   purchasePrice?: number | null
+  /**
+   * Fund only: the bucket's remaining cost basis (Σ amount_vnd, net of prior
+   * sells) as the dashboard reports it. A sale takes it out directly instead of
+   * reconstructing it from the averaged purchasePrice (#587, lib/fundWithdrawal).
+   */
+  costBasis?: number | null
   currentValue: number
   units?: number | null
 }
@@ -322,14 +329,17 @@ export function buildSellPayload(
   if (holding.type === 'fund' && holding.fundId) {
     if (!preview.numSell) return { ok: false, errorKey: 'amountRequired' }
     if (preview.sellOverMax) return { ok: false, errorKey: 'exceedsBalance' }
-    const principalWithdrawn = holding.purchasePrice
-      ? Math.round((preview.numSell / holding.currentValue) * (holding.purchasePrice * (holding.units ?? 0)))
-      : Math.round(preview.numSell)
-    const unitsWithdrawn = preview.sellNav ? preview.numSell / preview.sellNav : (holding.units ?? 0)
+    // Round the units FIRST: they are what the basis is allocated from, so a
+    // mismatch at the 4th decimal is a đồng the holding may not have (#587).
+    const unitsWithdrawn = parseFloat(
+      (preview.sellNav ? preview.numSell / preview.sellNav : (holding.units ?? 0)).toFixed(4))
+    const principalWithdrawn = fundCostBasis({
+      totalBasis: holding.costBasis, totalUnits: holding.units, sellUnits: unitsWithdrawn,
+    }) ?? Math.round(preview.numSell)
     return { ok: true, payload: {
       transaction_type: 'withdrawal', asset_type: 'fund', fund_id: holding.fundId,
       investment_date: date, amount_vnd: Math.round(preview.numSell),
-      units_withdrawn: parseFloat(unitsWithdrawn.toFixed(4)),
+      units_withdrawn: unitsWithdrawn,
       principal_withdrawn: principalWithdrawn,
       goal_id: holding.goalId ?? null, notes: note || null,
     } }

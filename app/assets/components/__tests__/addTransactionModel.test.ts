@@ -215,7 +215,9 @@ describe('buildSellPayload', () => {
   const zero = { numSell: 0, sellOverMax: false, sellNav: null, numGoldSellQty: 0, isOverUnits: false, goldProceeds: 0, goldCost: null, numReceived: 0, bankWithdrawPrincipal: 0 }
 
   it('fund: proportional principal_withdrawn + units_withdrawn=amount÷NAV', () => {
-    const holding = { type: 'fund' as const, fundId: 'f1', purchasePrice: 18_000, currentValue: 2_000_000, units: 100 }
+    // costBasis is what those 100 units cost; the sale takes half of it because it
+    // sells half the units. purchasePrice is display-only now (#587).
+    const holding = { type: 'fund' as const, fundId: 'f1', purchasePrice: 18_000, costBasis: 1_800_000, currentValue: 2_000_000, units: 100 }
     const preview = { ...zero, numSell: 1_000_000, sellNav: 20_000 }
     const p = ok(buildSellPayload(holding, preview, { date, note: '' }))
     expect(p).toEqual({

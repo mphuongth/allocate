@@ -20,6 +20,7 @@ const mockFund = {
   currentNAV: 25_000,
   currentValue: 2_500_000,
   purchasePrice: 22_000,
+  costBasis: 2_200_000,
   profitLoss: 300_000,
   profitLossPercentage: 13.64,
   goalId: 'goal-1',
