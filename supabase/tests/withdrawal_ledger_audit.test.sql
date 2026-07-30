@@ -37,7 +37,10 @@ declare
   v_ob_goal   uuid;
   v_split     uuid;
   v_prop_src  uuid; v_prop     uuid;
+  v_stray     uuid; v_stray_z  uuid;
+  v_mask_goal uuid; v_mask_zero uuid;
   -- the clean half
+  v_tol_goal  uuid;
   v_ok_bank   uuid; v_ok_bank_w  uuid;
   v_ok_gold   uuid; v_ok_gold_w1 uuid; v_ok_gold_w2 uuid;
   v_ok_buy    uuid; v_ok_sell1   uuid; v_ok_sell2   uuid;
@@ -109,6 +112,18 @@ begin
     (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, fund_id, principal_withdrawn, units_withdrawn)
   values (v_user, v_goal_b, 'fund', 'withdrawal', '2026-05-01', 1100000, v_fund_ok, 1000000, 50)
   returning transaction_id into v_seed_sell;
+
+  -- The invariant's allocation rule tolerates one đồng per sale, because that is
+  -- what rounding a proportional slice produces. A full sale taking basis + 1 is
+  -- therefore ACCEPTED — the insert below proves it, since the triggers are still
+  -- on — and an audit stricter than the invariant it audits would report a ledger
+  -- nobody can fix.
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Rounding') returning goal_id into v_tol_goal;
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id)
+  values (v_user, v_tol_goal, 'fund', 'investment', '2026-01-01', 1000000, 100, 10000, v_fund_ok);
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, fund_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_tol_goal, 'fund', 'withdrawal', '2026-02-01', 1200000, v_fund_ok, 1000001, 100);
 
   -- ═══ the planted violations ════════════════════════════════════════════════
   -- Disabling the user triggers is the only way in: these are precisely the shapes
@@ -210,6 +225,37 @@ begin
   values (v_user, v_goal_b, 'gold', 'withdrawal', '2026-02-01', 12000000, v_prop_src, 40000000, 1)
   returning transaction_id into v_prop;
 
+  -- 13. a fund sell whose asset_type was edited off 'fund': it KEEPS its fund_id,
+  --     but a retained id is not a bucket key without asset_type='fund', so the
+  --     row draws on nothing (the invariant refuses exactly this shape). Keying the
+  --     audit off `fund_id is null` would make this reachable corruption invisible.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, fund_id, principal_withdrawn)
+  values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 5000000, v_fund, 5000000)
+  returning transaction_id into v_stray;
+
+  -- 14. the same stranded shape carrying no deltas: still not a held-for-merge row
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, fund_id)
+  values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 5000000, v_fund)
+  returning transaction_id into v_stray_z;
+
+  -- 15. two sells whose basis errors CANCEL: one takes nothing, the other takes
+  --     double. The invariant refuses each on its own, but the bucket's totals come
+  --     out exactly proportional — so a holding-level check alone reports a clean
+  --     bucket and both invalid rows stay silent. This is why the missing-principal
+  --     check has to be per row.
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Masked') returning goal_id into v_mask_goal;
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id)
+  values (v_user, v_mask_goal, 'fund', 'investment', '2026-01-01', 1000000, 100, 10000, v_fund);
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, fund_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_mask_goal, 'fund', 'withdrawal', '2026-02-01', 600000, v_fund, 0, 50)
+  returning transaction_id into v_mask_zero;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, fund_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_mask_goal, 'fund', 'withdrawal', '2026-03-01', 600000, v_fund, 1000000, 50);
+
   alter table public.investment_transactions enable trigger user;
 
   -- ═══ every planted row must be named, by the right check ═══════════════════
@@ -226,7 +272,10 @@ begin
         ('parent_is_not_an_investment',   v_pnotinv),
         ('parent_is_a_fund_purchase',     v_onfund),
         ('draws_on_no_holding',           v_nothing),
-        ('sourceless_not_held_for_merge', v_notheld)
+        ('sourceless_not_held_for_merge', v_notheld),
+        ('draws_on_no_holding',           v_stray),
+        ('sourceless_not_held_for_merge', v_stray_z),
+        ('withdrawal_missing_principal',  v_mask_zero)
       ) as x(name, tx)
   loop
     if v_count <> 1 then
@@ -254,6 +303,14 @@ begin
   if not exists (select 1 from public.withdrawal_ledger_audit
                   where check_name = 'basis_not_proportional' and parent_transaction_id = v_prop_src) then
     raise exception 'the audit must report the gold sale that took the whole basis for one of four units';
+  end if;
+
+  -- The masked bucket is the point of that per-row check: its TOTALS are exactly
+  -- proportional, so the holding-level check is silent by design. Asserting the
+  -- silence keeps the two checks from being justified by each other.
+  if exists (select 1 from public.withdrawal_ledger_audit
+              where check_name = 'basis_not_proportional' and goal_id = v_mask_goal) then
+    raise exception 'the masked bucket adds up: the holding-level check is not what catches it';
   end if;
 
   -- ═══ and nothing the invariant itself accepted ═════════════════════════════

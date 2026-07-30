@@ -125,12 +125,21 @@ select 'gold_sale_missing_units', 'violation',
 union all
 -- No principal takes nothing out: the holding keeps its value while the row
 -- claims cash left.
+-- Per row, and per row for FUND sales too, not only for parent-backed ones. A
+-- fund sale's principal is the units-proportional slice of the basis, so zero is
+-- refused by the invariant — but the holding-level check below cannot see it: two
+-- sells whose errors cancel (one takes nothing, its sibling takes double) leave
+-- the bucket's totals exactly proportional and both invalid rows silent.
 select 'withdrawal_missing_principal', 'violation',
        w.user_id, w.transaction_id, w.parent_transaction_id, w.fund_id, w.goal_id,
-       format('withdrawal from holding %s records principal %s', w.parent_transaction_id, w.principal_withdrawn)
+       format('%s records principal %s',
+              case when w.fund_keyed then format('fund sale of %s units', w.units_withdrawn)
+                   else format('withdrawal from holding %s', w.parent_transaction_id) end,
+              w.principal_withdrawn)
   from wd w
- where not w.fund_keyed and w.parent_transaction_id is not null
-   and coalesce(w.principal_withdrawn, 0) <= 0
+ where coalesce(w.principal_withdrawn, 0) <= 0
+   and case when w.fund_keyed then coalesce(w.units_withdrawn, 0) > 0   -- else it is fund_sale_missing_units
+            else w.parent_transaction_id is not null end
 
 union all
 -- A withdrawal is not a holding: parenting to one invents a balance out of money
@@ -155,11 +164,20 @@ select 'parent_is_a_fund_purchase', 'review',
 union all
 -- Filed under neither key: it subtracts from nothing while the record says cash
 -- left. What deleting a source leaves behind (#607), among other routes.
+--
+-- A RETAINED fund_id does not save such a row, which is why this asks only about
+-- fund_keyed and the parent. Editing a fund sell's asset_type off 'fund' leaves the
+-- fund_id in place (the PUT clears it only when that field is sent), and a bare id
+-- is not a bucket key — buildWithdrawalMaps needs asset_type='fund' — so the row
+-- draws on nothing at all. Requiring fund_id is null here would have made that
+-- shape, the one the invariant refuses by name, invisible to the audit.
 select 'draws_on_no_holding', 'violation',
        w.user_id, w.transaction_id, w.parent_transaction_id, w.fund_id, w.goal_id,
-       format('takes principal %s / units %s from no holding', w.principal_withdrawn, w.units_withdrawn)
+       format('takes principal %s / units %s from no holding%s',
+              w.principal_withdrawn, w.units_withdrawn,
+              case when w.fund_id is not null then ' (fund id retained without asset_type=fund)' else '' end)
   from wd w
- where not w.fund_keyed and w.parent_transaction_id is null and w.fund_id is null
+ where not w.fund_keyed and w.parent_transaction_id is null
    and (coalesce(w.principal_withdrawn, 0) > 0 or coalesce(w.units_withdrawn, 0) > 0)
 
 union all
@@ -168,9 +186,9 @@ union all
 -- may wear that exception.
 select 'sourceless_not_held_for_merge', 'violation',
        w.user_id, w.transaction_id, w.parent_transaction_id, w.fund_id, w.goal_id,
-       'no parent, no fund, no deltas, and not held_for_merge'
+       'nothing it draws on, no deltas, and not held_for_merge'
   from wd w
- where not w.fund_keyed and w.parent_transaction_id is null and w.fund_id is null
+ where not w.fund_keyed and w.parent_transaction_id is null
    and coalesce(w.principal_withdrawn, 0) = 0 and coalesce(w.units_withdrawn, 0) = 0
    and not w.held_for_merge
 
@@ -180,13 +198,18 @@ union all
 -- Past zero. The dashboard then DROPS the holding (valueNonFundHolding returns
 -- null at effectiveAmount <= 0) while the excess withdrawal stays in history, so
 -- net worth is wrong in a way no screen shows.
+-- The tolerances are the invariant's own, per sale: one đồng of rounding wherever
+-- the principal is a proportional slice (gold; a deposit's principal is the user's
+-- own figure and is bounded exactly), and the 0.0001 units the clients' 4-decimal
+-- rounding can add to a full sell. An audit stricter than the invariant it audits
+-- reports ledgers nobody can repair, and that is how a report gets ignored.
 select 'holding_overdrawn', 'violation',
        p.user_id, null::uuid, p.transaction_id, null::uuid, p.goal_id,
        format('%s holding of %s đồng / %s units has %s đồng / %s units taken out across %s withdrawal(s)',
               p.asset_type, p.amount_vnd, coalesce(p.units, 0), p.out_principal, p.out_units, p.sells)
   from parents p
- where p.out_principal > p.amount_vnd
-    or (p.units is not null and p.out_units > p.units + 0.0001)
+ where p.out_principal > p.amount_vnd + (case when p.asset_type = 'gold' then p.sells else 0 end)
+    or (p.units is not null and p.out_units > p.units + 0.0001 * p.sells)
 
 union all
 select 'fund_bucket_overdrawn', 'violation',
@@ -195,7 +218,7 @@ select 'fund_bucket_overdrawn', 'violation',
               b.basis, b.units, b.out_principal, b.out_units, b.sells)
   from fund_buckets b
  where b.buys > 0
-   and (b.out_principal > b.basis or b.out_units > b.units + 0.0001)
+   and (b.out_principal > b.basis + b.sells or b.out_units > b.units + 0.0001 * b.sells)
 
 union all
 -- A sell alone in a bucket: its purchases are in another goal, so nothing here
