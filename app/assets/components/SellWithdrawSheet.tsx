@@ -505,7 +505,11 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
                   />
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 4 }}>
-                  {isVI ? 'Tạm tính theo giá trị hiện tại — sửa nếu rút sớm bị trừ lãi' : 'Pre-filled at current value — edit down if early withdrawal cuts interest'}
+                  {/* Not the whole current value any more: the prefill is the
+                      principal entered plus the interest accrued on that slice. */}
+                  {isVI
+                    ? 'Ước tính từ giá trị hiện tại — hãy đối chiếu với số tiền ngân hàng thực trả, nhất là khi rút trước hạn.'
+                    : "Estimated from the current value — verify it against the bank's actual payout, especially for an early withdrawal."}
                 </div>
               </div>
             )}
