@@ -49,8 +49,20 @@ declare
   v_out_units     numeric;
   v_left          bigint;
   v_left_units    numeric;
+  v_parent_type   text;
+  v_parent_asset  text;
 begin
   if new.transaction_type is distinct from 'withdrawal' then return new; end if;
+
+  -- Deleting a source is an ordinary ledger action, and parent_transaction_id is
+  -- ON DELETE SET NULL — so Postgres orphans the children with an UPDATE that
+  -- lands right here. Measuring that update would refuse it (the row has just
+  -- lost the holding it drew on) and turn a plain delete into an error. The
+  -- leftover orphan is a shape this invariant would not let anyone CREATE;
+  -- cleaning those up as the source goes wants its own change.
+  if tg_op = 'UPDATE' and old.parent_transaction_id is not null and new.parent_transaction_id is null then
+    return new;
+  end if;
 
   -- The branch order is not a preference: it MIRRORS lib/withdrawalProgress, which
   -- keys any row with asset_type='fund' + fund_id by (goal, fund) and ignores its
@@ -96,7 +108,8 @@ begin
   elsif new.parent_transaction_id is not null then
     -- Bank / gold / stock: one source row. Lock it before measuring it, so two
     -- concurrent withdrawals of the same deposit serialize here.
-    select t.amount_vnd, t.units into v_principal, v_units
+    select t.amount_vnd, t.units, t.transaction_type, t.asset_type
+      into v_principal, v_units, v_parent_type, v_parent_asset
       from public.investment_transactions t
      where t.transaction_id = new.parent_transaction_id
        and t.user_id = new.user_id
@@ -105,6 +118,23 @@ begin
     -- make (#474 / #525); staying quiet here keeps that message the one the user
     -- sees instead of a confusing "no balance".
     if not found then return new; end if;
+
+    -- A withdrawal is not a holding, so parenting to one invents a balance out of
+    -- money that already left. Renewal snapshots ARE valid parents on purpose:
+    -- renew and collapse re-parent partial withdrawals onto them, which is how a
+    -- renewed deposit stops double-counting them (#585).
+    --
+    -- A parent that is a FUND purchase is left alone here, though review flagged
+    -- it: such a row is ignored by buildWithdrawalMaps (the fund is valued through
+    -- the goal/fund map, which never consults parentWdMap), so it is an UNCOUNTED
+    -- withdrawal rather than an overdraw — a valuation gap that predates this
+    -- change, and one supabase/tests/dca_seeding_heal.test.sql treats as data that
+    -- exists. Bounding it by the parent's own principal, as below, is the most
+    -- this invariant can honestly say about it.
+    if v_parent_type is distinct from 'investment' then
+      raise exception 'withdrawal draws on no holding: its parent % is not an investment',
+        new.parent_transaction_id using errcode = 'check_violation';
+    end if;
 
     select coalesce(sum(w.principal_withdrawn), 0), coalesce(sum(w.units_withdrawn), 0)
       into v_out_principal, v_out_units

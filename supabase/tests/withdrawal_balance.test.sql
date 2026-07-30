@@ -325,4 +325,80 @@ begin
 end;
 $$;
 
+-- ── the parent has to be a holding, and deleting one must stay possible ──────
+-- A withdrawal is not a holding: parenting to one invents a balance out of money
+-- that already left. Renewal snapshots, on the other hand, are valid parents on
+-- purpose — renew and collapse re-parent partial withdrawals onto them (#585).
+--
+-- A FUND purchase as parent is bounded by that row rather than refused: such a
+-- row is ignored by buildWithdrawalMaps, so it is an uncounted withdrawal rather
+-- than an overdraw (a valuation gap older than this change, and a shape
+-- dca_seeding_heal.test.sql treats as data that exists).
+do $$
+declare
+  v_user uuid;
+  v_goal uuid;
+  v_fund uuid;
+  v_buy  uuid;
+  v_dep  uuid;
+  v_wd   uuid;
+  v_snap uuid;
+begin
+  insert into auth.users (id, email) values (gen_random_uuid(), 'wd-parent@test.invalid') returning id into v_user;
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'House') returning goal_id into v_goal;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Parent Fund', 'PRF', 'equity', 20000) returning id into v_fund;
+
+  insert into public.investment_transactions (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal, v_fund, 'fund', 'investment', '2026-01-01', 90000000, 4500, 20000) returning transaction_id into v_buy;
+
+  -- Parented to that fund purchase: allowed, but still bounded by the row it
+  -- names — 90M is there, 200M is not.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn)
+  values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 10000000, v_buy, 10000000);
+
+  begin
+    insert into public.investment_transactions
+      (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn)
+    values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-02', 200000000, v_buy, 200000000);
+    raise exception 'even an oddly parented withdrawal is bounded by the row it names';
+  exception when sqlstate '23514' then null;
+  end;
+
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
+  values (v_user, v_goal, 'bank', 'investment', '2026-01-01', 100000000) returning transaction_id into v_dep;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn)
+  values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 30000000, v_dep, 30000000) returning transaction_id into v_wd;
+
+  -- A withdrawal is not a holding: parenting to one is a phantom balance.
+  begin
+    insert into public.investment_transactions
+      (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn)
+    values (v_user, v_goal, 'bank', 'withdrawal', '2026-03-01', 20000000, v_wd, 20000000);
+    raise exception 'a withdrawal must not draw on another withdrawal';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- A renewal snapshot IS a valid parent — renew/collapse re-parent onto it.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, renewed_from_transaction_id)
+  values (v_user, v_goal, 'bank', 'investment', '2026-01-01', 100000000, v_dep) returning transaction_id into v_snap;
+
+  update public.investment_transactions set parent_transaction_id = v_snap where transaction_id = v_wd;
+
+  -- Deleting a source that has withdrawals is an ordinary ledger action. The FK
+  -- is ON DELETE SET NULL, so Postgres orphans the children — an UPDATE that
+  -- lands on this trigger. It must not turn a delete into an error.
+  delete from public.investment_transactions where transaction_id = v_snap;
+
+  if (select parent_transaction_id from public.investment_transactions where transaction_id = v_wd) is not null then
+    raise exception 'the orphaned withdrawal should have lost its parent';
+  end if;
+
+  raise notice 'withdrawal parent kinds + source deletion: ok';
+end;
+$$;
+
 rollback;

@@ -77,6 +77,24 @@ test.describe('withdrawal balance enforcement (#587)', () => {
     expect(outgoing[0].principal_withdrawn).toBe(100_000_000)
   })
 
+  // The guard sits on a BEFORE UPDATE too, and parent_transaction_id is
+  // ON DELETE SET NULL — so deleting a partially withdrawn deposit orphans its
+  // children through an update that lands on the trigger. An early version of
+  // this change refused that update and turned an ordinary delete into a 500.
+  // The suite missed it because the test helpers delete children first; the route
+  // does not, so drive the route.
+  test('a source that has been partly withdrawn can still be deleted', async ({ request }) => {
+    expect((await request.post('/api/v1/investment-transactions', { data: withdraw(30_000_000) })).status()).toBe(201)
+
+    const del = await request.delete(`/api/v1/investment-transactions/${depositId}`)
+    expect(del.status()).toBe(200)
+
+    const listed = await (await request.get(
+      `/api/v1/investment-transactions?goal_id=${goalId}&limit=100`)).json()
+    const rows = listed.transactions as Array<{ transaction_id: string }>
+    expect(rows.find((t) => t.transaction_id === depositId)).toBeUndefined()
+  })
+
   // A fund sell has no parent row: its balance is the (goal, fund) bucket the
   // dashboard aggregates. Units held for one goal must not fund another's sell.
   test('a fund sell draws only on the goal it was picked from', async ({ request }) => {
