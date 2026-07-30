@@ -40,9 +40,10 @@ declare
   v_stray     uuid; v_stray_z  uuid;
   v_mask_goal uuid; v_mask_zero uuid;
   v_eps_src   uuid; v_nounits_src uuid;
+  v_cancel_src uuid; v_cancel_a uuid; v_cancel_b uuid;
   -- the clean half
   v_tol_goal  uuid;
-  v_drift_src uuid; v_comp_src uuid;
+  v_drift_src uuid; v_comp_src uuid; v_f7_src uuid;
   v_ok_bank   uuid; v_ok_bank_w  uuid;
   v_ok_gold   uuid; v_ok_gold_w1 uuid; v_ok_gold_w2 uuid;
   v_ok_buy    uuid; v_ok_sell1   uuid; v_ok_sell2   uuid;
@@ -157,6 +158,24 @@ begin
   insert into public.investment_transactions
     (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
   values (v_user, v_goal_b, 'gold', 'withdrawal', '2026-03-01', 1, v_comp_src, 8, 1);
+
+  -- An epsilon-sized sale is legal or not depending ONLY on the order it was
+  -- written in, and the audit reads state, not history. Taking 0.00005 units FIRST
+  -- and the whole unit second is accepted by the invariant (the epsilon is granted
+  -- while something is left); exhausting the unit first and then taking 0.00005 is
+  -- refused. Both leave the same totals behind, so no state-based check can tell
+  -- them apart — which means the audit must stay SILENT here rather than report a
+  -- ledger that was written legally. Pinned so a later "tighten the epsilon" cannot
+  -- turn this into a false positive; the exposure it leaves is bounded by one
+  -- epsilon of units, and is recorded as a known limit in the view's header.
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal_b, 'gold', 'investment', '2026-01-01', 100, 1, 100) returning transaction_id into v_f7_src;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_goal_b, 'gold', 'withdrawal', '2026-02-01', 1, v_f7_src, 1, 0.00005);
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_goal_b, 'gold', 'withdrawal', '2026-03-01', 1, v_f7_src, 99, 1);
 
   -- ═══ the planted violations ════════════════════════════════════════════════
   -- Disabling the user triggers is the only way in: these are precisely the shapes
@@ -313,6 +332,23 @@ begin
     (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
   values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 5000000, v_nounits_src, 5000000, 5);
 
+  -- 18. two sales whose allocation errors CANCEL while both principals are
+  --     positive: 50 units taking 400 and 50 taking 600 out of a 1000 đồng / 100
+  --     unit holding. The invariant refuses each one as a first write — 50 of 100
+  --     units must take 500 — so this state is unreachable in ANY order, unlike the
+  --     epsilon case above. The totals are exactly proportional, so the
+  --     holding-level check cannot see it: only a per-sale comparison can.
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal_b, 'gold', 'investment', '2026-01-01', 1000, 100, 10) returning transaction_id into v_cancel_src;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_goal_b, 'gold', 'withdrawal', '2026-02-01', 1, v_cancel_src, 400, 50)
+  returning transaction_id into v_cancel_a;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_goal_b, 'gold', 'withdrawal', '2026-03-01', 1, v_cancel_src, 600, 50)
+  returning transaction_id into v_cancel_b;
+
   alter table public.investment_transactions enable trigger user;
 
   -- ═══ every planted row must be named, by the right check ═══════════════════
@@ -332,7 +368,9 @@ begin
         ('sourceless_not_held_for_merge', v_notheld),
         ('draws_on_no_holding',           v_stray),
         ('sourceless_not_held_for_merge', v_stray_z),
-        ('withdrawal_missing_principal',  v_mask_zero)
+        ('withdrawal_missing_principal',  v_mask_zero),
+        ('sale_basis_not_proportional',   v_cancel_a),
+        ('sale_basis_not_proportional',   v_cancel_b)
       ) as x(name, tx)
   loop
     if v_count <> 1 then
@@ -371,6 +409,13 @@ begin
     raise exception 'the audit must report units taken out of a holding that has none';
   end if;
 
+  -- Same lesson as the masked bucket, one level down: these two sales add up to
+  -- exactly the right basis, so the holding-level check is silent by design.
+  if exists (select 1 from public.withdrawal_ledger_audit
+              where check_name = 'basis_not_proportional' and parent_transaction_id = v_cancel_src) then
+    raise exception 'the cancelling pair adds up: the holding-level check is not what catches it';
+  end if;
+
   -- The masked bucket is the point of that per-row check: its TOTALS are exactly
   -- proportional, so the holding-level check is silent by design. Asserting the
   -- silence keeps the two checks from being justified by each other.
@@ -386,7 +431,7 @@ begin
     from public.withdrawal_ledger_audit
    where transaction_id in (v_ok_bank_w, v_ok_gold_w1, v_ok_gold_w2, v_ok_sell1, v_ok_sell2,
                             v_ok_held, v_seed, v_seed_buy, v_seed_sell)
-      or parent_transaction_id in (v_ok_bank, v_ok_gold, v_drift_src, v_comp_src)
+      or parent_transaction_id in (v_ok_bank, v_ok_gold, v_drift_src, v_comp_src, v_f7_src)
       or (fund_id = v_fund_ok);
   if v_count <> 0 then
     raise exception 'the audit reported % row(s) against a ledger the invariant accepted', v_count;

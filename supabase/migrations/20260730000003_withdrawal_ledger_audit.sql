@@ -30,6 +30,15 @@
 -- object a test can query. It also cannot drift from the invariant silently —
 -- both live in this directory and both are read by the same tests.
 --
+-- One known limit, worth stating rather than discovering later: whether an
+-- epsilon-sized sale was legal depends on the ORDER the rows were written in, and
+-- this view reads state. Taking 0.00005 units and then the whole unit is accepted
+-- (the epsilon is granted while something is left); exhausting the unit first and
+-- then taking 0.00005 is refused — and both leave identical totals, so no
+-- state-based check can separate them. The audit stays silent there on purpose,
+-- because reporting it would flag ledgers that were written legally. The exposure
+-- is bounded by one epsilon of units, and a clean-half test pins the silence.
+--
 -- Aggregates deliberately mirror the invariant's own measurements, including the
 -- exclusions: pending DCA seeds (units null) hold nothing sellable, renewal
 -- snapshots are history copies, and a sell keyed by (goal, fund) draws on that
@@ -268,6 +277,40 @@ select 'fund_bucket_has_no_purchases', 'violation',
 -- 'review', not 'violation': a purchase added to a bucket AFTER a sale legitimately
 -- shifts the ratio, and so does a hand-corrected row. The number is the useful
 -- part — expected vs actual says how far the basis has drifted from the units.
+
+-- Per SALE as well as per holding, because holding-level totals hide errors that
+-- CANCEL: 50 units taking 400 and 50 taking 600 out of a 1000 đồng / 100 unit
+-- holding add up to exactly the right basis, while the invariant refuses each one
+-- as a first write (50 of 100 units must take 500) — that state is unreachable in
+-- any order, and a totals-only audit calls it clean. The flat rate is the right
+-- yardstick per row precisely because the allocation rule is additive: each sale
+-- takes units × basis / total_units whatever the sequence. Same tolerance, and a
+-- measured one — the worst per-row deviation over invariant-legal sequences is 1
+-- đồng per sale (the last sale absorbs whatever the earlier ones drifted).
+union all
+select 'sale_basis_not_proportional', 'review',
+       w.user_id, w.transaction_id, w.parent_transaction_id, w.fund_id, w.goal_id,
+       format('a sale of %s of the holding''s %s units took %s đồng where the flat rate on a %s basis is %s',
+              w.units_withdrawn, p.units, w.principal_withdrawn, p.amount_vnd,
+              round(p.amount_vnd * w.units_withdrawn / p.units))
+  from wd w
+  join parents p on p.transaction_id = w.parent_transaction_id
+ where not w.fund_keyed and p.asset_type = 'gold' and coalesce(p.units, 0) > 0
+   and coalesce(w.units_withdrawn, 0) > 0
+   and abs(coalesce(w.principal_withdrawn, 0) - round(p.amount_vnd * w.units_withdrawn / p.units)) > 2 * p.sells
+
+union all
+select 'sale_basis_not_proportional', 'review',
+       w.user_id, w.transaction_id, w.parent_transaction_id, w.fund_id, w.goal_id,
+       format('a sell of %s of the bucket''s %s units took %s đồng where the flat rate on a %s basis is %s',
+              w.units_withdrawn, b.units, w.principal_withdrawn, b.basis,
+              round(b.basis * w.units_withdrawn / b.units))
+  from wd w
+  join fund_buckets b
+    on b.user_id = w.user_id and b.fund_id = w.fund_id and b.goal_id is not distinct from w.goal_id
+ where w.fund_keyed and b.units > 0
+   and coalesce(w.units_withdrawn, 0) > 0
+   and abs(coalesce(w.principal_withdrawn, 0) - round(b.basis * w.units_withdrawn / b.units)) > 2 * b.sells
 
 union all
 select 'basis_not_proportional', 'review',
