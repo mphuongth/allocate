@@ -75,6 +75,9 @@ declare
   -- there is nothing to reconcile.
   v_rows          int;
   v_slack         bigint;
+  -- Σ(units × unit_price) for the fund bucket — the basis the dashboard's avg
+  -- entry price, and so the sell builders, work from. Null outside that branch.
+  v_nav_basis     numeric;
 begin
   if wd.transaction_type is distinct from 'withdrawal' then return; end if;
 
@@ -126,8 +129,17 @@ begin
      order by t.transaction_id      -- a stable lock order; concurrent sells can't deadlock
        for update;
 
-    select coalesce(sum(t.amount_vnd), 0), coalesce(sum(t.units), 0), count(*)
-      into v_principal, v_units, v_rows
+    -- Two bases exist for a fund's principal and they can disagree outright, not
+    -- just by rounding: amount_vnd, units and unit_price are independent fields on
+    -- the POST route (and the sheet lets units be typed by hand), so a purchase may
+    -- store 1,000,000 with 60 units at 20,000 — a NAV cost of 1,200,000. The
+    -- dashboard's avg entry price, and therefore what the sell builders post, uses
+    -- the NAV basis; Σ amount_vnd is what the row says it cost. Bound by whichever
+    -- is larger: refusing on the smaller one refuses an ordinary full sale, and for
+    -- funds the UNITS check below is the load-bearing one anyway.
+    select coalesce(sum(t.amount_vnd), 0), coalesce(sum(t.units), 0), count(*),
+           coalesce(sum(t.units * coalesce(t.unit_price, 0)), 0)
+      into v_principal, v_units, v_rows, v_nav_basis
       from public.investment_transactions t
      where t.user_id = wd.user_id
        and t.fund_id = wd.fund_id
@@ -183,6 +195,11 @@ begin
       from public.investment_transactions w
      where w.parent_transaction_id = wd.parent_transaction_id
        and w.transaction_type = 'withdrawal'
+       -- Same precedence as the branch above, applied to the OTHER rows: a sibling
+       -- that is keyed by a fund draws on that bucket, not on this parent, so
+       -- counting it here too would charge it twice and make an ordinary later
+       -- withdrawal of this deposit look like an overdraw.
+       and not (w.asset_type = 'fund' and w.fund_id is not null)
        and w.transaction_id <> wd.transaction_id;
 
   else
@@ -203,7 +220,9 @@ begin
   end if;
 
   if coalesce(wd.principal_withdrawn, 0) > 0 then
-    v_left := coalesce(v_principal, 0) - v_out_principal;
+    -- For a fund bucket, take the larger of the two bases (see above).
+    v_left := greatest(coalesce(v_principal, 0), ceil(coalesce(v_nav_basis, 0))::bigint)
+              - v_out_principal;
     -- A fund bucket's principal is measured as Σ amount_vnd, while the sell
     -- builders derive what they post from the NAV cost basis (Σ units × unit_price,
     -- via the dashboard's avg entry price). Each purchase's stored amount_vnd was
@@ -233,6 +252,15 @@ $$;
 
 comment on function public.check_withdrawal_balance(public.investment_transactions) is
   'Raises when a withdrawal/sell would take more principal or units than its holding still has. Measured under a lock on the source, so concurrent sells cannot both pass (#587).';
+
+-- Postgres grants EXECUTE on a new function to PUBLIC, and this one is SECURITY
+-- DEFINER — so left open it is an oracle: call it with a hand-built row naming
+-- someone else's holding, and the refusal message reports that holding's exact
+-- remaining principal or units, RLS bypassed, taking row locks on the way. It is
+-- the triggers' helper and nothing else's; they call it as the definer, so they
+-- keep working without these grants.
+revoke all on function public.check_withdrawal_balance(public.investment_transactions) from public;
+revoke all on function public.check_withdrawal_balance(public.investment_transactions) from anon, authenticated;
 
 -- ── immediate: a new or increased claim ──────────────────────────────────────
 create or replace function public.enforce_withdrawal_within_balance()

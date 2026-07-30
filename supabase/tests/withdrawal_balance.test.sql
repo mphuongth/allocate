@@ -726,4 +726,123 @@ begin
 end;
 $$;
 
+-- ── the helper is the trigger's, not the API's ───────────────────────────────
+-- Postgres grants EXECUTE on a new function to PUBLIC, and this one is SECURITY
+-- DEFINER: left open, a caller who knows a holding's UUID could invoke it with a
+-- hand-built row, read the exact remaining balance out of the refusal message, and
+-- take locks on those rows while they were at it.
+do $$
+begin
+  begin
+    set local role authenticated;
+    -- A null composite is enough: EXECUTE is checked before the body runs.
+    perform public.check_withdrawal_balance(null::public.investment_transactions);
+    reset role;
+    raise exception 'check_withdrawal_balance must not be callable by authenticated';
+  exception
+    when insufficient_privilege then
+      reset role;
+    when others then
+      reset role;
+      -- Anything else means the call got THROUGH the privilege check.
+      raise exception 'expected a privilege error, got % (%)', sqlerrm, sqlstate;
+  end;
+
+  raise notice 'helper is not callable by the API roles: ok';
+end;
+$$;
+
+-- ── each withdrawal is counted against ONE balance ───────────────────────────
+do $$
+declare
+  v_user uuid;
+  v_fund uuid;
+  v_dep  uuid;
+begin
+  insert into auth.users (id, email) values (gen_random_uuid(), 'wd-onecount@test.invalid') returning id into v_user;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'OneCount Fund', 'OCF', 'equity', 20000) returning id into v_fund;
+
+  insert into public.investment_transactions (user_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_fund, 'fund', 'investment', '2026-01-01', 2000000, 100, 20000);
+  insert into public.investment_transactions (user_id, asset_type, transaction_type, investment_date, amount_vnd)
+  values (v_user, 'bank', 'investment', '2026-01-01', 100000000) returning transaction_id into v_dep;
+
+  -- A fund sell that also names a parent is measured against the FUND bucket
+  -- (mirroring buildWithdrawalMaps, which ignores its parent). The parent's own
+  -- balance must therefore not be reduced by it as well — counting it twice made a
+  -- later, perfectly ordinary bank withdrawal look like an overdraw.
+  insert into public.investment_transactions
+    (user_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_fund, 'fund', 'withdrawal', '2026-02-01', 1000000, v_dep, 1000000, 50);
+
+  -- The deposit still has all 100M.
+  insert into public.investment_transactions
+    (user_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn)
+  values (v_user, 'bank', 'withdrawal', '2026-03-01', 100000000, v_dep, 100000000);
+
+  raise notice 'one withdrawal, one balance: ok';
+end;
+$$;
+
+-- ── a purchase whose stored amount and NAV cost disagree outright ────────────
+-- The POST route takes amount_vnd, units and unit_price as independent fields and
+-- enforces no relationship between them, and the sheet lets units be typed by
+-- hand. So a purchase can store 1,000,000 with 60 units at 20,000 — a NAV cost of
+-- 1,200,000. The dashboard and the sell builders use the NAV basis, so a full sell
+-- posts 1,200,000: measuring only against Σ amount_vnd refuses an ordinary sale.
+-- The bound is whichever basis is larger; for funds, units are the load-bearing
+-- check anyway.
+do $$
+declare
+  v_user uuid;
+  v_fund uuid;
+begin
+  insert into auth.users (id, email) values (gen_random_uuid(), 'wd-navbasis@test.invalid') returning id into v_user;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'NavBasis Fund', 'NBF', 'equity', 20000) returning id into v_fund;
+
+  insert into public.investment_transactions (user_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_fund, 'fund', 'investment', '2026-01-01', 1000000, 60, 20000);
+
+  insert into public.investment_transactions
+    (user_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, principal_withdrawn, units_withdrawn)
+  values (v_user, v_fund, 'fund', 'withdrawal', '2026-02-01', 1200000, 1200000, 60);
+
+  raise notice 'fund principal bound takes the larger basis: ok';
+end;
+$$;
+
+-- The other direction: a stored amount ABOVE the NAV cost is still the bound, and
+-- neither basis licenses a real overdraw.
+do $$
+declare
+  v_user uuid;
+  v_fund uuid;
+begin
+  insert into auth.users (id, email) values (gen_random_uuid(), 'wd-navbasis2@test.invalid') returning id into v_user;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'NavBasis2 Fund', 'NB2', 'equity', 20000) returning id into v_fund;
+
+  -- amount_vnd 2,000,000 (fees included) vs NAV cost 1,200,000.
+  insert into public.investment_transactions (user_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_fund, 'fund', 'investment', '2026-01-01', 2000000, 60, 20000);
+
+  insert into public.investment_transactions
+    (user_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, principal_withdrawn, units_withdrawn)
+  values (v_user, v_fund, 'fund', 'withdrawal', '2026-02-01', 2000000, 2000000, 60);
+
+  begin
+    insert into public.investment_transactions
+      (user_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, principal_withdrawn, units_withdrawn)
+    values (v_user, v_fund, 'fund', 'withdrawal', '2026-03-01', 500000, 500000, 0.0001);
+    raise exception 'neither basis may license an overdraw';
+  exception when sqlstate '23514' then null;
+  end;
+
+  raise notice 'fund principal bound, other direction: ok';
+end;
+$$;
+
 rollback;
