@@ -54,6 +54,16 @@ declare
 begin
   if new.transaction_type is distinct from 'withdrawal' then return new; end if;
 
+  -- A negative withdrawal runs the ledger backwards: it ADDS to the holding and
+  -- banks a credit the next withdrawal can spend (the sums below are signed, and
+  -- so is lib/depositValuation's subtraction). Nothing in the schema stops one, so
+  -- the invariant does — before anything is measured, since a negative amount
+  -- would poison the measurement itself.
+  if coalesce(new.principal_withdrawn, 0) < 0 or coalesce(new.units_withdrawn, 0) < 0 then
+    raise exception 'withdrawal amounts cannot be negative (principal %, units %)',
+      new.principal_withdrawn, new.units_withdrawn using errcode = 'check_violation';
+  end if;
+
   -- Deleting a source is an ordinary ledger action, and parent_transaction_id is
   -- ON DELETE SET NULL — so Postgres orphans the children with an UPDATE that
   -- lands right here. Measuring that update would refuse it (the row has just
@@ -81,6 +91,11 @@ begin
   -- nothing draws down — a fat holding in one goal waving through a phantom fund
   -- sell in another, since the API accepts both fields on one row.
   if new.asset_type = 'fund' and new.fund_id is not null then
+    -- Both sides of the bucket carry `asset_type = 'fund'`, because that is what
+    -- the valuation counts: a row whose asset_type was edited off 'fund' keeps its
+    -- fund_id (the PUT clears fund_id only when that field is sent) but is valued
+    -- as a bank holding, so its units are no longer fund inventory to sell.
+    --
     -- Lock the bucket's investment rows before measuring them (see the header):
     -- this is what makes two concurrent sells of the same bucket serialize. Pending
     -- DCA seeds (units is null) are excluded: they carry a planned amount with no
@@ -90,6 +105,7 @@ begin
       from public.investment_transactions t
      where t.user_id = new.user_id
        and t.fund_id = new.fund_id
+       and t.asset_type = 'fund'
        and t.transaction_type = 'investment'
        and t.goal_id is not distinct from new.goal_id
        and t.renewed_from_transaction_id is null
@@ -102,6 +118,7 @@ begin
       from public.investment_transactions t
      where t.user_id = new.user_id
        and t.fund_id = new.fund_id
+       and t.asset_type = 'fund'
        and t.transaction_type = 'investment'
        and t.goal_id is not distinct from new.goal_id
        and t.renewed_from_transaction_id is null
@@ -112,6 +129,7 @@ begin
       from public.investment_transactions w
      where w.user_id = new.user_id
        and w.fund_id = new.fund_id
+       and w.asset_type = 'fund'
        and w.transaction_type = 'withdrawal'
        and w.goal_id is not distinct from new.goal_id
        and w.transaction_id <> new.transaction_id;

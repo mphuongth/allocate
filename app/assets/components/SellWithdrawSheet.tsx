@@ -11,6 +11,7 @@ import { CairnLoader } from '@/app/components/ui/CairnLoader'
 import { AffectsProgressControl } from './goalDetailShared'
 import { useDialogMount, useResetOnOpen } from '@/app/(app)/planning/components/useDialogMount'
 import { previewBankWithdrawal, estimateReceivedForPrincipal } from '@/lib/bankWithdrawal'
+import { goldCostBasis, goldUnitCost } from '@/lib/goldWithdrawal'
 const fmtVND = (n: number, _locale?: string) => fmt(n)
 
 export interface SellItem {
@@ -119,10 +120,13 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
   const numUnits = Number(units) || 0
   const numSalePrice = Number(salePrice) || 0
   const goldMaxUnits = item?.units ?? 0
-  const goldBuyUnit = isGold && item && item.units && item.units > 0 && item.purchasePrice != null
-    ? Math.round(item.purchasePrice / item.units) : null
+  // Per-unit price for display; the basis divides once and states a full sell
+  // exactly, so "sell all" can't post a đồng more than the holding has (#587).
+  const goldBuyUnit = isGold && item ? goldUnitCost(item.purchasePrice, item.units) : null
   const goldProceeds = isGold ? Math.round(numUnits * numSalePrice) : 0
-  const goldCostSold = goldBuyUnit != null ? Math.round(goldBuyUnit * numUnits) : null
+  const goldCostSold = isGold && item
+    ? goldCostBasis({ currentPrincipal: item.purchasePrice, units: item.units, sellUnits: numUnits })
+    : null
   const goldProfit = isGold && goldProceeds > 0 && goldCostSold != null ? goldProceeds - goldCostSold : null
   const goldRemUnits = isGold && item?.units != null ? item.units - numUnits : null
   const isOverUnits = isGold && item?.units != null && numUnits > item.units

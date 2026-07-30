@@ -6,6 +6,7 @@
 // and stay in the component for now.
 
 import { previewBankWithdrawal, estimateReceivedForPrincipal } from '@/lib/bankWithdrawal'
+import { goldCostBasis, goldUnitCost } from '@/lib/goldWithdrawal'
 
 export type AssetType = 'fund' | 'bank' | 'gold'
 
@@ -114,10 +115,11 @@ export function computeSellPreview(input: {
   const goldMaxUnits = h?.units ?? 0
   const numGoldSellQty = Number(goldSellQty) || 0
   const numGoldSellPrice = Number(goldSellPrice) || 0
-  const goldBuyUnit = h?.units && h.units > 0 && h.purchasePrice != null
-    ? Math.round(h.purchasePrice / h.units) : null
+  // Per-unit price for display; the basis divides once and states a full sell
+  // exactly, so "sell all" can't post a đồng more than the holding has (#587).
+  const goldBuyUnit = goldUnitCost(h?.purchasePrice, h?.units)
   const goldProceeds = Math.round(numGoldSellQty * numGoldSellPrice)
-  const goldCost = goldBuyUnit != null ? Math.round(numGoldSellQty * goldBuyUnit) : null
+  const goldCost = goldCostBasis({ currentPrincipal: h?.purchasePrice, units: h?.units, sellUnits: numGoldSellQty })
   const goldProfit = goldProceeds > 0 && goldCost != null ? goldProceeds - goldCost : null
   const goldRemUnits = h?.units != null ? h.units - numGoldSellQty : null
   const isOverUnits = numGoldSellQty > goldMaxUnits && goldMaxUnits > 0

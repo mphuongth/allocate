@@ -413,4 +413,66 @@ begin
 end;
 $$;
 
+-- ── the bucket must hold only what the valuation counts, and only forwards ───
+do $$
+declare
+  v_user uuid;
+  v_goal uuid;
+  v_fund uuid;
+  v_buy  uuid;
+  v_dep  uuid;
+begin
+  insert into auth.users (id, email) values (gen_random_uuid(), 'wd-bucket2@test.invalid') returning id into v_user;
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'House') returning goal_id into v_goal;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Bucket2 Fund', 'BK2', 'equity', 20000) returning id into v_fund;
+
+  -- A fund purchase whose asset_type is edited to 'bank' keeps its fund_id (the
+  -- PUT route clears fund_id only when that field is sent). The dashboard then
+  -- values it as a bank holding — so its units are no longer fund inventory and
+  -- must not back a fund sell.
+  insert into public.investment_transactions (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal, v_fund, 'fund', 'investment', '2026-01-01', 2000000, 100, 20000) returning transaction_id into v_buy;
+
+  update public.investment_transactions set asset_type = 'bank' where transaction_id = v_buy;
+
+  begin
+    insert into public.investment_transactions
+      (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, principal_withdrawn, units_withdrawn)
+    values (v_user, v_goal, v_fund, 'fund', 'withdrawal', '2026-02-01', 1000000, 1000000, 50);
+    raise exception 'units that are no longer valued as a fund must not back a fund sell';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- A negative withdrawal runs the ledger backwards: it ADDS to the holding and
+  -- leaves a credit the next withdrawal can spend. Nothing in the schema stops
+  -- one, so the invariant has to.
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
+  values (v_user, v_goal, 'bank', 'investment', '2026-01-01', 100000000) returning transaction_id into v_dep;
+
+  begin
+    insert into public.investment_transactions
+      (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn)
+    values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 100000, v_dep, -100000000);
+    raise exception 'a negative principal withdrawal must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  begin
+    insert into public.investment_transactions
+      (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
+    values (v_user, v_goal, 'gold', 'withdrawal', '2026-02-01', 100000, v_dep, 0, -5);
+    raise exception 'a negative units withdrawal must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- And the deposit still has its whole balance: nothing was credited to it.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn)
+  values (v_user, v_goal, 'bank', 'withdrawal', '2026-03-01', 100000000, v_dep, 100000000);
+
+  raise notice 'withdrawal bucket asset type + negative amounts: ok';
+end;
+$$;
+
 rollback;

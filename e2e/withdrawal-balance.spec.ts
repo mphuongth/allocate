@@ -95,6 +95,31 @@ test.describe('withdrawal balance enforcement (#587)', () => {
     expect(rows.find((t) => t.transaction_id === depositId)).toBeUndefined()
   })
 
+  // Selling a gold lot whose principal doesn't divide evenly by its units: the
+  // client used to derive the cost basis through a rounded per-unit price, which
+  // posts a đồng MORE than the holding has — so the balance guard would refuse an
+  // ordinary "sell all". The basis is now stated exactly for a full sale; this
+  // drives the arithmetic through the route to prove the two agree.
+  test('selling a whole gold holding is not refused by cost-basis rounding', async ({ request }) => {
+    const gold = await api.createTransaction({
+      asset_type: 'gold', goal_id: goalId, amount_vnd: 123_456_789, units: 10,
+      unit_price: 12_345_679, investment_date: '2026-01-01', notes: 'E2E wd balance gold',
+    })
+    try {
+      const res = await request.post('/api/v1/investment-transactions', {
+        data: {
+          transaction_type: 'withdrawal', asset_type: 'gold',
+          parent_transaction_id: gold.transaction_id, investment_date: '2026-02-01',
+          amount_vnd: 130_000_000, units_withdrawn: 10,
+          principal_withdrawn: 123_456_789, goal_id: goalId,
+        },
+      })
+      expect(res.status()).toBe(201)
+    } finally {
+      await api.deleteTransactionCascade(gold.transaction_id)
+    }
+  })
+
   // A fund sell has no parent row: its balance is the (goal, fund) bucket the
   // dashboard aggregates. Units held for one goal must not fund another's sell.
   test('a fund sell draws only on the goal it was picked from', async ({ request }) => {
