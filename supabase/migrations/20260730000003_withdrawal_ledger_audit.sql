@@ -117,7 +117,8 @@ sale_dev as (
                 round(p.amount_vnd * w.units_withdrawn / p.units)) as detail,
          abs(coalesce(w.principal_withdrawn, 0) - round(p.amount_vnd * w.units_withdrawn / p.units)) as dev,
          p.sells + 1 as base_tol,
-         case when p.out_units >= p.units - 0.0001 then 0.0001 * p.amount_vnd / p.units else 0 end as shortcut_tol
+         case when p.out_units >= p.units - 0.0001
+                then greatest(p.units - p.out_units, 0) * p.amount_vnd / p.units else 0 end as shortcut_tol
     from wd w
     join parents p on p.transaction_id = w.parent_transaction_id
    where not w.fund_keyed and p.asset_type = 'gold' and coalesce(p.units, 0) > 0
@@ -131,7 +132,8 @@ sale_dev as (
                 round(b.basis * w.units_withdrawn / b.units)),
          abs(coalesce(w.principal_withdrawn, 0) - round(b.basis * w.units_withdrawn / b.units)),
          b.sells + 1,
-         case when b.out_units >= b.units - 0.0001 then 0.0001 * b.basis / b.units else 0 end
+         case when b.out_units >= b.units - 0.0001
+                then greatest(b.units - b.out_units, 0) * b.basis / b.units else 0 end
     from wd w
     join fund_buckets b
       on b.user_id = w.user_id and b.fund_id = w.fund_id and b.goal_id is not distinct from w.goal_id
@@ -358,21 +360,24 @@ select 'fund_bucket_has_no_purchases', 'violation',
 -- The tolerance has THREE parts, and the third is the one that matters in practice:
 --   sells   the ±1 allowance each sale may use, which the last sale inherits
 --   1       the two roundings between the flat rate and the invariant's expectation
---   0.0001 × basis / units, and ONLY on a holding that ends up exhausted
---           the value of one epsilon of units. The clients round units to 4
+--   the value of the units left UNSOLD, and only on a holding that ends exhausted
+--           at most one epsilon's worth, since that is as much as can be left. The clients round units to 4
 --           decimals, so "sell everything" routinely posts a hair UNDER the holding
 --           (4 chỉ leaves as 3.9999) and the invariant treats a sale within an
 --           epsilon of the rest as a FULL one, taking the whole basis. On an
 --           ordinary 40,000,000 đồng gold holding that legitimate gap is a THOUSAND
 --           đồng — a flat tolerance reports every full gold sale in the ledger.
 --
---           The condition is what keeps that slack from covering ordinary partial
---           sales, where a thousand đồng of licence would hide real misallocation.
---           It is exact rather than heuristic: the shortcut requires the sale to
---           take within an epsilon of what REMAINS, so at most an epsilon of units
---           can be left behind afterwards — any legal use of it implies the holding
---           ends exhausted, which is state-visible. A sale of 1 chỉ out of 4 leaves
---           3 behind and gets no slack.
+--           Two conditions keep that slack from covering ordinary misallocation,
+--           and both are exact rather than heuristic. The shortcut requires a sale
+--           to take within an epsilon of what REMAINS, so (a) at most an epsilon of
+--           units can be left behind afterwards — any legal use implies the holding
+--           ends exhausted, and a sale of 1 chỉ out of 4 leaves 3 behind and gets
+--           nothing — and (b) the gap it opens against the flat rate is exactly the
+--           value of the units it did NOT take, which for the closer is the whole
+--           holding's unsold remainder. A holding sold out to the last unit had no
+--           gap to open: 4 units bought and 4 sold means every sale owes the flat
+--           rate exactly, however the sales were split up.
 -- Validated against 1.5M invariant-legal sale sequences across four magnitudes of
 -- basis and units: no row exceeded it, tightest margin 1.2 đồng.
 union all
@@ -396,7 +401,7 @@ select 'basis_not_proportional', 'review',
    and abs(p.out_principal
            - case when p.out_units >= p.units - 0.0001 then p.amount_vnd
                   else round(p.amount_vnd * p.out_units / p.units) end) > 2 * p.sells + case when p.out_units >= p.units - 0.0001
-                          then 0.0001 * p.amount_vnd / p.units else 0 end
+                          then greatest(p.units - p.out_units, 0) * p.amount_vnd / p.units else 0 end
 
 union all
 select 'basis_not_proportional', 'review',
@@ -411,7 +416,7 @@ select 'basis_not_proportional', 'review',
    and abs(b.out_principal
            - case when b.out_units >= b.units - 0.0001 then b.basis
                   else round(b.basis * b.out_units / b.units) end) > 2 * b.sells + case when b.out_units >= b.units - 0.0001
-                          then 0.0001 * b.basis / b.units else 0 end;
+                          then greatest(b.units - b.out_units, 0) * b.basis / b.units else 0 end;
 
 comment on view public.withdrawal_ledger_audit is
   'Read-only audit of existing withdrawal rows against the decision table enforced by check_withdrawal_balance. One row per finding: check_name, severity, and the holding it concerns (#609).';

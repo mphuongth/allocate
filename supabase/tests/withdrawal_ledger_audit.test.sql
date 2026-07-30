@@ -44,6 +44,7 @@ declare
   v_slack_src uuid; v_slack uuid;
   v_pair_src uuid; v_pair_a uuid; v_pair_b uuid;
   v_split_goal_src uuid; v_sg_a uuid; v_sg_b uuid;
+  v_closer_src uuid; v_closer uuid;
   -- the clean half
   v_tol_goal  uuid;
   v_drift_src uuid; v_comp_src uuid; v_f7_src uuid; v_full_src uuid; v_tail_src uuid;
@@ -449,6 +450,23 @@ begin
   values (v_user, v_goal_b, 'gold', 'withdrawal', '2026-03-01', 1, v_split_goal_src, 29999500, 3)
   returning transaction_id into v_sg_b;
 
+  -- 22. one wrong sale beside a correct one, on a holding sold out EXACTLY: 1 unit
+  --     taking 9,999,500 (rule: 10,000,000) and 3 units taking their exact
+  --     30,000,000. Only the first row is past the base tolerance, so the rationing
+  --     hands it the full-sale slack — but that slack exists only for a closer that
+  --     took slightly FEWER units than remained, and here nothing was left over:
+  --     4 units bought, 4 sold. The row is refused as a first write and refused as
+  --     the closer (probed both ways), so no slack is owed to it.
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal, 'gold', 'investment', '2026-01-01', 40000000, 4, 10000000) returning transaction_id into v_closer_src;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-02-01', 1, v_closer_src, 9999500, 1)
+  returning transaction_id into v_closer;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-03-01', 1, v_closer_src, 30000000, 3);
+
   alter table public.investment_transactions enable trigger user;
 
   -- ═══ every planted row must be named, by the right check ═══════════════════
@@ -475,7 +493,8 @@ begin
         ('sale_basis_not_proportional',   v_pair_a),
         ('sale_basis_not_proportional',   v_pair_b),
         ('sale_basis_not_proportional',   v_sg_a),
-        ('sale_basis_not_proportional',   v_sg_b)
+        ('sale_basis_not_proportional',   v_sg_b),
+        ('sale_basis_not_proportional',   v_closer)
       ) as x(name, tx)
   loop
     if v_count <> 1 then
