@@ -225,10 +225,9 @@ begin
     -- Keyed off the PARENT's type, not the withdrawal's: the row's own asset_type
     -- is nullable and the route lets it be omitted. Bank and stock are unaffected —
     -- their valuation is principal-only, and a deposit has no units to move.
-    if v_parent_asset = 'gold'
-       and (coalesce(wd.units_withdrawn, 0) <= 0 or coalesce(wd.principal_withdrawn, 0) <= 0) then
-      raise exception 'withdrawal invariant: a gold sale must record both units_withdrawn and principal_withdrawn (got % units, % principal)',
-        wd.units_withdrawn, wd.principal_withdrawn using errcode = 'check_violation';
+    if v_parent_asset = 'gold' and coalesce(wd.units_withdrawn, 0) <= 0 then
+      raise exception 'withdrawal invariant: a gold sale must record units_withdrawn (got %)',
+        wd.units_withdrawn using errcode = 'check_violation';
     end if;
 
     -- A withdrawal that records no principal takes nothing out of the holding:
@@ -297,23 +296,28 @@ begin
     end if;
   end if;
 
-  if v_rows is not null then
-    -- FUND: the principal is BOUND TO THE UNITS, not merely capped. Capping the two
+  if v_rows is not null or v_parent_asset = 'gold' then
+    -- ANY quantity-valued holding — a fund bucket, or gold — has its principal
+    -- BOUND TO THE UNITS, not merely capped beside them. Capping the two
     -- independently let a sale of 1 unit out of 100 claim the whole basis and leave
-    -- 99 units with none, which corrupts every later sale's allocation and the P&L.
+    -- 99 units with none, which corrupts every later sale's allocation and the P&L,
+    -- and eventually makes the rest unsellable for lack of basis. Gold behaves the
+    -- same way: valueNonFundHolding prices it units × market and takes its basis
+    -- from amount_vnd.
     --
-    -- One allocation rule, shared with lib/fundWithdrawal and matching how the
-    -- overview itself reduces a bucket: a sale of ALL the remaining units takes the
-    -- remaining basis exactly, and a partial sale takes its units-proportional
-    -- share of it. ONE rounding rule: the two sides may differ by at most a đồng,
-    -- which is what rounding a proportional slice can produce.
+    -- One allocation rule, shared with lib/fundWithdrawal and lib/goldWithdrawal and
+    -- matching how the dashboard itself reduces a holding: a sale of ALL the
+    -- remaining units takes the remaining basis exactly, and a partial sale takes
+    -- its units-proportional share of it. ONE rounding rule: the two sides may
+    -- differ by at most a đồng, which is what rounding a proportional slice can
+    -- produce.
     if wd.units_withdrawn >= v_left_units - c_units_epsilon then
       v_expected := v_left;
     else
       v_expected := round(wd.units_withdrawn * v_left / v_left_units);
     end if;
     if abs(coalesce(wd.principal_withdrawn, 0) - v_expected) > c_dong_epsilon then
-      raise exception 'withdrawal invariant: a fund sale of % units out of % must take % of the % basis, not %',
+      raise exception 'withdrawal invariant: a sale of % units out of % must take % of the % basis, not %',
         wd.units_withdrawn, v_left_units, v_expected, v_left, wd.principal_withdrawn
         using errcode = 'check_violation';
     end if;
@@ -435,6 +439,91 @@ create trigger investment_transactions_withdrawal_balance
   for each row
   when (new.transaction_type = 'withdrawal')
   execute function public.enforce_withdrawal_within_balance();
+
+-- ── a bucket must be able to back the sales left in it ───────────────────────
+-- The row-by-row checks above measure a WITHDRAWAL against its bucket. Nothing
+-- measured the bucket after its PURCHASES moved away — and that is a reachable
+-- state: an assign and a sell of the same fund racing each other leaves the sale in
+-- the old bucket while its purchases move to the new one (the assign's UPDATE
+-- cannot see a withdrawal inserted after its snapshot, so the row is never
+-- relocated and no trigger fires for it). Verified with two sessions, and it
+-- happens with these triggers disabled too, so it is the shape of the move rather
+-- than anything this invariant introduced.
+--
+-- The dashboard then finds a withdrawal in a bucket with no accumulator, skips the
+-- subtraction entirely, and the sold units come back — silent net-worth inflation,
+-- exactly the class this migration exists to stop. So a relocation that would leave
+-- a bucket owing more than it holds is refused: a failed assign can be retried, a
+-- split bucket is found months later.
+create or replace function public.check_fund_bucket_solvent(p_user uuid, p_fund uuid, p_goal uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_units      numeric;
+  v_out_units  numeric;
+  v_basis      bigint;
+  v_out_basis  bigint;
+begin
+  select coalesce(sum(t.units), 0), coalesce(sum(t.amount_vnd), 0)
+    into v_units, v_basis
+    from public.investment_transactions t
+   where t.user_id = p_user and t.fund_id = p_fund and t.asset_type = 'fund'
+     and t.transaction_type = 'investment'
+     and t.goal_id is not distinct from p_goal
+     and t.renewed_from_transaction_id is null
+     and t.units is not null;
+
+  select coalesce(sum(w.units_withdrawn), 0), coalesce(sum(w.principal_withdrawn), 0)
+    into v_out_units, v_out_basis
+    from public.investment_transactions w
+   where w.user_id = p_user and w.fund_id = p_fund and w.asset_type = 'fund'
+     and w.transaction_type = 'withdrawal'
+     and w.goal_id is not distinct from p_goal;
+
+  if v_out_units > v_units + 0.0001 or v_out_basis > v_basis + 1 then
+    raise exception 'withdrawal invariant: this fund bucket would be left owing % units / % of basis it does not hold',
+      v_out_units - v_units, v_out_basis - v_basis using errcode = 'check_violation';
+  end if;
+end;
+$$;
+
+comment on function public.check_fund_bucket_solvent(uuid, uuid, uuid) is
+  'Raises when a (goal, fund) bucket holds sales its purchases cannot back — the split a relocation can leave behind (#587).';
+
+revoke all on function public.check_fund_bucket_solvent(uuid, uuid, uuid) from public;
+revoke all on function public.check_fund_bucket_solvent(uuid, uuid, uuid) from anon, authenticated;
+
+create or replace function public.enforce_fund_bucket_after_move()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  -- Both ends: the bucket these purchases left, and the one they joined.
+  perform public.check_fund_bucket_solvent(new.user_id, new.fund_id, old.goal_id);
+  perform public.check_fund_bucket_solvent(new.user_id, new.fund_id, new.goal_id);
+  return null;
+end;
+$$;
+
+comment on function public.enforce_fund_bucket_after_move() is
+  'Re-measures both buckets when a fund purchase changes goal, at the end of the statement so a whole-bucket move is seen complete (#587).';
+
+drop trigger if exists investment_transactions_fund_bucket_moved on public.investment_transactions;
+create constraint trigger investment_transactions_fund_bucket_moved
+  after update of goal_id on public.investment_transactions
+  -- End of statement, like the withdrawal relocation check: an assign moves the
+  -- purchases and the sales in one UPDATE, and both ends are only settled once it
+  -- has finished.
+  deferrable initially immediate
+  for each row
+  when (new.transaction_type = 'investment' and new.fund_id is not null
+        and new.goal_id is distinct from old.goal_id)
+  execute function public.enforce_fund_bucket_after_move();
 
 -- ── deferred: a relocation, measured once the statement has landed ───────────
 create or replace function public.enforce_withdrawal_balance_after_move()

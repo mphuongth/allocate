@@ -980,7 +980,19 @@ begin
   exception when sqlstate '23514' then null;
   end;
 
-  -- Both together are fine, and a bank withdrawal still needs only principal.
+  -- Gold's principal is bound to its units, like a fund's: selling a sliver while
+  -- claiming the whole basis would leave nearly all the metal at market value with
+  -- no cost behind it, and nothing left to sell it against.
+  begin
+    insert into public.investment_transactions
+      (user_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
+    values (v_user, 'gold', 'withdrawal', '2026-02-01', 40000000, v_gold, 80000000, 0.5);
+    raise exception 'a 0.5-chi sale must not take the whole gold basis';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- Both together, in proportion, are fine — and a bank withdrawal still needs
+  -- only principal.
   insert into public.investment_transactions
     (user_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
   values (v_user, 'gold', 'withdrawal', '2026-02-01', 40000000, v_gold, 40000000, 5);
@@ -1014,6 +1026,56 @@ begin
   values (v_user, 'bank', 'withdrawal', '2026-03-02', 20000000, v_bank, 20000000);
 
   raise notice 'gold sale deltas + required principal: ok';
+end;
+$$;
+
+-- ── a relocation may not leave a bucket holding sales it cannot back ─────────
+-- Moving a fund's PURCHASES without their sales splits the bucket: the sales are
+-- left drawing on nothing while the units reappear in the destination, so the
+-- dashboard ignores the sale and restores the sold units (silent net-worth
+-- inflation). That is exactly what the assign-vs-sell race produces — verified
+-- with two sessions, and it happens with these triggers disabled too, so it is
+-- the shape of the move, not of this invariant. Refuse the move instead: a failed
+-- assign can be retried, a split bucket is discovered months later.
+do $$
+declare
+  v_user uuid;
+  v_a    uuid;
+  v_b    uuid;
+  v_fund uuid;
+begin
+  insert into auth.users (id, email) values (gen_random_uuid(), 'wd-split@test.invalid') returning id into v_user;
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'A') returning goal_id into v_a;
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'B') returning goal_id into v_b;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Split Fund', 'SPF', 'equity', 20000) returning id into v_fund;
+
+  insert into public.investment_transactions (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_a, v_fund, 'fund', 'investment', '2026-01-01', 2000000, 100, 20000);
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, principal_withdrawn, units_withdrawn)
+  values (v_user, v_a, v_fund, 'fund', 'withdrawal', '2026-02-01', 600000, 600000, 30);
+
+  -- Purchases only: the end state the race leaves behind.
+  begin
+    update public.investment_transactions
+       set goal_id = v_b
+     where user_id = v_user and fund_id = v_fund and transaction_type = 'investment';
+    raise exception 'moving purchases away from their sales must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- The whole bucket together — what the assign route actually does — is fine.
+  update public.investment_transactions
+     set goal_id = v_b
+   where user_id = v_user and fund_id = v_fund and asset_type = 'fund' and goal_id = v_a;
+
+  if (select count(*) from public.investment_transactions
+       where user_id = v_user and fund_id = v_fund and goal_id = v_b) <> 2 then
+    raise exception 'the whole bucket should have moved together';
+  end if;
+
+  raise notice 'a relocation cannot split a bucket: ok';
 end;
 $$;
 
