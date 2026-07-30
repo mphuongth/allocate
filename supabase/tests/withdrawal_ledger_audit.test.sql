@@ -39,8 +39,10 @@ declare
   v_prop_src  uuid; v_prop     uuid;
   v_stray     uuid; v_stray_z  uuid;
   v_mask_goal uuid; v_mask_zero uuid;
+  v_eps_src   uuid; v_nounits_src uuid;
   -- the clean half
   v_tol_goal  uuid;
+  v_drift_src uuid;
   v_ok_bank   uuid; v_ok_bank_w  uuid;
   v_ok_gold   uuid; v_ok_gold_w1 uuid; v_ok_gold_w2 uuid;
   v_ok_buy    uuid; v_ok_sell1   uuid; v_ok_sell2   uuid;
@@ -124,6 +126,20 @@ begin
   insert into public.investment_transactions
     (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, fund_id, principal_withdrawn, units_withdrawn)
   values (v_user, v_tol_goal, 'fund', 'withdrawal', '2026-02-01', 1200000, v_fund_ok, 1000001, 100);
+
+  -- The đồng of rounding, unlike the overdraw bound, DOES accumulate across sales:
+  -- each partial sale's expectation is recomputed from what is left, so two sales
+  -- may each under-take by a đồng and the invariant accepts both. 100 đồng over 4
+  -- units, two sales of 1 unit taking 24 where the flat proportion says 25 — the
+  -- aggregate is 48 against 50, and the audit must not call that a finding.
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal_b, 'gold', 'investment', '2026-01-01', 100, 4, 25) returning transaction_id into v_drift_src;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_goal_b, 'gold', 'withdrawal', '2026-02-01', 1, v_drift_src, 24, 1);
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_goal_b, 'gold', 'withdrawal', '2026-03-01', 1, v_drift_src, 24, 1);
 
   -- ═══ the planted violations ════════════════════════════════════════════════
   -- Disabling the user triggers is the only way in: these are precisely the shapes
@@ -256,6 +272,30 @@ begin
     (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, fund_id, principal_withdrawn, units_withdrawn)
   values (v_user, v_mask_goal, 'fund', 'withdrawal', '2026-03-01', 600000, v_fund, 1000000, 50);
 
+  -- 16. two sales past the units by MORE than one epsilon between them. The unit
+  --     tolerance does not accumulate: every constraint the invariant applies bounds
+  --     the CUMULATIVE sum (each sale is measured against what is left, which
+  --     already carries the previous sale's excess), so 4.00015 out of 4 units is a
+  --     ledger it would never have produced — the second insert is refused, proven
+  --     by probe. Principals are kept proportional so nothing else speaks up.
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal, 'gold', 'investment', '2026-01-01', 40000000, 4, 10000000) returning transaction_id into v_eps_src;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-02-01', 1, v_eps_src, 20000500, 2.00005);
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-03-01', 1, v_eps_src, 19999500, 2.0001);
+
+  -- 17. units taken out of a holding that HAS no units. The invariant coalesces the
+  --     parent's units to zero and refuses any positive quantity; skipping the check
+  --     when the parent's units are null lets the row through instead.
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
+  values (v_user, v_goal, 'bank', 'investment', '2026-01-01', 10000000) returning transaction_id into v_nounits_src;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 5000000, v_nounits_src, 5000000, 5);
+
   alter table public.investment_transactions enable trigger user;
 
   -- ═══ every planted row must be named, by the right check ═══════════════════
@@ -305,6 +345,15 @@ begin
     raise exception 'the audit must report the gold sale that took the whole basis for one of four units';
   end if;
 
+  if not exists (select 1 from public.withdrawal_ledger_audit
+                  where check_name = 'holding_overdrawn' and parent_transaction_id = v_eps_src) then
+    raise exception 'the audit must report units sold past the holding by more than one epsilon';
+  end if;
+  if not exists (select 1 from public.withdrawal_ledger_audit
+                  where check_name = 'holding_overdrawn' and parent_transaction_id = v_nounits_src) then
+    raise exception 'the audit must report units taken out of a holding that has none';
+  end if;
+
   -- The masked bucket is the point of that per-row check: its TOTALS are exactly
   -- proportional, so the holding-level check is silent by design. Asserting the
   -- silence keeps the two checks from being justified by each other.
@@ -320,7 +369,7 @@ begin
     from public.withdrawal_ledger_audit
    where transaction_id in (v_ok_bank_w, v_ok_gold_w1, v_ok_gold_w2, v_ok_sell1, v_ok_sell2,
                             v_ok_held, v_seed, v_seed_buy, v_seed_sell)
-      or parent_transaction_id in (v_ok_bank, v_ok_gold)
+      or parent_transaction_id in (v_ok_bank, v_ok_gold, v_drift_src)
       or (fund_id = v_fund_ok);
   if v_count <> 0 then
     raise exception 'the audit reported % row(s) against a ledger the invariant accepted', v_count;

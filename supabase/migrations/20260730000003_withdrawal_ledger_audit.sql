@@ -198,18 +198,27 @@ union all
 -- Past zero. The dashboard then DROPS the holding (valueNonFundHolding returns
 -- null at effectiveAmount <= 0) while the excess withdrawal stays in history, so
 -- net worth is wrong in a way no screen shows.
--- The tolerances are the invariant's own, per sale: one đồng of rounding wherever
--- the principal is a proportional slice (gold; a deposit's principal is the user's
--- own figure and is bounded exactly), and the 0.0001 units the clients' 4-decimal
--- rounding can add to a full sell. An audit stricter than the invariant it audits
--- reports ledgers nobody can repair, and that is how a report gets ignored.
+-- The tolerances are the invariant's own, and they do NOT accumulate across sales,
+-- however many there are: every constraint it applies bounds the CUMULATIVE sum,
+-- because each sale is measured against what is left — which already carries the
+-- previous sale's excess. Formally Σp ≤ basis + 1 and Σunits ≤ units + 0.0001 for
+-- any number of sales; two sales totalling units + 0.00015 are refused, which the
+-- test plants and a probe confirmed. So: one đồng wherever the principal is a
+-- proportional slice (gold — a deposit's principal is the user's own figure and is
+-- bounded exactly, with nothing to round), and one 0.0001 for the clients' 4-decimal
+-- rounding on a full sell.
+--
+-- Units are compared against coalesce: a holding with NO units still has a balance
+-- of zero units, and the invariant refuses any positive quantity drawn on it
+-- ('5 units exceeds the remaining balance of 0 units'). Skipping the comparison
+-- when the parent's units are null let exactly that row report clean.
 select 'holding_overdrawn', 'violation',
        p.user_id, null::uuid, p.transaction_id, null::uuid, p.goal_id,
        format('%s holding of %s đồng / %s units has %s đồng / %s units taken out across %s withdrawal(s)',
               p.asset_type, p.amount_vnd, coalesce(p.units, 0), p.out_principal, p.out_units, p.sells)
   from parents p
- where p.out_principal > p.amount_vnd + (case when p.asset_type = 'gold' then p.sells else 0 end)
-    or (p.units is not null and p.out_units > p.units + 0.0001 * p.sells)
+ where p.out_principal > p.amount_vnd + (case when p.asset_type = 'gold' then 1 else 0 end)
+    or p.out_units > coalesce(p.units, 0) + 0.0001
 
 union all
 select 'fund_bucket_overdrawn', 'violation',
@@ -218,7 +227,7 @@ select 'fund_bucket_overdrawn', 'violation',
               b.basis, b.units, b.out_principal, b.out_units, b.sells)
   from fund_buckets b
  where b.buys > 0
-   and (b.out_principal > b.basis + b.sells or b.out_units > b.units + 0.0001 * b.sells)
+   and (b.out_principal > b.basis + 1 or b.out_units > b.units + 0.0001)
 
 union all
 -- A sell alone in a bucket: its purchases are in another goal, so nothing here
@@ -237,7 +246,13 @@ select 'fund_bucket_has_no_purchases', 'violation',
 -- That rule is additive and order-independent — each sale takes units × basis /
 -- total_units regardless of sequence — so the aggregate is a sound check even
 -- though the per-sale history is not reconstructible. Tolerance is one đồng per
--- sale, which is what rounding each slice can produce.
+-- sale, and here — unlike the overdraw bound above — the drift genuinely DOES
+-- accumulate: each partial sale's expectation is recomputed from what is left, so
+-- two sales may each under-take by a đồng and both be accepted. 100 đồng over 4
+-- units, two sales of 1 unit taking 24 where the flat proportion says 25: the
+-- aggregate is 48 against 50, both accepted (probed, and pinned by a test).
+-- Over-taking gets no slack from that: the cumulative upper bound is enforced
+-- tightly by holding_overdrawn / fund_bucket_overdrawn above.
 --
 -- 'review', not 'violation': a purchase added to a bucket AFTER a sale legitimately
 -- shifts the ratio, and so does a hand-corrected row. The number is the useful
