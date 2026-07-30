@@ -180,6 +180,53 @@ test('sell unallocated fund via action sheet', async ({ page }) => {
   await expect(page.getByTestId('sell-sheet')).not.toBeVisible({ timeout: 8_000 })
 })
 
+// #578 — the partial-withdrawal coverage that existed called the API directly with
+// an already-correct withdraw_principal, so it never exercised the sheet's
+// conversion. This drives the real UI and then reads back what was persisted,
+// because the persisted principal is what depositValuation subtracts from the
+// holding forever after.
+test('partial bank withdrawal records the principal entered in the UI, not a slice of the current value', async ({ page }) => {
+  // A deposit whose current value is above its principal: 5.5%/yr, opened 60 days
+  // ago. Without accrued interest the old proportional bug is invisible.
+  const tx = await api.createTransaction({
+    asset_type: 'bank',
+    amount_vnd: 20_239_452,
+    interest_rate: 5.5,
+    investment_date: new Date(Date.now() - 60 * 86_400_000).toISOString().slice(0, 10),
+    expiry_date: new Date(Date.now() + 305 * 86_400_000).toISOString().slice(0, 10),
+    notes: 'E2E Partial Withdraw Deposit',
+  })
+  cleanup.add(() => api.deleteTransactionCascade(tx.transaction_id))
+
+  await gotoFreshDashboard(page)
+
+  const row = page.getByTestId('unallocated-row').filter({ hasText: 'E2E Partial Withdraw Deposit' }).first()
+  await expect(row).toBeVisible({ timeout: 10_000 })
+  await row.click()
+  await page.getByTestId('action-sell').click()
+  await expect(page.getByTestId('sell-sheet')).toBeVisible({ timeout: 5_000 })
+
+  // The reported numbers: ask the bank for 4,365,100 of principal, receive 4,366,416.
+  await page.getByTestId('sell-amount-input').fill('4365100')
+  await page.getByTestId('sell-received-input').fill('4366416')
+  // The preview must show the entered principal — the bug previewed 4.333.849.
+  await expect(page.getByTestId('sell-bank-principal')).toContainText('4.365.100')
+  await expect(page.getByTestId('sell-bank-remaining')).toContainText('15.874.352')
+
+  const [resp] = await Promise.all([
+    page.waitForResponse(r => r.url().includes('/api/v1/investment-transactions') && r.request().method() === 'POST'),
+    page.getByTestId('sell-confirm-btn').click(),
+  ])
+  expect(resp.status()).toBe(201)
+
+  const all = await (await page.request.get('/api/v1/investment-transactions?asset_type=bank&limit=1000')).json()
+  const wd = (all.transactions as Array<{ transaction_type: string; parent_transaction_id: string | null; amount_vnd: number; principal_withdrawn: number | null }>)
+    .filter(r => r.transaction_type === 'withdrawal' && r.parent_transaction_id === tx.transaction_id)
+  expect(wd).toHaveLength(1)
+  expect(wd[0].principal_withdrawn).toBe(4_365_100)
+  expect(wd[0].amount_vnd).toBe(4_366_416)
+})
+
 test('sell success state appears after confirm', async ({ page }) => {
   const fund = await api.createFund({ name: 'E2E Success Fund', code: 'E2ESUCFUND', fund_type: 'equity', nav: 10000 })
   cleanup.add(() => api.deleteFund(fund.id))

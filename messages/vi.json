@@ -91,9 +91,14 @@
     "unitsToSell": "Số phần muốn bán",
     "navLinkHint": "Nhập số tiền hoặc số phần — tự động đồng bộ",
     "amountReceived": "Số tiền thực nhận",
-    "receivedHint": "Tạm tính theo giá trị hiện tại — sửa nếu rút sớm bị trừ lãi",
+    "receivedHint": "Ước tính từ giá trị hiện tại — hãy đối chiếu với số tiền ngân hàng thực trả, nhất là khi rút trước hạn.",
     "principalPortion": "Tiền gốc",
-    "gainLoss": "Lãi/Lỗ"
+    "gainLoss": "Lãi/Lỗ",
+    "principalToWithdraw": "Số tiền gốc muốn rút",
+    "principalAvailable": "Gốc khả dụng",
+    "valueShort": "Giá trị",
+    "exceedsPrincipal": "Vượt quá tiền gốc còn lại",
+    "remainingPrincipal": "Tiền gốc còn lại"
   },
   "common": {
     "save": "Lưu",

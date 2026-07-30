@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  computeFundPricing, computeSellPreview, buildBuyPayload, buildEditPayload, buildSellPayload,
+  computeFundPricing, computeSellPreview, bankReceivedPrefill, buildBuyPayload, buildEditPayload, buildSellPayload,
   type PreviewHolding, type TxForm,
 } from '../addTransactionModel'
 
@@ -69,15 +69,59 @@ describe('computeSellPreview — bank', () => {
   it('splits principal out of the received cash and shows the gain', () => {
     const s = computeSellPreview({ assetType: 'bank', dir: 'sell', holding: bank, sellAmount: '5000000', received: '5200000', goldSellQty: '', goldSellPrice: '' })
     expect(s.numReceived).toBe(5_200_000)
-    expect(s.bankFraction).toBe(1)
-    expect(s.bankPrincipalPortion).toBe(5_000_000)
-    expect(s.bankGain).toBe(200_000)         // received − principal portion
+    expect(s.bankPctOfPrincipal).toBe(1)
+    expect(s.bankWithdrawPrincipal).toBe(5_000_000)
+    expect(s.bankGain).toBe(200_000)         // received − principal withdrawn
     expect(s.sellDisabled).toBe(false)
   })
 
   it('disables when nothing received', () => {
     const s = computeSellPreview({ assetType: 'bank', dir: 'sell', holding: bank, sellAmount: '5000000', received: '0', goldSellQty: '', goldSellPrice: '' })
     expect(s.sellDisabled).toBe(true)
+  })
+})
+
+// Same defect as the withdrawal sheet's (#578), in the Add-transaction sell path:
+// the entered amount was converted into a fraction of the deposit's current value
+// and applied to the principal, so a partial withdrawal never recorded the
+// principal the user typed. Only reachable when value != principal, which the
+// `bank` fixture above (5M on 5M) can't express.
+describe('computeSellPreview — partial bank withdrawal where value != principal (#578)', () => {
+  const book: PreviewHolding = {
+    type: 'bank', currentValue: 20_385_398, navPerUnit: null, gainPct: null,
+    purchasePrice: 20_239_452, units: null,
+  }
+
+  it('withdraws exactly the entered principal, and reports the interest paid', () => {
+    const s = computeSellPreview({ assetType: 'bank', dir: 'sell', holding: book, sellAmount: '4365100', received: '4366416', goldSellQty: '', goldSellPrice: '' })
+    // The old proportional conversion produced 4,333,849 and a gain of 32,567.
+    expect(s.bankWithdrawPrincipal).toBe(4_365_100)
+    expect(s.bankGain).toBe(1_316)
+    expect(s.sellRemaining).toBe(15_874_352)
+    expect(s.sellDisabled).toBe(false)
+  })
+
+  it('caps the withdrawal at the remaining principal, not the current value', () => {
+    const s = computeSellPreview({ assetType: 'bank', dir: 'sell', holding: book, sellAmount: '20300000', received: '20300000', goldSellQty: '', goldSellPrice: '' })
+    expect(s.sellMax).toBe(20_239_452)
+    expect(s.sellOverMax).toBe(true)
+    expect(s.sellDisabled).toBe(true)
+  })
+
+  it('still caps a fund sell at its current value', () => {
+    const s = computeSellPreview({ assetType: 'fund', dir: 'sell', holding: fund, sellAmount: '1900000', ...base })
+    expect(s.sellMax).toBe(2_000_000)
+    expect(s.sellOverMax).toBe(false)
+  })
+
+  it('prefills the received cash with the interest accrued on that principal', () => {
+    expect(bankReceivedPrefill(book, 4_365_100)).toBe(4_396_577)
+    // "All" withdraws the whole principal and estimates the whole current value.
+    expect(bankReceivedPrefill(book, 20_239_452)).toBe(20_385_398)
+  })
+
+  it('prefills nothing extra for a holding it has no principal for', () => {
+    expect(bankReceivedPrefill(null, 1_000)).toBe(1_000)
   })
 })
 
@@ -168,7 +212,7 @@ describe('buildEditPayload', () => {
 
 describe('buildSellPayload', () => {
   const date = '2026-07-24'
-  const zero = { numSell: 0, sellOverMax: false, sellNav: null, numGoldSellQty: 0, isOverUnits: false, goldProceeds: 0, goldCost: null, numReceived: 0, bankPrincipalPortion: 0 }
+  const zero = { numSell: 0, sellOverMax: false, sellNav: null, numGoldSellQty: 0, isOverUnits: false, goldProceeds: 0, goldCost: null, numReceived: 0, bankWithdrawPrincipal: 0 }
 
   it('fund: proportional principal_withdrawn + units_withdrawn=amount÷NAV', () => {
     const holding = { type: 'fund' as const, fundId: 'f1', purchasePrice: 18_000, currentValue: 2_000_000, units: 100 }
@@ -181,9 +225,9 @@ describe('buildSellPayload', () => {
     })
   })
 
-  it('bank: amount is received cash, principal is the split portion', () => {
+  it('bank: amount is the received cash, principal is what the user entered', () => {
     const holding = { type: 'bank' as const, transactionId: 't1', purchasePrice: 5_000_000, currentValue: 5_000_000 }
-    const preview = { ...zero, numSell: 5_000_000, numReceived: 5_200_000, bankPrincipalPortion: 5_000_000 }
+    const preview = { ...zero, numSell: 5_000_000, numReceived: 5_200_000, bankWithdrawPrincipal: 5_000_000 }
     expect(ok(buildSellPayload(holding, preview, { date, note: '' }))).toMatchObject({
       asset_type: 'bank', parent_transaction_id: 't1', amount_vnd: 5_200_000, principal_withdrawn: 5_000_000,
     })

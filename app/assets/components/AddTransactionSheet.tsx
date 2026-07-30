@@ -350,7 +350,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
   const sell = computeSellPreview({ assetType, dir, holding: selectedHolding, sellAmount, received, goldSellQty, goldSellPrice })
   // The SellForm renders from the full `sell` preview; the sheet only needs these
   // for the submit gate, the buildSellPayload call, and the gold-price prefill.
-  const { sellDisabled, numSell, sellOverMax, sellNav, numReceived, bankPrincipalPortion, numGoldSellQty, isOverUnits, goldProceeds, goldCost } = sell
+  const { sellDisabled, numSell, sellOverMax, sellNav, numReceived, bankWithdrawPrincipal, numGoldSellQty, isOverUnits, goldProceeds, goldCost } = sell
 
   // Prefill the gold sale price with the holding's current price per chỉ.
   useEffect(() => {
@@ -396,7 +396,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
     // Sell / withdraw from the chosen holding (POST).
     if (dir === 'sell') {
       const r = buildSellPayload(selectedHolding, {
-        numSell, sellOverMax, sellNav, numGoldSellQty, isOverUnits, goldProceeds, goldCost, numReceived, bankPrincipalPortion,
+        numSell, sellOverMax, sellNav, numGoldSellQty, isOverUnits, goldProceeds, goldCost, numReceived, bankWithdrawPrincipal,
       }, { date, note })
       if (!r.ok) { setError(t(r.errorKey)); return }
       await submitTransaction('/api/v1/investment-transactions', 'POST', r.payload)

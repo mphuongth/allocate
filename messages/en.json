@@ -91,9 +91,14 @@
     "unitsToSell": "Units to sell",
     "navLinkHint": "Enter an amount or units — they stay in sync",
     "amountReceived": "Amount you'll receive",
-    "receivedHint": "Pre-filled at current value — edit down if early withdrawal cuts interest",
+    "receivedHint": "Estimated from the current value — verify it against the bank's actual payout, especially for an early withdrawal.",
     "principalPortion": "Principal",
-    "gainLoss": "Gain / Loss"
+    "gainLoss": "Gain / Loss",
+    "principalToWithdraw": "Principal amount to withdraw",
+    "principalAvailable": "Principal available",
+    "valueShort": "Value",
+    "exceedsPrincipal": "Exceeds remaining principal",
+    "remainingPrincipal": "Remaining principal"
   },
   "common": {
     "save": "Save",
