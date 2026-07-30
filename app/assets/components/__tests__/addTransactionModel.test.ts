@@ -215,7 +215,9 @@ describe('buildSellPayload', () => {
   const zero = { numSell: 0, sellOverMax: false, sellNav: null, numGoldSellQty: 0, isOverUnits: false, goldProceeds: 0, goldCost: null, numReceived: 0, bankWithdrawPrincipal: 0 }
 
   it('fund: proportional principal_withdrawn + units_withdrawn=amount÷NAV', () => {
-    const holding = { type: 'fund' as const, fundId: 'f1', purchasePrice: 18_000, currentValue: 2_000_000, units: 100 }
+    // costBasis is what those 100 units cost; the sale takes half of it because it
+    // sells half the units. purchasePrice is display-only now (#587).
+    const holding = { type: 'fund' as const, fundId: 'f1', purchasePrice: 18_000, costBasis: 1_800_000, currentValue: 2_000_000, units: 100 }
     const preview = { ...zero, numSell: 1_000_000, sellNav: 20_000 }
     const p = ok(buildSellPayload(holding, preview, { date, note: '' }))
     expect(p).toEqual({
@@ -223,6 +225,36 @@ describe('buildSellPayload', () => {
       amount_vnd: 1_000_000, units_withdrawn: 50,
       principal_withdrawn: 900_000, goal_id: null, notes: null,   // (1M/2M)×(18000×100)
     })
+  })
+
+  // The dashboard aggregates a fund per (goal, fund), and so does the balance the
+  // server now measures a sell against (#587). A sell of a goal-allocated fund
+  // posted with goal_id: null drew down the Unallocated bucket instead — the
+  // goal's holding never moved, and once the server enforces the balance that
+  // sell is refused outright. The sell has to carry the holding's own goal.
+  it('fund: the sell belongs to the goal the holding sits in', () => {
+    const holding = {
+      type: 'fund' as const, fundId: 'f1', goalId: 'goal-1',
+      purchasePrice: 18_000, currentValue: 2_000_000, units: 100,
+    }
+    const preview = { ...zero, numSell: 1_000_000, sellNav: 20_000 }
+    expect(ok(buildSellPayload(holding, preview, { date, note: '' }))).toMatchObject({ goal_id: 'goal-1' })
+  })
+
+  it('non-fund sells carry the holding’s goal too', () => {
+    const bank = { type: 'bank' as const, transactionId: 't1', goalId: 'goal-2', purchasePrice: 5_000_000, currentValue: 5_000_000 }
+    expect(ok(buildSellPayload(bank, { ...zero, numSell: 5_000_000, numReceived: 5_200_000, bankWithdrawPrincipal: 5_000_000 }, { date, note: '' })))
+      .toMatchObject({ goal_id: 'goal-2' })
+
+    const gold = { type: 'gold' as const, transactionId: 'g1', goalId: 'goal-3', currentValue: 18_400_000, units: 2 }
+    expect(ok(buildSellPayload(gold, { ...zero, numGoldSellQty: 1, goldProceeds: 9_200_000, goldCost: 9_000_000 }, { date, note: '' })))
+      .toMatchObject({ goal_id: 'goal-3' })
+  })
+
+  it('an unallocated holding still sells with no goal', () => {
+    const holding = { type: 'fund' as const, fundId: 'f1', goalId: null, purchasePrice: 18_000, currentValue: 2_000_000, units: 100 }
+    expect(ok(buildSellPayload(holding, { ...zero, numSell: 1_000_000, sellNav: 20_000 }, { date, note: '' })))
+      .toMatchObject({ goal_id: null })
   })
 
   it('bank: amount is the received cash, principal is what the user entered', () => {
@@ -239,6 +271,25 @@ describe('buildSellPayload', () => {
     expect(ok(buildSellPayload(holding, preview, { date, note: '' }))).toMatchObject({
       asset_type: 'gold', parent_transaction_id: 'g1', amount_vnd: 9_200_000, units_withdrawn: 1, principal_withdrawn: 9_000_000,
     })
+  })
+
+  // Selling the lot must post the holding's own principal, not a figure derived
+  // through a rounded per-unit price: 123,456,789 / 10 rounds up to 12,345,679,
+  // and ×10 is a đồng more than the holding has — which the server refuses as an
+  // overdraw (#587). Preview and payload have to agree on the exact basis.
+  it('gold: selling the lot posts exactly the remaining principal', () => {
+    const holding = {
+      type: 'gold' as const, transactionId: 'g1', currentValue: 130_000_000,
+      units: 10, purchasePrice: 123_456_789, navPerUnit: 13_000_000, gainPct: null,
+    }
+    const preview = computeSellPreview({
+      assetType: 'gold', dir: 'sell', holding, sellAmount: '', received: '',
+      goldSellQty: '10', goldSellPrice: '13000000',
+    })
+
+    expect(preview.goldCost).toBe(123_456_789)
+    expect(ok(buildSellPayload(holding, preview, { date, note: '' })))
+      .toMatchObject({ principal_withdrawn: 123_456_789, units_withdrawn: 10 })
   })
 
   it('validation: no holding → holdingRequired; over balance → exceedsBalance; bank no received → amountRequired', () => {

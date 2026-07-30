@@ -221,6 +221,10 @@ export async function GET() {
       currentNAV: number
       currentValue: number
       purchasePrice: number
+      // Remaining cost basis of this bucket (Σ amount_vnd, net of prior sells) — the
+      // figure a sale must take out of it, surfaced so the sheets stop
+      // reconstructing it from purchasePrice (#587, lib/fundWithdrawal).
+      costBasis: number
       profitLoss: number
       profitLossPercentage: number
       goalId: string
@@ -367,7 +371,7 @@ export async function GET() {
   // Convert fund accumulators to breakdown items
   const unallocatedFunds: Array<{
     fundId: string; fundName: string; fundType: string; quantity: number; currentNAV: number
-    currentValue: number; purchasePrice: number; profitLoss: number; profitLossPercentage: number; goalId: null
+    currentValue: number; purchasePrice: number; costBasis: number; profitLoss: number; profitLossPercentage: number; goalId: null
   }> = []
   let unallocatedFundValue = 0
 
@@ -389,6 +393,7 @@ export async function GET() {
       currentNAV: acc.currentNAV,
       currentValue,
       purchasePrice,
+      costBasis: Math.round(acc.totalInvested),
       profitLoss,
       profitLossPercentage,
       goalId: acc.goalId,

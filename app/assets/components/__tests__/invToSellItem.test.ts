@@ -8,11 +8,15 @@ describe('invToSellItem', () => {
   it('maps a fund row to a fund SellItem', () => {
     const inv = {
       id: 'row1', type: 'fund', name: 'Fund', value: 3_000_000, units: null, gainPct: null, principal: null,
-      fund: { fundId: 'f1', fundName: 'VF1', currentValue: 3_000_000, quantity: 100, currentNAV: 30_000, profitLossPercentage: 12, purchasePrice: 2_680_000 },
+      fund: { fundId: 'f1', fundName: 'VF1', currentValue: 3_000_000, quantity: 100, currentNAV: 30_000, profitLossPercentage: 12, purchasePrice: 2_680_000, costBasis: 2_680_000 },
     } as unknown as InvRow
+    // costBasis is what a sale takes out of the bucket (#587). Dropping it here sent
+    // the sheet down its fallback — posting the PROCEEDS as principal — which the
+    // invariant refuses for any fund whose NAV has moved, so every goal-detail fund
+    // sale would fail.
     expect(invToSellItem(inv)).toEqual({
       type: 'fund', name: 'VF1', currentValue: 3_000_000, units: 100, navPerUnit: 30_000,
-      gainPct: 12, fundId: 'f1', purchasePrice: 2_680_000,
+      gainPct: 12, fundId: 'f1', purchasePrice: 2_680_000, costBasis: 2_680_000,
     })
   })
 

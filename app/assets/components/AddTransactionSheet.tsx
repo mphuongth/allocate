@@ -19,6 +19,12 @@ export interface Holding {
   key: string
   name: string
   source: string
+  /**
+   * The goal this position sits in (null = unallocated). `source` is its NAME,
+   * for display; the sell payload needs the id — a fund's balance is the
+   * (goal, fund) bucket, so a sell without it draws down the wrong one (#587).
+   */
+  goalId: string | null
   type: AssetType
   currentValue: number
   units: number | null
@@ -28,35 +34,38 @@ export interface Holding {
   fundId?: string
   transactionId?: string
   purchasePrice?: number
+  /** Fund only: the bucket's remaining cost basis, which a sale draws from (#587). */
+  costBasis?: number
 }
 
 function collectHoldings(d: {
-  goals?: { goalName: string; funds?: FundLike[]; nonFunds?: NonFundLike[] }[]
+  goals?: { goalId?: string; goalName: string; funds?: FundLike[]; nonFunds?: NonFundLike[] }[]
   unallocated?: { funds?: FundLike[]; nonFunds?: NonFundLike[] }
 }): Holding[] {
   const out: Holding[] = []
-  // Funds: allocated to goals or unallocated.
-  const fundSources: { f: FundLike; source: string }[] = [
-    ...(d.goals ?? []).flatMap((g) => (g.funds ?? []).map((f) => ({ f, source: g.goalName }))),
-    ...((d.unallocated?.funds) ?? []).map((f) => ({ f, source: 'Unallocated' })),
+  // Funds: allocated to goals or unallocated. Each position keeps the goal's id
+  // as well as its name — the sell posts the id (#587).
+  const fundSources: { f: FundLike; source: string; goalId: string | null }[] = [
+    ...(d.goals ?? []).flatMap((g) => (g.funds ?? []).map((f) => ({ f, source: g.goalName, goalId: g.goalId ?? null }))),
+    ...((d.unallocated?.funds) ?? []).map((f) => ({ f, source: 'Unallocated', goalId: null })),
   ]
-  fundSources.forEach(({ f, source }, i) => {
+  fundSources.forEach(({ f, source, goalId }, i) => {
     out.push({
-      key: `fund-${f.fundId}-${i}`, name: f.fundName, source, type: 'fund',
+      key: `fund-${f.fundId}-${i}`, name: f.fundName, source, goalId, type: 'fund',
       currentValue: f.currentValue, units: f.quantity, navPerUnit: f.currentNAV,
       gainPct: f.profitLossPercentage, interestRate: null,
-      fundId: f.fundId, purchasePrice: f.purchasePrice,
+      fundId: f.fundId, purchasePrice: f.purchasePrice, costBasis: f.costBasis,
     })
   })
   // Bank / gold: also allocated to goals or unallocated.
-  const nonFundSources: { it: NonFundLike; source: string }[] = [
-    ...(d.goals ?? []).flatMap((g) => (g.nonFunds ?? []).map((it) => ({ it, source: g.goalName }))),
-    ...((d.unallocated?.nonFunds) ?? []).map((it) => ({ it, source: 'Unallocated' })),
+  const nonFundSources: { it: NonFundLike; source: string; goalId: string | null }[] = [
+    ...(d.goals ?? []).flatMap((g) => (g.nonFunds ?? []).map((it) => ({ it, source: g.goalName, goalId: g.goalId ?? null }))),
+    ...((d.unallocated?.nonFunds) ?? []).map((it) => ({ it, source: 'Unallocated', goalId: null })),
   ]
-  nonFundSources.forEach(({ it, source }, i) => {
+  nonFundSources.forEach(({ it, source, goalId }, i) => {
     if (it.type !== 'bank' && it.type !== 'gold') return
     out.push({
-      key: `nf-${it.transactionId}-${i}`, name: it.notes || it.type, source,
+      key: `nf-${it.transactionId}-${i}`, name: it.notes || it.type, source, goalId,
       type: it.type as AssetType,
       currentValue: it.currentValue, units: it.units,
       navPerUnit: it.units && it.units > 0 ? it.currentValue / it.units : null,
@@ -67,7 +76,7 @@ function collectHoldings(d: {
   return out
 }
 
-interface FundLike { fundId: string; fundName: string; quantity: number; currentNAV: number; currentValue: number; purchasePrice: number; profitLossPercentage: number }
+interface FundLike { fundId: string; fundName: string; quantity: number; currentNAV: number; currentValue: number; purchasePrice: number; costBasis?: number; profitLossPercentage: number }
 interface NonFundLike { transactionId: string; type: string; amount: number; currentValue: number; interestRate: number | null; units: number | null; notes: string | null }
 
 // When set, the sheet opens in edit mode: fields are prefilled from this

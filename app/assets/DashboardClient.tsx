@@ -48,6 +48,8 @@ export interface FundBreakdownItem {
   currentNAV: number
   currentValue: number
   purchasePrice: number
+  /** Remaining cost basis (Σ amount_vnd, net of prior sells) — what a sale takes out (#587). */
+  costBasis: number
   profitLoss: number
   profitLossPercentage: number
   goalId: string | null
@@ -531,6 +533,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
       gainPct: fund.profitLossPercentage,
       fundId: fund.fundId,
       purchasePrice: fund.purchasePrice,
+      costBasis: fund.costBasis,
     })
     setSellSheetOpen(true)
   }

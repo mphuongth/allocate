@@ -18,6 +18,7 @@ function fund(fundType: string, currentValue: number): FundBreakdownItem {
     currentNAV: currentValue,
     currentValue,
     purchasePrice: currentValue,
+    costBasis: currentValue,
     profitLoss: 0,
     profitLossPercentage: 0,
     goalId: null,
@@ -200,14 +201,36 @@ describe('getCachedOverview / setCachedOverview', () => {
 
   it('returns null for an entry past its TTL unless stale is allowed', () => {
     const data = sample(500)
-    // Hand-write an entry with an old timestamp.
+    // Hand-write an entry with an old timestamp, under the CURRENT schema key.
     localStorage.setItem(
-      `dashboardOverviewCache_${userId}`,
+      `dashboardOverviewCache_v2_${userId}`,
       JSON.stringify({ data, ts: Date.now() - 10 * 60 * 1000 }),
     )
 
     expect(getCachedOverview(userId)).toBeNull()
     expect(getCachedOverview(userId, { allowStale: true })).toEqual(data)
+  })
+
+  // A payload written by the previous deploy has no fund `costBasis`, which the
+  // sell flow now posts as the withdrawn principal (#587) — served, it produces a
+  // sale the database refuses. The TTL cannot express that kind of staleness, and
+  // `allowStale` reads have no age bound at all, so the key carries the schema.
+  it('ignores a snapshot written under an older schema, even as a stale read', () => {
+    localStorage.setItem(
+      `dashboardOverviewCache_${userId}`,
+      JSON.stringify({ data: sample(700), ts: Date.now() }),
+    )
+
+    expect(getCachedOverview(userId)).toBeNull()
+    expect(getCachedOverview(userId, { allowStale: true })).toBeNull()
+  })
+
+  // …and the versioned key still matches the prefix that sign-out and the
+  // price-refresh flows clear by (lib/clientCache, settingsShared).
+  it('keeps the dashboardOverviewCache prefix so the cache sweepers still find it', () => {
+    setCachedOverview(userId, sample(800))
+    const keys = Object.keys(localStorage).filter((k) => k.startsWith('dashboardOverviewCache'))
+    expect(keys).toHaveLength(1)
   })
 
   it('round-trips a fresh entry', () => {

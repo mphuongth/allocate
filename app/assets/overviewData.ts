@@ -4,8 +4,16 @@ const OVERVIEW_ENDPOINT = '/api/v1/dashboard/overview'
 
 const OVERVIEW_CACHE_TTL = 2 * 60 * 1000 // 2 minutes
 
+// Bump when the cached shape gains a field a consumer RELIES on, so a payload
+// written by the previous deploy is never served to code that needs the new one.
+// v2: fund items carry `costBasis`, which the sell flow posts as the withdrawn
+// principal (#587). Served without it, a sale falls back to a figure the database
+// refuses — a pre-deploy snapshot is stale in a way the TTL cannot express, and
+// `allowStale` reads have no age bound at all.
+const OVERVIEW_CACHE_SCHEMA = 'v2'
+
 function overviewCacheKey(userId: string) {
-  return `dashboardOverviewCache_${userId}`
+  return `dashboardOverviewCache_${OVERVIEW_CACHE_SCHEMA}_${userId}`
 }
 
 /**

@@ -39,6 +39,8 @@ declare
   v_goal2  uuid;
   v_src    uuid;
   v_src2   uuid;
+  v_src3   uuid;
+  v_src4   uuid;
   v_osrc   uuid;
   v_saving uuid;
   v_osav   uuid;
@@ -67,10 +69,12 @@ begin
   values (v_other, 'Theirs', v_goal2, 5000000, v_osrc) returning saving_id into v_osav;
 
   -- 1) A held settlement on that source clears the link, within the insert itself.
+  -- The settlement closes the source, so it records the principal it takes out —
+  -- the withdrawal invariant (#587) refuses one that measures nothing.
   insert into public.investment_transactions
     (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
-     parent_transaction_id, held_for_merge, merge_target_goal_id)
-  values (v_user, v_goal, 'bank', 'withdrawal', '2026-07-01', 100000000, v_src, true, v_goal);
+     parent_transaction_id, principal_withdrawn, held_for_merge, merge_target_goal_id)
+  values (v_user, v_goal, 'bank', 'withdrawal', '2026-07-01', 100000000, v_src, 100000000, true, v_goal);
 
   select linked_deposit_tx_id into v_link from public.recurring_savings where saving_id = v_saving;
   if v_link is not null then
@@ -84,15 +88,19 @@ begin
   end if;
 
   -- 2) A PLAIN withdrawal must NOT clear the link — only holding closes the
-  --    source for merge. Re-link, then withdraw normally.
-  update public.recurring_savings set linked_deposit_tx_id = v_src where saving_id = v_saving;
+  --    source for merge. v_src is settled now, so re-link to a live deposit and
+  --    withdraw part of THAT (a withdrawal cannot exceed its holding, #587).
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
+  values (v_user, v_goal, 'bank', 'investment', '2026-03-01', 50000000) returning transaction_id into v_src3;
+
+  update public.recurring_savings set linked_deposit_tx_id = v_src3 where saving_id = v_saving;
 
   insert into public.investment_transactions
-    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id)
-  values (v_user, v_goal, 'bank', 'withdrawal', '2026-07-02', 10000000, v_src);
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn)
+  values (v_user, v_goal, 'bank', 'withdrawal', '2026-07-02', 10000000, v_src3, 10000000);
 
   select linked_deposit_tx_id into v_link from public.recurring_savings where saving_id = v_saving;
-  if v_link is distinct from v_src then
+  if v_link is distinct from v_src3 then
     raise exception 'a plain withdrawal must leave the link intact, got %', v_link;
   end if;
 
@@ -102,17 +110,23 @@ begin
 
   insert into public.investment_transactions
     (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
-     parent_transaction_id, held_for_merge, merge_target_goal_id)
-  values (v_user, v_goal, 'bank', 'withdrawal', '2026-07-03', 50000000, v_src2, true, v_goal);
+     parent_transaction_id, principal_withdrawn, held_for_merge, merge_target_goal_id)
+  values (v_user, v_goal, 'bank', 'withdrawal', '2026-07-03', 50000000, v_src2, 50000000, true, v_goal);
 
   select linked_deposit_tx_id into v_link from public.recurring_savings where saving_id = v_saving;
-  if v_link is distinct from v_src then
+  if v_link is distinct from v_src3 then
     raise exception 'holding an unrelated deposit must not clear this link, got %', v_link;
   end if;
 
   -- 4) The rollback guarantee. Force the cleanup UPDATE to fail and assert the
   --    settlement insert does not survive it — the exact failure the old
   --    two-statement route turned into a dangling link behind a 201.
+  -- The source this hold will settle, linked so the cleanup UPDATE fires — both
+  -- BEFORE the breaking trigger exists, or they would blow up outside the block.
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
+  values (v_user, v_goal, 'bank', 'investment', '2026-04-01', 100000000) returning transaction_id into v_src4;
+  update public.recurring_savings set linked_deposit_tx_id = v_src4 where saving_id = v_saving;
+
   create trigger tmp_break_recurring_update
     before update on public.recurring_savings
     for each row execute function public.tmp_raise_on_update();
@@ -120,8 +134,8 @@ begin
   begin
     insert into public.investment_transactions
       (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
-       parent_transaction_id, held_for_merge, merge_target_goal_id)
-    values (v_user, v_goal, 'bank', 'withdrawal', '2026-07-04', 100000000, v_src, true, v_goal);
+       parent_transaction_id, principal_withdrawn, held_for_merge, merge_target_goal_id)
+    values (v_user, v_goal, 'bank', 'withdrawal', '2026-07-04', 100000000, v_src4, 100000000, true, v_goal);
     -- Reached only if the insert survived a failing cleanup. P0001, so the
     -- ZZ999 handler below does NOT catch it: it propagates and fails the test.
     raise exception 'the insert must survive nothing: the cleanup failure did not abort it';
@@ -148,7 +162,7 @@ begin
 
   -- Nothing committed, so the link is exactly as it was.
   select linked_deposit_tx_id into v_link from public.recurring_savings where saving_id = v_saving;
-  if v_link is distinct from v_src then
+  if v_link is distinct from v_src4 then
     raise exception 'a rolled-back hold must leave the link untouched, got %', v_link;
   end if;
 

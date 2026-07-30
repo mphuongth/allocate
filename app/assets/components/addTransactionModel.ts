@@ -6,6 +6,8 @@
 // and stay in the component for now.
 
 import { previewBankWithdrawal, estimateReceivedForPrincipal } from '@/lib/bankWithdrawal'
+import { goldCostBasis, goldUnitCost } from '@/lib/goldWithdrawal'
+import { fundCostBasis } from '@/lib/fundWithdrawal'
 
 export type AssetType = 'fund' | 'bank' | 'gold'
 
@@ -114,10 +116,11 @@ export function computeSellPreview(input: {
   const goldMaxUnits = h?.units ?? 0
   const numGoldSellQty = Number(goldSellQty) || 0
   const numGoldSellPrice = Number(goldSellPrice) || 0
-  const goldBuyUnit = h?.units && h.units > 0 && h.purchasePrice != null
-    ? Math.round(h.purchasePrice / h.units) : null
+  // Per-unit price for display; the basis divides once and states a full sell
+  // exactly, so "sell all" can't post a đồng more than the holding has (#587).
+  const goldBuyUnit = goldUnitCost(h?.purchasePrice, h?.units)
   const goldProceeds = Math.round(numGoldSellQty * numGoldSellPrice)
-  const goldCost = goldBuyUnit != null ? Math.round(numGoldSellQty * goldBuyUnit) : null
+  const goldCost = goldCostBasis({ currentPrincipal: h?.purchasePrice, units: h?.units, sellUnits: numGoldSellQty })
   const goldProfit = goldProceeds > 0 && goldCost != null ? goldProceeds - goldCost : null
   const goldRemUnits = h?.units != null ? h.units - numGoldSellQty : null
   const isOverUnits = numGoldSellQty > goldMaxUnits && goldMaxUnits > 0
@@ -281,7 +284,20 @@ export interface SellHolding {
   type: AssetType
   transactionId?: string
   fundId?: string
+  /**
+   * The goal the holding sits in, null when unallocated. A fund's balance is the
+   * (goal, fund) bucket the dashboard aggregates — and the one the server measures
+   * a sell against (#587) — so a sell that dropped this drew down the wrong
+   * bucket: the goal's holding stayed put and the sell is now refused outright.
+   */
+  goalId?: string | null
   purchasePrice?: number | null
+  /**
+   * Fund only: the bucket's remaining cost basis (Σ amount_vnd, net of prior
+   * sells) as the dashboard reports it. A sale takes it out directly instead of
+   * reconstructing it from the averaged purchasePrice (#587, lib/fundWithdrawal).
+   */
+  costBasis?: number | null
   currentValue: number
   units?: number | null
 }
@@ -306,21 +322,26 @@ export function buildSellPayload(
       parent_transaction_id: holding.transactionId,
       investment_date: date, amount_vnd: preview.goldProceeds,
       units_withdrawn: parseFloat(preview.numGoldSellQty.toFixed(4)),
-      principal_withdrawn: preview.goldCost ?? preview.goldProceeds, goal_id: null, notes: note || null,
+      principal_withdrawn: preview.goldCost ?? preview.goldProceeds,
+      goal_id: holding.goalId ?? null, notes: note || null,
     } }
   }
   if (holding.type === 'fund' && holding.fundId) {
     if (!preview.numSell) return { ok: false, errorKey: 'amountRequired' }
     if (preview.sellOverMax) return { ok: false, errorKey: 'exceedsBalance' }
-    const principalWithdrawn = holding.purchasePrice
-      ? Math.round((preview.numSell / holding.currentValue) * (holding.purchasePrice * (holding.units ?? 0)))
-      : Math.round(preview.numSell)
-    const unitsWithdrawn = preview.sellNav ? preview.numSell / preview.sellNav : (holding.units ?? 0)
+    // Round the units FIRST: they are what the basis is allocated from, so a
+    // mismatch at the 4th decimal is a đồng the holding may not have (#587).
+    const unitsWithdrawn = parseFloat(
+      (preview.sellNav ? preview.numSell / preview.sellNav : (holding.units ?? 0)).toFixed(4))
+    const principalWithdrawn = fundCostBasis({
+      totalBasis: holding.costBasis, totalUnits: holding.units, sellUnits: unitsWithdrawn,
+    }) ?? Math.round(preview.numSell)
     return { ok: true, payload: {
       transaction_type: 'withdrawal', asset_type: 'fund', fund_id: holding.fundId,
       investment_date: date, amount_vnd: Math.round(preview.numSell),
-      units_withdrawn: parseFloat(unitsWithdrawn.toFixed(4)),
-      principal_withdrawn: principalWithdrawn, goal_id: null, notes: note || null,
+      units_withdrawn: unitsWithdrawn,
+      principal_withdrawn: principalWithdrawn,
+      goal_id: holding.goalId ?? null, notes: note || null,
     } }
   }
   if (holding.transactionId) {
@@ -335,7 +356,7 @@ export function buildSellPayload(
       parent_transaction_id: holding.transactionId, investment_date: date,
       amount_vnd: isBankSell ? Math.round(preview.numReceived) : Math.round(preview.numSell),
       principal_withdrawn: isBankSell ? preview.bankWithdrawPrincipal : Math.round(preview.numSell),
-      goal_id: null, notes: note || null,
+      goal_id: holding.goalId ?? null, notes: note || null,
     } }
   }
   return { ok: false, errorKey: 'holdingRequired' }
