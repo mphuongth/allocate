@@ -43,6 +43,7 @@ declare
   v_cancel_src uuid; v_cancel_a uuid; v_cancel_b uuid;
   v_slack_src uuid; v_slack uuid;
   v_pair_src uuid; v_pair_a uuid; v_pair_b uuid;
+  v_split_goal_src uuid; v_sg_a uuid; v_sg_b uuid;
   -- the clean half
   v_tol_goal  uuid;
   v_drift_src uuid; v_comp_src uuid; v_f7_src uuid; v_full_src uuid; v_tail_src uuid;
@@ -431,6 +432,23 @@ begin
   values (v_user, v_goal, 'gold', 'withdrawal', '2026-03-01', 1, v_pair_src, 29999500, 3)
   returning transaction_id into v_pair_b;
 
+  -- 21. the same unexplainable pair, but with the two sales filed under DIFFERENT
+  --     goals. A withdrawal carries its own goal_id and the invariant ignores it
+  --     entirely for a parent-backed row — the balance is keyed by
+  --     parent_transaction_id alone — so these are siblings on one holding however
+  --     they are filed. Counting them apart would let each look like the only
+  --     claimant of the full-sale slack.
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal, 'gold', 'investment', '2026-01-01', 40000000, 4, 10000000) returning transaction_id into v_split_goal_src;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-02-01', 1, v_split_goal_src, 10000500, 1)
+  returning transaction_id into v_sg_a;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_goal_b, 'gold', 'withdrawal', '2026-03-01', 1, v_split_goal_src, 29999500, 3)
+  returning transaction_id into v_sg_b;
+
   alter table public.investment_transactions enable trigger user;
 
   -- ═══ every planted row must be named, by the right check ═══════════════════
@@ -455,7 +473,9 @@ begin
         ('sale_basis_not_proportional',   v_cancel_b),
         ('sale_basis_not_proportional',   v_slack),
         ('sale_basis_not_proportional',   v_pair_a),
-        ('sale_basis_not_proportional',   v_pair_b)
+        ('sale_basis_not_proportional',   v_pair_b),
+        ('sale_basis_not_proportional',   v_sg_a),
+        ('sale_basis_not_proportional',   v_sg_b)
       ) as x(name, tx)
   loop
     if v_count <> 1 then

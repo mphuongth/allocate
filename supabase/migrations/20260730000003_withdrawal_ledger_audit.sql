@@ -110,7 +110,8 @@ fund_buckets as (
 sale_dev as (
   select w.transaction_id, w.user_id, w.goal_id, w.fund_id, w.parent_transaction_id,
          w.units_withdrawn, w.principal_withdrawn,
-         p.transaction_id as holding, p.amount_vnd as basis, p.units as units,
+         p.transaction_id as holding, p.transaction_id::text as balance_key,
+         p.amount_vnd as basis, p.units as units,
          format('a sale of %s of the holding''s %s units took %s đồng where the flat rate on a %s basis is %s',
                 w.units_withdrawn, p.units, w.principal_withdrawn, p.amount_vnd,
                 round(p.amount_vnd * w.units_withdrawn / p.units)) as detail,
@@ -124,7 +125,7 @@ sale_dev as (
   union all
   select w.transaction_id, w.user_id, w.goal_id, w.fund_id, w.parent_transaction_id,
          w.units_withdrawn, w.principal_withdrawn,
-         null::uuid, b.basis, b.units,
+         null::uuid, b.fund_id::text || ':' || coalesce(b.goal_id::text, ''), b.basis, b.units,
          format('a sell of %s of the bucket''s %s units took %s đồng where the flat rate on a %s basis is %s',
                 w.units_withdrawn, b.units, w.principal_withdrawn, b.basis,
                 round(b.basis * w.units_withdrawn / b.units)),
@@ -139,7 +140,12 @@ sale_dev as (
 ),
 
 -- Exactly ONE sale per holding can be the one that closed it, so at most one may
--- claim the full-sale slack. Rows past the base tolerance are counted per holding:
+-- claim the full-sale slack. Siblings are counted by the BALANCE key and nothing
+-- else — parent_transaction_id for bank/gold/stock, (fund, goal) for a fund bucket
+-- — because that is what the invariant measures. A withdrawal carries its own
+-- goal_id, and for a parent-backed row the invariant ignores it entirely; counting
+-- by it would split one holding's sales into separate partitions and hand each of
+-- them the slack that only one sale can have. Rows past the base tolerance are counted per holding:
 -- if two or more need the slack, the holding cannot be explained by any legal
 -- sequence and they are all reported; if just one does, it is allowed its value.
 --
@@ -151,7 +157,7 @@ sale_dev as (
 sale_dev_ranked as (
   select d.*,
          count(*) filter (where d.dev > d.base_tol and d.units_withdrawn > 0.0002)
-           over (partition by d.user_id, d.holding, d.fund_id, d.goal_id) as over_base
+           over (partition by d.user_id, d.balance_key) as over_base
     from sale_dev d
 )
 
