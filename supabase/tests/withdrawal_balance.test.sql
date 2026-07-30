@@ -845,4 +845,86 @@ begin
 end;
 $$;
 
+-- ── the fund exclusion must be null-safe ─────────────────────────────────────
+-- The parent branch excludes siblings that draw on a fund bucket instead. Written
+-- as `not (asset_type = 'fund' and fund_id is not null)`, that predicate is NULL —
+-- so the row is dropped from the sum — when asset_type is NULL and fund_id is set,
+-- a shape the POST route accepts. buildWithdrawalMaps counts such a row against
+-- its PARENT (it needs asset_type = 'fund' to use the fund key), so dropping it
+-- let two full withdrawals of the same deposit both pass.
+do $$
+declare
+  v_user uuid;
+  v_fund uuid;
+  v_dep  uuid;
+begin
+  insert into auth.users (id, email) values (gen_random_uuid(), 'wd-nullsafe@test.invalid') returning id into v_user;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'NullSafe Fund', 'NSF', 'equity', 20000) returning id into v_fund;
+  insert into public.investment_transactions (user_id, asset_type, transaction_type, investment_date, amount_vnd)
+  values (v_user, 'bank', 'investment', '2026-01-01', 100000000) returning transaction_id into v_dep;
+
+  insert into public.investment_transactions
+    (user_id, fund_id, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn)
+  values (v_user, v_fund, 'withdrawal', '2026-02-01', 100000000, v_dep, 100000000);
+
+  begin
+    insert into public.investment_transactions
+      (user_id, fund_id, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn)
+    values (v_user, v_fund, 'withdrawal', '2026-03-01', 100000000, v_dep, 100000000);
+    raise exception 'a second full withdrawal must be refused whatever the row''s asset_type is';
+  exception when sqlstate '23514' then null;
+  end;
+
+  raise notice 'fund exclusion is null-safe: ok';
+end;
+$$;
+
+-- ── a gold sale moves both deltas, like a fund sale ──────────────────────────
+-- valueNonFundHolding values gold by UNITS × price and takes the cost basis from
+-- amount_vnd, so a sale carrying only principal drops the basis while every chỉ
+-- stays in net worth (P&L inflated, the sold gold never leaves), and one carrying
+-- only units removes the metal while its cost stays. The bank case is different
+-- and must keep working: a deposit has no units to move.
+do $$
+declare
+  v_user uuid;
+  v_gold uuid;
+  v_bank uuid;
+begin
+  insert into auth.users (id, email) values (gen_random_uuid(), 'wd-gold-deltas@test.invalid') returning id into v_user;
+  insert into public.investment_transactions (user_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, 'gold', 'investment', '2026-01-01', 80000000, 10, 8000000) returning transaction_id into v_gold;
+  insert into public.investment_transactions (user_id, asset_type, transaction_type, investment_date, amount_vnd)
+  values (v_user, 'bank', 'investment', '2026-01-01', 100000000) returning transaction_id into v_bank;
+
+  begin
+    insert into public.investment_transactions
+      (user_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn)
+    values (v_user, 'gold', 'withdrawal', '2026-02-01', 40000000, v_gold, 40000000);
+    raise exception 'a gold sale without units_withdrawn must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  begin
+    insert into public.investment_transactions
+      (user_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, units_withdrawn)
+    values (v_user, 'gold', 'withdrawal', '2026-02-01', 40000000, v_gold, 5);
+    raise exception 'a gold sale without principal_withdrawn must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- Both together are fine, and a bank withdrawal still needs only principal.
+  insert into public.investment_transactions
+    (user_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
+  values (v_user, 'gold', 'withdrawal', '2026-02-01', 40000000, v_gold, 40000000, 5);
+
+  insert into public.investment_transactions
+    (user_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn)
+  values (v_user, 'bank', 'withdrawal', '2026-02-01', 30000000, v_bank, 30000000);
+
+  raise notice 'gold sale deltas: ok';
+end;
+$$;
+
 rollback;

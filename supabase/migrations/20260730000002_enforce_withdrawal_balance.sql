@@ -70,6 +70,7 @@ declare
   v_left          bigint;
   v_left_units    numeric;
   v_parent_type   text;
+  v_parent_asset  text;
   -- Purchases in the fund bucket, and the rounding slack they imply (below).
   -- Null outside the fund branch, where the basis is one row's stored amount and
   -- there is nothing to reconcile.
@@ -162,8 +163,8 @@ begin
   elsif wd.parent_transaction_id is not null then
     -- Bank / gold / stock: one source row. Lock it before measuring it, so two
     -- concurrent withdrawals of the same deposit serialize here.
-    select t.amount_vnd, t.units, t.transaction_type
-      into v_principal, v_units, v_parent_type
+    select t.amount_vnd, t.units, t.transaction_type, t.asset_type
+      into v_principal, v_units, v_parent_type, v_parent_asset
       from public.investment_transactions t
      where t.transaction_id = wd.parent_transaction_id
        and t.user_id = wd.user_id
@@ -190,6 +191,20 @@ begin
         wd.parent_transaction_id using errcode = 'check_violation';
     end if;
 
+    -- Gold is the one non-fund holding valued by QUANTITY: valueNonFundHolding
+    -- prices it as units × gold price and takes its cost basis from amount_vnd. So
+    -- a sale must move both, exactly as a fund sell must. Principal alone drops the
+    -- basis while every chỉ stays in net worth — P&L inflated and the sold gold
+    -- never leaves; units alone removes the metal and leaves its cost behind.
+    -- Keyed off the PARENT's type, not the withdrawal's: the row's own asset_type
+    -- is nullable and the route lets it be omitted. Bank and stock are unaffected —
+    -- their valuation is principal-only, and a deposit has no units to move.
+    if v_parent_asset = 'gold'
+       and (coalesce(wd.units_withdrawn, 0) <= 0 or coalesce(wd.principal_withdrawn, 0) <= 0) then
+      raise exception 'withdrawal invariant: a gold sale must record both units_withdrawn and principal_withdrawn (got % units, % principal)',
+        wd.units_withdrawn, wd.principal_withdrawn using errcode = 'check_violation';
+    end if;
+
     select coalesce(sum(w.principal_withdrawn), 0), coalesce(sum(w.units_withdrawn), 0)
       into v_out_principal, v_out_units
       from public.investment_transactions w
@@ -199,7 +214,13 @@ begin
        -- that is keyed by a fund draws on that bucket, not on this parent, so
        -- counting it here too would charge it twice and make an ordinary later
        -- withdrawal of this deposit look like an overdraw.
-       and not (w.asset_type = 'fund' and w.fund_id is not null)
+       --
+       -- coalesce, because asset_type is nullable and the route lets a caller omit
+       -- it: written bare, the predicate is NULL for a row with a fund_id and no
+       -- asset_type, which DROPS it from this sum — while buildWithdrawalMaps
+       -- counts that row against the parent (the fund key needs asset_type =
+       -- 'fund'). Two full withdrawals of one deposit both passed that way.
+       and not coalesce(w.asset_type = 'fund' and w.fund_id is not null, false)
        and w.transaction_id <> wd.transaction_id;
 
   else
