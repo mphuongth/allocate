@@ -861,6 +861,56 @@ begin
 end;
 $$;
 
+-- ── a fund sale's principal is bound to its units ────────────────────────────
+-- Capping principal and units independently was not enough: a sale of 1 unit out
+-- of 100 could claim the WHOLE basis, passing both caps while leaving 99 units
+-- with none — which corrupts every later allocation and the P&L. The principal is
+-- the units-proportional share of the remaining basis, within one đồng.
+do $$
+declare
+  v_user uuid;
+  v_fund uuid;
+begin
+  insert into auth.users (id, email) values (gen_random_uuid(), 'wd-alloc@test.invalid') returning id into v_user;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Alloc Fund', 'ALF', 'equity', 10000) returning id into v_fund;
+
+  insert into public.investment_transactions (user_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_fund, 'fund', 'investment', '2026-01-01', 1000000, 100, 10000);
+
+  -- 1 unit, whole basis: the case that used to pass.
+  begin
+    insert into public.investment_transactions
+      (user_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, principal_withdrawn, units_withdrawn)
+    values (v_user, v_fund, 'fund', 'withdrawal', '2026-02-01', 10000, 1000000, 1);
+    raise exception 'a 1-unit sale must not take the whole basis';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- Too little basis for the units sold is equally wrong: it leaves basis behind
+  -- with no units to carry it.
+  begin
+    insert into public.investment_transactions
+      (user_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, principal_withdrawn, units_withdrawn)
+    values (v_user, v_fund, 'fund', 'withdrawal', '2026-02-01', 500000, 1, 50);
+    raise exception 'a 50-unit sale must not take 1 đồng of basis';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- The proportional share is what passes: 50 units of 100 takes half.
+  insert into public.investment_transactions
+    (user_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, principal_withdrawn, units_withdrawn)
+  values (v_user, v_fund, 'fund', 'withdrawal', '2026-02-01', 500000, 500000, 50);
+
+  -- And the rest of the bucket sells for the rest of the basis.
+  insert into public.investment_transactions
+    (user_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, principal_withdrawn, units_withdrawn)
+  values (v_user, v_fund, 'fund', 'withdrawal', '2026-03-01', 500000, 500000, 50);
+
+  raise notice 'fund principal is bound to units: ok';
+end;
+$$;
+
 -- ── the fund exclusion must be null-safe ─────────────────────────────────────
 -- The parent branch excludes siblings that draw on a fund bucket instead. Written
 -- as `not (asset_type = 'fund' and fund_id is not null)`, that predicate is NULL —
@@ -939,7 +989,65 @@ begin
     (user_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn)
   values (v_user, 'bank', 'withdrawal', '2026-02-01', 30000000, v_bank, 30000000);
 
-  raise notice 'gold sale deltas: ok';
+  -- Omitted and zero principal, the two ways to withdraw nothing while claiming
+  -- cash left: lib/depositValuation subtracts coalesce(principal_withdrawn, 0), so
+  -- the deposit would keep its full value behind a withdrawal row.
+  begin
+    insert into public.investment_transactions
+      (user_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id)
+    values (v_user, 'bank', 'withdrawal', '2026-03-01', 20000000, v_bank);
+    raise exception 'a withdrawal with no principal_withdrawn must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  begin
+    insert into public.investment_transactions
+      (user_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn)
+    values (v_user, 'bank', 'withdrawal', '2026-03-01', 20000000, v_bank, 0);
+    raise exception 'a withdrawal of zero principal must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- And the positive case still lands, out of what is left.
+  insert into public.investment_transactions
+    (user_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn)
+  values (v_user, 'bank', 'withdrawal', '2026-03-02', 20000000, v_bank, 20000000);
+
+  raise notice 'gold sale deltas + required principal: ok';
+end;
+$$;
+
+-- ── held-for-merge is an explicit exception, not a silent one ────────────────
+-- A settle-with-hold row that names NO source has nothing to measure: it is the
+-- shape #588 exists to make source-backed. This invariant leaves it alone ONLY
+-- when it also claims no deltas — the moment it claims principal, it is a
+-- withdrawal drawing on nothing and is refused. That boundary is deliberate, so it
+-- is pinned rather than left to the reader.
+do $$
+declare
+  v_user uuid;
+  v_goal uuid;
+begin
+  insert into auth.users (id, email) values (gen_random_uuid(), 'wd-held@test.invalid') returning id into v_user;
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'House') returning goal_id into v_goal;
+
+  -- No source, no deltas: passes here, and #588 is where it gets a source.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     held_for_merge, merge_target_goal_id)
+  values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 50000000, true, v_goal);
+
+  -- No source but claiming principal: that is a withdrawal against nothing.
+  begin
+    insert into public.investment_transactions
+      (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+       principal_withdrawn, held_for_merge, merge_target_goal_id)
+    values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 50000000, 50000000, true, v_goal);
+    raise exception 'a held row claiming principal with no source must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  raise notice 'held-for-merge exception boundary: ok';
 end;
 $$;
 

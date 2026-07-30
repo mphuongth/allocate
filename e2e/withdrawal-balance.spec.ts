@@ -56,6 +56,23 @@ test.describe('withdrawal balance enforcement (#587)', () => {
     expect(empty.status()).toBe(400)
   })
 
+  // The shape rules, through the real route: a withdrawal that omits the number to
+  // be measured is a bad request, not a withdrawal of nothing (see the decision
+  // table in the PR / migration header).
+  test('a withdrawal must record what it takes out', async ({ request }) => {
+    // Bank: principal is the delta, and it is required.
+    for (const principal of [undefined, 0]) {
+      const res = await request.post('/api/v1/investment-transactions', {
+        data: { ...withdraw(10_000_000), principal_withdrawn: principal },
+      })
+      expect(res.status()).toBe(400)
+      expect((await res.json()).error).toMatch(/principal_withdrawn is required/)
+    }
+
+    // Bank needs no units, so an ordinary withdrawal still goes through.
+    expect((await request.post('/api/v1/investment-transactions', { data: withdraw(10_000_000) })).status()).toBe(201)
+  })
+
   // The race the invariant exists for. Both requests read the same balance before
   // either commits, so a client-side cap — or a server-side read without a lock —
   // lets both through and the deposit goes past zero.

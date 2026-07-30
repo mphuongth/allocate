@@ -188,13 +188,45 @@ export async function POST(request: NextRequest) {
   if (isWithdrawal && cleanParentTxId) {
     const { data: parent } = await supabase
       .from('investment_transactions')
-      .select('deposit_group_id')
+      .select('deposit_group_id, asset_type')
       .eq('transaction_id', cleanParentTxId)
       .eq('user_id', user.id)
       .single()
     if (parent?.deposit_group_id) {
       return NextResponse.json({ error: 'Cannot withdraw from an accumulating book yet.' }, { status: 400 })
     }
+    // The shape rules for a parent-backed withdrawal, checked here so a malformed
+    // request gets a message naming the field rather than the invariant's refusal
+    // (which the trigger still raises — this is the same rule stated earlier, not a
+    // replacement). See the withdrawal decision table in the PR / migration header.
+    //
+    // No principal means nothing leaves the holding: lib/depositValuation subtracts
+    // coalesce(principal_withdrawn, 0), so the deposit keeps its full value while
+    // the row claims cash left.
+    if (!cleanPrincipalWithdrawn || cleanPrincipalWithdrawn <= 0) {
+      return NextResponse.json(
+        { error: 'principal_withdrawn is required and must be positive for a withdrawal from a holding.' },
+        { status: 400 },
+      )
+    }
+    // Gold is valued by quantity, so a gold sale must move units too or the metal
+    // stays in net worth while its cost basis drops.
+    if (parent?.asset_type === 'gold' && (!cleanUnitsWithdrawn || cleanUnitsWithdrawn <= 0)) {
+      return NextResponse.json(
+        { error: 'units_withdrawn is required and must be positive for a gold sale.' },
+        { status: 400 },
+      )
+    }
+  }
+
+  // A fund sale has no parent row: it draws on the (goal, fund) bucket, and it is a
+  // QUANTITY — the units are what the cost basis is allocated from (lib/fundWithdrawal).
+  if (isWithdrawal && cleanAssetType === 'fund' && cleanFundId
+      && (!cleanUnitsWithdrawn || cleanUnitsWithdrawn <= 0)) {
+    return NextResponse.json(
+      { error: 'units_withdrawn is required and must be positive for a fund sale.' },
+      { status: 400 },
+    )
   }
 
   // Accumulating ("Loại 2") books. A top-up joins an existing book; creating one

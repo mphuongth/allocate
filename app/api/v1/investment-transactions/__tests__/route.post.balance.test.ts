@@ -133,6 +133,55 @@ describe('POST /api/v1/investment-transactions — remaining balance', () => {
     await expect(res.json()).resolves.toEqual({ error: 'Failed to create transaction' })
   })
 
+  // ── the shape rules, refused before the insert ─────────────────────────────
+  // The trigger states the same rules, but a request that omits the very number to
+  // be measured deserves a message naming the field. See the decision table.
+  it('refuses a parent-backed withdrawal that records no principal', async () => {
+    for (const body of [
+      { ...SELL, principal_withdrawn: undefined },
+      { ...SELL, principal_withdrawn: 0 },
+    ]) {
+      const res = await call(body)
+      expect(res.status).toBe(400)
+      await expect(res.json()).resolves.toMatchObject({ error: expect.stringMatching(/principal_withdrawn is required/) })
+    }
+  })
+
+  it('refuses a gold sale with no units', async () => {
+    h.ref = { data: { transaction_id: SOURCE, deposit_group_id: null, asset_type: 'gold' }, error: null }
+
+    const res = await call({ ...SELL, asset_type: 'gold' })
+
+    expect(res.status).toBe(400)
+    await expect(res.json()).resolves.toMatchObject({ error: expect.stringMatching(/units_withdrawn is required/) })
+  })
+
+  it('accepts a gold sale that moves both', async () => {
+    h.ref = { data: { transaction_id: SOURCE, deposit_group_id: null, asset_type: 'gold' }, error: null }
+
+    const res = await call({ ...SELL, asset_type: 'gold', units_withdrawn: 5 })
+
+    expect(res.status).toBe(201)
+  })
+
+  it('refuses a fund sale with no units', async () => {
+    const res = await call({
+      transaction_type: 'withdrawal', asset_type: 'fund',
+      fund_id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+      investment_date: '2026-07-01', amount_vnd: 1_000_000, principal_withdrawn: 1_000_000,
+    })
+
+    expect(res.status).toBe(400)
+    await expect(res.json()).resolves.toMatchObject({ error: expect.stringMatching(/units_withdrawn is required/) })
+  })
+
+  // A bank withdrawal has no units to move — requiring them would break every
+  // ordinary deposit withdrawal.
+  it('does not ask a bank withdrawal for units', async () => {
+    const res = await call()
+    expect(res.status).toBe(201)
+  })
+
   // A different check_violation (an ownership trigger, say) is not this
   // invariant's and must keep its own answer rather than borrowing this message.
   it('does not claim a balance problem for other constraint failures', async () => {

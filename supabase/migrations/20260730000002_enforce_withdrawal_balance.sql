@@ -21,12 +21,38 @@
 -- snapshot — so the second withdrawal sees the first one and is measured against
 -- the balance it left behind. Reading the sums first would let both pass.
 --
--- Two balances, mirroring the two buckets the dashboard aggregates:
+-- ─── The withdrawal decision table ───────────────────────────────────────────
+-- What a valid withdrawal looks like, per kind. This is the contract; every row
+-- here has direct coverage in supabase/tests/withdrawal_balance.test.sql, and each
+-- invalid near-neighbour has a refusal test. The schema alone cannot express it —
+-- asset_type, fund_id, parent_transaction_id, principal_withdrawn and
+-- units_withdrawn are all nullable and can coexist in shapes the UI never makes —
+-- so the API states it too (POST /api/v1/investment-transactions), and this
+-- function enforces it over whatever reaches the table.
+--
+--   Kind        | Holding (balance) key   | Required deltas
+--   ------------|-------------------------|--------------------------------------
+--   Fund        | (goal_id, fund_id)      | units > 0, and principal = the
+--               |   asset_type='fund'     | units-proportional share of the
+--               |                         | remaining basis (±1 đồng)
+--   Gold        | parent_transaction_id   | units > 0 and principal > 0
+--   Bank/stock  | parent_transaction_id   | principal > 0 (no units to move)
+--   Held-for-   | none, by definition     | claims NOTHING: no principal, no
+--   merge with  |                         | units. Making it source-backed is
+--   no source   |                         | #588; it is not silently treated as
+--               |                         | an ordinary withdrawal here.
+--
+-- The two balances the keys resolve to, mirroring what the dashboard aggregates:
 --   • bank / gold / stock — one source row, addressed by parent_transaction_id:
 --     remaining principal = amount_vnd − Σ principal_withdrawn, remaining units =
 --     units − Σ units_withdrawn (lib/depositValuation values it exactly so).
 --   • fund — a sell has no parent row; the overview aggregates funds per
 --     (goal_id, fund_id), so that bucket is the balance a sell draws down.
+--
+-- Fund principal is BOUND to units, not merely capped: capping them independently
+-- let a sale of 1 unit out of 100 claim the whole basis and leave 99 units with
+-- none. One allocation rule, shared by lib/fundWithdrawal (what the sheets post),
+-- the overview (how it reduces a bucket) and this function (what it will accept).
 --
 -- Why the check runs from TWO triggers. A new claim (an insert, or an edit that
 -- raises the amounts) is measured IMMEDIATELY: the error points at the statement
@@ -71,11 +97,13 @@ declare
   v_left_units    numeric;
   v_parent_type   text;
   v_parent_asset  text;
-  -- Purchases in the fund bucket (null outside it) and prior sales out of it —
-  -- the second bounds how much independent rounding the slack has to explain.
+  -- Purchases in the fund bucket; null outside that branch, which is also how the
+  -- allocation rule below knows which kind it is measuring.
   v_rows          int;
-  v_out_rows      int;
-  v_slack         bigint;
+  -- The basis a fund sale of these units is allowed to take, and the one đồng of
+  -- rounding the proportional split can produce.
+  v_expected      numeric;
+  c_dong_epsilon  constant numeric := 1;
 begin
   if wd.transaction_type is distinct from 'withdrawal' then return; end if;
 
@@ -95,14 +123,13 @@ begin
   -- nothing draws down — a fat holding in one goal waving through a phantom fund
   -- sell in another, since the API accepts both fields on one row.
   if wd.asset_type = 'fund' and wd.fund_id is not null then
-    -- A fund sell moves BOTH ledger deltas or it disagrees with the valuation:
-    -- with no units the overview skips the whole subtraction (it bails on
-    -- `wd.units <= 0`, so the cost basis is never removed either) and the holding
-    -- keeps its full value; with no principal the units fall while the cost basis
-    -- stays, and P&L is wrong. Neither is a shape the sheets produce.
-    if coalesce(wd.units_withdrawn, 0) <= 0 or coalesce(wd.principal_withdrawn, 0) <= 0 then
-      raise exception 'withdrawal invariant: a fund sell must record both units_withdrawn and principal_withdrawn (got % units, % principal)',
-        wd.units_withdrawn, wd.principal_withdrawn using errcode = 'check_violation';
+    -- A fund sale is a quantity: without units the overview skips the whole
+    -- subtraction (it bails on `wd.units <= 0`) and the holding keeps its value.
+    -- The principal is then not a free number — it is the allocation of the
+    -- remaining basis for those units, checked at the end of this function.
+    if coalesce(wd.units_withdrawn, 0) <= 0 then
+      raise exception 'withdrawal invariant: a fund sale must record units_withdrawn (got %)',
+        wd.units_withdrawn using errcode = 'check_violation';
     end if;
 
     -- Both sides of the bucket carry `asset_type = 'fund'`, because that is what
@@ -149,8 +176,8 @@ begin
        and t.renewed_from_transaction_id is null
        and t.units is not null;
 
-    select coalesce(sum(w.principal_withdrawn), 0), coalesce(sum(w.units_withdrawn), 0), count(*)
-      into v_out_principal, v_out_units, v_out_rows
+    select coalesce(sum(w.principal_withdrawn), 0), coalesce(sum(w.units_withdrawn), 0)
+      into v_out_principal, v_out_units
       from public.investment_transactions w
      where w.user_id = wd.user_id
        and w.fund_id = wd.fund_id
@@ -204,6 +231,15 @@ begin
         wd.units_withdrawn, wd.principal_withdrawn using errcode = 'check_violation';
     end if;
 
+    -- A withdrawal that records no principal takes nothing out of the holding:
+    -- lib/depositValuation subtracts coalesce(principal_withdrawn, 0), so the
+    -- deposit keeps its full value while the row claims cash left. A withdrawal
+    -- must not be valid merely because the number to measure was omitted.
+    if coalesce(wd.principal_withdrawn, 0) <= 0 then
+      raise exception 'withdrawal invariant: a withdrawal from holding % must record a positive principal_withdrawn (got %)',
+        wd.parent_transaction_id, wd.principal_withdrawn using errcode = 'check_violation';
+    end if;
+
     select coalesce(sum(w.principal_withdrawn), 0), coalesce(sum(w.units_withdrawn), 0)
       into v_out_principal, v_out_units
       from public.investment_transactions w
@@ -239,28 +275,47 @@ begin
     return;
   end if;
 
-  if coalesce(wd.principal_withdrawn, 0) > 0 then
-    v_left := coalesce(v_principal, 0) - v_out_principal;
-    -- What rounding can still explain, and nothing more. A fund bucket's basis is
-    -- allocated by units, so each PRIOR partial sale rounded its own slice
-    -- independently (≤ half a đồng each) and this one rounds its own. A single
-    -- deposit has no allocation to round — v_rows is null outside the fund branch —
-    -- so it gets none. Anything larger than this is a real overdraw, and the
-    -- arithmetic that used to need more than this now lives in lib/fundWithdrawal.
-    v_slack := case when v_rows is null then 0 else ceil((v_out_rows + 1) * 0.5) end;
-    if wd.principal_withdrawn > v_left + v_slack then
-      raise exception 'withdrawal invariant: % exceeds the remaining balance of % on this holding',
-        wd.principal_withdrawn, v_left using errcode = 'check_violation';
-    end if;
-  end if;
+  -- What the holding has left, after everything already taken out of it.
+  v_left := coalesce(v_principal, 0) - v_out_principal;
+  v_left_units := coalesce(v_units, 0) - v_out_units;
 
+  -- Quantity bound, for whichever kinds carry units.
   if coalesce(wd.units_withdrawn, 0) > 0 then
-    v_left_units := coalesce(v_units, 0) - v_out_units;
     -- The tolerance rounds a real balance; it does not create one. Applied to an
     -- empty holding it would hand every sold-out bucket 0.0001 units it never had.
     if wd.units_withdrawn > v_left_units + (case when v_left_units > 0 then c_units_epsilon else 0 end) then
       raise exception 'withdrawal invariant: % units exceeds the remaining balance of % units on this holding',
         wd.units_withdrawn, v_left_units using errcode = 'check_violation';
+    end if;
+  end if;
+
+  if v_rows is not null then
+    -- FUND: the principal is BOUND TO THE UNITS, not merely capped. Capping the two
+    -- independently let a sale of 1 unit out of 100 claim the whole basis and leave
+    -- 99 units with none, which corrupts every later sale's allocation and the P&L.
+    --
+    -- One allocation rule, shared with lib/fundWithdrawal and matching how the
+    -- overview itself reduces a bucket: a sale of ALL the remaining units takes the
+    -- remaining basis exactly, and a partial sale takes its units-proportional
+    -- share of it. ONE rounding rule: the two sides may differ by at most a đồng,
+    -- which is what rounding a proportional slice can produce.
+    if wd.units_withdrawn >= v_left_units - c_units_epsilon then
+      v_expected := v_left;
+    else
+      v_expected := round(wd.units_withdrawn * v_left / v_left_units);
+    end if;
+    if abs(coalesce(wd.principal_withdrawn, 0) - v_expected) > c_dong_epsilon then
+      raise exception 'withdrawal invariant: a fund sale of % units out of % must take % of the % basis, not %',
+        wd.units_withdrawn, v_left_units, v_expected, v_left, wd.principal_withdrawn
+        using errcode = 'check_violation';
+    end if;
+
+  elsif coalesce(wd.principal_withdrawn, 0) > 0 then
+    -- Non-fund: the principal is the user's own figure (the amount they withdrew),
+    -- bounded by what the holding still holds.
+    if wd.principal_withdrawn > v_left then
+      raise exception 'withdrawal invariant: % exceeds the remaining balance of % on this holding',
+        wd.principal_withdrawn, v_left using errcode = 'check_violation';
     end if;
   end if;
 end;
