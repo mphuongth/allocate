@@ -229,6 +229,19 @@ export async function POST(request: NextRequest) {
     )
   }
 
+  // Everything else must say what it draws on. The one exception is a
+  // held-for-merge settlement whose source isn't recorded yet — the pool shape
+  // #588 exists to fix — and it is an exception for THAT, so an ordinary
+  // withdrawal cannot wear it to leave no holding behind. The DB says the same
+  // thing and remains the backstop for writers that don't come through here.
+  if (isWithdrawal && !cleanParentTxId && !(cleanAssetType === 'fund' && cleanFundId)
+      && !cleanHeldForMerge) {
+    return NextResponse.json(
+      { error: 'A withdrawal must say what it draws on: a holding, or a fund.' },
+      { status: 400 },
+    )
+  }
+
   // Accumulating ("Loại 2") books. A top-up joins an existing book; creating one
   // makes the anchor row self-group. The book's goal + maturity are book-level,
   // so a top-up inherits them (copied down) and the tranche just carries its own

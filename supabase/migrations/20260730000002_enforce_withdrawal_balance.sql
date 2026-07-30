@@ -269,9 +269,17 @@ begin
       raise exception 'withdrawal invariant: draws on no holding — it has neither a parent transaction nor a fund'
         using errcode = 'check_violation';
     end if;
-    -- Carrying neither is a settlement row with nothing to measure — a
-    -- held-for-merge with no source is exactly that shape, and giving it one is
-    -- #588's job.
+    -- Carrying neither delta leaves nothing to measure, and exactly ONE kind of row
+    -- is allowed to be in that state: a held-for-merge settlement whose source is
+    -- not recorded yet (#588 makes them source-backed). The exception is for that
+    -- pool, so nothing else may wear it — an ordinary withdrawal has to name what it
+    -- draws on, or it is cash leaving no holding at all. held_for_merge is in the
+    -- trigger's UPDATE OF list too, so an allowed held row cannot become an
+    -- ordinary one by dropping the flag.
+    if not wd.held_for_merge then
+      raise exception 'withdrawal invariant: draws on no holding — only a held-for-merge settlement may omit its source'
+        using errcode = 'check_violation';
+    end if;
     return;
   end if;
 
@@ -383,12 +391,20 @@ begin
     -- Its destination is only complete once the whole statement has landed (a
     -- fund assign moves purchases and sells together), so the deferred trigger
     -- measures this one.
+    --
+    -- Every column that can change what the row IS has to be listed here, or the
+    -- bypass hands out an exemption it was never meant to: held_for_merge was
+    -- missing, so clearing it turned a permitted no-source held settlement into an
+    -- ordinary sourceless withdrawal without anything re-measuring it. Keep this
+    -- list in step with the trigger's `update of` columns — goal_id is the only one
+    -- a relocation may touch.
     if new.principal_withdrawn is not distinct from old.principal_withdrawn
        and new.units_withdrawn is not distinct from old.units_withdrawn
        and new.parent_transaction_id is not distinct from old.parent_transaction_id
        and new.fund_id is not distinct from old.fund_id
        and new.asset_type is not distinct from old.asset_type
-       and new.transaction_type = old.transaction_type then
+       and new.transaction_type = old.transaction_type
+       and new.held_for_merge = old.held_for_merge then
       return new;
     end if;
   end if;
@@ -410,9 +426,11 @@ create trigger investment_transactions_withdrawal_balance
   --     nothing down, so it is not measured) and then activated by a one-column
   --     update that never fired this trigger.
   --   • asset_type — it picks the fund-bucket branch over the parent branch.
+  --   • held_for_merge — it is what licenses the no-source shape, so clearing it
+  --     has to re-measure the row rather than leave the exception behind.
   before insert or update of
     transaction_type, asset_type, principal_withdrawn, units_withdrawn,
-    parent_transaction_id, fund_id, goal_id
+    parent_transaction_id, fund_id, goal_id, held_for_merge
   on public.investment_transactions
   for each row
   when (new.transaction_type = 'withdrawal')

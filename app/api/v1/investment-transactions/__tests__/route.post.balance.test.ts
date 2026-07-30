@@ -112,13 +112,15 @@ describe('POST /api/v1/investment-transactions — remaining balance', () => {
     expect(res.status).not.toBe(500)
   })
 
-  // The trigger's other refusal: principal taken out of a row attached to no
-  // holding, which subtracts from nothing while claiming cash left.
-  it('answers 400 when the withdrawal draws on no holding', async () => {
+  // The trigger's other refusal, mapped by the route. The request shape here is a
+  // well-formed one — a sourceless withdrawal is now refused before the insert
+  // (see below), so this covers the mapping of a refusal raised by another writer's
+  // shape rather than trying to provoke it from the API.
+  it('answers 400 when the database says the row draws on no holding', async () => {
     h.insertResult = balanceRefusal(
       'withdrawal invariant: draws on no holding — it has neither a parent transaction nor a fund')
 
-    const res = await call({ ...SELL, parent_transaction_id: undefined })
+    const res = await call()
 
     expect(res.status).toBe(400)
     await expect(res.json()).resolves.toEqual({ error: 'This withdrawal does not match the holding it is drawn on.' })
@@ -179,6 +181,29 @@ describe('POST /api/v1/investment-transactions — remaining balance', () => {
   // ordinary deposit withdrawal.
   it('does not ask a bank withdrawal for units', async () => {
     const res = await call()
+    expect(res.status).toBe(201)
+  })
+
+  // The no-source exception belongs to the held-for-merge pool (#588) and to
+  // nothing else: an ordinary withdrawal that names no holding is cash leaving
+  // nowhere, whatever its amount says.
+  it('refuses a withdrawal that says nothing about what it draws on', async () => {
+    const res = await call({
+      transaction_type: 'withdrawal', asset_type: 'bank',
+      investment_date: '2026-07-01', amount_vnd: 50_000_000,
+    })
+
+    expect(res.status).toBe(400)
+    await expect(res.json()).resolves.toMatchObject({ error: expect.stringMatching(/must say what it draws on/) })
+  })
+
+  it('lets a held-for-merge settlement through as the tracked exception', async () => {
+    const res = await call({
+      transaction_type: 'withdrawal', asset_type: 'bank',
+      investment_date: '2026-07-01', amount_vnd: 50_000_000,
+      held_for_merge: true, merge_target_goal_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    })
+
     expect(res.status).toBe(201)
   })
 

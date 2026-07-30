@@ -1027,15 +1027,35 @@ do $$
 declare
   v_user uuid;
   v_goal uuid;
+  v_held uuid;
 begin
   insert into auth.users (id, email) values (gen_random_uuid(), 'wd-held@test.invalid') returning id into v_user;
   insert into public.savings_goals (user_id, goal_name) values (v_user, 'House') returning goal_id into v_goal;
 
-  -- No source, no deltas: passes here, and #588 is where it gets a source.
+  -- No source, no deltas, and HELD: the tracked #588 exception, allowed.
   insert into public.investment_transactions
     (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
      held_for_merge, merge_target_goal_id)
-  values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 50000000, true, v_goal);
+  values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 50000000, true, v_goal)
+  returning transaction_id into v_held;
+
+  -- The same row shape WITHOUT held_for_merge is an ordinary withdrawal with no
+  -- holding at all. The exception is for the held-for-merge pool, so nothing else
+  -- may wear it: an ordinary withdrawal must name what it draws on.
+  begin
+    insert into public.investment_transactions
+      (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
+    values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 50000000);
+    raise exception 'an ordinary withdrawal with no source must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- And an allowed held row cannot be turned into one by dropping the flag.
+  begin
+    update public.investment_transactions set held_for_merge = false where transaction_id = v_held;
+    raise exception 'clearing held_for_merge must re-measure the row, not wave it through';
+  exception when sqlstate '23514' then null;
+  end;
 
   -- No source but claiming principal: that is a withdrawal against nothing.
   begin

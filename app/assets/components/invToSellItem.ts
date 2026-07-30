@@ -16,6 +16,11 @@ export function invToSellItem(inv: InvRow): SellItem {
       gainPct: inv.fund.profitLossPercentage,
       fundId: inv.fund.fundId,
       purchasePrice: inv.fund.purchasePrice,
+      // What a sale actually takes out of the bucket (#587). Without it the sheet
+      // falls back to posting the PROCEEDS as principal, which the invariant
+      // refuses for any fund whose NAV has moved — i.e. every real goal-detail
+      // fund sale. The third surface onto the same sheet; the other two pass it.
+      costBasis: inv.fund.costBasis,
     }
   }
   const navPerUnit = inv.units && inv.units > 0 ? inv.value / inv.units : undefined
