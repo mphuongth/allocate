@@ -21,63 +21,50 @@ function stubFetch(handler: Handler) {
   return calls
 }
 
-const FUND_LIST = [{ id: 'inv-1' }, { id: 'inv-2' }, { id: 'inv-3' }]
-
 beforeEach(() => vi.unstubAllGlobals())
 afterEach(() => vi.unstubAllGlobals())
 
 describe('assignInvestmentToGoal — funds', () => {
-  it('moves every investment of the fund to the goal', async () => {
-    const calls = stubFetch((url) =>
-      url.includes('fund-investments?') ? { ok: true, body: FUND_LIST } : { ok: true })
+  // A fund row on the dashboard aggregates every investment of that fund, so the
+  // assign has to move all of them. It used to do that client-side: list the fund,
+  // then PATCH each id in a Promise.all (#589). The list was unscoped, so
+  // assigning the *Unallocated* row moved rows that belonged to other goals too,
+  // and a partial failure split the fund across goals. Both are now one request
+  // the server executes as a single scoped UPDATE.
+  it('moves the fund out of Unallocated in one scoped request', async () => {
+    const calls = stubFetch(() => ({ ok: true, body: { moved: 3 } }))
 
     await assignInvestmentToGoal('fund', 'fund-1', 'goal-1')
 
-    expect(calls[0].url).toBe('/api/v1/fund-investments?fund_id=fund-1')
-    // Every investment is PATCHed — a fund row on the dashboard aggregates them.
-    expect(calls.slice(1).map((c) => c.url)).toEqual([
-      '/api/v1/fund-investments/inv-1/goal',
-      '/api/v1/fund-investments/inv-2/goal',
-      '/api/v1/fund-investments/inv-3/goal',
-    ])
-    expect(calls.slice(1).every((c) => c.method === 'PATCH')).toBe(true)
-    expect(calls[1].body).toEqual({ goal_id: 'goal-1' })
+    expect(calls).toEqual([{
+      url: '/api/v1/fund-investments/assign',
+      method: 'POST',
+      // from_goal_id: null is the whole point — only unallocated rows move.
+      body: { fund_id: 'fund-1', from_goal_id: null, to_goal_id: 'goal-1' },
+    }])
   })
 
-  it('throws when the investment list cannot be read', async () => {
-    stubFetch((url) => (url.includes('fund-investments?') ? { ok: false } : { ok: true }))
+  it('never lists or PATCHes individual rows any more', async () => {
+    const calls = stubFetch(() => ({ ok: true, body: { moved: 1 } }))
+
+    await assignInvestmentToGoal('fund', 'fund-1', 'goal-1')
+
+    expect(calls.some((c) => c.url.includes('fund-investments?'))).toBe(false)
+    expect(calls.some((c) => c.method === 'PATCH')).toBe(false)
+  })
+
+  it('surfaces the message the server gave — a concurrent move, for instance', async () => {
+    stubFetch(() => ({ ok: false, body: { error: 'This fund has already been moved. Refresh and try again.' } }))
 
     await expect(assignInvestmentToGoal('fund', 'fund-1', 'goal-1'))
-      .rejects.toThrow(/failed to fetch fund investments/i)
+      .rejects.toThrow(/already been moved/i)
   })
 
-  // The dashboard shows one row per fund, so a fund that half-moved is a state
-  // the user cannot see or correct from the list. It has to surface as an error.
-  it('throws when only some of the investments move', async () => {
-    stubFetch((url) => {
-      if (url.includes('fund-investments?')) return { ok: true, body: FUND_LIST }
-      return { ok: !url.includes('inv-2') }
-    })
+  it('falls back to a generic message when the error body is unusable', async () => {
+    stubFetch(() => ({ ok: false, body: {} }))
 
     await expect(assignInvestmentToGoal('fund', 'fund-1', 'goal-1'))
       .rejects.toThrow(/failed to assign/i)
-  })
-
-  it('still issues the other requests when one fails — they are not sequenced', async () => {
-    const calls = stubFetch((url) => {
-      if (url.includes('fund-investments?')) return { ok: true, body: FUND_LIST }
-      return { ok: !url.includes('inv-1') }
-    })
-
-    await expect(assignInvestmentToGoal('fund', 'fund-1', 'goal-1')).rejects.toThrow()
-
-    expect(calls.filter((c) => c.method === 'PATCH')).toHaveLength(3)
-  })
-
-  it('accepts a fund with no investments as a no-op', async () => {
-    stubFetch((url) => (url.includes('fund-investments?') ? { ok: true, body: [] } : { ok: true }))
-
-    await expect(assignInvestmentToGoal('fund', 'fund-1', 'goal-1')).resolves.toBeUndefined()
   })
 })
 

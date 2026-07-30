@@ -317,7 +317,7 @@ describe('GoalDetailSheet — unassign from goal', () => {
     )
   })
 
-  it('fires PATCH on fund-investments/:id/goal with goal_id null when confirmed (fund row)', async () => {
+  it('moves the fund out of this goal only when confirmed (fund row)', async () => {
     const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
       if (url.includes('/api/v1/investment-transactions') && (!init || init.method === undefined || init.method === 'GET')) {
         return Promise.resolve({ ok: true, json: async () => ({ transactions: [mockTx] }) })
@@ -326,8 +326,8 @@ describe('GoalDetailSheet — unassign from goal', () => {
         // Bare array — matches the real route (the object shape hid the #467 no-op).
         return Promise.resolve({ ok: true, json: async () => [{ id: 'fi-1' }, { id: 'fi-2' }] })
       }
-      if (url.includes('/api/v1/fund-investments/') && init?.method === 'PATCH') {
-        return Promise.resolve({ ok: true, json: async () => ({}) })
+      if (url.includes('/api/v1/fund-investments/assign')) {
+        return Promise.resolve({ ok: true, json: async () => ({ moved: 2 }) })
       }
       return Promise.resolve({ ok: true, json: async () => ({}) })
     })
@@ -345,15 +345,14 @@ describe('GoalDetailSheet — unassign from goal', () => {
     const confirmBtn = screen.getByRole('button', { name: /^unassign$/i })
     await userEvent.click(confirmBtn)
 
-    // Each fund-investment under this fund must be PATCHed to goal_id: null
+    // One scoped move: this fund, out of THIS goal, back to Unallocated (#589).
     await waitFor(() => {
-      const patchCalls = (fetchMock.mock.calls as Array<[string, RequestInit | undefined]>).filter(
-        ([url, init]) => url.includes('/api/v1/fund-investments/') && init?.method === 'PATCH'
+      const moves = (fetchMock.mock.calls as Array<[string, RequestInit | undefined]>).filter(
+        ([url]) => url.includes('/api/v1/fund-investments/assign')
       )
-      expect(patchCalls.length).toBe(2)
-      patchCalls.forEach(([, init]) => {
-        expect(String(init?.body ?? '')).toContain('"goal_id":null')
-      })
+      expect(moves.length).toBe(1)
+      expect(JSON.parse(String(moves[0][1]?.body)))
+        .toEqual({ fund_id: 'fund-1', from_goal_id: 'goal-1', to_goal_id: null })
     })
     await waitFor(() => expect(onDataChanged).toHaveBeenCalled())
   })
@@ -690,10 +689,10 @@ describe('GoalDetailSheet — refreshKey triggers refetch', () => {
       if (url.includes('/api/v1/fund-investments?fund_id=')) {
         return Promise.resolve({ ok: true, json: async () => [{ id: 'fi-1' }] })
       }
-      if (url.includes('/api/v1/fund-investments/') && init?.method === 'PATCH') {
+      if (url.includes('/api/v1/fund-investments/assign')) {
         // Simulate that the unassign succeeded: the next GET will omit the tx
         assigned = false
-        return Promise.resolve({ ok: true, json: async () => ({}) })
+        return Promise.resolve({ ok: true, json: async () => ({ moved: 1 }) })
       }
       return Promise.resolve({ ok: true, json: async () => ({}) })
     })
