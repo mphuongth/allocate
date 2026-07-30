@@ -57,10 +57,21 @@ begin
   -- Deleting a source is an ordinary ledger action, and parent_transaction_id is
   -- ON DELETE SET NULL — so Postgres orphans the children with an UPDATE that
   -- lands right here. Measuring that update would refuse it (the row has just
-  -- lost the holding it drew on) and turn a plain delete into an error. The
-  -- leftover orphan is a shape this invariant would not let anyone CREATE;
-  -- cleaning those up as the source goes wants its own change.
+  -- lost the holding it drew on) and turn a plain delete into an error.
+  --
+  -- Only THAT may orphan a row. Detaching a withdrawal from a source that is
+  -- still there restores the holding to full value while the withdrawal is filed
+  -- under no key at all — the same escape the rest of this function exists to
+  -- close. The tell is the source itself: by the time the FK action fires, the
+  -- parent row is already deleted and invisible to this query.
   if tg_op = 'UPDATE' and old.parent_transaction_id is not null and new.parent_transaction_id is null then
+    if exists (select 1 from public.investment_transactions t
+                where t.transaction_id = old.parent_transaction_id) then
+      raise exception 'withdrawal cannot be detached from holding %, which still exists',
+        old.parent_transaction_id using errcode = 'check_violation';
+    end if;
+    -- The source is gone. The leftover orphan is a shape this invariant would not
+    -- let anyone CREATE; cleaning those up as the source goes is issue #607.
     return new;
   end if;
 

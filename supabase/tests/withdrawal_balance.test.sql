@@ -388,6 +388,18 @@ begin
 
   update public.investment_transactions set parent_transaction_id = v_snap where transaction_id = v_wd;
 
+  -- Detaching a withdrawal while its source is still there is not a deletion: the
+  -- holding comes back to full value and the withdrawal is filed under no key at
+  -- all. Only the FK's own ON DELETE SET NULL may orphan a row, and the tell is
+  -- that the source is already gone by then.
+  begin
+    update public.investment_transactions
+       set parent_transaction_id = null
+     where transaction_id = v_wd;
+    raise exception 'a withdrawal must not be detached from a source that still exists';
+  exception when sqlstate '23514' then null;
+  end;
+
   -- Deleting a source that has withdrawals is an ordinary ledger action. The FK
   -- is ON DELETE SET NULL, so Postgres orphans the children — an UPDATE that
   -- lands on this trigger. It must not turn a delete into an error.
