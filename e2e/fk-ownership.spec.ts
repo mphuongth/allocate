@@ -75,6 +75,17 @@ test.describe('FK ownership enforcement (#474)', () => {
     expect(res.status()).toBe(403)
   })
 
+  // ---- fund-investments/assign: to_goal_id ---------------------------------
+  // The scoped move writes goal_id onto every unallocated row of a fund, so an
+  // unchecked target would park the caller's own holdings under a stranger's goal
+  // and report a successful move (#589).
+  test('POST /api/v1/fund-investments/assign rejects a cross-user to_goal_id (403)', async ({ request }) => {
+    const res = await request.post('/api/v1/fund-investments/assign', {
+      data: { fund_id: ownFundId, from_goal_id: null, to_goal_id: foreign.goalId },
+    })
+    expect(res.status()).toBe(403)
+  })
+
   // ---- funds: dca_goal_id ---------------------------------------------------
   test('POST /api/funds rejects a cross-user dca_goal_id (403)', async ({ request }) => {
     const res = await request.post('/api/funds', {

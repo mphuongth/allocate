@@ -1,11 +1,15 @@
 import { test, expect } from '@playwright/test'
 import * as api from './helpers/api'
 
-// The fund-unassign flow (goalActions.unassignInvestment) reads GET
-// /fund-investments and PATCHes each row's goal back to null. That GET returns a
-// BARE ARRAY — a wrong read there silently no-ops the unassign. Drive the real
-// route contract end-to-end so a unit mock's shape can't hide it again (#467).
-test.describe('fund-investments unassign contract (#467)', () => {
+// Moving a fund between goal buckets is now one scoped UPDATE — POST
+// /fund-investments/assign (#589). What a unit test cannot check is whether that
+// statement's WHERE clause really selects the bucket we mean against a live
+// database, so the scoping cases run here.
+//
+// GET /fund-investments still backs the fund detail views and returns a BARE
+// ARRAY; a wrong read there once silently no-op'd the unassign (#467), so its
+// shape stays pinned too.
+test.describe('fund-investments goal-move contract (#467, #589)', () => {
   let goalId: string
   let fundId: string
   let txId: string
@@ -51,8 +55,60 @@ test.describe('fund-investments unassign contract (#467)', () => {
     expect(rowAfter.goal_id).toBeNull()
   })
 
+  // The scoped move is one UPDATE statement inside PostgREST, so its WHERE clause
+  // is the only thing standing between an assign and another goal's rows (#589).
+  // A unit test can assert the filters were *asked for*; only a real database
+  // shows that they select what we think they do.
+  test('assigning the Unallocated bucket moves only the unallocated rows', async ({ request }) => {
+    const goalB = await api.createGoal({ goal_name: `E2E FundAssign B ${Date.now()}` })
+    const goalC = await api.createGoal({ goal_name: `E2E FundAssign C ${Date.now()}` })
+    // Same fund in goalA (txId, from beforeEach), in goalB, and twice unallocated.
+    const txB = await api.createTransaction({
+      asset_type: 'fund', fund_id: fundId, goal_id: goalB.goal_id,
+      amount_vnd: 1_000_000, units: 50, unit_price: 20_000, investment_date: '2026-02-01',
+    })
+    const free1 = await api.createTransaction({
+      asset_type: 'fund', fund_id: fundId,
+      amount_vnd: 600_000, units: 30, unit_price: 20_000, investment_date: '2026-03-01',
+    })
+    const free2 = await api.createTransaction({
+      asset_type: 'fund', fund_id: fundId,
+      amount_vnd: 400_000, units: 20, unit_price: 20_000, investment_date: '2026-04-01',
+    })
+    try {
+      const res = await request.post('/api/v1/fund-investments/assign', {
+        data: { fund_id: fundId, from_goal_id: null, to_goal_id: goalC.goal_id },
+      })
+      expect(res.status()).toBe(200)
+      expect((await res.json()).moved).toBe(2)
+
+      const rows = await (await request.get(`/api/v1/fund-investments?fund_id=${fundId}`)).json()
+      const goalOf = (id: string) => rows.find((r: { id: string }) => r.id === id).goal_id
+      // Both unallocated rows moved together...
+      expect(goalOf(free1.transaction_id)).toBe(goalC.goal_id)
+      expect(goalOf(free2.transaction_id)).toBe(goalC.goal_id)
+      // ...and the rows that already belonged to a goal stayed there. The old
+      // client-side loop moved these too.
+      expect(goalOf(txId)).toBe(goalId)
+      expect(goalOf(txB.transaction_id)).toBe(goalB.goal_id)
+
+      // Nothing unallocated is left, so a stale repeat is a conflict, not a
+      // silent success the dashboard can't explain.
+      const repeat = await request.post('/api/v1/fund-investments/assign', {
+        data: { fund_id: fundId, from_goal_id: null, to_goal_id: goalC.goal_id },
+      })
+      expect(repeat.status()).toBe(409)
+    } finally {
+      await api.deleteTransaction(free1.transaction_id)
+      await api.deleteTransaction(free2.transaction_id)
+      await api.deleteTransaction(txB.transaction_id)
+      await api.deleteGoal(goalB.goal_id)
+      await api.deleteGoal(goalC.goal_id)
+    }
+  })
+
   test('unassigning a fund from one goal leaves its other-goal rows intact', async ({ request }) => {
-    // Same fund split across two goals. The goal_id-scoped query must clear only
+    // Same fund split across two goals. The goal-scoped move must clear only
     // goalA's row, not goalB's (#467 P1).
     const goalB = await api.createGoal({ goal_name: `E2E FundUnassign B ${Date.now()}` })
     const txB = await api.createTransaction({
@@ -60,12 +116,11 @@ test.describe('fund-investments unassign contract (#467)', () => {
       amount_vnd: 1_000_000, units: 50, unit_price: 20_000, investment_date: '2026-02-01',
     })
     try {
-      // Scoped fetch returns only this goal's row.
-      const scoped = await (await request.get(`/api/v1/fund-investments?fund_id=${fundId}&goal_id=${goalId}`)).json()
-      expect(scoped.map((r: { id: string }) => r.id)).toEqual([txId])
-
-      const patch = await request.patch(`/api/v1/fund-investments/${txId}/goal`, { data: { goal_id: null } })
-      expect(patch.ok()).toBeTruthy()
+      const res = await request.post('/api/v1/fund-investments/assign', {
+        data: { fund_id: fundId, from_goal_id: goalId, to_goal_id: null },
+      })
+      expect(res.status()).toBe(200)
+      expect((await res.json()).moved).toBe(1)
 
       const all = await (await request.get(`/api/v1/fund-investments?fund_id=${fundId}`)).json()
       expect(all.find((r: { id: string }) => r.id === txId).goal_id).toBeNull()

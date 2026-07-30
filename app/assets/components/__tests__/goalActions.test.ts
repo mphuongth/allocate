@@ -48,28 +48,23 @@ describe('goalActions (#467)', () => {
     expect(await unholdTransaction('tx1')).toEqual({ ok: false, code: 'settlement_consumed' })
   })
 
-  // GET /fund-investments returns a BARE ARRAY (matches the real route), not
-  // { investments: [...] } — a wrong mock here would hide the #467 no-op bug.
-  it('unassignInvestment (fund) scopes the query to the goal and PATCHes each row back to null', async () => {
-    const calls = mockFetch((url, init) => {
-      if (url.includes('/fund-investments?fund_id=')) return { ok: true, body: [{ id: 'fi1' }, { id: 'fi2' }] }
-      if (init?.method === 'PATCH') return { ok: true }
-      return { ok: false }
-    })
+  // A fund unassign used to list the goal's rows and PATCH each one back to null
+  // in a Promise.all — a partial failure left the fund split between the goal and
+  // Unallocated (#589). It is now the same single scoped UPDATE the assign uses,
+  // in the opposite direction, so the two can't interleave into a split fund.
+  it('unassignInvestment (fund) moves the fund out of the goal in one scoped request', async () => {
+    const calls = mockFetch(() => ({ ok: true, body: { moved: 2 } }))
     expect(await unassignInvestment({ id: 'row1', fund: { fundId: 'f1' } }, 'goal-1')).toBe(true)
-    // Scoped to the goal so a fund split across goals isn't cleared elsewhere.
-    expect(calls[0].url).toBe('/api/v1/fund-investments?fund_id=f1&goal_id=goal-1')
-    const patched = calls.filter(c => c.init?.method === 'PATCH').map(c => c.url)
-    expect(patched).toEqual(['/api/v1/fund-investments/fi1/goal', '/api/v1/fund-investments/fi2/goal'])
-    expect(JSON.parse(String(calls.find(c => c.init?.method === 'PATCH')!.init!.body))).toEqual({ goal_id: null })
+    expect(calls).toHaveLength(1)
+    expect(calls[0].url).toBe('/api/v1/fund-investments/assign')
+    expect(calls[0].init?.method).toBe('POST')
+    // Scoped to this goal so a fund split across goals isn't cleared elsewhere.
+    expect(JSON.parse(String(calls[0].init?.body)))
+      .toEqual({ fund_id: 'f1', from_goal_id: 'goal-1', to_goal_id: null })
   })
 
-  it('unassignInvestment (fund) returns false when any PATCH fails', async () => {
-    mockFetch((url, init) => {
-      if (url.includes('/fund-investments?fund_id=')) return { ok: true, body: [{ id: 'fi1' }, { id: 'fi2' }] }
-      if (init?.method === 'PATCH') return { ok: url.includes('fi1') }
-      return { ok: false }
-    })
+  it('unassignInvestment (fund) returns false when the move is refused', async () => {
+    mockFetch(() => ({ ok: false, body: { error: 'nothing left to move' } }))
     expect(await unassignInvestment({ id: 'row1', fund: { fundId: 'f1' } }, 'goal-1')).toBe(false)
   })
 
@@ -81,8 +76,8 @@ describe('goalActions (#467)', () => {
     expect(JSON.parse(String(calls[0].init?.body))).toEqual({ goal_id: null })
   })
 
-  it('unassignInvestment (fund) returns false when the fund-investments fetch fails', async () => {
-    mockFetch(() => ({ ok: false }))
+  it('unassignInvestment (fund) returns false when the request never lands', async () => {
+    global.fetch = vi.fn(async () => { throw new Error('offline') }) as unknown as typeof fetch
     expect(await unassignInvestment({ id: 'row1', fund: { fundId: 'f1' } }, 'goal-1')).toBe(false)
   })
 })

@@ -6,10 +6,8 @@
 // Callers keep their own UI concerns — success flashes, closing, and refresh
 // sequencing (see #567) — and only await this.
 //
-// Deliberately *not* shared with `unassignInvestment` in goalActions.ts: that
-// scopes its fund query by goal_id, because the same fund can be split across
-// goals and an unfiltered query would clear the other goals' rows too (#467).
-// Same-looking requests, different operation.
+// The fund direction shares its endpoint with `unassignInvestment` in
+// goalActions.ts — same scoped move, opposite direction (#589).
 
 export type AssignKind = 'fund' | 'nonFund'
 
@@ -29,22 +27,19 @@ export async function assignInvestmentToGoal(
 }
 
 async function assignFund(fundId: string, goalId: string): Promise<void> {
-  // A dashboard fund row aggregates every investment in that fund, so assigning
-  // the row means moving all of them.
-  const res = await fetch(`/api/v1/fund-investments?fund_id=${fundId}`)
-  if (!res.ok) throw new Error('Failed to fetch fund investments')
-  const investments = await res.json() as Array<{ id: string }>
+  // Every fund assign starts from the Unallocated section, so the source bucket
+  // is Unallocated — `from_goal_id: null`. This used to list the fund and PATCH
+  // each row, which moved other goals' rows too and could half-succeed (#589);
+  // the route now does the whole move as one scoped statement.
+  const res = await fetch('/api/v1/fund-investments/assign', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fund_id: fundId, from_goal_id: null, to_goal_id: goalId }),
+  })
+  if (res.ok) return
 
-  // Issued together rather than in sequence: they are independent, and the user
-  // is waiting on a success flash. A partial move still throws — the list shows
-  // one row per fund, so a half-moved fund is a state the user can't see.
-  await Promise.all(investments.map((inv) =>
-    fetch(`/api/v1/fund-investments/${inv.id}/goal`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ goal_id: goalId }),
-    }).then((r) => { if (!r.ok) throw new Error('Failed to assign') })
-  ))
+  const { error } = await res.json().catch(() => ({ error: null })) as { error?: string | null }
+  throw new Error(error ?? 'Failed to assign')
 }
 
 async function assignNonFund(transactionId: string, goalId: string): Promise<void> {
