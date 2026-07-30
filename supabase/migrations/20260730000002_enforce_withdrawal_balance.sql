@@ -114,8 +114,19 @@ begin
        and w.transaction_id <> new.transaction_id;   -- an UPDATE re-measures without itself
 
   else
-    -- Nothing identifiable to draw down: a held-for-merge settlement with no
-    -- source is exactly this shape, and making it source-backed is #588's job.
+    -- Nothing identifiable to draw down. A row taking principal or units out of no
+    -- holding at all is not a withdrawal — buildWithdrawalMaps files it under
+    -- neither key, so it subtracts from nothing while the record claims cash left.
+    -- Reachable by editing a fund sell's asset_type off 'fund' (the fund_id stays,
+    -- but the row leaves the fund bucket), which is why asset_type fires this
+    -- trigger: running is not enough, the new shape has to be refused.
+    if coalesce(new.principal_withdrawn, 0) > 0 or coalesce(new.units_withdrawn, 0) > 0 then
+      raise exception 'withdrawal draws on no holding: it has neither a parent transaction nor a fund'
+        using errcode = 'check_violation';
+    end if;
+    -- Carrying neither is a settlement row with nothing to measure — a
+    -- held-for-merge with no source is exactly that shape, and giving it one is
+    -- #588's job.
     return new;
   end if;
 
@@ -148,12 +159,16 @@ comment on function public.enforce_withdrawal_within_balance() is
 
 drop trigger if exists investment_transactions_withdrawal_balance on public.investment_transactions;
 create trigger investment_transactions_withdrawal_balance
-  -- transaction_type is in the list because the WHEN clause reads it: without it,
-  -- a row could be staged as an investment carrying principal_withdrawn (which
-  -- draws nothing down, so it is not measured) and then turned into a withdrawal
-  -- by a one-column update that never fires this trigger.
+  -- Every column that decides WHICH balance the row is measured against, plus the
+  -- two that say how much it takes:
+  --   • transaction_type — the WHEN clause reads it, so without it a row could be
+  --     staged as an investment carrying principal_withdrawn (an investment draws
+  --     nothing down, so it is not measured) and then activated by a one-column
+  --     update that never fired this trigger.
+  --   • asset_type — it picks the fund-bucket branch over the parent branch.
   before insert or update of
-    transaction_type, principal_withdrawn, units_withdrawn, parent_transaction_id, fund_id, goal_id
+    transaction_type, asset_type, principal_withdrawn, units_withdrawn,
+    parent_transaction_id, fund_id, goal_id
   on public.investment_transactions
   for each row
   when (new.transaction_type = 'withdrawal')

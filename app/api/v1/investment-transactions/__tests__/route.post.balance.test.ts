@@ -112,6 +112,18 @@ describe('POST /api/v1/investment-transactions — remaining balance', () => {
     expect(res.status).not.toBe(500)
   })
 
+  // The trigger's other refusal: principal taken out of a row attached to no
+  // holding, which subtracts from nothing while claiming cash left.
+  it('answers 400 when the withdrawal draws on no holding', async () => {
+    h.insertResult = balanceRefusal(
+      'withdrawal draws on no holding: it has neither a parent transaction nor a fund')
+
+    const res = await call({ ...SELL, parent_transaction_id: undefined })
+
+    expect(res.status).toBe(400)
+    await expect(res.json()).resolves.toEqual({ error: 'A withdrawal must be attached to a holding.' })
+  })
+
   it('still reports an unrelated insert failure as a 500', async () => {
     h.insertResult = { data: null, error: { code: '08006', message: 'connection failure' } }
 

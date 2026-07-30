@@ -248,6 +248,7 @@ declare
   v_fund  uuid;
   v_fat   uuid;
   v_staged uuid;
+  v_sold  uuid;
 begin
   insert into auth.users (id, email) values (gen_random_uuid(), 'wd-bucket@test.invalid') returning id into v_user;
   insert into public.savings_goals (user_id, goal_name) values (v_user, 'House') returning goal_id into v_goal;
@@ -287,6 +288,36 @@ begin
        set transaction_type = 'withdrawal'
      where transaction_id = v_staged;
     raise exception 'becoming a withdrawal must be measured too';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- 3) Changing asset_type off 'fund' takes the row out of the fund bucket
+  --    (buildWithdrawalMaps stops keying it by goal/fund) and, with no parent, it
+  --    then subtracts from nothing at all: the sold units come back into net worth
+  --    while the withdrawal record stays. Adding asset_type to the trigger's
+  --    columns only gets the trigger to run — what refuses the change is that a
+  --    withdrawal drawing on NO holding is not a withdrawal.
+  insert into public.investment_transactions (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal_b, v_fund, 'fund', 'investment', '2026-01-01', 2000000, 100, 20000);
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, principal_withdrawn, units_withdrawn)
+  values (v_user, v_goal_b, v_fund, 'fund', 'withdrawal', '2026-02-01', 2000000, 2000000, 100)
+  returning transaction_id into v_sold;
+
+  begin
+    update public.investment_transactions
+       set asset_type = 'bank'
+     where transaction_id = v_sold;
+    raise exception 'a withdrawal must not be able to stop drawing on anything';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- Same shape, created directly: principal out of thin air, attached to nothing.
+  begin
+    insert into public.investment_transactions
+      (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, principal_withdrawn)
+    values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 7000000, 7000000);
+    raise exception 'a withdrawal with no holding to draw on must be refused';
   exception when sqlstate '23514' then null;
   end;
 

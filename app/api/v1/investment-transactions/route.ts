@@ -302,6 +302,12 @@ export async function POST(request: NextRequest) {
     if (error.message?.includes('exceeds the remaining balance')) {
       return NextResponse.json({ error: 'Withdrawal exceeds the remaining balance of this holding.' }, { status: 400 })
     }
+    // The same trigger's other refusal: principal or units taken out of a row that
+    // draws on no holding at all. No client can build that from the UI, but it is a
+    // bad request rather than a server fault, so say so.
+    if (error.message?.includes('draws on no holding')) {
+      return NextResponse.json({ error: 'A withdrawal must be attached to a holding.' }, { status: 400 })
+    }
     console.error('investment-transactions POST insert failed', error.message)
     return NextResponse.json({ error: 'Failed to create transaction' }, { status: 500 })
   }
