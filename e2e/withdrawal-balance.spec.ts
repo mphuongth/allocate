@@ -154,6 +154,58 @@ test.describe('withdrawal balance enforcement (#587)', () => {
     }
   })
 
+  // Assigning a fund moves its purchases AND its sells to the new goal in one
+  // statement (#589). A row-level check saw that half-applied, so whether it
+  // passed depended on heap order — and editing the buy is enough to flip it.
+  // This is the plain sequence a user does: buy, sell some, fix the buy, then
+  // assign the fund to a goal.
+  test('a fund with sell history can still be assigned to a goal', async ({ request }) => {
+    const fund = await api.createFund({
+      name: `E2E WdBalance Assign ${Date.now()}`,
+      code: `WBA${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+      fund_type: 'equity',
+      nav: 20_000,
+    })
+    const target = await api.createGoal({ goal_name: `E2E WdBalance Target ${Date.now()}` })
+    const buy = await api.createTransaction({
+      asset_type: 'fund', fund_id: fund.id,
+      amount_vnd: 2_000_000, units: 100, unit_price: 20_000, investment_date: '2026-01-01',
+    })
+    try {
+      const sell = await request.post('/api/v1/investment-transactions', {
+        data: {
+          transaction_type: 'withdrawal', asset_type: 'fund', fund_id: fund.id,
+          investment_date: '2026-02-01', amount_vnd: 600_000,
+          units_withdrawn: 30, principal_withdrawn: 600_000, goal_id: null,
+          notes: 'E2E wd balance fund',
+        },
+      })
+      expect(sell.status()).toBe(201)
+
+      // Editing the purchase rewrites it later in the heap, so the assign's single
+      // UPDATE reaches the sell first — the order that used to fail.
+      const edit = await request.put(`/api/v1/investment-transactions/${buy.transaction_id}`, {
+        data: {
+          asset_type: 'fund', fund_id: fund.id, investment_date: '2026-01-02',
+          amount_vnd: 2_000_000, units: 100, unit_price: 20_000,
+        },
+      })
+      expect(edit.ok()).toBeTruthy()
+
+      const assign = await request.post('/api/v1/fund-investments/assign', {
+        data: { fund_id: fund.id, from_goal_id: null, to_goal_id: target.goal_id },
+      })
+      expect(assign.status()).toBe(200)
+      // The sell moved with its purchases — the bucket did not split.
+      expect((await assign.json()).moved).toBe(2)
+    } finally {
+      await api.deleteTransactionCascade(buy.transaction_id)
+      await api.deleteAllTransactionsByNotes('E2E wd balance fund')
+      await api.deleteFund(fund.id)
+      await api.deleteGoal(target.goal_id)
+    }
+  })
+
   // A fund sell has no parent row: its balance is the (goal, fund) bucket the
   // dashboard aggregates. Units held for one goal must not fund another's sell.
   test('a fund sell draws only on the goal it was picked from', async ({ request }) => {

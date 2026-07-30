@@ -499,4 +499,129 @@ begin
 end;
 $$;
 
+-- ── relocating a bucket is a multi-row move, and row order must not decide it ─
+-- POST /api/v1/fund-investments/assign moves a fund's purchases AND its sells to
+-- the new goal in ONE update. A row trigger sees that statement half-applied, so
+-- whether the destination bucket looked complete depended on heap order: after an
+-- ordinary edit of the purchase (which rewrites it to the end of the heap), the
+-- sell was visited first, measured against an empty destination, and an everyday
+-- assign returned 500. Deleting a goal does the same thing through
+-- ON DELETE SET NULL. The relocation check is therefore deferred to the end of
+-- the statement — but it still has to refuse a sell moved somewhere on its own.
+do $$
+declare
+  v_user uuid;
+  v_a    uuid;
+  v_b    uuid;
+  v_fund uuid;
+  v_buy  uuid;
+  v_sell uuid;
+begin
+  insert into auth.users (id, email) values (gen_random_uuid(), 'wd-move@test.invalid') returning id into v_user;
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'A') returning goal_id into v_a;
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'B') returning goal_id into v_b;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Move Fund', 'MVF', 'equity', 20000) returning id into v_fund;
+
+  insert into public.investment_transactions (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_a, v_fund, 'fund', 'investment', '2026-01-01', 2000000, 100, 20000) returning transaction_id into v_buy;
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, principal_withdrawn, units_withdrawn)
+  values (v_user, v_a, v_fund, 'fund', 'withdrawal', '2026-02-01', 600000, 600000, 30) returning transaction_id into v_sell;
+
+  -- Editing the purchase rewrites it to the end of the heap, so the bulk update
+  -- below visits the SELL first. This is the order that used to fail.
+  update public.investment_transactions set notes = 'edited' where transaction_id = v_buy;
+
+  update public.investment_transactions
+     set goal_id = v_b, updated_at = now()
+   where user_id = v_user and fund_id = v_fund and asset_type = 'fund' and goal_id = v_a;
+
+  if (select count(*) from public.investment_transactions
+       where fund_id = v_fund and goal_id = v_b) <> 2 then
+    raise exception 'the whole bucket should have moved';
+  end if;
+
+  -- Deleting the goal relocates the bucket to Unallocated the same way.
+  delete from public.savings_goals where goal_id = v_b;
+
+  if (select count(*) from public.investment_transactions
+       where fund_id = v_fund and goal_id is null) <> 2 then
+    raise exception 'deleting the goal should have moved the whole bucket to unallocated';
+  end if;
+
+  -- But a sell moved on its own still has to be refused — the units stay in one
+  -- bucket while the sale is filed against another. Deferred means the error
+  -- arrives at the end of the statement, not during it.
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'C') returning goal_id into v_a;
+  begin
+    update public.investment_transactions set goal_id = v_a where transaction_id = v_sell;
+    raise exception 'moving a lone sell into a bucket that holds nothing must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  raise notice 'withdrawal bucket relocation: ok';
+end;
+$$;
+
+-- ── a fund sell records both deltas, and losing a fund re-measures the parent ─
+do $$
+declare
+  v_user uuid;
+  v_goal uuid;
+  v_fund uuid;
+  v_small uuid;
+  v_sell  uuid;
+begin
+  insert into auth.users (id, email) values (gen_random_uuid(), 'wd-deltas@test.invalid') returning id into v_user;
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'House') returning goal_id into v_goal;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Deltas Fund', 'DLF', 'equity', 20000) returning id into v_fund;
+
+  insert into public.investment_transactions (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal, v_fund, 'fund', 'investment', '2026-01-01', 20000000, 1000, 20000);
+
+  -- Units but no principal: the units fall while the cost basis stays, so P&L is
+  -- wrong. Principal but no units: the overview bails on `units <= 0` and skips
+  -- the subtraction entirely, leaving the holding untouched while the balance was
+  -- consumed. Neither is a shape the sell sheets produce.
+  begin
+    insert into public.investment_transactions
+      (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units_withdrawn)
+    values (v_user, v_goal, v_fund, 'fund', 'withdrawal', '2026-02-01', 1000000, 50);
+    raise exception 'a fund sell without principal_withdrawn must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  begin
+    insert into public.investment_transactions
+      (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, principal_withdrawn)
+    values (v_user, v_goal, v_fund, 'fund', 'withdrawal', '2026-02-01', 1000000, 1000000);
+    raise exception 'a fund sell without units_withdrawn must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- A sell carrying BOTH a fund and a parent is measured against the fund bucket
+  -- (mirroring buildWithdrawalMaps). Delete the fund and the same row starts
+  -- drawing on its parent instead — which may be far smaller, so losing the fund
+  -- has to re-measure rather than wave the row through.
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
+  values (v_user, v_goal, 'bank', 'investment', '2026-01-01', 1000000) returning transaction_id into v_small;
+
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_goal, v_fund, 'fund', 'withdrawal', '2026-02-01', 10000000, v_small, 10000000, 500)
+  returning transaction_id into v_sell;
+
+  begin
+    delete from public.funds where id = v_fund;
+    raise exception 'losing the fund must re-measure the sell against its parent';
+  exception when sqlstate '23514' then null;
+  end;
+
+  raise notice 'fund sell deltas + re-measure on fund loss: ok';
+end;
+$$;
+
 rollback;

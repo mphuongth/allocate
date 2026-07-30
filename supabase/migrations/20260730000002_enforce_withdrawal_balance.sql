@@ -28,12 +28,27 @@
 --   • fund — a sell has no parent row; the overview aggregates funds per
 --     (goal_id, fund_id), so that bucket is the balance a sell draws down.
 --
+-- Why the check runs from TWO triggers. A new claim (an insert, or an edit that
+-- raises the amounts) is measured IMMEDIATELY: the error points at the statement
+-- that caused it, and the lock is then held for the rest of the transaction.
+-- But MOVING a withdrawal between buckets is a multi-row change —
+-- POST /api/v1/fund-investments/assign relocates a fund's purchases AND its sells
+-- in one UPDATE, and deleting a goal does the same through ON DELETE SET NULL. A
+-- row-level trigger sees such a statement half-applied, so whether the destination
+-- bucket looked complete depended on heap order: an ordinary "buy, sell, edit the
+-- buy, assign the fund to a goal" failed. Relocations are therefore measured by a
+-- DEFERRED constraint trigger, once the whole statement has landed and the
+-- destination bucket is whatever it is going to be.
+--
 -- Not covered here, deliberately: lowering a *source's* amount_vnd below what has
 -- already been withdrawn (an edit, not a withdrawal) is the mirror hole and wants
 -- its own guard — collapse and renewal both rewrite amounts mid-transaction, so
 -- checking them needs care this change doesn't have room for.
-create or replace function public.enforce_withdrawal_within_balance()
-returns trigger
+
+-- The measurement itself, so the two triggers below share one implementation
+-- instead of drifting apart. Raises check_violation; returns quietly otherwise.
+create or replace function public.check_withdrawal_balance(wd public.investment_transactions)
+returns void
 language plpgsql
 security definer
 set search_path = ''
@@ -50,52 +65,17 @@ declare
   v_left          bigint;
   v_left_units    numeric;
   v_parent_type   text;
-  v_parent_asset  text;
 begin
-  if new.transaction_type is distinct from 'withdrawal' then return new; end if;
+  if wd.transaction_type is distinct from 'withdrawal' then return; end if;
 
   -- A negative withdrawal runs the ledger backwards: it ADDS to the holding and
   -- banks a credit the next withdrawal can spend (the sums below are signed, and
   -- so is lib/depositValuation's subtraction). Nothing in the schema stops one, so
   -- the invariant does — before anything is measured, since a negative amount
   -- would poison the measurement itself.
-  if coalesce(new.principal_withdrawn, 0) < 0 or coalesce(new.units_withdrawn, 0) < 0 then
+  if coalesce(wd.principal_withdrawn, 0) < 0 or coalesce(wd.units_withdrawn, 0) < 0 then
     raise exception 'withdrawal amounts cannot be negative (principal %, units %)',
-      new.principal_withdrawn, new.units_withdrawn using errcode = 'check_violation';
-  end if;
-
-  -- Deleting a source is an ordinary ledger action, and parent_transaction_id is
-  -- ON DELETE SET NULL — so Postgres orphans the children with an UPDATE that
-  -- lands right here. Measuring that update would refuse it (the row has just
-  -- lost the holding it drew on) and turn a plain delete into an error.
-  --
-  -- Only THAT may orphan a row. Detaching a withdrawal from a source that is
-  -- still there restores the holding to full value while the withdrawal is filed
-  -- under no key at all — the same escape the rest of this function exists to
-  -- close. The tell is the source itself: by the time the FK action fires, the
-  -- parent row is already deleted and invisible to this query.
-  -- Both links a withdrawal hangs on are ON DELETE SET NULL, so both deletions
-  -- arrive here the same way: the deposit (parent_transaction_id) and the fund
-  -- (fund_id, which a sell is keyed by).
-  if tg_op = 'UPDATE' then
-    if old.parent_transaction_id is not null and new.parent_transaction_id is null then
-      if exists (select 1 from public.investment_transactions t
-                  where t.transaction_id = old.parent_transaction_id) then
-        raise exception 'withdrawal cannot be detached from holding %, which still exists',
-          old.parent_transaction_id using errcode = 'check_violation';
-      end if;
-      -- The source is gone. The leftover orphan is a shape this invariant would
-      -- not let anyone CREATE; cleaning those up as the source goes is issue #607.
-      return new;
-    end if;
-
-    if old.fund_id is not null and new.fund_id is null then
-      if exists (select 1 from public.funds f where f.id = old.fund_id) then
-        raise exception 'withdrawal cannot be detached from fund %, which still exists',
-          old.fund_id using errcode = 'check_violation';
-      end if;
-      return new;   -- the fund was deleted; same story as above
-    end if;
+      wd.principal_withdrawn, wd.units_withdrawn using errcode = 'check_violation';
   end if;
 
   -- The branch order is not a preference: it MIRRORS lib/withdrawalProgress, which
@@ -103,7 +83,17 @@ begin
   -- parent. Measuring such a row against a parent instead would check a balance
   -- nothing draws down — a fat holding in one goal waving through a phantom fund
   -- sell in another, since the API accepts both fields on one row.
-  if new.asset_type = 'fund' and new.fund_id is not null then
+  if wd.asset_type = 'fund' and wd.fund_id is not null then
+    -- A fund sell moves BOTH ledger deltas or it disagrees with the valuation:
+    -- with no units the overview skips the whole subtraction (it bails on
+    -- `wd.units <= 0`, so the cost basis is never removed either) and the holding
+    -- keeps its full value; with no principal the units fall while the cost basis
+    -- stays, and P&L is wrong. Neither is a shape the sheets produce.
+    if coalesce(wd.units_withdrawn, 0) <= 0 or coalesce(wd.principal_withdrawn, 0) <= 0 then
+      raise exception 'a fund sell must record both units_withdrawn and principal_withdrawn (got % units, % principal)',
+        wd.units_withdrawn, wd.principal_withdrawn using errcode = 'check_violation';
+    end if;
+
     -- Both sides of the bucket carry `asset_type = 'fund'`, because that is what
     -- the valuation counts: a row whose asset_type was edited off 'fund' keeps its
     -- fund_id (the PUT clears fund_id only when that field is sent) but is valued
@@ -116,11 +106,11 @@ begin
     -- sell. Renewal snapshots are history copies, not holdings.
     perform 1
       from public.investment_transactions t
-     where t.user_id = new.user_id
-       and t.fund_id = new.fund_id
+     where t.user_id = wd.user_id
+       and t.fund_id = wd.fund_id
        and t.asset_type = 'fund'
        and t.transaction_type = 'investment'
-       and t.goal_id is not distinct from new.goal_id
+       and t.goal_id is not distinct from wd.goal_id
        and t.renewed_from_transaction_id is null
        and t.units is not null
      order by t.transaction_id      -- a stable lock order; concurrent sells can't deadlock
@@ -129,37 +119,37 @@ begin
     select coalesce(sum(t.amount_vnd), 0), coalesce(sum(t.units), 0)
       into v_principal, v_units
       from public.investment_transactions t
-     where t.user_id = new.user_id
-       and t.fund_id = new.fund_id
+     where t.user_id = wd.user_id
+       and t.fund_id = wd.fund_id
        and t.asset_type = 'fund'
        and t.transaction_type = 'investment'
-       and t.goal_id is not distinct from new.goal_id
+       and t.goal_id is not distinct from wd.goal_id
        and t.renewed_from_transaction_id is null
        and t.units is not null;
 
     select coalesce(sum(w.principal_withdrawn), 0), coalesce(sum(w.units_withdrawn), 0)
       into v_out_principal, v_out_units
       from public.investment_transactions w
-     where w.user_id = new.user_id
-       and w.fund_id = new.fund_id
+     where w.user_id = wd.user_id
+       and w.fund_id = wd.fund_id
        and w.asset_type = 'fund'
        and w.transaction_type = 'withdrawal'
-       and w.goal_id is not distinct from new.goal_id
-       and w.transaction_id <> new.transaction_id;
+       and w.goal_id is not distinct from wd.goal_id
+       and w.transaction_id <> wd.transaction_id;   -- measured without itself
 
-  elsif new.parent_transaction_id is not null then
+  elsif wd.parent_transaction_id is not null then
     -- Bank / gold / stock: one source row. Lock it before measuring it, so two
     -- concurrent withdrawals of the same deposit serialize here.
-    select t.amount_vnd, t.units, t.transaction_type, t.asset_type
-      into v_principal, v_units, v_parent_type, v_parent_asset
+    select t.amount_vnd, t.units, t.transaction_type
+      into v_principal, v_units, v_parent_type
       from public.investment_transactions t
-     where t.transaction_id = new.parent_transaction_id
-       and t.user_id = new.user_id
+     where t.transaction_id = wd.parent_transaction_id
+       and t.user_id = wd.user_id
        for update;
     -- A parent that isn't the writer's own is the ownership trigger's refusal to
     -- make (#474 / #525); staying quiet here keeps that message the one the user
     -- sees instead of a confusing "no balance".
-    if not found then return new; end if;
+    if not found then return; end if;
 
     -- A withdrawal is not a holding, so parenting to one invents a balance out of
     -- money that already left. Renewal snapshots ARE valid parents on purpose:
@@ -171,63 +161,127 @@ begin
     -- the goal/fund map, which never consults parentWdMap), so it is an UNCOUNTED
     -- withdrawal rather than an overdraw — a valuation gap that predates this
     -- change, and one supabase/tests/dca_seeding_heal.test.sql treats as data that
-    -- exists. Bounding it by the parent's own principal, as below, is the most
-    -- this invariant can honestly say about it.
+    -- exists (issue #606). Bounding it by the parent's own principal, as below, is
+    -- the most this invariant can honestly say about it.
     if v_parent_type is distinct from 'investment' then
       raise exception 'withdrawal draws on no holding: its parent % is not an investment',
-        new.parent_transaction_id using errcode = 'check_violation';
+        wd.parent_transaction_id using errcode = 'check_violation';
     end if;
 
     select coalesce(sum(w.principal_withdrawn), 0), coalesce(sum(w.units_withdrawn), 0)
       into v_out_principal, v_out_units
       from public.investment_transactions w
-     where w.parent_transaction_id = new.parent_transaction_id
+     where w.parent_transaction_id = wd.parent_transaction_id
        and w.transaction_type = 'withdrawal'
-       and w.transaction_id <> new.transaction_id;   -- an UPDATE re-measures without itself
+       and w.transaction_id <> wd.transaction_id;
 
   else
     -- Nothing identifiable to draw down. A row taking principal or units out of no
     -- holding at all is not a withdrawal — buildWithdrawalMaps files it under
     -- neither key, so it subtracts from nothing while the record claims cash left.
     -- Reachable by editing a fund sell's asset_type off 'fund' (the fund_id stays,
-    -- but the row leaves the fund bucket), which is why asset_type fires this
+    -- but the row leaves the fund bucket), which is why asset_type fires the
     -- trigger: running is not enough, the new shape has to be refused.
-    if coalesce(new.principal_withdrawn, 0) > 0 or coalesce(new.units_withdrawn, 0) > 0 then
+    if coalesce(wd.principal_withdrawn, 0) > 0 or coalesce(wd.units_withdrawn, 0) > 0 then
       raise exception 'withdrawal draws on no holding: it has neither a parent transaction nor a fund'
         using errcode = 'check_violation';
     end if;
     -- Carrying neither is a settlement row with nothing to measure — a
     -- held-for-merge with no source is exactly that shape, and giving it one is
     -- #588's job.
-    return new;
+    return;
   end if;
 
-  if coalesce(new.principal_withdrawn, 0) > 0 then
+  if coalesce(wd.principal_withdrawn, 0) > 0 then
     v_left := coalesce(v_principal, 0) - v_out_principal;
-    if new.principal_withdrawn > v_left then
+    if wd.principal_withdrawn > v_left then
       raise exception 'withdrawal of % exceeds the remaining balance of % on this holding',
-        new.principal_withdrawn, v_left using errcode = 'check_violation';
+        wd.principal_withdrawn, v_left using errcode = 'check_violation';
     end if;
   end if;
 
-  if coalesce(new.units_withdrawn, 0) > 0 then
+  if coalesce(wd.units_withdrawn, 0) > 0 then
     v_left_units := coalesce(v_units, 0) - v_out_units;
     -- The tolerance rounds a real balance; it does not create one. Applied to an
-    -- empty holding it would hand every sold-out bucket 0.0001 units it never
-    -- had — and since principal_withdrawn may be omitted, that is a withdrawal
-    -- row (carrying any amount_vnd) against a holding that is gone.
-    if new.units_withdrawn > v_left_units + (case when v_left_units > 0 then c_units_epsilon else 0 end) then
+    -- empty holding it would hand every sold-out bucket 0.0001 units it never had.
+    if wd.units_withdrawn > v_left_units + (case when v_left_units > 0 then c_units_epsilon else 0 end) then
       raise exception 'withdrawal of % units exceeds the remaining balance of % units on this holding',
-        new.units_withdrawn, v_left_units using errcode = 'check_violation';
+        wd.units_withdrawn, v_left_units using errcode = 'check_violation';
+    end if;
+  end if;
+end;
+$$;
+
+comment on function public.check_withdrawal_balance(public.investment_transactions) is
+  'Raises when a withdrawal/sell would take more principal or units than its holding still has. Measured under a lock on the source, so concurrent sells cannot both pass (#587).';
+
+-- ── immediate: a new or increased claim ──────────────────────────────────────
+create or replace function public.enforce_withdrawal_within_balance()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if tg_op = 'UPDATE' then
+    -- Deleting a source is an ordinary ledger action, and BOTH links a withdrawal
+    -- hangs on are ON DELETE SET NULL — the deposit (parent_transaction_id) and
+    -- the fund (fund_id, which a sell is keyed by). So Postgres orphans the
+    -- children with an UPDATE that lands right here, and measuring it would refuse
+    -- the row (it just lost the holding it drew on) and turn a plain delete into an
+    -- error.
+    --
+    -- Only the FK may orphan a row. Detaching a withdrawal from a source that is
+    -- still there restores the holding to full value while the withdrawal is filed
+    -- under no key at all — the same escape this function exists to close. The tell
+    -- is the source itself: by the time the FK action fires, the referenced row is
+    -- already deleted and invisible to these queries.
+    if old.parent_transaction_id is not null and new.parent_transaction_id is null then
+      if exists (select 1 from public.investment_transactions t
+                  where t.transaction_id = old.parent_transaction_id) then
+        raise exception 'withdrawal cannot be detached from holding %, which still exists',
+          old.parent_transaction_id using errcode = 'check_violation';
+      end if;
+      -- The source is gone. If the row still names a fund it now draws on that
+      -- bucket instead, so it has to be re-measured rather than waved through;
+      -- with nothing left to draw on, the leftover orphan is a shape this
+      -- invariant would not let anyone CREATE (issue #607).
+      if new.fund_id is null then return new; end if;
+    end if;
+
+    if old.fund_id is not null and new.fund_id is null then
+      if exists (select 1 from public.funds f where f.id = old.fund_id) then
+        raise exception 'withdrawal cannot be detached from fund %, which still exists',
+          old.fund_id using errcode = 'check_violation';
+      end if;
+      -- The fund is gone. buildWithdrawalMaps now keys the row by its PARENT, so
+      -- if it has one, it must be measured against that balance — a sell that fit
+      -- the fund bucket can overdraw a smaller deposit. With no parent either,
+      -- it is the orphan case above.
+      if new.parent_transaction_id is null then return new; end if;
+    end if;
+
+    -- A pure relocation: the claim is unchanged, only which bucket it sits in.
+    -- Its destination is only complete once the whole statement has landed (a
+    -- fund assign moves purchases and sells together), so the deferred trigger
+    -- measures this one.
+    if new.principal_withdrawn is not distinct from old.principal_withdrawn
+       and new.units_withdrawn is not distinct from old.units_withdrawn
+       and new.parent_transaction_id is not distinct from old.parent_transaction_id
+       and new.fund_id is not distinct from old.fund_id
+       and new.asset_type is not distinct from old.asset_type
+       and new.transaction_type = old.transaction_type then
+      return new;
     end if;
   end if;
 
+  perform public.check_withdrawal_balance(new);
   return new;
 end;
 $$;
 
 comment on function public.enforce_withdrawal_within_balance() is
-  'Refuses a withdrawal/sell that would take more principal or units than its holding still has, measured under a lock on the source so concurrent sells cannot both pass (#587).';
+  'Measures a new or increased withdrawal claim against its holding as it is written (#587).';
 
 drop trigger if exists investment_transactions_withdrawal_balance on public.investment_transactions;
 create trigger investment_transactions_withdrawal_balance
@@ -245,3 +299,45 @@ create trigger investment_transactions_withdrawal_balance
   for each row
   when (new.transaction_type = 'withdrawal')
   execute function public.enforce_withdrawal_within_balance();
+
+-- ── deferred: a relocation, measured once the statement has landed ───────────
+create or replace function public.enforce_withdrawal_balance_after_move()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_row public.investment_transactions;
+begin
+  -- Re-read the row rather than trusting the queued image: by commit it may have
+  -- moved again, or been deleted, and the balance question is about what is
+  -- actually there now.
+  select * into v_row from public.investment_transactions t
+   where t.transaction_id = new.transaction_id;
+  if not found then return null; end if;
+  if v_row.transaction_type is distinct from 'withdrawal' then return null; end if;
+  -- Orphaned by a delete (see the immediate trigger): nothing to measure against,
+  -- and refusing here would fail the delete that caused it.
+  if v_row.fund_id is null and v_row.parent_transaction_id is null then return null; end if;
+
+  perform public.check_withdrawal_balance(v_row);
+  return null;
+end;
+$$;
+
+comment on function public.enforce_withdrawal_balance_after_move() is
+  'Re-measures a withdrawal that changed bucket, deferred to the end of the statement so a multi-row move (a fund assign, a deleted goal) is seen complete (#587).';
+
+drop trigger if exists investment_transactions_withdrawal_balance_moved on public.investment_transactions;
+create constraint trigger investment_transactions_withdrawal_balance_moved
+  after update of goal_id on public.investment_transactions
+  -- INITIALLY IMMEDIATE on a constraint trigger means "at the end of the
+  -- statement", not "during it" — which is exactly the boundary a multi-row move
+  -- needs. Deferring to commit would work too, but would report the problem far
+  -- from the statement that caused it (and a caller can still SET CONSTRAINTS
+  -- DEFERRED when it genuinely needs to move a bucket in several statements).
+  deferrable initially immediate
+  for each row
+  when (new.transaction_type = 'withdrawal' and new.goal_id is distinct from old.goal_id)
+  execute function public.enforce_withdrawal_balance_after_move();
