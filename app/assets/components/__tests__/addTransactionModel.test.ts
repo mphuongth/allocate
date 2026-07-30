@@ -276,7 +276,10 @@ describe('buildSellPayload', () => {
   // and ×10 is a đồng more than the holding has — which the server refuses as an
   // overdraw (#587). Preview and payload have to agree on the exact basis.
   it('gold: selling the lot posts exactly the remaining principal', () => {
-    const holding = { type: 'gold' as const, transactionId: 'g1', currentValue: 130_000_000, units: 10, purchasePrice: 123_456_789 }
+    const holding = {
+      type: 'gold' as const, transactionId: 'g1', currentValue: 130_000_000,
+      units: 10, purchasePrice: 123_456_789, navPerUnit: 13_000_000, gainPct: null,
+    }
     const preview = computeSellPreview({
       assetType: 'gold', dir: 'sell', holding, sellAmount: '', received: '',
       goldSellQty: '10', goldSellPrice: '13000000',
