@@ -123,7 +123,11 @@ begin
 
   if coalesce(new.units_withdrawn, 0) > 0 then
     v_left_units := coalesce(v_units, 0) - v_out_units;
-    if new.units_withdrawn > v_left_units + c_units_epsilon then
+    -- The tolerance rounds a real balance; it does not create one. Applied to an
+    -- empty holding it would hand every sold-out bucket 0.0001 units it never
+    -- had — and since principal_withdrawn may be omitted, that is a withdrawal
+    -- row (carrying any amount_vnd) against a holding that is gone.
+    if new.units_withdrawn > v_left_units + (case when v_left_units > 0 then c_units_epsilon else 0 end) then
       raise exception 'withdrawal of % units exceeds the remaining balance of % units on this holding',
         new.units_withdrawn, v_left_units using errcode = 'check_violation';
     end if;

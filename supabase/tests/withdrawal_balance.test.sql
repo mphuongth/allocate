@@ -179,8 +179,9 @@ $$;
 -- unit of that rounding, so a real overdraw is still refused.
 do $$
 declare
-  v_user uuid;
-  v_fund uuid;
+  v_user  uuid;
+  v_fund  uuid;
+  v_fund2 uuid;
 begin
   insert into auth.users (id, email) values (gen_random_uuid(), 'wd-rounding@test.invalid') returning id into v_user;
   insert into public.funds (user_id, name, code, fund_type, nav)
@@ -199,6 +200,28 @@ begin
       (user_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, principal_withdrawn, units_withdrawn)
     values (v_user, v_fund, 'fund', 'withdrawal', '2026-03-01', 1000, 1000, 0.1);
     raise exception 'the rounding tolerance must not swallow a real overdraw';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- Nothing left means nothing to round. A holding sold out to EXACTLY zero (no
+  -- rounding remainder to hide behind) must not still yield 0.0001 units, or every
+  -- empty bucket carries a balance it never had — and with principal_withdrawn
+  -- omitted, that is a withdrawal carrying any amount_vnd it likes against a
+  -- holding that is gone.
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Exact Fund', 'EXF', 'equity', 20000) returning id into v_fund2;
+
+  insert into public.investment_transactions (user_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_fund2, 'fund', 'investment', '2026-01-01', 2000000, 100, 20000);
+  insert into public.investment_transactions
+    (user_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, principal_withdrawn, units_withdrawn)
+  values (v_user, v_fund2, 'fund', 'withdrawal', '2026-02-01', 2000000, 2000000, 100);
+
+  begin
+    insert into public.investment_transactions
+      (user_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units_withdrawn)
+    values (v_user, v_fund2, 'fund', 'withdrawal', '2026-03-01', 5000000, 0.0001);
+    raise exception 'an empty holding must not get the rounding tolerance as a balance';
   exception when sqlstate '23514' then null;
   end;
 
