@@ -101,6 +101,58 @@ fund_buckets as (
       on b.user_id = s.user_id
      and b.fund_id = s.fund_id
      and b.goal_id is not distinct from s.goal_id
+),
+
+-- How far each individual sale sits from the flat rate units × basis / total_units,
+-- with the two tolerances it may claim. Split out as a CTE because the full-sale
+-- slack has to be RATIONED across the holding (see below), which needs a window
+-- over the per-sale deviations rather than a row-local predicate.
+sale_dev as (
+  select w.transaction_id, w.user_id, w.goal_id, w.fund_id, w.parent_transaction_id,
+         w.units_withdrawn, w.principal_withdrawn,
+         p.transaction_id as holding, p.amount_vnd as basis, p.units as units,
+         format('a sale of %s of the holding''s %s units took %s đồng where the flat rate on a %s basis is %s',
+                w.units_withdrawn, p.units, w.principal_withdrawn, p.amount_vnd,
+                round(p.amount_vnd * w.units_withdrawn / p.units)) as detail,
+         abs(coalesce(w.principal_withdrawn, 0) - round(p.amount_vnd * w.units_withdrawn / p.units)) as dev,
+         p.sells + 1 as base_tol,
+         case when p.out_units >= p.units - 0.0001 then 0.0001 * p.amount_vnd / p.units else 0 end as shortcut_tol
+    from wd w
+    join parents p on p.transaction_id = w.parent_transaction_id
+   where not w.fund_keyed and p.asset_type = 'gold' and coalesce(p.units, 0) > 0
+     and coalesce(w.units_withdrawn, 0) > 0
+  union all
+  select w.transaction_id, w.user_id, w.goal_id, w.fund_id, w.parent_transaction_id,
+         w.units_withdrawn, w.principal_withdrawn,
+         null::uuid, b.basis, b.units,
+         format('a sell of %s of the bucket''s %s units took %s đồng where the flat rate on a %s basis is %s',
+                w.units_withdrawn, b.units, w.principal_withdrawn, b.basis,
+                round(b.basis * w.units_withdrawn / b.units)),
+         abs(coalesce(w.principal_withdrawn, 0) - round(b.basis * w.units_withdrawn / b.units)),
+         b.sells + 1,
+         case when b.out_units >= b.units - 0.0001 then 0.0001 * b.basis / b.units else 0 end
+    from wd w
+    join fund_buckets b
+      on b.user_id = w.user_id and b.fund_id = w.fund_id and b.goal_id is not distinct from w.goal_id
+   where w.fund_keyed and b.units > 0
+     and coalesce(w.units_withdrawn, 0) > 0
+),
+
+-- Exactly ONE sale per holding can be the one that closed it, so at most one may
+-- claim the full-sale slack. Rows past the base tolerance are counted per holding:
+-- if two or more need the slack, the holding cannot be explained by any legal
+-- sequence and they are all reported; if just one does, it is allowed its value.
+--
+-- Sub-epsilon slivers are left out of the count and never reported. A sale of
+-- 0.0002 units or less can legitimately take a whole remaining basis in the tail
+-- of an epsilon-exhausted holding, and which of those were legal depends on the
+-- order they were written in — the same undecidable-from-state limit recorded in
+-- the header, with the same bound on what it can hide.
+sale_dev_ranked as (
+  select d.*,
+         count(*) filter (where d.dev > d.base_tol and d.units_withdrawn > 0.0002)
+           over (partition by d.user_id, d.holding, d.fund_id, d.goal_id) as over_base
+    from sale_dev d
 )
 
 -- ── shape, per row ──────────────────────────────────────────────────────────
@@ -146,8 +198,19 @@ select 'withdrawal_missing_principal', 'violation',
                    else format('withdrawal from holding %s', w.parent_transaction_id) end,
               w.principal_withdrawn)
   from wd w
+  left join fund_buckets b
+    on w.fund_keyed and b.user_id = w.user_id and b.fund_id = w.fund_id
+   and b.goal_id is not distinct from w.goal_id
  where coalesce(w.principal_withdrawn, 0) <= 0
-   and case when w.fund_keyed then coalesce(w.units_withdrawn, 0) > 0   -- else it is fund_sale_missing_units
+   and case when w.fund_keyed
+              -- units <= 0 is fund_sale_missing_units. And a slice can be worth
+              -- NOTHING: round(basis × units / total_units) below half a đồng makes
+              -- zero the correct principal, which the invariant accepts (and
+              -- lib/fundWithdrawal posts). Only a slice actually worth something —
+              -- more than the invariant's own đồng of tolerance — is missing here.
+              then coalesce(w.units_withdrawn, 0) > 0
+                   and coalesce(b.units, 0) > 0
+                   and round(b.basis * w.units_withdrawn / b.units) > 1
             else w.parent_transaction_id is not null end
 
 union all
@@ -308,32 +371,11 @@ select 'fund_bucket_has_no_purchases', 'violation',
 -- basis and units: no row exceeded it, tightest margin 1.2 đồng.
 union all
 select 'sale_basis_not_proportional', 'review',
-       w.user_id, w.transaction_id, w.parent_transaction_id, w.fund_id, w.goal_id,
-       format('a sale of %s of the holding''s %s units took %s đồng where the flat rate on a %s basis is %s',
-              w.units_withdrawn, p.units, w.principal_withdrawn, p.amount_vnd,
-              round(p.amount_vnd * w.units_withdrawn / p.units))
-  from wd w
-  join parents p on p.transaction_id = w.parent_transaction_id
- where not w.fund_keyed and p.asset_type = 'gold' and coalesce(p.units, 0) > 0
-   and coalesce(w.units_withdrawn, 0) > 0
-   and abs(coalesce(w.principal_withdrawn, 0) - round(p.amount_vnd * w.units_withdrawn / p.units))
-       > p.sells + 1 + case when p.out_units >= p.units - 0.0001
-                         then 0.0001 * p.amount_vnd / p.units else 0 end
-
-union all
-select 'sale_basis_not_proportional', 'review',
-       w.user_id, w.transaction_id, w.parent_transaction_id, w.fund_id, w.goal_id,
-       format('a sell of %s of the bucket''s %s units took %s đồng where the flat rate on a %s basis is %s',
-              w.units_withdrawn, b.units, w.principal_withdrawn, b.basis,
-              round(b.basis * w.units_withdrawn / b.units))
-  from wd w
-  join fund_buckets b
-    on b.user_id = w.user_id and b.fund_id = w.fund_id and b.goal_id is not distinct from w.goal_id
- where w.fund_keyed and b.units > 0
-   and coalesce(w.units_withdrawn, 0) > 0
-   and abs(coalesce(w.principal_withdrawn, 0) - round(b.basis * w.units_withdrawn / b.units))
-       > b.sells + 1 + case when b.out_units >= b.units - 0.0001
-                         then 0.0001 * b.basis / b.units else 0 end
+       d.user_id, d.transaction_id, d.parent_transaction_id, d.fund_id, d.goal_id, d.detail
+  from sale_dev_ranked d
+ where d.dev > d.base_tol
+   and d.units_withdrawn > 0.0002
+   and (d.over_base >= 2 or d.dev > d.base_tol + d.shortcut_tol)
 
 union all
 select 'basis_not_proportional', 'review',

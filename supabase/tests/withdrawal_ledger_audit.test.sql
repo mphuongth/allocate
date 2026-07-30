@@ -42,9 +42,11 @@ declare
   v_eps_src   uuid; v_nounits_src uuid;
   v_cancel_src uuid; v_cancel_a uuid; v_cancel_b uuid;
   v_slack_src uuid; v_slack uuid;
+  v_pair_src uuid; v_pair_a uuid; v_pair_b uuid;
   -- the clean half
   v_tol_goal  uuid;
-  v_drift_src uuid; v_comp_src uuid; v_f7_src uuid; v_full_src uuid;
+  v_drift_src uuid; v_comp_src uuid; v_f7_src uuid; v_full_src uuid; v_tail_src uuid;
+  v_tiny_fund uuid;
   v_ok_bank   uuid; v_ok_bank_w  uuid;
   v_ok_gold   uuid; v_ok_gold_w1 uuid; v_ok_gold_w2 uuid;
   v_ok_buy    uuid; v_ok_sell1   uuid; v_ok_sell2   uuid;
@@ -190,6 +192,42 @@ begin
   insert into public.investment_transactions
     (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
   values (v_user, v_goal_b, 'gold', 'withdrawal', '2026-02-01', 48000000, v_full_src, 40000000, 3.9999);
+
+  -- A slice so small its proportional basis rounds to nothing: 100 units of a
+  -- 1,000,000-unit bucket worth 1000 đồng. round(1000 × 100 / 1000000) = 0, and the
+  -- invariant accepts a zero principal because it is within a đồng of that
+  -- expectation — lib/fundWithdrawal returns 0 here too. So "a fund sell with no
+  -- principal" is not universally invalid, and the audit may only call it that when
+  -- the expected slice is actually worth something.
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Tiny Fund', 'TINY', 'equity', 1) returning id into v_tiny_fund;
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id)
+  values (v_user, v_goal_b, 'fund', 'investment', '2026-01-01', 1000, 1000000, 1, v_tiny_fund);
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, fund_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_goal_b, 'fund', 'withdrawal', '2026-02-01', 1, v_tiny_fund, 0, 100);
+
+  -- The tail of an epsilon-exhausted holding, built one accepted insert at a time.
+  -- 1,000,000 đồng over 1 unit: 0.9998 units takes its 999,800, then 0.0001 units
+  -- is within an epsilon of the 0.0002 remaining and so is a FULL sale taking all
+  -- 200 left, then a last 0.0001 takes the 1 đồng the invariant insists a
+  -- parent-backed withdrawal must record. Measured against the flat rate those two
+  -- slivers are 100 and 99 đồng out — TWO rows past the base tolerance on one
+  -- holding, which is exactly the pattern that says "no legal sequence explains
+  -- this". Here a legal sequence does explain it, so slivers are left out of that
+  -- count; which of them were legal depends on write order, the same
+  -- undecidable-from-state limit as the header records.
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal_b, 'gold', 'investment', '2026-01-01', 1000000, 1, 1000000) returning transaction_id into v_tail_src;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_goal_b, 'gold', 'withdrawal', '2026-02-01', 1, v_tail_src, 999800, 0.9998);
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_goal_b, 'gold', 'withdrawal', '2026-03-01', 1, v_tail_src, 200, 0.0001);
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_goal_b, 'gold', 'withdrawal', '2026-04-01', 1, v_tail_src, 1, 0.0001);
 
   -- ═══ the planted violations ════════════════════════════════════════════════
   -- Disabling the user triggers is the only way in: these are precisely the shapes
@@ -377,6 +415,22 @@ begin
   values (v_user, v_goal, 'gold', 'withdrawal', '2026-02-01', 12000000, v_slack_src, 10000500, 1)
   returning transaction_id into v_slack;
 
+  -- 20. two sales that exhaust the holding and total the right basis, but neither
+  --     allocation is legal in any order: 1 unit taking 10,000,500 (rule: 10,000,000)
+  --     and 3 units taking 29,999,500 (rule: 30,000,000). Only ONE sale per holding
+  --     can be the one that closes it, so granting the full-sale slack to every
+  --     sibling of an exhausted holding hides both.
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal, 'gold', 'investment', '2026-01-01', 40000000, 4, 10000000) returning transaction_id into v_pair_src;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-02-01', 1, v_pair_src, 10000500, 1)
+  returning transaction_id into v_pair_a;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-03-01', 1, v_pair_src, 29999500, 3)
+  returning transaction_id into v_pair_b;
+
   alter table public.investment_transactions enable trigger user;
 
   -- ═══ every planted row must be named, by the right check ═══════════════════
@@ -399,7 +453,9 @@ begin
         ('withdrawal_missing_principal',  v_mask_zero),
         ('sale_basis_not_proportional',   v_cancel_a),
         ('sale_basis_not_proportional',   v_cancel_b),
-        ('sale_basis_not_proportional',   v_slack)
+        ('sale_basis_not_proportional',   v_slack),
+        ('sale_basis_not_proportional',   v_pair_a),
+        ('sale_basis_not_proportional',   v_pair_b)
       ) as x(name, tx)
   loop
     if v_count <> 1 then
@@ -460,8 +516,8 @@ begin
     from public.withdrawal_ledger_audit
    where transaction_id in (v_ok_bank_w, v_ok_gold_w1, v_ok_gold_w2, v_ok_sell1, v_ok_sell2,
                             v_ok_held, v_seed, v_seed_buy, v_seed_sell)
-      or parent_transaction_id in (v_ok_bank, v_ok_gold, v_drift_src, v_comp_src, v_f7_src, v_full_src)
-      or (fund_id = v_fund_ok);
+      or parent_transaction_id in (v_ok_bank, v_ok_gold, v_drift_src, v_comp_src, v_f7_src, v_full_src, v_tail_src)
+      or fund_id in (v_fund_ok, v_tiny_fund);
   if v_count <> 0 then
     raise exception 'the audit reported % row(s) against a ledger the invariant accepted', v_count;
   end if;
