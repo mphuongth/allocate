@@ -225,6 +225,36 @@ describe('buildSellPayload', () => {
     })
   })
 
+  // The dashboard aggregates a fund per (goal, fund), and so does the balance the
+  // server now measures a sell against (#587). A sell of a goal-allocated fund
+  // posted with goal_id: null drew down the Unallocated bucket instead — the
+  // goal's holding never moved, and once the server enforces the balance that
+  // sell is refused outright. The sell has to carry the holding's own goal.
+  it('fund: the sell belongs to the goal the holding sits in', () => {
+    const holding = {
+      type: 'fund' as const, fundId: 'f1', goalId: 'goal-1',
+      purchasePrice: 18_000, currentValue: 2_000_000, units: 100,
+    }
+    const preview = { ...zero, numSell: 1_000_000, sellNav: 20_000 }
+    expect(ok(buildSellPayload(holding, preview, { date, note: '' }))).toMatchObject({ goal_id: 'goal-1' })
+  })
+
+  it('non-fund sells carry the holding’s goal too', () => {
+    const bank = { type: 'bank' as const, transactionId: 't1', goalId: 'goal-2', purchasePrice: 5_000_000, currentValue: 5_000_000 }
+    expect(ok(buildSellPayload(bank, { ...zero, numSell: 5_000_000, numReceived: 5_200_000, bankWithdrawPrincipal: 5_000_000 }, { date, note: '' })))
+      .toMatchObject({ goal_id: 'goal-2' })
+
+    const gold = { type: 'gold' as const, transactionId: 'g1', goalId: 'goal-3', currentValue: 18_400_000, units: 2 }
+    expect(ok(buildSellPayload(gold, { ...zero, numGoldSellQty: 1, goldProceeds: 9_200_000, goldCost: 9_000_000 }, { date, note: '' })))
+      .toMatchObject({ goal_id: 'goal-3' })
+  })
+
+  it('an unallocated holding still sells with no goal', () => {
+    const holding = { type: 'fund' as const, fundId: 'f1', goalId: null, purchasePrice: 18_000, currentValue: 2_000_000, units: 100 }
+    expect(ok(buildSellPayload(holding, { ...zero, numSell: 1_000_000, sellNav: 20_000 }, { date, note: '' })))
+      .toMatchObject({ goal_id: null })
+  })
+
   it('bank: amount is the received cash, principal is what the user entered', () => {
     const holding = { type: 'bank' as const, transactionId: 't1', purchasePrice: 5_000_000, currentValue: 5_000_000 }
     const preview = { ...zero, numSell: 5_000_000, numReceived: 5_200_000, bankWithdrawPrincipal: 5_000_000 }

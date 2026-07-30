@@ -293,7 +293,18 @@ export async function POST(request: NextRequest) {
     .select()
     .single()
 
-  if (error) return NextResponse.json({ error: 'Failed to create transaction' }, { status: 500 })
+  if (error) {
+    // The remaining-balance invariant refused it: a stale sheet, a retry, or a
+    // sell that lost a race against another one. Nothing failed, so this is a 400
+    // that says the balance moved — matching the book withdrawal's own answer.
+    // The wording is pinned by supabase/tests/withdrawal_balance.test.sql, which
+    // is where the trigger raising it lives (20260730000002).
+    if (error.message?.includes('exceeds the remaining balance')) {
+      return NextResponse.json({ error: 'Withdrawal exceeds the remaining balance of this holding.' }, { status: 400 })
+    }
+    console.error('investment-transactions POST insert failed', error.message)
+    return NextResponse.json({ error: 'Failed to create transaction' }, { status: 500 })
+  }
 
   // Holding a deposit for merge closes its source, so a recurring saving linked
   // to that source must be unlinked or it would keep topping up a settled

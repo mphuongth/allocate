@@ -114,7 +114,7 @@ describe('AddTransactionSheet — goal selector (issue #232)', () => {
 describe('AddTransactionSheet — sell flow (issue #232)', () => {
   it('lists holdings from the overview and posts a fund withdrawal on confirm', async () => {
     const overview = {
-      goals: [{ goalName: 'Goal A', funds: [{ fundId: 'f1', fundName: 'VESAF', quantity: 100, currentNAV: 20000, currentValue: 2_000_000, purchasePrice: 18000, profitLossPercentage: 11.11 }] }],
+      goals: [{ goalId: 'g-a', goalName: 'Goal A', funds: [{ fundId: 'f1', fundName: 'VESAF', quantity: 100, currentNAV: 20000, currentValue: 2_000_000, purchasePrice: 18000, profitLossPercentage: 11.11 }] }],
       unallocated: { funds: [], nonFunds: [] },
     }
     const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
@@ -141,6 +141,9 @@ describe('AddTransactionSheet — sell flow (issue #232)', () => {
       expect(body.amount_vnd).toBe(1_000_000)
       expect(body.units_withdrawn).toBe(50)         // 1,000,000 / 20,000 NAV
       expect(body.principal_withdrawn).toBe(900_000) // 50% of cost basis (18,000 × 100)
+      // The sell draws down the bucket it was picked from. Posting null here sent
+      // it to Unallocated, which the server now refuses outright (#587).
+      expect(body.goal_id).toBe('g-a')
     })
   })
 })
@@ -148,7 +151,7 @@ describe('AddTransactionSheet — sell flow (issue #232)', () => {
 describe('AddTransactionSheet — fund sell units field (two-way linked)', () => {
   it('entering units fills the amount and posts the matching withdrawal', async () => {
     const overview = {
-      goals: [{ goalName: 'Goal A', funds: [{ fundId: 'f1', fundName: 'VESAF', quantity: 100, currentNAV: 20000, currentValue: 2_000_000, purchasePrice: 18000, profitLossPercentage: 11.11 }] }],
+      goals: [{ goalId: 'g-a', goalName: 'Goal A', funds: [{ fundId: 'f1', fundName: 'VESAF', quantity: 100, currentNAV: 20000, currentValue: 2_000_000, purchasePrice: 18000, profitLossPercentage: 11.11 }] }],
       unallocated: { funds: [], nonFunds: [] },
     }
     const fetchMock = vi.fn((url: string, _init?: RequestInit) => {

@@ -281,6 +281,13 @@ export interface SellHolding {
   type: AssetType
   transactionId?: string
   fundId?: string
+  /**
+   * The goal the holding sits in, null when unallocated. A fund's balance is the
+   * (goal, fund) bucket the dashboard aggregates — and the one the server measures
+   * a sell against (#587) — so a sell that dropped this drew down the wrong
+   * bucket: the goal's holding stayed put and the sell is now refused outright.
+   */
+  goalId?: string | null
   purchasePrice?: number | null
   currentValue: number
   units?: number | null
@@ -306,7 +313,8 @@ export function buildSellPayload(
       parent_transaction_id: holding.transactionId,
       investment_date: date, amount_vnd: preview.goldProceeds,
       units_withdrawn: parseFloat(preview.numGoldSellQty.toFixed(4)),
-      principal_withdrawn: preview.goldCost ?? preview.goldProceeds, goal_id: null, notes: note || null,
+      principal_withdrawn: preview.goldCost ?? preview.goldProceeds,
+      goal_id: holding.goalId ?? null, notes: note || null,
     } }
   }
   if (holding.type === 'fund' && holding.fundId) {
@@ -320,7 +328,8 @@ export function buildSellPayload(
       transaction_type: 'withdrawal', asset_type: 'fund', fund_id: holding.fundId,
       investment_date: date, amount_vnd: Math.round(preview.numSell),
       units_withdrawn: parseFloat(unitsWithdrawn.toFixed(4)),
-      principal_withdrawn: principalWithdrawn, goal_id: null, notes: note || null,
+      principal_withdrawn: principalWithdrawn,
+      goal_id: holding.goalId ?? null, notes: note || null,
     } }
   }
   if (holding.transactionId) {
@@ -335,7 +344,7 @@ export function buildSellPayload(
       parent_transaction_id: holding.transactionId, investment_date: date,
       amount_vnd: isBankSell ? Math.round(preview.numReceived) : Math.round(preview.numSell),
       principal_withdrawn: isBankSell ? preview.bankWithdrawPrincipal : Math.round(preview.numSell),
-      goal_id: null, notes: note || null,
+      goal_id: holding.goalId ?? null, notes: note || null,
     } }
   }
   return { ok: false, errorKey: 'holdingRequired' }
