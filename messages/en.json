@@ -93,7 +93,12 @@
     "amountReceived": "Amount you'll receive",
     "receivedHint": "Pre-filled at current value — edit down if early withdrawal cuts interest",
     "principalPortion": "Principal",
-    "gainLoss": "Gain / Loss"
+    "gainLoss": "Gain / Loss",
+    "principalToWithdraw": "Principal amount to withdraw",
+    "principalAvailable": "Principal available",
+    "valueShort": "Value",
+    "exceedsPrincipal": "Exceeds remaining principal",
+    "remainingPrincipal": "Remaining principal"
   },
   "common": {
     "save": "Save",

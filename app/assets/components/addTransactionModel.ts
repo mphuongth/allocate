@@ -5,6 +5,8 @@
 // directly. The DB-write payload builders inside handleSave are a separate concern
 // and stay in the component for now.
 
+import { previewBankWithdrawal, estimateReceivedForPrincipal } from '@/lib/bankWithdrawal'
+
 export type AssetType = 'fund' | 'bank' | 'gold'
 
 // The sell-side holding fields the preview reads — a structural subset of the
@@ -55,8 +57,10 @@ export interface SellPreview {
   sellGainLoss: number | null
   sellTax: number | null
   numReceived: number
-  bankFraction: number
-  bankPrincipalPortion: number
+  /** Share of the remaining PRINCIPAL this withdrawal takes — display only. */
+  bankPctOfPrincipal: number
+  /** Principal leaving the book: exactly what the user entered (#578). */
+  bankWithdrawPrincipal: number
   bankGain: number | null
   goldMaxUnits: number
   numGoldSellQty: number
@@ -84,7 +88,12 @@ export function computeSellPreview(input: {
 }): SellPreview {
   const { assetType, dir, holding: h, sellAmount, received, goldSellQty, goldSellPrice } = input
 
-  const sellMax = h?.currentValue ?? 0
+  // A bank withdrawal is bounded by the PRINCIPAL still in the book, not by its
+  // current value: the amount entered is the principal being taken out, and the
+  // interest is whatever the bank pays on top (#578). Anything sold at market is
+  // still bounded by its value.
+  const bankPrincipal = h?.purchasePrice ?? h?.currentValue ?? 0
+  const sellMax = assetType === 'bank' ? bankPrincipal : (h?.currentValue ?? 0)
   const numSell = Number(sellAmount) || 0
   const sellOverMax = numSell > sellMax && sellMax > 0
   const sellRemaining = Math.max(0, sellMax - numSell)
@@ -93,13 +102,13 @@ export function computeSellPreview(input: {
     ? numSell * h.gainPct / (100 + h.gainPct) : null
   const sellTax = assetType === 'fund' && numSell > 0 ? Math.round(numSell * 0.001) : null
 
-  // Bank withdrawal: received cash is editable (early withdrawal can cut interest);
-  // split the principal out so the summary can show the gain/loss.
+  // Bank withdrawal: received cash is editable (early withdrawal can cut
+  // interest), and the gain is simply what the bank paid above the principal.
   const numReceived = Number(received) || 0
-  const bankPrincipal = h?.purchasePrice ?? sellMax
-  const bankFraction = sellMax > 0 ? Math.min(1, numSell / sellMax) : 0
-  const bankPrincipalPortion = Math.round(bankPrincipal * bankFraction)
-  const bankGain = assetType === 'bank' && numReceived > 0 && numSell > 0 ? numReceived - bankPrincipalPortion : null
+  const bankView = previewBankWithdrawal({ currentPrincipal: bankPrincipal, amount: numSell, received: numReceived })
+  const bankWithdrawPrincipal = bankView.principal
+  const bankPctOfPrincipal = bankPrincipal > 0 ? Math.min(1, numSell / bankPrincipal) : 0
+  const bankGain = assetType === 'bank' && numReceived > 0 && numSell > 0 ? bankView.interest : null
 
   // Gold sells are quantity-based: chỉ to sell × the sale price per chỉ.
   const goldMaxUnits = h?.units ?? 0
@@ -124,10 +133,23 @@ export function computeSellPreview(input: {
 
   return {
     sellMax, numSell, sellOverMax, sellRemaining, sellNav, sellGainLoss, sellTax,
-    numReceived, bankFraction, bankPrincipalPortion, bankGain,
+    numReceived, bankPctOfPrincipal, bankWithdrawPrincipal, bankGain,
     goldMaxUnits, numGoldSellQty, numGoldSellPrice, goldBuyUnit, goldProceeds, goldCost,
     goldProfit, goldRemUnits, isOverUnits, sellDisabled,
   }
+}
+
+/**
+ * Prefill for the bank "amount you'll receive" field, given the principal being
+ * withdrawn. The amount field is principal, so the accrued interest has to be
+ * added back or an unedited field would record a withdrawal that earned nothing.
+ */
+export function bankReceivedPrefill(holding: PreviewHolding | null, amount: number): number {
+  return estimateReceivedForPrincipal({
+    currentPrincipal: holding?.purchasePrice ?? holding?.currentValue ?? 0,
+    currentValue: holding?.currentValue ?? 0,
+    amount,
+  })
 }
 
 // ── DB-write payload builders ────────────────────────────────────────────────
@@ -270,7 +292,7 @@ export function buildSellPayload(
   holding: SellHolding | null,
   preview: Pick<SellPreview,
     'numSell' | 'sellOverMax' | 'sellNav' | 'numGoldSellQty' | 'isOverUnits' |
-    'goldProceeds' | 'goldCost' | 'numReceived' | 'bankPrincipalPortion'>,
+    'goldProceeds' | 'goldCost' | 'numReceived' | 'bankWithdrawPrincipal'>,
   opts: { date: string; note: string },
 ): BuildResult {
   const { date, note } = opts
@@ -304,15 +326,15 @@ export function buildSellPayload(
   if (holding.transactionId) {
     if (!preview.numSell) return { ok: false, errorKey: 'amountRequired' }
     if (preview.sellOverMax) return { ok: false, errorKey: 'exceedsBalance' }
-    // Bank: received cash is what the user gets; principal portion is what leaves the
-    // deposit's principal, so the gain/loss is recorded accurately.
+    // Bank: received cash is what the user gets; the principal withdrawn is the
+    // amount they entered, so the gain/loss is recorded accurately (#578).
     const isBankSell = holding.type === 'bank'
     if (isBankSell && preview.numReceived <= 0) return { ok: false, errorKey: 'amountRequired' }
     return { ok: true, payload: {
       transaction_type: 'withdrawal', asset_type: holding.type,
       parent_transaction_id: holding.transactionId, investment_date: date,
       amount_vnd: isBankSell ? Math.round(preview.numReceived) : Math.round(preview.numSell),
-      principal_withdrawn: isBankSell ? preview.bankPrincipalPortion : Math.round(preview.numSell),
+      principal_withdrawn: isBankSell ? preview.bankWithdrawPrincipal : Math.round(preview.numSell),
       goal_id: null, notes: note || null,
     } }
   }

@@ -40,6 +40,89 @@ describe('SellWithdrawSheet — bank withdraw (received + principal portion)', (
   })
 })
 
+// The existing coverage above only exercises a FULL withdrawal, where the old
+// proportional conversion happened to return the whole principal — so it stayed
+// green while every partial withdrawal recorded the wrong principal (#578).
+describe('SellWithdrawSheet — partial bank withdrawal where value != principal (#578)', () => {
+  // The reported PVcombank book: 20,385,398 of app value on 20,239,452 of
+  // principal. The user asks the bank for 4,365,100 and receives 4,366,416.
+  const book = {
+    type: 'bank' as const, name: 'PVcombank',
+    currentValue: 20_385_398, interestRate: 5.5,
+    transactionId: 't1', purchasePrice: 20_239_452,
+  }
+
+  function enterWithdrawal() {
+    fireEvent.change(screen.getByTestId('sell-amount-input'), { target: { value: '4365100' } })
+    fireEvent.change(screen.getByTestId('sell-received-input'), { target: { value: '4366416' } })
+  }
+
+  it('previews the entered amount as the principal withdrawn', () => {
+    render(<SellWithdrawSheet item={book} open context="unallocated" onClose={vi.fn()} onSuccess={vi.fn()} />)
+    enterWithdrawal()
+    // The old proportional conversion previewed 4.333.849 here.
+    expect(screen.getByTestId('sell-bank-principal')).toHaveTextContent('4.365.100')
+  })
+
+  it('previews the interest the bank actually paid', () => {
+    render(<SellWithdrawSheet item={book} open context="unallocated" onClose={vi.fn()} onSuccess={vi.fn()} />)
+    enterWithdrawal()
+    expect(screen.getByTestId('sell-bank-gain')).toHaveTextContent('1.316')
+  })
+
+  it('previews the principal the bank says remains', () => {
+    render(<SellWithdrawSheet item={book} open context="unallocated" onClose={vi.fn()} onSuccess={vi.fn()} />)
+    enterWithdrawal()
+    // Remaining PRINCIPAL, not remaining value — it is what the next withdrawal
+    // is capped against, and what depositValuation reduces.
+    expect(screen.getByTestId('sell-bank-remaining')).toHaveTextContent('15.874.352')
+  })
+
+  it('posts the entered principal and the received cash unchanged', async () => {
+    const fetchMock = vi.fn((_url?: string, _init?: RequestInit) =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve({}) }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<SellWithdrawSheet item={book} open context="unallocated" onClose={vi.fn()} onSuccess={vi.fn()} />)
+    enterWithdrawal()
+    fireEvent.click(screen.getByTestId('sell-confirm-btn'))
+
+    await waitFor(() => {
+      const post = fetchMock.mock.calls.find((c) => String(c[0]).includes('/investment-transactions'))
+      const body = JSON.parse(String((post![1] as RequestInit).body))
+      expect(body.principal_withdrawn).toBe(4_365_100)
+      expect(body.amount_vnd).toBe(4_366_416)
+    })
+  })
+
+  it('caps the withdrawal at the remaining principal, not the current value', () => {
+    render(<SellWithdrawSheet item={book} open context="unallocated" onClose={vi.fn()} onSuccess={vi.fn()} />)
+    // Between principal and current value: the old cap allowed this, and then
+    // silently scaled the recorded principal down to fit.
+    fireEvent.change(screen.getByTestId('sell-amount-input'), { target: { value: '20300000' } })
+    expect(screen.getByTestId('sell-confirm-btn')).toBeDisabled()
+  })
+
+  it('prefills the received amount with the interest accrued on that principal', () => {
+    render(<SellWithdrawSheet item={book} open context="unallocated" onClose={vi.fn()} onSuccess={vi.fn()} />)
+    fireEvent.change(screen.getByTestId('sell-amount-input'), { target: { value: '4365100' } })
+    // Principal alone would record a withdrawal that earned nothing; the user
+    // still edits this down to the slip when an early withdrawal cuts interest.
+    const received = screen.getByTestId('sell-received-input') as HTMLInputElement
+    expect(Number(received.value.replace(/\./g, ''))).toBe(4_396_577)
+  })
+
+  it('fills the remaining principal — and the full current value — from "All"', () => {
+    render(<SellWithdrawSheet item={book} open context="unallocated" onClose={vi.fn()} onSuccess={vi.fn()} />)
+    fireEvent.click(screen.getByTestId('sell-all-btn'))
+    const amount = screen.getByTestId('sell-amount-input') as HTMLInputElement
+    const received = screen.getByTestId('sell-received-input') as HTMLInputElement
+    expect(Number(amount.value.replace(/\./g, ''))).toBe(20_239_452)
+    expect(Number(received.value.replace(/\./g, ''))).toBe(20_385_398)
+    expect(screen.getByTestId('sell-confirm-btn')).not.toBeDisabled()
+  })
+})
+
 describe('SellWithdrawSheet — links the withdrawal to its goal (issue #261)', () => {
   it('posts goal_id when withdrawing in a goal context', async () => {
     const fetchMock = vi.fn((_url?: string, _init?: RequestInit) =>

@@ -93,7 +93,12 @@
     "amountReceived": "Số tiền thực nhận",
     "receivedHint": "Tạm tính theo giá trị hiện tại — sửa nếu rút sớm bị trừ lãi",
     "principalPortion": "Tiền gốc",
-    "gainLoss": "Lãi/Lỗ"
+    "gainLoss": "Lãi/Lỗ",
+    "principalToWithdraw": "Số tiền gốc muốn rút",
+    "principalAvailable": "Gốc khả dụng",
+    "valueShort": "Giá trị",
+    "exceedsPrincipal": "Vượt quá tiền gốc còn lại",
+    "remainingPrincipal": "Tiền gốc còn lại"
   },
   "common": {
     "save": "Lưu",

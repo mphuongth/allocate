@@ -10,6 +10,7 @@ import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/
 import LoadError from './LoadError'
 import type { Fund, Bank, Holding } from './AddTransactionSheet'
 import type { SellPreview, AssetType } from './addTransactionModel'
+import { bankReceivedPrefill } from './addTransactionModel'
 
 const GOLD_PROVIDERS = ['PNJ', 'DOJI', 'SJC', 'Bảo Tín']
 
@@ -374,7 +375,7 @@ export function SellForm({
   const t = useTranslations('addTx')
   const {
     sellMax, numSell, sellOverMax, sellRemaining, sellNav, sellGainLoss, sellTax,
-    numReceived, bankFraction, bankPrincipalPortion, bankGain,
+    numReceived, bankPctOfPrincipal, bankWithdrawPrincipal, bankGain,
     goldMaxUnits, numGoldSellQty, numGoldSellPrice, goldBuyUnit, goldProceeds, goldCost,
     goldProfit, goldRemUnits, isOverUnits,
   } = sell
@@ -416,7 +417,12 @@ export function SellForm({
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedHolding.name}</div>
                       <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 2, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                        <span>{t('available')}: <span style={{ fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>{selectedHolding.currentValue.toLocaleString('vi-VN')} ₫</span></span>
+                        {/* Bank: what you can withdraw is the PRINCIPAL, so show
+                            that as available and the value beside it — offering a
+                            figure you can't enter is what made the old cap
+                            misleading. */}
+                        <span>{assetType === 'bank' ? t('principalAvailable') : t('available')}: <span style={{ fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>{Math.round(sellMax).toLocaleString('vi-VN')} ₫</span></span>
+                        {assetType === 'bank' && <span>{t('valueShort')}: <span style={{ fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}>{selectedHolding.currentValue.toLocaleString('vi-VN')} ₫</span></span>}
                         {selectedHolding.units != null && <span style={{ fontVariantNumeric: 'tabular-nums' }}>{selectedHolding.units.toLocaleString('vi-VN')} {t('unitsShort')}</span>}
                         {assetType === 'bank' && selectedHolding.interestRate != null && <span>{selectedHolding.interestRate}%/yr</span>}
                       </div>
@@ -427,7 +433,9 @@ export function SellForm({
                 {assetType !== 'gold' ? (
                   <>
                     <div>
-                      <label style={labelStyle}>{assetType === 'bank' ? t('amountToWithdraw') : t('amountToSell')}</label>
+                      {/* "Principal", explicitly: the field is the principal
+                          leaving the book, not a share of its value (#578). */}
+                      <label style={labelStyle}>{assetType === 'bank' ? t('principalToWithdraw') : t('amountToSell')}</label>
                       <div style={{ display: 'flex', gap: 8 }}>
                         <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'var(--c-card)', border: `1.5px solid ${sellOverMax ? 'var(--c-neg)' : 'var(--c-navy)'}`, borderRadius: 10 }}>
                           <span style={{ fontSize: 14, color: 'var(--c-muted)' }}>₫</span>
@@ -440,7 +448,9 @@ export function SellForm({
                               setSellAmount(v)
                               const n = Number(v) || 0
                               if (assetType === 'fund') setFundSellUnits(sellNav && n ? (n / sellNav).toFixed(2) : '')
-                              if (assetType === 'bank') setReceived(n ? String(Math.round(n)) : '')
+                              // The amount is principal, so the prefill adds the
+                              // interest accrued on that slice back on top (#578).
+                              if (assetType === 'bank') setReceived(n ? String(bankReceivedPrefill(selectedHolding, n)) : '')
                             }}
                             placeholder="0"
                             style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', fontSize: 16, fontWeight: 600, fontFamily: 'inherit', background: 'transparent', color: sellOverMax ? 'var(--c-neg)' : 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}
@@ -449,12 +459,12 @@ export function SellForm({
                         <button type="button" onClick={() => {
                           setSellAmount(String(Math.round(sellMax)))
                           if (assetType === 'fund') setFundSellUnits(selectedHolding?.units != null ? selectedHolding.units.toFixed(2) : '')
-                          if (assetType === 'bank') setReceived(String(Math.round(sellMax)))
+                          if (assetType === 'bank') setReceived(String(bankReceivedPrefill(selectedHolding, sellMax)))
                         }} style={{ padding: '8px 12px', background: 'var(--c-navy-tint)', color: 'var(--c-navy)', border: '1px solid var(--c-navy-tint)', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit' }}>{t('all')}</button>
                       </div>
                       {sellOverMax && (
                         <div style={{ fontSize: 11, color: 'var(--c-neg)', marginTop: 5, display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <X size={12} strokeWidth={2.5} /> {t('exceedsBalance')} · {t('max')} {Math.round(sellMax).toLocaleString('vi-VN')} ₫
+                          <X size={12} strokeWidth={2.5} /> {assetType === 'bank' ? t('exceedsPrincipal') : t('exceedsBalance')} · {t('max')} {Math.round(sellMax).toLocaleString('vi-VN')} ₫
                         </div>
                       )}
                     </div>
@@ -530,8 +540,8 @@ export function SellForm({
                     {assetType === 'bank' && numSell > 0 && !sellOverMax && numReceived > 0 && (
                       <div style={{ background: 'var(--c-card-2)', borderRadius: 12, overflow: 'hidden' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid var(--c-line)' }}>
-                          <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{t('principalPortion')}{bankFraction < 0.999 && <span style={{ opacity: 0.7 }}> · {Math.round(bankFraction * 100)}%</span>}</span>
-                          <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{bankPrincipalPortion.toLocaleString('vi-VN')} ₫</span>
+                          <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{t('principalPortion')}{bankPctOfPrincipal < 0.999 && <span style={{ opacity: 0.7 }}> · {Math.round(bankPctOfPrincipal * 100)}%</span>}</span>
+                          <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{bankWithdrawPrincipal.toLocaleString('vi-VN')} ₫</span>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid var(--c-line)' }}>
                           <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{t('amountReceived')}</span>
@@ -544,7 +554,7 @@ export function SellForm({
                           </div>
                         )}
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px' }}>
-                          <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{t('remainingAfter')}</span>
+                          <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{t('remainingPrincipal')}</span>
                           <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{sellRemaining.toLocaleString('vi-VN')} ₫</span>
                         </div>
                       </div>

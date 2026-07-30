@@ -10,6 +10,7 @@ import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/
 import { CairnLoader } from '@/app/components/ui/CairnLoader'
 import { AffectsProgressControl } from './goalDetailShared'
 import { useDialogMount, useResetOnOpen } from '@/app/(app)/planning/components/useDialogMount'
+import { previewBankWithdrawal, estimateReceivedForPrincipal } from '@/lib/bankWithdrawal'
 const fmtVND = (n: number, _locale?: string) => fmt(n)
 
 export interface SellItem {
@@ -126,17 +127,26 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
   const goldRemUnits = isGold && item?.units != null ? item.units - numUnits : null
   const isOverUnits = isGold && item?.units != null && numUnits > item.units
 
-  // Bank: cash received is editable; split principal out of the withdrawn amount
-  // so the summary can show an accurate gain/loss. A book withdraws like any bank
-  // deposit (partial up to the balance, "All" = full close) — only the confirm
-  // routes to the book endpoint, spreading the principal across tranches.
+  // Bank: the entered amount is the PRINCIPAL leaving the book, and the cash
+  // received is editable on top of it — an early withdrawal can forfeit the
+  // accrued interest, so only the user's bank slip knows the real payout. The
+  // amount used to be a slice of currentValue (principal + projected interest)
+  // that got converted back into a principal fraction, which meant the recorded
+  // principal was never the number the user typed (#578).
+  //
+  // A book withdraws the same way (partial up to the principal, "All" = full
+  // close) — only the confirm routes to the book endpoint, which spreads the
+  // principal across tranches.
   const numReceived = Number(received) || 0
   const bankPrincipal = item?.purchasePrice ?? maxAmount
-  const bankFraction = maxAmount > 0 ? Math.min(1, numAmount / maxAmount) : 0
-  const bankPrincipalPortion = Math.round(bankPrincipal * bankFraction)
-  const bankGain = isBank && numReceived > 0 && numAmount > 0 ? numReceived - bankPrincipalPortion : null
+  const bankPreview = previewBankWithdrawal({ currentPrincipal: bankPrincipal, amount: numAmount, received: numReceived })
+  const bankGain = isBank && numReceived > 0 && numAmount > 0 ? bankPreview.interest : null
+  // Withdrawals are capped by what the holding actually holds: principal for a
+  // bank deposit, current value for anything sold at market.
+  const bankPct = bankPrincipal > 0 ? Math.min(1, numAmount / bankPrincipal) : 0
 
-  const isOverMax = isGold ? isOverUnits : (numAmount > maxAmount && maxAmount > 0)
+  const withdrawMax = isBank ? bankPrincipal : maxAmount
+  const isOverMax = isGold ? isOverUnits : (numAmount > withdrawMax && withdrawMax > 0)
   const isValid = isGold
     ? (numUnits > 0 && !isOverUnits && numSalePrice > 0 && !saving)
     : isBank
@@ -167,7 +177,14 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
     const raw = parseIntVN(val)
     setAmount(raw)
     setError('')
-    if (isBank) setReceived(raw)  // received tracks the amount until edited down
+    // Bank: the received field tracks the amount until edited down, but the
+    // amount is principal — so add back the interest accrued on that slice or an
+    // unedited field would record a withdrawal that earned nothing.
+    if (isBank) {
+      setReceived(raw
+        ? String(estimateReceivedForPrincipal({ currentPrincipal: bankPrincipal, currentValue: maxAmount, amount: Number(raw) }))
+        : '')
+    }
     if (navPerUnit && raw) {
       const u = Number(raw) / navPerUnit
       setUnits(u > 0 ? u.toFixed(2) : '')
@@ -194,8 +211,13 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
       setError('')
       return
     }
-    setAmount(String(maxAmount))
-    if (isBank) setReceived(String(Math.round(maxAmount)))
+    // Bank: "All" is the whole remaining PRINCIPAL, and the payout estimate for
+    // it is the full current value — the same figure this field was pre-filled
+    // with before the amount became principal.
+    setAmount(String(isBank ? bankPrincipal : maxAmount))
+    if (isBank) {
+      setReceived(String(estimateReceivedForPrincipal({ currentPrincipal: bankPrincipal, currentValue: maxAmount, amount: bankPrincipal })))
+    }
     if (navPerUnit && item?.units != null) setUnits(item.units.toFixed(2))
     setError('')
   }
@@ -217,8 +239,8 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            withdraw_principal: bankPrincipalPortion,
-            total_received: Math.round(numReceived),
+            withdraw_principal: bankPreview.principal,
+            total_received: bankPreview.received,
             investment_date: today,
             affects_progress: context === 'goal' ? affectsProgress : true,
           }),
@@ -262,9 +284,10 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
           parent_transaction_id: item.transactionId,
           investment_date: today,
           // Gold: amount = proceeds (qty × sale price), principal = cost basis of
-          // the sold chỉ. Bank: amount = cash received, principal = principal portion.
-          amount_vnd: isGold ? goldProceeds : isBank ? Math.round(numReceived) : Math.round(numAmount),
-          principal_withdrawn: isGold ? (goldCostSold ?? goldProceeds) : isBank ? bankPrincipalPortion : Math.round(numAmount),
+          // the sold chỉ. Bank: amount = cash received, principal = the principal
+          // the user entered.
+          amount_vnd: isGold ? goldProceeds : isBank ? bankPreview.received : Math.round(numAmount),
+          principal_withdrawn: isGold ? (goldCostSold ?? goldProceeds) : isBank ? bankPreview.principal : Math.round(numAmount),
           goal_id: withdrawalGoalId,
           affects_progress: context === 'goal' ? affectsProgress : true,
         }
@@ -301,8 +324,10 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
   const titleText = isBank
     ? (isVI ? 'Rút tiền' : 'Withdraw')
     : (isVI ? 'Bán' : 'Sell')
+  // "Principal", explicitly: the field is the principal leaving the book, not a
+  // share of the deposit's current value (#578).
   const amountLabel = isBank
-    ? (isVI ? 'Số tiền muốn rút' : 'Amount to withdraw')
+    ? (isVI ? 'Số tiền gốc muốn rút' : 'Principal amount to withdraw')
     : (isVI ? 'Số tiền muốn bán' : 'Amount to sell')
   const confirmLabel = isBank
     ? (isVI ? 'Xác nhận rút' : 'Confirm withdrawal')
@@ -399,7 +424,12 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
                   <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 2, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                    <span>{isVI ? 'Khả dụng' : 'Available'}: <span style={{ fontWeight: 600, color: 'var(--c-ink)' }}>{fmtVND(maxAmount, locale)}</span></span>
+                    {/* Bank: the withdrawable figure is the PRINCIPAL, so show
+                        that as available and the current value beside it —
+                        offering a value you can't enter is what made the old cap
+                        misleading. */}
+                    <span>{isBank ? (isVI ? 'Gốc khả dụng' : 'Principal available') : (isVI ? 'Khả dụng' : 'Available')}: <span style={{ fontWeight: 600, color: 'var(--c-ink)' }}>{fmtVND(isBank ? bankPrincipal : maxAmount, locale)}</span></span>
+                    {isBank && <span>{isVI ? 'Giá trị' : 'Value'}: <span style={{ fontWeight: 600, color: 'var(--c-ink)' }}>{fmtVND(maxAmount, locale)}</span></span>}
                     {item.units != null && <span>{item.units.toLocaleString()} {isVI ? 'phần' : 'units'}</span>}
                     {isBank && item.interestRate && <span>{item.interestRate}%/yr</span>}
                   </div>
@@ -441,7 +471,9 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
               {isOverMax && (
                 <div style={{ fontSize: 11, color: 'var(--c-neg, #dc2626)', marginTop: 5, display: 'flex', alignItems: 'center', gap: 4 }}>
                   <X size={12} strokeWidth={2.5} />
-                  {isVI ? 'Vượt quá số dư khả dụng' : 'Exceeds available balance'} · {isVI ? 'Tối đa' : 'Max'} {fmtVND(maxAmount, locale)}
+                  {isBank
+                    ? (isVI ? 'Vượt quá tiền gốc còn lại' : 'Exceeds remaining principal')
+                    : (isVI ? 'Vượt quá số dư khả dụng' : 'Exceeds available balance')} · {isVI ? 'Tối đa' : 'Max'} {fmtVND(withdrawMax, locale)}
                 </div>
               )}
             </div>
@@ -518,23 +550,25 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
             {/* Bank summary: principal portion / received / gain-loss / remaining */}
             {isBank && numAmount > 0 && !isOverMax && numReceived > 0 && (
               <div data-testid="sell-summary-strip" style={{ background: 'var(--c-card-2)', borderRadius: 12, overflow: 'hidden' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid var(--c-line)' }}>
-                  <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{isVI ? 'Tiền gốc' : 'Principal'}{bankFraction < 0.999 && <span style={{ opacity: 0.7 }}> · {Math.round(bankFraction * 100)}%</span>}</span>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)' }}>{fmtVND(bankPrincipalPortion, locale)}</span>
+                <div data-testid="sell-bank-principal" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid var(--c-line)' }}>
+                  <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{isVI ? 'Tiền gốc' : 'Principal'}{bankPct < 0.999 && <span style={{ opacity: 0.7 }}> · {Math.round(bankPct * 100)}%</span>}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)' }}>{fmtVND(bankPreview.principal, locale)}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid var(--c-line)' }}>
                   <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{isVI ? 'Số tiền thực nhận' : "Amount you'll receive"}</span>
                   <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)' }}>{fmtVND(numReceived, locale)}</span>
                 </div>
                 {bankGain != null && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 14px', borderBottom: '1px solid var(--c-line)' }}>
+                  <div data-testid="sell-bank-gain" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 14px', borderBottom: '1px solid var(--c-line)' }}>
                     <span style={{ fontSize: 12, fontWeight: 600 }}>{isVI ? 'Lãi/Lỗ' : 'Gain / Loss'}</span>
                     <span style={{ fontSize: 15, fontWeight: 700, color: bankGain >= 0 ? 'var(--c-pos, #16a34a)' : 'var(--c-neg, #dc2626)' }}>{bankGain >= 0 ? '+' : '−'}{fmtVND(Math.abs(bankGain), locale)}</span>
                   </div>
                 )}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px' }}>
-                  <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{isVI ? 'Còn lại sau giao dịch' : 'Remaining after transaction'}</span>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)' }}>{fmtVND(Math.max(0, maxAmount - numAmount), locale)}</span>
+                {/* Remaining PRINCIPAL — what the next withdrawal is capped
+                    against, and what depositValuation reduces. */}
+                <div data-testid="sell-bank-remaining" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px' }}>
+                  <span style={{ fontSize: 12, color: 'var(--c-muted)' }}>{isVI ? 'Tiền gốc còn lại' : 'Remaining principal'}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)' }}>{fmtVND(bankPreview.remainingPrincipal, locale)}</span>
                 </div>
               </div>
             )}
@@ -620,7 +654,9 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
             </>
             )}
 
-            {/* Count toward goal progress — only when withdrawing from a goal */}
+            {/* Count toward goal progress — only when withdrawing from a goal.
+                What leaves the goal is the cash: for a bank deposit that's the
+                payout, not the principal slice of it. */}
             {context === 'goal' && (
               <AffectsProgressControl
                 checked={affectsProgress}
@@ -628,7 +664,7 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
                 isVi={isVI}
                 currentValue={goalCurrentValue ?? 0}
                 targetAmount={goalTargetAmount ?? null}
-                withdrawnValue={isGold ? goldProceeds : numAmount}
+                withdrawnValue={isGold ? goldProceeds : isBank ? numReceived : numAmount}
               />
             )}
 
@@ -685,12 +721,14 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
                   : isBank ? <ArrowDownToLine size={15} strokeWidth={2.2} /> : <ArrowDownRight size={15} strokeWidth={2.2} />}
                 {(isGold ? numUnits <= 0 : numAmount <= 0)
                   ? (isVI
-                      ? (isBank ? 'Nhập số tiền rút' : isGold ? 'Nhập số lượng bán' : 'Nhập số tiền bán')
-                      : (isBank ? 'Enter withdrawal amount' : isGold ? 'Enter quantity to sell' : 'Enter sale amount'))
+                      ? (isBank ? 'Nhập số tiền gốc rút' : isGold ? 'Nhập số lượng bán' : 'Nhập số tiền bán')
+                      : (isBank ? 'Enter principal to withdraw' : isGold ? 'Enter quantity to sell' : 'Enter sale amount'))
                   : (isGold && numSalePrice <= 0)
                   ? (isVI ? 'Nhập giá bán' : 'Enter sale price')
                   : isOverMax
-                  ? (isVI ? (isGold ? 'Vượt quá số lượng' : 'Vượt quá số dư') : (isGold ? 'Exceeds quantity' : 'Exceeds balance'))
+                  ? (isVI
+                      ? (isGold ? 'Vượt quá số lượng' : isBank ? 'Vượt quá tiền gốc' : 'Vượt quá số dư')
+                      : (isGold ? 'Exceeds quantity' : isBank ? 'Exceeds principal' : 'Exceeds balance'))
                   : (isBank && numReceived <= 0)
                   ? (isVI ? 'Nhập số tiền thực nhận' : 'Enter amount received')
                   : saving
