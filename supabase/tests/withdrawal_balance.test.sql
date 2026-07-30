@@ -229,4 +229,69 @@ begin
 end;
 $$;
 
+-- ── the balance a row is measured against must be the one it draws down ──────
+-- Two ways to hand the invariant the wrong balance, both caught by review on
+-- PR #599:
+--
+--   1. A fund withdrawal carrying BOTH fund_id and parent_transaction_id.
+--      lib/withdrawalProgress keys any row with asset_type='fund' + fund_id by
+--      (goal, fund) and ignores its parent — so measuring it against the parent
+--      instead lets a fat deposit in one goal wave through a phantom fund sell
+--      in another. The check has to follow the same precedence the valuation does.
+--   2. Staging the row as an investment and flipping transaction_type afterwards.
+--      A one-column update has to re-measure, or the guard is opt-in.
+do $$
+declare
+  v_user  uuid;
+  v_goal  uuid;
+  v_goal_b uuid;
+  v_fund  uuid;
+  v_fat   uuid;
+  v_staged uuid;
+begin
+  insert into auth.users (id, email) values (gen_random_uuid(), 'wd-bucket@test.invalid') returning id into v_user;
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'House') returning goal_id into v_goal;
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Car') returning goal_id into v_goal_b;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Bucket Fund', 'BKF', 'equity', 20000) returning id into v_fund;
+
+  -- Plenty of this fund held in the House goal — principal AND units, so the
+  -- parent-row check would pass on both counts if it were the one applied.
+  insert into public.investment_transactions (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal, v_fund, 'fund', 'investment', '2026-01-01', 4000000, 200, 20000) returning transaction_id into v_fat;
+
+  -- 1) The Car goal holds none of the fund. Parenting the sell to the fat House
+  --    row must not buy it a balance: the dashboard will subtract these units
+  --    from (Car, fund), which holds nothing.
+  begin
+    insert into public.investment_transactions
+      (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date,
+       amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
+    values (v_user, v_goal_b, v_fund, 'fund', 'withdrawal', '2026-02-01',
+            2000000, v_fat, 2000000, 100);
+    raise exception 'a fund sell must be measured against its fund bucket, not its parent';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- 2) Staged as an investment (which the invariant leaves alone, since an
+  --    investment draws nothing down), then activated. 9M of principal against a
+  --    4M holding.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn)
+  values (v_user, v_goal, 'bank', 'investment', '2026-02-01', 9000000, v_fat, 9000000)
+  returning transaction_id into v_staged;
+
+  begin
+    update public.investment_transactions
+       set transaction_type = 'withdrawal'
+     where transaction_id = v_staged;
+    raise exception 'becoming a withdrawal must be measured too';
+  exception when sqlstate '23514' then null;
+  end;
+
+  raise notice 'withdrawal bucket precedence + activation: ok';
+end;
+$$;
+
 rollback;

@@ -52,28 +52,14 @@ declare
 begin
   if new.transaction_type is distinct from 'withdrawal' then return new; end if;
 
-  if new.parent_transaction_id is not null then
-    -- Lock the source before measuring it (see the header): this is what makes
-    -- two concurrent withdrawals of the same deposit serialize.
-    select t.amount_vnd, t.units into v_principal, v_units
-      from public.investment_transactions t
-     where t.transaction_id = new.parent_transaction_id
-       and t.user_id = new.user_id
-       for update;
-    -- A parent that isn't the writer's own is the ownership trigger's refusal to
-    -- make (#474 / #525); staying quiet here keeps that message the one the user
-    -- sees instead of a confusing "no balance".
-    if not found then return new; end if;
-
-    select coalesce(sum(w.principal_withdrawn), 0), coalesce(sum(w.units_withdrawn), 0)
-      into v_out_principal, v_out_units
-      from public.investment_transactions w
-     where w.parent_transaction_id = new.parent_transaction_id
-       and w.transaction_type = 'withdrawal'
-       and w.transaction_id <> new.transaction_id;   -- an UPDATE re-measures without itself
-
-  elsif new.asset_type = 'fund' and new.fund_id is not null then
-    -- Lock the bucket's investment rows first, same ordering as above. Pending
+  -- The branch order is not a preference: it MIRRORS lib/withdrawalProgress, which
+  -- keys any row with asset_type='fund' + fund_id by (goal, fund) and ignores its
+  -- parent. Measuring such a row against a parent instead would check a balance
+  -- nothing draws down — a fat holding in one goal waving through a phantom fund
+  -- sell in another, since the API accepts both fields on one row.
+  if new.asset_type = 'fund' and new.fund_id is not null then
+    -- Lock the bucket's investment rows before measuring them (see the header):
+    -- this is what makes two concurrent sells of the same bucket serialize. Pending
     -- DCA seeds (units is null) are excluded: they carry a planned amount with no
     -- units bought yet, the dashboard never values them, so they hold nothing to
     -- sell. Renewal snapshots are history copies, not holdings.
@@ -106,6 +92,26 @@ begin
        and w.transaction_type = 'withdrawal'
        and w.goal_id is not distinct from new.goal_id
        and w.transaction_id <> new.transaction_id;
+
+  elsif new.parent_transaction_id is not null then
+    -- Bank / gold / stock: one source row. Lock it before measuring it, so two
+    -- concurrent withdrawals of the same deposit serialize here.
+    select t.amount_vnd, t.units into v_principal, v_units
+      from public.investment_transactions t
+     where t.transaction_id = new.parent_transaction_id
+       and t.user_id = new.user_id
+       for update;
+    -- A parent that isn't the writer's own is the ownership trigger's refusal to
+    -- make (#474 / #525); staying quiet here keeps that message the one the user
+    -- sees instead of a confusing "no balance".
+    if not found then return new; end if;
+
+    select coalesce(sum(w.principal_withdrawn), 0), coalesce(sum(w.units_withdrawn), 0)
+      into v_out_principal, v_out_units
+      from public.investment_transactions w
+     where w.parent_transaction_id = new.parent_transaction_id
+       and w.transaction_type = 'withdrawal'
+       and w.transaction_id <> new.transaction_id;   -- an UPDATE re-measures without itself
 
   else
     -- Nothing identifiable to draw down: a held-for-merge settlement with no
@@ -142,7 +148,12 @@ comment on function public.enforce_withdrawal_within_balance() is
 
 drop trigger if exists investment_transactions_withdrawal_balance on public.investment_transactions;
 create trigger investment_transactions_withdrawal_balance
-  before insert or update of principal_withdrawn, units_withdrawn, parent_transaction_id, fund_id, goal_id
+  -- transaction_type is in the list because the WHEN clause reads it: without it,
+  -- a row could be staged as an investment carrying principal_withdrawn (which
+  -- draws nothing down, so it is not measured) and then turned into a withdrawal
+  -- by a one-column update that never fires this trigger.
+  before insert or update of
+    transaction_type, principal_withdrawn, units_withdrawn, parent_transaction_id, fund_id, goal_id
   on public.investment_transactions
   for each row
   when (new.transaction_type = 'withdrawal')
