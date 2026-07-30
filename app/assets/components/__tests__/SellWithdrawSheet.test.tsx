@@ -123,6 +123,41 @@ describe('SellWithdrawSheet — partial bank withdrawal where value != principal
   })
 })
 
+// The goal-progress preview subtracts its input from the goal's VALUE, and after
+// saving, valueNonFundHolding revalues the holding from the remaining principal:
+// the goal drops by the withdrawn principal plus its projected interest
+// (calcProjectedInterest is linear in principal, so that slice is exact). The cash
+// received never enters that calculation — it leaves for Unallocated.
+describe('SellWithdrawSheet — goal-progress preview tracks the value released, not the payout', () => {
+  // 20M principal carrying 4M of accrued interest, in a goal worth exactly its
+  // target. Withdrawing half the principal releases 10M + 2M = 12M of value.
+  const book = {
+    type: 'bank' as const, name: 'PVcombank',
+    currentValue: 24_000_000, interestRate: 6,
+    transactionId: 't1', purchasePrice: 20_000_000,
+  }
+  const goalProps = { context: 'goal' as const, goalId: 'g1', goalCurrentValue: 24_000_000, goalTargetAmount: 24_000_000 }
+
+  it('previews the drop from the value released', () => {
+    render(<SellWithdrawSheet item={book} open {...goalProps} onClose={vi.fn()} onSuccess={vi.fn()} />)
+    fireEvent.change(screen.getByTestId('sell-amount-input'), { target: { value: '10000000' } })
+    const control = screen.getByTestId('affects-progress-control')
+    // 24M → 12M of 24M = 50%. Using the payout would leave 14M → 58%.
+    expect(control).toHaveTextContent('50%')
+    expect(control).not.toHaveTextContent('58%')
+  })
+
+  it('does not shrink the previewed drop when an early withdrawal forfeits the interest', () => {
+    render(<SellWithdrawSheet item={book} open {...goalProps} onClose={vi.fn()} onSuccess={vi.fn()} />)
+    fireEvent.change(screen.getByTestId('sell-amount-input'), { target: { value: '10000000' } })
+    // The bank pays back principal only — but the holding is still revalued from
+    // the remaining principal, so the goal falls by the same 12M either way. A
+    // preview keyed off the payout would promise a smaller drop than it delivers.
+    fireEvent.change(screen.getByTestId('sell-received-input'), { target: { value: '10000000' } })
+    expect(screen.getByTestId('affects-progress-control')).toHaveTextContent('50%')
+  })
+})
+
 describe('SellWithdrawSheet — links the withdrawal to its goal (issue #261)', () => {
   it('posts goal_id when withdrawing in a goal context', async () => {
     const fetchMock = vi.fn((_url?: string, _init?: RequestInit) =>

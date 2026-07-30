@@ -146,6 +146,16 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
   const bankPct = bankPrincipal > 0 ? Math.min(1, numAmount / bankPrincipal) : 0
 
   const withdrawMax = isBank ? bankPrincipal : maxAmount
+
+  // Value released from the holding by this withdrawal. After saving,
+  // valueNonFundHolding revalues the deposit from its remaining principal, so the
+  // holding falls by the withdrawn principal PLUS its projected interest —
+  // calcProjectedInterest is linear in principal, which makes that slice exact.
+  // The cash received is not that figure: an early withdrawal can forfeit the
+  // interest and still release it from the goal.
+  const bankValueReleased = isBank
+    ? estimateReceivedForPrincipal({ currentPrincipal: bankPrincipal, currentValue: maxAmount, amount: numAmount })
+    : 0
   const isOverMax = isGold ? isOverUnits : (numAmount > withdrawMax && withdrawMax > 0)
   const isValid = isGold
     ? (numUnits > 0 && !isOverUnits && numSalePrice > 0 && !saving)
@@ -655,8 +665,8 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
             )}
 
             {/* Count toward goal progress — only when withdrawing from a goal.
-                What leaves the goal is the cash: for a bank deposit that's the
-                payout, not the principal slice of it. */}
+                Keyed off the VALUE released (see bankValueReleased), which is what
+                the goal actually loses once the holding is revalued. */}
             {context === 'goal' && (
               <AffectsProgressControl
                 checked={affectsProgress}
@@ -664,7 +674,7 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
                 isVi={isVI}
                 currentValue={goalCurrentValue ?? 0}
                 targetAmount={goalTargetAmount ?? null}
-                withdrawnValue={isGold ? goldProceeds : isBank ? numReceived : numAmount}
+                withdrawnValue={isGold ? goldProceeds : isBank ? bankValueReleased : numAmount}
               />
             )}
 
