@@ -120,6 +120,40 @@ test.describe('withdrawal balance enforcement (#587)', () => {
     }
   })
 
+  // fund_id is ON DELETE SET NULL too, so deleting a fund orphans its sells
+  // through the same kind of update as deleting a deposit. Same failure mode, a
+  // different route — and the helpers hide it the same way.
+  test('a fund that has been sold from can still be deleted', async ({ request }) => {
+    const fund = await api.createFund({
+      name: `E2E WdBalance Del ${Date.now()}`,
+      code: `WBD${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+      fund_type: 'equity',
+      nav: 20_000,
+    })
+    const buy = await api.createTransaction({
+      asset_type: 'fund', fund_id: fund.id, goal_id: goalId,
+      amount_vnd: 2_000_000, units: 100, unit_price: 20_000, investment_date: '2026-01-01',
+    })
+    const sell = await request.post('/api/v1/investment-transactions', {
+      data: {
+        transaction_type: 'withdrawal', asset_type: 'fund', fund_id: fund.id,
+        investment_date: '2026-02-01', amount_vnd: 1_000_000,
+        units_withdrawn: 50, principal_withdrawn: 1_000_000, goal_id: goalId,
+        notes: 'E2E wd balance fund',
+      },
+    })
+    expect(sell.status()).toBe(201)
+
+    try {
+      const del = await request.delete(`/api/funds/${fund.id}`)
+      expect(del.ok()).toBeTruthy()
+    } finally {
+      await api.deleteTransactionCascade(buy.transaction_id)
+      await api.deleteAllTransactionsByNotes('E2E wd balance fund')
+      await api.deleteFund(fund.id)
+    }
+  })
+
   // A fund sell has no parent row: its balance is the (goal, fund) bucket the
   // dashboard aggregates. Units held for one goal must not fund another's sell.
   test('a fund sell draws only on the goal it was picked from', async ({ request }) => {

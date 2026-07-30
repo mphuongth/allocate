@@ -421,6 +421,7 @@ declare
   v_fund uuid;
   v_buy  uuid;
   v_dep  uuid;
+  v_sell uuid;
 begin
   insert into auth.users (id, email) values (gen_random_uuid(), 'wd-bucket2@test.invalid') returning id into v_user;
   insert into public.savings_goals (user_id, goal_name) values (v_user, 'House') returning goal_id into v_goal;
@@ -471,7 +472,30 @@ begin
     (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn)
   values (v_user, v_goal, 'bank', 'withdrawal', '2026-03-01', 100000000, v_dep, 100000000);
 
-  raise notice 'withdrawal bucket asset type + negative amounts: ok';
+  -- Deleting the FUND is the same story as deleting a deposit: fund_id is also
+  -- ON DELETE SET NULL, so the sells are orphaned by an update that lands here.
+  -- Only the FK may do it — detaching a sell from a fund that still exists puts
+  -- the units back and files the sell under no key at all.
+  insert into public.investment_transactions (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal, v_fund, 'fund', 'investment', '2026-01-01', 2000000, 100, 20000);
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, principal_withdrawn, units_withdrawn)
+  values (v_user, v_goal, v_fund, 'fund', 'withdrawal', '2026-02-01', 1000000, 1000000, 50)
+  returning transaction_id into v_sell;
+
+  begin
+    update public.investment_transactions set fund_id = null where transaction_id = v_sell;
+    raise exception 'a sell must not be detached from a fund that still exists';
+  exception when sqlstate '23514' then null;
+  end;
+
+  delete from public.funds where id = v_fund;
+
+  if (select fund_id from public.investment_transactions where transaction_id = v_sell) is not null then
+    raise exception 'deleting the fund should have orphaned its sell';
+  end if;
+
+  raise notice 'withdrawal bucket asset type + negative amounts + fund deletion: ok';
 end;
 $$;
 
