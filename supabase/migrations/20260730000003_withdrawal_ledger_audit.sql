@@ -245,14 +245,25 @@ select 'fund_bucket_has_no_purchases', 'violation',
 -- units takes the remaining basis, a partial sale its units-proportional share.
 -- That rule is additive and order-independent — each sale takes units × basis /
 -- total_units regardless of sequence — so the aggregate is a sound check even
--- though the per-sale history is not reconstructible. Tolerance is one đồng per
--- sale, and here — unlike the overdraw bound above — the drift genuinely DOES
--- accumulate: each partial sale's expectation is recomputed from what is left, so
--- two sales may each under-take by a đồng and both be accepted. 100 đồng over 4
--- units, two sales of 1 unit taking 24 where the flat proportion says 25: the
--- aggregate is 48 against 50, both accepted (probed, and pinned by a test).
--- Over-taking gets no slack from that: the cumulative upper bound is enforced
--- tightly by holding_overdrawn / fund_bucket_overdrawn above.
+-- though the per-sale history is not reconstructible.
+--
+-- The tolerance is TWO đồng per sale, and unlike the overdraw bound above this one
+-- genuinely has to scale: each partial sale's expectation is recomputed from the
+-- ROUNDED remaining basis, so the error compounds rather than cancelling. Worked
+-- example, both writes accepted by the invariant — 100 đồng over 15 units, a sale
+-- of 7 units taking 48 where the expectation is 47, then 1 unit of the remaining 8
+-- taking 8 where the expectation is round(52/8) = 7: the aggregate is 56 against a
+-- flat expectation of 53, a drift of 3 across 2 sales.
+--
+-- Two rather than one-and-a-half because 1.5 is where the measured worst case sits:
+-- a search over 400k invariant-legal sale sequences (random basis, units, chain
+-- length up to 25, errors pushed to the allowance every time) never exceeded 1.5
+-- đồng per sale. It cannot run away, either — writing D for the drift, each sale
+-- gives D ← D × (1 − units/remaining_units) + e, a CONTRACTION, so the accumulated
+-- part shrinks as the chain grows and the worst cases are short chains.
+--
+-- Over-taking gains nothing from this slack: the cumulative upper bound stays tight
+-- in holding_overdrawn / fund_bucket_overdrawn above.
 --
 -- 'review', not 'violation': a purchase added to a bucket AFTER a sale legitimately
 -- shifts the ratio, and so does a hand-corrected row. The number is the useful
@@ -270,7 +281,7 @@ select 'basis_not_proportional', 'review',
  where p.asset_type = 'gold' and coalesce(p.units, 0) > 0
    and abs(p.out_principal
            - case when p.out_units >= p.units - 0.0001 then p.amount_vnd
-                  else round(p.amount_vnd * p.out_units / p.units) end) > p.sells
+                  else round(p.amount_vnd * p.out_units / p.units) end) > 2 * p.sells
 
 union all
 select 'basis_not_proportional', 'review',
@@ -284,7 +295,7 @@ select 'basis_not_proportional', 'review',
  where b.units > 0
    and abs(b.out_principal
            - case when b.out_units >= b.units - 0.0001 then b.basis
-                  else round(b.basis * b.out_units / b.units) end) > b.sells;
+                  else round(b.basis * b.out_units / b.units) end) > 2 * b.sells;
 
 comment on view public.withdrawal_ledger_audit is
   'Read-only audit of existing withdrawal rows against the decision table enforced by check_withdrawal_balance. One row per finding: check_name, severity, and the holding it concerns (#609).';

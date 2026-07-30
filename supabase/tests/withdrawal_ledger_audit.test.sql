@@ -42,7 +42,7 @@ declare
   v_eps_src   uuid; v_nounits_src uuid;
   -- the clean half
   v_tol_goal  uuid;
-  v_drift_src uuid;
+  v_drift_src uuid; v_comp_src uuid;
   v_ok_bank   uuid; v_ok_bank_w  uuid;
   v_ok_gold   uuid; v_ok_gold_w1 uuid; v_ok_gold_w2 uuid;
   v_ok_buy    uuid; v_ok_sell1   uuid; v_ok_sell2   uuid;
@@ -140,6 +140,23 @@ begin
   insert into public.investment_transactions
     (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
   values (v_user, v_goal_b, 'gold', 'withdrawal', '2026-03-01', 1, v_drift_src, 24, 1);
+
+  -- Worse than additive, because each expectation is recomputed from the ROUNDED
+  -- remaining: 100 đồng over 15 units, a sale of 7 units taking 48 where the
+  -- expectation is 47, then 1 unit of the remaining 8 taking 8 where the
+  -- expectation is round(52/8) = 7. Both inside the allowance, so both accepted —
+  -- but the aggregate is 56 against a flat expectation of 53, a drift of 3 across
+  -- 2 sales. A simulation over invariant-legal sequences puts the worst case at
+  -- 1.5 đồng per sale (the drift CONTRACTS by 1 − units/remaining each step, so it
+  -- cannot run away), which is what the tolerance is set from.
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal_b, 'gold', 'investment', '2026-01-01', 100, 15, 7) returning transaction_id into v_comp_src;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_goal_b, 'gold', 'withdrawal', '2026-02-01', 1, v_comp_src, 48, 7);
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_goal_b, 'gold', 'withdrawal', '2026-03-01', 1, v_comp_src, 8, 1);
 
   -- ═══ the planted violations ════════════════════════════════════════════════
   -- Disabling the user triggers is the only way in: these are precisely the shapes
@@ -369,7 +386,7 @@ begin
     from public.withdrawal_ledger_audit
    where transaction_id in (v_ok_bank_w, v_ok_gold_w1, v_ok_gold_w2, v_ok_sell1, v_ok_sell2,
                             v_ok_held, v_seed, v_seed_buy, v_seed_sell)
-      or parent_transaction_id in (v_ok_bank, v_ok_gold, v_drift_src)
+      or parent_transaction_id in (v_ok_bank, v_ok_gold, v_drift_src, v_comp_src)
       or (fund_id = v_fund_ok);
   if v_count <> 0 then
     raise exception 'the audit reported % row(s) against a ledger the invariant accepted', v_count;
