@@ -41,6 +41,7 @@ declare
   v_mask_goal uuid; v_mask_zero uuid;
   v_eps_src   uuid; v_nounits_src uuid;
   v_cancel_src uuid; v_cancel_a uuid; v_cancel_b uuid;
+  v_slack_src uuid; v_slack uuid;
   -- the clean half
   v_tol_goal  uuid;
   v_drift_src uuid; v_comp_src uuid; v_f7_src uuid; v_full_src uuid;
@@ -362,6 +363,20 @@ begin
   values (v_user, v_goal_b, 'gold', 'withdrawal', '2026-03-01', 1, v_cancel_src, 600, 50)
   returning transaction_id into v_cancel_b;
 
+  -- 19. an ORDINARY partial sale taking the wrong basis: 1 chỉ of 4, taking
+  --     10,000,500 where the rule says 10,000,000. The invariant refuses it. The
+  --     full-sale slack must not cover this row — that slack exists because a sale
+  --     within an epsilon of the REST takes the whole basis, and a sale of 1 of 4
+  --     units is nowhere near the rest. The tell is state-visible: using the
+  --     shortcut leaves at most an epsilon of units behind, so it can only have
+  --     happened on a holding that ends up exhausted. This one has 3 units left.
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal, 'gold', 'investment', '2026-01-01', 40000000, 4, 10000000) returning transaction_id into v_slack_src;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-02-01', 12000000, v_slack_src, 10000500, 1)
+  returning transaction_id into v_slack;
+
   alter table public.investment_transactions enable trigger user;
 
   -- ═══ every planted row must be named, by the right check ═══════════════════
@@ -383,7 +398,8 @@ begin
         ('sourceless_not_held_for_merge', v_stray_z),
         ('withdrawal_missing_principal',  v_mask_zero),
         ('sale_basis_not_proportional',   v_cancel_a),
-        ('sale_basis_not_proportional',   v_cancel_b)
+        ('sale_basis_not_proportional',   v_cancel_b),
+        ('sale_basis_not_proportional',   v_slack)
       ) as x(name, tx)
   loop
     if v_count <> 1 then
