@@ -82,7 +82,7 @@ describe('POST /api/v1/investment-transactions — remaining balance', () => {
 
   it('answers 400 with the reason when the principal exceeds the balance', async () => {
     h.insertResult = balanceRefusal(
-      'withdrawal of 50000000 exceeds the remaining balance of 40000000 on this holding')
+      'withdrawal invariant: 50000000 exceeds the remaining balance of 40000000 on this holding')
 
     const res = await call()
 
@@ -92,7 +92,7 @@ describe('POST /api/v1/investment-transactions — remaining balance', () => {
 
   it('answers 400 for a unit overdraw too', async () => {
     h.insertResult = balanceRefusal(
-      'withdrawal of 5 units exceeds the remaining balance of 4 units on this holding')
+      'withdrawal invariant: 5 units exceeds the remaining balance of 4 units on this holding')
 
     const res = await call({ ...SELL, asset_type: 'gold', units_withdrawn: 5 })
 
@@ -105,7 +105,7 @@ describe('POST /api/v1/investment-transactions — remaining balance', () => {
   // and it must not be a 500 — nothing failed.
   it('does not report a balance refusal as a server error', async () => {
     h.insertResult = balanceRefusal(
-      'withdrawal of 1 exceeds the remaining balance of 0 on this holding')
+      'withdrawal invariant: 1 exceeds the remaining balance of 0 on this holding')
 
     const res = await call()
 
@@ -116,12 +116,12 @@ describe('POST /api/v1/investment-transactions — remaining balance', () => {
   // holding, which subtracts from nothing while claiming cash left.
   it('answers 400 when the withdrawal draws on no holding', async () => {
     h.insertResult = balanceRefusal(
-      'withdrawal draws on no holding: it has neither a parent transaction nor a fund')
+      'withdrawal invariant: draws on no holding — it has neither a parent transaction nor a fund')
 
     const res = await call({ ...SELL, parent_transaction_id: undefined })
 
     expect(res.status).toBe(400)
-    await expect(res.json()).resolves.toEqual({ error: 'A withdrawal must be attached to a holding.' })
+    await expect(res.json()).resolves.toEqual({ error: 'This withdrawal does not match the holding it is drawn on.' })
   })
 
   it('still reports an unrelated insert failure as a 500', async () => {
@@ -133,13 +133,29 @@ describe('POST /api/v1/investment-transactions — remaining balance', () => {
     await expect(res.json()).resolves.toEqual({ error: 'Failed to create transaction' })
   })
 
-  // A different check_violation (an ownership trigger, say) is not a balance
-  // problem and must keep its own answer rather than borrowing this message.
+  // A different check_violation (an ownership trigger, say) is not this
+  // invariant's and must keep its own answer rather than borrowing this message.
   it('does not claim a balance problem for other constraint failures', async () => {
     h.insertResult = balanceRefusal('parent_transaction_id does not belong to the row owner')
 
     const res = await call()
 
     expect(res.status).toBe(500)
+  })
+
+  // The reason the match is one PREFIX and not a list of phrases: every refusal
+  // the invariant adds is a bad request, and the route shouldn't have to be
+  // updated (and remembered) each time one is added. Half a fund sell is the case
+  // that was falling through as a 500.
+  it('answers 400 for any refusal the invariant raises, including ones added later', async () => {
+    for (const message of [
+      'withdrawal invariant: a fund sell must record both units_withdrawn and principal_withdrawn (got 50 units, <NULL> principal)',
+      'withdrawal invariant: amounts cannot be negative (principal -100, units <NULL>)',
+      'withdrawal invariant: cannot be detached from fund abc, which still exists',
+      'withdrawal invariant: something nobody has written yet',
+    ]) {
+      h.insertResult = balanceRefusal(message)
+      expect((await call()).status).toBe(400)
+    }
   })
 })

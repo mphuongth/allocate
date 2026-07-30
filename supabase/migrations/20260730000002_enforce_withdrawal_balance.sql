@@ -37,8 +37,13 @@
 -- row-level trigger sees such a statement half-applied, so whether the destination
 -- bucket looked complete depended on heap order: an ordinary "buy, sell, edit the
 -- buy, assign the fund to a goal" failed. Relocations are therefore measured by a
--- DEFERRED constraint trigger, once the whole statement has landed and the
--- destination bucket is whatever it is going to be.
+-- CONSTRAINT trigger, which runs at the END OF THE STATEMENT — once the whole move
+-- has landed and the destination bucket is whatever it is going to be.
+--
+-- Every refusal here is prefixed 'withdrawal invariant:' so the API can map the
+-- whole family to a 400 with one match. Adding a new refusal used to mean
+-- remembering to add a phrase to the route, and forgetting made an invalid request
+-- look like a server fault.
 --
 -- Not covered here, deliberately: lowering a *source's* amount_vnd below what has
 -- already been withdrawn (an edit, not a withdrawal) is the mirror hole and wants
@@ -65,6 +70,11 @@ declare
   v_left          bigint;
   v_left_units    numeric;
   v_parent_type   text;
+  -- Purchases in the fund bucket, and the rounding slack they imply (below).
+  -- Null outside the fund branch, where the basis is one row's stored amount and
+  -- there is nothing to reconcile.
+  v_rows          int;
+  v_slack         bigint;
 begin
   if wd.transaction_type is distinct from 'withdrawal' then return; end if;
 
@@ -74,7 +84,7 @@ begin
   -- the invariant does — before anything is measured, since a negative amount
   -- would poison the measurement itself.
   if coalesce(wd.principal_withdrawn, 0) < 0 or coalesce(wd.units_withdrawn, 0) < 0 then
-    raise exception 'withdrawal amounts cannot be negative (principal %, units %)',
+    raise exception 'withdrawal invariant: amounts cannot be negative (principal %, units %)',
       wd.principal_withdrawn, wd.units_withdrawn using errcode = 'check_violation';
   end if;
 
@@ -90,7 +100,7 @@ begin
     -- keeps its full value; with no principal the units fall while the cost basis
     -- stays, and P&L is wrong. Neither is a shape the sheets produce.
     if coalesce(wd.units_withdrawn, 0) <= 0 or coalesce(wd.principal_withdrawn, 0) <= 0 then
-      raise exception 'a fund sell must record both units_withdrawn and principal_withdrawn (got % units, % principal)',
+      raise exception 'withdrawal invariant: a fund sell must record both units_withdrawn and principal_withdrawn (got % units, % principal)',
         wd.units_withdrawn, wd.principal_withdrawn using errcode = 'check_violation';
     end if;
 
@@ -116,8 +126,8 @@ begin
      order by t.transaction_id      -- a stable lock order; concurrent sells can't deadlock
        for update;
 
-    select coalesce(sum(t.amount_vnd), 0), coalesce(sum(t.units), 0)
-      into v_principal, v_units
+    select coalesce(sum(t.amount_vnd), 0), coalesce(sum(t.units), 0), count(*)
+      into v_principal, v_units, v_rows
       from public.investment_transactions t
      where t.user_id = wd.user_id
        and t.fund_id = wd.fund_id
@@ -164,7 +174,7 @@ begin
     -- exists (issue #606). Bounding it by the parent's own principal, as below, is
     -- the most this invariant can honestly say about it.
     if v_parent_type is distinct from 'investment' then
-      raise exception 'withdrawal draws on no holding: its parent % is not an investment',
+      raise exception 'withdrawal invariant: draws on no holding — its parent % is not an investment',
         wd.parent_transaction_id using errcode = 'check_violation';
     end if;
 
@@ -183,7 +193,7 @@ begin
     -- but the row leaves the fund bucket), which is why asset_type fires the
     -- trigger: running is not enough, the new shape has to be refused.
     if coalesce(wd.principal_withdrawn, 0) > 0 or coalesce(wd.units_withdrawn, 0) > 0 then
-      raise exception 'withdrawal draws on no holding: it has neither a parent transaction nor a fund'
+      raise exception 'withdrawal invariant: draws on no holding — it has neither a parent transaction nor a fund'
         using errcode = 'check_violation';
     end if;
     -- Carrying neither is a settlement row with nothing to measure — a
@@ -194,8 +204,17 @@ begin
 
   if coalesce(wd.principal_withdrawn, 0) > 0 then
     v_left := coalesce(v_principal, 0) - v_out_principal;
-    if wd.principal_withdrawn > v_left then
-      raise exception 'withdrawal of % exceeds the remaining balance of % on this holding',
+    -- A fund bucket's principal is measured as Σ amount_vnd, while the sell
+    -- builders derive what they post from the NAV cost basis (Σ units × unit_price,
+    -- via the dashboard's avg entry price). Each purchase's stored amount_vnd was
+    -- itself rounded, so the two bases can differ by under half a đồng per row —
+    -- and a FULL sell of a multi-purchase bucket could land a few đồng above
+    -- Σ amount_vnd and be refused. Allow exactly that slack: half a đồng per
+    -- purchase, plus one for the sell's own rounding. Nothing outside the fund
+    -- branch gets any (v_rows is null there — one row's stored amount IS the basis).
+    v_slack := case when v_rows is null then 0 else ceil((v_rows + 1) * 0.5) end;
+    if wd.principal_withdrawn > v_left + v_slack then
+      raise exception 'withdrawal invariant: % exceeds the remaining balance of % on this holding',
         wd.principal_withdrawn, v_left using errcode = 'check_violation';
     end if;
   end if;
@@ -205,7 +224,7 @@ begin
     -- The tolerance rounds a real balance; it does not create one. Applied to an
     -- empty holding it would hand every sold-out bucket 0.0001 units it never had.
     if wd.units_withdrawn > v_left_units + (case when v_left_units > 0 then c_units_epsilon else 0 end) then
-      raise exception 'withdrawal of % units exceeds the remaining balance of % units on this holding',
+      raise exception 'withdrawal invariant: % units exceeds the remaining balance of % units on this holding',
         wd.units_withdrawn, v_left_units using errcode = 'check_violation';
     end if;
   end if;
@@ -239,7 +258,7 @@ begin
     if old.parent_transaction_id is not null and new.parent_transaction_id is null then
       if exists (select 1 from public.investment_transactions t
                   where t.transaction_id = old.parent_transaction_id) then
-        raise exception 'withdrawal cannot be detached from holding %, which still exists',
+        raise exception 'withdrawal invariant: cannot be detached from holding %, which still exists',
           old.parent_transaction_id using errcode = 'check_violation';
       end if;
       -- The source is gone. If the row still names a fund it now draws on that
@@ -251,7 +270,7 @@ begin
 
     if old.fund_id is not null and new.fund_id is null then
       if exists (select 1 from public.funds f where f.id = old.fund_id) then
-        raise exception 'withdrawal cannot be detached from fund %, which still exists',
+        raise exception 'withdrawal invariant: cannot be detached from fund %, which still exists',
           old.fund_id using errcode = 'check_violation';
       end if;
       -- The fund is gone. buildWithdrawalMaps now keys the row by its PARENT, so

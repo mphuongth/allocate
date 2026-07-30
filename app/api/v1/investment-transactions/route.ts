@@ -294,19 +294,21 @@ export async function POST(request: NextRequest) {
     .single()
 
   if (error) {
-    // The remaining-balance invariant refused it: a stale sheet, a retry, or a
-    // sell that lost a race against another one. Nothing failed, so this is a 400
-    // that says the balance moved — matching the book withdrawal's own answer.
-    // The wording is pinned by supabase/tests/withdrawal_balance.test.sql, which
-    // is where the trigger raising it lives (20260730000002).
-    if (error.message?.includes('exceeds the remaining balance')) {
-      return NextResponse.json({ error: 'Withdrawal exceeds the remaining balance of this holding.' }, { status: 400 })
-    }
-    // The same trigger's other refusal: principal or units taken out of a row that
-    // draws on no holding at all. No client can build that from the UI, but it is a
-    // bad request rather than a server fault, so say so.
-    if (error.message?.includes('draws on no holding')) {
-      return NextResponse.json({ error: 'A withdrawal must be attached to a holding.' }, { status: 400 })
+    // The withdrawal invariant refused it (20260730000002). Every refusal it
+    // raises carries this prefix, so the whole family maps to a 400 with one
+    // match — listing the messages individually meant a new refusal fell through
+    // as a 500, reporting an invalid request as a server fault. The prefix is
+    // pinned by supabase/tests/withdrawal_balance.test.sql.
+    if (error.message?.includes('withdrawal invariant:')) {
+      // The one a real user can hit: a stale sheet, a retry, or a sell that lost a
+      // race. Matching the book withdrawal's own answer for the same condition.
+      if (error.message.includes('remaining balance')) {
+        return NextResponse.json({ error: 'Withdrawal exceeds the remaining balance of this holding.' }, { status: 400 })
+      }
+      // The rest are shapes no client builds from the UI — a withdrawal attached
+      // to nothing, half a fund sell, a negative amount. Still the caller's
+      // problem, not the server's.
+      return NextResponse.json({ error: 'This withdrawal does not match the holding it is drawn on.' }, { status: 400 })
     }
     console.error('investment-transactions POST insert failed', error.message)
     return NextResponse.json({ error: 'Failed to create transaction' }, { status: 500 })

@@ -624,4 +624,106 @@ begin
 end;
 $$;
 
+-- ── a full fund sell must survive the two cost bases disagreeing ─────────────
+-- The bucket's principal is measured as Σ amount_vnd; the sell builders derive
+-- what they post from the NAV cost basis (Σ units × unit_price). Each stored
+-- amount_vnd was itself rounded, so on a multi-purchase bucket the two differ by
+-- a đồng or two — enough to refuse an ordinary "sell everything" without a slack
+-- of exactly that size.
+do $$
+declare
+  v_user uuid;
+  v_fund uuid;
+begin
+  insert into auth.users (id, email) values (gen_random_uuid(), 'wd-basis@test.invalid') returning id into v_user;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Basis Fund', 'BSF', 'equity', 20000) returning id into v_fund;
+
+  -- Two purchases whose raw basis is 1,000,050.4 each: stored amount_vnd rounds
+  -- DOWN to 1,000,050, so Σ amount_vnd = 2,000,100 while the NAV cost the sheet
+  -- computes rounds to 2,000,101.
+  insert into public.investment_transactions (user_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_fund, 'fund', 'investment', '2026-01-01', 1000050, 50.0025, 20000);
+  insert into public.investment_transactions (user_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_fund, 'fund', 'investment', '2026-02-01', 1000050, 50.0025, 20000);
+
+  insert into public.investment_transactions
+    (user_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, principal_withdrawn, units_withdrawn)
+  values (v_user, v_fund, 'fund', 'withdrawal', '2026-03-01', 2000101, 2000101, 100.005);
+
+  -- The slack is bounded, not a licence: a thousand đồng over is still refused.
+  begin
+    insert into public.investment_transactions
+      (user_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, principal_withdrawn, units_withdrawn)
+    values (v_user, v_fund, 'fund', 'withdrawal', '2026-04-01', 1000, 1000, 0.0001);
+    raise exception 'the cost-basis slack must not cover a real overdraw';
+  exception when sqlstate '23514' then null;
+  end;
+
+  raise notice 'fund cost-basis slack: ok';
+end;
+$$;
+
+-- ── every refusal is recognisable to the API ─────────────────────────────────
+-- The route maps this family to a 400 by one prefix. When each message had to be
+-- listed individually, a new refusal fell through as a 500 — an invalid request
+-- reported as a server fault.
+do $$
+declare
+  v_user uuid;
+  v_fund uuid;
+  v_msg  text;
+  v_seen int := 0;
+begin
+  insert into auth.users (id, email) values (gen_random_uuid(), 'wd-prefix@test.invalid') returning id into v_user;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Prefix Fund', 'PXF', 'equity', 20000) returning id into v_fund;
+
+  -- negative amounts
+  begin
+    insert into public.investment_transactions
+      (user_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, principal_withdrawn, units_withdrawn)
+    values (v_user, v_fund, 'fund', 'withdrawal', '2026-02-01', 1000, -1000, -1);
+  exception when sqlstate '23514' then
+    v_msg := sqlerrm;
+    if v_msg not like 'withdrawal invariant:%' then
+      raise exception 'the negative-amount refusal must carry the prefix, got: %', v_msg;
+    end if;
+    v_seen := v_seen + 1;
+  end;
+
+  -- incomplete fund deltas
+  begin
+    insert into public.investment_transactions
+      (user_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, principal_withdrawn)
+    values (v_user, v_fund, 'fund', 'withdrawal', '2026-02-01', 1000, 1000);
+  exception when sqlstate '23514' then
+    v_msg := sqlerrm;
+    if v_msg not like 'withdrawal invariant:%' then
+      raise exception 'the incomplete-deltas refusal must carry the prefix, got: %', v_msg;
+    end if;
+    v_seen := v_seen + 1;
+  end;
+
+  -- an empty bucket
+  begin
+    insert into public.investment_transactions
+      (user_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, principal_withdrawn, units_withdrawn)
+    values (v_user, v_fund, 'fund', 'withdrawal', '2026-02-01', 1000, 1000, 1);
+  exception when sqlstate '23514' then
+    v_msg := sqlerrm;
+    if v_msg not like 'withdrawal invariant:%' then
+      raise exception 'the balance refusal must carry the prefix, got: %', v_msg;
+    end if;
+    v_seen := v_seen + 1;
+  end;
+
+  if v_seen <> 3 then
+    raise exception 'expected three refusals, saw %', v_seen;
+  end if;
+
+  raise notice 'refusal prefix: ok';
+end;
+$$;
+
 rollback;
