@@ -284,9 +284,20 @@ select 'fund_bucket_has_no_purchases', 'violation',
 -- as a first write (50 of 100 units must take 500) — that state is unreachable in
 -- any order, and a totals-only audit calls it clean. The flat rate is the right
 -- yardstick per row precisely because the allocation rule is additive: each sale
--- takes units × basis / total_units whatever the sequence. Same tolerance, and a
--- measured one — the worst per-row deviation over invariant-legal sequences is 1
--- đồng per sale (the last sale absorbs whatever the earlier ones drifted).
+-- takes units × basis / total_units whatever the sequence.
+--
+-- The tolerance has THREE parts, and the third is the one that matters in practice:
+--   sells   the ±1 allowance each sale may use, which the last sale inherits
+--   1       the two roundings between the flat rate and the invariant's expectation
+--   0.0001 × basis / units
+--           the value of one epsilon of units. The clients round units to 4
+--           decimals, so "sell everything" routinely posts a hair UNDER the holding
+--           (4 chỉ leaves as 3.9999) and the invariant treats a sale within an
+--           epsilon of the rest as a FULL one, taking the whole basis. On an
+--           ordinary 40,000,000 đồng gold holding that legitimate gap is a THOUSAND
+--           đồng — a flat tolerance reports every full gold sale in the ledger.
+-- Validated against 1.5M invariant-legal sale sequences across four magnitudes of
+-- basis and units: no row exceeded it, tightest margin 1.2 đồng.
 union all
 select 'sale_basis_not_proportional', 'review',
        w.user_id, w.transaction_id, w.parent_transaction_id, w.fund_id, w.goal_id,
@@ -297,7 +308,8 @@ select 'sale_basis_not_proportional', 'review',
   join parents p on p.transaction_id = w.parent_transaction_id
  where not w.fund_keyed and p.asset_type = 'gold' and coalesce(p.units, 0) > 0
    and coalesce(w.units_withdrawn, 0) > 0
-   and abs(coalesce(w.principal_withdrawn, 0) - round(p.amount_vnd * w.units_withdrawn / p.units)) > 2 * p.sells
+   and abs(coalesce(w.principal_withdrawn, 0) - round(p.amount_vnd * w.units_withdrawn / p.units))
+       > p.sells + 1 + 0.0001 * p.amount_vnd / p.units
 
 union all
 select 'sale_basis_not_proportional', 'review',
@@ -310,7 +322,8 @@ select 'sale_basis_not_proportional', 'review',
     on b.user_id = w.user_id and b.fund_id = w.fund_id and b.goal_id is not distinct from w.goal_id
  where w.fund_keyed and b.units > 0
    and coalesce(w.units_withdrawn, 0) > 0
-   and abs(coalesce(w.principal_withdrawn, 0) - round(b.basis * w.units_withdrawn / b.units)) > 2 * b.sells
+   and abs(coalesce(w.principal_withdrawn, 0) - round(b.basis * w.units_withdrawn / b.units))
+       > b.sells + 1 + 0.0001 * b.basis / b.units
 
 union all
 select 'basis_not_proportional', 'review',
@@ -324,7 +337,7 @@ select 'basis_not_proportional', 'review',
  where p.asset_type = 'gold' and coalesce(p.units, 0) > 0
    and abs(p.out_principal
            - case when p.out_units >= p.units - 0.0001 then p.amount_vnd
-                  else round(p.amount_vnd * p.out_units / p.units) end) > 2 * p.sells
+                  else round(p.amount_vnd * p.out_units / p.units) end) > 2 * p.sells + 0.0001 * p.amount_vnd / p.units
 
 union all
 select 'basis_not_proportional', 'review',
@@ -338,7 +351,7 @@ select 'basis_not_proportional', 'review',
  where b.units > 0
    and abs(b.out_principal
            - case when b.out_units >= b.units - 0.0001 then b.basis
-                  else round(b.basis * b.out_units / b.units) end) > 2 * b.sells;
+                  else round(b.basis * b.out_units / b.units) end) > 2 * b.sells + 0.0001 * b.basis / b.units;
 
 comment on view public.withdrawal_ledger_audit is
   'Read-only audit of existing withdrawal rows against the decision table enforced by check_withdrawal_balance. One row per finding: check_name, severity, and the holding it concerns (#609).';

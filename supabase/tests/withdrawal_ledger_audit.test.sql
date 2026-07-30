@@ -43,7 +43,7 @@ declare
   v_cancel_src uuid; v_cancel_a uuid; v_cancel_b uuid;
   -- the clean half
   v_tol_goal  uuid;
-  v_drift_src uuid; v_comp_src uuid; v_f7_src uuid;
+  v_drift_src uuid; v_comp_src uuid; v_f7_src uuid; v_full_src uuid;
   v_ok_bank   uuid; v_ok_bank_w  uuid;
   v_ok_gold   uuid; v_ok_gold_w1 uuid; v_ok_gold_w2 uuid;
   v_ok_buy    uuid; v_ok_sell1   uuid; v_ok_sell2   uuid;
@@ -176,6 +176,19 @@ begin
   insert into public.investment_transactions
     (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
   values (v_user, v_goal_b, 'gold', 'withdrawal', '2026-03-01', 1, v_f7_src, 99, 1);
+
+  -- The clients round units to 4 decimals, so "sell everything" routinely posts a
+  -- hair UNDER the holding — 4 chỉ leaves as 3.9999 — and the invariant treats a
+  -- sale within an epsilon of the rest as a FULL one, taking the whole basis. A
+  -- per-sale check against the flat rate units × basis / total_units therefore sees
+  -- a legitimate gap of 0.0001 × basis / units, which on an ordinary 40,000,000
+  -- gold holding is a thousand đồng. Nothing exotic: this is what a full gold sale
+  -- looks like in this app.
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal_b, 'gold', 'investment', '2026-01-01', 40000000, 4, 10000000) returning transaction_id into v_full_src;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_goal_b, 'gold', 'withdrawal', '2026-02-01', 48000000, v_full_src, 40000000, 3.9999);
 
   -- ═══ the planted violations ════════════════════════════════════════════════
   -- Disabling the user triggers is the only way in: these are precisely the shapes
@@ -431,7 +444,7 @@ begin
     from public.withdrawal_ledger_audit
    where transaction_id in (v_ok_bank_w, v_ok_gold_w1, v_ok_gold_w2, v_ok_sell1, v_ok_sell2,
                             v_ok_held, v_seed, v_seed_buy, v_seed_sell)
-      or parent_transaction_id in (v_ok_bank, v_ok_gold, v_drift_src, v_comp_src, v_f7_src)
+      or parent_transaction_id in (v_ok_bank, v_ok_gold, v_drift_src, v_comp_src, v_f7_src, v_full_src)
       or (fund_id = v_fund_ok);
   if v_count <> 0 then
     raise exception 'the audit reported % row(s) against a ledger the invariant accepted', v_count;
