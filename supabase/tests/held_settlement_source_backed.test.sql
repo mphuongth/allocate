@@ -449,6 +449,28 @@ begin
     raise exception 'a settled deposit must not be moved to another goal' using errcode = 'ZZ999';
   exception when check_violation then null;
   end;
+  -- Naming amount and goal was not enough: converting the deposit to gold changes
+  -- what it IS, so the overview values it through the gold path where the
+  -- settlement's bank withdrawal no longer reduces it — while the pool still adds
+  -- the parked cash. Neither named column moves.
+  begin
+    update public.investment_transactions
+       set asset_type = 'gold', units = 10, unit_price = 100000
+     where transaction_id = v_partial;
+    raise exception 'a settled deposit must not change what it is' using errcode = 'ZZ999';
+  exception when check_violation then null;
+  end;
+
+  -- A settlement is not renewal history. active_investment_transactions excludes
+  -- rows carrying renewed_from_transaction_id, so stamping one hides its
+  -- withdrawal from valuation while renew_term_deposit_with_merge still folds its
+  -- cash into the destination — both ends counted.
+  begin
+    update public.investment_transactions set renewed_from_transaction_id = v_partial
+     where transaction_id = v_held2;
+    raise exception 'a held settlement must not be stamped as renewal history' using errcode = 'ZZ999';
+  exception when check_violation then null;
+  end;
   -- Removing the settlement frees it, which is the remedy the message names.
   delete from public.investment_transactions where transaction_id = v_held2;
   update public.investment_transactions set amount_vnd = 1200000 where transaction_id = v_partial;

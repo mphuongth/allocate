@@ -432,7 +432,7 @@ begin
      and s.held_for_merge
    limit 1;
   if found then
-    raise exception 'held settlement: this deposit has a settlement recorded against it — remove that settlement before changing its amount or goal'
+    raise exception 'held settlement: this deposit has a settlement recorded against it — remove that settlement before changing it'
       using errcode = 'check_violation';
   end if;
   return new;
@@ -442,11 +442,23 @@ $$;
 revoke all on function public.guard_settled_source_edit() from public, anon, authenticated;
 
 drop trigger if exists investment_transactions_guard_settled_source on public.investment_transactions;
+-- Every UPDATE, not a column list — the same lesson as the held-row trigger, and
+-- it was needed here for the same reason. Naming amount_vnd and goal_id missed
+-- the edit that changes what the holding IS: converting a settled 10,000,000 bank
+-- deposit into a fund or gold holding leaves both of those untouched, but the
+-- overview then values it through the fund/gold path, where the settlement's bank
+-- withdrawal no longer reduces it — while the pool still adds the parked cash.
+-- The source is counted twice with neither guarded column changed.
+--
+-- Enumerating "valuation-defining fields" would be the same list-that-rots one
+-- level down (asset_type, units, unit_price, fund_id, interest_rate, expiry_date,
+-- is_pledged, currency …). A settled deposit is a closed record; nothing about it
+-- should be changing while a settlement stands. That includes cosmetic edits like
+-- notes, which is a small cost: "Bỏ chờ gộp" restores the deposit and it edits
+-- freely again.
 create trigger investment_transactions_guard_settled_source
-  before update of amount_vnd, goal_id on public.investment_transactions
+  before update on public.investment_transactions
   for each row
-  when (new.amount_vnd is distinct from old.amount_vnd
-        or new.goal_id is distinct from old.goal_id)
   execute function public.guard_settled_source_edit();
 
 -- ─── the source requirement, deferred ────────────────────────────────────────
@@ -552,6 +564,12 @@ alter table public.investment_transactions
       -- column the RPC writes against what actually validates it — this was the
       -- only one with no guard at all.
       and asset_type = 'bank'
+      -- Not renewal history. active_investment_transactions excludes rows carrying
+      -- renewed_from_transaction_id, so stamping a settlement hides its withdrawal
+      -- from dashboard valuation — the source stops being closed there — while
+      -- renew_term_deposit_with_merge reads the base table and still folds the
+      -- settlement's cash into the destination. Both ends counted.
+      and renewed_from_transaction_id is null
       and merge_target_goal_id is not null
       -- IS NOT DISTINCT FROM, not `=`: a CHECK passes on UNKNOWN, so plain
       -- equality lets an UPDATE set goal_id = NULL straight through — the
