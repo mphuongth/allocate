@@ -68,8 +68,13 @@ export function computeGoalCalculator(
   const neededPerMonth = remaining > 0 ? remaining / monthsLeft : 0
   const input = Math.max(0, monthlyInput || 0)
   const monthsToGoal = input > 0 && remaining > 0 ? Math.ceil(remaining / input) : null
+  // Anchored to the FIRST of the month, because this date is only ever rendered as
+  // a month and year. Adding months to today overflows whenever today's day doesn't
+  // exist in the target month — 31 February rolls into March — and the user is then
+  // told a month later than their pace actually reaches the goal. Only bites on the
+  // 29th-31st, which is why it survived this long.
   const projectedDate = monthsToGoal != null
-    ? (() => { const d = new Date(); d.setMonth(d.getMonth() + monthsToGoal); return d })()
+    ? (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth() + monthsToGoal, 1) })()
     : null
   const isOnTrack = input > 0 && input >= neededPerMonth
   const gap = Math.abs(neededPerMonth - input)
