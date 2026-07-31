@@ -670,4 +670,49 @@ begin
   end if;
 end $$;
 
+-- ═══ the contract itself ═══════════════════════════════════════════════════
+-- Two claims the view's header makes, kept honest here rather than in prose alone.
+do $$
+declare
+  v_user uuid; v_g uuid; v_s uuid; v_violations int; v_any int;
+begin
+  insert into auth.users (id, email) values (gen_random_uuid(), 'wd-audit-contract@test.invalid') returning id into v_user;
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'G') returning goal_id into v_g;
+
+  -- CLAIM 1: an empty result does not prove the ledger clean.
+  --
+  -- 1000 đồng over 100 units, two sales of 50 units taking 497 and 503. Refused as
+  -- a first write (50 of 100 must take 500) and neither can follow the other — all
+  -- orderings are illegal — yet the totals are exactly proportional and each
+  -- per-sale deviation is inside what a legal two-sale ledger shows elsewhere. The
+  -- audit CANNOT see it, and this test exists so that silence is never mistaken for
+  -- a guarantee: if someone later makes this ledger report, the header's claim has
+  -- changed and both must be revisited together.
+  alter table public.investment_transactions disable trigger user;
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_g, 'gold', 'investment', '2026-01-01', 1000, 100, 10) returning transaction_id into v_s;
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_g, 'gold', 'withdrawal', '2026-02-01', 1, v_s, 497, 50),
+         (v_user, v_g, 'gold', 'withdrawal', '2026-03-01', 1, v_s, 503, 50);
+  alter table public.investment_transactions enable trigger user;
+
+  select count(*) into v_any from public.withdrawal_ledger_audit where user_id = v_user;
+  if v_any <> 0 then
+    raise notice 'the known-blind ledger now reports % row(s) — the header limit may be stale', v_any;
+  end if;
+
+  -- CLAIM 2: 'violation' means provable from state. The sequence-sensitive checks
+  -- may never wear it, whatever they find — a repair automated off one of those
+  -- would be acting on a ledger that might have been written legally.
+  select count(*) into v_violations
+    from public.withdrawal_ledger_audit
+   where severity = 'violation'
+     and check_name in ('sale_basis_not_proportional', 'basis_not_proportional', 'parent_is_a_fund_purchase');
+  if v_violations <> 0 then
+    raise exception 'a sequence-sensitive check reported % row(s) as a violation', v_violations;
+  end if;
+
+  raise notice 'withdrawal_ledger_audit: contract holds — sequence-sensitive findings stay advisory';
+end $$;
+
 rollback;

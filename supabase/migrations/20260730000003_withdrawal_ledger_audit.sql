@@ -1,16 +1,47 @@
--- Read the ledger and report what would not be accepted today (#609).
+-- Screen the ledger for withdrawal rows the invariant would not accept today (#609).
 --
 -- #587 put the withdrawal decision table on the table as a trigger
 -- (20260730000002). A trigger validates writes, so it never looked at a single row
 -- written before it landed: the shapes it now refuses can all still be sitting in
 -- history, and every reader — dashboard/overview, withdrawal progress, goal
--- progress — trusts them. Until someone looks, we don't know whether the ledger is
--- clean. The not-knowing is the thing this closes; a backfill is a separate
--- decision that depends on what the report says.
+-- progress — trusts them.
 --
--- One check per row of that decision table, plus the two known valuation gaps
--- (#606, #607) so a run is complete rather than nearly complete. Strictly
--- read-only: it names rows and holdings, changes nothing, and is safe to run on
+-- ─── What this view can and cannot tell you ──────────────────────────────────
+--
+-- AN EMPTY RESULT DOES NOT PROVE THE LEDGER CLEAN, and #609 must not be closed as
+-- "verified clean" on the strength of one. This is a limit of the approach, not a
+-- missing predicate, and no amount of extra checks removes it:
+--
+--   The invariant is STATEFUL. It measures each write against the balance
+--   remaining at that moment, so whether a row was legal depends on the order the
+--   rows were written in. This view reads the ledger as it stands now. Different
+--   histories — some legal, some not — reach the very same final state, and the
+--   state does not record which one happened.
+--
+-- The sharpest example, which no ordering of its rows makes legal:
+--
+--   1000 đồng over 100 units, two sales of 50 units taking 497 and 503. Each is
+--   refused as a first write (50 of 100 units must take 500) and neither can
+--   follow the other. The totals are exactly proportional, and every per-sale
+--   deviation is inside what a legal two-sale ledger can show on some OTHER
+--   holding — so nothing here can distinguish it. The audit is silent. A test
+--   pins that silence so it is never mistaken for a guarantee.
+--
+-- Deciding those needs the write order, which exists (created_at) but is only
+-- trustworthy once a source's amount and units can no longer be edited under a
+-- sale that already drew on them — that is #608. A replay audit on top of #608 is
+-- the design that could carry a "verified clean" guarantee; this view is not it.
+--
+-- ─── The two severities ──────────────────────────────────────────────────────
+--
+-- 'violation' — provable from the state alone. No ordering of any history could
+--               have produced this row, so it is wrong however it got here.
+-- 'review'    — the ledger looks off, but legally-written ledgers can look the
+--               same. Sequence-sensitive: judge these with the rows in front of
+--               you, and expect the drift a mid-stream purchase legitimately
+--               causes. Never automate a repair off a 'review' row.
+--
+-- Read-only. It names rows and holdings, changes nothing, and is safe to run on
 -- production in the SQL editor:
 --
 --   select check_name, severity, count(*)
@@ -19,10 +50,6 @@
 --
 -- Then drill into a check_name for the rows and the detail text.
 --
--- severity 'violation' — the invariant would refuse this row today.
--- severity 'review'    — legal to write, but it is not counted the way the ledger
---                        assumes; #606 and the proportionality drift below.
---
 -- Why a view and not a script kept in a folder: supabase/tests/
 -- withdrawal_ledger_audit.test.sql plants one row per check and asserts the audit
 -- names it. An audit that returns nothing is indistinguishable from an audit that
@@ -30,14 +57,11 @@
 -- object a test can query. It also cannot drift from the invariant silently —
 -- both live in this directory and both are read by the same tests.
 --
--- One known limit, worth stating rather than discovering later: whether an
--- epsilon-sized sale was legal depends on the ORDER the rows were written in, and
--- this view reads state. Taking 0.00005 units and then the whole unit is accepted
--- (the epsilon is granted while something is left); exhausting the unit first and
--- then taking 0.00005 is refused — and both leave identical totals, so no
--- state-based check can separate them. The audit stays silent there on purpose,
--- because reporting it would flag ledgers that were written legally. The exposure
--- is bounded by one epsilon of units, and a clean-half test pins the silence.
+-- A second known limit, narrower than the one above: whether an epsilon-sized sale
+-- was legal also depends on write order. Taking 0.00005 units and then the whole
+-- unit is accepted (the epsilon is granted while something is left); exhausting the
+-- unit first and then taking 0.00005 is refused — identical totals either way. The
+-- audit stays silent there rather than report a ledger that was written legally.
 --
 -- Aggregates deliberately mirror the invariant's own measurements, including the
 -- exclusions: pending DCA seeds (units null) hold nothing sellable, renewal
@@ -437,7 +461,7 @@ select 'basis_not_proportional', 'review',
                           then least(abs(b.units - b.out_units), 0.0001) * b.basis / b.units else 0 end;
 
 comment on view public.withdrawal_ledger_audit is
-  'Read-only audit of existing withdrawal rows against the decision table enforced by check_withdrawal_balance. One row per finding: check_name, severity, and the holding it concerns (#609).';
+  'Read-only screen of existing withdrawal rows against the decision table enforced by check_withdrawal_balance. severity=violation is provable from state; severity=review is sequence-sensitive. An empty result does NOT prove the ledger clean — see the header (#609).';
 
 -- An operator tool, and there is no screen that reads it. security_invoker means
 -- RLS would confine a caller to their own rows anyway, but granting it adds a
