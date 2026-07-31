@@ -46,7 +46,12 @@ not a full E2E. Reach for E2E only when the loop itself crosses the network/DB b
 E2E was removed from CI (PR #313) and runs **locally only** — so local checks are
 the only automated gate before the Vercel preview. Scale the checks to the change:
 
-- **Always:** `npm test -- --run` (Vitest unit tests) and `npm run lint`. Fast, every PR.
+- **Always:** `npm run typecheck`, `npm test -- --run` (Vitest unit tests), and
+  `npm run lint`. Fast, every PR. Don't skip the typecheck because the tests are
+  green — Vitest ignores extra arguments and unused types, so a test that calls a
+  handler with a signature it no longer has passes locally and fails CI. CI runs
+  `typecheck` inside the "Unit Tests" job, so a red X there is often `tsc`, not a
+  failing assertion (#614).
 - **Targeted E2E** — when the change touches a feature area, run that area's specs,
   e.g. `npx playwright test e2e/planning.spec.ts --project=chromium`. This is the
   common case.
