@@ -68,11 +68,28 @@ test.describe('FK ownership enforcement (#474)', () => {
     expect(res.status()).toBe(403)
   })
 
+  // A held settlement must name the deposit it closes (#588), so this needs a
+  // real source of the caller's own — otherwise the request is refused for being
+  // sourceless (400) and the ownership rule is never reached, which is the rule
+  // this case exists to pin.
   test('POST /api/v1/investment-transactions rejects a cross-user merge_target_goal_id (403)', async ({ request }) => {
-    const res = await request.post('/api/v1/investment-transactions', {
-      data: { transaction_type: 'withdrawal', held_for_merge: true, merge_target_goal_id: foreign.goalId, amount_vnd: 500_000, principal_withdrawn: 500_000, investment_date: '2026-01-01' },
+    const src = await api.createTransaction({
+      asset_type: 'bank', goal_id: ownGoalId, amount_vnd: 1_000_000,
+      interest_rate: 5, expiry_date: '2027-01-01', investment_date: '2026-01-01',
     })
-    expect(res.status()).toBe(403)
+    try {
+      const res = await request.post('/api/v1/investment-transactions', {
+        data: {
+          transaction_type: 'withdrawal', held_for_merge: true,
+          parent_transaction_id: src.transaction_id,
+          merge_target_goal_id: foreign.goalId,
+          amount_vnd: 500_000, investment_date: '2026-01-01',
+        },
+      })
+      expect(res.status()).toBe(403)
+    } finally {
+      await api.deleteTransactionCascade(src.transaction_id)
+    }
   })
 
   // ---- fund-investments/assign: to_goal_id ---------------------------------

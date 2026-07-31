@@ -184,9 +184,8 @@ describe('POST /api/v1/investment-transactions — remaining balance', () => {
     expect(res.status).toBe(201)
   })
 
-  // The no-source exception belongs to the held-for-merge pool (#588) and to
-  // nothing else: an ordinary withdrawal that names no holding is cash leaving
-  // nowhere, whatever its amount says.
+  // A withdrawal that names no holding is cash leaving nowhere, whatever its
+  // amount says.
   it('refuses a withdrawal that says nothing about what it draws on', async () => {
     const res = await call({
       transaction_type: 'withdrawal', asset_type: 'bank',
@@ -197,14 +196,23 @@ describe('POST /api/v1/investment-transactions — remaining balance', () => {
     await expect(res.json()).resolves.toMatchObject({ error: expect.stringMatching(/must say what it draws on/) })
   })
 
-  it('lets a held-for-merge settlement through as the tracked exception', async () => {
+  // This case used to assert a 201: held_for_merge was the one flag that
+  // exempted a withdrawal from naming a source, because the pool shape had no
+  // source to name yet. That exemption WAS the #588 hole — the row's amount_vnd
+  // becomes net worth, so an unbacked one inflated total assets by whatever
+  // number the caller sent. Held settlements are source-backed now, and there is
+  // no shape left that may omit what it draws on.
+  it('no longer lets held_for_merge excuse a settlement with no source', async () => {
     const res = await call({
       transaction_type: 'withdrawal', asset_type: 'bank',
       investment_date: '2026-07-01', amount_vnd: 50_000_000,
       held_for_merge: true, merge_target_goal_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
     })
 
-    expect(res.status).toBe(201)
+    expect(res.status).toBe(400)
+    await expect(res.json()).resolves.toMatchObject({
+      error: expect.stringMatching(/must name the deposit it closes/),
+    })
   })
 
   // A different check_violation (an ownership trigger, say) is not this
