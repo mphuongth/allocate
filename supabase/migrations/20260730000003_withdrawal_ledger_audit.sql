@@ -340,12 +340,17 @@ union all
 -- of zero units, and the invariant refuses any positive quantity drawn on it
 -- ('5 units exceeds the remaining balance of 0 units'). Skipping the comparison
 -- when the parent's units are null let exactly that row report clean.
+--
+-- And the 4-decimal epsilon is granted only where the invariant grants it: while
+-- something is left to round. `case when v_left_units > 0 then c_units_epsilon else
+-- 0 end` is its own wording. A holding of zero units — the schema allows one — has
+-- no rounding to forgive, so a sliver sold out of it is an overdraw like any other.
 select 'holding_overdrawn', 'violation',
        p.user_id, null::uuid, p.transaction_id, null::uuid, p.goal_id,
        format('%s holding of %s đồng / %s units has %s đồng / %s units taken out across %s withdrawal(s)',
               p.asset_type, p.amount_vnd, coalesce(p.units, 0), p.out_principal, p.out_units, p.sells)
   from parents p
- where p.out_units > coalesce(p.units, 0) + 0.0001
+ where p.out_units > coalesce(p.units, 0) + case when coalesce(p.units, 0) > 0 then 0.0001 else 0 end
     or (p.asset_type is distinct from 'gold' and p.out_principal > p.amount_vnd)
 
 union all
@@ -354,7 +359,8 @@ select 'fund_bucket_overdrawn', 'violation',
        format('bucket holds %s đồng / %s units and has %s đồng / %s units sold across %s sell(s)',
               b.basis, b.units, b.out_principal, b.out_units, b.sells)
   from fund_buckets b
- where b.buys > 0 and b.out_units > b.units + 0.0001
+ where b.buys > 0
+   and b.out_units > b.units + case when b.units > 0 then 0.0001 else 0 end
 
 union all
 -- The same overrun on the principal side of a quantity-valued holding. Worth
@@ -381,12 +387,19 @@ union all
 -- A sell alone in a bucket: its purchases are in another goal, so nothing here
 -- offsets it and the goal that HAS the purchases shows them unsold. What an
 -- assign racing a sale leaves behind (#610).
+-- ...beyond what a relocation may legally leave behind. check_fund_bucket_solvent
+-- (#587) refuses a move only when the bucket would be left owing MORE than 0.0001
+-- units or one đồng, so an orphan that small is a state the invariant itself
+-- permits — reachable by moving a purchase out from under an epsilon-sized sell.
+-- Reporting it as provable corruption would send an operator to repair a ledger
+-- nobody wrote wrong; the same thresholds are mirrored here so the two agree.
 select 'fund_bucket_has_no_purchases', 'violation',
        b.user_id, b.a_sell::uuid, null::uuid, b.fund_id, b.goal_id,
        format('%s sell(s) taking %s đồng / %s units, with no purchases in this bucket',
               b.sells, b.out_principal, b.out_units)
   from fund_buckets b
  where b.buys = 0
+   and (b.out_units > 0.0001 or b.out_principal > 1)
 
 -- ── allocation, per quantity-valued holding ─────────────────────────────────
 -- Fund buckets and gold bind the principal TO the units: a sale of all remaining

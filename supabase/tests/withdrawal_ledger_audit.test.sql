@@ -48,11 +48,13 @@ declare
   v_sliver_src uuid; v_sliver_a uuid; v_sliver_b uuid;
   v_tail2_src uuid; v_tail2_a uuid; v_tail2_b uuid;
   v_basisover_src uuid;
+  v_zerounit_goal uuid;
   -- the clean half
   v_tol_goal  uuid;
   v_drift_src uuid; v_comp_src uuid; v_f7_src uuid; v_full_src uuid; v_tail_src uuid;
   v_roundup_src uuid;
   v_tiny_fund uuid; v_late_fund uuid; v_late_sell uuid;
+  v_orphan_fund uuid; v_orphan_buy uuid; v_orphan_goal uuid;
   v_ok_bank   uuid; v_ok_bank_w  uuid;
   v_ok_gold   uuid; v_ok_gold_w1 uuid; v_ok_gold_w2 uuid;
   v_ok_buy    uuid; v_ok_sell1   uuid; v_ok_sell2   uuid;
@@ -264,6 +266,22 @@ begin
   returning transaction_id into v_late_sell;
   insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id)
   values (v_user, v_goal_b, 'fund', 'investment', '2026-03-01', 999, 100, 10, v_late_fund);
+
+  -- An orphan bucket the invariant itself allows. A 0.0001-unit sell worth a đồng
+  -- is left behind when its purchase moves to another goal: check_fund_bucket_solvent
+  -- (#587) refuses a relocation only when the bucket would be left owing MORE than
+  -- 0.0001 units or one đồng, so this state is reachable with every trigger enabled.
+  -- A purchase-less bucket is therefore not corrupt by itself, and calling it one
+  -- would hand an operator a repair to make on a ledger nobody wrote wrong.
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Orphan target') returning goal_id into v_orphan_goal;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Orphan Fund', 'ORPH', 'equity', 1) returning id into v_orphan_fund;
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id)
+  values (v_user, v_goal_b, 'fund', 'investment', '2026-01-01', 1000000, 100, 10000, v_orphan_fund) returning transaction_id into v_orphan_buy;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, fund_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_goal_b, 'fund', 'withdrawal', '2026-02-01', 1, v_orphan_fund, 1, 0.0001);
+  update public.investment_transactions set goal_id = v_orphan_goal where transaction_id = v_orphan_buy;
 
   -- ═══ the planted violations ════════════════════════════════════════════════
   -- Disabling the user triggers is the only way in: these are precisely the shapes
@@ -553,6 +571,18 @@ begin
   values (v_user, v_goal, 'gold', 'withdrawal', '2026-02-01', 1, v_basisover_src, 30000000, 2),
          (v_user, v_goal, 'gold', 'withdrawal', '2026-03-01', 1, v_basisover_src, 30000000, 2);
 
+  -- 26. a bucket whose purchase holds ZERO units, sold from anyway. The schema
+  --     permits zero units; the invariant does not permit selling them — it grants
+  --     the 4-decimal epsilon only while something is left, so 0.0001 units out of
+  --     nothing is refused. Granting that epsilon unconditionally made this ledger
+  --     audit clean.
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Zero units') returning goal_id into v_zerounit_goal;
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id)
+  values (v_user, v_zerounit_goal, 'fund', 'investment', '2026-01-01', 1000, 0, 0, v_fund);
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, fund_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_zerounit_goal, 'fund', 'withdrawal', '2026-02-01', 1, v_fund, 0, 0.0001);
+
   alter table public.investment_transactions enable trigger user;
 
   -- ═══ every planted row must be named, by the right check ═══════════════════
@@ -600,6 +630,10 @@ begin
   if not exists (select 1 from public.withdrawal_ledger_audit
                   where check_name = 'fund_bucket_overdrawn' and goal_id = v_ob_goal and fund_id = v_fund) then
     raise exception 'the audit must report the fund bucket sold twice over';
+  end if;
+  if not exists (select 1 from public.withdrawal_ledger_audit
+                  where check_name = 'fund_bucket_overdrawn' and goal_id = v_zerounit_goal) then
+    raise exception 'the audit must report units sold out of a bucket that holds none';
   end if;
   if not exists (select 1 from public.withdrawal_ledger_audit
                   where check_name = 'fund_bucket_has_no_purchases' and transaction_id = v_split) then
@@ -663,7 +697,7 @@ begin
    where transaction_id in (v_ok_bank_w, v_ok_gold_w1, v_ok_gold_w2, v_ok_sell1, v_ok_sell2,
                             v_ok_held, v_seed, v_seed_buy, v_seed_sell)
       or parent_transaction_id in (v_ok_bank, v_ok_gold, v_drift_src, v_comp_src, v_f7_src, v_full_src, v_tail_src, v_roundup_src)
-      or fund_id in (v_fund_ok, v_tiny_fund);
+      or fund_id in (v_fund_ok, v_tiny_fund, v_orphan_fund);
   if v_count <> 0 then
     raise exception 'the audit reported % row(s) against a ledger the invariant accepted', v_count;
   end if;
@@ -718,6 +752,7 @@ begin
   insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
   values (v_user, v_g, 'gold', 'withdrawal', '2026-02-01', 1, v_s, 497, 50),
          (v_user, v_g, 'gold', 'withdrawal', '2026-03-01', 1, v_s, 503, 50);
+
   alter table public.investment_transactions enable trigger user;
 
   select count(*) into v_any from public.withdrawal_ledger_audit where user_id = v_user;
