@@ -396,6 +396,42 @@ begin
   exception when check_violation then null;
   end;
 
+  -- The same rules must survive an UPDATE, not only an INSERT. The trigger used to
+  -- name the columns it fired on, and every rule added after that list read a
+  -- column the list did not name — so an update touching only THAT column skipped
+  -- the check entirely. It fires on every update of a held row now.
+  v_row := public.create_held_settlement(v_partial, 1000000, '2026-07-01');
+  v_held2 := v_row.transaction_id;
+  begin
+    update public.investment_transactions set affects_progress = false where transaction_id = v_held2;
+    raise exception 'an update must not be able to clear affects_progress' using errcode = 'ZZ999';
+  exception when check_violation then null;
+  end;
+  begin
+    update public.investment_transactions
+       set goal_id = v_goal2, merge_target_goal_id = v_goal2
+     where transaction_id = v_held2;
+    raise exception 'an update must not be able to move a settlement to another goal' using errcode = 'ZZ999';
+  exception when check_violation then null;
+  end;
+  begin
+    update public.investment_transactions set principal_withdrawn = 1 where transaction_id = v_held2;
+    raise exception 'an update must not be able to un-close the deposit' using errcode = 'ZZ999';
+  exception when check_violation then null;
+  end;
+  delete from public.investment_transactions where transaction_id = v_held2;
+
+  -- asset_type was the one column the RPC writes that nothing validated. A
+  -- settlement closes a bank deposit, so the row closing it is a bank withdrawal.
+  begin
+    insert into public.investment_transactions
+      (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+       parent_transaction_id, principal_withdrawn, affects_progress, held_for_merge, merge_target_goal_id)
+    values (v_user, v_goal, 'gold', 'withdrawal', '2026-07-01', 1000000, v_partial, 1000000, true, true, v_goal);
+    raise exception 'a held settlement must be a bank withdrawal' using errcode = 'ZZ999';
+  exception when check_violation then null;
+  end;
+
   -- ── 9b) editing a deposit that has already been settled ─────────────────────
   -- Every guard above measures the SETTLEMENT; none fires when the SOURCE is
   -- edited. Raising its amount revives it in net worth while its cash is still in

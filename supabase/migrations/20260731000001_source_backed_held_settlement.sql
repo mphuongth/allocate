@@ -379,11 +379,22 @@ $$;
 revoke all on function public.check_held_amount_within_source() from public, anon, authenticated;
 
 drop trigger if exists investment_transactions_held_amount_bound on public.investment_transactions;
--- UPDATE OF lists every column the bound reads, so no edit can move the row out
--- from under it: raising the amount, re-pointing the parent, or flipping the flag
--- on a row that was never measured.
+-- Every UPDATE of a held row, not a list of columns.
+--
+-- It WAS a list — amount_vnd, held_for_merge, parent_transaction_id,
+-- principal_withdrawn — written when the bound was the only rule here. Each rule
+-- added since (full closure, the parent's goal, affects_progress) reads a column
+-- the list did not name, so an UPDATE touching only that column skipped the check
+-- entirely: `set affects_progress = false` on a perfectly valid settlement went
+-- straight through, and so did moving both goal columns to another owned goal.
+--
+-- A list has to be re-derived every time a rule is added, and forgetting is
+-- silent. Firing on every update of a held row cannot be forgotten. The cost is a
+-- re-validation on writes that were already valid — held rows are few, and the
+-- merge consume's own update re-proves the same invariants rather than skipping
+-- them, which is the behaviour worth having anyway.
 create trigger investment_transactions_held_amount_bound
-  before insert or update of amount_vnd, held_for_merge, parent_transaction_id, principal_withdrawn
+  before insert or update
   on public.investment_transactions
   for each row
   when (new.held_for_merge)
@@ -536,6 +547,11 @@ alter table public.investment_transactions
   check (
     not held_for_merge or (
       transaction_type = 'withdrawal'
+      -- A settlement closes a BANK deposit (the source rules allow nothing else),
+      -- so the row that closes it is a bank withdrawal. Found by auditing every
+      -- column the RPC writes against what actually validates it — this was the
+      -- only one with no guard at all.
+      and asset_type = 'bank'
       and merge_target_goal_id is not null
       -- IS NOT DISTINCT FROM, not `=`: a CHECK passes on UNKNOWN, so plain
       -- equality lets an UPDATE set goal_id = NULL straight through — the
