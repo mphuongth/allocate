@@ -236,12 +236,12 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     .select('transaction_id')
 
   if (error) {
-    // The deposit still has a settlement parked against it (#588). Its parent is
-    // the settlement's only link back to what it closed, so the delete is refused
-    // rather than allowed to null it — another conflict the user resolves ("Bỏ
-    // chờ gộp" removes the settlement and restores the deposit), not a fault.
-    // The prefix marks it as a rule this codebase authored; anything else the
-    // database says stays unquoted.
+    // The deposit still has a settlement parked against it (#588). Deleting it
+    // nulls the settlement's only link back to what it closed, and the deferred
+    // source check refuses that at the end of the transaction — another conflict
+    // the user resolves ("Bỏ chờ gộp" removes the settlement and restores the
+    // deposit), not a fault. The prefix marks a rule this codebase authored;
+    // anything else the database says is not quoted back.
     if (error.message?.startsWith('held settlement: ')) {
       return NextResponse.json(
         {

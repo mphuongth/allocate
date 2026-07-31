@@ -245,9 +245,14 @@ begin
       (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
        principal_withdrawn, units_withdrawn, affects_progress, held_for_merge, merge_target_goal_id)
     values (v_user, v_goal, 'bank', 'withdrawal', '2026-07-01', 999000000, 0, 0, true, true, v_goal);
+    -- The source requirement is a DEFERRED constraint trigger (ON DELETE SET NULL
+    -- makes it unanswerable until the end of the transaction), so it has to be
+    -- forced to be observable inside this block rather than at COMMIT.
+    set constraints all immediate;
     raise exception 'a held row with no source must be refused' using errcode = 'ZZ999';
   exception when check_violation then null;
   end;
+  set constraints all deferred;
 
   begin
     insert into public.investment_transactions
@@ -343,23 +348,24 @@ begin
   end;
 
   -- ── 11) deleting the deposit a settlement is parked against ─────────────────
-  -- parent_transaction_id is ON DELETE SET NULL, so this delete would null the
-  -- settlement's only link back to what it closed — the unbacked row this whole
-  -- migration forbids. It is refused, with the prefix the route turns into a 409
-  -- rather than the 500 a bare constraint violation would have produced.
-  --
-  -- Catching check_violation alone would not prove anything: WITHOUT the guard
-  -- the FK's SET NULL trips the shape constraint, which is also a check_violation
-  -- — and is precisely the bare 23514 the route cannot translate. So the message
-  -- has to be ours.
+  -- parent_transaction_id is ON DELETE SET NULL, so this delete nulls the
+  -- settlement's only link back to what it closed. The deferred trigger asks at
+  -- the end of the transaction whether a settlement was left behind that way —
+  -- here one is, so it is refused.
   begin
     delete from public.investment_transactions where transaction_id = v_partial2;
+    -- The SET NULL has already run; what is deferred is the question of whether a
+    -- settlement is left behind by it. Forcing the constraints asks it here rather
+    -- than at COMMIT.
+    set constraints all immediate;
     raise exception 'deleting a settled deposit must be refused while its settlement stands' using errcode = 'ZZ999';
   exception when check_violation then
     if sqlerrm not like 'held settlement:%' then
-      raise exception 'the refusal must be the guard, not a bare constraint violation the route reports as 500: %', sqlerrm;
+      raise exception 'the refusal must be ours, not a bare violation the route reports as 500: %', sqlerrm;
     end if;
   end;
+  set constraints all deferred;
+
   -- Removing the settlement first ("Bỏ chờ gộp") frees the deposit, which is the
   -- remedy the message names.
   delete from public.investment_transactions where parent_transaction_id = v_partial2;
@@ -369,14 +375,47 @@ begin
     raise exception 'the deposit must delete once its settlement is gone';
   end if;
 
-  -- Dropping the flag must not be a way to keep an otherwise-illegal row either:
-  -- an ordinary withdrawal still answers to the withdrawal invariant.
-  select count(*) into v_count
-  from public.investment_transactions
-  where user_id = v_user and held_for_merge and parent_transaction_id is null;
+  -- ── 12) removing BOTH rows must not be refused ──────────────────────────────
+  -- The first attempt at #588's delete policy was a BEFORE DELETE guard, which
+  -- fires per row and so aborted account deletion (`delete from auth.users`
+  -- cascades over every transaction) and service-role bulk cleanup. Nothing
+  -- survives those, so there is no invariant left to protect.
+  --
+  -- Written as two statements, SOURCE FIRST, on purpose. A single bulk DELETE
+  -- proves nothing: the order rows are processed in is not defined, so it passes
+  -- whenever the settlement happens to go first — which is exactly how the
+  -- deferrable-FOREIGN-KEY attempt looked like it worked. Source first is the
+  -- ordering that actually exercises the deferral.
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
+  values (v_user, v_goal, 'bank', 'investment', '2026-06-28', 1000000) returning transaction_id into v_partial;
+  v_row := public.create_held_settlement(v_partial, 1000000, '2026-07-01');
+  v_held := v_row.transaction_id;
+
+  -- Deleted by id, not by parent: the SET NULL is immediate, so the moment the
+  -- deposit goes the settlement no longer names it. Only the CHECK is deferred.
+  delete from public.investment_transactions where transaction_id = v_partial;
+  delete from public.investment_transactions where transaction_id = v_held;
+  set constraints all immediate;
+
+  select count(*) into v_count from public.investment_transactions
+   where transaction_id in (v_partial, v_held);
   if v_count <> 0 then
-    raise exception 'no held row may exist without a source, found %', v_count;
+    raise exception 'removing both rows must go through, % left', v_count;
   end if;
+  set constraints all deferred;
+
+  -- And the whole-account cascade, the case that was reported broken.
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
+  values (v_other, v_ogoal, 'bank', 'investment', '2026-06-29', 1000000) returning transaction_id into v_partial;
+  perform public.create_held_settlement(v_partial, 1000000, '2026-07-01');
+
+  delete from auth.users where id = v_other;
+  set constraints all immediate;
+  select count(*) into v_count from public.investment_transactions where user_id = v_other;
+  if v_count <> 0 then
+    raise exception 'deleting the account must remove its rows, % left', v_count;
+  end if;
+  set constraints all deferred;
 
   raise notice 'held_settlement_source_backed.test.sql: OK';
 end $$;

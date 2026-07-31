@@ -304,24 +304,41 @@ create trigger investment_transactions_held_amount_bound
   when (new.held_for_merge)
   execute function public.check_held_amount_within_source();
 
--- ─── deleting the deposit a settlement is parked against ─────────────────────
+-- ─── the source requirement, deferred ────────────────────────────────────────
 --
--- parent_transaction_id is ON DELETE SET NULL, so removing a settled deposit
--- from the ledger nulls its settlement's parent — which is now the one shape a
--- held row may not have. Without this guard the referential update fails the
--- shape constraint (23514), and the DELETE route only translates foreign-key
--- errors (23503), so an ordinary ledger action would answer 500.
+-- "A held settlement names the deposit it closed" cannot be an ordinary CHECK,
+-- because parent_transaction_id is ON DELETE SET NULL: removing a settled deposit
+-- nulls its settlement's parent, and an immediate check refuses that referential
+-- update — turning an ordinary ledger action into a constraint violation the
+-- DELETE route reports as 500.
 --
--- Refusing is the right answer rather than a nicer 500: the settlement's parent
--- is its only link back to what it closed, and nulling it produces exactly the
--- unbacked row this migration exists to forbid. The remedy is the one the UI
--- already offers — "Bỏ chờ gộp" removes the settlement and restores the deposit,
--- after which the deposit deletes normally. This mirrors the 409 the route
--- already gives for a deposit with a settlement waiting to merge INTO it.
+-- Two earlier attempts got this wrong, both worth recording so they are not
+-- tried again:
 --
--- The message carries the same 'held settlement: ' prefix as the RPC's refusals,
--- so the route recognises it as a rule the caller can act on rather than a fault.
-create or replace function public.guard_held_settlement_source_delete()
+--   • a BEFORE DELETE guard on the source. It fires per row, so it also aborted
+--     statements that remove the settlement TOO — `delete from auth.users`
+--     (user_id cascades over every transaction) and service-role bulk cleanup.
+--     Nothing survives those, so there is no invariant left to protect, and
+--     refusing them broke account deletion outright.
+--   • making the FOREIGN KEY deferrable. Referential ACTIONS are not deferred by
+--     that — only the check is — so the SET NULL still fired immediately. It
+--     appeared to work only because a single bulk DELETE sometimes processes the
+--     settlement before the deposit, which is not an ordering anything may rely on.
+--
+-- What actually separates the two cases is asking the question at the END of the
+-- transaction: does a settlement still exist with no deposit behind it? A
+-- DEFERRABLE INITIALLY DEFERRED constraint trigger asks exactly that, and CHECK
+-- constraints cannot be deferred, which is why this is a trigger.
+--
+--   • both rows go — at commit the settlement is gone, the re-read finds
+--     nothing, and the transaction stands;
+--   • only the deposit goes — at commit the settlement is still there with a
+--     null parent, and it is refused.
+--
+-- The re-read is the whole mechanism: the trigger was queued against a row that
+-- may since have been deleted, so it must look at the table as it will be
+-- committed, not at the NEW image it was handed.
+create or replace function public.check_held_settlement_has_source()
 returns trigger
 language plpgsql
 security definer
@@ -329,34 +346,38 @@ set search_path = ''
 as $$
 begin
   perform 1
-    from public.investment_transactions s
-   where s.parent_transaction_id = old.transaction_id
-     and s.held_for_merge
-   limit 1;
+    from public.investment_transactions t
+   where t.transaction_id = new.transaction_id
+     and t.held_for_merge
+     and t.parent_transaction_id is null;
   if found then
-    raise exception 'held settlement: this deposit has a settlement parked against it — remove that settlement first'
+    raise exception 'held settlement: a settlement must name the deposit it closed'
       using errcode = 'check_violation';
   end if;
-  return old;
+  return null;
 end;
 $$;
 
-revoke all on function public.guard_held_settlement_source_delete() from public, anon, authenticated;
+revoke all on function public.check_held_settlement_has_source() from public, anon, authenticated;
 
-drop trigger if exists investment_transactions_guard_held_source on public.investment_transactions;
-create trigger investment_transactions_guard_held_source
-  before delete on public.investment_transactions
+drop trigger if exists investment_transactions_held_source_required on public.investment_transactions;
+create constraint trigger investment_transactions_held_source_required
+  after insert or update on public.investment_transactions
+  deferrable initially deferred
   for each row
-  execute function public.guard_held_settlement_source_delete();
+  when (new.held_for_merge)
+  execute function public.check_held_settlement_has_source();
 
 -- ─── the shape, as a constraint ──────────────────────────────────────────────
 --
 -- The RPC is the only writer that should produce this row, but a constraint is
 -- what makes that true of every writer — including a service-role script and any
--- endpoint added later. The four parts are the ones whose absence causes the
--- damage above: a held row that is not a withdrawal is not closing anything, one
--- with no parent is backed by nothing, and one with no target drops its cash out
--- of net worth.
+-- endpoint added later. A held row that is not a withdrawal is not closing
+-- anything, and one with no target goal drops its cash out of net worth.
+--
+-- "Must name a parent" is NOT here: it lives in the deferred trigger above,
+-- because ON DELETE SET NULL makes it a question that can only be answered at
+-- the end of the transaction.
 --
 -- The fourth is the two goal columns agreeing. The dashboard shows the parked
 -- cash under merge_target_goal_id, while renew_term_deposit_with_merge only lets
@@ -381,7 +402,6 @@ alter table public.investment_transactions
   check (
     not held_for_merge or (
       transaction_type = 'withdrawal'
-      and parent_transaction_id is not null
       and merge_target_goal_id is not null
       -- IS NOT DISTINCT FROM, not `=`: a CHECK passes on UNKNOWN, so plain
       -- equality lets an UPDATE set goal_id = NULL straight through — the

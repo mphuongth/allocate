@@ -108,28 +108,6 @@ begin
   values (v_user, v_goal, 'fund', 'withdrawal', '2026-03-01', 480000, v_fund_ok, 420000, 40)
   returning transaction_id into v_ok_sell2;
 
-  -- A held-for-merge row with no source. #588 made this shape unwritable
-  -- (investment_transactions_held_shape), but the constraint is NOT VALID and so
-  -- does not scan history — which is precisely the population this audit view
-  -- exists to report on. Dropping the constraint for the insert is how a legacy
-  -- row is reproduced; the rollback takes it back. The invariant's held exemption
-  -- is unchanged, so the view must still read this row as clean.
-  alter table public.investment_transactions drop constraint investment_transactions_held_shape;
-  insert into public.investment_transactions
-    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, held_for_merge, merge_target_goal_id)
-  values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 5000000, true, v_goal_b)
-  returning transaction_id into v_ok_held;
-  alter table public.investment_transactions
-    add constraint investment_transactions_held_shape
-    check (
-      not held_for_merge or (
-        transaction_type = 'withdrawal'
-        and parent_transaction_id is not null
-        and merge_target_goal_id is not null
-        and merge_target_goal_id = goal_id
-      )
-    ) not valid;
-
   -- a pending DCA seed (units null) shares the bucket with a real purchase. It
   -- holds nothing sellable, so a FULL sale takes the purchase's basis only — the
   -- audit must exclude seeds from the basis exactly as the invariant does, or
@@ -303,6 +281,17 @@ begin
   -- Disabling the user triggers is the only way in: these are precisely the shapes
   -- the invariant refuses, which is why they can only exist as HISTORY.
   alter table public.investment_transactions disable trigger user;
+
+  -- A held-for-merge row with no source. #588 requires one, through a DEFERRED
+  -- constraint trigger — so this row belongs here, with the user triggers off,
+  -- for the same reason as every other planted shape: it can only exist as
+  -- HISTORY. (Its target goal matches goal_id because the shape CHECK is
+  -- immediate; only the missing source is what makes it legacy.) The invariant's
+  -- held exemption is unchanged, so the view must still read it as clean.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, held_for_merge, merge_target_goal_id)
+  values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 5000000, true, v_goal)
+  returning transaction_id into v_ok_held;
 
   -- 1. a negative withdrawal runs the ledger backwards
   insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)

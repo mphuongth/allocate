@@ -1099,15 +1099,20 @@ begin
   insert into auth.users (id, email) values (gen_random_uuid(), 'wd-held@test.invalid') returning id into v_user;
   insert into public.savings_goals (user_id, goal_name) values (v_user, 'House') returning goal_id into v_goal;
 
-  -- No source and HELD is no longer a shape anything may write (#588).
+  -- No source and HELD is no longer a shape anything may write (#588). The check
+  -- is DEFERRED — ON DELETE SET NULL makes "is a settlement left with no deposit"
+  -- a question only the end of the transaction can answer — so it has to be
+  -- forced to be observable here rather than at COMMIT.
   begin
     insert into public.investment_transactions
       (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
        held_for_merge, merge_target_goal_id)
     values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 50000000, true, v_goal);
+    set constraints all immediate;
     raise exception 'a held row with no source must be refused';
   exception when sqlstate '23514' then null;
   end;
+  set constraints all deferred;
 
   -- An ordinary withdrawal with no holding at all: refused, as it always was.
   begin
@@ -1118,25 +1123,23 @@ begin
   exception when sqlstate '23514' then null;
   end;
 
-  -- A LEGACY source-less held row — one written before the constraint existed,
-  -- which NOT VALID deliberately does not scan. Dropping the constraint for the
-  -- insert is how such a row is reproduced; the rollback takes it all back.
-  alter table public.investment_transactions drop constraint investment_transactions_held_shape;
+  -- A LEGACY source-less held row — one written before the guards existed, which
+  -- NOT VALID deliberately does not scan. Dropping the constraint for the insert
+  -- is how such a row is reproduced; the deferred source check never fires
+  -- because this transaction rolls back rather than commits, which is the same
+  -- reason a legacy row survives in production until something touches it.
+  -- A LEGACY source-less held row — one written before #588's guards existed.
+  -- No ALTER is needed to produce it: the shape CHECK asks only for a withdrawal
+  -- with an agreeing target goal, and the source requirement is a DEFERRED
+  -- constraint trigger, which never fires here because this transaction rolls
+  -- back rather than commits. That is the same reason such a row survives in
+  -- production until something touches it — which is exactly the population this
+  -- invariant is still the only thing measuring.
   insert into public.investment_transactions
     (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
      held_for_merge, merge_target_goal_id)
   values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 50000000, true, v_goal)
   returning transaction_id into v_held;
-  alter table public.investment_transactions
-    add constraint investment_transactions_held_shape
-    check (
-      not held_for_merge or (
-        transaction_type = 'withdrawal'
-        and parent_transaction_id is not null
-        and merge_target_goal_id is not null
-        and merge_target_goal_id = goal_id
-      )
-    ) not valid;
 
   -- The exemption is the flag's, so the row cannot keep it by dropping the flag:
   -- this invariant re-measures and finds a withdrawal drawing on nothing.
