@@ -78,9 +78,23 @@ begin
       using errcode = 'check_violation';
   end if;
 
+  -- FOR UPDATE, taken HERE rather than left to the RPC. The RPC locks before
+  -- calling, but a raw INSERT reaches this through the trigger with no lock at
+  -- all — and then an unlocked read can measure a source that a concurrent
+  -- statement is about to change. The two commit in an order neither sees:
+  --
+  --   the INSERT reads amount 10,000,000 → the UPDATE raises it to 100,000,000,
+  --   sees no committed settlement so the settled-source guard lets it through →
+  --   the INSERT commits its now-stale principal_withdrawn. The deposit is partly
+  --   active and its cash is in the pool.
+  --
+  -- Locking the source before measuring it is what orders them: the update waits,
+  -- then finds the settlement and is refused. Re-locking inside the RPC's own
+  -- transaction is free.
   select * into v_src
     from public.investment_transactions
-   where transaction_id = p_source_id;
+   where transaction_id = p_source_id
+   for update;
   if not found then
     raise exception 'held settlement: the deposit being settled was not found'
       using errcode = 'no_data_found';
@@ -116,11 +130,24 @@ begin
       using errcode = 'check_violation';
   end if;
 
+  -- The same bucket precedence check_withdrawal_balance applies (20260730000002).
+  -- A withdrawal keyed by a fund draws on the (goal, fund) bucket, NOT on this
+  -- deposit, even when it also names it as its parent — a shape the POST route
+  -- accepts. Counting it here charged the deposit for a sale it never funded:
+  -- a 10,000,000 deposit with a 9,000,000 fund-keyed sibling measured as
+  -- 1,000,000 left, so a settlement "closing it in full" left 9,000,000 active
+  -- while the pool took ten million beside it.
+  --
+  -- coalesce for the same reason it is there: asset_type is nullable and the
+  -- route lets a caller omit it, so written bare the predicate is NULL for a row
+  -- with a fund_id and no asset_type — which would DROP it from this sum while
+  -- buildWithdrawalMaps counts it against the parent.
   select v_src.amount_vnd - coalesce(sum(w.principal_withdrawn), 0)
     into v_eff
     from public.investment_transactions w
    where w.parent_transaction_id = p_source_id
      and w.transaction_type = 'withdrawal'
+     and not coalesce(w.asset_type = 'fund' and w.fund_id is not null, false)
      and (p_exclude_tx is null or w.transaction_id <> p_exclude_tx);
 
   if v_eff <= 0 then

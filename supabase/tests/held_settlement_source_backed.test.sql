@@ -46,6 +46,7 @@ declare
   v_partial2 uuid;  -- the deposit whose settlement blocks its deletion
   v_snap    uuid;  -- a renewal snapshot: closed, and excluded from net worth
   v_held2   uuid;  -- the settlement blocking edits to its own source
+  v_fund    uuid;  -- a fund, for the bucket-precedence case
   v_row     public.investment_transactions;
   v_saving  uuid;
   v_link    uuid;
@@ -211,6 +212,31 @@ begin
     raise exception 'a deposit cannot wait to be merged into itself' using errcode = 'ZZ999';
   exception when check_violation then null;
   end;
+
+  -- ── 5b) a fund-keyed sibling does not draw on this deposit ──────────────────
+  -- check_withdrawal_balance gives a withdrawal keyed by a fund to the
+  -- (goal, fund) bucket, NOT to its parent — even when it names one, a shape the
+  -- POST route accepts. Counting it here charged the deposit for a sale it never
+  -- funded: a 10,000,000 deposit with a 9,000,000 fund-keyed sibling measured as
+  -- 1,000,000 left, so a settlement "closing it in full" left 9,000,000 active
+  -- while the pool took ten million beside it.
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Held Fund', 'HLDF', 'equity', 10000) returning id into v_fund;
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
+  values (v_user, v_goal, 'bank', 'investment', '2026-05-10', 10000000) returning transaction_id into v_partial;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, fund_id, units, unit_price)
+  values (v_user, v_goal, 'fund', 'investment', '2026-05-10', 9000000, v_fund, 900, 10000);
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, fund_id,
+     parent_transaction_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_goal, 'fund', 'withdrawal', '2026-05-20', 9000000, v_fund, v_partial, 9000000, 900);
+
+  v_row := public.create_held_settlement(v_partial, 10500000, '2026-07-01');
+  if v_row.principal_withdrawn <> 10000000 then
+    raise exception 'the fund sale must not shrink this deposit''s balance, closed only %', v_row.principal_withdrawn;
+  end if;
+  delete from public.investment_transactions where transaction_id = v_row.transaction_id;
 
   -- ── 6) a partly withdrawn deposit closes only what is left ──────────────────
   insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
