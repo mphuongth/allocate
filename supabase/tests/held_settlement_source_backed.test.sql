@@ -41,10 +41,12 @@ declare
   v_pledged uuid;
   v_wd      uuid;
   v_oth_tx  uuid;
+  v_free    uuid;  -- a deposit with no goal
+  v_held    uuid;
   v_row     public.investment_transactions;
   v_saving  uuid;
   v_link    uuid;
-  v_count   int;
+  v_count   bigint;
 begin
   insert into auth.users (id, email) values (gen_random_uuid(), 'held-src@test.invalid') returning id into v_user;
   insert into auth.users (id, email) values (gen_random_uuid(), 'held-other@test.invalid') returning id into v_other;
@@ -164,10 +166,32 @@ begin
   -- 403 every other cross-user reference answers with (#474).
   exception when insufficient_privilege then null;
   end;
-  -- The caller's OWN other goal is a legitimate target.
-  v_row := public.create_held_settlement(v_partial, 1000000, '2026-07-01', v_goal2);
-  if v_row.merge_target_goal_id is distinct from v_goal2 then
-    raise exception 'an explicit target must be honoured, got %', v_row.merge_target_goal_id;
+  -- Nor the caller's own OTHER goal. Two readers use two different columns —
+  -- the dashboard displays by merge_target_goal_id, renew_term_deposit_with_merge
+  -- consumes by goal_id — so a settlement earmarked elsewhere would show in one
+  -- goal and be consumable only from another. A settlement does not move cash
+  -- between goals.
+  begin
+    perform public.create_held_settlement(v_partial, 1000000, '2026-07-01', v_goal2);
+    raise exception 'a target other than the deposit''s own goal must be refused' using errcode = 'ZZ999';
+  exception when check_violation then null;
+  end;
+  -- Naming the deposit's own goal explicitly is the normal client call.
+  v_row := public.create_held_settlement(v_partial, 1000000, '2026-07-01', v_goal);
+  if v_row.merge_target_goal_id is distinct from v_goal or v_row.goal_id is distinct from v_goal then
+    raise exception 'both goal columns must be the source goal, got goal_id=% target=%',
+      v_row.goal_id, v_row.merge_target_goal_id;
+  end if;
+
+  -- A deposit with NO goal is the one case where the target decides — there is
+  -- nothing for it to disagree with — and the row then takes it as its own
+  -- goal_id so both readers still agree.
+  insert into public.investment_transactions (user_id, asset_type, transaction_type, investment_date, amount_vnd)
+  values (v_user, 'bank', 'investment', '2026-02-15', 1000000) returning transaction_id into v_free;
+  v_row := public.create_held_settlement(v_free, 1000000, '2026-07-01', v_goal2);
+  if v_row.goal_id is distinct from v_goal2 or v_row.merge_target_goal_id is distinct from v_goal2 then
+    raise exception 'an unallocated deposit must take the target as its goal, got goal_id=% target=%',
+      v_row.goal_id, v_row.merge_target_goal_id;
   end if;
 
   insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
@@ -241,6 +265,55 @@ begin
     raise exception 'a held INVESTMENT is not a settlement' using errcode = 'ZZ999';
   exception when check_violation then null;
   end;
+
+  -- Everything about this row is legal except that its two goal columns disagree,
+  -- so only the constraint's goal clause can be what refuses it. A fresh deposit,
+  -- and the principal it really has left, keeps some other rule from refusing it
+  -- first and making this case pass for the wrong reason.
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
+  values (v_user, v_goal, 'bank', 'investment', '2026-06-20', 1000000) returning transaction_id into v_partial;
+  begin
+    insert into public.investment_transactions
+      (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+       parent_transaction_id, principal_withdrawn, affects_progress, held_for_merge, merge_target_goal_id)
+    values (v_user, v_goal, 'bank', 'withdrawal', '2026-07-01', 1000000, v_partial, 1000000, true, true, v_goal2);
+    raise exception 'the two goal columns must agree' using errcode = 'ZZ999';
+  exception when check_violation then null;
+  end;
+
+  -- ── 9) the amount bound, for every writer ───────────────────────────────────
+  -- Routing the route through the RPC is not the same as making the RPC the only
+  -- writer: an authenticated caller reaches this table directly, and their own
+  -- rows are exactly what this is about. A shape-only constraint lets both of
+  -- these through, and each one puts a number the deposit cannot back straight
+  -- into total assets.
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
+  values (v_user, v_goal, 'bank', 'investment', '2026-06-15', 1000000) returning transaction_id into v_partial;
+
+  begin
+    insert into public.investment_transactions
+      (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+       parent_transaction_id, principal_withdrawn, affects_progress, held_for_merge, merge_target_goal_id)
+    values (v_user, v_goal, 'bank', 'withdrawal', '2026-07-01', 999000000, v_partial, 1000000, true, true, v_goal);
+    raise exception 'a raw held INSERT must still be bounded by its source' using errcode = 'ZZ999';
+  exception when check_violation then null;
+  end;
+
+  -- Created properly, then inflated by an UPDATE that touches nothing else.
+  v_row := public.create_held_settlement(v_partial, 1050000, '2026-07-01');
+  v_held := v_row.transaction_id;
+  begin
+    update public.investment_transactions set amount_vnd = 999000000 where transaction_id = v_held;
+    raise exception 'a held row must stay bounded after it exists' using errcode = 'ZZ999';
+  exception when check_violation then null;
+  end;
+
+  -- The bound excludes the row itself, so an ordinary edit within it is fine.
+  update public.investment_transactions set amount_vnd = 1060000 where transaction_id = v_held;
+  select amount_vnd into v_count from public.investment_transactions where transaction_id = v_held;
+  if v_count <> 1060000 then
+    raise exception 'a legitimate amount edit must go through, got %', v_count;
+  end if;
 
   -- Dropping the flag must not be a way to keep an otherwise-illegal row either:
   -- an ordinary withdrawal still answers to the withdrawal invariant.

@@ -108,11 +108,27 @@ begin
   values (v_user, v_goal, 'fund', 'withdrawal', '2026-03-01', 480000, v_fund_ok, 420000, 40)
   returning transaction_id into v_ok_sell2;
 
-  -- held-for-merge with no source: the ONE legal sourceless withdrawal (#588)
+  -- A held-for-merge row with no source. #588 made this shape unwritable
+  -- (investment_transactions_held_shape), but the constraint is NOT VALID and so
+  -- does not scan history — which is precisely the population this audit view
+  -- exists to report on. Dropping the constraint for the insert is how a legacy
+  -- row is reproduced; the rollback takes it back. The invariant's held exemption
+  -- is unchanged, so the view must still read this row as clean.
+  alter table public.investment_transactions drop constraint investment_transactions_held_shape;
   insert into public.investment_transactions
     (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, held_for_merge, merge_target_goal_id)
   values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 5000000, true, v_goal_b)
   returning transaction_id into v_ok_held;
+  alter table public.investment_transactions
+    add constraint investment_transactions_held_shape
+    check (
+      not held_for_merge or (
+        transaction_type = 'withdrawal'
+        and parent_transaction_id is not null
+        and merge_target_goal_id is not null
+        and merge_target_goal_id = goal_id
+      )
+    ) not valid;
 
   -- a pending DCA seed (units null) shares the bucket with a real purchase. It
   -- holds nothing sellable, so a FULL sale takes the purchase's basis only — the

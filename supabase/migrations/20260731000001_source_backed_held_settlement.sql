@@ -165,6 +165,22 @@ begin
     raise exception 'held settlement: the target goal does not belong to this deposit'
       using errcode = 'insufficient_privilege';
   end if;
+  -- The two goal columns must agree, because two different readers use two
+  -- different ones: the dashboard shows the parked cash under
+  -- merge_target_goal_id, while renew_term_deposit_with_merge will only let a
+  -- deposit consume a held row whose goal_id matches its own. Let them diverge
+  -- and the settlement is displayed in one goal and consumable only from
+  -- another — visible, and impossible to act on where it is visible.
+  --
+  -- So a settlement does not move cash between goals: an explicit target may
+  -- only name the goal the deposit is already in. The one case where the target
+  -- genuinely decides is a deposit with NO goal, where there is nothing to
+  -- disagree with — and the row then takes the target as its own goal_id so both
+  -- readers still agree.
+  if v_src.goal_id is not null and v_target is distinct from v_src.goal_id then
+    raise exception 'held settlement: the cash stays in the deposit''s own goal — it cannot be earmarked to a different one'
+      using errcode = 'check_violation';
+  end if;
 
   if p_merge_anchor_inv_id is not null then
     if p_merge_anchor_inv_id = p_source_id then
@@ -187,7 +203,10 @@ begin
     investment_date, amount_vnd, principal_withdrawn, affects_progress,
     held_for_merge, merge_target_goal_id, merge_anchor_inv_id
   ) values (
-    v_src.user_id, v_src.goal_id, 'bank', 'withdrawal', p_source_id,
+    -- goal_id = v_target, not v_src.goal_id: they are equal whenever the source
+    -- has a goal (checked above), and when it has none this is what keeps the
+    -- row's goal and its display goal the same.
+    v_src.user_id, v_target, 'bank', 'withdrawal', p_source_id,
     coalesce(p_investment_date, current_date), p_amount_vnd, v_eff, true,
     true, v_target, p_merge_anchor_inv_id
   )
@@ -199,14 +218,94 @@ $$;
 
 grant execute on function public.create_held_settlement(uuid, bigint, date, uuid, uuid) to authenticated;
 
+-- ─── the amount, as an invariant ─────────────────────────────────────────────
+--
+-- Routing the app through the RPC is not the same as making the RPC the only
+-- writer. An authenticated caller can still write investment_transactions
+-- directly — RLS confines them to their own rows, and their own rows are exactly
+-- what this is about. Two writes get past a shape-only constraint:
+--
+--   • an INSERT with a real parent and a correct principal_withdrawn, but
+--     amount_vnd = 999,000,000 (the withdrawal invariant bounds the principal,
+--     never the row's own amount); and
+--   • an UPDATE that raises amount_vnd on a settlement that was created properly.
+--
+-- Both put a number the deposit cannot back straight into total assets. The bound
+-- therefore has to live where every writer meets it. A CHECK cannot express it —
+-- it has to read the source row — so this is a trigger, the same shape the
+-- withdrawal invariant takes (20260730000002), and it carries the same ×10 rule
+-- the RPC applies so there is one bound rather than two that can drift.
+create or replace function public.check_held_amount_within_source()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_src public.investment_transactions;
+  v_eff bigint;
+begin
+  -- A legacy held row predating the shape constraint may have no parent. It
+  -- cannot be measured, and refusing every unrelated update to it would be a
+  -- second, unannounced migration; the constraint is what stops NEW ones.
+  if new.parent_transaction_id is null then return new; end if;
+
+  select * into v_src
+    from public.investment_transactions
+   where transaction_id = new.parent_transaction_id;
+  if not found then
+    raise exception 'held settlement: the deposit being settled was not found'
+      using errcode = 'no_data_found';
+  end if;
+
+  -- The source's remaining principal, EXCLUDING this row — so the bound reads
+  -- the same on the insert that creates a settlement and on a later update to it.
+  select v_src.amount_vnd - coalesce(sum(w.principal_withdrawn), 0)
+    into v_eff
+    from public.investment_transactions w
+   where w.parent_transaction_id = new.parent_transaction_id
+     and w.transaction_type = 'withdrawal'
+     and w.transaction_id <> new.transaction_id;
+
+  if new.amount_vnd > greatest(v_eff, 0) * 10 then
+    raise exception 'held settlement: % is unreasonably large for a deposit with % left', new.amount_vnd, v_eff
+      using errcode = 'check_violation';
+  end if;
+
+  return new;
+end;
+$$;
+
+-- Not callable by the API roles: it is a trigger body, and an endpoint reaching
+-- for it directly would be reading half an invariant. Mirrors the withdrawal
+-- invariant's helper, whose lockdown withdrawal_balance.test.sql pins.
+revoke all on function public.check_held_amount_within_source() from public, anon, authenticated;
+
+drop trigger if exists investment_transactions_held_amount_bound on public.investment_transactions;
+-- UPDATE OF lists every column the bound reads, so no edit can move the row out
+-- from under it: raising the amount, re-pointing the parent, or flipping the flag
+-- on a row that was never measured.
+create trigger investment_transactions_held_amount_bound
+  before insert or update of amount_vnd, held_for_merge, parent_transaction_id, principal_withdrawn
+  on public.investment_transactions
+  for each row
+  when (new.held_for_merge)
+  execute function public.check_held_amount_within_source();
+
 -- ─── the shape, as a constraint ──────────────────────────────────────────────
 --
 -- The RPC is the only writer that should produce this row, but a constraint is
 -- what makes that true of every writer — including a service-role script and any
--- endpoint added later. The three parts are the ones whose absence causes the
+-- endpoint added later. The four parts are the ones whose absence causes the
 -- damage above: a held row that is not a withdrawal is not closing anything, one
 -- with no parent is backed by nothing, and one with no target drops its cash out
 -- of net worth.
+--
+-- The fourth is the two goal columns agreeing. The dashboard shows the parked
+-- cash under merge_target_goal_id, while renew_term_deposit_with_merge only lets
+-- a deposit consume a held row whose goal_id matches its own — diverge them and
+-- the settlement is displayed in one goal and consumable only from another. The
+-- app has always written them equal, so this pins what was already true.
 --
 -- NOT VALID on purpose. This validates every INSERT and UPDATE from here on, but
 -- does not scan rows written before it — the same stance #611 takes toward the
@@ -227,6 +326,7 @@ alter table public.investment_transactions
       transaction_type = 'withdrawal'
       and parent_transaction_id is not null
       and merge_target_goal_id is not null
+      and merge_target_goal_id = goal_id
     )
   ) not valid;
 
