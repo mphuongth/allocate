@@ -50,7 +50,7 @@ declare
   v_tol_goal  uuid;
   v_drift_src uuid; v_comp_src uuid; v_f7_src uuid; v_full_src uuid; v_tail_src uuid;
   v_roundup_src uuid;
-  v_tiny_fund uuid;
+  v_tiny_fund uuid; v_late_fund uuid; v_late_sell uuid;
   v_ok_bank   uuid; v_ok_bank_w  uuid;
   v_ok_gold   uuid; v_ok_gold_w1 uuid; v_ok_gold_w2 uuid;
   v_ok_buy    uuid; v_ok_sell1   uuid; v_ok_sell2   uuid;
@@ -244,6 +244,24 @@ begin
   insert into public.investment_transactions
     (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
   values (v_user, v_goal_b, 'gold', 'withdrawal', '2026-02-01', 48000000, v_roundup_src, 40000000, 4.0001);
+
+  -- A zero-principal sale that was right when it was written, judged later against
+  -- a bucket that grew. 1 đồng over 100 units makes a 1-unit slice worth nothing, so
+  -- zero is the correct principal and the invariant accepts it; a 999 đồng purchase
+  -- arriving afterwards moves the bucket's ratio and the same row now looks 5 đồng
+  -- short. Every write was legal, so the audit may not call it a VIOLATION — the
+  -- proportionality check may still raise it for review, which is what that severity
+  -- is for and why its own comment names purchases added after a sale.
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Late Fund', 'LATE', 'equity', 1) returning id into v_late_fund;
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id)
+  values (v_user, v_goal_b, 'fund', 'investment', '2026-01-01', 1, 100, 1, v_late_fund);
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, fund_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_goal_b, 'fund', 'withdrawal', '2026-02-01', 1, v_late_fund, 0, 1)
+  returning transaction_id into v_late_sell;
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id)
+  values (v_user, v_goal_b, 'fund', 'investment', '2026-03-01', 999, 100, 10, v_late_fund);
 
   -- ═══ the planted violations ════════════════════════════════════════════════
   -- Disabling the user triggers is the only way in: these are precisely the shapes
@@ -518,7 +536,7 @@ begin
         ('sourceless_not_held_for_merge', v_notheld),
         ('draws_on_no_holding',           v_stray),
         ('sourceless_not_held_for_merge', v_stray_z),
-        ('withdrawal_missing_principal',  v_mask_zero),
+        ('sale_basis_not_proportional',   v_mask_zero),
         ('sale_basis_not_proportional',   v_cancel_a),
         ('sale_basis_not_proportional',   v_cancel_b),
         ('sale_basis_not_proportional',   v_slack),
@@ -565,6 +583,13 @@ begin
   if not exists (select 1 from public.withdrawal_ledger_audit
                   where check_name = 'holding_overdrawn' and parent_transaction_id = v_nounits_src) then
     raise exception 'the audit must report units taken out of a holding that has none';
+  end if;
+
+  -- Nothing whose every write was legal may be called a violation. 'review' is
+  -- allowed here: the ratio really did move, and saying so is this check's job.
+  if exists (select 1 from public.withdrawal_ledger_audit
+              where transaction_id = v_late_sell and severity = 'violation') then
+    raise exception 'a sale that was correct when written must not become a violation because the bucket grew';
   end if;
 
   -- Same lesson as the masked bucket, one level down: these two sales add up to

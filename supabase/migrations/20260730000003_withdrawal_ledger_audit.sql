@@ -195,34 +195,27 @@ select 'gold_sale_missing_units', 'violation',
  where not w.fund_keyed and w.parent_asset = 'gold' and coalesce(w.units_withdrawn, 0) <= 0
 
 union all
--- No principal takes nothing out: the holding keeps its value while the row
--- claims cash left.
--- Per row, and per row for FUND sales too, not only for parent-backed ones. A
--- fund sale's principal is the units-proportional slice of the basis, so zero is
--- refused by the invariant — but the holding-level check below cannot see it: two
--- sells whose errors cancel (one takes nothing, its sibling takes double) leave
--- the bucket's totals exactly proportional and both invalid rows silent.
+-- No principal takes nothing out: the holding keeps its value while the row claims
+-- cash left. The invariant demands a positive principal from a parent-backed
+-- withdrawal outright, which is what makes this a violation.
+--
+-- FUND sells are deliberately not judged here, though they were until a review
+-- pointed at the hole. A fund sell's principal is a proportional slice, and a slice
+-- can correctly be ZERO when it is worth less than half a đồng — but whether it was
+-- worth that is decided by the bucket AS IT WAS when the sale was written, and a
+-- purchase arriving later moves the ratio. A 1 đồng / 100 unit bucket makes a
+-- 1-unit slice worth nothing; add a 999 đồng purchase afterwards and the same
+-- accepted row looks five đồng short. Nothing whose every write was legal may be
+-- called a violation, so fund sells are left to sale_basis_not_proportional, whose
+-- 'review' severity says exactly this about purchases added after a sale.
 select 'withdrawal_missing_principal', 'violation',
        w.user_id, w.transaction_id, w.parent_transaction_id, w.fund_id, w.goal_id,
-       format('%s records principal %s',
-              case when w.fund_keyed then format('fund sale of %s units', w.units_withdrawn)
-                   else format('withdrawal from holding %s', w.parent_transaction_id) end,
-              w.principal_withdrawn)
+       format('withdrawal from holding %s records principal %s',
+              w.parent_transaction_id, w.principal_withdrawn)
   from wd w
-  left join fund_buckets b
-    on w.fund_keyed and b.user_id = w.user_id and b.fund_id = w.fund_id
-   and b.goal_id is not distinct from w.goal_id
  where coalesce(w.principal_withdrawn, 0) <= 0
-   and case when w.fund_keyed
-              -- units <= 0 is fund_sale_missing_units. And a slice can be worth
-              -- NOTHING: round(basis × units / total_units) below half a đồng makes
-              -- zero the correct principal, which the invariant accepts (and
-              -- lib/fundWithdrawal posts). Only a slice actually worth something —
-              -- more than the invariant's own đồng of tolerance — is missing here.
-              then coalesce(w.units_withdrawn, 0) > 0
-                   and coalesce(b.units, 0) > 0
-                   and round(b.basis * w.units_withdrawn / b.units) > 1
-            else w.parent_transaction_id is not null end
+   and not w.fund_keyed
+   and w.parent_transaction_id is not null
 
 union all
 -- A withdrawal is not a holding: parenting to one invents a balance out of money
