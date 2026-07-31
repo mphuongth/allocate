@@ -81,6 +81,28 @@ export async function POST(request: NextRequest) {
     throw e
   }
 
+  // A well-formed UUID is not proof of ownership, and neither fund_id nor
+  // goal_id is protected by an FK back to the caller — so a known foreign id
+  // would link this holding to someone else's fund or goal and report success
+  // (#586, the same hole the canonical route closed in #474).
+  const { data: fund } = await supabase
+    .from('funds')
+    .select('id')
+    .eq('id', cleanFundId)
+    .eq('user_id', user.id)
+    .maybeSingle()
+  if (!fund) return NextResponse.json({ error: "You don't have permission to access this fund." }, { status: 403 })
+
+  if (cleanGoalId) {
+    const { data: goal } = await supabase
+      .from('savings_goals')
+      .select('goal_id')
+      .eq('goal_id', cleanGoalId)
+      .eq('user_id', user.id)
+      .maybeSingle()
+    if (!goal) return NextResponse.json({ error: "You don't have permission to access this goal." }, { status: 403 })
+  }
+
   if (cleanPlanId) {
     const { data: plan } = await supabase.from('monthly_plans').select('id').eq('id', cleanPlanId).eq('user_id', user.id).single()
     if (!plan) return NextResponse.json({ error: 'Plan not found' }, { status: 404 })

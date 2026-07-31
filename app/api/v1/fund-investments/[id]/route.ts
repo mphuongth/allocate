@@ -1,98 +1,40 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { ValidationError, validateAmount, validateDate, validateUUID } from '@/lib/validation'
-import { readJsonBody } from '@/lib/apiBody'
+import { NextResponse } from 'next/server'
 
-export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
-  const supabase = await createSupabaseServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+// Removed legacy mutations (#586).
+//
+// This route once exposed PUT and DELETE that wrote straight to
+// investment_transactions, matched on transaction_id + user_id and nothing else.
+// Both bypassed invariants the canonical /api/v1/investment-transactions/[id]
+// route enforces:
+//
+//   • PUT had no `asset_type = 'fund'` filter, so a fund-shaped body could
+//     rewrite a bank deposit's amount/units/unit_price, and it wrote a single
+//     row with no accumulating-book cascade — editing one tranche split the
+//     book away from its group (goal and maturity are book-level).
+//   • DELETE had no `consumed_by_inv_id IS NULL` guard, so the withdrawal that
+//     closes a merged source could be deleted. That re-opens the source at full
+//     value while its cash still sits in the anchor: the same money counted
+//     twice in net worth.
+//
+// Nothing in the app called either — the fund flows go through
+// POST /fund-investments/assign and the canonical transaction route — so rather
+// than duplicate the guards in a second place they are gone.
+//
+// 410 rather than dropping the handlers: an unexported method answers 405, which
+// reads as "wrong verb, try another one" and invites a retry. 410 says the path
+// itself is permanently gone, and it is a response a stale client can be tested
+// against. Neither handler authenticates or opens a database client — a removed
+// mutation must not be able to reach a row by any path through this file.
 
-  const parsed = await readJsonBody(request)
-  if (!parsed.ok) return parsed.response
-  const body = parsed.body
-  const { fund_id, goal_id, amount_vnd, units_purchased, nav_at_purchase, investment_date } = body
+const GONE = {
+  error: 'This endpoint has been removed. Use /api/v1/investment-transactions/[id] instead.',
+  code: 'gone',
+} as const
 
-  const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
-
-  try {
-    const txId = validateUUID(id, 'transaction_id')
-
-    if (fund_id !== undefined) {
-      updates.fund_id = fund_id === null || fund_id === '' ? null : validateUUID(fund_id, 'fund_id')
-    }
-    if (goal_id !== undefined) {
-      updates.goal_id = goal_id === null || goal_id === '' ? null : validateUUID(goal_id, 'goal_id')
-    }
-    if (amount_vnd !== undefined) {
-      const n = validateAmount(amount_vnd, 'amount_vnd')
-      if (n <= 0) throw new ValidationError('Amount and units are required and must be positive')
-      updates.amount_vnd = n
-    }
-    if (units_purchased !== undefined) {
-      const n = validateAmount(units_purchased, 'units_purchased')
-      if (n <= 0) throw new ValidationError('Amount and units are required and must be positive')
-      updates.units = n
-    }
-    if (nav_at_purchase !== undefined) {
-      const n = validateAmount(nav_at_purchase, 'nav_at_purchase')
-      if (n <= 0) throw new ValidationError('NAV at purchase must be positive')
-      updates.unit_price = n
-    }
-    if (investment_date !== undefined) {
-      updates.investment_date = investment_date === null || investment_date === '' ? null : validateDate(investment_date, 'investment_date')
-    }
-
-    const { data, error } = await supabase
-      .from('investment_transactions')
-      .update(updates)
-      .eq('transaction_id', txId)
-      .eq('user_id', user.id)
-      .select('transaction_id, fund_id, goal_id, amount_vnd, units, unit_price, investment_date, created_at, funds(name, nav), savings_goals(goal_name)')
-      .single()
-
-    if (error || !data) return NextResponse.json({ error: 'Investment not found' }, { status: 404 })
-
-    return NextResponse.json({
-      id: data.transaction_id,
-      fund_id: data.fund_id,
-      goal_id: data.goal_id,
-      amount_vnd: data.amount_vnd,
-      units_purchased: data.units,
-      nav_at_purchase: data.unit_price,
-      investment_date: data.investment_date,
-      created_at: data.created_at,
-      funds: data.funds,
-      savings_goals: data.savings_goals,
-    })
-  } catch (e) {
-    if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
-    throw e
-  }
+export async function PUT() {
+  return NextResponse.json(GONE, { status: 410 })
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
-
-  let txId: string
-  try {
-    txId = validateUUID(id, 'transaction_id')
-  } catch (e) {
-    if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
-    throw e
-  }
-
-  const supabase = await createSupabaseServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const { error } = await supabase
-    .from('investment_transactions')
-    .delete()
-    .eq('transaction_id', txId)
-    .eq('user_id', user.id)
-
-  if (error) return NextResponse.json({ error: 'Investment not found' }, { status: 404 })
-  return new NextResponse(null, { status: 204 })
+export async function DELETE() {
+  return NextResponse.json(GONE, { status: 410 })
 }
