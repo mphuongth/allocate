@@ -132,3 +132,65 @@ test.describe('fund-investments goal-move contract (#467, #589)', () => {
     }
   })
 })
+
+// The legacy row endpoints wrote to investment_transactions with no asset-type
+// filter and no consumed-settlement guard (#586). The route unit tests pin the
+// status codes and the filter chain; what only a live database can show is that
+// a *real* bank deposit is untouched by a call made through the fund-scoped
+// path — i.e. that the id really is cross-type and really is refused.
+test.describe('legacy fund-investments mutations are closed (#586)', () => {
+  test('PUT and DELETE are gone, and the transaction survives them', async ({ request }) => {
+    const goal = await api.createGoal({ goal_name: `E2E Legacy586 ${Date.now()}` })
+    const fund = await api.createFund({
+      name: `E2E Legacy586 Fund ${Date.now()}`,
+      code: `L58${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+      fund_type: 'equity',
+      nav: 20_000,
+    })
+    const tx = await api.createTransaction({
+      asset_type: 'fund', fund_id: fund.id, goal_id: goal.goal_id,
+      amount_vnd: 2_000_000, units: 100, unit_price: 20_000, investment_date: '2026-01-01',
+    })
+    try {
+      const put = await request.put(`/api/v1/fund-investments/${tx.transaction_id}`, {
+        data: { amount_vnd: 999_000_000 },
+      })
+      expect(put.status()).toBe(410)
+
+      const del = await request.delete(`/api/v1/fund-investments/${tx.transaction_id}`)
+      expect(del.status()).toBe(410)
+
+      // Neither call reached the row.
+      const rows = await (await request.get(`/api/v1/fund-investments?fund_id=${fund.id}`)).json()
+      const row = rows.find((r: { id: string }) => r.id === tx.transaction_id)
+      expect(row).toBeTruthy()
+      expect(row.amount_vnd).toBe(2_000_000)
+    } finally {
+      await api.deleteTransaction(tx.transaction_id)
+      await api.deleteFund(fund.id)
+      await api.deleteGoal(goal.goal_id)
+    }
+  })
+
+  test('the goal PATCH refuses a bank deposit id and leaves it in its goal', async ({ request }) => {
+    const goalA = await api.createGoal({ goal_name: `E2E Legacy586 A ${Date.now()}` })
+    const goalB = await api.createGoal({ goal_name: `E2E Legacy586 B ${Date.now()}` })
+    const bank = await api.createTransaction({
+      asset_type: 'bank', goal_id: goalA.goal_id, amount_vnd: 5_000_000,
+      interest_rate: 5, expiry_date: '2027-01-01', investment_date: '2026-01-01',
+    })
+    try {
+      const patch = await request.patch(`/api/v1/fund-investments/${bank.transaction_id}/goal`, {
+        data: { goal_id: goalB.goal_id },
+      })
+      expect(patch.status()).toBe(404)
+
+      const after = await (await request.get(`/api/v1/investment-transactions/${bank.transaction_id}`)).json()
+      expect(after.goal_id).toBe(goalA.goal_id)
+    } finally {
+      await api.deleteTransaction(bank.transaction_id)
+      await api.deleteGoal(goalA.goal_id)
+      await api.deleteGoal(goalB.goal_id)
+    }
+  })
+})
