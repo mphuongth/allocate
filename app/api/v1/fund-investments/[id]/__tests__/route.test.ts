@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { NextRequest } from 'next/server'
 
 // The legacy fund-investments row endpoint used to expose PUT and DELETE that
 // wrote straight to investment_transactions (#586):
@@ -34,18 +33,7 @@ vi.mock('@/lib/supabase-server', () => ({
   },
 }))
 
-const route = await import('../route')
-
-const TX_ID = '88888888-8888-4888-8888-888888888888'
-
-const call = (method: 'PUT' | 'DELETE', id = TX_ID, body?: unknown) =>
-  route[method](
-    new Request(`https://app.test/api/v1/fund-investments/${id}`, {
-      method,
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    }) as unknown as NextRequest,
-    { params: Promise.resolve({ id }) },
-  )
+const { PUT, DELETE } = await import('../route')
 
 describe('legacy /api/v1/fund-investments/[id] mutations', () => {
   beforeEach(() => {
@@ -53,8 +41,11 @@ describe('legacy /api/v1/fund-investments/[id] mutations', () => {
     h.tables = []
   })
 
+  // Both handlers take no parameters at all — not the request, not the route
+  // params. That is the removal made structural: there is no id to look up and
+  // no body to apply, so no edit to this file can quietly grow back into a write.
   it('answers PUT with 410 Gone', async () => {
-    const res = await call('PUT', TX_ID, { amount_vnd: 1_000_000 })
+    const res = await PUT()
 
     expect(res.status).toBe(410)
     const body = await res.json()
@@ -64,7 +55,7 @@ describe('legacy /api/v1/fund-investments/[id] mutations', () => {
   })
 
   it('answers DELETE with 410 Gone', async () => {
-    const res = await call('DELETE')
+    const res = await DELETE()
 
     expect(res.status).toBe(410)
     await expect(res.json()).resolves.toMatchObject({ code: 'gone' })
@@ -73,15 +64,10 @@ describe('legacy /api/v1/fund-investments/[id] mutations', () => {
   // The whole safety argument. If either handler still opened a client it could
   // still write, and a later edit could quietly restore the unguarded update.
   it('never reaches the database', async () => {
-    await call('PUT', TX_ID, { amount_vnd: 1_000_000 })
-    await call('DELETE')
+    await PUT()
+    await DELETE()
 
     expect(h.clientCreated).toBe(false)
     expect(h.tables).toEqual([])
-  })
-
-  // A well-formed id is not a way back in either — the id is never even read.
-  it('answers 410 regardless of the id', async () => {
-    expect((await call('DELETE', 'not-a-uuid')).status).toBe(410)
   })
 })
