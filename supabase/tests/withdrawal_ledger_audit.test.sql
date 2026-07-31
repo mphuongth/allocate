@@ -47,6 +47,7 @@ declare
   v_closer_src uuid; v_closer uuid;
   v_sliver_src uuid; v_sliver_a uuid; v_sliver_b uuid;
   v_tail2_src uuid; v_tail2_a uuid; v_tail2_b uuid;
+  v_basisover_src uuid;
   -- the clean half
   v_tol_goal  uuid;
   v_drift_src uuid; v_comp_src uuid; v_f7_src uuid; v_full_src uuid; v_tail_src uuid;
@@ -539,6 +540,19 @@ begin
   values (v_user, v_goal, 'gold', 'withdrawal', '2026-04-01', 1, v_tail2_src, 150, 0.0001)
   returning transaction_id into v_tail2_b;
 
+  -- 25. basis taken far past what the holding cost: 40,000,000 over 4 units, two
+  --     sales of 2 units taking 30,000,000 each. The units add up, so nothing is
+  --     over-sold — but 60,000,000 of cost has left a 40,000,000 holding, and
+  --     dashboard/overview subtracts exactly that sum from invested capital. Not a
+  --     violation: the invariant places no cap on the principal of a
+  --     quantity-valued holding, so the audit can only raise it for review.
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal, 'gold', 'investment', '2026-01-01', 40000000, 4, 10000000) returning transaction_id into v_basisover_src;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-02-01', 1, v_basisover_src, 30000000, 2),
+         (v_user, v_goal, 'gold', 'withdrawal', '2026-03-01', 1, v_basisover_src, 30000000, 2);
+
   alter table public.investment_transactions enable trigger user;
 
   -- ═══ every planted row must be named, by the right check ═══════════════════
@@ -609,6 +623,16 @@ begin
     raise exception 'the audit must report units taken out of a holding that has none';
   end if;
 
+  if not exists (select 1 from public.withdrawal_ledger_audit
+                  where check_name = 'basis_taken_exceeds_cost' and severity = 'review'
+                    and parent_transaction_id = v_basisover_src) then
+    raise exception 'the audit must raise basis taken past the holding cost for review';
+  end if;
+  if exists (select 1 from public.withdrawal_ledger_audit
+              where check_name = 'basis_taken_exceeds_cost' and severity = 'violation') then
+    raise exception 'a basis overrun on a quantity-valued holding is not provable and may not be a violation';
+  end if;
+
   -- Nothing whose every write was legal may be called a violation. 'review' is
   -- allowed here: the ratio really did move, and saying so is this check's job.
   if exists (select 1 from public.withdrawal_ledger_audit
@@ -674,7 +698,7 @@ end $$;
 -- Two claims the view's header makes, kept honest here rather than in prose alone.
 do $$
 declare
-  v_user uuid; v_g uuid; v_s uuid; v_violations int; v_any int;
+  v_user uuid; v_g uuid; v_s uuid; v_tiny uuid; v_violations int; v_any int; i int;
 begin
   insert into auth.users (id, email) values (gen_random_uuid(), 'wd-audit-contract@test.invalid') returning id into v_user;
   insert into public.savings_goals (user_id, goal_name) values (v_user, 'G') returning goal_id into v_g;
@@ -699,6 +723,30 @@ begin
   select count(*) into v_any from public.withdrawal_ledger_audit where user_id = v_user;
   if v_any <> 0 then
     raise notice 'the known-blind ledger now reports % row(s) — the header limit may be stale', v_any;
+  end if;
+
+  -- CLAIM 1b: a legal ledger may never produce a VIOLATION, however odd it looks.
+  --
+  -- A 1 đồng / 5 unit gold holding sold in three 1-unit slices. Each slice's
+  -- proportional share rounds to zero, and the invariant still demands a positive
+  -- principal from a parent-backed withdrawal, so each records the single đồng it is
+  -- allowed — three đồng out of a one đồng holding, every write accepted. There is
+  -- no principal cap in the quantity-valued branch at all: it enforces the
+  -- proportional allocation, not a running total. 'Σ principal ≤ basis' was never
+  -- the invariant's rule for gold or funds, so it cannot be a violation.
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_g, 'gold', 'investment', '2026-01-01', 1, 5, 1) returning transaction_id into v_tiny;
+  for i in 1..3 loop
+    insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
+    values (v_user, v_g, 'gold', 'withdrawal', '2026-02-01', 1, v_tiny, 1, 1);
+  end loop;
+
+  select count(*) into v_violations
+    from public.withdrawal_ledger_audit
+   where severity = 'violation' and (parent_transaction_id = v_tiny or transaction_id in
+         (select transaction_id from public.investment_transactions where parent_transaction_id = v_tiny));
+  if v_violations <> 0 then
+    raise exception 'a ledger the invariant accepted was reported as a violation (% row(s))', v_violations;
   end if;
 
   -- CLAIM 2: 'violation' means provable from state. The sequence-sensitive checks

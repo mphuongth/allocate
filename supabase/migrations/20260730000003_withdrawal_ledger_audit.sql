@@ -35,7 +35,11 @@
 -- ─── The two severities ──────────────────────────────────────────────────────
 --
 -- 'violation' — provable from the state alone. No ordering of any history could
---               have produced this row, so it is wrong however it got here.
+--               have produced this row, so it is wrong however it got here. Note
+--               what that excludes: the principal taken out of a GOLD holding or a
+--               fund bucket is not capped by the invariant at all — those follow
+--               the proportional allocation, one sale at a time, and that allowance
+--               accumulates — so a basis overrun there is reported for review.
 -- 'review'    — the ledger looks off, but legally-written ledgers can look the
 --               same. Sequence-sensitive: judge these with the rows in front of
 --               you, and expect the drift a mid-stream purchase legitimately
@@ -312,15 +316,25 @@ union all
 -- Past zero. The dashboard then DROPS the holding (valueNonFundHolding returns
 -- null at effectiveAmount <= 0) while the excess withdrawal stays in history, so
 -- net worth is wrong in a way no screen shows.
--- The tolerances are the invariant's own, and they do NOT accumulate across sales,
--- however many there are: every constraint it applies bounds the CUMULATIVE sum,
--- because each sale is measured against what is left — which already carries the
--- previous sale's excess. Formally Σp ≤ basis + 1 and Σunits ≤ units + 0.0001 for
--- any number of sales; two sales totalling units + 0.00015 are refused, which the
--- test plants and a probe confirmed. So: one đồng wherever the principal is a
--- proportional slice (gold — a deposit's principal is the user's own figure and is
--- bounded exactly, with nothing to round), and one 0.0001 for the clients' 4-decimal
--- rounding on a full sell.
+-- What the invariant actually caps, and what it does not.
+--
+-- UNITS are capped for every kind of holding, and the bound is cumulative however
+-- many sales there are: each sale is measured against what is LEFT, which already
+-- carries the previous sale's excess, so Σunits ≤ units + 0.0001 whatever the
+-- count (two sales totalling units + 0.00015 are refused — probed). Selling more of
+-- a thing than exists is provable from state, so it is a violation.
+--
+-- PRINCIPAL is capped only where the invariant caps it: bank and stock, where the
+-- amount withdrawn is the user's own figure and the rule is literally
+-- `principal_withdrawn > remaining` → refused. There is NO principal cap in the
+-- quantity-valued branch. Gold and fund sells are governed by the proportional
+-- allocation instead, one sale at a time, and THAT allowance accumulates: a 1 đồng
+-- / 5 unit holding sold in three 1-unit slices has each slice's share round to
+-- zero, while the invariant separately demands a positive principal from a
+-- parent-backed withdrawal — so three đồng legally leave a one đồng holding, every
+-- write accepted. Calling that an overdraw would tell an operator to repair a
+-- correctly written ledger, which is the one thing 'violation' promises not to do.
+-- Quantity-valued basis overruns go to 'review' below instead.
 --
 -- Units are compared against coalesce: a holding with NO units still has a balance
 -- of zero units, and the invariant refuses any positive quantity drawn on it
@@ -331,8 +345,8 @@ select 'holding_overdrawn', 'violation',
        format('%s holding of %s đồng / %s units has %s đồng / %s units taken out across %s withdrawal(s)',
               p.asset_type, p.amount_vnd, coalesce(p.units, 0), p.out_principal, p.out_units, p.sells)
   from parents p
- where p.out_principal > p.amount_vnd + (case when p.asset_type = 'gold' then 1 else 0 end)
-    or p.out_units > coalesce(p.units, 0) + 0.0001
+ where p.out_units > coalesce(p.units, 0) + 0.0001
+    or (p.asset_type is distinct from 'gold' and p.out_principal > p.amount_vnd)
 
 union all
 select 'fund_bucket_overdrawn', 'violation',
@@ -340,8 +354,28 @@ select 'fund_bucket_overdrawn', 'violation',
        format('bucket holds %s đồng / %s units and has %s đồng / %s units sold across %s sell(s)',
               b.basis, b.units, b.out_principal, b.out_units, b.sells)
   from fund_buckets b
- where b.buys > 0
-   and (b.out_principal > b.basis + 1 or b.out_units > b.units + 0.0001)
+ where b.buys > 0 and b.out_units > b.units + 0.0001
+
+union all
+-- The same overrun on the principal side of a quantity-valued holding. Worth
+-- looking at — dashboard/overview subtracts exactly this sum from invested capital
+-- — but never provable, since accumulated rounding on small slices reaches it
+-- legally. The per-sale tolerance is what an honest reading needs, so it is the
+-- tolerance used here too.
+select 'basis_taken_exceeds_cost', 'review',
+       p.user_id, null::uuid, p.transaction_id, null::uuid, p.goal_id,
+       format('gold holding cost %s đồng and has %s đồng taken out across %s withdrawal(s)',
+              p.amount_vnd, p.out_principal, p.sells)
+  from parents p
+ where p.asset_type = 'gold' and p.out_principal > p.amount_vnd + p.sells
+
+union all
+select 'basis_taken_exceeds_cost', 'review',
+       b.user_id, null::uuid, null::uuid, b.fund_id, b.goal_id,
+       format('bucket cost %s đồng and has %s đồng sold out of it across %s sell(s)',
+              b.basis, b.out_principal, b.sells)
+  from fund_buckets b
+ where b.buys > 0 and b.out_principal > b.basis + b.sells
 
 union all
 -- A sell alone in a bucket: its purchases are in another goal, so nothing here
