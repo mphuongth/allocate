@@ -44,6 +44,7 @@ declare
   v_free    uuid;  -- a deposit with no goal
   v_held    uuid;
   v_partial2 uuid;  -- the deposit whose settlement blocks its deletion
+  v_snap    uuid;  -- a renewal snapshot: closed, and excluded from net worth
   v_row     public.investment_transactions;
   v_saving  uuid;
   v_link    uuid;
@@ -334,6 +335,36 @@ begin
        parent_transaction_id, principal_withdrawn, affects_progress, held_for_merge, merge_target_goal_id)
     values (v_user, v_goal, 'bank', 'withdrawal', '2026-07-01', 10000000, v_partial, 1, true, true, v_goal);
     raise exception 'a held row must close the whole deposit, not a token slice' using errcode = 'ZZ999';
+  exception when check_violation then null;
+  end;
+
+  -- Every eligibility rule the RPC applies must apply to a RAW write too. The
+  -- trigger used to check only the amount, so a direct writer could settle a
+  -- RENEWAL SNAPSHOT: dashboard/overview excludes snapshots from active
+  -- investments, so closing one removes nothing from net worth while the pool adds
+  -- the settlement beside it — cash from a deposit that was already closed.
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
+  values (v_user, v_goal, 'bank', 'investment', '2026-06-26', 1000000) returning transaction_id into v_partial;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, renewed_from_transaction_id)
+  values (v_user, v_goal, 'bank', 'investment', '2026-06-26', 1000000, v_partial) returning transaction_id into v_snap;
+  begin
+    insert into public.investment_transactions
+      (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+       parent_transaction_id, principal_withdrawn, affects_progress, held_for_merge, merge_target_goal_id)
+    values (v_user, v_goal, 'bank', 'withdrawal', '2026-07-01', 10000000, v_snap, 1000000, true, true, v_goal);
+    raise exception 'a raw write must not settle a renewal snapshot either' using errcode = 'ZZ999';
+  exception when check_violation then null;
+  end;
+
+  -- The other eligibility rules reach a raw write as well, through the same
+  -- shared definition — a gold holding is not a deposit to settle.
+  begin
+    insert into public.investment_transactions
+      (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+       parent_transaction_id, principal_withdrawn, affects_progress, held_for_merge, merge_target_goal_id)
+    values (v_user, v_goal, 'bank', 'withdrawal', '2026-07-01', 100000, v_gold, 3000000, true, true, v_goal);
+    raise exception 'a raw write must not settle a gold holding either' using errcode = 'ZZ999';
   exception when check_violation then null;
   end;
 

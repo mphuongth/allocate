@@ -30,6 +30,108 @@
 -- than trusting the caller, and a CHECK that keeps the shape from being written
 -- any other way.
 
+-- ─── what counts as a settleable deposit ─────────────────────────────────────
+--
+-- One definition, called by BOTH writers: the RPC (so a caller gets the refusal
+-- before any work happens) and the row trigger below (so a raw INSERT/UPDATE
+-- meets the same bar). They used to state these rules separately, and the trigger
+-- checked only the amount — so a direct writer could settle a RENEWAL SNAPSHOT,
+-- which the dashboard excludes from active investments: closing it removed
+-- nothing from net worth while the pool added the settlement beside it, worth up
+-- to ten times a deposit that had already been closed. Two statements of one rule
+-- is how that gap opened, so there is now one.
+--
+-- Returns the source's remaining principal. p_exclude_tx leaves a row out of the
+-- already-withdrawn sum — the settlement being written — so the answer reads the
+-- same on the insert that creates it and on a later update to it.
+--
+-- security INVOKER, deliberately. It is called from two places with different
+-- privileges and that is exactly what makes invoker right:
+--
+--   • from the trigger, which is security definer — so inside it the current user
+--     is the owner, RLS does not apply, and every writer's row gets measured
+--     including one whose source RLS would hide from the caller;
+--   • from the RPC, which is security invoker — so it reads as the caller, under
+--     RLS, after the RPC has already proved the source is visible to them.
+--
+-- Definer here would have been wrong twice over: it would let a caller probe
+-- another user's transaction ids for eligibility, and revoking EXECUTE to prevent
+-- that would block the RPC itself (it runs as the caller) — which is exactly the
+-- 500 that mistake produced.
+create or replace function public.held_settlement_source_state(
+  p_source_id uuid,
+  p_exclude_tx uuid default null
+)
+returns bigint
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  v_src public.investment_transactions;
+  v_eff bigint;
+begin
+  if p_source_id is null then
+    raise exception 'held settlement: name the deposit this settles'
+      using errcode = 'check_violation';
+  end if;
+
+  select * into v_src
+    from public.investment_transactions
+   where transaction_id = p_source_id;
+  if not found then
+    raise exception 'held settlement: the deposit being settled was not found'
+      using errcode = 'no_data_found';
+  end if;
+
+  -- Eligibility, mirroring the merge RPC's ruleset for a live source
+  -- (20260620000006): a plain, ACTIVE, single bank term deposit. A withdrawal has
+  -- nothing to close; a fund/gold holding is not settled this way; an accumulating
+  -- book spans tranches this one row could not close; a renewal snapshot is a
+  -- closed cycle that no longer counts in net worth, so settling it would add cash
+  -- without removing anything.
+  if v_src.transaction_type is distinct from 'investment' then
+    raise exception 'held settlement: the source must be a deposit, not a withdrawal'
+      using errcode = 'check_violation';
+  end if;
+  if v_src.asset_type is distinct from 'bank' then
+    raise exception 'held settlement: only a bank deposit can be settled for merge'
+      using errcode = 'check_violation';
+  end if;
+  if v_src.deposit_group_id is not null then
+    raise exception 'held settlement: an accumulating book cannot be settled for merge yet'
+      using errcode = 'check_violation';
+  end if;
+  if v_src.renewed_from_transaction_id is not null then
+    raise exception 'held settlement: a renewal snapshot is already closed'
+      using errcode = 'check_violation';
+  end if;
+  -- Pledged means frozen as collateral. The sheet already refuses to offer a
+  -- pledged deposit for merge (lib/mergeEligibility), so the server saying the
+  -- same thing closes the raw-API path rather than adding a new rule.
+  if coalesce(v_src.is_pledged, false) then
+    raise exception 'held settlement: a pledged deposit is frozen as collateral'
+      using errcode = 'check_violation';
+  end if;
+
+  select v_src.amount_vnd - coalesce(sum(w.principal_withdrawn), 0)
+    into v_eff
+    from public.investment_transactions w
+   where w.parent_transaction_id = p_source_id
+     and w.transaction_type = 'withdrawal'
+     and (p_exclude_tx is null or w.transaction_id <> p_exclude_tx);
+
+  if v_eff <= 0 then
+    raise exception 'held settlement: this deposit has already been fully withdrawn'
+      using errcode = 'check_violation';
+  end if;
+
+  return v_eff;
+end;
+$$;
+
+grant execute on function public.held_settlement_source_state(uuid, uuid) to authenticated;
+
 -- ─── create_held_settlement ──────────────────────────────────────────────────
 --
 -- The caller supplies the source, what was received, and where the cash is
@@ -71,7 +173,6 @@ declare
   -- in step forever; a bound generous enough never to refuse a real
   -- held-to-maturity value, but tight enough that the number cannot be invented,
   -- is the trade the merge path already made. Same rule in both places.
-  c_amount_factor constant int := 10;
   v_src    public.investment_transactions;
   v_eff    bigint;
   v_target uuid;
@@ -86,6 +187,10 @@ begin
       using errcode = 'check_violation';
   end if;
 
+  -- The lock is taken by THIS function rather than by the shared check: it is what
+  -- makes two settlements of one deposit impossible, and taking it under RLS is
+  -- also the ownership boundary — a source belonging to someone else is not
+  -- visible here at all.
   select * into v_src
     from public.investment_transactions
    where transaction_id = p_source_id
@@ -95,52 +200,10 @@ begin
       using errcode = 'no_data_found';
   end if;
 
-  -- Eligibility, mirroring the merge RPC's ruleset for a live source
-  -- (20260620000006): a plain, active, single bank term deposit. A withdrawal
-  -- has nothing to close; a fund/gold holding is not settled this way; an
-  -- accumulating book spans tranches this one row could not close; a renewal
-  -- snapshot is already a closed cycle.
-  if v_src.transaction_type is distinct from 'investment' then
-    raise exception 'held settlement: the source must be a deposit, not a withdrawal'
-      using errcode = 'check_violation';
-  end if;
-  if v_src.asset_type is distinct from 'bank' then
-    raise exception 'held settlement: only a bank deposit can be settled for merge'
-      using errcode = 'check_violation';
-  end if;
-  if v_src.deposit_group_id is not null then
-    raise exception 'held settlement: an accumulating book cannot be settled for merge yet'
-      using errcode = 'check_violation';
-  end if;
-  if v_src.renewed_from_transaction_id is not null then
-    raise exception 'held settlement: a renewal snapshot is already closed'
-      using errcode = 'check_violation';
-  end if;
-  -- Pledged means frozen as collateral. The sheet already refuses to offer a
-  -- pledged deposit for merge (lib/mergeEligibility), so the server saying the
-  -- same thing closes the raw-API path rather than adding a new rule.
-  if coalesce(v_src.is_pledged, false) then
-    raise exception 'held settlement: a pledged deposit is frozen as collateral'
-      using errcode = 'check_violation';
-  end if;
-
-  -- What the deposit still has, after any earlier partial withdrawal. This is
-  -- both the amount the settlement closes and the second settlement's refusal.
-  select v_src.amount_vnd - coalesce(sum(w.principal_withdrawn), 0)
-    into v_eff
-    from public.investment_transactions w
-   where w.parent_transaction_id = p_source_id
-     and w.transaction_type = 'withdrawal';
-
-  if v_eff <= 0 then
-    raise exception 'held settlement: this deposit has already been fully withdrawn'
-      using errcode = 'check_violation';
-  end if;
-
-  if p_amount_vnd > v_eff * c_amount_factor then
-    raise exception 'held settlement: % is unreasonably large for a deposit with % left', p_amount_vnd, v_eff
-      using errcode = 'check_violation';
-  end if;
+  -- Eligibility and the remaining principal come from the one definition every
+  -- writer answers to. The amount bound is NOT checked here — the row trigger owns
+  -- it, so there is one comparison rather than two that can drift.
+  v_eff := public.held_settlement_source_state(p_source_id);
 
   -- Net-worth safety. Closing the deposit removes it from net worth, and the
   -- pool adds the cash back ONLY through merge_target_goal_id. Unresolvable
@@ -242,44 +305,39 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_src public.investment_transactions;
+  -- The same ×10 sanity bound the multi-source merge applies to a client's
+  -- "received" (20260620000006). Settling a deposit releases its remaining
+  -- principal plus interest, never a multiple of it. An exact cap would mean
+  -- reimplementing lib/depositValuation's accrual in SQL and keeping the two in
+  -- step forever; a bound generous enough never to refuse a real held-to-maturity
+  -- value, but tight enough that the number cannot be invented, is the trade the
+  -- merge path already made. Same rule in both places, and now only one copy.
+  c_amount_factor constant int := 10;
   v_eff bigint;
 begin
-  -- A legacy held row predating the shape constraint may have no parent. It
-  -- cannot be measured, and refusing every unrelated update to it would be a
-  -- second, unannounced migration; the constraint is what stops NEW ones.
+  -- A legacy held row predating these guards may have no parent. It cannot be
+  -- measured, and refusing every unrelated update to it would be a second,
+  -- unannounced migration; the deferred source check is what stops NEW ones.
   if new.parent_transaction_id is null then return new; end if;
 
-  select * into v_src
-    from public.investment_transactions
-   where transaction_id = new.parent_transaction_id;
-  if not found then
-    raise exception 'held settlement: the deposit being settled was not found'
-      using errcode = 'no_data_found';
-  end if;
-
-  -- The source's remaining principal, EXCLUDING this row — so the bound reads
-  -- the same on the insert that creates a settlement and on a later update to it.
-  select v_src.amount_vnd - coalesce(sum(w.principal_withdrawn), 0)
-    into v_eff
-    from public.investment_transactions w
-   where w.parent_transaction_id = new.parent_transaction_id
-     and w.transaction_type = 'withdrawal'
-     and w.transaction_id <> new.transaction_id;
+  -- Eligibility AND the remaining principal, from the definition the RPC uses.
+  -- Checking the amount without checking the source is what let a raw write settle
+  -- a renewal snapshot — a deposit already excluded from net worth, so the pool's
+  -- cash was added with nothing removed to balance it.
+  v_eff := public.held_settlement_source_state(new.parent_transaction_id, new.transaction_id);
 
   -- Full closure. "Để dành gộp" settles the deposit outright — that is what
   -- licenses the pool to add the cash back, because the deposit has stopped
   -- counting. Bounding the amount alone is not enough: a raw write could take
   -- principal_withdrawn = 1 against a 1,000,000 deposit and still claim
-  -- amount_vnd = 10,000,000, leaving the deposit worth 999,999 in net worth
-  -- while the pool adds ten million beside it. The RPC always closes the whole
-  -- remaining principal; every other writer must too.
+  -- amount_vnd = 10,000,000, leaving the deposit worth 999,999 in net worth while
+  -- the pool adds ten million beside it.
   if coalesce(new.principal_withdrawn, 0) <> v_eff then
     raise exception 'held settlement: must close the whole deposit — % left, but % taken', v_eff, coalesce(new.principal_withdrawn, 0)
       using errcode = 'check_violation';
   end if;
 
-  if new.amount_vnd > greatest(v_eff, 0) * 10 then
+  if new.amount_vnd > v_eff * c_amount_factor then
     raise exception 'held settlement: % is unreasonably large for a deposit with % left', new.amount_vnd, v_eff
       using errcode = 'check_violation';
   end if;
@@ -288,9 +346,6 @@ begin
 end;
 $$;
 
--- Not callable by the API roles: it is a trigger body, and an endpoint reaching
--- for it directly would be reading half an invariant. Mirrors the withdrawal
--- invariant's helper, whose lockdown withdrawal_balance.test.sql pins.
 revoke all on function public.check_held_amount_within_source() from public, anon, authenticated;
 
 drop trigger if exists investment_transactions_held_amount_bound on public.investment_transactions;
