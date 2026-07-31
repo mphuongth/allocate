@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, afterEach, vi } from 'vitest'
 import { type GoalDetailTx } from '../goalDetailShared'
 import { buildInvRows, buildRenewalSummary } from '../goalDetailRows'
 import { fmtMaturity } from '../goalDetailMaturity'
@@ -326,6 +326,36 @@ describe('computeGoalCalculator', () => {
     expect(c.monthsToGoal).toBe(24)             // ceil(120M / 5M)
     expect(c.isOnTrack).toBe(false)             // 5M < 10M
     expect(c.gap).toBe(5_000_000)
+  })
+
+  // The projection is rendered as a month and year, so landing in the wrong month
+  // is the whole error. Adding months to TODAY's date overflows whenever today's
+  // day doesn't exist in the target month: on the 31st, "seven months from now" is
+  // 31 February, which JavaScript silently rolls into March. The user is told a
+  // month later than the pace actually reaches the goal, and only on the 29th-31st,
+  // which is why it went unnoticed.
+  describe('projected month across a short month (run-date dependent)', () => {
+    afterEach(() => vi.useRealTimers())
+
+    it('lands in February when seven months from 31 July', () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date(2026, 6, 31, 12))   // 31 July 2026
+
+      const c = computeGoalCalculator({ targetAmount: 7_000_000, targetDate: null, currentValue: 0 }, 1_000_000)
+
+      expect(c.monthsToGoal).toBe(7)
+      expect(c.projectedDate?.getFullYear()).toBe(2027)
+      expect(c.projectedDate?.getMonth()).toBe(1)   // February, not March
+    })
+
+    it('lands in the next month when one month from 31 January', () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date(2026, 0, 31, 12))   // 31 January 2026
+
+      const c = computeGoalCalculator({ targetAmount: 1_000_000, targetDate: null, currentValue: 0 }, 1_000_000)
+
+      expect(c.projectedDate?.getMonth()).toBe(1)   // February, not March
+    })
   })
 
   it('returns no projection (null) when the input is zero', () => {

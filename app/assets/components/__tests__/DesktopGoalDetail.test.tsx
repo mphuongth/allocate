@@ -434,11 +434,14 @@ describe('DesktopGoalDetail — singular month wording (issue #262)', () => {
   // 1,000,000₫ left to reach the target.
   const nearGoal: GoalData = { ...mockGoal, targetAmount: 10_000_000, currentValue: 9_000_000, targetDate: null }
 
-  // Format a YYYY-MM string `n` months from today (deterministic regardless of run date).
+  // Format a YYYY-MM string `n` months from today. Built from the first of the
+  // month: setMonth on today's date overflows when the day doesn't exist in the
+  // target month, so run on the 31st this returned n+1 months and the test failed
+  // with "2 months early" — the comment claiming determinism was the bug.
   function monthsFromNow(n: number): string {
     const d = new Date()
-    d.setMonth(d.getMonth() + n)
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    const t = new Date(d.getFullYear(), d.getMonth() + n, 1)
+    return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}`
   }
 
   beforeEach(() => {
