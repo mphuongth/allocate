@@ -153,16 +153,30 @@ sale_dev as (
 -- if two or more need the slack, the holding cannot be explained by any legal
 -- sequence and they are all reported; if just one does, it is allowed its value.
 --
--- Sub-epsilon slivers are left out of the count, but only on a holding that ends
--- EXHAUSTED. A sliver can take a whole remaining basis only if it closed the
+-- Sub-epsilon slivers in the tail of an exhausted holding are judged by the same
+-- one-closer rule rather than exempted outright: exactly one of them may have been
+-- the sale that emptied the basis, so the others must have taken either their flat
+-- share or (having come after it) nothing. Two slivers that did neither have no
+-- legal reading in any order — 0.9998 units taking 999,800 and then 0.0001 each
+-- taking 50 and 150 of the 200 left adds up perfectly and is refused by all six
+-- orderings, which is the shape this catches.
+--
+-- The exemption itself is still limited to a holding that ends EXHAUSTED. A sliver can take a whole remaining basis only if it closed the
 -- holding, and which slivers in that tail were legal depends on write order — the
 -- undecidable-from-state limit the header records. On a holding with units still
 -- unsold nothing closed anything, so a sliver there owes the flat rate like any
 -- other sale and is measured like one: 0.0002 units out of 1 closes nothing.
 sale_dev_ranked as (
   select d.*,
+         d.exhausted and d.units_withdrawn <= 0.0002 as sliver,
          count(*) filter (where d.dev > d.base_tol and not (d.exhausted and d.units_withdrawn <= 0.0002))
-           over (partition by d.user_id, d.balance_key) as over_base
+           over (partition by d.user_id, d.balance_key) as over_base,
+         -- Slivers in the tail that took NEITHER their flat share nor nothing at
+         -- all. One of those is the closer emptying the basis; a second one has no
+         -- legal reading, whatever order they were written in.
+         count(*) filter (where d.exhausted and d.units_withdrawn <= 0.0002
+                            and d.dev > d.base_tol and coalesce(d.principal_withdrawn, 0) > 1)
+           over (partition by d.user_id, d.balance_key) as odd_slivers
     from sale_dev d
 )
 
@@ -385,8 +399,12 @@ select 'sale_basis_not_proportional', 'review',
        d.user_id, d.transaction_id, d.parent_transaction_id, d.fund_id, d.goal_id, d.detail
   from sale_dev_ranked d
  where d.dev > d.base_tol
-   and not (d.exhausted and d.units_withdrawn <= 0.0002)
-   and (d.over_base >= 2 or d.dev > d.base_tol + d.shortcut_tol)
+   and case
+         when d.sliver
+           -- The tail exemption is for ONE closer, not for every sliver in it.
+           then d.odd_slivers >= 2 and coalesce(d.principal_withdrawn, 0) > 1
+         else d.over_base >= 2 or d.dev > d.base_tol + d.shortcut_tol
+       end
 
 union all
 select 'basis_not_proportional', 'review',

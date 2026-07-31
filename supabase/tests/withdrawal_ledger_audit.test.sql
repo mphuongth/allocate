@@ -46,6 +46,7 @@ declare
   v_split_goal_src uuid; v_sg_a uuid; v_sg_b uuid;
   v_closer_src uuid; v_closer uuid;
   v_sliver_src uuid; v_sliver_a uuid; v_sliver_b uuid;
+  v_tail2_src uuid; v_tail2_a uuid; v_tail2_b uuid;
   -- the clean half
   v_tol_goal  uuid;
   v_drift_src uuid; v_comp_src uuid; v_f7_src uuid; v_full_src uuid; v_tail_src uuid;
@@ -517,6 +518,27 @@ begin
   values (v_user, v_goal, 'gold', 'withdrawal', '2026-03-01', 1, v_sliver_src, 199, 0.0001)
   returning transaction_id into v_sliver_b;
 
+  -- 24. an exhausted tail whose slivers are BOTH wrong: 0.9998 units takes its
+  --     999,800, then two 0.0001 slivers take 50 and 150 of the 200 left. Units and
+  --     principal both add up exactly, so the holding-level checks are silent, and
+  --     the tail exemption skipped the slivers. But only one sliver can be the
+  --     closer that empties the basis; the other must take its flat share or, if it
+  --     came after, nothing. Neither of these does — all six orderings were run
+  --     against the invariant and every one is refused.
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal, 'gold', 'investment', '2026-01-01', 1000000, 1, 1000000) returning transaction_id into v_tail2_src;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-02-01', 1, v_tail2_src, 999800, 0.9998);
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-03-01', 1, v_tail2_src, 50, 0.0001)
+  returning transaction_id into v_tail2_a;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-04-01', 1, v_tail2_src, 150, 0.0001)
+  returning transaction_id into v_tail2_b;
+
   alter table public.investment_transactions enable trigger user;
 
   -- ═══ every planted row must be named, by the right check ═══════════════════
@@ -546,7 +568,9 @@ begin
         ('sale_basis_not_proportional',   v_sg_b),
         ('sale_basis_not_proportional',   v_closer),
         ('sale_basis_not_proportional',   v_sliver_a),
-        ('sale_basis_not_proportional',   v_sliver_b)
+        ('sale_basis_not_proportional',   v_sliver_b),
+        ('sale_basis_not_proportional',   v_tail2_a),
+        ('sale_basis_not_proportional',   v_tail2_b)
       ) as x(name, tx)
   loop
     if v_count <> 1 then
