@@ -267,6 +267,18 @@ begin
      and w.transaction_type = 'withdrawal'
      and w.transaction_id <> new.transaction_id;
 
+  -- Full closure. "Để dành gộp" settles the deposit outright — that is what
+  -- licenses the pool to add the cash back, because the deposit has stopped
+  -- counting. Bounding the amount alone is not enough: a raw write could take
+  -- principal_withdrawn = 1 against a 1,000,000 deposit and still claim
+  -- amount_vnd = 10,000,000, leaving the deposit worth 999,999 in net worth
+  -- while the pool adds ten million beside it. The RPC always closes the whole
+  -- remaining principal; every other writer must too.
+  if coalesce(new.principal_withdrawn, 0) <> v_eff then
+    raise exception 'held settlement: must close the whole deposit — % left, but % taken', v_eff, coalesce(new.principal_withdrawn, 0)
+      using errcode = 'check_violation';
+  end if;
+
   if new.amount_vnd > greatest(v_eff, 0) * 10 then
     raise exception 'held settlement: % is unreasonably large for a deposit with % left', new.amount_vnd, v_eff
       using errcode = 'check_violation';
@@ -291,6 +303,51 @@ create trigger investment_transactions_held_amount_bound
   for each row
   when (new.held_for_merge)
   execute function public.check_held_amount_within_source();
+
+-- ─── deleting the deposit a settlement is parked against ─────────────────────
+--
+-- parent_transaction_id is ON DELETE SET NULL, so removing a settled deposit
+-- from the ledger nulls its settlement's parent — which is now the one shape a
+-- held row may not have. Without this guard the referential update fails the
+-- shape constraint (23514), and the DELETE route only translates foreign-key
+-- errors (23503), so an ordinary ledger action would answer 500.
+--
+-- Refusing is the right answer rather than a nicer 500: the settlement's parent
+-- is its only link back to what it closed, and nulling it produces exactly the
+-- unbacked row this migration exists to forbid. The remedy is the one the UI
+-- already offers — "Bỏ chờ gộp" removes the settlement and restores the deposit,
+-- after which the deposit deletes normally. This mirrors the 409 the route
+-- already gives for a deposit with a settlement waiting to merge INTO it.
+--
+-- The message carries the same 'held settlement: ' prefix as the RPC's refusals,
+-- so the route recognises it as a rule the caller can act on rather than a fault.
+create or replace function public.guard_held_settlement_source_delete()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  perform 1
+    from public.investment_transactions s
+   where s.parent_transaction_id = old.transaction_id
+     and s.held_for_merge
+   limit 1;
+  if found then
+    raise exception 'held settlement: this deposit has a settlement parked against it — remove that settlement first'
+      using errcode = 'check_violation';
+  end if;
+  return old;
+end;
+$$;
+
+revoke all on function public.guard_held_settlement_source_delete() from public, anon, authenticated;
+
+drop trigger if exists investment_transactions_guard_held_source on public.investment_transactions;
+create trigger investment_transactions_guard_held_source
+  before delete on public.investment_transactions
+  for each row
+  execute function public.guard_held_settlement_source_delete();
 
 -- ─── the shape, as a constraint ──────────────────────────────────────────────
 --
@@ -326,7 +383,12 @@ alter table public.investment_transactions
       transaction_type = 'withdrawal'
       and parent_transaction_id is not null
       and merge_target_goal_id is not null
-      and merge_target_goal_id = goal_id
+      -- IS NOT DISTINCT FROM, not `=`: a CHECK passes on UNKNOWN, so plain
+      -- equality lets an UPDATE set goal_id = NULL straight through — the
+      -- dashboard would go on displaying the cash under the non-null target
+      -- while the merge refuses it for a goal that no longer matches. Paired
+      -- with the non-null target above, this forces goal_id to that same goal.
+      and merge_target_goal_id is not distinct from goal_id
     )
   ) not valid;
 

@@ -236,6 +236,21 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     .select('transaction_id')
 
   if (error) {
+    // The deposit still has a settlement parked against it (#588). Its parent is
+    // the settlement's only link back to what it closed, so the delete is refused
+    // rather than allowed to null it — another conflict the user resolves ("Bỏ
+    // chờ gộp" removes the settlement and restores the deposit), not a fault.
+    // The prefix marks it as a rule this codebase authored; anything else the
+    // database says stays unquoted.
+    if (error.message?.startsWith('held settlement: ')) {
+      return NextResponse.json(
+        {
+          error: 'A settlement is parked against this deposit. Remove that settlement before deleting it.',
+          code: 'held_settlement_parked',
+        },
+        { status: 409 },
+      )
+    }
     // The mirror image of the guard above. Two columns reference this table with
     // no ON DELETE action, so deleting a deposit that either one points at raises
     // a foreign-key violation — a conflict the user can resolve, not a server

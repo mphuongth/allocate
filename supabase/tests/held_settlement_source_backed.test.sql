@@ -43,6 +43,7 @@ declare
   v_oth_tx  uuid;
   v_free    uuid;  -- a deposit with no goal
   v_held    uuid;
+  v_partial2 uuid;  -- the deposit whose settlement blocks its deletion
   v_row     public.investment_transactions;
   v_saving  uuid;
   v_link    uuid;
@@ -302,6 +303,7 @@ begin
   -- Created properly, then inflated by an UPDATE that touches nothing else.
   v_row := public.create_held_settlement(v_partial, 1050000, '2026-07-01');
   v_held := v_row.transaction_id;
+  v_partial2 := v_partial;  -- the deposit this settlement is parked against
   begin
     update public.investment_transactions set amount_vnd = 999000000 where transaction_id = v_held;
     raise exception 'a held row must stay bounded after it exists' using errcode = 'ZZ999';
@@ -313,6 +315,58 @@ begin
   select amount_vnd into v_count from public.investment_transactions where transaction_id = v_held;
   if v_count <> 1060000 then
     raise exception 'a legitimate amount edit must go through, got %', v_count;
+  end if;
+
+  -- Bounding the amount is not enough on its own. Taking a token principal keeps
+  -- the deposit alive in net worth while the pool adds the settlement beside it,
+  -- so the same money is counted twice — 999,999 still in the deposit AND up to
+  -- ten million in the pool. A held settlement closes the deposit outright.
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
+  values (v_user, v_goal, 'bank', 'investment', '2026-06-25', 1000000) returning transaction_id into v_partial;
+  begin
+    insert into public.investment_transactions
+      (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+       parent_transaction_id, principal_withdrawn, affects_progress, held_for_merge, merge_target_goal_id)
+    values (v_user, v_goal, 'bank', 'withdrawal', '2026-07-01', 10000000, v_partial, 1, true, true, v_goal);
+    raise exception 'a held row must close the whole deposit, not a token slice' using errcode = 'ZZ999';
+  exception when check_violation then null;
+  end;
+
+  -- ── 10) NULL is not a way around the goal agreement ─────────────────────────
+  -- A CHECK passes on UNKNOWN, so plain equality would let an UPDATE blank
+  -- goal_id: the dashboard keeps displaying the cash under the non-null target
+  -- while the merge refuses it for a goal that no longer matches.
+  begin
+    update public.investment_transactions set goal_id = null where transaction_id = v_held;
+    raise exception 'blanking goal_id must not slip past the goal agreement' using errcode = 'ZZ999';
+  exception when check_violation then null;
+  end;
+
+  -- ── 11) deleting the deposit a settlement is parked against ─────────────────
+  -- parent_transaction_id is ON DELETE SET NULL, so this delete would null the
+  -- settlement's only link back to what it closed — the unbacked row this whole
+  -- migration forbids. It is refused, with the prefix the route turns into a 409
+  -- rather than the 500 a bare constraint violation would have produced.
+  --
+  -- Catching check_violation alone would not prove anything: WITHOUT the guard
+  -- the FK's SET NULL trips the shape constraint, which is also a check_violation
+  -- — and is precisely the bare 23514 the route cannot translate. So the message
+  -- has to be ours.
+  begin
+    delete from public.investment_transactions where transaction_id = v_partial2;
+    raise exception 'deleting a settled deposit must be refused while its settlement stands' using errcode = 'ZZ999';
+  exception when check_violation then
+    if sqlerrm not like 'held settlement:%' then
+      raise exception 'the refusal must be the guard, not a bare constraint violation the route reports as 500: %', sqlerrm;
+    end if;
+  end;
+  -- Removing the settlement first ("Bỏ chờ gộp") frees the deposit, which is the
+  -- remedy the message names.
+  delete from public.investment_transactions where parent_transaction_id = v_partial2;
+  delete from public.investment_transactions where transaction_id = v_partial2;
+  select count(*) into v_count from public.investment_transactions where transaction_id = v_partial2;
+  if v_count <> 0 then
+    raise exception 'the deposit must delete once its settlement is gone';
   end if;
 
   -- Dropping the flag must not be a way to keep an otherwise-illegal row either:
