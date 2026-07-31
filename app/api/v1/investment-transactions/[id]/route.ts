@@ -189,6 +189,22 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     .select()
     .single()
 
+  // A deposit that has already been settled for merge cannot have its amount or
+  // goal changed: the settlement is a statement about that balance, and moving it
+  // underneath would revive the deposit in net worth while its cash still sits in
+  // the pool (#588). A conflict the user resolves — "Bỏ chờ gộp" removes the
+  // settlement and restores the deposit — not a missing row, so 404 would
+  // misdescribe it. The prefix marks a rule this codebase authored.
+  if (error?.message?.startsWith('held settlement: ')) {
+    return NextResponse.json(
+      {
+        error: 'A settlement is recorded against this deposit. Remove that settlement before changing it.',
+        code: 'held_settlement_parked',
+      },
+      { status: 409 },
+    )
+  }
+
   if (error || !transaction) return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
 
   // (Accumulating books took the atomic update_deposit_book path above; only

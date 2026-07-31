@@ -45,6 +45,7 @@ declare
   v_held    uuid;
   v_partial2 uuid;  -- the deposit whose settlement blocks its deletion
   v_snap    uuid;  -- a renewal snapshot: closed, and excluded from net worth
+  v_held2   uuid;  -- the settlement blocking edits to its own source
   v_row     public.investment_transactions;
   v_saving  uuid;
   v_link    uuid;
@@ -367,6 +368,58 @@ begin
     raise exception 'a raw write must not settle a gold holding either' using errcode = 'ZZ999';
   exception when check_violation then null;
   end;
+
+  -- A settlement belongs to the goal its deposit is in. The shape CHECK only makes
+  -- the row's two goal columns agree WITH EACH OTHER, so a raw write could set both
+  -- to another owned goal — closing goal A's deposit and showing its cash in goal
+  -- B, the cross-goal transfer the RPC refuses.
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
+  values (v_user, v_goal, 'bank', 'investment', '2026-06-27', 1000000) returning transaction_id into v_partial;
+  begin
+    insert into public.investment_transactions
+      (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+       parent_transaction_id, principal_withdrawn, affects_progress, held_for_merge, merge_target_goal_id)
+    values (v_user, v_goal2, 'bank', 'withdrawal', '2026-07-01', 1000000, v_partial, 1000000, true, true, v_goal2);
+    raise exception 'a raw write must not file a settlement under another goal' using errcode = 'ZZ999';
+  exception when check_violation then null;
+  end;
+
+  -- affects_progress = false takes the withdrawal out of the goal bar's withdrawal
+  -- map, so the bar keeps counting the deposit — while heldForMergeContributions
+  -- adds the parked cash to progressValue regardless. The bar counts both.
+  begin
+    insert into public.investment_transactions
+      (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+       parent_transaction_id, principal_withdrawn, affects_progress, held_for_merge, merge_target_goal_id)
+    values (v_user, v_goal, 'bank', 'withdrawal', '2026-07-01', 1000000, v_partial, 1000000, false, true, v_goal);
+    raise exception 'a held settlement must affect goal progress' using errcode = 'ZZ999';
+  exception when check_violation then null;
+  end;
+
+  -- ── 9b) editing a deposit that has already been settled ─────────────────────
+  -- Every guard above measures the SETTLEMENT; none fires when the SOURCE is
+  -- edited. Raising its amount revives it in net worth while its cash is still in
+  -- the pool — counted twice. Moving its goal splits the settlement from the
+  -- deposit it belongs to.
+  v_row := public.create_held_settlement(v_partial, 1000000, '2026-07-01');
+  v_held2 := v_row.transaction_id;
+  begin
+    update public.investment_transactions set amount_vnd = 100000000 where transaction_id = v_partial;
+    raise exception 'a settled deposit must not have its amount changed' using errcode = 'ZZ999';
+  exception when check_violation then null;
+  end;
+  begin
+    update public.investment_transactions set goal_id = v_goal2 where transaction_id = v_partial;
+    raise exception 'a settled deposit must not be moved to another goal' using errcode = 'ZZ999';
+  exception when check_violation then null;
+  end;
+  -- Removing the settlement frees it, which is the remedy the message names.
+  delete from public.investment_transactions where transaction_id = v_held2;
+  update public.investment_transactions set amount_vnd = 1200000 where transaction_id = v_partial;
+  select amount_vnd into v_count from public.investment_transactions where transaction_id = v_partial;
+  if v_count <> 1200000 then
+    raise exception 'the deposit must edit freely once its settlement is gone, got %', v_count;
+  end if;
 
   -- ── 10) NULL is not a way around the goal agreement ─────────────────────────
   -- A CHECK passes on UNKNOWN, so plain equality would let an UPDATE blank

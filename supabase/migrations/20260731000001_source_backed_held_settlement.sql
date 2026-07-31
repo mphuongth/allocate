@@ -58,11 +58,13 @@
 -- another user's transaction ids for eligibility, and revoking EXECUTE to prevent
 -- that would block the RPC itself (it runs as the caller) — which is exactly the
 -- 500 that mistake produced.
+drop function if exists public.held_settlement_source_state(uuid, uuid);
+
 create or replace function public.held_settlement_source_state(
   p_source_id uuid,
   p_exclude_tx uuid default null
 )
-returns bigint
+returns table (remaining bigint, source_goal_id uuid)
 language plpgsql
 security invoker
 set search_path = ''
@@ -126,7 +128,11 @@ begin
       using errcode = 'check_violation';
   end if;
 
-  return v_eff;
+  -- The goal comes back with the balance because the two are asked together by
+  -- both callers: a settlement belongs to the goal its deposit is in.
+  remaining := v_eff;
+  source_goal_id := v_src.goal_id;
+  return next;
 end;
 $$;
 
@@ -203,7 +209,7 @@ begin
   -- Eligibility and the remaining principal come from the one definition every
   -- writer answers to. The amount bound is NOT checked here — the row trigger owns
   -- it, so there is one comparison rather than two that can drift.
-  v_eff := public.held_settlement_source_state(p_source_id);
+  select remaining into v_eff from public.held_settlement_source_state(p_source_id);
 
   -- Net-worth safety. Closing the deposit removes it from net worth, and the
   -- pool adds the cash back ONLY through merge_target_goal_id. Unresolvable
@@ -313,7 +319,8 @@ declare
   -- value, but tight enough that the number cannot be invented, is the trade the
   -- merge path already made. Same rule in both places, and now only one copy.
   c_amount_factor constant int := 10;
-  v_eff bigint;
+  v_eff       bigint;
+  v_src_goal  uuid;
 begin
   -- A legacy held row predating these guards may have no parent. It cannot be
   -- measured, and refusing every unrelated update to it would be a second,
@@ -324,7 +331,30 @@ begin
   -- Checking the amount without checking the source is what let a raw write settle
   -- a renewal snapshot — a deposit already excluded from net worth, so the pool's
   -- cash was added with nothing removed to balance it.
-  v_eff := public.held_settlement_source_state(new.parent_transaction_id, new.transaction_id);
+  select remaining, source_goal_id
+    into v_eff, v_src_goal
+    from public.held_settlement_source_state(new.parent_transaction_id, new.transaction_id);
+
+  -- A settlement belongs to the goal its deposit is in. The shape constraint only
+  -- makes the row's two goal columns agree WITH EACH OTHER — a raw write could set
+  -- both to another owned goal, closing goal A's deposit and showing its cash in
+  -- goal B, which is exactly the cross-goal transfer the RPC refuses. An
+  -- unassigned deposit is the intended exception: there is nothing to disagree
+  -- with, so the settlement's goal is what decides.
+  if v_src_goal is not null and new.goal_id is distinct from v_src_goal then
+    raise exception 'held settlement: the cash stays in the deposit''s own goal — it cannot be filed under a different one'
+      using errcode = 'check_violation';
+  end if;
+
+  -- affects_progress = false takes the withdrawal out of the goal bar's
+  -- withdrawal map, so the bar keeps counting the deposit — while
+  -- heldForMergeContributions adds the parked cash to progressValue regardless.
+  -- The bar would then count both. The RPC always writes true; so must everyone.
+  if new.affects_progress is distinct from true then
+    raise exception 'held settlement: must affect goal progress — it closes the deposit the bar is counting'
+      using errcode = 'check_violation';
+  end if;
+
 
   -- Full closure. "Để dành gộp" settles the deposit outright — that is what
   -- licenses the pool to add the cash back, because the deposit has stopped
@@ -358,6 +388,55 @@ create trigger investment_transactions_held_amount_bound
   for each row
   when (new.held_for_merge)
   execute function public.check_held_amount_within_source();
+
+-- ─── editing a deposit that has already been settled ─────────────────────────
+--
+-- Every guard above measures the SETTLEMENT. None of them fires when the SOURCE
+-- is edited, because the source is not a held row — and the settlement's whole
+-- meaning is a statement ABOUT the source's balance:
+--
+--   a 1,000,000 deposit is settled (the settlement closes all 1,000,000), then
+--   the deposit is edited to 100,000,000 → 99,000,000 of it is active again in
+--   net worth while its cash is still sitting in the pool. Counted twice.
+--
+-- goal_id is here for the same reason: the settlement is filed under its
+-- deposit's goal, so moving the deposit afterwards would split the two apart —
+-- the cash shown in one goal, consumable only from another.
+--
+-- Refusing is the answer rather than cascading a correction: the settlement is a
+-- record of what was closed, and silently rewriting it to match a new number
+-- would restate history the user did not ask to restate. The remedy is the one
+-- the UI already offers — "Bỏ chờ gộp" removes the settlement and restores the
+-- deposit, after which it edits freely.
+create or replace function public.guard_settled_source_edit()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  perform 1
+    from public.investment_transactions s
+   where s.parent_transaction_id = old.transaction_id
+     and s.held_for_merge
+   limit 1;
+  if found then
+    raise exception 'held settlement: this deposit has a settlement recorded against it — remove that settlement before changing its amount or goal'
+      using errcode = 'check_violation';
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function public.guard_settled_source_edit() from public, anon, authenticated;
+
+drop trigger if exists investment_transactions_guard_settled_source on public.investment_transactions;
+create trigger investment_transactions_guard_settled_source
+  before update of amount_vnd, goal_id on public.investment_transactions
+  for each row
+  when (new.amount_vnd is distinct from old.amount_vnd
+        or new.goal_id is distinct from old.goal_id)
+  execute function public.guard_settled_source_edit();
 
 -- ─── the source requirement, deferred ────────────────────────────────────────
 --
