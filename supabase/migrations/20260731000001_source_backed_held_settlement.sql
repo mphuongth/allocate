@@ -488,6 +488,36 @@ create trigger investment_transactions_guard_settled_source
   for each row
   execute function public.guard_settled_source_edit();
 
+-- ─── note: deleting a goal that a settlement is earmarked to ────────────────
+--
+-- There is deliberately NO trigger here, and the reason is worth recording.
+--
+-- Deleting a goal moves its transactions to Unassigned via ON DELETE SET NULL on
+-- investment_transactions.goal_id, which arrives at the source guard above as an
+-- update — so the guard refuses it, and the goal deletion aborts. That is the
+-- right outcome reached the right way: merge_target_goal_id has no foreign key,
+-- so it would be left pointing at a goal that no longer exists, and the #525
+-- ownership trigger refuses that too.
+--
+-- Refusing is right — the parked cash is earmarked to that goal, and there is no
+-- way through that does not either lose the earmark or lose the money (nulling
+-- the target is exactly what the shape constraint forbids). Two instruments were
+-- tried and both dropped, which is why the reasoning is here rather than the code:
+--
+--   • a trigger on savings_goals. BEFORE DELETE also aborts `delete from
+--     auth.users`, where the settlement is going away too and there is nothing to
+--     protect; AFTER DELETE deferred never runs at all, because an immediate
+--     trigger has already refused the statement.
+--   • an exemption in the source guard for the referential action itself. Measured
+--     against every ordering — goal alone, goal then account, account cascade — it
+--     changed no outcome, only which error appeared, and the one it produced was
+--     the WORSE of the two: it hid our own message behind the ownership trigger's.
+--
+-- So the database keeps refusing it, and the ROUTE does the explaining: it checks
+-- for parked cash before issuing the delete and answers 409 with the remedy
+-- ("Bỏ chờ gộp" releases the settlement, then the goal deletes). One place, the
+-- right message, and no new way to break an account deletion.
+
 -- ─── the source requirement, deferred ────────────────────────────────────────
 --
 -- "A held settlement names the deposit it closed" cannot be an ordinary CHECK,

@@ -47,6 +47,7 @@ declare
   v_snap    uuid;  -- a renewal snapshot: closed, and excluded from net worth
   v_held2   uuid;  -- the settlement blocking edits to its own source
   v_fund    uuid;  -- a fund, for the bucket-precedence case
+  v_goal3   uuid;  -- a goal deleted while cash is parked in it
   v_row     public.investment_transactions;
   v_saving  uuid;
   v_link    uuid;
@@ -541,6 +542,40 @@ begin
   select count(*) into v_count from public.investment_transactions where transaction_id = v_partial2;
   if v_count <> 0 then
     raise exception 'the deposit must delete once its settlement is gone';
+  end if;
+
+  -- ── 11b) the goal-deletion cascade must not be broken by the source guard ───
+  -- Deleting a goal moves its transactions to Unassigned via ON DELETE SET NULL,
+  -- which reaches the source guard as an update. Refusing that aborted the goal
+  -- deletion outright — and, worse, aborted `delete from auth.users` too, where
+  -- goal and settlement go together and nothing is left to protect.
+  --
+  -- The guard now exempts exactly the referential action: goal_id and nothing
+  -- else, non-null to null, and only when the goal is already gone (the FK runs
+  -- after the savings_goals row is deleted — a user unassigning a deposit still
+  -- has the goal in place, and is still refused).
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Doomed') returning goal_id into v_goal3;
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
+  values (v_user, v_goal3, 'bank', 'investment', '2026-06-30', 1000000) returning transaction_id into v_partial;
+  v_row := public.create_held_settlement(v_partial, 1000000, '2026-07-01');
+  v_held2 := v_row.transaction_id;
+
+  -- A user unassigning a settled deposit is NOT the cascade: the goal is there.
+  begin
+    update public.investment_transactions set goal_id = null where transaction_id = v_partial;
+    raise exception 'unassigning a settled deposit must still be refused' using errcode = 'ZZ999';
+  exception when check_violation then
+    if sqlerrm not like 'held settlement:%' then
+      raise exception 'the refusal must be the source guard, got: %', sqlerrm;
+    end if;
+  end;
+
+  -- Releasing the settlement frees both the deposit and its goal.
+  delete from public.investment_transactions where transaction_id = v_held2;
+  delete from public.savings_goals where goal_id = v_goal3;
+  select count(*) into v_count from public.savings_goals where goal_id = v_goal3;
+  if v_count <> 0 then
+    raise exception 'the goal must delete once its settlement is released';
   end if;
 
   -- ── 12) removing BOTH rows must not be refused ──────────────────────────────

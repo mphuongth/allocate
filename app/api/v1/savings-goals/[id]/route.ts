@@ -179,6 +179,33 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     .eq('goal_id', goalId)
     .eq('user_id', user.id)
 
+  // Cash parked in this goal for a merge (#588). The database refuses the delete
+  // either way — merge_target_goal_id has no foreign key, so it would be left
+  // pointing at a goal that no longer exists — but it refuses through the #525
+  // ownership trigger, whose message is about a goal reference, not about a
+  // settlement. Asking first is what turns that into an answer the user can act
+  // on: 404 "Goal not found" describes the wrong thing entirely, since the goal is
+  // very much there.
+  const { data: parked } = await supabase
+    .from('investment_transactions')
+    .select('transaction_id')
+    .eq('user_id', user.id)
+    .eq('held_for_merge', true)
+    .is('consumed_by_inv_id', null)
+    .or(`merge_target_goal_id.eq.${goalId},goal_id.eq.${goalId}`)
+    .limit(1)
+    .maybeSingle()
+
+  if (parked) {
+    return NextResponse.json(
+      {
+        error: 'This goal has cash parked in it for a merge. Release that settlement before deleting the goal.',
+        code: 'held_settlement_parked',
+      },
+      { status: 409 },
+    )
+  }
+
   const { error } = await supabase
     .from('savings_goals')
     .delete()
