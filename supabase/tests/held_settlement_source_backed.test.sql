@@ -49,6 +49,9 @@ declare
   v_fund    uuid;  -- a fund, for the bucket-precedence case
   v_goal3   uuid;  -- a goal deleted while cash is parked in it
   v_csrc    uuid;  -- source of the consumed settlement (never released)
+  v_csrc2   uuid;  -- source used for the dead-end cases
+  v_plan    uuid;
+  v_goal4   uuid;
   v_row     public.investment_transactions;
   v_saving  uuid;
   v_link    uuid;
@@ -625,6 +628,52 @@ begin
   select count(*) into v_count from public.savings_goals where goal_id = v_goal3;
   if v_count <> 0 then
     raise exception 'the goal must delete once its settlement is released';
+  end if;
+
+  -- ── 11c) the guard must not create dead ends ────────────────────────────────
+  -- "A settled deposit is a closed record, nothing about it should change" was too
+  -- broad. Two things it blocked are neither valuation nor the settlement's claim:
+  --
+  --   • plan_id, unlinked by ON DELETE SET NULL when a monthly plan is deleted.
+  --     Blocking it made the plan undeletable — permanently, once the settlement
+  --     was consumed, since a consumed settlement cannot be released either.
+  --   • the goal, AFTER the merge is done. While cash is parked the goal is what
+  --     the dashboard shows it under; once consumed the cash lives in the
+  --     destination and the pool skips the row. Pinning it then only made a goal
+  --     that had ever completed a merge undeletable.
+  --
+  -- An EXEMPT list is what makes this safe: forgetting to add a field to it blocks
+  -- more than needed, where forgetting to add one to a list of GUARDED fields would
+  -- let a real edit through.
+  insert into public.monthly_plans (user_id, month, year, salary_vnd)
+  values (v_user, 7, 2026, 50000000) returning id into v_plan;
+  insert into public.investment_transactions (user_id, goal_id, plan_id, asset_type, transaction_type, investment_date, amount_vnd)
+  values (v_user, v_goal, v_plan, 'bank', 'investment', '2026-06-24', 1000000) returning transaction_id into v_csrc2;
+  v_row := public.create_held_settlement(v_csrc2, 1000000, '2026-07-01');
+  v_held2 := v_row.transaction_id;
+
+  -- metadata: the plan unlink, and a rename
+  delete from public.monthly_plans where id = v_plan;
+  update public.investment_transactions set notes = 'renamed' where transaction_id = v_csrc2;
+
+  -- the amount still cannot move, parked or not
+  begin
+    update public.investment_transactions set amount_vnd = 99000000 where transaction_id = v_csrc2;
+    raise exception 'the amount must stay guarded' using errcode = 'ZZ999';
+  exception when check_violation then null;
+  end;
+
+  -- goal: pinned while parked, free once the merge is done
+  begin
+    update public.investment_transactions set goal_id = v_goal2 where transaction_id = v_csrc2;
+    raise exception 'the goal must be pinned while cash is parked' using errcode = 'ZZ999';
+  exception when check_violation then null;
+  end;
+  update public.investment_transactions set consumed_by_inv_id = v_src2 where transaction_id = v_held2;
+  update public.investment_transactions set goal_id = v_goal2 where transaction_id = v_csrc2;
+  select goal_id into v_goal4 from public.investment_transactions where transaction_id = v_csrc2;
+  if v_goal4 is distinct from v_goal2 then
+    raise exception 'a consumed settlement must not pin its deposit''s goal, got %', v_goal4;
   end if;
 
   -- ── 12) removing BOTH rows must not be refused ──────────────────────────────

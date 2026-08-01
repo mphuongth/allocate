@@ -368,7 +368,8 @@ begin
   -- goal B, which is exactly the cross-goal transfer the RPC refuses. An
   -- unassigned deposit is the intended exception: there is nothing to disagree
   -- with, so the settlement's goal is what decides.
-  if v_src_goal is not null and new.goal_id is distinct from v_src_goal then
+  if new.consumed_by_inv_id is null
+     and v_src_goal is not null and new.goal_id is distinct from v_src_goal then
     raise exception 'held settlement: the cash stays in the deposit''s own goal — it cannot be filed under a different one'
       using errcode = 'check_violation';
   end if;
@@ -452,7 +453,46 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+declare
+  -- Fields the settlement asserts NOTHING about. An EXEMPT list is safe where a
+  -- guard list is not, and that distinction is what I got wrong first: forgetting
+  -- to add a field here blocks more than necessary, while forgetting to add one to
+  -- a list of guarded fields lets a real edit through. So the guard stays "block
+  -- everything" and this names the few provably harmless exceptions.
+  c_meta constant text[] := array['plan_id', 'notes', 'updated_at'];
+  v_parked boolean;
 begin
+  -- Metadata only. Deleting a monthly plan unlinks its transactions through
+  -- plan_id ON DELETE SET NULL, which arrives here as an update of the source —
+  -- and blocking it made the plan permanently undeletable once the settlement was
+  -- consumed, since a consumed settlement cannot be removed either.
+  if (to_jsonb(new) - c_meta) = (to_jsonb(old) - c_meta) then
+    return new;
+  end if;
+
+  select exists (
+    select 1 from public.investment_transactions s
+     where s.parent_transaction_id = old.transaction_id
+       and s.held_for_merge
+       and s.consumed_by_inv_id is null
+  ) into v_parked;
+
+  -- The goal, once the merge is DONE. While cash is parked, the goal is what the
+  -- dashboard displays it under and what the merge consumes it from, so it is
+  -- pinned. After consumption the cash lives in the destination deposit and the
+  -- pool skips the row entirely — the settlement is history, and history travels
+  -- with the ledger. Without this, deleting a goal that had ever completed a held
+  -- merge was refused forever: the FK nulls goal_id, this guard rejected it, and
+  -- nothing could release a consumed settlement to unblock it.
+  if not v_parked
+     and (to_jsonb(new) - (c_meta || array['goal_id'])) = (to_jsonb(old) - (c_meta || array['goal_id']))
+  then
+    return new;
+  end if;
+
+  -- Everything else still breaks what the settlement claims about this deposit —
+  -- its amount above all, which stays guarded even after consumption: raising it
+  -- re-opens value here while that cash is already inside the destination.
   perform 1
     from public.investment_transactions s
    where s.parent_transaction_id = old.transaction_id
@@ -632,6 +672,17 @@ create index if not exists investment_transactions_held_parent_idx
 -- for parked cash before issuing the delete and answers 409 with the remedy
 -- ("Bỏ chờ gộp" releases the settlement, then the goal deletes). One place, the
 -- right message, and no new way to break an account deletion.
+--
+-- The route also clears merge_target_goal_id on CONSUMED settlements in that goal
+-- first. That column has no foreign key, so a goal deletion leaves it pointing at
+-- nothing, and the #525 ownership trigger then refuses the very update the
+-- deletion depends on — which made a goal that had ever completed a held merge
+-- permanently undeletable. Adding the missing FK does NOT fix it: goal_id and
+-- merge_target_goal_id are two separate referential actions on the same row, and
+-- whichever runs first leaves the other dangling for the ownership trigger to
+-- reject. Clearing it in the route is deterministic; fighting RI ordering is not.
+-- Safe because the pool skips consumed rows entirely — for them the target is
+-- dead metadata.
 
 -- ─── the source requirement, deferred ────────────────────────────────────────
 --
@@ -742,13 +793,16 @@ alter table public.investment_transactions
       -- renew_term_deposit_with_merge reads the base table and still folds the
       -- settlement's cash into the destination. Both ends counted.
       and renewed_from_transaction_id is null
-      and merge_target_goal_id is not null
+      -- The goal rules bind only while the cash is PARKED. Once consumed it lives
+      -- in the destination deposit and the pool skips this row, so pinning it to a
+      -- goal that may since have been deleted only makes history undeletable.
+      and (consumed_by_inv_id is not null or merge_target_goal_id is not null)
       -- IS NOT DISTINCT FROM, not `=`: a CHECK passes on UNKNOWN, so plain
       -- equality lets an UPDATE set goal_id = NULL straight through — the
       -- dashboard would go on displaying the cash under the non-null target
       -- while the merge refuses it for a goal that no longer matches. Paired
       -- with the non-null target above, this forces goal_id to that same goal.
-      and merge_target_goal_id is not distinct from goal_id
+      and (consumed_by_inv_id is not null or merge_target_goal_id is not distinct from goal_id)
     )
   ) not valid;
 

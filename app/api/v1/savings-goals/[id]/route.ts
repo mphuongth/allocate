@@ -206,6 +206,22 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     )
   }
 
+  // Settlements whose merge is already DONE are history, and the goal should not
+  // be stuck behind them — but merge_target_goal_id has no foreign key, so the
+  // deletion leaves it pointing at nothing and the #525 ownership trigger then
+  // refuses the very update the deletion depends on. Adding the missing FK does
+  // not help: goal_id and merge_target_goal_id are separate referential actions on
+  // the same row, and whichever runs first leaves the other dangling. Clearing it
+  // here is deterministic. Safe because the pool skips consumed rows entirely —
+  // for them the target is dead metadata.
+  await supabase
+    .from('investment_transactions')
+    .update({ merge_target_goal_id: null })
+    .eq('user_id', user.id)
+    .eq('held_for_merge', true)
+    .not('consumed_by_inv_id', 'is', null)
+    .eq('merge_target_goal_id', goalId)
+
   const { error } = await supabase
     .from('savings_goals')
     .delete()
