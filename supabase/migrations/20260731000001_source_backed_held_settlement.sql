@@ -488,6 +488,59 @@ create trigger investment_transactions_guard_settled_source
   for each row
   execute function public.guard_settled_source_edit();
 
+-- ─── a settlement cannot stop being one ──────────────────────────────────────
+--
+-- Every guard above keys on the row being held: the row trigger fires WHEN
+-- (new.held_for_merge), the shape constraint reads `not held_for_merge or (…)`,
+-- and the withdrawal invariant only measures withdrawals. Clearing the marker
+-- therefore steps outside all three at once:
+--
+--   update … set held_for_merge = false, transaction_type = 'investment'
+--   → ACCEPTED: the settlement becomes an active bank investment counted in net
+--     worth, and having stopped being a withdrawal it no longer subtracts from
+--     its parent — so the source reopens too. Both counted.
+--
+-- Nothing legitimate clears it. "Bỏ chờ gộp" DELETES the settlement (which is how
+-- the deposit comes back); the merge stamps consumed_by_inv_id and leaves the
+-- marker in place. So the transition itself is refused, and the row keeps
+-- answering to the guards that assume it.
+--
+-- A separate trigger rather than a wider WHEN on the one above: a WHEN clause may
+-- only read OLD on an UPDATE-only trigger, and this stays narrow enough to cost
+-- nothing on the writes it does not concern.
+create or replace function public.guard_held_marker_cleared()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  raise exception 'held settlement: a settlement cannot stop being one — remove it instead'
+    using errcode = 'check_violation';
+end;
+$$;
+
+revoke all on function public.guard_held_marker_cleared() from public, anon, authenticated;
+
+drop trigger if exists investment_transactions_held_marker_kept on public.investment_transactions;
+create trigger investment_transactions_held_marker_kept
+  before update on public.investment_transactions
+  for each row
+  when (old.held_for_merge and not new.held_for_merge)
+  execute function public.guard_held_marker_cleared();
+
+-- ─── the index the settled-source guard needs ────────────────────────────────
+--
+-- guard_settled_source_edit asks "does a held settlement reference this row?" on
+-- EVERY update of EVERY investment transaction, and PostgreSQL does not index a
+-- referencing foreign-key column on its own — so without this it is a sequential
+-- scan of the whole ledger per updated row, and ordinary edits start to scale
+-- with the table. Partial on held_for_merge because that is the only shape the
+-- guard ever looks for, which keeps it to a handful of entries.
+create index if not exists investment_transactions_held_parent_idx
+  on public.investment_transactions (parent_transaction_id)
+  where held_for_merge;
+
 -- ─── note: deleting a goal that a settlement is earmarked to ────────────────
 --
 -- There is deliberately NO trigger here, and the reason is worth recording.

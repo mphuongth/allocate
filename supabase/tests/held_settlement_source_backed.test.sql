@@ -459,6 +459,30 @@ begin
   exception when check_violation then null;
   end;
 
+  -- Every other guard keys on the row being held: the row trigger fires
+  -- WHEN (new.held_for_merge), the shape constraint reads
+  -- `not held_for_merge or (…)`, and the withdrawal invariant only measures
+  -- withdrawals. Clearing the marker steps outside all three at once — the
+  -- settlement becomes an active bank investment in net worth AND stops
+  -- subtracting from its parent, so the source reopens beside it.
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
+  values (v_user, v_goal, 'bank', 'investment', '2026-06-29', 1000000) returning transaction_id into v_partial;
+  v_row := public.create_held_settlement(v_partial, 1000000, '2026-07-01');
+  v_held2 := v_row.transaction_id;
+  begin
+    update public.investment_transactions
+       set held_for_merge = false, transaction_type = 'investment'
+     where transaction_id = v_held2;
+    raise exception 'a settlement must not be able to stop being one' using errcode = 'ZZ999';
+  exception when check_violation then null;
+  end;
+  -- Deleting it IS how a settlement goes away ("Bỏ chờ gộp"), and that still works.
+  delete from public.investment_transactions where transaction_id = v_held2;
+  select count(*) into v_count from public.investment_transactions where transaction_id = v_held2;
+  if v_count <> 0 then
+    raise exception 'releasing a settlement by deleting it must still work';
+  end if;
+
   -- ── 9b) editing a deposit that has already been settled ─────────────────────
   -- Every guard above measures the SETTLEMENT; none fires when the SOURCE is
   -- edited. Raising its amount revives it in net worth while its cash is still in
