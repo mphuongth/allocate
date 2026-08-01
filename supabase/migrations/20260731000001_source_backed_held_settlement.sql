@@ -529,6 +529,68 @@ create trigger investment_transactions_held_marker_kept
   when (old.held_for_merge and not new.held_for_merge)
   execute function public.guard_held_marker_cleared();
 
+-- ─── consumption, once recorded, stands ──────────────────────────────────────
+--
+-- consumed_by_inv_id is what takes a settlement out of the pool: once stamped,
+-- its cash lives in the destination deposit's principal and
+-- heldForMergeContributions stops adding it. Every guard above re-validates the
+-- SOURCE fields on an update and said nothing about this one, so both directions
+-- were writable:
+--
+--   clear it after a real merge → the pool synthesizes the settlement again while
+--     its cash is already inside the destination. Counted twice.
+--   set it arbitrarily → the cash leaves net worth and arrives nowhere.
+--
+-- The first is refused here. Nothing un-merges: renew_term_deposit_with_merge
+-- only ever stamps, there is no route or UI that clears it, and a settlement
+-- whose cash has been folded in cannot become pooled again without duplicating
+-- it. Repointing it at a different deposit is the same claim twice over.
+--
+-- The second — a first stamp, null → something — is NOT blocked, and that is a
+-- deliberate stop rather than an oversight. "Only the merge may stamp it" needs
+-- the trigger to know which function is writing, and every mechanism for that was
+-- worse than the gap:
+--
+--   • the PL/pgSQL call stack (GET DIAGNOSTICS … PG_CONTEXT) does not contain it.
+--     Inside a trigger the stack holds only the trigger's own frame, so the test
+--     matched nothing and the real merge broke — caught by the E2E, not by
+--     reading it.
+--   • a per-function GUC (`alter function … set app.merge = 1`) works, but
+--     `create or replace` silently DROPS a function's SET clause, so the day
+--     someone edits the merge RPC every merge starts failing in production. A
+--     coupling that breaks at a distance, silently, is what this file has spent
+--     several commits removing.
+--   • copying the merge RPC into this migration to add one line duplicates two
+--     hundred lines whose next edit would not reach the copy — the same drift
+--     that put the fund-bucket bug here in the first place.
+--
+-- So the inflation direction is closed and the loss direction is written down:
+-- an authenticated caller can still make their own parked cash disappear from
+-- their own net worth. It destroys value rather than fabricating it, and it is
+-- theirs to destroy — which is a different thing from letting them invent money.
+create or replace function public.guard_consumption_marker()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  raise exception 'held settlement: a settlement that has been merged cannot be un-merged'
+    using errcode = 'check_violation';
+end;
+$$;
+
+revoke all on function public.guard_consumption_marker() from public, anon, authenticated;
+
+drop trigger if exists investment_transactions_consumption_marker on public.investment_transactions;
+create trigger investment_transactions_consumption_marker
+  before update on public.investment_transactions
+  for each row
+  when (old.held_for_merge
+        and old.consumed_by_inv_id is not null
+        and new.consumed_by_inv_id is distinct from old.consumed_by_inv_id)
+  execute function public.guard_consumption_marker();
+
 -- ─── the index the settled-source guard needs ────────────────────────────────
 --
 -- guard_settled_source_edit asks "does a held settlement reference this row?" on

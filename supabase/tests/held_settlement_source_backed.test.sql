@@ -48,6 +48,7 @@ declare
   v_held2   uuid;  -- the settlement blocking edits to its own source
   v_fund    uuid;  -- a fund, for the bucket-precedence case
   v_goal3   uuid;  -- a goal deleted while cash is parked in it
+  v_csrc    uuid;  -- source of the consumed settlement (never released)
   v_row     public.investment_transactions;
   v_saving  uuid;
   v_link    uuid;
@@ -482,6 +483,30 @@ begin
   if v_count <> 0 then
     raise exception 'releasing a settlement by deleting it must still work';
   end if;
+
+  -- Consumption, once recorded, stands. Clearing it puts the settlement back in
+  -- the pool while its cash is already inside the destination deposit — counted
+  -- twice; repointing it makes the same claim against two deposits. Nothing
+  -- un-merges: the merge RPC only ever stamps, and no route or UI clears it.
+  -- Its own deposit: this block leaves a CONSUMED settlement behind, which by
+  -- design cannot be released, so it must not sit on a deposit a later block reuses.
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
+  values (v_user, v_goal, 'bank', 'investment', '2026-06-26', 1000000) returning transaction_id into v_csrc;
+  v_row := public.create_held_settlement(v_csrc, 1000000, '2026-07-01');
+  v_held2 := v_row.transaction_id;
+  -- A first stamp is what a merge does, and is left alone (see the migration for
+  -- why "only the merge may stamp it" has no honest implementation here).
+  update public.investment_transactions set consumed_by_inv_id = v_src2 where transaction_id = v_held2;
+  begin
+    update public.investment_transactions set consumed_by_inv_id = null where transaction_id = v_held2;
+    raise exception 'a merged settlement must not be un-merged' using errcode = 'ZZ999';
+  exception when check_violation then null;
+  end;
+  begin
+    update public.investment_transactions set consumed_by_inv_id = v_csrc where transaction_id = v_held2;
+    raise exception 'a merged settlement must not be repointed at another deposit' using errcode = 'ZZ999';
+  exception when check_violation then null;
+  end;
 
   -- ── 9b) editing a deposit that has already been settled ─────────────────────
   -- Every guard above measures the SETTLEMENT; none fires when the SOURCE is
