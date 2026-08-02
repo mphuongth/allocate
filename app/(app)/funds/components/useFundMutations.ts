@@ -1,9 +1,9 @@
 'use client'
 
-import { useCallback, useState } from 'react'
+import { useCallback } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { useTranslations } from 'next-intl'
-import type { Fund } from './useFundsData'
+import type { Fund, FundsBusy } from './useFundsData'
 
 // The persistence half of the Fund Library's DCA and delete actions, shared by
 // DesktopFundLibraryView and MobileFundLibraryView. Both used to carry their own
@@ -20,7 +20,11 @@ import type { Fund } from './useFundsData'
 export type DeleteOutcome = 'deleted' | 'in-use' | 'failed'
 
 export interface FundMutations {
-  /** Funds with a request in flight — views disable their controls on these. */
+  /**
+   * Funds with a request in flight — views disable their controls on these.
+   * Passed straight back out from the shared set both views were given, so a
+   * request started before a resize still reads as busy afterwards (#590).
+   */
   togglingIds: Set<string>
   /** Turn DCA off and persist it. */
   disableDca: (fund: Fund) => Promise<void>
@@ -40,18 +44,23 @@ export interface FundMutations {
  * @param notify presentation is the one thing left to the view — the desktop
  *   toast takes a boolean, the mobile one a string. Both get the same message
  *   and the same success flag.
+ * @param togglingIds owned by FundLibraryClient, not by this hook: both views
+ *   are mounted at once and each calls this hook, so a set per instance would
+ *   let the view a resize hands the user start a write on a fund the other one
+ *   still has in flight (#590).
  */
 export function useFundMutations({
   setFunds,
   reload,
   notify,
+  togglingIds,
+  setTogglingIds,
 }: {
   setFunds: Dispatch<SetStateAction<Fund[]>>
   reload: () => Promise<void>
   notify: (message: string, ok: boolean) => void
-}): FundMutations {
+} & FundsBusy): FundMutations {
   const t = useTranslations('funds')
-  const [togglingIds, setTogglingIds] = useState<Set<string>>(new Set())
 
   const patchFund = useCallback((id: string, changes: Partial<Fund>) => {
     setFunds((prev) => prev.map((f) => (f.id === id ? { ...f, ...changes } : f)))
@@ -125,7 +134,7 @@ export function useFundMutations({
     } finally {
       setTogglingIds((prev) => { const next = new Set(prev); next.delete(fund.id); return next })
     }
-  }, [patchFund, rollbackFund, putFund, reload, notify])
+  }, [patchFund, rollbackFund, putFund, reload, notify, setTogglingIds])
 
   const disableDca = useCallback((fund: Fund) => persist(
     fund,

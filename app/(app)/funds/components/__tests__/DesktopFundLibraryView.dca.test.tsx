@@ -5,6 +5,7 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event'
 import DesktopFundLibraryView from '../DesktopFundLibraryView'
 import type { Fund } from '../useFundsData'
+import { useFundsBusy } from './helpers/fundsBusy'
 
 // next-intl → return the key (and append params) so assertions stay language-agnostic.
 vi.mock('next-intl', () => ({
@@ -40,6 +41,7 @@ function Harness({ initial, reload }: { initial: Fund[]; reload: () => Promise<v
   const [funds, setFunds] = useState(initial)
   return (
     <DesktopFundLibraryView
+      {...useFundsBusy()}
       funds={funds}
       setFunds={setFunds}
       goals={[]}

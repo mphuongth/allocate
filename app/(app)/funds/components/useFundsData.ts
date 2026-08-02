@@ -34,6 +34,16 @@ export interface FundsData {
   reload: () => Promise<void>
 }
 
+/**
+ * Funds with a DCA request in flight, owned by FundLibraryClient so both
+ * mounted views share one set — a save started before a resize still counts as
+ * busy in the view the user lands on (#590).
+ */
+export interface FundsBusy {
+  togglingIds: Set<string>
+  setTogglingIds: Dispatch<SetStateAction<Set<string>>>
+}
+
 // ─── Cache ──────────────────────────────────────────────────────────────────
 
 const CACHE_KEY = 'fundLibraryCache'

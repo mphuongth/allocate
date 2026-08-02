@@ -13,7 +13,7 @@ import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/
 import { useDialogA11y } from '@/app/(app)/planning/components/useDialogA11y'
 import { FundsEmptyState } from './FundsEmptyState'
 import { FundNavAge } from './FundNavAge'
-import type { Fund, Goal, FundType, FundsData } from './useFundsData'
+import type { Fund, Goal, FundType, FundsData, FundsBusy } from './useFundsData'
 import { useFundMutations } from './useFundMutations'
 import { useDialogMount } from '@/app/(app)/planning/components/useDialogMount'
 
@@ -440,7 +440,7 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function MobileFundLibraryView({ funds, setFunds, goals, loading, error, reload }: FundsData) {
+export default function MobileFundLibraryView({ funds, setFunds, goals, loading, error, reload, togglingIds: busyIds, setTogglingIds }: FundsData & FundsBusy) {
   const t = useTranslations('funds')
   const tc = useTranslations('common')
   const locale = useLocale()
@@ -495,6 +495,8 @@ export default function MobileFundLibraryView({ funds, setFunds, goals, loading,
       setFunds,
       reload,
       notify: useCallback((message: string, ok: boolean) => addToast(message, ok ? 'success' : 'error'), [addToast]),
+      togglingIds: busyIds,
+      setTogglingIds,
     })
 
   const handleRefreshNav = useCallback(async () => {

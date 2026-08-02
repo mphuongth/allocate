@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { render, screen } from '@testing-library/react'
 import MobileFundLibraryView from '../MobileFundLibraryView'
 import type { Fund } from '../useFundsData'
+import { useFundsBusy } from './helpers/fundsBusy'
 
 // Same translation mock as the DCA suite — params are echoed as JSON so the
 // relative-time bucket (relMinutes/relHours/…) is observable in the DOM:
@@ -43,6 +44,7 @@ function Harness({ initial, reload }: { initial: Fund[]; reload: () => Promise<v
   const [funds, setFunds] = useState(initial)
   return (
     <MobileFundLibraryView
+      {...useFundsBusy()}
       funds={funds}
       setFunds={setFunds}
       goals={[]}

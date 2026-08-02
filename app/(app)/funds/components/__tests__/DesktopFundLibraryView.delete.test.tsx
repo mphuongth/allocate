@@ -5,6 +5,7 @@ import { render, screen, within, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import DesktopFundLibraryView from '../DesktopFundLibraryView'
 import type { Fund } from '../useFundsData'
+import { useFundsBusy } from './helpers/fundsBusy'
 
 vi.mock('next-intl', () => ({
   useTranslations: () => (key: string, params?: Record<string, unknown>) =>
@@ -22,7 +23,7 @@ function makeFund(over: Partial<Fund> = {}): Fund {
 }
 function Harness({ reload }: { reload: () => Promise<void> }) {
   const [funds, setFunds] = useState([makeFund()])
-  return <DesktopFundLibraryView funds={funds} setFunds={setFunds} goals={[]} loading={false} error={false} reload={reload} />
+  return <DesktopFundLibraryView {...useFundsBusy()} funds={funds} setFunds={setFunds} goals={[]} loading={false} error={false} reload={reload} />
 }
 
 let reload: Mock<() => Promise<void>>

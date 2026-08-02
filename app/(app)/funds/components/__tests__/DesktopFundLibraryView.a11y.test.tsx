@@ -4,6 +4,7 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event'
 import DesktopFundLibraryView from '../DesktopFundLibraryView'
 import type { Fund } from '../useFundsData'
+import { useFundsBusy } from './helpers/fundsBusy'
 
 vi.mock('next-intl', () => ({
   useTranslations: () => (key: string, params?: Record<string, unknown>) =>
@@ -21,7 +22,7 @@ function makeFund(over: Partial<Fund> = {}): Fund {
 }
 function Harness() {
   const [funds, setFunds] = useState([makeFund()])
-  return <DesktopFundLibraryView funds={funds} setFunds={setFunds} goals={[]} loading={false} error={false} reload={() => Promise.resolve()} />
+  return <DesktopFundLibraryView {...useFundsBusy()} funds={funds} setFunds={setFunds} goals={[]} loading={false} error={false} reload={() => Promise.resolve()} />
 }
 
 beforeEach(() => { vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }))) })

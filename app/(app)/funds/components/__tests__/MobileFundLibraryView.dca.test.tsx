@@ -5,6 +5,7 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event'
 import MobileFundLibraryView from '../MobileFundLibraryView'
 import type { Fund } from '../useFundsData'
+import { useFundsBusy } from './helpers/fundsBusy'
 
 vi.mock('next-intl', () => ({
   useTranslations: () => (key: string, params?: Record<string, unknown>) =>
@@ -42,6 +43,7 @@ function Harness({ initial, reload }: { initial: Fund[]; reload: () => Promise<v
   const [funds, setFunds] = useState(initial)
   return (
     <MobileFundLibraryView
+      {...useFundsBusy()}
       funds={funds}
       setFunds={setFunds}
       goals={[]}

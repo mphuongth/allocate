@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useFundMutations } from '../useFundMutations'
 import type { Fund } from '../useFundsData'
+import { useFundsBusy } from './helpers/fundsBusy'
 
 // The desktop and mobile fund libraries each carried their own copy of these
 // mutations, down to the optimistic update and its rollback, and the copies had
@@ -51,7 +52,9 @@ function setup(
   const reload = vi.fn(async () => {})
   const notify = vi.fn()
 
-  const { result } = renderHook(() => useFundMutations({ setFunds, reload, notify }))
+  // The busy set lives in FundLibraryClient so both views share it (#590); the
+  // hook is handed it, exactly as a view hands it down.
+  const { result } = renderHook(() => useFundMutations({ setFunds, reload, notify, ...useFundsBusy() }))
   return { result, requests, reload, notify, current: () => funds[0] }
 }
 
@@ -233,7 +236,7 @@ describe('useFundMutations — deleting', () => {
     const setFunds = vi.fn()
     const reload = vi.fn(async () => {})
     const notify = vi.fn()
-    const { result } = renderHook(() => useFundMutations({ setFunds, reload, notify }))
+    const { result } = renderHook(() => useFundMutations({ setFunds, reload, notify, ...useFundsBusy() }))
 
     let outcome: string | undefined
     await act(async () => { outcome = await result.current.deleteFund(FUND) })

@@ -13,7 +13,7 @@ import { SyncPill } from '@/app/components/ui/SyncPill'
 import { useDialogA11y } from '@/app/(app)/planning/components/useDialogA11y'
 import { FundsEmptyState } from './FundsEmptyState'
 import { FundNavAge } from './FundNavAge'
-import type { Fund, Goal, FundType, FundsData } from './useFundsData'
+import type { Fund, Goal, FundType, FundsData, FundsBusy } from './useFundsData'
 import { useFundMutations } from './useFundMutations'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -311,7 +311,7 @@ function FormField({ label, children }: { label: string; children: ReactNode }) 
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function DesktopFundLibraryView({ funds, setFunds, goals, loading, error, reload }: FundsData) {
+export default function DesktopFundLibraryView({ funds, setFunds, goals, loading, error, reload, togglingIds: busyIds, setTogglingIds }: FundsData & FundsBusy) {
   const t = useTranslations('funds')
   const tc = useTranslations('common')
   const locale = useLocale()
@@ -360,7 +360,7 @@ export default function DesktopFundLibraryView({ funds, setFunds, goals, loading
   // and busy-id bookkeeping all live in one place. Only the toast shape differs
   // between the two, which is why it is injected (#573).
   const { togglingIds, disableDca, saveDcaAmount, setDcaGoal, deleteFund } =
-    useFundMutations({ setFunds, reload, notify: addToast })
+    useFundMutations({ setFunds, reload, notify: addToast, togglingIds: busyIds, setTogglingIds })
 
   // Sorting
   const handleSort = (key: SortKey) => {
