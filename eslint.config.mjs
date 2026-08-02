@@ -59,7 +59,14 @@ const eslintConfig = defineConfig([
           message: "Don't derive a business date/month from the runtime's local zone — use todayIso()/businessYearMonth() from lib/dates.",
         },
         {
-          // The two selectors above only see the direct form. Aliasing the clock
+          // Displayed dates drift the same way: without an explicit timeZone,
+          // toLocaleDateString reads the renderer's clock, so a PDF built on the
+          // UTC server printed yesterday under a filename that said today.
+          selector: "CallExpression[callee.object.type='NewExpression'][callee.object.callee.name='Date'][callee.object.arguments.length=0][callee.property.name=/^(toLocaleDateString|toLocaleString)$/]",
+          message: "Don't format today's date in the renderer's zone — use formatBusinessDate() from lib/dates.",
+        },
+        {
+          // The three selectors above only see the direct form. Aliasing the clock
           // first (`const now = new Date(); now.getMonth()`) reads identically to
           // reading parts off a *parsed* date, which is legitimate — so the alias
           // itself is what gets rejected, and the author has to say which they

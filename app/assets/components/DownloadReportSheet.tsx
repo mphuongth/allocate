@@ -6,6 +6,7 @@ import { iconHit } from './iconHit'
 import { useLocale } from 'next-intl'
 import { fmt } from '@/lib/formatters'
 import { CairnLoader } from '@/app/components/ui/CairnLoader'
+import { formatBusinessDate } from '@/lib/dates'
 import { useDialogA11y } from '@/app/(app)/planning/components/useDialogA11y'
 import { useDialogMount, useResetOnOpen } from '@/app/(app)/planning/components/useDialogMount'
 
@@ -50,7 +51,8 @@ export default function DownloadReportSheet({ open, onClose, data, onExport, des
 
   if (desktop ? !open : !mounted) return null
 
-  const today = new Date().toLocaleDateString(isVI ? 'vi-VN' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+  // The "as of" day must match the day the data is keyed to, not the browser's.
+  const today = formatBusinessDate(isVI ? 'vi-VN' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
 
   const t = isVI ? {
     title: 'Báo cáo danh mục',

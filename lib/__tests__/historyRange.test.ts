@@ -28,6 +28,29 @@ describe('rangeStartDate', () => {
     expect(rangeStartDate('bogus', NOW)).toBeNull()
   })
 
+  // Snapshots are keyed to the business day (Asia/Ho_Chi_Minh), so the cutoff
+  // that filters them has to be measured from the same calendar. Subtracting from
+  // the UTC date parts moved the cutoff back a day for the first seven hours of
+  // each Vietnam day — the chart silently gained a snapshot before 07:00 and lost
+  // it again afterwards, within one business day (#591).
+  it('measures back from the business day, not the UTC one', () => {
+    const vnMidnight = new Date('2026-08-14T17:30:00Z') // 15 Aug 2026, 00:30 in VN
+    expect(rangeStartDate('1m', vnMidnight)).toBe('2026-07-15')
+    expect(rangeStartDate('1y', vnMidnight)).toBe('2025-08-15')
+  })
+
+  it('gives the same cutoff either side of the 06:59 → 07:00 UTC-date rollover', () => {
+    const before = new Date('2026-08-14T23:59:00Z') // 15 Aug 2026, 06:59 in VN
+    const after = new Date('2026-08-15T00:00:00Z')  // 15 Aug 2026, 07:00 in VN
+    expect(rangeStartDate('1m', before)).toBe(rangeStartDate('1m', after))
+  })
+
+  it('clamps to the last valid day when the target month is shorter', () => {
+    // 31 Mar − 1 month has no 31 Feb; land on the last day of February instead of
+    // rolling forward into March (which would drop a month of history).
+    expect(rangeStartDate('1m', new Date('2026-03-31T03:00:00Z'))).toBe('2026-02-28')
+  })
+
   it('every selectable range yields a distinct cutoff (the bug: 1m/3m collapsed to All)', () => {
     const cutoffs = ['1m', '3m', '6m', '1y'].map((r) => rangeStartDate(r, NOW))
     expect(cutoffs).toEqual(['2026-05-15', '2026-03-15', '2025-12-15', '2025-06-15'])

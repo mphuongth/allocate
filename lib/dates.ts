@@ -39,6 +39,33 @@ export function businessYearMonth(now: Date = new Date()): { year: number; month
   return { year, month }
 }
 
+const pad = (n: number) => String(n).padStart(2, '0')
+
+// Add `n` whole months to a YYYY-MM-DD date (negative to go back), keeping the
+// day of month but clamping to the last valid day when the target month is
+// shorter — so 31 Jan + 1 month → 28 Feb rather than rolling into March.
+// Computed in UTC from the date parts, so it's timezone-independent.
+export function addMonths(isoDate: string, n: number): string {
+  const [y, m, d] = isoDate.slice(0, 10).split('-').map(Number)
+  const target = new Date(Date.UTC(y, m - 1 + n, 1))
+  const year = target.getUTCFullYear()
+  const month = target.getUTCMonth()
+  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
+  return `${year}-${pad(month + 1)}-${pad(Math.min(d, lastDay))}`
+}
+
+// A date formatted for *display* in the business timezone — the "generated on" /
+// "as of" line on a report. Without the explicit zone this reads the renderer's
+// clock: the PDF built on the UTC server would print yesterday while its own
+// filename said today, and a user abroad would see their browser's day.
+export function formatBusinessDate(
+  locale: string,
+  options: Intl.DateTimeFormatOptions = { day: '2-digit', month: '2-digit', year: 'numeric' },
+  now: Date = new Date(),
+): string {
+  return new Intl.DateTimeFormat(locale, { ...options, timeZone: BUSINESS_TIMEZONE }).format(now)
+}
+
 // Whole months from the business month until a `YYYY-MM` target, floored at 1 —
 // the horizon a goal's monthly contribution is spread over. Floored because a
 // target in the current or a past month still needs one month to save into.

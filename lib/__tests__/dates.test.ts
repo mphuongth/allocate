@@ -5,6 +5,7 @@ import {
   businessYearMonth,
   businessTodayDate,
   monthsUntilYm,
+  formatBusinessDate,
   daysUntilIso,
   isFutureInvestmentDate,
 } from '../dates'
@@ -133,6 +134,30 @@ describe('daysUntilIso', () => {
 
   it('returns NaN for an unparseable date', () => {
     expect(daysUntilIso('not-a-date', '2026-06-14')).toBeNaN()
+  })
+})
+
+describe('formatBusinessDate', () => {
+  // The "generated on" / "as of" date a report displays. Formatted in the business
+  // zone so the PDF rendered on the UTC server can't say yesterday while its own
+  // filename says today, and so a user abroad sees the same day the data is keyed
+  // to rather than their browser's.
+  it('formats the business day, not the UTC one', () => {
+    const vnMidnight = new Date('2026-06-14T17:30:00Z') // 15 Jun 2026, 00:30 in VN
+    expect(formatBusinessDate('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }, vnMidnight))
+      .toBe('15/06/2026')
+  })
+
+  it('agrees with todayIso on the day it names', () => {
+    const vnMidnight = new Date('2026-06-14T17:30:00Z')
+    const formatted = formatBusinessDate('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' }, vnMidnight)
+    expect(formatted.replace(/\//g, '-')).toBe(todayIso(vnMidnight))
+  })
+
+  it('honours the requested locale and style', () => {
+    const noon = new Date('2026-06-14T05:00:00Z') // 12:00 in Vietnam
+    expect(formatBusinessDate('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }, noon))
+      .toBe('14 June 2026')
   })
 })
 

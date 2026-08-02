@@ -85,20 +85,9 @@ export function isActionableAccumulatingBook(
   return isMaturityActionable(depositMaturityState(daysUntil(it.expiryDate)))
 }
 
-const pad = (n: number) => String(n).padStart(2, '0')
-
-// Add `n` whole months to a YYYY-MM-DD date, keeping the day of month but
-// clamping to the last valid day when the target month is shorter (so
-// 31 Jan + 1 month → 28 Feb rather than rolling into March). Computed in UTC
-// from the date parts to stay timezone-independent.
-export function addMonths(isoDate: string, n: number): string {
-  const [y, m, d] = isoDate.split('-').map(Number)
-  const target = new Date(Date.UTC(y, m - 1 + n, 1))
-  const year = target.getUTCFullYear()
-  const month = target.getUTCMonth()
-  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
-  return `${year}-${pad(month + 1)}-${pad(Math.min(d, lastDay))}`
-}
+// Plain-date month arithmetic now lives with the other plain-date helpers in
+// lib/dates; re-exported here so the maturity call sites keep one import.
+export { addMonths } from './dates'
 
 // Whole months between two YYYY-MM-DD dates (the count of complete months from
 // `fromIso` to `toIso`). Used to derive a deposit's original term length from

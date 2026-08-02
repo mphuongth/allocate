@@ -109,6 +109,36 @@ test.describe('API input validation', () => {
     }
   })
 
+  // Creating and editing must agree on what "the future" is. POST goes through
+  // isFutureInvestmentDate (the business day, Asia/Ho_Chi_Minh); the edit route
+  // used to compare `new Date(date) > new Date()`, which parses a plain date at
+  // UTC midnight — so between 00:00 and 06:59 Vietnam time it rejected the very
+  // date POST had just accepted, and an edit that didn't touch the date at all
+  // failed with "cannot be in the future" (#591).
+  test('PUT /api/v1/investment-transactions/<id> accepts the business-day date POST accepts', async ({ request }) => {
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' })
+    const tx = await api.createTransaction({
+      asset_type: 'bank',
+      amount_vnd: 5_000_000,
+      investment_date: today,
+      notes: 'E2E business-day edit guard',
+    })
+    try {
+      const ok = await request.put(`/api/v1/investment-transactions/${tx.transaction_id}`, {
+        data: { investment_date: today, amount_vnd: 6_000_000 },
+      })
+      expect(ok.status()).toBe(200)
+
+      // A date genuinely past the business day is still refused.
+      const future = await request.put(`/api/v1/investment-transactions/${tx.transaction_id}`, {
+        data: { investment_date: new Date(Date.now() + 5 * 86_400_000).toISOString().slice(0, 10) },
+      })
+      expect(future.status()).toBe(400)
+    } finally {
+      await api.deleteTransaction(tx.transaction_id)
+    }
+  })
+
   // Pagination / month / DCA hardening (#471): junk inputs that used to reach
   // the DB as NaN ranges, parseInt('1abc') → 1, or CHECK-violating amounts must
   // now be a clean 400 at the route.

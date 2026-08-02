@@ -2,6 +2,7 @@ import { Document, Page, View, Text, StyleSheet, Font } from '@react-pdf/rendere
 import path from 'path'
 import type { DashboardData } from '@/app/assets/DashboardClient'
 import { fmt, fmtPct } from '@/lib/formatters'
+import { formatBusinessDate } from '@/lib/dates'
 
 Font.register({
   family: 'Roboto',
@@ -93,7 +94,9 @@ function LabelRow({ label, value, profitValue }: { label: string; value: string;
 export function PortfolioReport({ data, locale = 'vi' }: { data: DashboardData; locale?: string }) {
   const l = labels[(locale as Locale) in labels ? (locale as Locale) : 'vi']
   const { netWorth, goals, byType } = data
-  const generatedDate = new Date().toLocaleDateString(locale === 'vi' ? 'vi-VN' : 'en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  // Rendered on the server (UTC), so the zone has to be explicit or the PDF prints
+  // yesterday while its own filename says today (#591).
+  const generatedDate = formatBusinessDate(locale === 'vi' ? 'vi-VN' : 'en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
 
   const mutualFundsTotal = [
     ...data.goals.flatMap((g) => g.funds),
