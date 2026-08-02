@@ -8,6 +8,8 @@
 // app/assets/components/MaturityResolveSheet.tsx. See also `fmtMaturity` in
 // goalDetailShared.tsx for the display formatting.
 
+import { daysUntilIso } from './dates'
+
 // Surface a deposit as "needs attention" once it is within this many days of
 // maturity (in addition to already-matured ones). A week of lead time lets the
 // user decide (renew / withdraw) before the deposit actually matures.
@@ -53,14 +55,11 @@ export function isMaturityActionable(state: MaturityState): boolean {
   return state === 'matured' || state === 'maturing'
 }
 
-// Whole days from today until the given YYYY-MM-DD date (negative once past).
-// Mirrors the diffDays computation in fmtMaturity so the two never diverge.
+// Whole days from the business day until the given YYYY-MM-DD date (negative
+// once past). fmtMaturity computes diffDays through the same helper so the two
+// never diverge.
 export function daysUntil(isoDate: string): number {
-  const d = new Date(isoDate + 'T00:00:00')
-  if (isNaN(d.getTime())) return NaN
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  return Math.round((d.getTime() - today.getTime()) / 86_400_000)
+  return daysUntilIso(isoDate)
 }
 
 // Whether a non-fund holding is a term deposit that needs a decision right now

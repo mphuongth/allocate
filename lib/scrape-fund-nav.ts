@@ -1,5 +1,6 @@
 import https from 'https'
 import { ValidationError } from './validation'
+import { todayIso } from './dates'
 import {
   boundedFetchText,
   httpSemaphore,
@@ -158,7 +159,10 @@ async function scrapeDragonCapital(url: string): Promise<number> {
   const urlReportCode = pathSegments[pathSegments.length - 1].toUpperCase()
   if (!urlReportCode) throw new Error('Dragon Capital: could not extract fund report code from URL')
 
-  const today = new Date().toISOString().split('T')[0]
+  // Upper bound of the NAV query window. The provider publishes on Vietnam
+  // business days, so the window must close on the Vietnam date — the UTC one
+  // lags it by a day for the first seven hours (#591).
+  const today = todayIso()
   const siteId = '0DMJ2000000oLukOAE'
   const classname = '@udd/01pJ2000000CgSu'
 

@@ -1,27 +1,72 @@
-// Plain-date ("YYYY-MM-DD") helpers that treat a date as a LOCAL calendar day,
-// matching how daysUntil/fmtMaturity parse maturity dates (`new Date(d + 'T00:00:00')`).
+// Business-date policy and plain-date ("YYYY-MM-DD") helpers.
 //
-// Why this exists: `new Date().toISOString().slice(0, 10)` yields the UTC date,
-// which in a timezone ahead of UTC (e.g. Vietnam, UTC+7) is yesterday during the
-// first hours of the local day. Mixing that with the local-parsing maturity code
-// drifted "today" — and a recorded investment_date — by up to a day. Use these so
-// every plain-date "today"/comparison agrees on the user's local calendar.
+// POLICY: this app has exactly one business timezone — Asia/Ho_Chi_Minh (UTC+7).
+// Every "today", "current month" and plain-date comparison is derived in that
+// zone, no matter where the code runs: a browser in any timezone, a Vercel
+// function in UTC, or a cron job. Nothing derives a business date from UTC
+// (`new Date().toISOString().slice(0, 10)`) or from the runtime's local zone
+// (`new Date().getMonth()`) — both drift.
+//
+// Why it matters: between 00:00 and 06:59 Vietnam time the UTC calendar date is
+// still *yesterday*. A UTC-derived "today" recorded transactions on the previous
+// date, assigned contributions to the previous month, and keyed the dashboard's
+// daily snapshot to the wrong day. Runtime-local derivation has the mirror
+// problem — it makes the answer depend on where the code happens to run (#591).
+//
+// Plain dates are treated as whole calendar days: compared and differenced from
+// their parts, never parsed into an instant, so no timezone can shift them.
 
-const pad = (n: number) => String(n).padStart(2, '0')
+export const BUSINESS_TIMEZONE = 'Asia/Ho_Chi_Minh'
 
-// Today in the local timezone as YYYY-MM-DD (not the UTC date).
-export function todayIso(): string {
-  const d = new Date()
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+const businessParts = new Intl.DateTimeFormat('en-US', {
+  timeZone: BUSINESS_TIMEZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+})
+
+// Today as YYYY-MM-DD in the business timezone. Pass `now` to pin the instant.
+export function todayIso(now: Date = new Date()): string {
+  const parts = businessParts.formatToParts(now)
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find(p => p.type === type)?.value ?? ''
+  return `${part('year')}-${part('month')}-${part('day')}`
 }
 
-// Whether a plain investment date is clearly in the future. The server runs in
-// UTC but clients send their LOCAL "today", so a client ahead of UTC can send
-// the server's "tomorrow" for a perfectly valid same-day entry. Allow one day of
-// skew and reject only dates beyond it. Compared as plain dates (ISO strings sort
-// chronologically), so any time portion on the input is ignored.
+// The business year and 1-based month — for the monthly-plan / recurring-savings
+// logic that reasons in months rather than dates.
+export function businessYearMonth(now: Date = new Date()): { year: number; month: number } {
+  const [year, month] = todayIso(now).split('-').map(Number)
+  return { year, month }
+}
+
+// The business day as a Date at *local* midnight, for the date arithmetic that
+// still runs on Date objects (e.g. stepping a premium anniversary forward a
+// year). Only the date parts are meaningful — never read a time off it.
+export function businessTodayDate(now: Date = new Date()): Date {
+  const [year, month, day] = todayIso(now).split('-').map(Number)
+  return new Date(year, month - 1, day)
+}
+
+// Whole days from `from` (default: business today) until a plain YYYY-MM-DD
+// date; negative once the date has passed. Both sides are read as calendar
+// dates, so the result never depends on the runtime timezone.
+export function daysUntilIso(isoDate: string, from: string = todayIso()): number {
+  const utcMidnight = (iso: string) => {
+    const [y, m, d] = iso.slice(0, 10).split('-').map(Number)
+    if (!y || !m || !d) return NaN
+    return Date.UTC(y, m - 1, d)
+  }
+  const target = utcMidnight(isoDate)
+  const base = utcMidnight(from)
+  if (isNaN(target) || isNaN(base)) return NaN
+  return Math.round((target - base) / 86_400_000)
+}
+
+// Whether a plain investment date is in the future. Client and server both derive
+// "today" in the business timezone, so they agree on the boundary and no
+// clock-skew allowance is needed: anything past the business day is future-dated.
+// Compared as plain dates (ISO strings sort chronologically), so any time portion
+// on the input is ignored.
 export function isFutureInvestmentDate(isoDate: string, asOf: Date = new Date()): boolean {
-  const max = new Date(asOf)
-  max.setUTCDate(max.getUTCDate() + 1)
-  return isoDate.slice(0, 10) > max.toISOString().slice(0, 10)
+  return isoDate.slice(0, 10) > todayIso(asOf)
 }

@@ -1,4 +1,5 @@
 import type { DashboardData } from '@/app/assets/DashboardClient'
+import { todayIso } from '@/lib/dates'
 
 export async function downloadPortfolioPDF(data: DashboardData, locale: string): Promise<void> {
   const res = await fetch('/api/v1/report', {
@@ -13,7 +14,7 @@ export async function downloadPortfolioPDF(data: DashboardData, locale: string):
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `allocate-report-${new Date().toISOString().slice(0, 10)}.pdf`
+  a.download = `allocate-report-${todayIso()}.pdf`
   a.click()
   URL.revokeObjectURL(url)
 }

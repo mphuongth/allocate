@@ -38,6 +38,29 @@ const eslintConfig = defineConfig([
       "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
     },
   },
+  // Business dates come from lib/dates, never from UTC or the runtime's local
+  // zone (#591). Between 00:00 and 06:59 Vietnam time the UTC calendar date is
+  // still yesterday, so `new Date().toISOString().slice(0, 10)` recorded the
+  // wrong business day; `new Date().getMonth()` has the mirror problem of
+  // depending on where the code runs. This keeps them from creeping back.
+  // (`new Date().toISOString()` on its own is fine — that's a UTC *timestamp*,
+  // which is exactly what `updated_at` and friends want.)
+  {
+    files: ["app/**/*.{ts,tsx}", "lib/**/*.{ts,tsx}", "components/**/*.{ts,tsx}"],
+    ignores: ["lib/dates.ts", "**/__tests__/**"],
+    rules: {
+      "no-restricted-syntax": ["error",
+        {
+          selector: "MemberExpression[object.callee.property.name='toISOString'][object.callee.object.type='NewExpression'][object.callee.object.callee.name='Date'][object.callee.object.arguments.length=0][property.name=/^(slice|split)$/]",
+          message: "Don't derive a business date from the UTC date — use todayIso() from lib/dates.",
+        },
+        {
+          selector: "CallExpression[callee.object.type='NewExpression'][callee.object.callee.name='Date'][callee.object.arguments.length=0][callee.property.name=/^(getMonth|getFullYear|getDate)$/]",
+          message: "Don't derive a business date/month from the runtime's local zone — use todayIso()/businessYearMonth() from lib/dates.",
+        },
+      ],
+    },
+  },
 ]);
 
 export default eslintConfig;

@@ -1,3 +1,5 @@
+import { businessTodayDate, businessYearMonth } from './dates'
+
 // The single source of truth for a bank term deposit's accrued interest, used by
 // the dashboard/net-worth, the goals list and the goal-detail holding rows so
 // the same deposit never shows a different value across screens.
@@ -48,8 +50,7 @@ export function insuranceStatus(
   const anchor = parseLocalDate(paymentDate)
   if (!anchor) return 'on_track'
 
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
+  const today = businessTodayDate()
   const last = lastPaymentDate ? parseLocalDate(lastPaymentDate) : null
 
   // Work out the next due date.
@@ -79,25 +80,23 @@ export function insuranceStatus(
 }
 
 // Returns the calendar year a member's premium was last settled for, but only
-// when that payment happened in the current year — i.e. the current cycle is
-// paid. Returns null otherwise. The date is parsed as local so a plain
-// YYYY-MM-DD string never shifts across a timezone boundary.
+// when that payment happened in the current business year — i.e. the current
+// cycle is paid. Returns null otherwise. The date is parsed from its parts so a
+// plain YYYY-MM-DD string never shifts across a timezone boundary.
 export function insurancePaidYear(lastPaymentDate: string | null): number | null {
   if (!lastPaymentDate) return null
   // last_payment_date is a timestamptz, so trim any time part to the date first.
   const [y, m, d] = lastPaymentDate.slice(0, 10).split('-').map(Number)
   const paid = new Date(y, (m ?? 1) - 1, d ?? 1)
   if (isNaN(paid.getTime())) return null
-  return paid.getFullYear() === new Date().getFullYear() ? paid.getFullYear() : null
+  return paid.getFullYear() === businessYearMonth().year ? paid.getFullYear() : null
 }
 
 // A monthly plan exists only once income is set for that month, and its
 // insurance allocation counts as saved once the month has arrived — the current
 // month or any past month. A future month's allocation is not saved yet.
 export function isPlanMonthRealized(year: number, month: number): boolean {
-  const now = new Date()
-  const nowYear = now.getFullYear()
-  const nowMonth = now.getMonth() + 1
+  const { year: nowYear, month: nowMonth } = businessYearMonth()
   return year < nowYear || (year === nowYear && month <= nowMonth)
 }
 

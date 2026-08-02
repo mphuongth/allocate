@@ -2,7 +2,7 @@
 // "time left" + tone, and the "needs action" predicates for term deposits and
 // accumulating books. Split out of goalDetailShared so the shared UI file stays
 // presentational. Imports InvRow as a type only (no runtime dependency back).
-import { isTermDeposit, depositMaturityState, isMaturityActionable, isActionableAccumulatingBook } from '@/lib/maturity'
+import { isTermDeposit, depositMaturityState, isMaturityActionable, isActionableAccumulatingBook, daysUntil } from '@/lib/maturity'
 import { fmtTxDate } from './transactionUtils'
 import type { InvRow } from './goalDetailShared'
 
@@ -38,11 +38,10 @@ export function needsBookMaturityAction(inv: InvRow): boolean {
 
 export function fmtMaturity(dateStr: string | null | undefined, isVi: boolean): Maturity | null {
   if (!dateStr) return null
-  const d = new Date(dateStr + 'T00:00:00')
-  if (isNaN(d.getTime())) return null
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const diffDays = Math.round((d.getTime() - today.getTime()) / 86_400_000)
+  // Both the diff and the "matured/today" wording key off the business day, the
+  // same one daysUntil uses — so the card, the badge and the copy never disagree.
+  const diffDays = daysUntil(dateStr)
+  if (isNaN(diffDays)) return null
   const formatted = fmtTxDate(dateStr, isVi ? 'vi' : 'en')
 
   let relative: string

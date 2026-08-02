@@ -11,6 +11,7 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
 import { fmtCompact } from '@/lib/formatters'
+import { todayIso } from '@/lib/dates'
 
 export interface BookTopUpTarget {
   savingId: string
@@ -39,7 +40,7 @@ export default function RecurringBookTopUpSheet({
 }) {
   const [amount, setAmount] = useState('')
   const [rate, setRate] = useState('')
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [date, setDate] = useState(() => todayIso())
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -48,7 +49,7 @@ export default function RecurringBookTopUpSheet({
     if (!target) return
     setAmount(String(target.amount))
     setRate(target.rate != null ? String(Math.round(target.rate * 10) / 10) : '')
-    setDate(new Date().toISOString().slice(0, 10))
+    setDate(todayIso())
     setError('')
   }, [target])
 

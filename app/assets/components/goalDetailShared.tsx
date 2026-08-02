@@ -6,6 +6,7 @@
 import { useState, type CSSProperties } from 'react'
 import { TrendingUp, Building, Coins, BarChart2, Target, RefreshCw, Plus } from 'lucide-react'
 import { fmtCompact } from '@/lib/formatters'
+import { todayIso } from '@/lib/dates'
 import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
 import { fmtTxDate } from './transactionUtils'
 import { fmtMaturity, type Maturity } from './goalDetailMaturity'
@@ -346,7 +347,7 @@ export function TopUpControl({ inv, isVi, onDone }: { inv: InvRow; isVi: boolean
   const [open, setOpen] = useState(false)
   const [amount, setAmount] = useState('')
   const [rate, setRate] = useState(inv.interestRate != null ? String(Math.round(inv.interestRate * 10) / 10) : '')
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [date, setDate] = useState(() => todayIso())
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   if (!inv.depositGroupId) return null

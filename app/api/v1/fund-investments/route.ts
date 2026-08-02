@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validateDate, validateUUID } from '@/lib/validation'
 import { readJsonBody } from '@/lib/apiBody'
+import { todayIso } from '@/lib/dates'
 
 export async function GET(request: NextRequest) {
   const supabase = await createSupabaseServerClient()
@@ -75,7 +76,7 @@ export async function POST(request: NextRequest) {
     if (plan_id) cleanPlanId = validateUUID(plan_id, 'plan_id')
     cleanInvestmentDate = investment_date
       ? validateDate(investment_date, 'investment_date')
-      : new Date().toISOString().slice(0, 10)
+      : todayIso()
   } catch (e) {
     if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
     throw e

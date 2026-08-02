@@ -7,6 +7,7 @@ import type { ReactElement } from 'react'
 import { PortfolioReport } from '@/components/report/PortfolioReport'
 import type { DashboardData } from '@/app/assets/DashboardClient'
 import { readJsonBody } from '@/lib/apiBody'
+import { todayIso } from '@/lib/dates'
 
 export async function POST(req: NextRequest) {
   try {
@@ -23,7 +24,7 @@ export async function POST(req: NextRequest) {
 
     const buffer = await renderToBuffer(element)
 
-    const filename = `allocate-report-${new Date().toISOString().slice(0, 10)}.pdf`
+    const filename = `allocate-report-${todayIso()}.pdf`
 
     return new Response(new Uint8Array(buffer), {
       headers: {

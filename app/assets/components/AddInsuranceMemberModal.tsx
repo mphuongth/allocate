@@ -5,6 +5,7 @@ import { Plus, X } from 'lucide-react'
 import { fmtCompact } from '@/lib/formatters'
 import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
 import { COVERAGE_OPTIONS } from './insuranceShared'
+import { todayIso } from '@/lib/dates'
 
 interface Props {
   open: boolean
@@ -20,7 +21,7 @@ export default function AddInsuranceMemberModal({ open, onClose, onCreated, loca
   const [name, setName] = useState('')
   const [coverage, setCoverage] = useState('Self')
   const [premium, setPremium] = useState<number>(12_000_000)
-  const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [startDate, setStartDate] = useState(() => todayIso())
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // Keep the mobile sheet mounted through its slide-down exit animation.
@@ -33,7 +34,7 @@ export default function AddInsuranceMemberModal({ open, onClose, onCreated, loca
       setName('')
       setCoverage('Self')
       setPremium(12_000_000)
-      setStartDate(new Date().toISOString().slice(0, 10))
+      setStartDate(todayIso())
       setSubmitting(false)
       setError(null)
     } else {
