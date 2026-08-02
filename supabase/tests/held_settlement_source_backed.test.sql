@@ -54,6 +54,7 @@ declare
   v_goal4   uuid;
   v_csrc3   uuid;  -- source for the repoint / consumed-delete cases
   v_small   uuid;  -- the smaller deposit a settlement must not be moved onto
+  v_csrc4   uuid;  -- source for the detach case
   v_row     public.investment_transactions;
   v_saving  uuid;
   v_link    uuid;
@@ -718,6 +719,42 @@ begin
   select count(*) into v_count from public.investment_transactions where transaction_id = v_csrc3;
   if v_count <> 0 then
     raise exception 'the source of a consumed settlement must be deletable';
+  end if;
+  set constraints all deferred;
+
+  -- ── 11e) a settlement cannot be detached from a source that still exists ────
+  -- The repoint guard above allows parent_transaction_id → NULL, because that is
+  -- how the foreign key releases a source that has been deleted. On its own that
+  -- would be a hole: nulling it while the deposit is still there stops the
+  -- withdrawal applying to it, so the source reopens while the settlement's cash
+  -- sits in the destination.
+  --
+  -- It is not a hole, because the withdrawal invariant (#587,
+  -- 20260730000002) already refuses to detach a withdrawal from a holding that
+  -- still exists. That protection lives in another migration and nothing here
+  -- would notice if it went away, so it is pinned from this side too.
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
+  values (v_user, v_goal, 'bank', 'investment', '2026-06-21', 1000000) returning transaction_id into v_csrc4;
+  v_row := public.create_held_settlement(v_csrc4, 1000000, '2026-07-01');
+  v_held2 := v_row.transaction_id;
+  begin
+    update public.investment_transactions set parent_transaction_id = null where transaction_id = v_held2;
+    raise exception 'a settlement must not detach from a source that still exists' using errcode = 'ZZ999';
+  exception when check_violation then null;
+  end;
+  -- Consumed makes no difference: the same refusal applies.
+  update public.investment_transactions set consumed_by_inv_id = v_src2 where transaction_id = v_held2;
+  begin
+    update public.investment_transactions set parent_transaction_id = null where transaction_id = v_held2;
+    raise exception 'consumed does not license detaching from a live source' using errcode = 'ZZ999';
+  exception when check_violation then null;
+  end;
+  -- And the legitimate route still works: delete the source, the FK releases it.
+  delete from public.investment_transactions where transaction_id = v_csrc4;
+  set constraints all immediate;
+  select parent_transaction_id into v_goal4 from public.investment_transactions where transaction_id = v_held2;
+  if v_goal4 is not null then
+    raise exception 'deleting the source must release the settlement''s parent, got %', v_goal4;
   end if;
   set constraints all deferred;
 
