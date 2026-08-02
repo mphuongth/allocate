@@ -120,7 +120,11 @@ export function useFundMutations({
 
   const saveDcaAmount = useCallback((fund: Fund, amount: number, isNewEnable = false) => persist(
     fund,
-    { is_dca: true, dca_monthly_amount_vnd: amount, dca_goal_id: fund.dca_goal_id },
+    // Amount fields only, so the derived rollback stays out of the goal: the
+    // goal selector is live while this is in flight, and a goal change that
+    // lands first is the server's truth — restoring the goal captured here
+    // would undo it.
+    { is_dca: true, dca_monthly_amount_vnd: amount },
     { is_dca: true, dca_monthly_amount_vnd: amount, dca_goal_id: fund.dca_goal_id },
     t('toastDcaFailed'),
     // Turning DCA on flips `is_dca` locally before anything is persisted, so on

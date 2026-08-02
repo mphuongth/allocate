@@ -25,8 +25,12 @@ const FUND: Fund = {
   updated_at: '',
 }
 
+type FetchResult = { ok: boolean; status?: number }
+
 function setup(
-  fetchImpl: (url: string, init?: RequestInit) => { ok: boolean; status?: number },
+  // May return a pending promise, so a test can hold one request open while
+  // another completes.
+  fetchImpl: (url: string, init?: RequestInit) => FetchResult | Promise<FetchResult>,
   initial: Fund = FUND,
 ) {
   const requests: Array<{ url: string; method: string; body: Record<string, unknown> | undefined }> = []
@@ -36,7 +40,7 @@ function setup(
       method: init?.method ?? 'GET',
       body: init?.body ? JSON.parse(init.body as string) : undefined,
     })
-    const { ok, status } = fetchImpl(url, init)
+    const { ok, status } = await fetchImpl(url, init)
     return { ok, status: status ?? (ok ? 200 : 500) }
   }))
 
@@ -108,6 +112,29 @@ describe('useFundMutations — saving the DCA amount', () => {
       dca_goal_id: 'goal-1',
     })
     expect(notify).toHaveBeenCalledWith('toastDcaFailed', false)
+  })
+
+  // The goal selector stays live while an amount save is in flight, so the two
+  // writes can overlap. The amount rollback must stay out of the goal: rolling
+  // back to the goal this save captured would undo a goal change the server
+  // already accepted (#590 review).
+  it('leaves a goal that changed mid-flight alone when the amount save fails', async () => {
+    let failAmountSave = () => {}
+    const amountSave = new Promise<{ ok: boolean; status: number }>((resolve) => {
+      failAmountSave = () => resolve({ ok: false, status: 500 })
+    })
+    const { result, current } = setup((_url, init) => {
+      const body = JSON.parse(init!.body as string)
+      return body.dca_goal_id === 'goal-2' ? { ok: true } : amountSave
+    })
+
+    let saving: Promise<void> | undefined
+    act(() => { saving = result.current.saveDcaAmount(FUND, 2_000_000) })
+    // The goal write lands, and reloads, while the amount is still in flight.
+    await act(async () => { await result.current.setDcaGoal({ ...FUND, dca_monthly_amount_vnd: 2_000_000 }, 'goal-2') })
+    await act(async () => { failAmountSave(); await saving })
+
+    expect(current()).toMatchObject({ dca_goal_id: 'goal-2', is_dca: true, dca_monthly_amount_vnd: 1_000_000 })
   })
 
   // A brand-new enable has nothing persisted behind it: the view flipped
