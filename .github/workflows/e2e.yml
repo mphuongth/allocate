@@ -59,6 +59,21 @@ jobs:
       - name: Start a local Supabase stack
         run: supabase start
 
+      - name: Grant the API roles access to public
+        # A hosted Supabase project grants anon/authenticated/service_role on
+        # everything in `public` through its default privileges, so the app's
+        # migrations never carry GRANTs. Migrations applied by `supabase start`
+        # in the runner don't pick those up, and every seeded row failed with
+        # `42501 permission denied for table …`. Grant them explicitly so the
+        # ephemeral CI database matches a real project. RLS still applies.
+        run: |
+          psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 <<'SQL'
+          GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+          GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
+          GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
+          GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role;
+          SQL
+
       - name: Point the app and the E2E setup at the local stack
         # `supabase status -o env` prints the local stack's URL and keys. These
         # are the CLI's well-known local development keys — not secrets.
