@@ -329,14 +329,17 @@ describe('useSettingsController — report', () => {
     expect(result.current.reportSummary).toBeNull()
   })
 
-  it('exports using the prefetched overview and the active locale', async () => {
+  // The prefetched overview feeds the sheet's KPI summary only. It is not part
+  // of the export any more: the endpoint builds the PDF from the caller's own
+  // holdings, so the locale is all that travels with the request (#594).
+  it('exports with the active locale alone', async () => {
     fetchOverviewMock.mockResolvedValue(OVERVIEW)
     const { result } = await mounted()
 
     await act(async () => { result.current.openReport() })
     await act(async () => { await result.current.exportReport() })
 
-    expect(exportReportMock).toHaveBeenCalledWith(OVERVIEW, 'en')
+    expect(exportReportMock).toHaveBeenCalledWith('en')
   })
 
   it('closes the sheet', async () => {

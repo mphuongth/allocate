@@ -30,12 +30,53 @@ export type JsonBodyResult<T> =
   | { ok: false; response: NextResponse }
 
 const badRequest = (error: string) => NextResponse.json({ error }, { status: 400 })
+const tooLarge = () => NextResponse.json({ error: 'Request body too large' }, { status: 413 })
 
 // "Nothing but whitespace" by JSON's definition, which is only space, tab, LF
 // and CR. `String.trim()` uses the much wider Unicode set, so it would call a
 // body of U+00A0 or a BOM empty — and an optional route would accept that as
 // `{}` and mutate, on a body JSON.parse cannot read.
 const JSON_BLANK = /^[ \t\n\r]*$/
+
+type ReadResult = { ok: true; text: string } | { ok: false }
+
+const readAll = async (request: Request): Promise<ReadResult> =>
+  ({ ok: true, text: await request.text() })
+
+/**
+ * Read the body as text, abandoning it the moment more than `maxBytes` have
+ * arrived. Buffering first and measuring afterwards would leave the DoS this cap
+ * exists to prevent intact for any client that omits Content-Length — chunked
+ * transfer encoding declares no size, so `request.text()` would decode the whole
+ * thing before anyone asked how big it was.
+ *
+ * Memory is therefore bounded by the cap plus one chunk, whatever the client
+ * claims or sends.
+ */
+async function readBounded(request: Request, maxBytes: number): Promise<ReadResult> {
+  // A request sent without a body has no stream to read; `text()` yields ''.
+  if (!request.body) return readAll(request)
+
+  const reader = request.body.getReader()
+  // Streaming decode: a multi-byte character split across two chunks is held
+  // over rather than turning into replacement characters.
+  const decoder = new TextDecoder()
+  let text = ''
+  let total = 0
+
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    total += value.byteLength
+    if (total > maxBytes) {
+      await reader.cancel()
+      return { ok: false }
+    }
+    text += decoder.decode(value, { stream: true })
+  }
+
+  return { ok: true, text: text + decoder.decode() }
+}
 
 export async function readJsonBody<T = JsonBody>(
   request: Request,
@@ -45,13 +86,33 @@ export async function readJsonBody<T = JsonBody>(
    * sending something broken are different mistakes, and only the second is the
    * client's, so an absent body yields `{}` while a malformed one is still a 400.
    */
-  { optional = false }: { optional?: boolean } = {},
+  {
+    optional = false,
+    /**
+     * Upper bound, in UTF-8 bytes, on the body this route will accept. Routes
+     * whose body is a couple of scalars should set one: the PDF report endpoint
+     * takes only a locale but triggers an expensive server-side render, so a
+     * huge payload is refused with a 413 instead of being parsed first (#594).
+     * Unset means unbounded, which is the pre-existing behaviour everywhere else.
+     */
+    maxBytes,
+  }: { optional?: boolean; maxBytes?: number } = {},
 ): Promise<JsonBodyResult<T>> {
+  // Content-Length lets an oversized body be refused before a single chunk is
+  // read. It is a client-supplied claim, so it is a shortcut, not the limit —
+  // the streaming read below enforces the cap on what actually arrives.
+  if (maxBytes != null) {
+    const declared = Number(request.headers.get('content-length'))
+    if (Number.isFinite(declared) && declared > maxBytes) return { ok: false, response: tooLarge() }
+  }
+
   // Read as text rather than calling `.json()`, so "empty" is distinguishable
   // from "unparseable" instead of both arriving as the same SyntaxError.
   let raw: string
   try {
-    raw = await request.text()
+    const read = maxBytes == null ? await readAll(request) : await readBounded(request, maxBytes)
+    if (!read.ok) return { ok: false, response: tooLarge() }
+    raw = read.text
   } catch {
     return { ok: false, response: badRequest('Request body could not be read') }
   }

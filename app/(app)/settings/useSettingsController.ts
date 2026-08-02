@@ -210,8 +210,8 @@ export function useSettingsController({ initials, displayName }: {
   const closeReport = useCallback(() => setShowReport(false), [])
 
   const exportReport = useCallback(
-    () => exportPortfolioReport(overviewCache, locale),
-    [overviewCache, locale],
+    () => exportPortfolioReport(locale),
+    [locale],
   )
 
   const reportSummary: ReportSummary | null = overviewCache ? {

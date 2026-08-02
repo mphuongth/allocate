@@ -1,38 +1,4 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import type { DashboardData } from '@/app/assets/DashboardClient'
-
-const mockData: DashboardData = {
-  netWorth: {
-    totalAssets: 500_000_000,
-    totalLiabilities: 0,
-    netWorth: 500_000_000,
-    totalInvested: 400_000_000,
-    currentValue: 500_000_000,
-    overallProfitLoss: 100_000_000,
-    overallProfitLossPercentage: 25,
-    navStale: false,
-    hasGold: false,
-    navUpdatedAt: null,
-  },
-  goals: [
-    {
-      goalId: 'g1',
-      goalName: 'Mua nhà',
-      targetAmount: 1_000_000_000,
-      targetDate: null,
-      currentValue: 300_000_000,
-      totalInvested: 250_000_000,
-      profitLoss: 50_000_000,
-      profitLossPercentage: 20,
-      progressPercentage: 30,
-      transactionCount: 2,
-      funds: [],
-    },
-  ],
-  unallocated: { totalValue: 0, funds: [], nonFunds: [] },
-  byType: { bank: 100_000_000, gold: 0, stock: 0 },
-  insurance: [],
-}
 
 const mockPdfBlob = new Blob(['%PDF-1.4'], { type: 'application/pdf' })
 
@@ -61,44 +27,47 @@ describe('downloadPortfolioPDF', () => {
     vi.restoreAllMocks()
   })
 
-  it('POSTs to /api/v1/report with data and locale as JSON', async () => {
+  // The body carries the locale and nothing else: the endpoint derives every
+  // figure from the caller's own holdings, so posting the dashboard payload back
+  // to it was both forgeable and unbounded in size (#594).
+  it('POSTs to /api/v1/report with only the locale as JSON', async () => {
     const { downloadPortfolioPDF } = await import('../generateReport')
-    await downloadPortfolioPDF(mockData, 'vi')
+    await downloadPortfolioPDF('vi')
     expect(global.fetch).toHaveBeenCalledWith('/api/v1/report', expect.objectContaining({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ data: mockData, locale: 'vi' }),
+      body: JSON.stringify({ locale: 'vi' }),
     }))
   })
 
   it('triggers a download by clicking the anchor element', async () => {
     const { downloadPortfolioPDF } = await import('../generateReport')
-    await downloadPortfolioPDF(mockData, 'en')
+    await downloadPortfolioPDF('en')
     expect(anchorClickMock).toHaveBeenCalled()
   })
 
   it('sets filename with today\'s date in YYYY-MM-DD format', async () => {
     const { downloadPortfolioPDF } = await import('../generateReport')
-    await downloadPortfolioPDF(mockData, 'vi')
+    await downloadPortfolioPDF('vi')
     expect(anchorElement.download).toMatch(/^allocate-report-\d{4}-\d{2}-\d{2}\.pdf$/)
   })
 
   it('uses a blob URL as the anchor href', async () => {
     const { downloadPortfolioPDF } = await import('../generateReport')
-    await downloadPortfolioPDF(mockData, 'vi')
+    await downloadPortfolioPDF('vi')
     expect(URL.createObjectURL).toHaveBeenCalledWith(mockPdfBlob)
     expect(anchorElement.href).toBe('blob:mock-url')
   })
 
   it('revokes the object URL after download', async () => {
     const { downloadPortfolioPDF } = await import('../generateReport')
-    await downloadPortfolioPDF(mockData, 'vi')
+    await downloadPortfolioPDF('vi')
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-url')
   })
 
   it('throws when the API returns a non-ok response', async () => {
     global.fetch = vi.fn().mockResolvedValue({ ok: false, blob: vi.fn() })
     const { downloadPortfolioPDF } = await import('../generateReport')
-    await expect(downloadPortfolioPDF(mockData, 'en')).rejects.toThrow('Failed to generate report')
+    await expect(downloadPortfolioPDF('en')).rejects.toThrow('Failed to generate report')
   })
 })

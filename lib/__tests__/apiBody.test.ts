@@ -103,4 +103,133 @@ describe('readJsonBody', () => {
       expect(payload, body).toEqual({ error: 'Request body must be a JSON object' })
     }
   })
+
+  // A route whose body is a handful of scalars has no reason to accept a
+  // megabyte of JSON. The PDF report endpoint sets a very small cap because the
+  // work it triggers is expensive and its body carries nothing but a locale
+  // (#594) — an oversized payload is refused before it is parsed.
+  describe('maxBytes', () => {
+    const read = (body: BodyInit | null, maxBytes: number) =>
+      readJsonBody(post(body), { maxBytes })
+
+    it('accepts a body within the cap', async () => {
+      expect(await read('{"locale":"vi"}', 256)).toEqual({ ok: true, body: { locale: 'vi' } })
+    })
+
+    it('rejects an oversized body with 413', async () => {
+      const result = await read(JSON.stringify({ pad: 'x'.repeat(500) }), 256)
+      expect(result.ok).toBe(false)
+      if (!result.ok) {
+        expect(result.response.status).toBe(413)
+        expect(await result.response.json()).toEqual({ error: 'Request body too large' })
+      }
+    })
+
+    // Content-Length is the only chance to refuse a huge body BEFORE reading it
+    // into memory, so a lying-small header must not become a way past the cap:
+    // the decoded text is measured too.
+    it('rejects an oversized body whose Content-Length is missing or understated', async () => {
+      const oversized = JSON.stringify({ pad: 'x'.repeat(500) })
+      const request = new Request('http://localhost/api/v1/report', {
+        method: 'POST',
+        body: oversized,
+        headers: { 'Content-Length': '12' },
+      })
+      const result = await readJsonBody(request, { maxBytes: 256 })
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.response.status).toBe(413)
+    })
+
+    // Byte length, not character count: 100 Vietnamese characters are ~300 UTF-8
+    // bytes, and the cap is expressed in bytes.
+    it('measures bytes rather than characters', async () => {
+      const result = await read(JSON.stringify({ note: 'đ'.repeat(200) }), 256)
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.response.status).toBe(413)
+    })
+
+    // A client that omits Content-Length (chunked transfer encoding) would
+    // otherwise have the whole body buffered and decoded before the cap was
+    // consulted — the DoS the cap exists to prevent, just one step later. The
+    // body is read incrementally and the read is abandoned the moment the
+    // running total passes the cap.
+    describe('streaming', () => {
+      /** A chunked body — no Content-Length — that counts how much was pulled. */
+      function chunked(chunkCount: number, chunkBytes = 1024) {
+        const pulled = { chunks: 0 }
+        const chunk = new TextEncoder().encode('x'.repeat(chunkBytes))
+        const stream = new ReadableStream<Uint8Array>({
+          pull(controller) {
+            if (pulled.chunks >= chunkCount) return controller.close()
+            pulled.chunks++
+            controller.enqueue(chunk)
+          },
+        })
+        const request = new Request('http://localhost/api/v1/report', {
+          method: 'POST',
+          body: stream,
+          // Required by undici to send a stream body.
+          duplex: 'half',
+        } as RequestInit & { duplex: 'half' })
+        return { request, pulled }
+      }
+
+      it('rejects an oversized chunked body with 413', async () => {
+        const { request } = chunked(64)
+        expect(request.headers.get('content-length')).toBeNull()
+
+        const result = await readJsonBody(request, { maxBytes: 256 })
+        expect(result.ok).toBe(false)
+        if (!result.ok) expect(result.response.status).toBe(413)
+      })
+
+      it('stops reading instead of buffering the whole body', async () => {
+        const { request, pulled } = chunked(1024)
+
+        await readJsonBody(request, { maxBytes: 256 })
+
+        // One chunk already exceeds the cap, so the read ends there rather than
+        // pulling the remaining megabyte into memory.
+        expect(pulled.chunks).toBe(1)
+      })
+
+      it('still parses a chunked body within the cap', async () => {
+        const stream = new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('{"loc'))
+            controller.enqueue(new TextEncoder().encode('ale":"vi"}'))
+            controller.close()
+          },
+        })
+        const request = new Request('http://localhost/api/v1/report', {
+          method: 'POST', body: stream, duplex: 'half',
+        } as RequestInit & { duplex: 'half' })
+
+        expect(await readJsonBody(request, { maxBytes: 256 })).toEqual({ ok: true, body: { locale: 'vi' } })
+      })
+
+      // A multi-byte character split across two chunks must not decode to two
+      // replacement characters — the decode is incremental, not per chunk.
+      it('decodes a multi-byte character split across chunks', async () => {
+        const encoded = new TextEncoder().encode('{"note":"đ"}')
+        const stream = new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(encoded.slice(0, 10))
+            controller.enqueue(encoded.slice(10))
+            controller.close()
+          },
+        })
+        const request = new Request('http://localhost/api/v1/report', {
+          method: 'POST', body: stream, duplex: 'half',
+        } as RequestInit & { duplex: 'half' })
+
+        expect(await readJsonBody(request, { maxBytes: 256 })).toEqual({ ok: true, body: { note: 'đ' } })
+      })
+    })
+
+    it('combines with optional bodies', async () => {
+      expect(await readJsonBody(post(null), { optional: true, maxBytes: 256 }))
+        .toEqual({ ok: true, body: {} })
+    })
+  })
 })

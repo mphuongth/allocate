@@ -478,25 +478,19 @@ describe('exportPortfolioReport', () => {
   beforeEach(() => downloadPortfolioPDF.mockClear())
   afterEach(() => vi.restoreAllMocks())
 
-  it('uses the prefetched overview without fetching again', async () => {
+  // The report endpoint builds its own data from the caller's holdings, so the
+  // export sends the locale and nothing else — no dashboard payload to fetch,
+  // forward, or forge (#594).
+  it('exports with the locale alone, fetching no dashboard data', async () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
-    const cached = { netWorth: 1 } as never
-    await exportPortfolioReport(cached, 'en')
+    await exportPortfolioReport('en')
     expect(fetchMock).not.toHaveBeenCalled()
-    expect(downloadPortfolioPDF).toHaveBeenCalledWith(cached, 'en')
+    expect(downloadPortfolioPDF).toHaveBeenCalledWith('en')
   })
 
-  it('fetches the overview when none is cached', async () => {
-    const fresh = { netWorth: 2 }
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(fresh) }))
-    await exportPortfolioReport(null, 'vi')
-    expect(downloadPortfolioPDF).toHaveBeenCalledWith(fresh, 'vi')
-  })
-
-  it('throws when the overview cannot be loaded', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }))
-    await expect(exportPortfolioReport(null, 'en')).rejects.toThrow('Failed to load portfolio data')
-    expect(downloadPortfolioPDF).not.toHaveBeenCalled()
+  it('propagates a failed export', async () => {
+    downloadPortfolioPDF.mockRejectedValueOnce(new Error('Failed to generate report'))
+    await expect(exportPortfolioReport('vi')).rejects.toThrow('Failed to generate report')
   })
 })
