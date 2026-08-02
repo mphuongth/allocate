@@ -52,6 +52,8 @@ declare
   v_csrc2   uuid;  -- source used for the dead-end cases
   v_plan    uuid;
   v_goal4   uuid;
+  v_csrc3   uuid;  -- source for the repoint / consumed-delete cases
+  v_small   uuid;  -- the smaller deposit a settlement must not be moved onto
   v_row     public.investment_transactions;
   v_saving  uuid;
   v_link    uuid;
@@ -675,6 +677,49 @@ begin
   if v_goal4 is distinct from v_goal2 then
     raise exception 'a consumed settlement must not pin its deposit''s goal, got %', v_goal4;
   end if;
+
+  -- ── 11d) a settlement keeps its deposit, and a merged one keeps its place ───
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
+  values (v_user, v_goal, 'bank', 'investment', '2026-06-22', 10000000) returning transaction_id into v_csrc3;
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
+  values (v_user, v_goal, 'bank', 'investment', '2026-06-22', 1000000) returning transaction_id into v_small;
+  v_row := public.create_held_settlement(v_csrc3, 10000000, '2026-07-01');
+  v_held2 := v_row.transaction_id;
+
+  -- Repointing rewrites what the settlement means while every check still passes:
+  -- full closure holds against the NEW source, the ×10 bound holds, and the pool
+  -- contribution stays at 10,000,000 — so the first deposit reopens and total
+  -- assets gain 9,000,000.
+  begin
+    update public.investment_transactions
+       set parent_transaction_id = v_small, principal_withdrawn = 1000000
+     where transaction_id = v_held2;
+    raise exception 'a settlement must not be moved onto another deposit' using errcode = 'ZZ999';
+  exception when check_violation then null;
+  end;
+
+  -- Deleting an UNCONSUMED settlement is "Bỏ chờ gộp" and must keep working;
+  -- deleting a CONSUMED one is a different act entirely — its cash is in the
+  -- destination, so removing the withdrawal reopens the source beside it.
+  update public.investment_transactions set consumed_by_inv_id = v_src2 where transaction_id = v_held2;
+  begin
+    delete from public.investment_transactions where transaction_id = v_held2;
+    set constraints all immediate;
+    raise exception 'a merged settlement must not be deletable on its own' using errcode = 'ZZ999';
+  exception when check_violation then null;
+  end;
+  set constraints all deferred;
+
+  -- Its SOURCE, though, is deletable: fully withdrawn, so it is worth nothing, and
+  -- the consumed settlement is inert history. Refusing this made the deposit
+  -- permanently undeletable, since the settlement cannot be released either.
+  delete from public.investment_transactions where transaction_id = v_csrc3;
+  set constraints all immediate;
+  select count(*) into v_count from public.investment_transactions where transaction_id = v_csrc3;
+  if v_count <> 0 then
+    raise exception 'the source of a consumed settlement must be deletable';
+  end if;
+  set constraints all deferred;
 
   -- ── 12) removing BOTH rows must not be refused ──────────────────────────────
   -- The first attempt at #588's delete policy was a BEFORE DELETE guard, which

@@ -631,6 +631,87 @@ create trigger investment_transactions_consumption_marker
         and new.consumed_by_inv_id is distinct from old.consumed_by_inv_id)
   execute function public.guard_consumption_marker();
 
+-- ─── a settlement keeps the deposit it closed ────────────────────────────────
+--
+-- The row trigger measures whatever parent the row names AT THE TIME, so moving a
+-- settlement onto a different deposit passes every check while rewriting what it
+-- means:
+--
+--   a 10,000,000 settlement repointed from its 10,000,000 deposit to a
+--   1,000,000 one, with principal_withdrawn dropped to match
+--   → full closure holds, the ×10 bound holds, and the pool contribution is
+--     untouched at 10,000,000. The first deposit reopens, the second closes,
+--     and total assets gain 9,000,000.
+--
+-- Validating both the old and the new source would make the arithmetic work out;
+-- refusing the move is simpler and loses nothing, because nothing re-parents a
+-- settlement. Clearing it to NULL is a different thing — that is the foreign key
+-- releasing a deleted source, which for consumed history is allowed above.
+create or replace function public.guard_held_parent_repointed()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  raise exception 'held settlement: a settlement stays with the deposit it closed'
+    using errcode = 'check_violation';
+end;
+$$;
+
+revoke all on function public.guard_held_parent_repointed() from public, anon, authenticated;
+
+drop trigger if exists investment_transactions_held_parent_kept on public.investment_transactions;
+create trigger investment_transactions_held_parent_kept
+  before update on public.investment_transactions
+  for each row
+  when (old.held_for_merge
+        and new.parent_transaction_id is not null
+        and new.parent_transaction_id is distinct from old.parent_transaction_id)
+  execute function public.guard_held_parent_repointed();
+
+-- ─── a merged settlement is not deletable on its own ─────────────────────────
+--
+-- Deleting an unconsumed settlement is "Bỏ chờ gộp": the withdrawal goes and the
+-- deposit comes back whole. Deleting a CONSUMED one is not the same act at all —
+-- its cash was folded into the destination deposit and is still there, so
+-- removing the withdrawal that closed the source reopens the source beside it.
+-- Counted twice. The transaction DELETE route already refuses this; the table
+-- did not, and authenticated callers reach the table.
+--
+-- Deferred, for the reason this file keeps relearning: an immediate guard would
+-- also abort the cascades that remove the source and the destination along with
+-- it, where nothing survives to be double-counted. At commit the question answers
+-- itself — if the deposit this settlement closed is still there, the settlement
+-- had no business leaving.
+create or replace function public.guard_consumed_settlement_deleted()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  perform 1
+    from public.investment_transactions p
+   where p.transaction_id = old.parent_transaction_id;
+  if found then
+    raise exception 'held settlement: this settlement has been merged — its cash is in another deposit, so it cannot be removed'
+      using errcode = 'check_violation';
+  end if;
+  return null;
+end;
+$$;
+
+revoke all on function public.guard_consumed_settlement_deleted() from public, anon, authenticated;
+
+drop trigger if exists investment_transactions_consumed_not_deletable on public.investment_transactions;
+create constraint trigger investment_transactions_consumed_not_deletable
+  after delete on public.investment_transactions
+  deferrable initially deferred
+  for each row
+  when (old.held_for_merge and old.consumed_by_inv_id is not null)
+  execute function public.guard_consumed_settlement_deleted();
+
 -- ─── the index the settled-source guard needs ────────────────────────────────
 --
 -- guard_settled_source_edit asks "does a held settlement reference this row?" on
@@ -725,10 +806,16 @@ security definer
 set search_path = ''
 as $$
 begin
+  -- Only while the cash is PARKED. A consumed settlement is history: its cash is
+  -- in the destination deposit and the pool skips it, so losing the link to a
+  -- source that has itself been deleted costs nothing — while refusing it made
+  -- that source permanently undeletable, since a consumed settlement cannot be
+  -- released to unblock it either.
   perform 1
     from public.investment_transactions t
    where t.transaction_id = new.transaction_id
      and t.held_for_merge
+     and t.consumed_by_inv_id is null
      and t.parent_transaction_id is null;
   if found then
     raise exception 'held settlement: a settlement must name the deposit it closed'
