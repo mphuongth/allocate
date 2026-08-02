@@ -412,6 +412,12 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
               value={fund.dca_goal_id ?? ''}
               title={goalLabel}
               aria-label={goalLabel}
+              // Waits out an in-flight write like the desktop selector already
+              // did: the goal PUT carries the amount, so running it during an
+              // amount save would persist a value that save hasn't confirmed
+              // yet — and the failed save could then no longer tell the
+              // server's value from its own optimistic one (#590).
+              disabled={toggling}
               onChange={(e) => onGoalChange(e.target.value || null)}
               style={{
                 // 16px (not 13) so iOS Safari doesn't zoom the viewport on focus
@@ -425,7 +431,8 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
                 // --c-ink-2 (not --c-muted): the select holds a real chosen goal, so
                 // it needs readable contrast, not faint placeholder-grey.
                 background: 'var(--c-card)', color: 'var(--c-ink-2)',
-                fontFamily: 'inherit', cursor: 'pointer', appearance: 'none', outline: 'none',
+                fontFamily: 'inherit', appearance: 'none', outline: 'none',
+                cursor: toggling ? 'not-allowed' : 'pointer', opacity: toggling ? 0.5 : 1,
               }}
             >
               {goals.map((g) => <option key={g.goal_id} value={g.goal_id}>{g.goal_name}</option>)}

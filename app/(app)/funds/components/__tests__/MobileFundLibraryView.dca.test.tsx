@@ -164,6 +164,25 @@ describe('MobileFundLibraryView — DCA amount edit must not desync from the ser
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
+  // The goal write is a full PUT that carries the amount, so letting it run
+  // during an amount save persists that still-unconfirmed amount and reloads
+  // it — after which the failed save's rollback can no longer tell the
+  // server's value from its own optimistic one (#590 review). Every DCA
+  // control on a busy fund waits, as the desktop selector already did.
+  it('locks the goal selector while an amount save is in flight', async () => {
+    fetchMock.mockReturnValue(new Promise(() => {}))
+    render(<Harness initial={[makeFund({ is_dca: true, dca_monthly_amount_vnd: 2_000_000 })]} reload={reload} />)
+
+    await userEvent.click(screen.getByTestId('dca-amount-btn-f1'))
+    const input = screen.getByTestId('dca-amount-input-f1')
+    await userEvent.clear(input)
+    await userEvent.type(input, '3000000')
+    fireEvent.blur(input)
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+    expect(screen.getByTestId('dca-goal-f1')).toBeDisabled()
+  })
+
   it('a valid amount edit still persists with a PUT (is_dca true) and reloads', async () => {
     render(<Harness initial={[makeFund({ is_dca: true, dca_monthly_amount_vnd: 2_000_000 })]} reload={reload} />)
 

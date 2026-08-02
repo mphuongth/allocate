@@ -178,6 +178,10 @@ describe('DesktopFundLibraryView — DCA amount edit must not desync from the se
     await userEvent.click(amountBtn)
     expect(screen.queryByTestId('dca-amount-input-f1')).not.toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledTimes(1)
+    // The goal write is a full PUT carrying the amount, so it waits too — it
+    // would otherwise persist the still-unconfirmed amount and reload it (#590
+    // review).
+    expect(screen.getByTestId('dca-goal-f1')).toBeDisabled()
   })
 
   it('a valid amount edit still persists with a PUT (is_dca true) and reloads', async () => {
