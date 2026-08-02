@@ -4,7 +4,7 @@ import { isNavStale, insuranceStatus, isPlanMonthRealized, isInCurrentCycle, rea
 import { buildWithdrawalMaps } from '@/lib/withdrawalProgress'
 import { heldForMergeContributions } from '@/lib/heldForMerge'
 import { valueNonFundHolding } from '@/lib/depositValuation'
-import { shouldWriteSnapshot } from '@/lib/snapshots'
+import { persistSnapshot, shouldWriteSnapshot } from '@/lib/snapshots'
 import { todayIso } from '@/lib/dates'
 
 export const dynamic = 'force-dynamic'
@@ -559,15 +559,29 @@ export async function GET() {
 
   const hasGold = allTxsRaw.some((tx) => tx.asset_type === 'gold')
 
-  // Upsert today's snapshot for the history chart (fire-and-forget), but only
-  // when the rounded value actually changed. The dashboard is loaded many times
-  // a day; re-writing an identical row just burns disk I/O (WAL + dirtied page +
-  // autovacuum) for no benefit. See lib/snapshots.ts.
+  // Upsert today's snapshot for the history chart, but only when the rounded
+  // value actually changed. The dashboard is loaded many times a day; re-writing
+  // an identical row just burns disk I/O (WAL + dirtied page + autovacuum) for no
+  // benefit. See lib/snapshots.ts.
+  //
+  // The write is awaited (with a timeout) so a serverless instance can't freeze
+  // before the row lands — but it never fails the response: history is secondary
+  // to the numbers on screen, so a broken write is logged, not surfaced (#592).
   if (shouldWriteSnapshot(snapshotRes.data, totalAssets)) {
-    supabase.from('net_worth_snapshots').upsert(
-      { user_id: user.id, snapshot_date: today, total_assets: Math.round(totalAssets) },
-      { onConflict: 'user_id,snapshot_date' }
-    ).then(() => { /* ignore errors */ })
+    const written = await persistSnapshot(() =>
+      supabase.from('net_worth_snapshots').upsert(
+        { user_id: user.id, snapshot_date: today, total_assets: Math.round(totalAssets) },
+        { onConflict: 'user_id,snapshot_date' }
+      )
+    )
+    if (!written.ok) {
+      // Context only — never the balance itself.
+      console.error('[dashboard/overview] net-worth snapshot write failed', {
+        user_id: user.id,
+        snapshot_date: today,
+        reason: written.reason,
+      })
+    }
   }
 
   return NextResponse.json({

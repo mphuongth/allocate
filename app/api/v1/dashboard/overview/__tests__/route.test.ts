@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { SNAPSHOT_WRITE_TIMEOUT_MS } from '@/lib/snapshots'
 
 // A partial dashboard read must never (a) return an understated 200 nor
 // (b) overwrite today's net-worth snapshot with the incomplete value (#513).
@@ -15,9 +16,30 @@ const h = vi.hoisted(() => ({
   user: { id: 'user-1' } as { id: string } | null,
   tables: {} as Record<string, { data: unknown; error: unknown }>,
   upsertCalls: [] as unknown[],
+  // How the snapshot upsert behaves, and whether it had actually settled by the
+  // time GET() resolved — the fire-and-forget bug (#592) is precisely a response
+  // that finishes while this is still false.
+  upsertOutcome: 'ok' as 'ok' | 'error' | 'reject' | 'hang',
+  upsertSettled: false,
 }))
 
 vi.mock('@/lib/supabase-server', () => {
+  /**
+   * The snapshot write resolves on a macrotask, so a handler that does not await
+   * it returns first — which is what the `upsertSettled` assertions detect.
+   */
+  function snapshotWrite() {
+    if (h.upsertOutcome === 'hang') return new Promise(() => { /* never settles */ })
+    return new Promise((resolve, reject) => {
+      setTimeout(() => {
+        h.upsertSettled = true
+        if (h.upsertOutcome === 'reject') reject(new Error('connection reset'))
+        else if (h.upsertOutcome === 'error') resolve({ error: { message: 'permission denied' } })
+        else resolve({ error: null })
+      }, 0)
+    })
+  }
+
   function chainFor(name: string) {
     const result = () => h.tables[name] ?? { data: [], error: null }
     const chain: Record<string, unknown> = {
@@ -28,8 +50,9 @@ vi.mock('@/lib/supabase-server', () => {
       maybeSingle: async () => result(),
       then: (resolve: (v: unknown) => void) => resolve(result()),
       upsert: (row: unknown) => {
-        if (name === 'net_worth_snapshots') h.upsertCalls.push(row)
-        return { then: (r: (v: unknown) => void) => r({ error: null }) }
+        if (name !== 'net_worth_snapshots') return { then: (r: (v: unknown) => void) => r({ error: null }) }
+        h.upsertCalls.push(row)
+        return snapshotWrite()
       },
     }
     return chain
@@ -76,6 +99,8 @@ function withOnePlan() {
 beforeEach(() => {
   h.user = { id: 'user-1' }
   h.upsertCalls = []
+  h.upsertOutcome = 'ok'
+  h.upsertSettled = false
   baseHappy()
 })
 
@@ -138,5 +163,68 @@ describe('GET /api/v1/dashboard/overview — optional gold price (#513)', () => 
     const res = await GET()
     expect(res.status).toBe(500)
     expect(h.upsertCalls).toHaveLength(0)
+  })
+})
+
+// #592 — the snapshot write used to be fire-and-forget, so on a serverless
+// runtime the response could finish (and the instance freeze) before the row
+// landed, silently dropping history points.
+describe('GET /api/v1/dashboard/overview — snapshot persistence is awaited (#592)', () => {
+  let errorSpy: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    errorSpy.mockRestore()
+    vi.useRealTimers()
+  })
+
+  it('does not resolve the response until the snapshot write has settled', async () => {
+    const res = await GET()
+    expect(res.status).toBe(200)
+    expect(h.upsertSettled).toBe(true)
+  })
+
+  it('still returns 200 when the snapshot write fails', async () => {
+    h.upsertOutcome = 'error'
+    const res = await GET()
+    expect(res.status).toBe(200)
+    expect(await res.json()).toHaveProperty('netWorth')
+  })
+
+  it('logs the failure with user/date context but no financial payload', async () => {
+    h.upsertOutcome = 'error'
+    await GET()
+    expect(errorSpy).toHaveBeenCalledTimes(1)
+    const [message, context] = errorSpy.mock.calls[0] as [string, Record<string, unknown>]
+    expect(message).toContain('snapshot')
+    expect(context).toMatchObject({ user_id: 'user-1', reason: 'permission denied' })
+    expect(context.snapshot_date).toEqual(expect.any(String))
+    expect(JSON.stringify(context)).not.toContain('total_assets')
+  })
+
+  it('still returns 200 when the snapshot write rejects', async () => {
+    h.upsertOutcome = 'reject'
+    const res = await GET()
+    expect(res.status).toBe(200)
+    expect(errorSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('gives up on a hung write instead of hanging the response', async () => {
+    vi.useFakeTimers()
+    h.upsertOutcome = 'hang'
+    const pending = GET()
+    await vi.advanceTimersByTimeAsync(SNAPSHOT_WRITE_TIMEOUT_MS + 1)
+    const res = await pending
+    expect(res.status).toBe(200)
+    expect(errorSpy).toHaveBeenCalledTimes(1)
+    expect((errorSpy.mock.calls[0] as [string, Record<string, unknown>])[1]).toMatchObject({ reason: 'timeout' })
+  })
+
+  it('logs nothing when the write succeeds', async () => {
+    await GET()
+    expect(errorSpy).not.toHaveBeenCalled()
   })
 })
