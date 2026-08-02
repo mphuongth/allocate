@@ -38,6 +38,46 @@ const tooLarge = () => NextResponse.json({ error: 'Request body too large' }, { 
 // `{}` and mutate, on a body JSON.parse cannot read.
 const JSON_BLANK = /^[ \t\n\r]*$/
 
+type ReadResult = { ok: true; text: string } | { ok: false }
+
+const readAll = async (request: Request): Promise<ReadResult> =>
+  ({ ok: true, text: await request.text() })
+
+/**
+ * Read the body as text, abandoning it the moment more than `maxBytes` have
+ * arrived. Buffering first and measuring afterwards would leave the DoS this cap
+ * exists to prevent intact for any client that omits Content-Length — chunked
+ * transfer encoding declares no size, so `request.text()` would decode the whole
+ * thing before anyone asked how big it was.
+ *
+ * Memory is therefore bounded by the cap plus one chunk, whatever the client
+ * claims or sends.
+ */
+async function readBounded(request: Request, maxBytes: number): Promise<ReadResult> {
+  // A request sent without a body has no stream to read; `text()` yields ''.
+  if (!request.body) return readAll(request)
+
+  const reader = request.body.getReader()
+  // Streaming decode: a multi-byte character split across two chunks is held
+  // over rather than turning into replacement characters.
+  const decoder = new TextDecoder()
+  let text = ''
+  let total = 0
+
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    total += value.byteLength
+    if (total > maxBytes) {
+      await reader.cancel()
+      return { ok: false }
+    }
+    text += decoder.decode(value, { stream: true })
+  }
+
+  return { ok: true, text: text + decoder.decode() }
+}
+
 export async function readJsonBody<T = JsonBody>(
   request: Request,
   /**
@@ -58,9 +98,9 @@ export async function readJsonBody<T = JsonBody>(
     maxBytes,
   }: { optional?: boolean; maxBytes?: number } = {},
 ): Promise<JsonBodyResult<T>> {
-  // Content-Length is the only chance to refuse before the body is in memory.
-  // It is a client-supplied claim, so the decoded text is measured again below —
-  // this check is an optimisation, not the limit itself.
+  // Content-Length lets an oversized body be refused before a single chunk is
+  // read. It is a client-supplied claim, so it is a shortcut, not the limit —
+  // the streaming read below enforces the cap on what actually arrives.
   if (maxBytes != null) {
     const declared = Number(request.headers.get('content-length'))
     if (Number.isFinite(declared) && declared > maxBytes) return { ok: false, response: tooLarge() }
@@ -70,17 +110,11 @@ export async function readJsonBody<T = JsonBody>(
   // from "unparseable" instead of both arriving as the same SyntaxError.
   let raw: string
   try {
-    raw = await request.text()
+    const read = maxBytes == null ? await readAll(request) : await readBounded(request, maxBytes)
+    if (!read.ok) return { ok: false, response: tooLarge() }
+    raw = read.text
   } catch {
     return { ok: false, response: badRequest('Request body could not be read') }
-  }
-
-  // Bytes, not characters: a Vietnamese body is ~3 bytes per character, and the
-  // cap is stated in bytes. `raw.length` first so the encode is skipped for the
-  // overwhelmingly common small body (chars ≤ bytes, so a body under the cap in
-  // characters may still be over it in bytes — hence the encode when it isn't).
-  if (maxBytes != null && raw.length > maxBytes / 4) {
-    if (new TextEncoder().encode(raw).length > maxBytes) return { ok: false, response: tooLarge() }
   }
 
   if (JSON_BLANK.test(raw)) {
