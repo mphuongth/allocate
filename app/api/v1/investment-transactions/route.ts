@@ -7,6 +7,12 @@ import { readJsonBody } from '@/lib/apiBody'
 
 const ASSET_TYPES = ['fund', 'bank', 'stock', 'gold'] as const
 
+// Every refusal create_held_settlement authors carries this prefix. Matching on
+// it is what separates OUR rules — which the caller can act on, so they are
+// forwarded verbatim as a 400 — from anything else the database says, which is
+// an internal fault and must not be echoed back (#588).
+const HELD_REFUSAL_PREFIX = 'held settlement: '
+
 export async function GET(request: NextRequest) {
   const supabase = await createSupabaseServerClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -181,6 +187,61 @@ export async function POST(request: NextRequest) {
     if (!plan) return NextResponse.json({ error: 'Plan not found' }, { status: 404 })
   }
 
+  // ── held-for-merge settlement ("Để dành gộp") ───────────────────────────────
+  //
+  // This shape is NOT built from the body (#588). A held settlement closes a
+  // deposit and parks its cash, and the dashboard adds that cash straight back
+  // into net worth and the goal bar — so amount_vnd here IS net worth. Assembled
+  // from client fields it could be backed by no deposit at all, or by one worth a
+  // thousandth of the amount claimed; the withdrawal invariant bounds
+  // principal_withdrawn but never a withdrawal's own amount_vnd.
+  //
+  // create_held_settlement takes the source and derives the rest from it — owner,
+  // goal, asset type, direction, and the principal being closed — under a row
+  // lock, which is also what stops two settlements consuming one deposit. The
+  // route's job shrinks to naming the source and translating the refusals.
+  if (cleanHeldForMerge) {
+    if (!cleanParentTxId) {
+      return NextResponse.json(
+        { error: 'A held-for-merge settlement must name the deposit it closes.' },
+        { status: 400 },
+      )
+    }
+
+    const { data: settlement, error: heldErr } = await supabase
+      .rpc('create_held_settlement', {
+        p_source_id: cleanParentTxId,
+        p_amount_vnd: cleanAmount,
+        p_investment_date: cleanInvestmentDate,
+        // null lets the RPC default the target to the source's own goal — "the
+        // cash stays where the deposit was".
+        p_merge_target_goal_id: cleanMergeTargetGoalId,
+        p_merge_anchor_inv_id: cleanMergeAnchorInvId,
+      })
+      .single()
+
+    if (heldErr || !settlement) {
+      const message = heldErr?.message ?? ''
+      if (message.startsWith(HELD_REFUSAL_PREFIX)) {
+        // A rule the caller broke, not a fault: say which one.
+        //   42501 — a goal or anchor belonging to someone else. The 403 every
+        //           other cross-user reference in this API answers with (#474).
+        //   P0002 — the source lookup came back empty: missing, or someone
+        //           else's, which RLS renders as the same thing and which must
+        //           stay indistinguishable.
+        const status = heldErr?.code === '42501' ? 403 : heldErr?.code === 'P0002' ? 404 : 400
+        return NextResponse.json(
+          { error: message.slice(HELD_REFUSAL_PREFIX.length), code: 'held_settlement_rejected' },
+          { status },
+        )
+      }
+      console.error('create_held_settlement: failed', message)
+      return NextResponse.json({ error: 'Failed to create the settlement' }, { status: 500 })
+    }
+
+    return NextResponse.json(settlement, { status: 201 })
+  }
+
   // Withdrawals can't yet target an accumulating book: the withdrawal parents to
   // one row, so an amount exceeding that tranche's principal wouldn't spill to
   // the book's other tranches and net worth would under-subtract. Per-tranche
@@ -281,28 +342,9 @@ export async function POST(request: NextRequest) {
     depositGroupId = explicitTxId
   }
 
-  // Net-worth safety for a held settlement. A held withdrawal removes its source
-  // from net worth, and the dashboard synthesizes the parked cash back ONLY via
-  // merge_target_goal_id. If that can't be resolved — an unassigned deposit
-  // settled with no explicit target — the cash leaves net worth and is never
-  // added back: money silently lost, surfaced nowhere. The UI always supplies a
-  // goal, so reject the unguarded API path rather than mis-state total assets.
-  const resolvedHeldTargetGoalId = cleanMergeTargetGoalId ?? effectiveGoalId
-  if (cleanHeldForMerge && !resolvedHeldTargetGoalId) {
-    return NextResponse.json({ error: 'A held-for-merge settlement must resolve a target goal.' }, { status: 400 })
-  }
-  // The held target goal is an app-managed goal reference (no physical FK), so a
-  // caller-supplied merge_target_goal_id must be verified for ownership too — a
-  // foreign target would strand the parked cash in another user's goal (#474).
-  if (cleanHeldForMerge && resolvedHeldTargetGoalId) {
-    const { data: goal } = await supabase
-      .from('savings_goals')
-      .select('goal_id')
-      .eq('goal_id', resolvedHeldTargetGoalId)
-      .eq('user_id', user.id)
-      .single()
-    if (!goal) return NextResponse.json({ error: "You don't have permission to access this goal." }, { status: 403 })
-  }
+  // (Net-worth safety for a held settlement — a resolvable, owned target goal —
+  // now lives in create_held_settlement, which every held row goes through and
+  // which returned above. Nothing reaching here is held.)
 
   const { data: transaction, error } = await supabase
     .from('investment_transactions')
@@ -329,11 +371,12 @@ export async function POST(request: NextRequest) {
       // Structured bank only applies to bank deposits; funds/gold have no bank.
       // A top-up tranche inherits the book's bank (effectiveBankCode).
       bank_code: effectiveAssetType === 'bank' ? effectiveBankCode : null,
-      // Held-for-merge pool flags (withdrawal only). The target goal defaults to
-      // the withdrawal's own goal (= the closed source's goal) when not given.
-      held_for_merge: cleanHeldForMerge,
-      merge_target_goal_id: cleanHeldForMerge ? resolvedHeldTargetGoalId : null,
-      merge_anchor_inv_id: cleanHeldForMerge ? cleanMergeAnchorInvId : null,
+      // The held-for-merge pool is created by create_held_settlement, never here
+      // (#588). Written out rather than left to the column defaults so a body
+      // carrying these fields cannot ride in on a row this path builds.
+      held_for_merge: false,
+      merge_target_goal_id: null,
+      merge_anchor_inv_id: null,
     })
     .select()
     .single()

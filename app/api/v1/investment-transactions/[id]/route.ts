@@ -189,6 +189,22 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     .select()
     .single()
 
+  // A deposit that has already been settled for merge cannot have its amount or
+  // goal changed: the settlement is a statement about that balance, and moving it
+  // underneath would revive the deposit in net worth while its cash still sits in
+  // the pool (#588). A conflict the user resolves — "Bỏ chờ gộp" removes the
+  // settlement and restores the deposit — not a missing row, so 404 would
+  // misdescribe it. The prefix marks a rule this codebase authored.
+  if (error?.message?.startsWith('held settlement: ')) {
+    return NextResponse.json(
+      {
+        error: 'A settlement is recorded against this deposit. Remove that settlement before changing it.',
+        code: 'held_settlement_parked',
+      },
+      { status: 409 },
+    )
+  }
+
   if (error || !transaction) return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
 
   // (Accumulating books took the atomic update_deposit_book path above; only
@@ -236,6 +252,21 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     .select('transaction_id')
 
   if (error) {
+    // The deposit still has a settlement parked against it (#588). Deleting it
+    // nulls the settlement's only link back to what it closed, and the deferred
+    // source check refuses that at the end of the transaction — another conflict
+    // the user resolves ("Bỏ chờ gộp" removes the settlement and restores the
+    // deposit), not a fault. The prefix marks a rule this codebase authored;
+    // anything else the database says is not quoted back.
+    if (error.message?.startsWith('held settlement: ')) {
+      return NextResponse.json(
+        {
+          error: 'A settlement is parked against this deposit. Remove that settlement before deleting it.',
+          code: 'held_settlement_parked',
+        },
+        { status: 409 },
+      )
+    }
     // The mirror image of the guard above. Two columns reference this table with
     // no ON DELETE action, so deleting a deposit that either one points at raises
     // a foreign-key violation — a conflict the user can resolve, not a server

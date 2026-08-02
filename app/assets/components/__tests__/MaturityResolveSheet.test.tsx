@@ -589,6 +589,10 @@ describe('MaturityResolveBody', () => {
         merge_anchor_inv_id: 'anc',
         affects_progress: true,
       })
+      // The server closes what the deposit actually has left (#588). Sending a
+      // principal from the screen would hand that decision back to the client,
+      // and the screen's copy is stale if anything moved since load.
+      expect(JSON.parse(post[1].body)).not.toHaveProperty('principal_withdrawn')
     })
 
     it('shows no hold fork (plain withdraw) when the only siblings mature earlier', async () => {

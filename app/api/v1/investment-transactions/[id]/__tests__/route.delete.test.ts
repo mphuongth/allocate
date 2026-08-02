@@ -176,6 +176,25 @@ describe('DELETE /api/v1/investment-transactions/[id]', () => {
     expect(error).not.toMatch(/undo the merge/i)
   })
 
+  // parent_transaction_id is ON DELETE SET NULL, so deleting a settled deposit
+  // would null its settlement's only link back to what it closed (#588). The
+  // database refuses that, and the refusal arrives as a check violation — not the
+  // 23503 this handler was built around, so without its own branch an ordinary
+  // ledger action reads as a server fault.
+  it('returns 409 when a settlement is still parked against the deposit', async () => {
+    h.deleteResult = {
+      data: null,
+      error: { code: '23514', message: 'held settlement: this deposit has a settlement parked against it — remove that settlement first' },
+    }
+
+    const res = await call()
+
+    expect(res.status).toBe(409)
+    const body = await res.json()
+    expect(body.code).toBe('held_settlement_parked')
+    expect(body.error).toMatch(/settlement/i)
+  })
+
   it('returns a generic 409 for an unrecognised foreign-key reference', async () => {
     h.deleteResult = {
       data: null,

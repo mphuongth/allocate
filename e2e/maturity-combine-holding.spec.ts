@@ -269,20 +269,67 @@ test.describe('Term-deposit maturity — "Ví chờ gộp" holding pool', () => 
     }
   })
 
-  test('rejects a held settlement that resolves no target goal (would silently lose net worth)', async ({ page }) => {
-    // The held cash leaves net worth and is synthesized back ONLY via
-    // merge_target_goal_id. With no goal AND no explicit target it resolves to
-    // null → heldForMergeContributions skips it → the money vanishes from total
-    // assets, shown nowhere. The UI always supplies a goal; the raw API must not
-    // accept the unresolvable case.
+  test('rejects a held settlement backed by no deposit at all', async ({ page }) => {
+    // This row used to be accepted (#588). held_for_merge was the one flag that
+    // excused a withdrawal from naming a source, so the raw API could mint a
+    // settlement backed by nothing — and the pool adds its amount_vnd straight
+    // into total assets and the goal bar. It also resolved no target goal, the
+    // other half of the same request: without one the cash leaves net worth and
+    // is never added back. Neither is reachable now; the source is required.
     const res = await page.request.post('/api/v1/investment-transactions', {
       data: {
         transaction_type: 'withdrawal', asset_type: 'bank', investment_date: iso(0),
         amount_vnd: 5_000_000, principal_withdrawn: 5_000_000, affects_progress: true,
-        held_for_merge: true, // no goal_id, no merge_target_goal_id
+        held_for_merge: true, // no parent_transaction_id, no goal, no target
       },
     })
     expect(res.status()).toBe(400)
+  })
+
+  // The amount is what becomes net worth, and the withdrawal invariant never
+  // looks at it — it bounds principal_withdrawn only (#588). So the cap lives in
+  // create_held_settlement, and only a live database shows that the settlement is
+  // measured against the deposit's REAL remaining principal rather than whatever
+  // the request claimed.
+  test('rejects a settlement far larger than the deposit it closes, and total assets do not move', async ({ page }) => {
+    const goal = await api.createGoal({ goal_name: `E2E Held Bound ${Date.now()}` })
+    const D = await api.createTransaction({
+      asset_type: 'bank', goal_id: goal.goal_id, amount_vnd: 2_000_000,
+      interest_rate: 6, expiry_date: iso(30), investment_date: iso(-300),
+      notes: `E2E Held Bound ${Date.now()}`,
+    })
+    try {
+      const before = await (await page.request.get('/api/v1/dashboard/overview')).json()
+
+      const res = await page.request.post('/api/v1/investment-transactions', {
+        data: {
+          transaction_type: 'withdrawal', asset_type: 'bank', investment_date: iso(0),
+          goal_id: goal.goal_id, parent_transaction_id: D.transaction_id,
+          amount_vnd: 999_000_000, principal_withdrawn: 2_000_000, affects_progress: true,
+          held_for_merge: true, merge_target_goal_id: goal.goal_id,
+        },
+      })
+      expect(res.status()).toBe(400)
+
+      const after = await (await page.request.get('/api/v1/dashboard/overview')).json()
+      expect(after.totalAssets).toBe(before.totalAssets)
+
+      // The real settlement — principal plus a plausible interest — still works.
+      const ok = await page.request.post('/api/v1/investment-transactions', {
+        data: {
+          transaction_type: 'withdrawal', asset_type: 'bank', investment_date: iso(0),
+          goal_id: goal.goal_id, parent_transaction_id: D.transaction_id,
+          amount_vnd: 2_100_000, affects_progress: true,
+          held_for_merge: true, merge_target_goal_id: goal.goal_id,
+        },
+      })
+      expect(ok.status()).toBe(201)
+      // principal_withdrawn was never sent — the RPC derives it from the source.
+      expect((await ok.json()).principal_withdrawn).toBe(2_000_000)
+    } finally {
+      await api.deleteTransactionCascade(D.transaction_id)
+      await api.deleteGoal(goal.goal_id)
+    }
   })
 
   test('a held settlement reads neutrally in the History tab — not a red withdrawal', async ({ page }) => {

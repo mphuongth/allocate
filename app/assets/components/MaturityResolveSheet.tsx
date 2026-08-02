@@ -555,7 +555,10 @@ export function MaturityResolveBody({
           parent_transaction_id: inv.id,
           investment_date: todayIso(),
           amount_vnd: Math.round(holdReceivedNum),
-          principal_withdrawn: Math.round(principal),
+          // principal_withdrawn is NOT sent: the server derives what the deposit
+          // still has and closes exactly that (#588). Sending our own number
+          // would offer back the control the RPC exists to take, and ours is the
+          // screen's view of the principal — stale if anything moved since load.
           affects_progress: true,
           held_for_merge: true,
           merge_target_goal_id: goalId,

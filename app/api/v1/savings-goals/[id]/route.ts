@@ -179,6 +179,49 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     .eq('goal_id', goalId)
     .eq('user_id', user.id)
 
+  // Cash parked in this goal for a merge (#588). The database refuses the delete
+  // either way — merge_target_goal_id has no foreign key, so it would be left
+  // pointing at a goal that no longer exists — but it refuses through the #525
+  // ownership trigger, whose message is about a goal reference, not about a
+  // settlement. Asking first is what turns that into an answer the user can act
+  // on: 404 "Goal not found" describes the wrong thing entirely, since the goal is
+  // very much there.
+  const { data: parked } = await supabase
+    .from('investment_transactions')
+    .select('transaction_id')
+    .eq('user_id', user.id)
+    .eq('held_for_merge', true)
+    .is('consumed_by_inv_id', null)
+    .or(`merge_target_goal_id.eq.${goalId},goal_id.eq.${goalId}`)
+    .limit(1)
+    .maybeSingle()
+
+  if (parked) {
+    return NextResponse.json(
+      {
+        error: 'This goal has cash parked in it for a merge. Release that settlement before deleting the goal.',
+        code: 'held_settlement_parked',
+      },
+      { status: 409 },
+    )
+  }
+
+  // Settlements whose merge is already DONE are history, and the goal should not
+  // be stuck behind them — but merge_target_goal_id has no foreign key, so the
+  // deletion leaves it pointing at nothing and the #525 ownership trigger then
+  // refuses the very update the deletion depends on. Adding the missing FK does
+  // not help: goal_id and merge_target_goal_id are separate referential actions on
+  // the same row, and whichever runs first leaves the other dangling. Clearing it
+  // here is deterministic. Safe because the pool skips consumed rows entirely —
+  // for them the target is dead metadata.
+  await supabase
+    .from('investment_transactions')
+    .update({ merge_target_goal_id: null })
+    .eq('user_id', user.id)
+    .eq('held_for_merge', true)
+    .not('consumed_by_inv_id', 'is', null)
+    .eq('merge_target_goal_id', goalId)
+
   const { error } = await supabase
     .from('savings_goals')
     .delete()

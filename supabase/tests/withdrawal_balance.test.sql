@@ -1079,12 +1079,17 @@ begin
 end;
 $$;
 
--- ── held-for-merge is an explicit exception, not a silent one ────────────────
--- A settle-with-hold row that names NO source has nothing to measure: it is the
--- shape #588 exists to make source-backed. This invariant leaves it alone ONLY
--- when it also claims no deltas — the moment it claims principal, it is a
--- withdrawal drawing on nothing and is refused. That boundary is deliberate, so it
--- is pinned rather than left to the reader.
+-- ── the held-for-merge exception, after #588 ─────────────────────────────────
+-- This block used to open by CREATING a source-less held row and calling it "the
+-- tracked #588 exception, allowed". That row is exactly what #588 removed: its
+-- amount_vnd becomes net worth, so an unbacked one inflated total assets.
+-- investment_transactions_held_shape now refuses it outright.
+--
+-- The exemption inside THIS invariant stays, and stays tested, because the
+-- constraint is NOT VALID: it does not scan rows written before it. So a legacy
+-- source-less held row can still be in the table, and this trigger is the only
+-- thing still measuring it — including refusing to let it become an ordinary
+-- withdrawal by dropping the flag.
 do $$
 declare
   v_user uuid;
@@ -1094,16 +1099,22 @@ begin
   insert into auth.users (id, email) values (gen_random_uuid(), 'wd-held@test.invalid') returning id into v_user;
   insert into public.savings_goals (user_id, goal_name) values (v_user, 'House') returning goal_id into v_goal;
 
-  -- No source, no deltas, and HELD: the tracked #588 exception, allowed.
-  insert into public.investment_transactions
-    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
-     held_for_merge, merge_target_goal_id)
-  values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 50000000, true, v_goal)
-  returning transaction_id into v_held;
+  -- No source and HELD is no longer a shape anything may write (#588). The check
+  -- is DEFERRED — ON DELETE SET NULL makes "is a settlement left with no deposit"
+  -- a question only the end of the transaction can answer — so it has to be
+  -- forced to be observable here rather than at COMMIT.
+  begin
+    insert into public.investment_transactions
+      (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+       held_for_merge, merge_target_goal_id)
+    values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 50000000, true, v_goal);
+    set constraints all immediate;
+    raise exception 'a held row with no source must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+  set constraints all deferred;
 
-  -- The same row shape WITHOUT held_for_merge is an ordinary withdrawal with no
-  -- holding at all. The exception is for the held-for-merge pool, so nothing else
-  -- may wear it: an ordinary withdrawal must name what it draws on.
+  -- An ordinary withdrawal with no holding at all: refused, as it always was.
   begin
     insert into public.investment_transactions
       (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
@@ -1112,14 +1123,34 @@ begin
   exception when sqlstate '23514' then null;
   end;
 
-  -- And an allowed held row cannot be turned into one by dropping the flag.
+  -- A LEGACY source-less held row — one written before the guards existed, which
+  -- NOT VALID deliberately does not scan. Dropping the constraint for the insert
+  -- is how such a row is reproduced; the deferred source check never fires
+  -- because this transaction rolls back rather than commits, which is the same
+  -- reason a legacy row survives in production until something touches it.
+  -- A LEGACY source-less held row — one written before #588's guards existed.
+  -- No ALTER is needed to produce it: the shape CHECK asks only for a withdrawal
+  -- with an agreeing target goal, and the source requirement is a DEFERRED
+  -- constraint trigger, which never fires here because this transaction rolls
+  -- back rather than commits. That is the same reason such a row survives in
+  -- production until something touches it — which is exactly the population this
+  -- invariant is still the only thing measuring.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     held_for_merge, merge_target_goal_id)
+  values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 50000000, true, v_goal)
+  returning transaction_id into v_held;
+
+  -- The exemption is the flag's, so the row cannot keep it by dropping the flag:
+  -- this invariant re-measures and finds a withdrawal drawing on nothing.
   begin
     update public.investment_transactions set held_for_merge = false where transaction_id = v_held;
     raise exception 'clearing held_for_merge must re-measure the row, not wave it through';
   exception when sqlstate '23514' then null;
   end;
 
-  -- No source but claiming principal: that is a withdrawal against nothing.
+  -- No source but claiming principal: that is a withdrawal against nothing,
+  -- refused by this invariant whether or not the shape constraint sees it.
   begin
     insert into public.investment_transactions
       (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
