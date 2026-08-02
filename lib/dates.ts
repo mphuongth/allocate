@@ -54,6 +54,14 @@ export function addMonths(isoDate: string, n: number): string {
   return `${year}-${pad(month + 1)}-${pad(Math.min(d, lastDay))}`
 }
 
+// Add `n` whole calendar days to a YYYY-MM-DD date (negative to go back).
+// Computed in UTC from the date parts, so no timezone or DST shift can move it.
+export function addDaysIso(isoDate: string, n: number): string {
+  const [y, m, d] = isoDate.slice(0, 10).split('-').map(Number)
+  const target = new Date(Date.UTC(y, m - 1, d + n))
+  return `${target.getUTCFullYear()}-${pad(target.getUTCMonth() + 1)}-${pad(target.getUTCDate())}`
+}
+
 // A date formatted for *display* in the business timezone — the "generated on" /
 // "as of" line on a report. Without the explicit zone this reads the renderer's
 // clock: the PDF built on the UTC server would print yesterday while its own
@@ -101,9 +109,25 @@ export function daysUntilIso(isoDate: string, from: string = todayIso()): number
 
 // Whether a plain investment date is in the future. Client and server both derive
 // "today" in the business timezone, so they agree on the boundary and no
-// clock-skew allowance is needed: anything past the business day is future-dated.
-// Compared as plain dates (ISO strings sort chronologically), so any time portion
-// on the input is ignored.
-export function isFutureInvestmentDate(isoDate: string, asOf: Date = new Date()): boolean {
-  return isoDate.slice(0, 10) > todayIso(asOf)
+// clock-skew allowance is needed: by default anything past the business day is
+// future-dated. Compared as plain dates (ISO strings sort chronologically), so any
+// time portion on the input is ignored.
+//
+// `graceDays` is for the flows that anchor a new cycle to a date the app itself
+// chose rather than one the user typed — see MATURITY_ANCHOR_GRACE_DAYS. A
+// user-entered create/edit date must stay on the strict default.
+export function isFutureInvestmentDate(
+  isoDate: string,
+  asOf: Date = new Date(),
+  graceDays: number = 0,
+): boolean {
+  return isoDate.slice(0, 10) > addDaysIso(todayIso(asOf), graceDays)
 }
+
+// Renewing a term deposit (and collapsing an accumulating book) anchors the new
+// cycle to the OLD maturity date, not to today — so the next maturity is
+// old-maturity + term and accrual doesn't skip the overdue days. The 7-day
+// reminder window deliberately surfaces a deposit *before* it matures, so that
+// anchor can be up to a day ahead of the business date. The renew UI gates itself
+// at one day (`daysLeft > 1`); this is the server side of that same allowance.
+export const MATURITY_ANCHOR_GRACE_DAYS = 1

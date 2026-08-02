@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validateBankCode, validateDate, validateRate, validateUUID } from '@/lib/validation'
-import { isFutureInvestmentDate } from '@/lib/dates'
+import { isFutureInvestmentDate, MATURITY_ANCHOR_GRACE_DAYS } from '@/lib/dates'
 import { isTermDeposit } from '@/lib/maturity'
 import { readJsonBody } from '@/lib/apiBody'
 
@@ -102,7 +102,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     throw e
   }
 
-  if (isFutureInvestmentDate(cleanInvestmentDate)) {
+  // Anchored to the OLD maturity date, which the reminder window can surface a day
+  // before it falls — hence the grace. Without it the sheet's enabled "Confirm
+  // renewal" button 400s for a deposit maturing tomorrow (#591).
+  if (isFutureInvestmentDate(cleanInvestmentDate, new Date(), MATURITY_ANCHOR_GRACE_DAYS)) {
     return NextResponse.json({ error: 'Investment date cannot be in the future.' }, { status: 400 })
   }
 

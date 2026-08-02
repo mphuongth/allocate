@@ -7,13 +7,15 @@ import { fmt } from '@/lib/formatters'
 import { formatIntVN } from '@/lib/numberFormat'
 import { SUCCESS_FLASH_MS } from '../../successFlash'
 import type { InvRow } from '../goalDetailShared'
+import { todayIso, addDaysIso } from '@/lib/dates'
 
 // A YYYY-MM-DD string `n` days from today (deterministic regardless of run date).
+// Built on the BUSINESS calendar, because that is what daysUntil/fmtMaturity
+// measure against. Deriving these from the runtime's local clock made every
+// maturity assertion off by one whenever the runner's date differed from
+// Vietnam's — on a UTC runner, that is 17:00–23:59 every day (#591).
 function daysFromNow(n: number): string {
-  const d = new Date()
-  d.setHours(0, 0, 0, 0)
-  d.setDate(d.getDate() + n)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return addDaysIso(todayIso(), n)
 }
 // A matured term deposit: value (compounded) > principal, expiry in the past.
 const maturedDeposit: InvRow = {

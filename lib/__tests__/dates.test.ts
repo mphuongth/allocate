@@ -6,6 +6,7 @@ import {
   businessTodayDate,
   monthsUntilYm,
   formatBusinessDate,
+  addDaysIso,
   daysUntilIso,
   isFutureInvestmentDate,
 } from '../dates'
@@ -137,6 +138,24 @@ describe('daysUntilIso', () => {
   })
 })
 
+describe('addDaysIso', () => {
+  it('steps forward and back by whole calendar days', () => {
+    expect(addDaysIso('2026-06-14', 0)).toBe('2026-06-14')
+    expect(addDaysIso('2026-06-14', 1)).toBe('2026-06-15')
+    expect(addDaysIso('2026-06-14', -1)).toBe('2026-06-13')
+  })
+
+  it('crosses month and year boundaries, and leap days', () => {
+    expect(addDaysIso('2026-06-30', 1)).toBe('2026-07-01')
+    expect(addDaysIso('2026-12-31', 1)).toBe('2027-01-01')
+    expect(addDaysIso('2028-02-28', 1)).toBe('2028-02-29') // 2028 is a leap year
+  })
+
+  it('round-trips with daysUntilIso', () => {
+    expect(daysUntilIso(addDaysIso('2026-06-14', 9), '2026-06-14')).toBe(9)
+  })
+})
+
 describe('formatBusinessDate', () => {
   // The "generated on" / "as of" date a report displays. Formatted in the business
   // zone so the PDF rendered on the UTC server can't say yesterday while its own
@@ -189,5 +208,30 @@ describe('isFutureInvestmentDate', () => {
   it('ignores any time portion on the input', () => {
     expect(isFutureInvestmentDate('2026-06-14T23:59:59Z', asOf)).toBe(false)
     expect(isFutureInvestmentDate('2026-06-15T00:00:00Z', asOf)).toBe(true)
+  })
+
+  // The renew / book-collapse flows anchor the new cycle to the OLD maturity
+  // date, and the 7-day reminder window surfaces a deposit before that date
+  // falls — so those routes legitimately post a date up to a day ahead. They opt
+  // in explicitly; a user-entered create/edit date stays strict.
+  describe('graceDays', () => {
+    it('accepts tomorrow when a grace day is allowed', () => {
+      expect(isFutureInvestmentDate('2026-06-15', asOf, 1)).toBe(false)
+    })
+
+    it('still rejects beyond the grace', () => {
+      expect(isFutureInvestmentDate('2026-06-16', asOf, 1)).toBe(true)
+    })
+
+    it('defaults to no grace at all', () => {
+      expect(isFutureInvestmentDate('2026-06-15', asOf)).toBe(true)
+    })
+
+    it('measures the grace from the business day, not the UTC one', () => {
+      // 00:30 on 15 Jun in Vietnam: today is the 15th, so one grace day reaches
+      // the 16th — even though the UTC date is still the 14th.
+      expect(isFutureInvestmentDate('2026-06-16', VN_0030, 1)).toBe(false)
+      expect(isFutureInvestmentDate('2026-06-17', VN_0030, 1)).toBe(true)
+    })
   })
 })

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validateDate, validateRate, validateUUID } from '@/lib/validation'
-import { isFutureInvestmentDate } from '@/lib/dates'
+import { isFutureInvestmentDate, MATURITY_ANCHOR_GRACE_DAYS } from '@/lib/dates'
 import { buildCollapsePlan, type CollapseTrancheInput } from '@/lib/accumulating'
 import { readJsonBody } from '@/lib/apiBody'
 
@@ -59,7 +59,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     throw e
   }
 
-  if (isFutureInvestmentDate(cleanInvestmentDate)) {
+  // Same maturity anchor as renew: the book's old maturity can be a day out (#591).
+  if (isFutureInvestmentDate(cleanInvestmentDate, new Date(), MATURITY_ANCHOR_GRACE_DAYS)) {
     return NextResponse.json({ error: 'Investment date cannot be in the future.' }, { status: 400 })
   }
   // The new cycle must have positive length (ISO date strings sort chronologically).
