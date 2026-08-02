@@ -137,6 +137,29 @@ describe('useFundMutations — saving the DCA amount', () => {
     expect(current()).toMatchObject({ dca_goal_id: 'goal-2', is_dca: true, dca_monthly_amount_vnd: 1_000_000 })
   })
 
+  // Both viewports stay mounted and share the funds state, so a disable can
+  // land while an amount save is still in flight. The late rollback must not
+  // resurrect the amount over it — its optimistic write is no longer what the
+  // row holds, so there is nothing of its own left to undo (#590 review).
+  it('skips the rollback when a later mutation already moved the fund', async () => {
+    let failAmountSave = () => {}
+    const amountSave = new Promise<{ ok: boolean; status: number }>((resolve) => {
+      failAmountSave = () => resolve({ ok: false, status: 500 })
+    })
+    const { result, current } = setup((_url, init) => {
+      const body = JSON.parse(init!.body as string)
+      return body.is_dca === false ? { ok: true } : amountSave
+    })
+
+    let saving: Promise<void> | undefined
+    act(() => { saving = result.current.saveDcaAmount(FUND, 2_000_000) })
+    // The other viewport turns DCA off, and the server accepts it.
+    await act(async () => { await result.current.disableDca({ ...FUND, dca_monthly_amount_vnd: 2_000_000 }) })
+    await act(async () => { failAmountSave(); await saving })
+
+    expect(current()).toMatchObject({ is_dca: false, dca_monthly_amount_vnd: null })
+  })
+
   // A brand-new enable has nothing persisted behind it: the view flipped
   // `is_dca` on locally when the editor opened, so the state to restore is off.
   it('reverts to off when the first save of a new enable fails', async () => {

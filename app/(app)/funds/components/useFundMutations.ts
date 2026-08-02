@@ -58,6 +58,21 @@ export function useFundMutations({
   }, [setFunds])
 
   /**
+   * Undo an optimistic write, but only while the row still holds it. Both
+   * viewports stay mounted on the same funds state, so a second mutation (or
+   * its reload) can land while the first request is still out — and then the
+   * loser's rollback would overwrite a result the server actually confirmed.
+   * If our own optimistic values are gone, someone else owns those fields now.
+   */
+  const rollbackFund = useCallback((id: string, optimistic: Partial<Fund>, rollback: Partial<Fund>) => {
+    setFunds((prev) => prev.map((f) => {
+      if (f.id !== id) return f
+      const stillOurs = Object.entries(optimistic).every(([key, value]) => f[key as keyof Fund] === value)
+      return stillOurs ? { ...f, ...rollback } : f
+    }))
+  }, [setFunds])
+
+  /**
    * Every DCA write is a full PUT: the route's partial-update semantics key off
    * whether `is_dca` is present, and the unchanged columns have to come along or
    * they'd be overwritten with undefined.
@@ -85,7 +100,8 @@ export function useFundMutations({
    * call site is what produced #590: the amount save rolled back to a blanket
    * "DCA off", so a transient error told the user their configuration was gone
    * while the server still had it. `rollbackOverride` exists for the one case
-   * the fund object can't describe — see `saveDcaAmount`.
+   * the fund object can't describe — see `saveDcaAmount`. The undo itself is
+   * conditional: see `rollbackFund`.
    */
   const persist = useCallback(async (
     fund: Fund,
@@ -104,12 +120,12 @@ export function useFundMutations({
       if (!res.ok) throw new Error()
       await reload()
     } catch {
-      patchFund(fund.id, rollback)
+      rollbackFund(fund.id, optimistic, rollback)
       notify(failureMessage, false)
     } finally {
       setTogglingIds((prev) => { const next = new Set(prev); next.delete(fund.id); return next })
     }
-  }, [patchFund, putFund, reload, notify])
+  }, [patchFund, rollbackFund, putFund, reload, notify])
 
   const disableDca = useCallback((fund: Fund) => persist(
     fund,
