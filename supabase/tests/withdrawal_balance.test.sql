@@ -428,14 +428,25 @@ begin
   insert into public.funds (user_id, name, code, fund_type, nav)
   values (v_user, 'Bucket2 Fund', 'BK2', 'equity', 20000) returning id into v_fund;
 
-  -- A fund purchase whose asset_type is edited to 'bank' keeps its fund_id (the
-  -- PUT route clears fund_id only when that field is sent). The dashboard then
-  -- values it as a bank holding — so its units are no longer fund inventory and
-  -- must not back a fund sell.
+  -- A fund purchase edited to 'bank' is no longer valued as fund inventory, so
+  -- its units must not back a fund sell.
   insert into public.investment_transactions (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
   values (v_user, v_goal, v_fund, 'fund', 'investment', '2026-01-01', 2000000, 100, 20000) returning transaction_id into v_buy;
 
-  update public.investment_transactions set asset_type = 'bank' where transaction_id = v_buy;
+  -- Such a row used to keep its fund_id and units — the PUT route cleared
+  -- fund_id only when that field was sent — which is the contradiction #593
+  -- closed. The subtype constraint now refuses the half-done conversion outright.
+  begin
+    update public.investment_transactions set asset_type = 'bank' where transaction_id = v_buy;
+    raise exception 'a fund converted to a deposit must not keep its fund_id and units';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- Done properly — old subtype cleared in the same statement, as the route does
+  -- it — the conversion lands, and the bucket it left is empty from then on.
+  update public.investment_transactions
+  set asset_type = 'bank', fund_id = null, units = null, unit_price = null
+  where transaction_id = v_buy;
 
   begin
     insert into public.investment_transactions
