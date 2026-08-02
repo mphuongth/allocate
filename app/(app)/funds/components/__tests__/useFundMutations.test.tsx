@@ -25,7 +25,10 @@ const FUND: Fund = {
   updated_at: '',
 }
 
-function setup(fetchImpl: (url: string, init?: RequestInit) => { ok: boolean; status?: number }) {
+function setup(
+  fetchImpl: (url: string, init?: RequestInit) => { ok: boolean; status?: number },
+  initial: Fund = FUND,
+) {
   const requests: Array<{ url: string; method: string; body: Record<string, unknown> | undefined }> = []
   vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
     requests.push({
@@ -37,7 +40,7 @@ function setup(fetchImpl: (url: string, init?: RequestInit) => { ok: boolean; st
     return { ok, status: status ?? (ok ? 200 : 500) }
   }))
 
-  let funds: Fund[] = [FUND]
+  let funds: Fund[] = [initial]
   const setFunds = vi.fn((update: Fund[] | ((prev: Fund[]) => Fund[])) => {
     funds = typeof update === 'function' ? update(funds) : update
   })
@@ -91,10 +94,29 @@ describe('useFundMutations — saving the DCA amount', () => {
     expect(reload).toHaveBeenCalled()
   })
 
-  it('reverts DCA to off when the save fails', async () => {
+  // A failed save must leave the row showing what the server still has, not a
+  // blanket "DCA off" — the previous rollback lied about an untouched
+  // configuration after any transient error (#590).
+  it('restores the previously saved amount and goal when editing fails', async () => {
     const { result, notify, current } = setup(fails)
 
     await act(async () => { await result.current.saveDcaAmount(FUND, 2_000_000) })
+
+    expect(current()).toMatchObject({
+      is_dca: true,
+      dca_monthly_amount_vnd: 1_000_000,
+      dca_goal_id: 'goal-1',
+    })
+    expect(notify).toHaveBeenCalledWith('toastDcaFailed', false)
+  })
+
+  // A brand-new enable has nothing persisted behind it: the view flipped
+  // `is_dca` on locally when the editor opened, so the state to restore is off.
+  it('reverts to off when the first save of a new enable fails', async () => {
+    const enabling: Fund = { ...FUND, is_dca: true, dca_monthly_amount_vnd: null, dca_goal_id: null }
+    const { result, notify, current } = setup(fails, enabling)
+
+    await act(async () => { await result.current.saveDcaAmount(enabling, 2_000_000, true) })
 
     expect(current()).toMatchObject({ is_dca: false, dca_monthly_amount_vnd: null })
     expect(notify).toHaveBeenCalledWith('toastDcaFailed', false)

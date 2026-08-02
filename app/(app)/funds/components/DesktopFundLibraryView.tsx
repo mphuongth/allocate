@@ -462,9 +462,12 @@ export default function DesktopFundLibraryView({ funds, setFunds, goals, loading
       setDcaEditIsNew(false)
       return
     }
+    // Captured before the flag is cleared: it decides what a failed save rolls
+    // back to — off for a never-persisted enable, the saved amount otherwise.
+    const wasNew = dcaEditIsNew
     setDcaEditId(null)
     setDcaEditIsNew(false)
-    await saveDcaAmount(fund, amount)
+    await saveDcaAmount(fund, amount, wasNew)
   }
 
   async function handleSetDcaGoal(fund: Fund, goalId: string | null) {

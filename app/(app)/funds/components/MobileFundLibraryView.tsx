@@ -626,8 +626,11 @@ export default function MobileFundLibraryView({ funds, setFunds, goals, loading,
       return
     }
 
+    // Captured before the flag is cleared: it decides what a failed save rolls
+    // back to — off for a never-persisted enable, the saved amount otherwise.
+    const wasNew = dcaEditIsNew
     setDcaEditIsNew(false)
-    await saveDcaAmount(fund, amount)
+    await saveDcaAmount(fund, amount, wasNew)
   }
 
   // Abandon an inline amount edit (Escape). A brand-new enable reverts to off;

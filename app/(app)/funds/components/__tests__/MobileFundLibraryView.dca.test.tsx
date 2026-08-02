@@ -88,6 +88,38 @@ describe('MobileFundLibraryView — DCA amount edit must not desync from the ser
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  // Same assertion as the desktop spec: after a failed edit both viewports must
+  // still show the configuration the server kept, not "DCA off" (#590).
+  it('a failed edit of a saved amount leaves the card enabled at its previous amount', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 500, json: () => Promise.resolve({}) })
+    render(<Harness initial={[makeFund({ is_dca: true, dca_monthly_amount_vnd: 2_000_000 })]} reload={reload} />)
+
+    await userEvent.click(screen.getByTestId('dca-amount-btn-f1'))
+    const input = screen.getByTestId('dca-amount-input-f1')
+    await userEvent.clear(input)
+    await userEvent.type(input, '3000000')
+    fireEvent.blur(input)
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+    await waitFor(() => expect(screen.getByLabelText('disableDca')).toBeInTheDocument())
+    expect(screen.getByTestId('dca-amount-btn-f1')).toHaveTextContent('2000000')
+    expect(reload).not.toHaveBeenCalled()
+  })
+
+  it('a failed first save of a just-enabled DCA leaves the card off', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 500, json: () => Promise.resolve({}) })
+    render(<Harness initial={[makeFund({ is_dca: false })]} reload={reload} />)
+
+    await userEvent.click(screen.getByLabelText('enableDca'))
+    const input = screen.getByTestId('dca-amount-input-f1')
+    await userEvent.type(input, '3000000')
+    fireEvent.blur(input)
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+    await waitFor(() => expect(screen.getByLabelText('enableDca')).toBeInTheDocument())
+    expect(screen.queryByTestId('dca-amount-btn-f1')).not.toBeInTheDocument()
+  })
+
   it('a valid amount edit still persists with a PUT (is_dca true) and reloads', async () => {
     render(<Harness initial={[makeFund({ is_dca: true, dca_monthly_amount_vnd: 2_000_000 })]} reload={reload} />)
 
