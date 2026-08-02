@@ -254,12 +254,17 @@ function DcaToggle({ fund, editId, editValue, toggling, goals, goalLabel, unallo
         ) : (
           <button
             data-testid={`dca-amount-btn-${fund.id}`}
+            // Busy until the save settles: a second amount write stacked on the
+            // first leaves each rollback aiming at the other's optimistic value
+            // rather than at what the server holds (#590).
+            disabled={toggling}
             onClick={e => { e.stopPropagation(); onEditStart() }}
             style={{
               fontSize: 11, fontWeight: 500, padding: '2px 8px',
+              opacity: toggling ? 0.5 : 1,
               background: 'var(--c-navy-tint)', color: 'var(--c-navy)',
               border: '1px solid var(--c-navy-tint)', borderRadius: 6,
-              cursor: 'pointer', fontFamily: 'inherit',
+              cursor: toggling ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
             }}
           >
             {fund.dca_monthly_amount_vnd ? fmtCompact(fund.dca_monthly_amount_vnd) : t('setAmount')}

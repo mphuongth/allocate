@@ -384,16 +384,21 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
               <button
                 type="button"
                 data-testid={`dca-amount-btn-${fund.id}`}
+                // Busy until the save settles: a second amount write stacked on
+                // the first leaves each rollback aiming at the other's
+                // optimistic value rather than at what the server holds (#590).
+                disabled={toggling}
                 onClick={() => { setDcaEditId(fund.id); setDcaEditValue(String(fund.dca_monthly_amount_vnd)); setDcaEditIsNew(false) }}
-                style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', background: 'var(--c-navy-tint)', color: 'var(--c-navy)', border: '1px solid var(--c-navy-tint)', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit' }}
+                style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', background: 'var(--c-navy-tint)', color: 'var(--c-navy)', border: '1px solid var(--c-navy-tint)', borderRadius: 6, cursor: toggling ? 'not-allowed' : 'pointer', opacity: toggling ? 0.5 : 1, fontFamily: 'inherit' }}
               >
                 {fmtCompact(fund.dca_monthly_amount_vnd)}
               </button>
             ) : (
               <button
                 type="button"
+                disabled={toggling}
                 onClick={() => { setDcaEditId(fund.id); setDcaEditValue(''); setDcaEditIsNew(false) }}
-                style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', background: 'var(--c-navy-tint)', color: 'var(--c-navy)', border: '1px solid var(--c-navy-tint)', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit' }}
+                style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', background: 'var(--c-navy-tint)', color: 'var(--c-navy)', border: '1px solid var(--c-navy-tint)', borderRadius: 6, cursor: toggling ? 'not-allowed' : 'pointer', opacity: toggling ? 0.5 : 1, fontFamily: 'inherit' }}
               >
                 {t('setAmount')}
               </button>

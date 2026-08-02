@@ -140,6 +140,28 @@ describe('MobileFundLibraryView — DCA amount edit must not desync from the ser
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  // Two saves of the same amount must not overlap: stacked writes make each
+  // one's rollback target the other's optimistic value instead of what the
+  // server holds, and the card keeps an amount that was never persisted (#590
+  // review). The card is busy until the first save settles.
+  it('does not let a second amount save stack on one still in flight', async () => {
+    fetchMock.mockReturnValue(new Promise(() => {}))
+    render(<Harness initial={[makeFund({ is_dca: true, dca_monthly_amount_vnd: 2_000_000 })]} reload={reload} />)
+
+    await userEvent.click(screen.getByTestId('dca-amount-btn-f1'))
+    const input = screen.getByTestId('dca-amount-input-f1')
+    await userEvent.clear(input)
+    await userEvent.type(input, '3000000')
+    fireEvent.blur(input)
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+    const amountBtn = screen.getByTestId('dca-amount-btn-f1')
+    expect(amountBtn).toBeDisabled()
+    await userEvent.click(amountBtn)
+    expect(screen.queryByTestId('dca-amount-input-f1')).not.toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
   it('a valid amount edit still persists with a PUT (is_dca true) and reloads', async () => {
     render(<Harness initial={[makeFund({ is_dca: true, dca_monthly_amount_vnd: 2_000_000 })]} reload={reload} />)
 
