@@ -186,6 +186,21 @@ describe('PUT /api/v1/investment-transactions/[id] — subtype normalization (#5
     expect(h.rpcCalls.map((c) => c.name)).toEqual(['update_deposit_book'])
   })
 
+  it('reports a book the database refused to convert as a conflict, not a missing row', async () => {
+    // The route's own guard reads deposit_group_id before it writes, so a
+    // deposit that becomes a book in between (a recurring top-up self-groups its
+    // anchor) is refused by the trigger instead. 404 would describe that as a
+    // row that isn't there.
+    h.existing = { deposit_group_id: null, asset_type: 'bank' }
+    h.updateResult = {
+      data: null,
+      error: { message: 'deposit book: a tranche of an accumulating book cannot change asset type' },
+    }
+    const res = await put({ asset_type: 'gold', amount_vnd: 1_000_000 })
+    expect(res.status).toBe(400)
+    expect(await res.json()).toMatchObject({ code: 'book_type_change' })
+  })
+
   it('does not normalize a legacy row whose asset type is unknown', async () => {
     h.existing = { deposit_group_id: null, asset_type: null }
     await put({ asset_type: 'fund', fund_id: FUND_ID, amount_vnd: 1_000_000 })

@@ -220,6 +220,17 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   // the pool (#588). A conflict the user resolves — "Bỏ chờ gộp" removes the
   // settlement and restores the deposit — not a missing row, so 404 would
   // misdescribe it. The prefix marks a rule this codebase authored.
+  // The book rules the table enforces (20260802000002). The guard above reads
+  // deposit_group_id before the write, so a deposit that becomes a book in
+  // between — a recurring top-up self-groups its anchor — is caught here
+  // instead. It is the same refusal, and 404 would call it a missing row.
+  if (error?.message?.startsWith('deposit book: ')) {
+    return NextResponse.json(
+      { error: 'An accumulating deposit book cannot be changed to another asset type.', code: 'book_type_change' },
+      { status: 400 },
+    )
+  }
+
   if (error?.message?.startsWith('held settlement: ')) {
     return NextResponse.json(
       {
