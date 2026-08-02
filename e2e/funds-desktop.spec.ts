@@ -66,6 +66,38 @@ test('DCA enabled on desktop is reflected when switching to mobile viewport', as
   await expect(card.getByRole('button', { name: /disable dca|tắt dca/i })).toBeVisible({ timeout: 5_000 })
 })
 
+// The "brand-new enable" marker is per-view editor state while the funds copy
+// is shared, so a pending enable crossing the breakpoint would look like an
+// existing DCA to the other view — and a first failed save would then restore
+// a locally enabled row the server never had (#590). It can't: hiding the
+// desktop view blurs its focused amount input, which cancels the pending
+// enable. Only a real browser does that — jsdom keeps focus on hidden nodes —
+// so this invariant can only be pinned here.
+test('a pending DCA enable does not survive crossing to the mobile viewport (#590)', async ({ page }) => {
+  const fund = await api.createFund({ name: 'E2E Pending Enable Handoff', code: 'DPENDH', fund_type: 'equity', nav: 20000 })
+  cleanup.add(() => api.deleteFund(fund.id))
+
+  const puts: string[] = []
+  page.on('request', r => {
+    if (r.method() === 'PUT' && r.url().includes(`/api/funds/${fund.id}`)) puts.push(r.url())
+  })
+
+  await page.goto('/funds')
+  await page.waitForLoadState('networkidle')
+
+  // Toggle DCA on and leave the amount editor open — nothing is persisted yet.
+  const row = page.getByTestId('desktop-funds-table').getByTestId(`fund-row-${fund.id}`)
+  await row.getByTestId('dca-toggle').click()
+  await expect(row.getByTestId(`dca-amount-input-${fund.id}`)).toBeVisible()
+
+  await page.setViewportSize({ width: 390, height: 844 })
+
+  // The mobile card shows DCA off, and nothing was written.
+  const card = page.getByTestId('mobile-funds').getByTestId(`fund-card-${fund.id}`)
+  await expect(card.getByRole('button', { name: /enable dca|bật dca/i })).toBeVisible({ timeout: 5_000 })
+  expect(puts).toEqual([])
+})
+
 test('desktop funds DCA goal selection persists across reload', async ({ page }) => {
   const goal = await api.createGoal({ goal_name: 'E2E Desktop DCA Goal Target' })
   cleanup.add(() => api.deleteGoal(goal.goal_id))

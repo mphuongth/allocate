@@ -13,7 +13,7 @@ import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/
 import { useDialogA11y } from '@/app/(app)/planning/components/useDialogA11y'
 import { FundsEmptyState } from './FundsEmptyState'
 import { FundNavAge } from './FundNavAge'
-import type { Fund, Goal, FundType, FundsData } from './useFundsData'
+import type { Fund, Goal, FundType, FundsData, FundsBusy } from './useFundsData'
 import { useFundMutations } from './useFundMutations'
 import { useDialogMount } from '@/app/(app)/planning/components/useDialogMount'
 
@@ -384,16 +384,21 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
               <button
                 type="button"
                 data-testid={`dca-amount-btn-${fund.id}`}
+                // Busy until the save settles: a second amount write stacked on
+                // the first leaves each rollback aiming at the other's
+                // optimistic value rather than at what the server holds (#590).
+                disabled={toggling}
                 onClick={() => { setDcaEditId(fund.id); setDcaEditValue(String(fund.dca_monthly_amount_vnd)); setDcaEditIsNew(false) }}
-                style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', background: 'var(--c-navy-tint)', color: 'var(--c-navy)', border: '1px solid var(--c-navy-tint)', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit' }}
+                style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', background: 'var(--c-navy-tint)', color: 'var(--c-navy)', border: '1px solid var(--c-navy-tint)', borderRadius: 6, cursor: toggling ? 'not-allowed' : 'pointer', opacity: toggling ? 0.5 : 1, fontFamily: 'inherit' }}
               >
                 {fmtCompact(fund.dca_monthly_amount_vnd)}
               </button>
             ) : (
               <button
                 type="button"
+                disabled={toggling}
                 onClick={() => { setDcaEditId(fund.id); setDcaEditValue(''); setDcaEditIsNew(false) }}
-                style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', background: 'var(--c-navy-tint)', color: 'var(--c-navy)', border: '1px solid var(--c-navy-tint)', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit' }}
+                style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', background: 'var(--c-navy-tint)', color: 'var(--c-navy)', border: '1px solid var(--c-navy-tint)', borderRadius: 6, cursor: toggling ? 'not-allowed' : 'pointer', opacity: toggling ? 0.5 : 1, fontFamily: 'inherit' }}
               >
                 {t('setAmount')}
               </button>
@@ -407,6 +412,12 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
               value={fund.dca_goal_id ?? ''}
               title={goalLabel}
               aria-label={goalLabel}
+              // Waits out an in-flight write like the desktop selector already
+              // did: the goal PUT carries the amount, so running it during an
+              // amount save would persist a value that save hasn't confirmed
+              // yet — and the failed save could then no longer tell the
+              // server's value from its own optimistic one (#590).
+              disabled={toggling}
               onChange={(e) => onGoalChange(e.target.value || null)}
               style={{
                 // 16px (not 13) so iOS Safari doesn't zoom the viewport on focus
@@ -420,7 +431,8 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
                 // --c-ink-2 (not --c-muted): the select holds a real chosen goal, so
                 // it needs readable contrast, not faint placeholder-grey.
                 background: 'var(--c-card)', color: 'var(--c-ink-2)',
-                fontFamily: 'inherit', cursor: 'pointer', appearance: 'none', outline: 'none',
+                fontFamily: 'inherit', appearance: 'none', outline: 'none',
+                cursor: toggling ? 'not-allowed' : 'pointer', opacity: toggling ? 0.5 : 1,
               }}
             >
               {goals.map((g) => <option key={g.goal_id} value={g.goal_id}>{g.goal_name}</option>)}
@@ -435,7 +447,7 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function MobileFundLibraryView({ funds, setFunds, goals, loading, error, reload }: FundsData) {
+export default function MobileFundLibraryView({ funds, setFunds, goals, loading, error, reload, togglingIds: busyIds, setTogglingIds }: FundsData & FundsBusy) {
   const t = useTranslations('funds')
   const tc = useTranslations('common')
   const locale = useLocale()
@@ -490,6 +502,8 @@ export default function MobileFundLibraryView({ funds, setFunds, goals, loading,
       setFunds,
       reload,
       notify: useCallback((message: string, ok: boolean) => addToast(message, ok ? 'success' : 'error'), [addToast]),
+      togglingIds: busyIds,
+      setTogglingIds,
     })
 
   const handleRefreshNav = useCallback(async () => {
@@ -626,8 +640,11 @@ export default function MobileFundLibraryView({ funds, setFunds, goals, loading,
       return
     }
 
+    // Captured before the flag is cleared: it decides what a failed save rolls
+    // back to — off for a never-persisted enable, the saved amount otherwise.
+    const wasNew = dcaEditIsNew
     setDcaEditIsNew(false)
-    await saveDcaAmount(fund, amount)
+    await saveDcaAmount(fund, amount, wasNew)
   }
 
   // Abandon an inline amount edit (Escape). A brand-new enable reverts to off;

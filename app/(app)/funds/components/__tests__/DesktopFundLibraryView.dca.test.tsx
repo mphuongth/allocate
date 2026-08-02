@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { Mock } from 'vitest'
 import { useState } from 'react'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import DesktopFundLibraryView from '../DesktopFundLibraryView'
 import type { Fund } from '../useFundsData'
+import { useFundsBusy } from './helpers/fundsBusy'
 
 // next-intl → return the key (and append params) so assertions stay language-agnostic.
 vi.mock('next-intl', () => ({
@@ -40,6 +41,7 @@ function Harness({ initial, reload }: { initial: Fund[]; reload: () => Promise<v
   const [funds, setFunds] = useState(initial)
   return (
     <DesktopFundLibraryView
+      {...useFundsBusy()}
       funds={funds}
       setFunds={setFunds}
       goals={[]}
@@ -101,6 +103,85 @@ describe('DesktopFundLibraryView — DCA amount edit must not desync from the se
     expect(screen.getByLabelText('enableDca')).toBeInTheDocument()
     expect(screen.queryByTestId('dca-amount-btn-f1')).not.toBeInTheDocument()
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  // Same assertion as the mobile spec: after a failed edit both viewports must
+  // still show the configuration the server kept, not "DCA off" (#590).
+  it('a failed edit of a saved amount leaves the row enabled at its previous amount', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 500, json: () => Promise.resolve({}) })
+    render(<Harness initial={[makeFund({ is_dca: true, dca_monthly_amount_vnd: 2_000_000 })]} reload={reload} />)
+
+    await userEvent.click(screen.getByTestId('dca-amount-btn-f1'))
+    const input = screen.getByTestId('dca-amount-input-f1')
+    await userEvent.clear(input)
+    await userEvent.type(input, '3000000')
+    fireEvent.blur(input)
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+    await waitFor(() => expect(screen.getByLabelText('disableDca')).toBeInTheDocument())
+    expect(screen.getByTestId('dca-amount-btn-f1')).toHaveTextContent('2000000')
+    expect(reload).not.toHaveBeenCalled()
+  })
+
+  it('a failed first save of a just-enabled DCA leaves the row off', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 500, json: () => Promise.resolve({}) })
+    render(<Harness initial={[makeFund({ is_dca: false })]} reload={reload} />)
+
+    await userEvent.click(screen.getByLabelText('enableDca'))
+    const input = screen.getByTestId('dca-amount-input-f1')
+    await userEvent.type(input, '3000000')
+    fireEvent.blur(input)
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+    await waitFor(() => expect(screen.getByLabelText('enableDca')).toBeInTheDocument())
+    expect(screen.queryByTestId('dca-amount-btn-f1')).not.toBeInTheDocument()
+  })
+
+  // The "brand-new enable" flag is single, shared editor state, so a pending
+  // enable must never outlive its editor — otherwise a later save of that row
+  // would roll back to a locally-enabled state the server never had (#590
+  // review). Moving to another row blurs the pending input, which reverts it.
+  it('a pending enable does not survive moving to another row', async () => {
+    render(
+      <Harness
+        initial={[makeFund({ is_dca: false }), makeFund({ id: 'f2', code: 'VESAF', is_dca: true, dca_monthly_amount_vnd: 2_000_000 })]}
+        reload={reload}
+      />,
+    )
+
+    await userEvent.click(within(screen.getByTestId('fund-row-f1')).getByLabelText('enableDca'))
+    await userEvent.click(screen.getByTestId('dca-amount-btn-f2'))
+
+    // f1 is back off — no half-enabled row is left behind, and nothing was PUT.
+    expect(within(screen.getByTestId('fund-row-f1')).getByLabelText('enableDca')).toBeInTheDocument()
+    expect(screen.queryByTestId('dca-amount-btn-f1')).not.toBeInTheDocument()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  // Two saves of the same amount must not overlap: stacked writes make each
+  // one's rollback target the other's optimistic value instead of what the
+  // server holds, and the row keeps an amount that was never persisted (#590
+  // review). The row is busy until the first save settles.
+  it('does not let a second amount save stack on one still in flight', async () => {
+    fetchMock.mockReturnValue(new Promise(() => {}))
+    render(<Harness initial={[makeFund({ is_dca: true, dca_monthly_amount_vnd: 2_000_000 })]} reload={reload} />)
+
+    await userEvent.click(screen.getByTestId('dca-amount-btn-f1'))
+    const input = screen.getByTestId('dca-amount-input-f1')
+    await userEvent.clear(input)
+    await userEvent.type(input, '3000000')
+    fireEvent.blur(input)
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+    const amountBtn = screen.getByTestId('dca-amount-btn-f1')
+    expect(amountBtn).toBeDisabled()
+    await userEvent.click(amountBtn)
+    expect(screen.queryByTestId('dca-amount-input-f1')).not.toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    // The goal write is a full PUT carrying the amount, so it waits too — it
+    // would otherwise persist the still-unconfirmed amount and reload it (#590
+    // review).
+    expect(screen.getByTestId('dca-goal-f1')).toBeDisabled()
   })
 
   it('a valid amount edit still persists with a PUT (is_dca true) and reloads', async () => {

@@ -4,6 +4,7 @@ import { render, screen, within, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import MobileFundLibraryView from '../MobileFundLibraryView'
 import type { Fund } from '../useFundsData'
+import { useFundsBusy } from './helpers/fundsBusy'
 
 // Presence/render + filter coverage for the mobile Funds list. Moved off E2E per
 // the test-layering policy. The header add/refresh actions live in the mobile top
@@ -50,6 +51,7 @@ function Harness({ initial }: { initial: Fund[] }) {
   const [funds, setFunds] = useState(initial)
   return (
     <MobileFundLibraryView
+      {...useFundsBusy()}
       funds={funds}
       setFunds={setFunds}
       goals={[]}

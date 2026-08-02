@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useFundMutations } from '../useFundMutations'
 import type { Fund } from '../useFundsData'
+import { useFundsBusy } from './helpers/fundsBusy'
 
 // The desktop and mobile fund libraries each carried their own copy of these
 // mutations, down to the optimistic update and its rollback, and the copies had
@@ -25,7 +26,14 @@ const FUND: Fund = {
   updated_at: '',
 }
 
-function setup(fetchImpl: (url: string, init?: RequestInit) => { ok: boolean; status?: number }) {
+type FetchResult = { ok: boolean; status?: number }
+
+function setup(
+  // May return a pending promise, so a test can hold one request open while
+  // another completes.
+  fetchImpl: (url: string, init?: RequestInit) => FetchResult | Promise<FetchResult>,
+  initial: Fund = FUND,
+) {
   const requests: Array<{ url: string; method: string; body: Record<string, unknown> | undefined }> = []
   vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
     requests.push({
@@ -33,18 +41,20 @@ function setup(fetchImpl: (url: string, init?: RequestInit) => { ok: boolean; st
       method: init?.method ?? 'GET',
       body: init?.body ? JSON.parse(init.body as string) : undefined,
     })
-    const { ok, status } = fetchImpl(url, init)
+    const { ok, status } = await fetchImpl(url, init)
     return { ok, status: status ?? (ok ? 200 : 500) }
   }))
 
-  let funds: Fund[] = [FUND]
+  let funds: Fund[] = [initial]
   const setFunds = vi.fn((update: Fund[] | ((prev: Fund[]) => Fund[])) => {
     funds = typeof update === 'function' ? update(funds) : update
   })
   const reload = vi.fn(async () => {})
   const notify = vi.fn()
 
-  const { result } = renderHook(() => useFundMutations({ setFunds, reload, notify }))
+  // The busy set lives in FundLibraryClient so both views share it (#590); the
+  // hook is handed it, exactly as a view hands it down.
+  const { result } = renderHook(() => useFundMutations({ setFunds, reload, notify, ...useFundsBusy() }))
   return { result, requests, reload, notify, current: () => funds[0] }
 }
 
@@ -91,10 +101,75 @@ describe('useFundMutations — saving the DCA amount', () => {
     expect(reload).toHaveBeenCalled()
   })
 
-  it('reverts DCA to off when the save fails', async () => {
+  // A failed save must leave the row showing what the server still has, not a
+  // blanket "DCA off" — the previous rollback lied about an untouched
+  // configuration after any transient error (#590).
+  it('restores the previously saved amount and goal when editing fails', async () => {
     const { result, notify, current } = setup(fails)
 
     await act(async () => { await result.current.saveDcaAmount(FUND, 2_000_000) })
+
+    expect(current()).toMatchObject({
+      is_dca: true,
+      dca_monthly_amount_vnd: 1_000_000,
+      dca_goal_id: 'goal-1',
+    })
+    expect(notify).toHaveBeenCalledWith('toastDcaFailed', false)
+  })
+
+  // The goal selector stays live while an amount save is in flight, so the two
+  // writes can overlap. The amount rollback must stay out of the goal: rolling
+  // back to the goal this save captured would undo a goal change the server
+  // already accepted (#590 review).
+  it('leaves a goal that changed mid-flight alone when the amount save fails', async () => {
+    let failAmountSave = () => {}
+    const amountSave = new Promise<{ ok: boolean; status: number }>((resolve) => {
+      failAmountSave = () => resolve({ ok: false, status: 500 })
+    })
+    const { result, current } = setup((_url, init) => {
+      const body = JSON.parse(init!.body as string)
+      return body.dca_goal_id === 'goal-2' ? { ok: true } : amountSave
+    })
+
+    let saving: Promise<void> | undefined
+    act(() => { saving = result.current.saveDcaAmount(FUND, 2_000_000) })
+    // The goal write lands, and reloads, while the amount is still in flight.
+    await act(async () => { await result.current.setDcaGoal({ ...FUND, dca_monthly_amount_vnd: 2_000_000 }, 'goal-2') })
+    await act(async () => { failAmountSave(); await saving })
+
+    expect(current()).toMatchObject({ dca_goal_id: 'goal-2', is_dca: true, dca_monthly_amount_vnd: 1_000_000 })
+  })
+
+  // Both viewports stay mounted and share the funds state, so a disable can
+  // land while an amount save is still in flight. The late rollback must not
+  // resurrect the amount over it — its optimistic write is no longer what the
+  // row holds, so there is nothing of its own left to undo (#590 review).
+  it('skips the rollback when a later mutation already moved the fund', async () => {
+    let failAmountSave = () => {}
+    const amountSave = new Promise<{ ok: boolean; status: number }>((resolve) => {
+      failAmountSave = () => resolve({ ok: false, status: 500 })
+    })
+    const { result, current } = setup((_url, init) => {
+      const body = JSON.parse(init!.body as string)
+      return body.is_dca === false ? { ok: true } : amountSave
+    })
+
+    let saving: Promise<void> | undefined
+    act(() => { saving = result.current.saveDcaAmount(FUND, 2_000_000) })
+    // The other viewport turns DCA off, and the server accepts it.
+    await act(async () => { await result.current.disableDca({ ...FUND, dca_monthly_amount_vnd: 2_000_000 }) })
+    await act(async () => { failAmountSave(); await saving })
+
+    expect(current()).toMatchObject({ is_dca: false, dca_monthly_amount_vnd: null })
+  })
+
+  // A brand-new enable has nothing persisted behind it: the view flipped
+  // `is_dca` on locally when the editor opened, so the state to restore is off.
+  it('reverts to off when the first save of a new enable fails', async () => {
+    const enabling: Fund = { ...FUND, is_dca: true, dca_monthly_amount_vnd: null, dca_goal_id: null }
+    const { result, notify, current } = setup(fails, enabling)
+
+    await act(async () => { await result.current.saveDcaAmount(enabling, 2_000_000, true) })
 
     expect(current()).toMatchObject({ is_dca: false, dca_monthly_amount_vnd: null })
     expect(notify).toHaveBeenCalledWith('toastDcaFailed', false)
@@ -161,7 +236,7 @@ describe('useFundMutations — deleting', () => {
     const setFunds = vi.fn()
     const reload = vi.fn(async () => {})
     const notify = vi.fn()
-    const { result } = renderHook(() => useFundMutations({ setFunds, reload, notify }))
+    const { result } = renderHook(() => useFundMutations({ setFunds, reload, notify, ...useFundsBusy() }))
 
     let outcome: string | undefined
     await act(async () => { outcome = await result.current.deleteFund(FUND) })

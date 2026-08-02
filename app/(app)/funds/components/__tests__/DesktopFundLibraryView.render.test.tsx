@@ -4,6 +4,7 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import DesktopFundLibraryView from '../DesktopFundLibraryView'
 import type { Fund } from '../useFundsData'
+import { useFundsBusy } from './helpers/fundsBusy'
 
 // Presence/render + filter coverage for the desktop Funds table. Moved off E2E
 // (each spun a browser, duplicated the mobile view) per the test-layering policy.
@@ -45,6 +46,7 @@ function Harness({ initial }: { initial: Fund[] }) {
   const [funds, setFunds] = useState(initial)
   return (
     <DesktopFundLibraryView
+      {...useFundsBusy()}
       funds={funds}
       setFunds={setFunds}
       goals={[]}

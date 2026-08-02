@@ -13,7 +13,7 @@ import { SyncPill } from '@/app/components/ui/SyncPill'
 import { useDialogA11y } from '@/app/(app)/planning/components/useDialogA11y'
 import { FundsEmptyState } from './FundsEmptyState'
 import { FundNavAge } from './FundNavAge'
-import type { Fund, Goal, FundType, FundsData } from './useFundsData'
+import type { Fund, Goal, FundType, FundsData, FundsBusy } from './useFundsData'
 import { useFundMutations } from './useFundMutations'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -254,12 +254,17 @@ function DcaToggle({ fund, editId, editValue, toggling, goals, goalLabel, unallo
         ) : (
           <button
             data-testid={`dca-amount-btn-${fund.id}`}
+            // Busy until the save settles: a second amount write stacked on the
+            // first leaves each rollback aiming at the other's optimistic value
+            // rather than at what the server holds (#590).
+            disabled={toggling}
             onClick={e => { e.stopPropagation(); onEditStart() }}
             style={{
               fontSize: 11, fontWeight: 500, padding: '2px 8px',
+              opacity: toggling ? 0.5 : 1,
               background: 'var(--c-navy-tint)', color: 'var(--c-navy)',
               border: '1px solid var(--c-navy-tint)', borderRadius: 6,
-              cursor: 'pointer', fontFamily: 'inherit',
+              cursor: toggling ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
             }}
           >
             {fund.dca_monthly_amount_vnd ? fmtCompact(fund.dca_monthly_amount_vnd) : t('setAmount')}
@@ -306,7 +311,7 @@ function FormField({ label, children }: { label: string; children: ReactNode }) 
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function DesktopFundLibraryView({ funds, setFunds, goals, loading, error, reload }: FundsData) {
+export default function DesktopFundLibraryView({ funds, setFunds, goals, loading, error, reload, togglingIds: busyIds, setTogglingIds }: FundsData & FundsBusy) {
   const t = useTranslations('funds')
   const tc = useTranslations('common')
   const locale = useLocale()
@@ -355,7 +360,7 @@ export default function DesktopFundLibraryView({ funds, setFunds, goals, loading
   // and busy-id bookkeeping all live in one place. Only the toast shape differs
   // between the two, which is why it is injected (#573).
   const { togglingIds, disableDca, saveDcaAmount, setDcaGoal, deleteFund } =
-    useFundMutations({ setFunds, reload, notify: addToast })
+    useFundMutations({ setFunds, reload, notify: addToast, togglingIds: busyIds, setTogglingIds })
 
   // Sorting
   const handleSort = (key: SortKey) => {
@@ -462,9 +467,12 @@ export default function DesktopFundLibraryView({ funds, setFunds, goals, loading
       setDcaEditIsNew(false)
       return
     }
+    // Captured before the flag is cleared: it decides what a failed save rolls
+    // back to — off for a never-persisted enable, the saved amount otherwise.
+    const wasNew = dcaEditIsNew
     setDcaEditId(null)
     setDcaEditIsNew(false)
-    await saveDcaAmount(fund, amount)
+    await saveDcaAmount(fund, amount, wasNew)
   }
 
   async function handleSetDcaGoal(fund: Fund, goalId: string | null) {
