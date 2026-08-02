@@ -30,6 +30,15 @@ describe('classifyFailure', () => {
   })
 
   it('classifies a webServer that never came up as infra', () => {
+    // Playwright words this several ways; all of them mention config.webServer.
+    expect(
+      classifyFailure({ message: 'Timed out waiting 120000ms from config.webServer.' }),
+    ).toBe('infra')
+    expect(
+      classifyFailure({
+        message: 'Process from config.webServer was not able to start. Exit code: 1',
+      }),
+    ).toBe('infra')
     expect(
       classifyFailure({
         message: 'Timed out waiting 120000ms from config.webServer to start at http://localhost:3000',

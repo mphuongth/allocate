@@ -46,8 +46,10 @@ const INFRA_PATTERNS: RegExp[] = [
   /service unavailable/i,
   /gateway timeout/i,
   /bad gateway/i,
-  // The app server never came up at all
-  /from config\.webServer to start/i,
+  // The app server never came up at all. Playwright words this several ways
+  // ("Timed out waiting … from config.webServer.", "Process from
+  // config.webServer was not able to start."), so match the config key itself.
+  /config\.webServer/i,
   // Browser / worker died under us
   /browser has been closed/i,
   /browser closed unexpectedly/i,

@@ -1,4 +1,10 @@
-import type { Reporter, TestCase, TestResult, FullResult } from '@playwright/test/reporter'
+import type {
+  Reporter,
+  TestCase,
+  TestResult,
+  TestError,
+  FullResult,
+} from '@playwright/test/reporter'
 import { summarizeFailures, type FailureInput } from '../helpers/failureClass'
 import { checkSmokeBudget, SMOKE_BUDGET_MS } from '../helpers/lanes'
 
@@ -40,14 +46,29 @@ class LaneReporter implements Reporter {
     })
   }
 
+  /**
+   * Global errors never reach `onTestEnd` — a webServer that won't start, a
+   * config that won't load, a worker that died before any test ran. Without
+   * this, exactly the failure the infra classifier is best at spotting would be
+   * missing from the summary.
+   */
+  onError(error: TestError) {
+    this.failures.push({
+      title: 'global error (no test)',
+      status: 'failed',
+      message: [error.message, error.stack, error.value].filter(Boolean).join('\n'),
+    })
+  }
+
   onEnd(result: FullResult) {
-    // Nothing ran — e.g. `playwright test --list`. Stay quiet.
+    // Nothing ran and nothing failed — e.g. `playwright test --list`. Stay quiet.
     if (this.finished === 0 && this.failures.length === 0) return
 
     const durationMs = Date.now() - this.startedAt
     const lines: string[] = ['', `E2E lane: ${this.lane} — ${formatDuration(durationMs)}`]
 
-    if (this.lane === 'smoke') {
+    // A run that never got as far as a test says nothing about the budget.
+    if (this.lane === 'smoke' && this.finished > 0) {
       const verdict = checkSmokeBudget(durationMs)
       lines.push(
         verdict.withinBudget
