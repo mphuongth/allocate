@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { Mock } from 'vitest'
 import { useState } from 'react'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import MobileFundLibraryView from '../MobileFundLibraryView'
 import type { Fund } from '../useFundsData'
@@ -118,6 +118,26 @@ describe('MobileFundLibraryView — DCA amount edit must not desync from the ser
     await waitFor(() => expect(fetchMock).toHaveBeenCalled())
     await waitFor(() => expect(screen.getByLabelText('enableDca')).toBeInTheDocument())
     expect(screen.queryByTestId('dca-amount-btn-f1')).not.toBeInTheDocument()
+  })
+
+  // The "brand-new enable" flag is single, shared editor state, so a pending
+  // enable must never outlive its editor — otherwise a later save of that card
+  // would roll back to a locally-enabled state the server never had (#590
+  // review). Moving to another card blurs the pending input, which reverts it.
+  it('a pending enable does not survive moving to another card', async () => {
+    render(
+      <Harness
+        initial={[makeFund({ is_dca: false }), makeFund({ id: 'f2', code: 'VESAF', is_dca: true, dca_monthly_amount_vnd: 2_000_000 })]}
+        reload={reload}
+      />,
+    )
+
+    await userEvent.click(within(screen.getByTestId('fund-card-f1')).getByLabelText('enableDca'))
+    await userEvent.click(screen.getByTestId('dca-amount-btn-f2'))
+
+    expect(within(screen.getByTestId('fund-card-f1')).getByLabelText('enableDca')).toBeInTheDocument()
+    expect(screen.queryByTestId('dca-amount-btn-f1')).not.toBeInTheDocument()
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('a valid amount edit still persists with a PUT (is_dca true) and reloads', async () => {
