@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validateBankCode, validateDate, validateEnum, validateNotes, validateRate, validateUUID } from '@/lib/validation'
 import { readJsonBody } from '@/lib/apiBody'
 import { isFutureInvestmentDate } from '@/lib/dates'
+import { subtypeResetFields } from '@/lib/assetTypeFields'
 
 const ASSET_TYPES = ['fund', 'bank', 'stock', 'gold'] as const
 
@@ -145,6 +146,19 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     .single()
   if (!existing) return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
 
+  const changesAssetType = Boolean(cleanAssetType && existing.asset_type && cleanAssetType !== existing.asset_type)
+
+  // A book is a group of bank tranches sharing a goal, a maturity and a bank.
+  // Converting one row out of `bank` would leave its siblings describing a
+  // deposit that no longer exists — and the book RPC has no asset_type argument,
+  // so the change would silently do nothing. Refuse it instead (#593).
+  if (existing.deposit_group_id && changesAssetType) {
+    return NextResponse.json(
+      { error: 'An accumulating deposit book cannot be changed to another asset type.', code: 'book_type_change' },
+      { status: 400 },
+    )
+  }
+
   if (existing.deposit_group_id) {
     const { data: row, error: bookErr } = await supabase
       .rpc('update_deposit_book', {
@@ -167,6 +181,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   }
 
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
+  // A type change drops the previous subtype's columns FIRST, so anything the
+  // request restates for the new type overwrites the null below and anything it
+  // omits is genuinely gone (#593). Without this the row kept contradictory
+  // metadata — a "fund" holding still carrying a maturity and a bank code.
+  if (changesAssetType && cleanAssetType) {
+    Object.assign(updates, subtypeResetFields(existing.asset_type, cleanAssetType))
+  }
   if (goal_id !== undefined) updates.goal_id = cleanGoalId
   if (cleanAssetType) updates.asset_type = cleanAssetType
   if (cleanInvestmentDate) updates.investment_date = cleanInvestmentDate
