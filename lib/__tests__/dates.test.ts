@@ -4,6 +4,7 @@ import {
   todayIso,
   businessYearMonth,
   businessTodayDate,
+  monthsUntilYm,
   daysUntilIso,
   isFutureInvestmentDate,
 } from '../dates'
@@ -68,6 +69,36 @@ describe('businessYearMonth', () => {
   it('defaults to the current instant', () => {
     vi.setSystemTime(VN_0030)
     expect(businessYearMonth()).toEqual({ year: 2026, month: 6 })
+  })
+})
+
+describe('monthsUntilYm', () => {
+  // One helper for the goal-deadline horizon that CreateGoalSheet,
+  // calcDeadlineMonths and the desktop goal editor each used to compute inline.
+  const JUNE = new Date('2026-06-14T03:00:00Z') // 10:00 in Vietnam
+
+  it('counts whole months to a future target', () => {
+    expect(monthsUntilYm('2026-12', JUNE)).toBe(6)
+    expect(monthsUntilYm('2027-06', JUNE)).toBe(12)
+  })
+
+  it('floors at 1 for the current or a past month', () => {
+    expect(monthsUntilYm('2026-06', JUNE)).toBe(1)
+    expect(monthsUntilYm('2025-01', JUNE)).toBe(1)
+  })
+
+  it('accepts a full YYYY-MM-DD target (the day is irrelevant)', () => {
+    expect(monthsUntilYm('2026-12-31', JUNE)).toBe(6)
+  })
+
+  it('measures from the Vietnam month at 00:30 on the 1st, not the previous UTC one', () => {
+    // 1 Jun 2026, 00:30 in Vietnam — still 31 May by the UTC clock, which would
+    // stretch every horizon by a month.
+    expect(monthsUntilYm('2026-12', new Date('2026-05-31T17:30:00Z'))).toBe(6)
+  })
+
+  it('falls back to 1 for an unparseable target', () => {
+    expect(monthsUntilYm('', JUNE)).toBe(1)
   })
 })
 

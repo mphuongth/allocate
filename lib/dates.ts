@@ -39,6 +39,16 @@ export function businessYearMonth(now: Date = new Date()): { year: number; month
   return { year, month }
 }
 
+// Whole months from the business month until a `YYYY-MM` target, floored at 1 —
+// the horizon a goal's monthly contribution is spread over. Floored because a
+// target in the current or a past month still needs one month to save into.
+export function monthsUntilYm(ym: string, now: Date = new Date()): number {
+  const [y, m] = ym.split('-').map(Number)
+  if (!y || !m) return 1
+  const { year, month } = businessYearMonth(now)
+  return Math.max(1, (y - year) * 12 + (m - month))
+}
+
 // The business day as a Date at *local* midnight, for the date arithmetic that
 // still runs on Date objects (e.g. stepping a premium anniversary forward a
 // year). Only the date parts are meaningful — never read a time off it.

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Check, Shield, X } from 'lucide-react'
 import { fmtCompact } from '@/lib/formatters'
 import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
+import { todayIso } from '@/lib/dates'
 import type { InsuranceData } from '../DashboardClient'
 
 interface Props {
@@ -17,18 +18,13 @@ interface Props {
   settle?: boolean
 }
 
-function todayLocalISO(): string {
-  const n = new Date()
-  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
-}
-
 export default function LogInsurancePaymentModal({ open, onClose, onSaved, ins, locale, settle = false }: Props) {
   const isVi = locale === 'vi'
   // In settle mode you're paying the whole annual premium; otherwise suggest a
   // single monthly contribution.
   const suggested = ins ? (settle ? ins.annualPremium : Math.round(ins.annualPremium / 12)) : 0
   const [amount, setAmount] = useState('')
-  const [date, setDate] = useState(todayLocalISO)
+  const [date, setDate] = useState(() => todayIso())
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -36,7 +32,7 @@ export default function LogInsurancePaymentModal({ open, onClose, onSaved, ins, 
   useEffect(() => {
     if (open) {
       setAmount('')
-      setDate(todayLocalISO())
+      setDate(todayIso())
       setSubmitting(false)
       setDone(false)
       setError(null)

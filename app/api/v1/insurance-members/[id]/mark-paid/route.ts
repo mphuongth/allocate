@@ -38,6 +38,10 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   // date other than today. Defaults to the business day (Asia/Ho_Chi_Minh) when
   // absent: the server clock is UTC, which between 00:00 and 06:59 Vietnam time
   // would settle the premium against the previous date (#591).
+  // The one place the clock is aliased: `updated_at`, the value read back for the
+  // response, and the audit line must all name the *same* instant. That's a UTC
+  // timestamp, not a business date — the business date is derived from it below.
+  // eslint-disable-next-line no-restricted-syntax
   const now = new Date()
   let paidISO = todayIso(now)
   // Optional: no body at all is the documented "paid today" case. A body that is

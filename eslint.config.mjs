@@ -58,6 +58,17 @@ const eslintConfig = defineConfig([
           selector: "CallExpression[callee.object.type='NewExpression'][callee.object.callee.name='Date'][callee.object.arguments.length=0][callee.property.name=/^(getMonth|getFullYear|getDate)$/]",
           message: "Don't derive a business date/month from the runtime's local zone — use todayIso()/businessYearMonth() from lib/dates.",
         },
+        {
+          // The two selectors above only see the direct form. Aliasing the clock
+          // first (`const now = new Date(); now.getMonth()`) reads identically to
+          // reading parts off a *parsed* date, which is legitimate — so the alias
+          // itself is what gets rejected, and the author has to say which they
+          // meant. A genuine timestamp is `new Date().toISOString()` inline, or
+          // this rule disabled with a note (see mark-paid, which needs one instant
+          // shared across updated_at and its audit line).
+          selector: "VariableDeclarator[init.type='NewExpression'][init.callee.name='Date'][init.arguments.length=0]",
+          message: "Don't alias the current clock — a business date/month comes from lib/dates (todayIso, businessYearMonth); a UTC timestamp is `new Date().toISOString()` inline.",
+        },
       ],
     },
   },

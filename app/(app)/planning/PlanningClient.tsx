@@ -8,6 +8,7 @@ import { useNavigation } from '@/app/components/navigation/NavigationContext'
 import MobilePlanningView from './components/MobilePlanningView'
 import DesktopPlanningView from './components/DesktopPlanningView'
 import { useAdoptCacheOnce } from '@/lib/useHydrated'
+import { businessYearMonth } from '@/lib/dates'
 
 export interface MonthlyPlan {
   id: string
@@ -130,9 +131,10 @@ export default function PlanningClient() {
   const isVI = locale === 'vi'
   const { setMobileTopBar } = useNavigation()
   const MONTHS = t('months').split(',')
-  const now = new Date()
-  const initialMonth = now.getMonth() + 1
-  const initialYear = now.getFullYear()
+  // The plan opens on the *business* month (see lib/dates) — deriving it from the
+  // browser's local zone put a user abroad, or one loading the page between 00:00
+  // and 06:59 Vietnam time in a UTC browser, on the wrong month's plan (#591).
+  const { year: initialYear, month: initialMonth } = businessYearMonth()
   // Start where the server starts. These used to seed from getPlanCache(), but a
   // useState initialiser runs during the *hydration* render and the server has no
   // localStorage — so a warm cache made the client render the real cards over
@@ -308,9 +310,9 @@ export default function PlanningClient() {
   }, [month, year])
 
   const navigateToday = useCallback(() => {
-    const now = new Date()
-    setMonth(now.getMonth() + 1)
-    setYear(now.getFullYear())
+    const { year, month } = businessYearMonth()
+    setMonth(month)
+    setYear(year)
   }, [])
 
   useEffect(() => {
