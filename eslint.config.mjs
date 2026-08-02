@@ -38,6 +38,47 @@ const eslintConfig = defineConfig([
       "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
     },
   },
+  // Business dates come from lib/dates, never from UTC or the runtime's local
+  // zone (#591). Between 00:00 and 06:59 Vietnam time the UTC calendar date is
+  // still yesterday, so `new Date().toISOString().slice(0, 10)` recorded the
+  // wrong business day; `new Date().getMonth()` has the mirror problem of
+  // depending on where the code runs. This keeps them from creeping back.
+  // (`new Date().toISOString()` on its own is fine — that's a UTC *timestamp*,
+  // which is exactly what `updated_at` and friends want.)
+  {
+    files: ["app/**/*.{ts,tsx}", "lib/**/*.{ts,tsx}", "components/**/*.{ts,tsx}"],
+    ignores: ["lib/dates.ts", "**/__tests__/**"],
+    rules: {
+      "no-restricted-syntax": ["error",
+        {
+          selector: "MemberExpression[object.callee.property.name='toISOString'][object.callee.object.type='NewExpression'][object.callee.object.callee.name='Date'][object.callee.object.arguments.length=0][property.name=/^(slice|split)$/]",
+          message: "Don't derive a business date from the UTC date — use todayIso() from lib/dates.",
+        },
+        {
+          selector: "CallExpression[callee.object.type='NewExpression'][callee.object.callee.name='Date'][callee.object.arguments.length=0][callee.property.name=/^(getMonth|getFullYear|getDate)$/]",
+          message: "Don't derive a business date/month from the runtime's local zone — use todayIso()/businessYearMonth() from lib/dates.",
+        },
+        {
+          // Displayed dates drift the same way: without an explicit timeZone,
+          // toLocaleDateString reads the renderer's clock, so a PDF built on the
+          // UTC server printed yesterday under a filename that said today.
+          selector: "CallExpression[callee.object.type='NewExpression'][callee.object.callee.name='Date'][callee.object.arguments.length=0][callee.property.name=/^(toLocaleDateString|toLocaleString)$/]",
+          message: "Don't format today's date in the renderer's zone — use formatBusinessDate() from lib/dates.",
+        },
+        {
+          // The three selectors above only see the direct form. Aliasing the clock
+          // first (`const now = new Date(); now.getMonth()`) reads identically to
+          // reading parts off a *parsed* date, which is legitimate — so the alias
+          // itself is what gets rejected, and the author has to say which they
+          // meant. A genuine timestamp is `new Date().toISOString()` inline, or
+          // this rule disabled with a note (see mark-paid, which needs one instant
+          // shared across updated_at and its audit line).
+          selector: "VariableDeclarator[init.type='NewExpression'][init.callee.name='Date'][init.arguments.length=0]",
+          message: "Don't alias the current clock — a business date/month comes from lib/dates (todayIso, businessYearMonth); a UTC timestamp is `new Date().toISOString()` inline.",
+        },
+      ],
+    },
+  },
 ]);
 
 export default eslintConfig;

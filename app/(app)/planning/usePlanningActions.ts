@@ -1,4 +1,5 @@
 import { toast } from 'sonner'
+import { todayIso } from '@/lib/dates'
 import type { GoalItem, GoalRow } from '@/lib/planning'
 import type { EditableTransaction, PrefillTransaction } from '@/app/assets/components/AddTransactionSheet'
 import type { BookTopUpTarget } from '@/app/assets/components/RecurringBookTopUpSheet'
@@ -23,7 +24,7 @@ export function buildBuyEdit(
   return {
     transaction_id: inv.transaction_id,
     asset_type: 'fund',
-    investment_date: inv.investment_date ?? new Date().toISOString().slice(0, 10),
+    investment_date: inv.investment_date ?? todayIso(),
     amount_vnd: inv.amount_vnd,
     unit_price: inv.unit_price,
     units: inv.units,
@@ -45,7 +46,7 @@ export function buildContributionPrefill(
   return {
     goal_id: entry.isUnallocated ? null : entry.goalId,
     plan_id: planId,
-    investment_date: new Date().toISOString().slice(0, 10),
+    investment_date: todayIso(),
     ...prefill,
   }
 }
@@ -198,7 +199,7 @@ export function usePlanningActions(ctx: PlanningActionsCtx) {
           const dep = await res.json()
           const isBookAnchor = dep.deposit_group_id && dep.deposit_group_id === dep.transaction_id
           if (isBookAnchor) {
-            const matured = dep.expiry_date && dep.expiry_date < new Date().toISOString().slice(0, 10)
+            const matured = dep.expiry_date && dep.expiry_date < todayIso()
             if (matured) {
               onToast(isVI ? 'Sổ đã đáo hạn — hãy xử lý đáo hạn trước.' : 'This book has matured — handle its maturity first.')
               return { kind: 'matured' }

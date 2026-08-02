@@ -4,6 +4,7 @@
 // its own.
 import { RefreshCw, PiggyBank, GitMerge, ArrowDownRight, ArrowUpRight, type LucideIcon } from 'lucide-react'
 import { txKind, type TxKind, type TxKindFields } from './transactionUtils'
+import { monthsUntilYm, businessYearMonth } from '@/lib/dates'
 
 export interface HistoryRowDescriptor {
   kind: TxKind
@@ -37,9 +38,7 @@ export function describeHistoryRow(
 
 export function calcDeadlineMonths(targetDate: string | null): number {
   if (!targetDate) return 12
-  const [ty, tm] = targetDate.split('-').map(Number)
-  const now = new Date()
-  return Math.max(1, (ty - now.getFullYear()) * 12 + (tm - 1 - now.getMonth()))
+  return monthsUntilYm(targetDate)
 }
 
 export interface GoalCalculator {
@@ -73,8 +72,9 @@ export function computeGoalCalculator(
   // exist in the target month — 31 February rolls into March — and the user is then
   // told a month later than their pace actually reaches the goal. Only bites on the
   // 29th-31st, which is why it survived this long.
+  // Counted forward from the *business* month, not the browser's local one (#591).
   const projectedDate = monthsToGoal != null
-    ? (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth() + monthsToGoal, 1) })()
+    ? (() => { const { year, month } = businessYearMonth(); return new Date(year, month - 1 + monthsToGoal, 1) })()
     : null
   const isOnTrack = input > 0 && input >= neededPerMonth
   const gap = Math.abs(neededPerMonth - input)

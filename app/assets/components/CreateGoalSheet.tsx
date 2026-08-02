@@ -8,6 +8,7 @@ import { fmt } from '@/lib/formatters'
 import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
 import { CairnLoader } from '@/app/components/ui/CairnLoader'
 import { useDialogMount, useResetOnOpen } from '@/app/(app)/planning/components/useDialogMount'
+import { monthsUntilYm } from '@/lib/dates'
 
 interface Props {
   open: boolean
@@ -26,12 +27,6 @@ const GOAL_ICONS = [
 
 const PRIORITY_KEYS = ['low', 'med', 'high'] as const
 type PriorityKey = typeof PRIORITY_KEYS[number]
-
-function monthsUntil(ym: string): number {
-  const [y, m] = ym.split('-').map(Number)
-  const now = new Date()
-  return Math.max(1, (y - now.getFullYear()) * 12 + (m - 1 - now.getMonth()))
-}
 
 export function CreateGoalSheet({ open, onClose, onSuccess, desktop }: Props) {
   const tg = useTranslations('goals')
@@ -61,9 +56,9 @@ export function CreateGoalSheet({ open, onClose, onSuccess, desktop }: Props) {
   const perMonth = (() => {
     const amount = Number(target)
     if (!amount || !targetDate) return null
-    return Math.round(amount / monthsUntil(targetDate))
+    return Math.round(amount / monthsUntilYm(targetDate))
   })()
-  const months = targetDate ? monthsUntil(targetDate) : null
+  const months = targetDate ? monthsUntilYm(targetDate) : null
 
   async function handleSave() {
     if (!name.trim()) { setError(tg('nameRequired')); return }

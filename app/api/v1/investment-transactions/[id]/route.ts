@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validateBankCode, validateDate, validateEnum, validateNotes, validateRate, validateUUID } from '@/lib/validation'
 import { readJsonBody } from '@/lib/apiBody'
+import { isFutureInvestmentDate } from '@/lib/dates'
 
 const ASSET_TYPES = ['fund', 'bank', 'stock', 'gold'] as const
 
@@ -101,7 +102,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     throw e
   }
 
-  if (cleanInvestmentDate && new Date(cleanInvestmentDate) > new Date()) {
+  // The same business-day check POST uses. Comparing `new Date(date) > new Date()`
+  // parsed the plain date at UTC midnight, so between 00:00 and 06:59 Vietnam time
+  // an edit was refused for the very date creation had just accepted (#591).
+  if (cleanInvestmentDate && isFutureInvestmentDate(cleanInvestmentDate)) {
     return NextResponse.json({ error: 'Investment date cannot be in the future.' }, { status: 400 })
   }
 

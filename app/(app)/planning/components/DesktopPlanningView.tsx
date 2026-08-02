@@ -24,6 +24,7 @@ import { usePlanningDerivations } from '../usePlanningDerivations'
 import { usePlanningActions, buildBuyEdit, buildContributionPrefill } from '../usePlanningActions'
 import { saveIncome, deletePlan, saveOtherExpense } from '../planActions'
 import { relationshipLabel } from '@/app/assets/components/insuranceShared'
+import { businessYearMonth } from '@/lib/dates'
 import type {
   MonthlyPlan, FundInvestment, DirectSaving, FixedExpense,
   InsuranceMember, OtherExpense, RecurringSaving, RecurringSavingOverride, RecurringFulfillment, DcaSkip, Fund, Goal,
@@ -130,8 +131,8 @@ export default function DesktopPlanningView({
   const longMonths  = isVI ? LONG_MONTHS_VI  : LONG_MONTHS_EN
   const monthLabel  = `${longMonths[month - 1]} ${year}`
   const shortLabel  = `${shortMonths[month - 1]} ${year}`
-  const todayD      = new Date()
-  const isCurrentMonth = month === todayD.getMonth() + 1 && year === todayD.getFullYear()
+  const today       = businessYearMonth()
+  const isCurrentMonth = month === today.month && year === today.year
 
   // ── API handlers ──
   // Skip/restore/override/record actions are shared with the mobile view via

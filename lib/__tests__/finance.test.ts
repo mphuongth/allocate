@@ -281,3 +281,49 @@ describe('insurancePaidYear', () => {
     expect(insurancePaidYear('2026-05-29T00:00:00+00:00')).toBe(2026)
   })
 })
+
+// Between 00:00 and 06:59 Vietnam time the UTC calendar date is still yesterday,
+// so a UTC- or server-local-derived "now" assigns the wrong business month/year.
+// These pin the boundary instants that used to drift (#591).
+describe('business-day boundaries (Asia/Ho_Chi_Minh)', () => {
+  afterEach(() => vi.useRealTimers())
+
+  it('realizes the new month at 00:30 Vietnam time on the 1st', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-05-31T17:30:00Z')) // 1 Jun 2026, 00:30 in VN
+    expect(isPlanMonthRealized(2026, 6)).toBe(true)
+    expect(isPlanMonthRealized(2026, 7)).toBe(false)
+  })
+
+  it('realizes the new year at 00:30 Vietnam time on 1 January', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2025-12-31T17:30:00Z')) // 1 Jan 2026, 00:30 in VN
+    expect(isPlanMonthRealized(2026, 1)).toBe(true)
+    expect(isPlanMonthRealized(2025, 12)).toBe(true)
+    expect(isPlanMonthRealized(2026, 2)).toBe(false)
+  })
+
+  it('holds the month across the 06:59 → 07:00 UTC-date rollover', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-05-31T23:59:00Z')) // 1 Jun 2026, 06:59 in VN
+    expect(isPlanMonthRealized(2026, 6)).toBe(true)
+    vi.setSystemTime(new Date('2026-06-01T00:00:00Z')) // 1 Jun 2026, 07:00 in VN
+    expect(isPlanMonthRealized(2026, 6)).toBe(true)
+  })
+
+  it('counts a 1 January payment as the current year at 00:30 Vietnam time', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2025-12-31T17:30:00Z')) // 1 Jan 2026, 00:30 in VN
+    expect(insurancePaidYear('2026-01-01')).toBe(2026)
+  })
+
+  it('reads a premium that came due yesterday as overdue at 00:30 Vietnam time', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-06-14T17:30:00Z')) // 15 Jun 2026, 00:30 in VN
+    // Anniversary fell on 14 Jun 2026 — yesterday in Vietnam, but still "today"
+    // by the UTC clock, which read it as merely upcoming.
+    expect(insuranceStatus('2025-06-14')).toBe('overdue')
+    // The one falling today is due, not yet missed.
+    expect(insuranceStatus('2025-06-15')).toBe('upcoming')
+  })
+})

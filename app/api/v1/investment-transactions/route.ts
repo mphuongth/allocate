@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validateBankCode, validateDate, validateEnum, validateNotes, validatePositiveIntParam, validateRate, validateUUID } from '@/lib/validation'
-import { isFutureInvestmentDate } from '@/lib/dates'
+import { isFutureInvestmentDate, todayIso } from '@/lib/dates'
 import { readJsonBody } from '@/lib/apiBody'
 
 const ASSET_TYPES = ['fund', 'bank', 'stock', 'gold'] as const
@@ -327,7 +327,7 @@ export async function POST(request: NextRequest) {
     // A matured book is closed: a new tranche dated today would sit past the
     // book's maturity and accrue zero interest (capped at expiry) — i.e. money
     // silently into a dead book. Block it.
-    if (anchor.expiry_date && anchor.expiry_date < new Date().toISOString().slice(0, 10)) {
+    if (anchor.expiry_date && anchor.expiry_date < todayIso()) {
       return NextResponse.json({ error: 'Cannot top up a deposit that has already matured.' }, { status: 400 })
     }
     depositGroupId = anchor.deposit_group_id

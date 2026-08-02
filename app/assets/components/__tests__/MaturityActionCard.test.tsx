@@ -3,12 +3,14 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import MaturityActionCard from '../MaturityActionCard'
 import type { InvRow } from '../goalDetailShared'
+import { todayIso, addDaysIso } from '@/lib/dates'
 
+// Built on the BUSINESS calendar, because that is what daysUntil/fmtMaturity
+// measure against. Deriving these from the runtime's local clock made every
+// maturity assertion off by one whenever the runner's date differed from
+// Vietnam's — on a UTC runner, that is 17:00–23:59 every day (#591).
 function daysFromNow(n: number): string {
-  const d = new Date()
-  d.setHours(0, 0, 0, 0)
-  d.setDate(d.getDate() + n)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return addDaysIso(todayIso(), n)
 }
 
 const mk = (over: Partial<InvRow>): InvRow => ({

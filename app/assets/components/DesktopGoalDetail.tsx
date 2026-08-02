@@ -21,6 +21,7 @@ import { SellWithdrawSheet } from './SellWithdrawSheet'
 import { invToSellItem } from './invToSellItem'
 import { useTranslations } from 'next-intl'
 import { useResetOnOpen, useResetOnChange } from '@/app/(app)/planning/components/useDialogMount'
+import { monthsUntilYm } from '@/lib/dates'
 
 interface Props {
   goal: GoalData
@@ -878,12 +879,7 @@ function EditGoalModal({ open, onClose, goal, onSaved, isVi }: {
     setError('')
   }, goal)
 
-  const monthsTo = (() => {
-    if (!date) return 1
-    const [y, m] = date.split('-').map(Number)
-    const now = new Date()
-    return Math.max(1, (y - now.getFullYear()) * 12 + (m - 1 - now.getMonth()))
-  })()
+  const monthsTo = date ? monthsUntilYm(date) : 1
   const perMonth = target ? Number(target) / monthsTo : 0
 
   async function handleSave() {

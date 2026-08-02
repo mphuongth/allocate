@@ -5,13 +5,15 @@ import { fmtMaturity } from '../goalDetailMaturity'
 import { calcDeadlineMonths, computeGoalCalculator, describeHistoryRow } from '../goalDetailModel'
 import type { FundBreakdownItem } from '../../DashboardClient'
 import { ArrowUpRight, ArrowDownRight, PiggyBank, GitMerge, RefreshCw } from 'lucide-react'
+import { todayIso, addDaysIso } from '@/lib/dates'
 
 // A YYYY-MM-DD string `n` days from today (deterministic regardless of run date).
+// Built on the BUSINESS calendar, because that is what daysUntil/fmtMaturity
+// measure against. Deriving these from the runtime's local clock made every
+// maturity assertion off by one whenever the runner's date differed from
+// Vietnam's — on a UTC runner, that is 17:00–23:59 every day (#591).
 function daysFromNow(n: number): string {
-  const d = new Date()
-  d.setHours(0, 0, 0, 0)
-  d.setDate(d.getDate() + n)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return addDaysIso(todayIso(), n)
 }
 
 const baseTx = (over: Partial<GoalDetailTx>): GoalDetailTx => ({
@@ -339,7 +341,7 @@ describe('computeGoalCalculator', () => {
 
     it('lands in February when seven months from 31 July', () => {
       vi.useFakeTimers()
-      vi.setSystemTime(new Date(2026, 6, 31, 12))   // 31 July 2026
+      vi.setSystemTime(new Date('2026-07-31T05:00:00Z'))   // 31 July 2026, 12:00 in Vietnam
 
       const c = computeGoalCalculator({ targetAmount: 7_000_000, targetDate: null, currentValue: 0 }, 1_000_000)
 
@@ -350,7 +352,7 @@ describe('computeGoalCalculator', () => {
 
     it('lands in the next month when one month from 31 January', () => {
       vi.useFakeTimers()
-      vi.setSystemTime(new Date(2026, 0, 31, 12))   // 31 January 2026
+      vi.setSystemTime(new Date('2026-01-31T05:00:00Z'))   // 31 January 2026, 12:00 in Vietnam
 
       const c = computeGoalCalculator({ targetAmount: 1_000_000, targetDate: null, currentValue: 0 }, 1_000_000)
 

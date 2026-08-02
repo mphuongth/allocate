@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateUUID, validateDate } from '@/lib/validation'
 import { readJsonBody } from '@/lib/apiBody'
+import { todayIso } from '@/lib/dates'
 
 function err(status: number, code: string, message: string) {
   return NextResponse.json({ error: code, message }, { status })
@@ -34,9 +35,15 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   if (member.user_id !== user.id) return err(403, 'FORBIDDEN', "You don't have permission to mark this payment")
 
   // Optional payment date from the body — when the user records the payment on a
-  // date other than today. Defaults to today when absent.
+  // date other than today. Defaults to the business day (Asia/Ho_Chi_Minh) when
+  // absent: the server clock is UTC, which between 00:00 and 06:59 Vietnam time
+  // would settle the premium against the previous date (#591).
+  // The one place the clock is aliased: `updated_at`, the value read back for the
+  // response, and the audit line must all name the *same* instant. That's a UTC
+  // timestamp, not a business date — the business date is derived from it below.
+  // eslint-disable-next-line no-restricted-syntax
   const now = new Date()
-  let paidISO = now.toISOString().split('T')[0]
+  let paidISO = todayIso(now)
   // Optional: no body at all is the documented "paid today" case. A body that is
   // present but unparseable is a client mistake, and used to be swallowed into
   // that same default rather than reported (#566).

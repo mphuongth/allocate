@@ -8,6 +8,8 @@
 // app/assets/components/MaturityResolveSheet.tsx. See also `fmtMaturity` in
 // goalDetailShared.tsx for the display formatting.
 
+import { daysUntilIso } from './dates'
+
 // Surface a deposit as "needs attention" once it is within this many days of
 // maturity (in addition to already-matured ones). A week of lead time lets the
 // user decide (renew / withdraw) before the deposit actually matures.
@@ -53,14 +55,11 @@ export function isMaturityActionable(state: MaturityState): boolean {
   return state === 'matured' || state === 'maturing'
 }
 
-// Whole days from today until the given YYYY-MM-DD date (negative once past).
-// Mirrors the diffDays computation in fmtMaturity so the two never diverge.
+// Whole days from the business day until the given YYYY-MM-DD date (negative
+// once past). fmtMaturity computes diffDays through the same helper so the two
+// never diverge.
 export function daysUntil(isoDate: string): number {
-  const d = new Date(isoDate + 'T00:00:00')
-  if (isNaN(d.getTime())) return NaN
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  return Math.round((d.getTime() - today.getTime()) / 86_400_000)
+  return daysUntilIso(isoDate)
 }
 
 // Whether a non-fund holding is a term deposit that needs a decision right now
@@ -86,20 +85,9 @@ export function isActionableAccumulatingBook(
   return isMaturityActionable(depositMaturityState(daysUntil(it.expiryDate)))
 }
 
-const pad = (n: number) => String(n).padStart(2, '0')
-
-// Add `n` whole months to a YYYY-MM-DD date, keeping the day of month but
-// clamping to the last valid day when the target month is shorter (so
-// 31 Jan + 1 month → 28 Feb rather than rolling into March). Computed in UTC
-// from the date parts to stay timezone-independent.
-export function addMonths(isoDate: string, n: number): string {
-  const [y, m, d] = isoDate.split('-').map(Number)
-  const target = new Date(Date.UTC(y, m - 1 + n, 1))
-  const year = target.getUTCFullYear()
-  const month = target.getUTCMonth()
-  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
-  return `${year}-${pad(month + 1)}-${pad(Math.min(d, lastDay))}`
-}
+// Plain-date month arithmetic now lives with the other plain-date helpers in
+// lib/dates; re-exported here so the maturity call sites keep one import.
+export { addMonths } from './dates'
 
 // Whole months between two YYYY-MM-DD dates (the count of complete months from
 // `fromIso` to `toIso`). Used to derive a deposit's original term length from

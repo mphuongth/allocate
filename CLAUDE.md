@@ -41,6 +41,23 @@ path that recomputes the same value. Close the loop: action → assert the rende
 But "rendered outcome" usually means a component test asserting the rendered DOM from props —
 not a full E2E. Reach for E2E only when the loop itself crosses the network/DB boundary.
 
+## Business dates — one timezone, one helper
+
+The app has exactly **one business timezone: `Asia/Ho_Chi_Minh` (UTC+7)**. Every
+"today", "current month", and plain-date comparison is derived in that zone, wherever
+the code runs — a browser in any timezone, a Vercel function in UTC, a cron job.
+
+Use `lib/dates`: `todayIso()`, `businessYearMonth()`, `businessTodayDate()`,
+`daysUntilIso()`. Never derive a business date from UTC
+(`new Date().toISOString().slice(0, 10)`) or from the runtime's local zone
+(`new Date().getMonth()`) — between 00:00 and 06:59 Vietnam time the UTC date is still
+*yesterday*, which recorded transactions on the wrong day and filed contributions under
+the wrong month (#591). An eslint `no-restricted-syntax` rule blocks both idioms in
+`app/`, `lib/`, and `components/`.
+
+`new Date().toISOString()` on its own is fine and correct for *timestamps*
+(`updated_at`, `created_at`) — those are instants, not business dates.
+
 ## What to run before opening a PR
 
 E2E was removed from CI (PR #313) and runs **locally only** — so local checks are

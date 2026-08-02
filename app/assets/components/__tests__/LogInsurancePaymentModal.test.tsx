@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import LogInsurancePaymentModal from '../LogInsurancePaymentModal'
 import type { InsuranceData } from '../../DashboardClient'
+import { todayIso } from '@/lib/dates'
 
 const ins: InsuranceData = {
   insuranceId: 'ins-1',
@@ -23,7 +24,10 @@ beforeEach(() => {
 })
 
 describe('LogInsurancePaymentModal (issue #223)', () => {
-  it('posts the amount and the local saved_date', async () => {
+  // The date defaults to the business day (Asia/Ho_Chi_Minh), not the browser's
+  // local one — otherwise a contribution logged abroad, or in a UTC browser
+  // between 00:00 and 06:59 Vietnam time, is filed under the wrong day (#591).
+  it('posts the amount and the business saved_date', async () => {
     render(<LogInsurancePaymentModal open ins={ins} locale="en" onClose={vi.fn()} onSaved={vi.fn()} />)
 
     await userEvent.type(screen.getByRole('textbox'), '1500000')
@@ -35,8 +39,7 @@ describe('LogInsurancePaymentModal (issue #223)', () => {
     const body = JSON.parse((init as RequestInit).body as string)
     expect(body.amount_saved_vnd).toBe(1_500_000)
 
-    const now = new Date()
-    const expected = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    const expected = todayIso()
     expect(body.saved_date).toBe(expected)
   })
 })
@@ -66,8 +69,7 @@ describe('LogInsurancePaymentModal — settle mode', () => {
     expect(url).toBe('/api/v1/insurance-members/ins-1/mark-paid')
     expect((init as RequestInit).method).toBe('POST')
     const body = JSON.parse((init as RequestInit).body as string)
-    const now = new Date()
-    const expected = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    const expected = todayIso()
     expect(body.paid_date).toBe(expected)
   })
 })

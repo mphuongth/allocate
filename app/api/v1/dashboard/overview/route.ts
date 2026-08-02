@@ -5,6 +5,7 @@ import { buildWithdrawalMaps } from '@/lib/withdrawalProgress'
 import { heldForMergeContributions } from '@/lib/heldForMerge'
 import { valueNonFundHolding } from '@/lib/depositValuation'
 import { shouldWriteSnapshot } from '@/lib/snapshots'
+import { todayIso } from '@/lib/dates'
 
 export const dynamic = 'force-dynamic'
 
@@ -61,9 +62,11 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // Today's date (server local) — used both to read the existing snapshot below
-  // and to upsert it at the end.
-  const today = new Date().toISOString().split('T')[0]
+  // The business day (Asia/Ho_Chi_Minh, see lib/dates) — used both to read the
+  // existing snapshot below and to upsert it at the end. Derived in that zone,
+  // not from the server's UTC clock, or a snapshot taken between 00:00 and 06:59
+  // Vietnam time would be filed under the previous day (#591).
+  const today = todayIso()
   // Pin interest accrual to UTC midnight so the displayed networth is stable
   // across multiple API calls within the same day. Using Date.now() makes
   // calcProjectedInterest return a slightly different value every millisecond —
