@@ -40,7 +40,7 @@ test('add button is visible on funds page', async ({ page }) => {
 
 // ─── Sheet open / close ──────────────────────────────────────────────────────
 
-test('clicking the add button opens Add transaction sheet', async ({ page }) => {
+test('clicking the add button opens Add transaction sheet', { tag: '@smoke' }, async ({ page }) => {
   await page.goto('/dashboard')
   await page.waitForLoadState('networkidle')
   await page.getByRole('button', { name: /add transaction/i }).click()

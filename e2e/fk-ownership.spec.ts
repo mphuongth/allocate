@@ -32,14 +32,14 @@ test.describe('FK ownership enforcement (#474)', () => {
   })
 
   // ---- investment-transactions: fund_id ------------------------------------
-  test('POST /api/v1/investment-transactions rejects a cross-user fund_id (403)', async ({ request }) => {
+  test('POST /api/v1/investment-transactions rejects a cross-user fund_id (403)', { tag: '@smoke' }, async ({ request }) => {
     const res = await request.post('/api/v1/investment-transactions', {
       data: { asset_type: 'fund', fund_id: foreign.fundId, amount_vnd: 1_000_000, investment_date: '2026-01-01', unit_price: 20000, units: 50 },
     })
     expect(res.status()).toBe(403)
   })
 
-  test('POST /api/v1/investment-transactions accepts the caller’s own fund_id', async ({ request }) => {
+  test('POST /api/v1/investment-transactions accepts the caller’s own fund_id', { tag: '@smoke' }, async ({ request }) => {
     const res = await request.post('/api/v1/investment-transactions', {
       data: { asset_type: 'fund', fund_id: ownFundId, amount_vnd: 1_000_000, investment_date: '2026-01-01', unit_price: 20000, units: 50, notes: 'E2E own-fund FK' },
     })
@@ -205,7 +205,7 @@ test.describe('FK ownership enforcement — plan-scoped and user-scoped (#525)',
     expect(res.status()).toBe(403)
   })
 
-  test('recurring-savings rejects a cross-user goal_id (403)', async ({ request }) => {
+  test('recurring-savings rejects a cross-user goal_id (403)', { tag: '@smoke' }, async ({ request }) => {
     const res = await request.post('/api/v1/recurring-savings', {
       data: { name: `E2E FK Recurring ${Date.now()}`, amount_vnd: 1_000_000, goal_id: foreign.goalId },
     })
@@ -231,7 +231,7 @@ test.describe('FK ownership enforcement — plan-scoped and user-scoped (#525)',
   })
 
   // The same guard must not get in the way of a legitimate write.
-  test('a plan override against the caller’s own record still succeeds', async ({ request }) => {
+  test('a plan override against the caller’s own record still succeeds', { tag: '@smoke' }, async ({ request }) => {
     const member = await api.createInsuranceMember({
       member_name: `E2E FK Own Member ${Date.now()}`,
       relationship: 'self',

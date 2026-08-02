@@ -60,8 +60,9 @@ the wrong month (#591). An eslint `no-restricted-syntax` rule blocks both idioms
 
 ## What to run before opening a PR
 
-E2E was removed from CI (PR #313) and runs **locally only** — so local checks are
-the only automated gate before the Vercel preview. Scale the checks to the change:
+CI runs unit tests plus the **E2E smoke lane** (~19 `@smoke` tests, ~3 min, against a
+local Supabase stack started in the runner — #595). The **full** suite still runs
+locally and nightly, never on the PR path. Scale the checks to the change:
 
 - **Always:** `npm run typecheck`, `npm test -- --run` (Vitest unit tests), and
   `npm run lint`. Fast, every PR. Don't skip the typecheck because the tests are
@@ -72,13 +73,16 @@ the only automated gate before the Vercel preview. Scale the checks to the chang
 - **Targeted E2E** — when the change touches a feature area, run that area's specs,
   e.g. `npx playwright test e2e/planning.spec.ts --project=chromium`. This is the
   common case.
+- **Smoke lane** (`npm run test:e2e:smoke`, ~3 min) — the same lane CI runs on the PR.
+  Cheap way to catch a break before pushing.
 - **Full E2E** (`npm run test:e2e`, ~8 min serial) — before merging anything broad or
   risky: auth, layout, the dashboard overview API, shared components, a DB migration,
   or env/config changes. Also run it after touching E2E selectors / DOM attributes /
   i18n strings (grep `e2e/` for the old value first).
 
 Keep the local Supabase stack running for the session so spec runs are instant — see
-[Running E2E locally](README.md#running-e2e-locally). A few specs key off the current
+[docs/e2e.md](docs/e2e.md) for lanes, tagging, the smoke budget, and the infra-vs-product
+failure classification. A few specs key off the current
 real date (e.g. planning's June-2026 fixtures), so they can fail as the calendar moves
 — unrelated to your change.
 

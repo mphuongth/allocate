@@ -45,13 +45,13 @@ async function gotoFreshDashboard(page: Page) {
   ])
 }
 
-test('dashboard page loads with main layout', async ({ page }) => {
+test('dashboard page loads with main layout', { tag: '@smoke' }, async ({ page }) => {
   await page.goto('/dashboard')
   await expect(page.locator('nav, [role="navigation"]').first()).toBeVisible()
   await expect(page).toHaveURL(/dashboard/)
 })
 
-test('dashboard shows net worth card when data exists', async ({ page }) => {
+test('dashboard shows net worth card when data exists', { tag: '@smoke' }, async ({ page }) => {
   await page.goto('/dashboard')
   await page.waitForLoadState('networkidle')
   // Net worth card shows the net worth or total assets label in EN or VI
@@ -148,7 +148,7 @@ test('assign unallocated fund to a goal via action sheet', async ({ page }) => {
   await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 8_000 })
 })
 
-test('sell unallocated fund via action sheet', async ({ page }) => {
+test('sell unallocated fund via action sheet', { tag: '@smoke' }, async ({ page }) => {
   const fund = await api.createFund({ name: 'E2E Test Fund', code: 'E2ETESTFUND', fund_type: 'equity', nav: 10000 })
   cleanup.add(() => api.deleteFund(fund.id))
 

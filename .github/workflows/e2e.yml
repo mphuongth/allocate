@@ -1,0 +1,97 @@
+name: E2E
+
+# Playwright lanes (#595).
+#
+#   smoke — ~19 high-value tests (auth, cross-user ownership, API validation,
+#           the core transaction flow, one maturity/merge money path, the report
+#           download, navigation). Called by CI on every pull request.
+#   full  — the whole suite (~258 tests, ~7.6 min serial). Runs nightly and on
+#           demand, never on the PR path.
+#
+# Both lanes run against a **local Supabase stack started inside the runner**,
+# not the shared test project. That project is a NANO instance whose Disk IO
+# budget could not sustain the suite (throttled, ~72 min, cascading failures),
+# which is why E2E was pulled from CI in the first place (#313). A per-run local
+# stack is isolated, fast, and free — and the production guard in
+# e2e/helpers/guard.ts still refuses to run against production either way.
+
+on:
+  workflow_call:
+    inputs:
+      lane:
+        description: 'smoke or full'
+        type: string
+        default: full
+  workflow_dispatch:
+    inputs:
+      lane:
+        description: 'Which lane to run'
+        type: choice
+        options: [full, smoke]
+        default: full
+  schedule:
+    # 18:00 UTC = 01:00 Asia/Ho_Chi_Minh — the nightly full-suite run.
+    - cron: '0 18 * * *'
+
+jobs:
+  e2e:
+    name: E2E (${{ inputs.lane || 'full' }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      LANE: ${{ inputs.lane || 'full' }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - uses: supabase/setup-cli@v2
+        with:
+          version: latest
+
+      - name: Start a local Supabase stack
+        run: supabase start
+
+      - name: Point the app and the E2E setup at the local stack
+        # `supabase status -o env` prints the local stack's URL and keys. These
+        # are the CLI's well-known local development keys — not secrets.
+        run: |
+          eval "$(supabase status -o env)"
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
+            echo "E2E_SUPABASE_URL=$API_URL"
+            echo "E2E_SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
+          } >> "$GITHUB_ENV"
+
+      - name: Build the app
+        run: npm run build
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run the ${{ inputs.lane || 'full' }} lane
+        run: |
+          if [ "$LANE" = "smoke" ]; then
+            npm run test:e2e:smoke
+          else
+            npm run test:e2e
+          fi
+
+      - name: Upload the Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ inputs.lane || 'full' }}
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

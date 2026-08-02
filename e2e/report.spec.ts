@@ -23,7 +23,7 @@ test.describe('PDF Report download', () => {
     await expect(exportBtn(page)).toBeVisible({ timeout: 5_000 })
   })
 
-  test('clicking the button downloads a PDF file with the correct filename', async ({ page }) => {
+  test('clicking the button downloads a PDF file with the correct filename', { tag: '@smoke' }, async ({ page }) => {
     await reportBtn(page).click()
     await expect(exportBtn(page)).toBeVisible({ timeout: 5_000 })
     const [download] = await Promise.all([

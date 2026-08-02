@@ -47,7 +47,7 @@ test('login page h1 says Welcome back', async ({ page }) => {
 
 // ─── Login behaviour ────────────────────────────────────────────────────────
 
-test('valid login redirects to /dashboard', async ({ page }) => {
+test('valid login redirects to /dashboard', { tag: '@smoke' }, async ({ page }) => {
   const { email, password } = getTestCredentials()
   await page.goto('/auth/login')
   await page.locator('#email').fill(email)
@@ -57,7 +57,7 @@ test('valid login redirects to /dashboard', async ({ page }) => {
   await expect(page).toHaveURL(/dashboard/)
 })
 
-test('wrong password shows error and stays on login page', async ({ page }) => {
+test('wrong password shows error and stays on login page', { tag: '@smoke' }, async ({ page }) => {
   const { email } = getTestCredentials()
   await page.goto('/auth/login')
   await page.locator('#email').fill(email)
@@ -67,7 +67,7 @@ test('wrong password shows error and stays on login page', async ({ page }) => {
   await expect(page).toHaveURL(/auth\/login/)
 })
 
-test('unauthenticated access to /dashboard redirects to /auth/login', async ({ page }) => {
+test('unauthenticated access to /dashboard redirects to /auth/login', { tag: '@smoke' }, async ({ page }) => {
   await page.goto('/dashboard')
   await page.waitForURL('**/auth/login', { timeout: 10_000 })
   await expect(page).toHaveURL(/auth\/login/)
@@ -79,7 +79,7 @@ test('unauthenticated access to /dashboard redirects to /auth/login', async ({ p
 // "Invalid Refresh Token: Refresh Token Not Found", and a soft router.push()
 // after sign-in bounced straight back to /auth/login — the button stuck on
 // "redirecting", never reaching Overview. See fix in app/auth/login/page.tsx.
-test('login succeeds even when a stale/invalid session cookie is present', async ({ page }) => {
+test('login succeeds even when a stale/invalid session cookie is present', { tag: '@smoke' }, async ({ page }) => {
   const adminUrl = process.env.E2E_SUPABASE_URL
   const serviceRoleKey = process.env.E2E_SUPABASE_SERVICE_ROLE_KEY
   test.skip(!adminUrl || !serviceRoleKey, 'requires E2E Supabase admin credentials')
