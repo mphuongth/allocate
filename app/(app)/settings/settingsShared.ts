@@ -178,8 +178,9 @@ export function formatLastSync(
   return isVI ? `${days} ngày trước` : `${days}d ago`
 }
 
-// Prefetch the dashboard overview for the report sheet. Returns null on any
-// failure (the export path re-fetches and surfaces the error itself).
+// Prefetch the dashboard overview for the report sheet's KPI summary. Returns
+// null on any failure — the numbers are a preview, and the export itself no
+// longer depends on them (the server derives the PDF's figures itself).
 export async function fetchOverview(): Promise<DashboardData | null> {
   try {
     const res = await fetch('/api/v1/dashboard/overview', { cache: 'no-store' })
@@ -189,17 +190,11 @@ export async function fetchOverview(): Promise<DashboardData | null> {
   }
 }
 
-// Export the portfolio PDF, reusing the prefetched overview when available.
-export async function exportPortfolioReport(
-  overviewCache: DashboardData | null,
-  locale: string,
-): Promise<void> {
-  let data = overviewCache
-  if (!data) {
-    const res = await fetch('/api/v1/dashboard/overview', { cache: 'no-store' })
-    if (!res.ok) throw new Error('Failed to load portfolio data')
-    data = await res.json()
-  }
+// Export the portfolio PDF. Nothing is sent but the locale: the endpoint reads
+// the caller's holdings itself, so there is no overview to fetch or forward —
+// which is also what stops a client dictating the report's contents or its size
+// (#594).
+export async function exportPortfolioReport(locale: string): Promise<void> {
   const { downloadPortfolioPDF } = await import('@/lib/generateReport')
-  await downloadPortfolioPDF(data!, locale)
+  await downloadPortfolioPDF(locale)
 }

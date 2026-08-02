@@ -30,6 +30,7 @@ export type JsonBodyResult<T> =
   | { ok: false; response: NextResponse }
 
 const badRequest = (error: string) => NextResponse.json({ error }, { status: 400 })
+const tooLarge = () => NextResponse.json({ error: 'Request body too large' }, { status: 413 })
 
 // "Nothing but whitespace" by JSON's definition, which is only space, tab, LF
 // and CR. `String.trim()` uses the much wider Unicode set, so it would call a
@@ -45,8 +46,26 @@ export async function readJsonBody<T = JsonBody>(
    * sending something broken are different mistakes, and only the second is the
    * client's, so an absent body yields `{}` while a malformed one is still a 400.
    */
-  { optional = false }: { optional?: boolean } = {},
+  {
+    optional = false,
+    /**
+     * Upper bound, in UTF-8 bytes, on the body this route will accept. Routes
+     * whose body is a couple of scalars should set one: the PDF report endpoint
+     * takes only a locale but triggers an expensive server-side render, so a
+     * huge payload is refused with a 413 instead of being parsed first (#594).
+     * Unset means unbounded, which is the pre-existing behaviour everywhere else.
+     */
+    maxBytes,
+  }: { optional?: boolean; maxBytes?: number } = {},
 ): Promise<JsonBodyResult<T>> {
+  // Content-Length is the only chance to refuse before the body is in memory.
+  // It is a client-supplied claim, so the decoded text is measured again below —
+  // this check is an optimisation, not the limit itself.
+  if (maxBytes != null) {
+    const declared = Number(request.headers.get('content-length'))
+    if (Number.isFinite(declared) && declared > maxBytes) return { ok: false, response: tooLarge() }
+  }
+
   // Read as text rather than calling `.json()`, so "empty" is distinguishable
   // from "unparseable" instead of both arriving as the same SyntaxError.
   let raw: string
@@ -54,6 +73,14 @@ export async function readJsonBody<T = JsonBody>(
     raw = await request.text()
   } catch {
     return { ok: false, response: badRequest('Request body could not be read') }
+  }
+
+  // Bytes, not characters: a Vietnamese body is ~3 bytes per character, and the
+  // cap is stated in bytes. `raw.length` first so the encode is skipped for the
+  // overwhelmingly common small body (chars ≤ bytes, so a body under the cap in
+  // characters may still be over it in bytes — hence the encode when it isn't).
+  if (maxBytes != null && raw.length > maxBytes / 4) {
+    if (new TextEncoder().encode(raw).length > maxBytes) return { ok: false, response: tooLarge() }
   }
 
   if (JSON_BLANK.test(raw)) {

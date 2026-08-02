@@ -471,8 +471,10 @@ export default function DashboardClient({ userId }: { userId: string }) {
     if (!data || isGeneratingReport) return
     setIsGeneratingReport(true)
     try {
+      // `data` gates the button (nothing to export on an empty account) but is
+      // not sent — the endpoint derives the report from the user's holdings.
       const { downloadPortfolioPDF } = await import('@/lib/generateReport')
-      await downloadPortfolioPDF(data, locale)
+      await downloadPortfolioPDF(locale)
     } finally {
       setIsGeneratingReport(false)
     }

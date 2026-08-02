@@ -103,4 +103,54 @@ describe('readJsonBody', () => {
       expect(payload, body).toEqual({ error: 'Request body must be a JSON object' })
     }
   })
+
+  // A route whose body is a handful of scalars has no reason to accept a
+  // megabyte of JSON. The PDF report endpoint sets a very small cap because the
+  // work it triggers is expensive and its body carries nothing but a locale
+  // (#594) — an oversized payload is refused before it is parsed.
+  describe('maxBytes', () => {
+    const read = (body: BodyInit | null, maxBytes: number) =>
+      readJsonBody(post(body), { maxBytes })
+
+    it('accepts a body within the cap', async () => {
+      expect(await read('{"locale":"vi"}', 256)).toEqual({ ok: true, body: { locale: 'vi' } })
+    })
+
+    it('rejects an oversized body with 413', async () => {
+      const result = await read(JSON.stringify({ pad: 'x'.repeat(500) }), 256)
+      expect(result.ok).toBe(false)
+      if (!result.ok) {
+        expect(result.response.status).toBe(413)
+        expect(await result.response.json()).toEqual({ error: 'Request body too large' })
+      }
+    })
+
+    // Content-Length is the only chance to refuse a huge body BEFORE reading it
+    // into memory, so a lying-small header must not become a way past the cap:
+    // the decoded text is measured too.
+    it('rejects an oversized body whose Content-Length is missing or understated', async () => {
+      const oversized = JSON.stringify({ pad: 'x'.repeat(500) })
+      const request = new Request('http://localhost/api/v1/report', {
+        method: 'POST',
+        body: oversized,
+        headers: { 'Content-Length': '12' },
+      })
+      const result = await readJsonBody(request, { maxBytes: 256 })
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.response.status).toBe(413)
+    })
+
+    // Byte length, not character count: 100 Vietnamese characters are ~300 UTF-8
+    // bytes, and the cap is expressed in bytes.
+    it('measures bytes rather than characters', async () => {
+      const result = await read(JSON.stringify({ note: 'đ'.repeat(200) }), 256)
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.response.status).toBe(413)
+    })
+
+    it('combines with optional bodies', async () => {
+      expect(await readJsonBody(post(null), { optional: true, maxBytes: 256 }))
+        .toEqual({ ok: true, body: {} })
+    })
+  })
 })
