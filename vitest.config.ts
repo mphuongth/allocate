@@ -28,6 +28,10 @@ export default defineConfig({
         'lib/**/*.{ts,tsx}',
         'components/**/*.{ts,tsx}',
         'i18n/**/*.{ts,tsx}',
+        // The Next.js middleware — auth redirects, session refresh, CSP. It's
+        // the only application source at the repo root, and it runs on every
+        // page navigation, so it belongs in the report like any route.
+        'proxy.ts',
       ],
       exclude: [
         '**/__tests__/**',
@@ -48,7 +52,7 @@ export default defineConfig({
       // guard the money paths the audit called out — raise them as tests land,
       // never lower them to make a red build green.
       thresholds: {
-        // Repo-wide floor, measured 2026-08-03 at 61.13 / 57.99 / 59.68 / 64.51.
+        // Repo-wide floor, measured 2026-08-03 at 60.88 / 57.91 / 59.38 / 64.22.
         statements: 60,
         branches: 56,
         functions: 58,
