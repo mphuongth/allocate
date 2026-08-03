@@ -1187,6 +1187,7 @@ begin;
 do $$
 declare
   v_user uuid; v_goal uuid; v_goal2 uuid; v_fund uuid; v_fund2 uuid;
+  v_goal3 uuid; v_fund3 uuid; v_dep2 uuid; v_dep3 uuid; v_wd2 uuid;
   v_buy uuid; v_buy2 uuid; v_buy3 uuid; v_dep uuid;
 begin
   insert into auth.users (id, email) values (gen_random_uuid(), 'fundkeyed@test.invalid') returning id into v_user;
@@ -1308,6 +1309,51 @@ begin
 
   -- Deleting the FUND out from under the same legacy row is fine too.
   delete from public.funds where id = v_fund2;
+
+  -- The same shape assembled from the OTHER end: the child's trigger cannot see a
+  -- statement that only touches the parent, and PUT lets a holding change its asset
+  -- type (#593) — so a bank deposit with a withdrawal on it could be edited into a
+  -- fund purchase and the withdrawal woke up parented to a fund. The parent is asked
+  -- the question now.
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Converted') returning goal_id into v_goal3;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Convert Fund', 'CNVF', 'equity', 25000) returning id into v_fund3;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
+  values (v_user, v_goal3, 'bank', 'investment', '2026-01-01', 2000000) returning transaction_id into v_dep2;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn)
+  values (v_user, v_goal3, 'bank', 'withdrawal', '2026-02-01', 400000, v_dep2, 400000)
+  returning transaction_id into v_wd2;
+
+  begin
+    update public.investment_transactions
+       set asset_type = 'fund', fund_id = v_fund3, units = 50, unit_price = 40000
+     where transaction_id = v_dep2;
+    raise exception 'a holding must not become a fund purchase under a withdrawal that is not fund-keyed';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- Removing the withdrawal is what unblocks it: the guard is about the shape the
+  -- edit would create, not about the edit.
+  delete from public.investment_transactions where transaction_id = v_wd2;
+  update public.investment_transactions
+     set asset_type = 'fund', fund_id = v_fund3, units = 50, unit_price = 40000
+   where transaction_id = v_dep2;
+
+  -- A child that carries its OWN fund draws on that bucket whatever its parent is,
+  -- so it never blocks the conversion. (Dual-key sell: legal, the fund branch wins.)
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
+  values (v_user, v_goal3, 'bank', 'investment', '2026-01-01', 5000000) returning transaction_id into v_dep3;
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, units_withdrawn, principal_withdrawn)
+  values (v_user, v_goal3, v_fund3, 'fund', 'withdrawal', '2026-02-01', 250000, v_dep3, 10, 400000);
+
+  update public.investment_transactions
+     set asset_type = 'fund', fund_id = v_fund3, units = 100, unit_price = 50000
+   where transaction_id = v_dep3;
 
   raise notice 'a fund sale must be keyed by its fund: ok';
 end;
