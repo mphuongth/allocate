@@ -13,19 +13,24 @@
 -- writer — and it brings the rows already in the ledger into the total instead of
 -- leaving them to a backfill nobody can time.
 --
--- Only ONE branch of the view changes: 'parent_is_a_fund_purchase' told an
--- operator the row's principal "no valuation offsets", which is now false and
--- would invite a manual repair that subtracts the same money twice. Everything
--- else is copied verbatim from 20260730000003 (a view has to be re-stated whole).
+-- What changes here, and why:
 --
--- Deliberately NOT changed: the proportional checks still measure a fund bucket by
--- its fund-keyed sells alone. A fund-parented row whose units are derived is
--- proportional BY CONSTRUCTION (units = purchase units x principal / purchase
--- cost), so folding it in would only ever compare the derivation with itself; and
--- one that does record units is already named, by the check above, for review.
--- The overdraw checks need no change either: `holding_overdrawn` already measures
--- every parent-backed draw against the purchase it names, which is exactly the
--- bound the reader caps the derived units at.
+--   • fund_sells now aggregates BOTH shapes into the bucket each draws on, and
+--     `parents` stops counting a fund-parented row against the purchase row. One
+--     claim, one balance: without this, a 50-unit purchase could show a 45-unit
+--     fund-keyed sell and a 10-unit parented sell and no overdraw anywhere, while
+--     the reader subtracts 55 and drops the holding five units early.
+--   • 'parent_is_a_fund_purchase' told an operator the row's principal "no
+--     valuation offsets" — now false, and it would invite a manual repair that
+--     subtracts the same money twice. It says what the row is instead: legacy, and
+--     valued into the bucket.
+--
+-- Everything else is copied verbatim from 20260730000003 (a view has to be
+-- re-stated whole). The per-sale proportionality check still measures fund-keyed
+-- sells only: a fund-parented row's units are as often derived as recorded, and
+-- comparing a derivation against the rate it was derived from proves nothing.
+-- 20260803000002 refuses the shape at write time, so what these aggregates cover
+-- is history, and history is exactly what an audit is for.
 
 create or replace view public.withdrawal_ledger_audit
 with (security_invoker = true) as
@@ -38,7 +43,16 @@ with wd as (
          -- fund) bucket no matter what parent it also names.
          coalesce(w.asset_type = 'fund' and w.fund_id is not null, false) as fund_keyed,
          p.transaction_type as parent_type,
-         p.asset_type       as parent_asset
+         p.asset_type       as parent_asset,
+         -- The other half of the same bucket (#606): a row parented to a fund
+         -- PURCHASE draws on that purchase's (goal, fund) bucket too, so the
+         -- aggregates below have to add it there — and NOT to the parent, or one
+         -- claim would be measured against two balances.
+         p.fund_id          as parent_fund,
+         p.goal_id          as parent_goal,
+         coalesce(not (w.asset_type = 'fund' and w.fund_id is not null)
+                  and p.transaction_type = 'investment'
+                  and p.asset_type = 'fund' and p.fund_id is not null, false) as fund_parented
     from public.investment_transactions w
     left join public.investment_transactions p on p.transaction_id = w.parent_transaction_id
    where w.transaction_type = 'withdrawal'
@@ -50,7 +64,8 @@ parents as (
          sum(coalesce(w.units_withdrawn, 0))     as out_units,
          count(*)                                as sells
     from public.investment_transactions p
-    join wd w on w.parent_transaction_id = p.transaction_id and not w.fund_keyed
+    join wd w on w.parent_transaction_id = p.transaction_id
+             and not w.fund_keyed and not w.fund_parented
    where p.transaction_type = 'investment'
    group by p.transaction_id, p.user_id, p.goal_id, p.asset_type, p.amount_vnd, p.units
 ),
@@ -66,14 +81,22 @@ fund_buys as (
    group by t.user_id, t.goal_id, t.fund_id
 ),
 fund_sells as (
-  select w.user_id, w.goal_id, w.fund_id,
+  -- One bucket, both shapes. A fund-parented row's units are counted only where it
+  -- RECORDS them: the reader derives them when they are absent, and a derived
+  -- quantity is proportional by construction, so folding it in here would report
+  -- the derivation rather than the ledger. That makes the units side conservative —
+  -- it under-counts what such a row removes, never over-counts — which is the right
+  -- direction for a check that calls an overrun a violation.
+  select w.user_id,
+         case when w.fund_keyed then w.goal_id else w.parent_goal end as goal_id,
+         case when w.fund_keyed then w.fund_id else w.parent_fund end as fund_id,
          sum(coalesce(w.principal_withdrawn, 0)) as out_principal,
          sum(coalesce(w.units_withdrawn, 0))     as out_units,
          count(*)                                as sells,
          min(w.transaction_id::text)             as a_sell
     from wd w
-   where w.fund_keyed
-   group by w.user_id, w.goal_id, w.fund_id
+   where w.fund_keyed or w.fund_parented
+   group by 1, 2, 3
 ),
 fund_buckets as (
   select s.user_id, s.goal_id, s.fund_id, s.out_principal, s.out_units, s.sells, s.a_sell,
@@ -107,6 +130,9 @@ sale_dev as (
    where not w.fund_keyed and p.asset_type = 'gold' and coalesce(p.units, 0) > 0
      and coalesce(w.units_withdrawn, 0) > 0
   union all
+  -- Fund-keyed sells only. A fund-parented row is named by its own check, and its
+  -- units are as often derived as recorded — comparing a derivation against the
+  -- rate it was derived from proves nothing.
   select w.transaction_id, w.user_id, w.goal_id, w.fund_id, w.parent_transaction_id,
          w.units_withdrawn, w.principal_withdrawn,
          null::uuid, b.fund_id::text || ':' || coalesce(b.goal_id::text, ''), b.basis, b.units,
@@ -224,13 +250,16 @@ select 'parent_is_not_an_investment', 'violation',
  where not w.fund_keyed and w.parent_type is not null and w.parent_type <> 'investment'
 
 union all
--- Counted, but not in the shape the app writes. Since #606 buildWithdrawalMaps
--- values such a row against the PURCHASE's (goal, fund) bucket, so its principal
--- does reduce the holding — it is no longer the uncounted withdrawal this check
--- was written for. It stays reported, at 'review', for the one thing still worth a
--- human's eye: when the row records no units_withdrawn, the units removed from the
--- bucket are DERIVED pro-rata from that purchase's own price rather than recorded,
--- and no reader can tell a deliberate quantity from a derived one.
+-- Legacy shape, no longer writable. Since #606 buildWithdrawalMaps values such a
+-- row against the PURCHASE's (goal, fund) bucket, so its principal does reduce the
+-- holding — it is no longer the uncounted withdrawal this check was written for —
+-- and check_withdrawal_balance refuses new ones outright, because a fund sale has
+-- to be keyed by its fund to be measured against the balance it draws down.
+--
+-- What is left is history, and it stays reported at 'review' for the thing still
+-- worth a human's eye: when the row records no units_withdrawn, the units removed
+-- from the bucket are DERIVED pro-rata rather than recorded, and no reader can tell
+-- a deliberate quantity from a derived one.
 --
 -- Do not repair one by hand off this row alone without checking what the dashboard
 -- already subtracts for it — the money is offset now, and subtracting it a second

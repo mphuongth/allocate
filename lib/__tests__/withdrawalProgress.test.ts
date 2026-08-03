@@ -137,6 +137,10 @@ describe('buildWithdrawalMaps', () => {
   // map under a key nothing reads: the dashboard values a fund through the (goal,
   // fund) map and never consults parentWdMap, so the cash left while the fund kept
   // every unit — net worth overstated by the withdrawn amount, silently.
+  //
+  // The shape is refused at write time now (check_withdrawal_balance, #606), so
+  // these cases are about the rows already in the ledger: they are valued, not
+  // waved through.
   describe('a withdrawal parented to a fund purchase (#606)', () => {
     const buy = {
       transaction_id: 'buy-1',

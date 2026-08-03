@@ -352,17 +352,16 @@ begin
   insert into public.investment_transactions (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
   values (v_user, v_goal, v_fund, 'fund', 'investment', '2026-01-01', 90000000, 4500, 20000) returning transaction_id into v_buy;
 
-  -- Parented to that fund purchase: allowed, but still bounded by the row it
-  -- names — 90M is there, 200M is not.
-  insert into public.investment_transactions
-    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn)
-  values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 10000000, v_buy, 10000000);
-
+  -- Parented to that fund purchase: refused (#606). It used to be allowed and
+  -- bounded by the row it names, which gave the fund bucket a SECOND balance —
+  -- the reader values such a row against the bucket, so a sell keyed by the fund
+  -- and one parented to a purchase in it could each pass their own reading and
+  -- together take more units than the bucket holds. A fund sale carries its fund.
   begin
     insert into public.investment_transactions
       (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn)
-    values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-02', 200000000, v_buy, 200000000);
-    raise exception 'even an oddly parented withdrawal is bounded by the row it names';
+    values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 10000000, v_buy, 10000000);
+    raise exception 'a withdrawal parented to a fund purchase must be refused';
   exception when sqlstate '23514' then null;
   end;
 
@@ -1172,6 +1171,87 @@ begin
   end;
 
   raise notice 'held-for-merge exception boundary: ok';
+end;
+$$;
+
+rollback;
+
+begin;
+-- ── a fund sale is keyed by its fund, not parented to the purchase (#606) ─────
+-- The reader values a withdrawal parented to a fund purchase against that
+-- purchase's (goal, fund) bucket. This function measured the same row against the
+-- purchase's own principal, so ONE bucket had TWO balances: a 50-unit purchase
+-- took a 45-unit fund-keyed sell and a 10-unit parented sell, each legal against
+-- its own reading, 55 units out of 50 — and the dashboard, subtracting all 55,
+-- drops the holding five units early. The shape is refused instead.
+do $$
+declare
+  v_user uuid; v_goal uuid; v_fund uuid; v_buy uuid; v_dep uuid;
+begin
+  insert into auth.users (id, email) values (gen_random_uuid(), 'fundkeyed@test.invalid') returning id into v_user;
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Fund keyed') returning goal_id into v_goal;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Keyed Fund', 'KEYF', 'equity', 25000) returning id into v_fund;
+
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal, v_fund, 'fund', 'investment', '2026-01-01', 2000000, 50, 40000)
+  returning transaction_id into v_buy;
+
+  -- The pair that used to fit: 45 units through the bucket, 10 more through the
+  -- purchase. The first is an ordinary sell and stays legal.
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd,
+     units_withdrawn, principal_withdrawn)
+  values (v_user, v_goal, v_fund, 'fund', 'withdrawal', '2026-02-01', 1125000, 45, 1800000);
+
+  begin
+    insert into public.investment_transactions
+      (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+       parent_transaction_id, units_withdrawn, principal_withdrawn)
+    values (v_user, v_goal, null, 'withdrawal', '2026-03-01', 250000, v_buy, 10, 400000);
+    raise exception 'a sale parented to a fund purchase must be refused, not measured against the purchase';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- Not about the missing asset_type, and not about the units either: the shape is
+  -- refused for naming a fund purchase as its source at all.
+  begin
+    insert into public.investment_transactions
+      (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+       parent_transaction_id, principal_withdrawn)
+    values (v_user, v_goal, 'bank', 'withdrawal', '2026-03-01', 100000, v_buy, 100000);
+    raise exception 'a bank-typed withdrawal on a fund purchase must be refused too';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- The same 10 units, keyed by the fund: now measured against the bucket, which
+  -- has 5 units and 200,000 đồng left — so this is refused for what it really is.
+  begin
+    insert into public.investment_transactions
+      (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd,
+       units_withdrawn, principal_withdrawn)
+    values (v_user, v_goal, v_fund, 'fund', 'withdrawal', '2026-03-01', 250000, 10, 400000);
+    raise exception 'ten units out of the five the bucket has left must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- And what the bucket does still hold goes through.
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd,
+     units_withdrawn, principal_withdrawn)
+  values (v_user, v_goal, v_fund, 'fund', 'withdrawal', '2026-03-01', 125000, 5, 200000);
+
+  -- A deposit parent is untouched by any of this.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
+  values (v_user, v_goal, 'bank', 'investment', '2026-01-01', 10000000) returning transaction_id into v_dep;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn)
+  values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 4000000, v_dep, 4000000);
+
+  raise notice 'a fund sale must be keyed by its fund: ok';
 end;
 $$;
 

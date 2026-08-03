@@ -47,22 +47,26 @@ export function fundBucketKey(goalId: string | null, fundId: string): string {
 // a fund purchase. Only a withdrawal that is neither is keyed by its parent id.
 //
 // The second half is what #606 added. A row parented to a fund purchase but not
-// itself fund-keyed (no fund_id, or asset_type omitted — a shape the POST route
-// accepts and supabase/tests/dca_seeding_heal.test.sql plants as data that exists)
-// used to land in parentWdMap under a key nothing reads: the dashboard values a
-// fund through the (goal, fund) map and never consults parentWdMap, so the cash
-// left while the fund kept every unit. Net worth was overstated by the withdrawn
-// amount, with no error and nothing on screen to show it. The trigger cannot fix
-// that — the number was wrong in the reader, not the writer — so the reader is
-// where it is fixed, which also brings EXISTING rows in that shape into the total
-// instead of leaving them silently uncounted.
+// itself fund-keyed (no fund_id, or asset_type omitted) used to land in
+// parentWdMap under a key nothing reads: the dashboard values a fund through the
+// (goal, fund) map and never consults parentWdMap, so the cash left while the fund
+// kept every unit. Net worth was overstated by the withdrawn amount, with no error
+// and nothing on screen to show it.
 //
 // The bucket key comes from the PURCHASE, not the withdrawal: that is how
 // lib/dashboardOverview keys the accumulator, so the sale lands on the units it
 // actually drew on. Units come from `units_withdrawn` when recorded and are
 // otherwise derived pro-rata from that one purchase's own price (units ×
-// principal / amount) — principal alone would drop the cost basis while every
-// unit stayed in net worth, the same trap the invariant refuses for gold.
+// principal / amount, capped at the units it holds) — principal alone would drop
+// the cost basis while every unit stayed in net worth, the same trap the invariant
+// refuses for gold.
+//
+// This half is for HISTORY. check_withdrawal_balance refuses the shape at write
+// time (20260803000002): one bucket cannot have two balances, and measuring a
+// parented row against its purchase while the units come out of the bucket let a
+// 45-unit fund-keyed sell and a 10-unit parented one take 55 units out of 50. So
+// nothing writes such a row any more; what is already in the ledger is valued here
+// rather than left silently uncounted, and withdrawal_ledger_audit reports it.
 export function buildWithdrawalMaps(withdrawals: WithdrawalRow[], parents: ParentRow[] = []): {
   parentWdMap: ParentWdMap
   fundWdMap: FundWdMap

@@ -743,6 +743,65 @@ begin
   end if;
 end $$;
 
+-- ═══ one bucket, one balance across both sale shapes (#606) ════════════════
+-- A fund-keyed sell and a sell parented to a purchase in the same bucket used to be
+-- measured against two different balances, and the audit aggregated only the first
+-- — so 55 units out of a 50-unit bucket reported clean while the reader subtracted
+-- all 55 and dropped the holding five units early. The write path refuses the
+-- parented shape now; what is already in the ledger has to be REPORTED, which is
+-- why these rows are planted with the trigger off.
+do $$
+declare
+  v_user uuid; v_goal uuid; v_fund uuid; v_buy uuid; v_par uuid; v_n int;
+begin
+  insert into auth.users (id, email) values (gen_random_uuid(), 'wd-audit-606@test.invalid') returning id into v_user;
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Mixed shapes') returning goal_id into v_goal;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Mixed Fund', 'MIXF', 'equity', 25000) returning id into v_fund;
+
+  alter table public.investment_transactions disable trigger user;
+
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal, v_fund, 'fund', 'investment', '2026-01-01', 2000000, 50, 40000)
+  returning transaction_id into v_buy;
+
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units_withdrawn, principal_withdrawn)
+  values (v_user, v_goal, v_fund, 'fund', 'withdrawal', '2026-02-01', 1125000, 45, 1800000);
+
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, units_withdrawn, principal_withdrawn)
+  values (v_user, v_goal, null, 'withdrawal', '2026-03-01', 250000, v_buy, 10, 400000)
+  returning transaction_id into v_par;
+
+  alter table public.investment_transactions enable trigger user;
+
+  -- 55 of 50 units, whichever shape took them.
+  select count(*) into v_n from public.withdrawal_ledger_audit
+   where user_id = v_user and check_name = 'fund_bucket_overdrawn' and fund_id = v_fund;
+  if v_n <> 1 then
+    raise exception 'the audit must report the bucket drawn on by both sale shapes, got %', v_n;
+  end if;
+
+  -- And the parented row is not ALSO charged to the purchase it names: one claim,
+  -- one balance. Counting it twice would invent an overdrawn holding on top.
+  select count(*) into v_n from public.withdrawal_ledger_audit
+   where user_id = v_user and check_name = 'holding_overdrawn';
+  if v_n <> 0 then
+    raise exception 'a fund-parented sale must not be charged to the purchase as well, got % holding overdraw(s)', v_n;
+  end if;
+
+  -- It stays named for review, with the detail that says it IS valued.
+  if not exists (select 1 from public.withdrawal_ledger_audit
+                  where transaction_id = v_par and check_name = 'parent_is_a_fund_purchase'
+                    and detail like '%valued against that fund bucket%') then
+    raise exception 'the fund-parented row must still be reported for review';
+  end if;
+
+  raise notice 'withdrawal_ledger_audit: both sale shapes share one bucket balance';
+end $$;
+
 -- ═══ the contract itself ═══════════════════════════════════════════════════
 -- Two claims the view's header makes, kept honest here rather than in prose alone.
 do $$
