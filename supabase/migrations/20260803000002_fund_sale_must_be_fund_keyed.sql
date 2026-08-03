@@ -170,12 +170,20 @@ begin
     -- new ones, and editing an old one back into legality means giving it its fund.
     --
     -- Asked exactly as lib/withdrawalProgress asks it: the parent must still CARRY
-    -- a fund. A fund-typed purchase whose fund is gone (ON DELETE SET NULL clears
-    -- fund_id on both sides) is no bucket — the reader leaves such a row on the
-    -- parent axis, and this branch measures it there, which is what keeps
-    -- DELETE /api/v1/funds/[id] working for a sell that named both its fund and a
-    -- purchase. Refusing on asset_type alone turned deleting a fund into an error.
-    if v_parent_asset = 'fund' and v_parent_fund is not null then
+    -- a fund. A fund-typed purchase whose fund is gone is no bucket — the reader
+    -- leaves such a row on the parent axis, and this branch measures it there.
+    --
+    -- And the fund itself has to still EXIST, which is not the same question. When
+    -- a fund is deleted, ON DELETE SET NULL clears fund_id on every referencing row
+    -- in one statement, in no defined order: a sell that named both its fund and a
+    -- purchase in it can be re-measured BEFORE its parent has been cleared, and
+    -- then the parent still shows the fund that is already gone. Keyed off fund_id
+    -- alone, deleting a fund succeeded or raised depending on heap order. The
+    -- lookup below is the same tell 20260730000002 uses for the orphan cases: a
+    -- referenced fund row that no longer exists is the FK's own transition, not a
+    -- freshly written parent-backed sale.
+    if v_parent_asset = 'fund' and v_parent_fund is not null
+       and exists (select 1 from public.funds f where f.id = v_parent_fund) then
       raise exception 'withdrawal invariant: a fund sale must be keyed by its fund (asset_type=fund + fund_id), not parented to purchase %',
         wd.parent_transaction_id using errcode = 'check_violation';
     end if;

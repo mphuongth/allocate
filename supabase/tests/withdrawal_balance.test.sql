@@ -1265,6 +1265,15 @@ begin
      parent_transaction_id, units_withdrawn, principal_withdrawn)
   values (v_user, v_goal, v_fund, 'fund', 'withdrawal', '2026-04-02', 250000, v_buy2, 10, 250000);
 
+  -- ...and in the order that used to decide it. ON DELETE SET NULL clears every
+  -- referencing row in ONE statement, in no defined order, so the sell can be
+  -- re-measured before its parent has been cleared — and then the parent still
+  -- shows the fund that is already gone. Touching the purchase moves it behind the
+  -- sell in the heap, which is the ordering that raised. What settles it is that
+  -- the fund ROW is gone by then, whichever row the cascade reaches first.
+  update public.investment_transactions set notes = 'moved behind the sell'
+   where transaction_id = v_buy2;
+
   delete from public.funds where id = v_fund;
 
   if exists (select 1 from public.investment_transactions where transaction_id = v_buy2 and fund_id is not null) then

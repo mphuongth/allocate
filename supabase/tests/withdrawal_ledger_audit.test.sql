@@ -828,9 +828,12 @@ begin
   values (v_user, v_goal, v_fund, 'fund', 'investment', '2026-01-02', 1000, 1, 1000);
 
   -- Principal-only draw on the 100-unit purchase: the reader takes all 100 units.
+  -- Written as a recorded ZERO rather than a null, because that is the harder shape:
+  -- the old write path demanded positive units only from a gold parent, and a
+  -- coalesce would let the zero slip past the derivation on both sides.
   insert into public.investment_transactions
-    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn)
-  values (v_user, v_goal, null, 'withdrawal', '2026-02-01', 1000, v_big, 1000);
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, units_withdrawn, principal_withdrawn)
+  values (v_user, v_goal, null, 'withdrawal', '2026-02-01', 1000, v_big, 0, 1000);
   -- Plus an ordinary 2-unit sell: 102 units asked of a bucket holding 101.
   insert into public.investment_transactions
     (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units_withdrawn, principal_withdrawn)

@@ -94,12 +94,17 @@ fund_sells as (
          case when w.fund_keyed then w.goal_id else w.parent_goal end as goal_id,
          case when w.fund_keyed then w.fund_id else w.parent_fund end as fund_id,
          sum(coalesce(w.principal_withdrawn, 0)) as out_principal,
+         -- A recorded ZERO derives like an absent one, exactly as the reader does:
+         -- the old parent-backed write path demanded positive units only from a
+         -- gold parent, so zero beside a real principal is a shape this data wears,
+         -- and coalesce alone would let it slip past the derivation and hide the
+         -- units the dashboard removes for it.
          sum(case when w.fund_keyed then coalesce(w.units_withdrawn, 0)
-                  else coalesce(w.units_withdrawn,
-                                case when coalesce(w.parent_units, 0) > 0 and coalesce(w.parent_amount, 0) > 0
-                                       then least(w.parent_units,
-                                                  w.parent_units * coalesce(w.principal_withdrawn, 0) / w.parent_amount)
-                                     else 0 end)
+                  when coalesce(w.units_withdrawn, 0) > 0 then w.units_withdrawn
+                  when coalesce(w.parent_units, 0) > 0 and coalesce(w.parent_amount, 0) > 0
+                    then least(w.parent_units,
+                               w.parent_units * coalesce(w.principal_withdrawn, 0) / w.parent_amount)
+                  else 0
              end)                                as out_units,
          count(*)                                as sells,
          min(w.transaction_id::text)             as a_sell
