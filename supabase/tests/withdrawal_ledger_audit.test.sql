@@ -847,6 +847,14 @@ begin
     raise exception 'the audit must count the units a principal-only row derives, got % overdraw(s)', v_n;
   end if;
 
+  -- And the detail must not call it "units 0": the dashboard removed the derived
+  -- quantity, and an operator reading zero would conclude nothing was taken.
+  if not exists (select 1 from public.withdrawal_ledger_audit
+                  where user_id = v_user and check_name = 'parent_is_a_fund_purchase'
+                    and detail like '%derived pro-rata%') then
+    raise exception 'a recorded zero must be reported as derived, not as units 0';
+  end if;
+
   raise notice 'withdrawal_ledger_audit: derived units count against the bucket';
 end $$;
 

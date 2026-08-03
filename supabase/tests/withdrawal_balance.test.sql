@@ -1186,7 +1186,8 @@ begin;
 -- drops the holding five units early. The shape is refused instead.
 do $$
 declare
-  v_user uuid; v_goal uuid; v_fund uuid; v_buy uuid; v_buy2 uuid; v_dep uuid;
+  v_user uuid; v_goal uuid; v_goal2 uuid; v_fund uuid; v_fund2 uuid;
+  v_buy uuid; v_buy2 uuid; v_buy3 uuid; v_dep uuid;
 begin
   insert into auth.users (id, email) values (gen_random_uuid(), 'fundkeyed@test.invalid') returning id into v_user;
   insert into public.savings_goals (user_id, goal_name) values (v_user, 'Fund keyed') returning goal_id into v_goal;
@@ -1279,6 +1280,34 @@ begin
   if exists (select 1 from public.investment_transactions where transaction_id = v_buy2 and fund_id is not null) then
     raise exception 'deleting the fund should have cleared the purchase''s fund_id';
   end if;
+
+  -- A goal holding a LEGACY row of this shape must still be deletable. Deleting a
+  -- goal clears goal_id on every transaction (ON DELETE SET NULL) and the deferred
+  -- trigger re-measures each one; refusing the shape there would make history
+  -- undeletable, so the refusal lives in the new-claim path only. The legacy row is
+  -- planted with the trigger off, which is the only way it can exist now.
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Legacy goal') returning goal_id into v_goal2;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Legacy Fund', 'LGCF', 'equity', 25000) returning id into v_fund2;
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal2, v_fund2, 'fund', 'investment', '2026-01-01', 2000000, 50, 40000)
+  returning transaction_id into v_buy3;
+
+  alter table public.investment_transactions disable trigger user;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn)
+  values (v_user, v_goal2, null, 'withdrawal', '2026-02-01', 400000, v_buy3, 400000);
+  alter table public.investment_transactions enable trigger user;
+
+  delete from public.savings_goals where goal_id = v_goal2;
+
+  if exists (select 1 from public.investment_transactions where transaction_id = v_buy3 and goal_id is not null) then
+    raise exception 'deleting the goal should have cleared the purchase''s goal_id';
+  end if;
+
+  -- Deleting the FUND out from under the same legacy row is fine too.
+  delete from public.funds where id = v_fund2;
 
   raise notice 'a fund sale must be keyed by its fund: ok';
 end;

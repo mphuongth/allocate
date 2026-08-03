@@ -290,7 +290,11 @@ select 'parent_is_a_fund_purchase', 'review',
        case when w.fund_parented
               then format('draws %s đồng on fund purchase %s, valued against that fund bucket with units %s',
                           w.principal_withdrawn, w.parent_transaction_id,
-                          case when w.units_withdrawn is null then 'derived pro-rata' else w.units_withdrawn::text end)
+                          -- Zero is derived as well, on both sides: labelling it
+                          -- "units 0" would tell an operator nothing was removed
+                          -- while the dashboard removed the derived quantity.
+                          case when coalesce(w.units_withdrawn, 0) > 0 then w.units_withdrawn::text
+                               else 'derived pro-rata' end)
             else format('draws %s đồng on fund-typed %s %s, which carries no fund of its own — no bucket values it',
                         w.principal_withdrawn, w.parent_type, w.parent_transaction_id)
        end
