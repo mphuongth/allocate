@@ -58,6 +58,11 @@ Done:
 - Dashboard DTOs extracted to `features/dashboard/contracts.ts`; `lib/`, the
   report and the nav badge no longer import from `DashboardClient`.
 - `useDialogA11y` / `useDialogMount` moved out of Planning into `components/ui/`.
+- Dashboard decomposed (#602): the derived view model (`dashboardModel.ts`), the
+  data lifecycle (`useOverviewData`), the fund-detail history
+  (`useFundPurchaseHistory`) and the overview cache all live in
+  `features/dashboard/`, tested directly instead of through a full-page render.
+  `DashboardClient` is orchestration + layout: 1,210 → ~805 lines.
 - One component root: `app/components/` folded into `components/{ui,layout,navigation}`
   and `features/landing/`. The app shell no longer imports a screen — the
   add-transaction sheet reaches it as an opaque `overlays` node from the route
@@ -67,6 +72,8 @@ Still open — incremental, as files are touched, not as a repo-wide rename:
 
 - `app/assets/` split into `features/dashboard`, `features/investments`,
   `features/goals`, `features/insurance`.
-- Splitting the oversized modules: `DashboardClient`, Maturity Resolve, Fund
-  Library. Keep the desktop/mobile shells separate where the UX genuinely
-  differs; extract the shared models, actions and form fields.
+- `MaturityResolveSheet` (~1,020 lines) — the other half of #602, same
+  treatment: separate its resolve model and actions from its presentation.
+- Fund Library, Planning and Settings desktop/mobile drift (#603). Keep the
+  shells separate where the UX genuinely differs; extract the shared models,
+  actions and form fields.

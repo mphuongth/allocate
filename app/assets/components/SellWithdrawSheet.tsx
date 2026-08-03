@@ -10,29 +10,12 @@ import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/
 import { CairnLoader } from '@/components/ui/CairnLoader'
 import { AffectsProgressControl } from './goalDetailShared'
 import { useDialogMount, useResetOnOpen } from '@/components/ui/useDialogMount'
+import type { SellItem } from '@/features/dashboard/contracts'
+export type { SellItem } from '@/features/dashboard/contracts'
 import { previewBankWithdrawal, estimateReceivedForPrincipal } from '@/lib/bankWithdrawal'
 import { goldCostBasis, goldUnitCost } from '@/lib/goldWithdrawal'
 import { fundCostBasis } from '@/lib/fundWithdrawal'
 const fmtVND = (n: number, _locale?: string) => fmt(n)
-
-export interface SellItem {
-  type: 'fund' | 'bank' | 'gold' | 'stock'
-  name: string
-  currentValue: number
-  units?: number
-  navPerUnit?: number
-  gainPct?: number
-  interestRate?: number
-  // API identifiers
-  fundId?: string
-  transactionId?: string
-  purchasePrice?: number
-  /** Fund only: remaining cost basis of the bucket, which a sale draws from (#587). */
-  costBasis?: number
-  // Set when this bank item is an accumulating book (its anchor id). Switches the
-  // sheet to a FULL close: every tranche is withdrawn at once (no partial amount).
-  depositGroupId?: string | null
-}
 
 interface Props {
   item: SellItem | null
