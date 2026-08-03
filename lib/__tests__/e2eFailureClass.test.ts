@@ -90,6 +90,44 @@ describe('classifyFailure', () => {
     ).toBe('infra')
   })
 
+  it('does not let a text assertion about an error state count as infra', () => {
+    // The suite has ~120 text/locator assertions. If the UI asserts on an error
+    // banner, Playwright echoes that text into the failure message — a missing
+    // error state is a product regression, not a throttled gateway.
+    expect(
+      classifyFailure({
+        message:
+          "expect(locator).toBeVisible() failed\n\nLocator: getByText('Network error')\nExpected: visible\nReceived: <element(s) not found>",
+      }),
+    ).toBe('product')
+    expect(
+      classifyFailure({
+        message:
+          "expect(locator).toContainText('Service Unavailable') failed\n\nLocator: locator('#banner')",
+      }),
+    ).toBe('product')
+    expect(
+      classifyFailure({
+        message: "expect(locator).toBeVisible() failed\n\nLocator: getByText('Too many requests')",
+      }),
+    ).toBe('product')
+  })
+
+  it('still calls a real transport failure infra even inside a locator assertion', () => {
+    // The page genuinely failed to load — not a text expectation about wording.
+    expect(
+      classifyFailure({
+        message:
+          "expect(locator).toBeVisible() failed\n\nCall log:\n  - page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:3000",
+      }),
+    ).toBe('infra')
+    expect(
+      classifyFailure({
+        message: "expect(locator).toBeVisible() failed\n\nError: connect ECONNREFUSED 127.0.0.1:54321",
+      }),
+    ).toBe('infra')
+  })
+
   it('classifies browser/worker crashes as infra', () => {
     expect(
       classifyFailure({ message: 'Target page, context or browser has been closed' }),

@@ -31,7 +31,6 @@ const INFRA_PATTERNS: RegExp[] = [
   /\b(ECONNREFUSED|ECONNRESET|ETIMEDOUT|EPIPE|EAI_AGAIN|ENOTFOUND|EHOSTUNREACH)\b/,
   /socket hang up/i,
   /fetch failed/i,
-  /network error/i,
   /net::ERR_[A-Z_]+/,
   // Postgres / Supabase throttling and exhaustion
   /too many connections/i,
@@ -40,15 +39,6 @@ const INFRA_PATTERNS: RegExp[] = [
   /canceling statement due to/i,
   /disk io/i,
   /resource exhausted/i,
-  // Gateway and rate-limit responses. The classifier sees the message *and* the
-  // stack, so a bare number is not enough — `dashboard.spec.ts:503:11` and an
-  // expected value of 429 are ordinary product failures. Require either the
-  // status phrase or an explicit HTTP-status context.
-  /too many requests/i,
-  /service unavailable/i,
-  /gateway timeout/i,
-  /bad gateway/i,
-  /\b(?:status(?:[ _]?code)?|http)\b\W{0,3}(?:429|50[234])\b/i,
   // The app server never came up at all. Playwright words this several ways
   // ("Timed out waiting … from config.webServer.", "Process from
   // config.webServer was not able to start."), so match the config key itself.
@@ -59,6 +49,28 @@ const INFRA_PATTERNS: RegExp[] = [
   /target crashed/i,
   /page crashed/i,
 ]
+
+/**
+ * Wording-only signals. A gateway announces itself in prose, but prose is also
+ * what a UI renders — and Playwright echoes a locator's expected text into the
+ * failure message, so `expect(getByText('Network error')).toBeVisible()` failing
+ * because the banner never appeared would otherwise read as infrastructure. The
+ * suite has ~120 text assertions, so these count only when the failure is not a
+ * text/locator expectation. (`network error` was dropped outright: as a phrase
+ * it is almost purely UI copy, and a genuine transport failure always carries a
+ * socket code, `fetch failed`, or `net::ERR_*` above.)
+ */
+const INFRA_WORDING: RegExp[] = [
+  /too many requests/i,
+  /service unavailable/i,
+  /gateway timeout/i,
+  /bad gateway/i,
+  /\b(?:status(?:[ _]?code)?|http)\b\W{0,3}(?:429|50[234])\b/i,
+]
+
+/** The failure is an expectation about rendered text, so its wording is the test's, not the server's. */
+const TEXT_EXPECTATION =
+  /getBy(?:Text|Role|Label|Placeholder|Title|AltText)\(|toContainText\(|toHaveText\(|Locator:|locator\(/
 
 /**
  * Playwright colours its errors, so a real diff arrives as
@@ -84,7 +96,9 @@ const ANSI = /\u001b\[[0-9;]*m/g
 export function classifyFailure(failure: FailureInput): FailureKind {
   const message = (failure.message ?? '').replace(ANSI, '')
   if (!message) return 'product'
-  return INFRA_PATTERNS.some((p) => p.test(message)) ? 'infra' : 'product'
+  if (INFRA_PATTERNS.some((p) => p.test(message))) return 'infra'
+  if (TEXT_EXPECTATION.test(message)) return 'product'
+  return INFRA_WORDING.some((p) => p.test(message)) ? 'infra' : 'product'
 }
 
 export type FailureSummary<T extends FailureInput> = {

@@ -54,6 +54,14 @@ layer; it doesn't fail the run.
 - **product** — everything else, including a plain locator timeout (that is an
   element that never appeared, i.e. a real regression).
 
+The gateway *wording* signals (`Service Unavailable`, `Too many requests`, …)
+don't count when the failure is a text or locator expectation — Playwright
+echoes a locator's expected text into the message, so
+`expect(getByText('Network error')).toBeVisible()` failing means the banner
+never rendered, which is a regression. Transport-level signals (socket codes,
+`net::ERR_*`, `fetch failed`) still count everywhere, including inside a locator
+assertion, because there the page genuinely failed to load.
+
 Ambiguity resolves to *product* by design. A bare assertion diff
 (`Expected: 400 / Received: 503`) is **not** treated as infra: the reporter only
 receives the diff — `TestResult.errors[]` carries no code snippet — so a
