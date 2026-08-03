@@ -60,9 +60,13 @@ the wrong month (#591). An eslint `no-restricted-syntax` rule blocks both idioms
 
 ## What to run before opening a PR
 
-CI runs unit tests plus the **E2E smoke lane** (~19 `@smoke` tests, ~3 min, against a
-local Supabase stack started in the runner — #595). The **full** suite still runs
-locally and nightly, never on the PR path. Scale the checks to the change:
+CI reports five independent gates on every PR (#596): **Unit Tests** (typecheck +
+Vitest with coverage thresholds), **Lint**, **Production Build**, **DB Tests** (the
+`supabase/tests` SQL suite against a stack started from scratch, which also proves
+every migration applies to an empty database), and the **E2E smoke lane** (~19
+`@smoke` tests, ~3 min, against a local Supabase stack started in the runner — #595).
+The production `supabase db push` job waits on all five. The **full** E2E suite still
+runs locally and nightly, never on the PR path. Scale the checks to the change:
 
 - **Always:** `npm run typecheck`, `npm test -- --run` (Vitest unit tests), and
   `npm run lint`. Fast, every PR. Don't skip the typecheck because the tests are
@@ -70,6 +74,16 @@ locally and nightly, never on the PR path. Scale the checks to the change:
   handler with a signature it no longer has passes locally and fails CI. CI runs
   `typecheck` inside the "Unit Tests" job, so a red X there is often `tsc`, not a
   failing assertion (#614).
+- **Coverage** (`npm run test:coverage`) — when you delete or rewrite tests, or add a
+  server route. Thresholds live in `vitest.config.ts`: a repo-wide floor set just
+  under today's numbers, `lines: 100` on the money modules in `lib/`, and per-file
+  floors on the transaction/dashboard routes. They are a ratchet — raise them as
+  tests land, never lower one to turn a red build green.
+- **DB tests** (`npm run test:db`) — after touching a migration, trigger, RPC, or
+  constraint. Needs the local Supabase stack running.
+- **Production build** (`npm run build`) — after touching config, env usage, or
+  anything that only fails under `next build` (it type-checks the whole repo,
+  including `vitest.config.ts`).
 - **Targeted E2E** — when the change touches a feature area, run that area's specs,
   e.g. `npx playwright test e2e/planning.spec.ts --project=chromium`. This is the
   common case.

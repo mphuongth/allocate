@@ -6,6 +6,9 @@ on:
   push:
     branches: [main, feature/redesign-desktop]
 
+# Every gate is its own job so the PR page reports unit, lint, build, DB and
+# smoke-E2E status independently — a red X names the thing that broke instead of
+# hiding it behind one "Unit Tests" check (#596).
 jobs:
   test:
     name: Unit Tests
@@ -25,8 +28,109 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Run unit tests
-        run: npm test -- --run
+      # Coverage thresholds live in vitest.config.ts and are enforced here: the
+      # run fails when a gated module drops below its floor.
+      - name: Run unit tests with coverage
+        run: npm run test:coverage
+
+      - name: Upload the coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 7
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Lint
+        run: npm run lint
+
+  build:
+    name: Production Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      # Placeholder Supabase credentials: `next build` only needs the public env
+      # vars to exist so the client bundle compiles and the static routes
+      # prerender. Nothing in the build talks to the database, and placeholders
+      # keep this gate runnable on fork PRs, where secrets aren't available. The
+      # build against a real stack happens in the E2E lane.
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+
+  # Migration + SQL-trigger gate. `supabase start` provisions an empty Postgres
+  # and replays every migration in supabase/migrations from scratch, so this job
+  # fails on a migration that can't apply to a clean database — the case a
+  # long-lived local stack never exercises. The suite in supabase/tests then
+  # asserts the constraints and triggers those migrations install (withdrawal
+  # balance, FK ownership, held-for-merge settlement, the refresh rate limits,
+  # …). Each test runs as the `postgres` superuser inside a rolled-back
+  # transaction, so ordering between files doesn't matter.
+  db:
+    name: DB Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+
+      - uses: supabase/setup-cli@v2
+        with:
+          version: latest
+
+      # Only Postgres (and the auth stack the migrations reference) is needed —
+      # skip the containers the SQL suite never touches so the job stays quick.
+      # The tests connect over psql as `postgres`; no API layer is involved.
+      - name: Start a local Supabase stack (applies every migration from scratch)
+        run: supabase start -x studio,imgproxy,edge-runtime,logflare,vector,mailpit,supavisor
+
+      - name: Restore the hosted-project DML baseline
+        # Same reason as the E2E lane: a hosted project grants anon/authenticated/
+        # service_role full DML on `public` through default privileges, so the
+        # app's migrations carry no GRANTs. The CLI's local stack grants only the
+        # non-DML part, so a test that runs an RPC as `service_role` fails with
+        # `42501 permission denied for table …`. The script tops up DML only for
+        # roles still present in an object's ACL, so migration-level revocations
+        # survive it.
+        run: npm run db:baseline
+
+      - name: Run the SQL test suite
+        run: npm run test:db
+
+      - name: Dump the stack status on failure
+        if: failure()
+        run: supabase status || true
 
   # Browser gate on every PR: the ~19 `@smoke`-tagged tests only (#595). The
   # full suite stays off the PR path — it takes ~7.6 min serial and runs nightly
@@ -48,10 +152,14 @@ jobs:
   # main, so schema changes ship automatically instead of needing a manual
   # `supabase db push`. `supabase db push` is idempotent (only applies migrations
   # not yet in the remote history), so re-runs are safe.
+  #
+  # This writes to the production schema, so it waits on *every* gate, not just
+  # unit tests: a migration that can't apply to a clean database, code that
+  # doesn't build, or a broken smoke path must not reach production.
   migrate:
     name: Apply DB migrations (production)
     runs-on: ubuntu-latest
-    needs: test
+    needs: [test, lint, build, db, e2e-smoke]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v6
