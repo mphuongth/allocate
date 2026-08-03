@@ -6,7 +6,7 @@ import { X, Mountain, Home, Shield, ShoppingCart, Target } from 'lucide-react'
 import { iconHit } from './iconHit'
 import { fmt } from '@/lib/formatters'
 import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
-import { CairnLoader } from '@/app/components/ui/CairnLoader'
+import { CairnLoader } from '@/components/ui/CairnLoader'
 import { useDialogMount, useResetOnOpen } from '@/components/ui/useDialogMount'
 import { monthsUntilYm } from '@/lib/dates'
 

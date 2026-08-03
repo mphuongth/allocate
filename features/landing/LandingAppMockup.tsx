@@ -7,7 +7,7 @@ import { fmtCompact } from '@/lib/formatters'
 // It is deliberately built from the SAME i18n keys and the same formatter the real screens
 // use (nav.*, dashboard.*, fmtCompact) rather than hardcoded English strings, so it follows
 // the page locale and cannot quietly drift into advertising an app we don't ship. The shell
-// mirrors app/components/navigation/Sidebar.tsx: a light 220px sidebar with a wordmark and
+// mirrors components/navigation/Sidebar.tsx: a light 220px sidebar with a wordmark and
 // *labelled* nav items — not an icon-only rail. Sizes are ~0.45× the real ones to fit the
 // 540px hero frame; proportions and colours are otherwise the app's.
 

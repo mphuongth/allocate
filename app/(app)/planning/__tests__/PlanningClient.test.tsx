@@ -19,7 +19,7 @@ vi.mock('next-intl', () => ({
   useLocale: () => 'en',
 }))
 
-vi.mock('@/app/components/navigation/NavigationContext', () => ({
+vi.mock('@/components/navigation/NavigationContext', () => ({
   useNavigation: () => ({ setMobileTopBar: vi.fn() }),
 }))
 

@@ -7,7 +7,7 @@
 // import the field primitives from here.
 import { PiggyBank, ArrowDownToLine, Check, GitMerge } from 'lucide-react'
 import { fmt, fmtCompact } from '@/lib/formatters'
-import AmountInput from '@/app/components/ui/AmountInput'
+import AmountInput from '@/components/ui/AmountInput'
 
 export const fieldLabel: React.CSSProperties = {
   fontSize: 11, fontWeight: 600, letterSpacing: '0.05em',

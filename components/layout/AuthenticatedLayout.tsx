@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import { toast } from 'sonner'
@@ -9,9 +9,8 @@ import Sidebar from '../navigation/Sidebar'
 import Header from '../navigation/Header'
 import MobileBottomTabs from '../navigation/MobileBottomTabs'
 import MobileTopBar from '../navigation/MobileTopBar'
-import OfflineBanner from '@/app/components/OfflineBanner'
-import CacheOwnerAnnouncer from '@/app/components/CacheOwnerAnnouncer'
-import AddTransactionSheet from '@/app/assets/components/AddTransactionSheet'
+import OfflineBanner from '@/components/layout/OfflineBanner'
+import CacheOwnerAnnouncer from '@/components/layout/CacheOwnerAnnouncer'
 
 function getInitials(email: string): string {
   const parts = email.split('@')[0].split(/[._-]/)
@@ -35,9 +34,8 @@ const PAGES_WITH_OWN_HEADER = new Set(['/dashboard', '/planning', '/funds', '/se
 // Pages that manage their own full-height desktop layout (no <main> padding/scroll on md+).
 const PAGES_WITH_FULL_HEIGHT_DESKTOP = new Set(['/dashboard', '/planning', '/funds', '/settings'])
 
-function AuthenticatedLayoutInner({ children, email, initials }: { children: React.ReactNode; email: string; initials: string }) {
-  const { mobileTopBar } = useNavigation()
-  const [showAddTx, setShowAddTx] = useState(false)
+function AuthenticatedLayoutInner({ children, email, initials, overlays }: { children: React.ReactNode; email: string; initials: string; overlays?: React.ReactNode }) {
+  const { mobileTopBar, openAddTransaction } = useNavigation()
   const pathname = usePathname()
   const hideDesktopHeader = PAGES_WITH_OWN_HEADER.has(pathname)
   const isFullHeightDesktop = PAGES_WITH_FULL_HEIGHT_DESKTOP.has(pathname)
@@ -74,19 +72,19 @@ function AuthenticatedLayoutInner({ children, email, initials }: { children: Rea
       </div>
 
       {/* Mobile bottom tab navigation — the center + is the add-transaction action */}
-      <MobileBottomTabs onAdd={() => setShowAddTx(true)} />
+      <MobileBottomTabs onAdd={openAddTransaction} />
       <OfflineBanner />
 
-      {/* Add transaction sheet */}
-      <AddTransactionSheet
-        open={showAddTx}
-        onClose={() => setShowAddTx(false)}
-      />
+      {/* Screen-owned overlays the whole app shell shows — today the
+          add-transaction sheet, passed down by the route group. They render
+          here so they sit above the tab bar, but the layout doesn't know what
+          they are: it is shared chrome and must not import a screen (#600). */}
+      {overlays}
     </div>
   )
 }
 
-export default function AuthenticatedLayout({ children, userId, email, displayName }: { children: React.ReactNode; userId: string; email: string; displayName?: string }) {
+export default function AuthenticatedLayout({ children, userId, email, displayName, overlays }: { children: React.ReactNode; userId: string; email: string; displayName?: string; overlays?: React.ReactNode }) {
   const router = useRouter()
 
   // Watch for session expiry (e.g. token revoked or expired)
@@ -112,7 +110,7 @@ export default function AuthenticatedLayout({ children, userId, email, displayNa
   return (
     <NavigationProvider userName={userName}>
       <CacheOwnerAnnouncer userId={userId} />
-      <AuthenticatedLayoutInner email={email} initials={initials}>
+      <AuthenticatedLayoutInner email={email} initials={initials} overlays={overlays}>
         {children}
       </AuthenticatedLayoutInner>
     </NavigationProvider>

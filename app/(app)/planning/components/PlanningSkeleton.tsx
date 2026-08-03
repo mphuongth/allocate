@@ -1,4 +1,4 @@
-import { Skeleton } from '@/app/components/ui/Skeleton'
+import { Skeleton } from '@/components/ui/Skeleton'
 
 const card: React.CSSProperties = {
   background: 'var(--c-card)',

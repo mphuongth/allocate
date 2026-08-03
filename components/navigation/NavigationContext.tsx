@@ -18,6 +18,12 @@ interface NavigationContextValue {
   setUserName: (name: string) => void
   mobileTopBar: MobileTopBarOpts
   setMobileTopBar: (opts: MobileTopBarOpts) => void
+  // The add-transaction sheet's open flag. The mobile bottom tabs' centre "+"
+  // opens it, but the sheet itself is a dashboard component rendered by the
+  // route group — this layout is shared chrome and may not import one (#600).
+  addTransactionOpen: boolean
+  openAddTransaction: () => void
+  closeAddTransaction: () => void
 }
 
 const NavigationContext = createContext<NavigationContextValue>({
@@ -29,6 +35,9 @@ const NavigationContext = createContext<NavigationContextValue>({
   setUserName: () => {},
   mobileTopBar: { title: '' },
   setMobileTopBar: () => {},
+  addTransactionOpen: false,
+  openAddTransaction: () => {},
+  closeAddTransaction: () => {},
 })
 
 export function NavigationProvider({ children, userName: initialUserName }: { children: React.ReactNode; userName: string }) {
@@ -36,6 +45,7 @@ export function NavigationProvider({ children, userName: initialUserName }: { ch
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [userName, setUserName] = useState(initialUserName)
   const [mobileTopBar, setMobileTopBarState] = useState<MobileTopBarOpts>({ title: '' })
+  const [addTransactionOpen, setAddTransactionOpen] = useState(false)
 
   // Re-sync from server-provided value when the underlying prop changes
   // (e.g. after a router.refresh that brings fresh user metadata down).
@@ -47,12 +57,16 @@ export function NavigationProvider({ children, userName: initialUserName }: { ch
     setMobileTopBarState(opts)
   }, [])
 
+  const openAddTransaction = useCallback(() => setAddTransactionOpen(true), [])
+  const closeAddTransaction = useCallback(() => setAddTransactionOpen(false), [])
+
   return (
     <NavigationContext.Provider value={{
       sidebarOpen, setSidebarOpen,
       sidebarCollapsed, setSidebarCollapsed,
       userName, setUserName,
       mobileTopBar, setMobileTopBar,
+      addTransactionOpen, openAddTransaction, closeAddTransaction,
     }}>
       {children}
     </NavigationContext.Provider>

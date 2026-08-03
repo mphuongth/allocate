@@ -23,7 +23,7 @@ vi.mock('@/lib/formatters', () => ({
   fmtCompact: (n: number) => `${n}`,
 }))
 
-vi.mock('@/app/components/navigation/NavigationContext', () => ({
+vi.mock('@/components/navigation/NavigationContext', () => ({
   useNavigation: () => ({ setMobileTopBar: vi.fn() }),
 }))
 

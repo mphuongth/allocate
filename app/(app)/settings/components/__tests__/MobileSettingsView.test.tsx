@@ -35,11 +35,11 @@ vi.mock('next/navigation', () => ({
   useTransition: () => [false, (fn: () => void) => fn()],
 }))
 
-vi.mock('@/app/components/navigation/NavigationContext', () => ({
+vi.mock('@/components/navigation/NavigationContext', () => ({
   useNavigation: () => ({ setMobileTopBar: vi.fn(), setUserName: setUserNameMock }),
 }))
 
-vi.mock('@/app/components/ThemeProvider', () => ({
+vi.mock('@/components/layout/ThemeProvider', () => ({
   useTheme: () => ({ theme: 'light', toggleTheme: vi.fn(), setTheme: vi.fn() }),
 }))
 

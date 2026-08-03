@@ -6,8 +6,8 @@ test.use({ storageState: { cookies: [], origins: [] } })
 // their targets, hero copy, the six feature cards, the three numbered steps, the
 // plan spotlight, both CTAs — is now pinned where it renders, without a browser:
 //   app/__tests__/landingPage.test.tsx      (the page's own tree, en + vi)
-//   app/components/__tests__/LandingMockups.test.tsx      (the two mockups)
-//   app/components/__tests__/LandingProductTour.test.tsx  (tabs, locale, a11y)
+//   features/landing/__tests__/LandingMockups.test.tsx      (the two mockups)
+//   features/landing/__tests__/LandingProductTour.test.tsx  (tabs, locale, a11y)
 // Twenty page loads proved things a server-component render proves for free.
 //
 // Three things survive here, because each needs a real browser:

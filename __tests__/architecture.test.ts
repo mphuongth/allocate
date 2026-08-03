@@ -58,12 +58,9 @@ function edges(from: (f: string) => boolean, to: (spec: string) => boolean): str
 }
 
 const isAppImport = (spec: string) => spec === 'app' || spec.startsWith('app/')
-/**
- * UI that belongs to a screen: the `app/assets/` bucket and the route group.
- * `app/components/` is deliberately not here — it is the app's shared chrome
- * (navigation, layouts, primitives), which any screen may use.
- */
+/** UI that belongs to a screen: the `app/assets/` bucket and the route group. */
 const isFeatureUi = (spec: string) => spec.startsWith('app/assets/') || spec.startsWith('app/(app)/')
+const isRouteHandler = (spec: string) => spec.startsWith('app/api/')
 
 describe('layer boundaries (#600)', () => {
   it('finds the source files it is meant to be checking', () => {
@@ -91,7 +88,23 @@ describe('layer boundaries (#600)', () => {
   it('keeps navigation out of feature UI', () => {
     // The sidebar/bottom-tab badge is chrome shared by every screen; it may read
     // a contract, never a screen's component module.
-    expect(edges((f) => f.startsWith('app/components/navigation/'), isFeatureUi)).toEqual([])
+    expect(edges((f) => f.startsWith('components/navigation/'), isFeatureUi)).toEqual([])
+  })
+
+  it('keeps feature UI out of route handlers', () => {
+    // The other direction: a screen talks to the server over HTTP, never by
+    // importing the handler module. Importing it would drag the service-role
+    // Supabase client and the server-only env into a client bundle.
+    expect(edges((f) => f.startsWith('app/') && !f.startsWith('app/api/'), isRouteHandler)).toEqual([])
+    expect(edges((f) => !f.startsWith('app/'), isRouteHandler)).toEqual([])
+  })
+
+  it('has exactly one component root', () => {
+    // `app/components/` and `components/` both existed, with no rule saying
+    // which a shared component belonged in — the audit's "two component roots"
+    // finding. `app/` holds routes, layouts and handlers; a component that more
+    // than one route renders lives under `components/`.
+    expect(sourceFiles('app/components')).toEqual([])
   })
 
   it('exports no types from DashboardClient', () => {
