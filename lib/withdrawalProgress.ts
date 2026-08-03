@@ -118,7 +118,14 @@ export function buildWithdrawalMaps(withdrawals: WithdrawalRow[], parents: Paren
       const derived = buyUnits > 0 && buyAmount > 0
         ? Math.min(buyUnits, (buyUnits * principal) / buyAmount)
         : 0
-      const row: WithdrawalRow = { ...wd, units_withdrawn: wd.units_withdrawn ?? derived }
+      // A recorded ZERO is treated as absent, not as a quantity. The old
+      // parent-backed write path required positive units only from a gold parent,
+      // so `units_withdrawn = 0` alongside a real principal is one of the shapes
+      // this legacy data actually wears — and dashboardOverview skips a bucket
+      // entry whose units are <= 0 entirely, principal included, which would leave
+      // exactly the #606 overstatement this function is here to remove.
+      const recorded = wd.units_withdrawn ?? 0
+      const row: WithdrawalRow = { ...wd, units_withdrawn: recorded > 0 ? recorded : derived }
       const key = fundBucketKey(fundParent.goal_id, fundParent.fund_id!)
       addFund(fundWdMapAll, key, row)
       if (affectsProgress) addFund(fundWdMap, key, row)

@@ -36,6 +36,9 @@ declare
   v_left_units    numeric;
   v_parent_type   text;
   v_parent_asset  text;
+  -- The parent's own fund: what makes it a BUCKET rather than just a fund-typed
+  -- row. Deleting a fund clears it (ON DELETE SET NULL) on both sides.
+  v_parent_fund   uuid;
   -- Purchases in the fund bucket; null outside that branch, which is also how the
   -- allocation rule below knows which kind it is measuring.
   v_rows          int;
@@ -128,8 +131,8 @@ begin
   elsif wd.parent_transaction_id is not null then
     -- Bank / gold / stock: one source row. Lock it before measuring it, so two
     -- concurrent withdrawals of the same deposit serialize here.
-    select t.amount_vnd, t.units, t.transaction_type, t.asset_type
-      into v_principal, v_units, v_parent_type, v_parent_asset
+    select t.amount_vnd, t.units, t.transaction_type, t.asset_type, t.fund_id
+      into v_principal, v_units, v_parent_type, v_parent_asset, v_parent_fund
       from public.investment_transactions t
      where t.transaction_id = wd.parent_transaction_id
        and t.user_id = wd.user_id
@@ -165,7 +168,14 @@ begin
     -- Rows already written this way keep their meaning (the reader values them into
     -- the bucket, and withdrawal_ledger_audit reports them); what stops is writing
     -- new ones, and editing an old one back into legality means giving it its fund.
-    if v_parent_asset = 'fund' then
+    --
+    -- Asked exactly as lib/withdrawalProgress asks it: the parent must still CARRY
+    -- a fund. A fund-typed purchase whose fund is gone (ON DELETE SET NULL clears
+    -- fund_id on both sides) is no bucket — the reader leaves such a row on the
+    -- parent axis, and this branch measures it there, which is what keeps
+    -- DELETE /api/v1/funds/[id] working for a sell that named both its fund and a
+    -- purchase. Refusing on asset_type alone turned deleting a fund into an error.
+    if v_parent_asset = 'fund' and v_parent_fund is not null then
       raise exception 'withdrawal invariant: a fund sale must be keyed by its fund (asset_type=fund + fund_id), not parented to purchase %',
         wd.parent_transaction_id using errcode = 'check_violation';
     end if;

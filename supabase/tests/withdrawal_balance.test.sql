@@ -1186,7 +1186,7 @@ begin;
 -- drops the holding five units early. The shape is refused instead.
 do $$
 declare
-  v_user uuid; v_goal uuid; v_fund uuid; v_buy uuid; v_dep uuid;
+  v_user uuid; v_goal uuid; v_fund uuid; v_buy uuid; v_buy2 uuid; v_dep uuid;
 begin
   insert into auth.users (id, email) values (gen_random_uuid(), 'fundkeyed@test.invalid') returning id into v_user;
   insert into public.savings_goals (user_id, goal_name) values (v_user, 'Fund keyed') returning goal_id into v_goal;
@@ -1250,6 +1250,26 @@ begin
     (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
      parent_transaction_id, principal_withdrawn)
   values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 4000000, v_dep, 4000000);
+
+  -- Deleting a fund must still work for a sell that named BOTH its fund and a
+  -- purchase in it. The FK clears fund_id on both sides, the orphan path re-measures
+  -- the row, and it lands in the parent branch — where the parent is fund-typed but
+  -- no longer carries a fund, so it is no bucket and nothing is refused. Asking only
+  -- about asset_type turned an ordinary fund deletion into an error.
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal, v_fund, 'fund', 'investment', '2026-04-01', 1000000, 40, 25000)
+  returning transaction_id into v_buy2;
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, units_withdrawn, principal_withdrawn)
+  values (v_user, v_goal, v_fund, 'fund', 'withdrawal', '2026-04-02', 250000, v_buy2, 10, 250000);
+
+  delete from public.funds where id = v_fund;
+
+  if exists (select 1 from public.investment_transactions where transaction_id = v_buy2 and fund_id is not null) then
+    raise exception 'deleting the fund should have cleared the purchase''s fund_id';
+  end if;
 
   raise notice 'a fund sale must be keyed by its fund: ok';
 end;

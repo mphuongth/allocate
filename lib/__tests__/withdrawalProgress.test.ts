@@ -193,6 +193,18 @@ describe('buildWithdrawalMaps', () => {
       expect(fundWdMapAll.get('goal-1::fund-1')).toEqual({ units: 12.5, cost: 500_000 }) // 50 × 500k/2m
     })
 
+    // The old parent-backed write path required positive units only from a gold
+    // parent, so a recorded ZERO next to a real principal is a shape this data
+    // wears. Kept as zero it would be worse than before the fix: the overview
+    // skips a bucket entry with units <= 0 outright, principal and all.
+    it('treats a recorded zero as an absent quantity, not as "no units"', () => {
+      const wd = makeWithdrawal({
+        parent_transaction_id: 'buy-1', units_withdrawn: 0, principal_withdrawn: 500_000,
+      })
+      const { fundWdMapAll } = buildWithdrawalMaps([wd], [buy])
+      expect(fundWdMapAll.get('goal-1::fund-1')).toEqual({ units: 12.5, cost: 500_000 })
+    })
+
     it('never derives more units than the purchase holds', () => {
       const wd = makeWithdrawal({
         parent_transaction_id: 'buy-1', units_withdrawn: null, principal_withdrawn: 9_000_000,
