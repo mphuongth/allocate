@@ -66,6 +66,9 @@ Done:
 - Maturity resolve decomposed (#602): the merge rules and picker state
   (`features/dashboard/maturity/`) and the sheet's 121-line copy block are out
   of `MaturityResolveBody`, 1,021 → ~818 lines.
+- Fund Library desktop/mobile drift (#603): one filter+sort rule and one
+  fund-type palette in `features/funds/`, replacing a byte-identical copy in
+  each view. The table and the card list stay separate — they genuinely differ.
 - One component root: `app/components/` folded into `components/{ui,layout,navigation}`
   and `features/landing/`. The app shell no longer imports a screen — the
   add-transaction sheet reaches it as an opaque `overlays` node from the route
@@ -75,6 +78,6 @@ Still open — incremental, as files are touched, not as a repo-wide rename:
 
 - `app/assets/` split into `features/dashboard`, `features/investments`,
   `features/goals`, `features/insurance`.
-- Fund Library, Planning and Settings desktop/mobile drift (#603). Keep the
-  shells separate where the UX genuinely differs; extract the shared models,
-  actions and form fields.
+- Planning and Settings desktop/mobile drift (#603) — Fund Library is done.
+  Keep the shells separate where the UX genuinely differs; extract the shared
+  models, actions and form fields.

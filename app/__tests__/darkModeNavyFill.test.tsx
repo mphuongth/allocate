@@ -87,17 +87,14 @@ describe('issue #264 — fund-type chips are theme-tokenized', () => {
   // colours from hardcoded light-pastel hex, which stayed light on the dark
   // canvas. Both the surface and the accent text must come from flipping
   // tokens instead.
-  for (const rel of [
-    '(app)/funds/components/MobileFundLibraryView.tsx',
-    '(app)/funds/components/DesktopFundLibraryView.tsx',
-  ]) {
-    it(`${rel} TYPE_META uses CSS tokens, not hardcoded hex`, () => {
-      const src = readFileSync(path.join(APP_DIR, rel), 'utf8')
-      const block = src.match(/const TYPE_META[^=]*=\s*\{([\s\S]*?)\n\}/)
-      expect(block, 'TYPE_META block not found').not.toBeNull()
-      expect(block![1], 'TYPE_META still has a hardcoded hex colour').not.toMatch(/#[0-9a-fA-F]{6}/)
-    })
-  }
+  // One palette now, shared by both views (#603) — so there is one place to
+  // check, and no way for the two copies to drift apart on a re-tokenisation.
+  it('TYPE_META uses CSS tokens, not hardcoded hex', () => {
+    const src = readFileSync(path.resolve(process.cwd(), 'features/funds/fundListModel.ts'), 'utf8')
+    const block = src.match(/TYPE_META[^=]*=\s*\{([\s\S]*?)\n\}/)
+    expect(block, 'TYPE_META block not found').not.toBeNull()
+    expect(block![1], 'TYPE_META still has a hardcoded hex colour').not.toMatch(/#[0-9a-fA-F]{6}/)
+  })
 
   it('globals.css defines fund-type tokens with dark-mode overrides', () => {
     const css = readFileSync(path.join(process.cwd(), 'app/globals.css'), 'utf8')

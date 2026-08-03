@@ -34,7 +34,6 @@ import {
   depositMaturityState,
   addMonths,
   monthsBetween,
-  allocateCumulative,
   type RenewMode,
 } from '@/lib/maturity'
 import { maturityResolveStrings } from '@/features/dashboard/maturity/strings'
