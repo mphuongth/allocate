@@ -1364,6 +1364,26 @@ begin
   exception when sqlstate '23514' then null;
   end;
 
+  -- A legacy child that RECORDS its units is read as written, whatever this
+  -- purchase later costs — so it must not freeze an ordinary edit. Give the child
+  -- units and the same re-pricing goes through.
+  -- (Off, because touching the child's own amounts is a RAISED claim and the child's
+  -- trigger refuses the legacy shape there — giving it a fund is what legalises it.)
+  alter table public.investment_transactions disable trigger user;
+  update public.investment_transactions set units_withdrawn = 12.5
+   where parent_transaction_id = v_dep2 and transaction_type = 'withdrawal';
+  alter table public.investment_transactions enable trigger user;
+
+  update public.investment_transactions set units = 25, unit_price = 80000
+   where transaction_id = v_dep2;
+  update public.investment_transactions set units = 50, unit_price = 40000
+   where transaction_id = v_dep2;
+
+  alter table public.investment_transactions disable trigger user;
+  update public.investment_transactions set units_withdrawn = null
+   where parent_transaction_id = v_dep2 and transaction_type = 'withdrawal';
+  alter table public.investment_transactions enable trigger user;
+
   -- Everything else about it still edits: the guard is about the rate, not the row.
   update public.investment_transactions set notes = 'renamed' where transaction_id = v_dep2;
 

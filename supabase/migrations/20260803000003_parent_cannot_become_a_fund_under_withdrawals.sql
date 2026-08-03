@@ -19,12 +19,13 @@
 -- a new sale, asked of the edit that would create the shape.
 --
 -- The same statement is also the only thing that can move the RATE a legacy child's
--- units are derived at. Those units are `parent units x principal / parent amount`,
+-- units are DERIVED at. Those units are `parent units x principal / parent amount`,
 -- so editing the purchase's amount_vnd or units rewrites how much the dashboard
 -- takes out of the bucket for a row nothing re-measured — two principal-only
 -- children of a 50-unit / 2,000,000 purchase derive 12.5 units each today and 25
 -- each if the purchase is re-priced to half the units. The guard covers that edit
--- too, for a purchase that HAS such a child.
+-- too, and only for children that are actually derived from it: one that RECORDS a
+-- positive units_withdrawn is read as written, so it must not freeze the edit.
 --
 -- (The general case — lowering a holding's amount below what has already been
 -- withdrawn — is the mirror hole 20260730000002 names in its header and #608 owns.
@@ -46,35 +47,46 @@ security definer
 set search_path = ''
 as $$
 begin
-  if new.transaction_type = 'investment'
-     and new.asset_type = 'fund' and new.fund_id is not null
-     and (old.asset_type is distinct from new.asset_type
-          or old.fund_id is distinct from new.fund_id
-          -- The purchase's own PRICE is the rate a legacy child's units are derived
-          -- at (units x principal / amount, lib/withdrawalProgress), so editing it
-          -- silently rewrites how much the dashboard takes out of the bucket for a
-          -- row nothing re-measured. Only a purchase that HAS such a child is
-          -- affected: an ordinary fund holding, whose sells carry their own fund,
-          -- is edited exactly as before.
-          or old.amount_vnd is distinct from new.amount_vnd
-          or old.units is distinct from new.units) then
-    if exists (
-      select 1
-        from public.investment_transactions w
-       where w.parent_transaction_id = new.transaction_id
-         and w.transaction_type = 'withdrawal'
-         and (w.asset_type is distinct from 'fund' or w.fund_id is null)
-    ) then
-      -- Prefixed like every other refusal in this family so the API maps it to a
-      -- 400 with the one match it already has.
-      if old.asset_type is distinct from new.asset_type or old.fund_id is distinct from new.fund_id then
-        raise exception 'withdrawal invariant: holding % cannot become a fund purchase while a withdrawal that is not keyed by a fund draws on it',
-          new.transaction_id using errcode = 'check_violation';
-      end if;
-      raise exception 'withdrawal invariant: fund purchase % cannot change its amount or units while a withdrawal that is not keyed by a fund draws on it — that row''s units are derived from this purchase',
-        new.transaction_id using errcode = 'check_violation';
-    end if;
+  if new.transaction_type is distinct from 'investment'
+     or new.asset_type is distinct from 'fund' or new.fund_id is null then
+    return new;
   end if;
+
+  -- BECOMING a fund purchase: every non-fund-keyed child would wake up parented to
+  -- a fund, which is the shape 20260803000002 refuses at the child's own door.
+  if (old.asset_type is distinct from new.asset_type or old.fund_id is distinct from new.fund_id)
+     and exists (
+       select 1
+         from public.investment_transactions w
+        where w.parent_transaction_id = new.transaction_id
+          and w.transaction_type = 'withdrawal'
+          and (w.asset_type is distinct from 'fund' or w.fund_id is null)
+     ) then
+    -- Prefixed like every other refusal in this family so the API maps it to a 400
+    -- with the one match it already has.
+    raise exception 'withdrawal invariant: holding % cannot become a fund purchase while a withdrawal that is not keyed by a fund draws on it',
+      new.transaction_id using errcode = 'check_violation';
+  end if;
+
+  -- RE-PRICING one: this row's price is the rate a legacy child's units are DERIVED
+  -- at (parent units x principal / parent amount, lib/withdrawalProgress), so moving
+  -- it rewrites what the dashboard takes out of the bucket for a row nothing
+  -- re-measures. Only children that are actually derived from it are affected: one
+  -- that RECORDS a positive units_withdrawn is read as written, whatever this
+  -- purchase later costs, so it must not freeze an ordinary edit.
+  if (old.amount_vnd is distinct from new.amount_vnd or old.units is distinct from new.units)
+     and exists (
+       select 1
+         from public.investment_transactions w
+        where w.parent_transaction_id = new.transaction_id
+          and w.transaction_type = 'withdrawal'
+          and (w.asset_type is distinct from 'fund' or w.fund_id is null)
+          and coalesce(w.units_withdrawn, 0) <= 0
+     ) then
+    raise exception 'withdrawal invariant: fund purchase % cannot change its amount or units while a withdrawal that is not keyed by a fund derives its units from it',
+      new.transaction_id using errcode = 'check_violation';
+  end if;
+
   return new;
 end;
 $$;
