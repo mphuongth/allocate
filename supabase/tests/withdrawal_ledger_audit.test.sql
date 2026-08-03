@@ -627,6 +627,16 @@ begin
     end if;
   end loop;
 
+  -- The detail an operator reads is part of the report, not decoration: this row's
+  -- principal IS offset now (lib/withdrawalProgress values it against the parent
+  -- purchase's fund bucket, #606), and the old wording — "which no valuation
+  -- offsets" — would send whoever reads it to subtract the same money a second time.
+  if not exists (select 1 from public.withdrawal_ledger_audit
+                  where transaction_id = v_onfund
+                    and detail like '%valued against that fund bucket%') then
+    raise exception 'the fund-parented withdrawal must be reported as valued, not as uncounted';
+  end if;
+
   -- the three group-level checks, keyed by holding rather than by row
   if not exists (select 1 from public.withdrawal_ledger_audit
                   where check_name = 'holding_overdrawn' and parent_transaction_id = v_over_src) then
