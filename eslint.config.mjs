@@ -15,6 +15,9 @@ const eslintConfig = defineConfig([
     // Gitignored local git worktrees (stale repo copies checked out by other
     // Claude sessions) — don't lint their sources as if they were ours (#469).
     ".claude/**",
+    // Generated v8/istanbul coverage report (#596) — its bundled HTML viewer
+    // scripts are not our source.
+    "coverage/**",
   ]),
   {
     rules: {
