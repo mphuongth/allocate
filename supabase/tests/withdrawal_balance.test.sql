@@ -1341,6 +1341,32 @@ begin
      set asset_type = 'fund', fund_id = v_fund3, units = 50, unit_price = 40000
    where transaction_id = v_dep2;
 
+  -- Re-pricing a purchase that carries a legacy child is refused for the same
+  -- reason: those units are derived from this purchase's price, so moving it
+  -- rewrites what the dashboard takes out of the bucket for a row nothing
+  -- re-measures. Planted with the trigger off — the only way the child can exist.
+  alter table public.investment_transactions disable trigger user;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn)
+  values (v_user, v_goal3, null, 'withdrawal', '2026-03-01', 500000, v_dep2, 500000);
+  alter table public.investment_transactions enable trigger user;
+
+  begin
+    update public.investment_transactions set units = 25, unit_price = 80000
+     where transaction_id = v_dep2;
+    raise exception 'a fund purchase must not be re-priced under a legacy child';
+  exception when sqlstate '23514' then null;
+  end;
+  begin
+    update public.investment_transactions set amount_vnd = 4000000
+     where transaction_id = v_dep2;
+    raise exception 'a fund purchase must not have its amount changed under a legacy child';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- Everything else about it still edits: the guard is about the rate, not the row.
+  update public.investment_transactions set notes = 'renamed' where transaction_id = v_dep2;
+
   -- A child that carries its OWN fund draws on that bucket whatever its parent is,
   -- so it never blocks the conversion. (Dual-key sell: legal, the fund branch wins.)
   insert into public.investment_transactions
