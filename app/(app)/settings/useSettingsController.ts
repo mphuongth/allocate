@@ -8,7 +8,7 @@ import { toast } from 'sonner'
 import { useTheme, type ThemeChoice } from '@/components/layout/ThemeProvider'
 import { useNavigation } from '@/components/navigation/NavigationContext'
 import type { DashboardData } from '@/features/dashboard/contracts'
-import { useManagedTimeout } from './useManagedTimeout'
+import { useManagedTimeout } from '@/components/ui/useManagedTimeout'
 import {
   clearAppCaches, setLocaleCookie, refreshPrices, fetchOverview,
   exportPortfolioReport, fetchLastSync, formatLastSync,
