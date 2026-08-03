@@ -40,12 +40,16 @@ const INFRA_PATTERNS: RegExp[] = [
   /canceling statement due to/i,
   /disk io/i,
   /resource exhausted/i,
-  // Gateway and rate-limit responses
-  /\b(429|502|503|504)\b/,
+  // Gateway and rate-limit responses. The classifier sees the message *and* the
+  // stack, so a bare number is not enough — `dashboard.spec.ts:503:11` and an
+  // expected value of 429 are ordinary product failures. Require either the
+  // status phrase or an explicit HTTP-status context.
   /too many requests/i,
   /service unavailable/i,
   /gateway timeout/i,
   /bad gateway/i,
+  /\b(?:status(?:[ _]?code)?|http)\b\W{0,3}(?:429|50[234])\b/i,
+  /\breceived\s*:?\s+(?:429|50[234])\b/i,
   // The app server never came up at all. Playwright words this several ways
   // ("Timed out waiting … from config.webServer.", "Process from
   // config.webServer was not able to start."), so match the config key itself.

@@ -96,6 +96,15 @@ production project, in CI and locally alike.
 - Both start a **local Supabase stack inside the runner**. The shared NANO test
   project throttles under the suite's write load — that is what made CI E2E
   unusable in #313 — so nothing points at it.
+- After the stack starts, one SQL step restores the **hosted-project DML
+  baseline**. A hosted project grants `anon`/`authenticated`/`service_role` full
+  DML on `public` through default privileges (which is why no migration carries
+  a `GRANT`); the CLI's local stack grants only the non-DML part, so seeding
+  fails with `42501 permission denied`. The step tops up DML *only for roles
+  still present in an object's ACL*, so a migration's
+  `revoke all on <table> from anon, authenticated` survives it — the revoked
+  tables stay revoked and function `EXECUTE` grants are left alone. Verified
+  against a stack reproduced locally with the same CLI version.
 - The Playwright HTML report and `test-results/` are uploaded as artifacts on
   failure.
 

@@ -27,6 +27,22 @@ describe('classifyFailure', () => {
     )
     expect(classifyFailure({ message: 'request failed with 504 Gateway Timeout' })).toBe('infra')
     expect(classifyFailure({ message: 'HTTP 429 Too Many Requests' })).toBe('infra')
+    expect(classifyFailure({ message: 'apiResponse.json: status 502' })).toBe('infra')
+    expect(classifyFailure({ message: 'Received: 429' })).toBe('infra')
+  })
+
+  it('does not read a bare number in a stack frame or a value as a status code', () => {
+    // The classifier sees message + stack. A line number, an amount, or a goal
+    // id containing 503 must not turn a real regression into "infra".
+    expect(
+      classifyFailure({
+        message: 'expect(received).toBe(expected)\n    at e2e/dashboard.spec.ts:503:11',
+      }),
+    ).toBe('product')
+    expect(
+      classifyFailure({ message: 'expect(received).toBe(expected)\n\nExpected: 429\nReceived: 0' }),
+    ).toBe('product')
+    expect(classifyFailure({ message: 'amount_vnd 502000 did not match' })).toBe('product')
   })
 
   it('classifies a webServer that never came up as infra', () => {

@@ -59,19 +59,45 @@ jobs:
       - name: Start a local Supabase stack
         run: supabase start
 
-      - name: Grant the API roles access to public
-        # A hosted Supabase project grants anon/authenticated/service_role on
-        # everything in `public` through its default privileges, so the app's
-        # migrations never carry GRANTs. Migrations applied by `supabase start`
-        # in the runner don't pick those up, and every seeded row failed with
-        # `42501 permission denied for table …`. Grant them explicitly so the
-        # ephemeral CI database matches a real project. RLS still applies.
+      - name: Restore the hosted-project DML baseline
+        # A hosted Supabase project grants anon/authenticated/service_role full
+        # DML on everything in `public` through its default privileges, so the
+        # app's migrations carry no GRANTs of their own. The CLI's local stack
+        # grants only the non-DML part (`Dxtm` — truncate/references/trigger/
+        # maintain), so every seeded row failed with `42501 permission denied
+        # for table …`.
+        #
+        # Top up DML *only for roles still present in an object's ACL*. That is
+        # the difference that matters: a migration's `revoke all on <table> from
+        # anon, authenticated` removes the role from the ACL entirely, so those
+        # deliberate revocations survive this step instead of being handed back.
+        # Functions are untouched for the same reason — migrations manage their
+        # EXECUTE grants explicitly (e.g. refresh_gold_price_all is service_role
+        # only), and the 20 that carry no explicit ACL already get PUBLIC
+        # EXECUTE exactly as they do in production.
+        #
+        # Caveat: this restores the full DML set, so a *partial* revoke (say,
+        # revoking only INSERT) would be undone. The schema has none today — all
+        # revocations are `revoke all`.
         run: |
           psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 <<'SQL'
-          GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
-          GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
-          GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
-          GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role;
+          DO $$
+          DECLARE obj record;
+          BEGIN
+            FOR obj IN
+              SELECT DISTINCT c.oid::regclass::text AS rel,
+                              pg_get_userbyid(a.grantee) AS grantee
+              FROM pg_class c
+              JOIN pg_namespace n ON n.oid = c.relnamespace AND n.nspname = 'public'
+              CROSS JOIN LATERAL aclexplode(c.relacl) a
+              WHERE c.relkind IN ('r', 'p', 'v', 'm')
+                AND pg_get_userbyid(a.grantee) IN ('anon', 'authenticated', 'service_role')
+            LOOP
+              EXECUTE format(
+                'GRANT SELECT, INSERT, UPDATE, DELETE ON %s TO %I', obj.rel, obj.grantee);
+            END LOOP;
+          END
+          $$;
           SQL
 
       - name: Point the app and the E2E setup at the local stack
