@@ -19,28 +19,10 @@ import { useFundMutations } from './useFundMutations'
 // ─── Types ────────────────────────────────────────────────────────────────────
 // Fund/Goal/FundType are shared with the mobile view via useFundsData.
 
-type SortKey = 'code' | 'nav' | 'name'
-type TypeFilter = 'all' | 'equity' | 'debt' | 'balanced'
+import type { SortKey, TypeFilter } from '@/features/funds/contracts'
+import { TYPE_META, TYPE_FILTERS, FORM_TYPES, filterAndSortFunds, nextSort } from '@/features/funds/fundListModel'
 
 // ─── Design constants ─────────────────────────────────────────────────────────
-
-const TYPE_META: Record<FundType, { label: string; labelVi: string; color: string; bg: string }> = {
-  equity:   { label: 'Stock',    labelVi: 'Cổ phiếu',   color: 'var(--c-fund-equity)',   bg: 'var(--c-fund-equity-bg)' },
-  debt:     { label: 'Bond',     labelVi: 'Trái phiếu', color: 'var(--c-fund-debt)',     bg: 'var(--c-fund-debt-bg)' },
-  balanced: { label: 'Balanced', labelVi: 'Cân bằng',   color: 'var(--c-fund-balanced)', bg: 'var(--c-fund-balanced-bg)' },
-  gold:     { label: 'Gold',     labelVi: 'Vàng',       color: 'var(--c-fund-gold)',     bg: 'var(--c-fund-gold-bg)' },
-}
-
-const TYPE_FILTERS: { v: TypeFilter; label: string; labelVi: string }[] = [
-  { v: 'all',      label: 'All',      labelVi: 'Tất cả' },
-  { v: 'equity',   label: 'Stock',    labelVi: 'Cổ phiếu' },
-  { v: 'debt',     label: 'Bond',     labelVi: 'Trái phiếu' },
-  { v: 'balanced', label: 'Balanced', labelVi: 'Cân bằng' },
-]
-
-// Selectable fund types in the create/edit form. Gold is excluded (handled
-// separately via byType) to match MobileFundLibraryView's FORM_TYPES.
-const FORM_TYPES = (Object.keys(TYPE_META) as FundType[]).filter(ft => ft !== 'gold')
 
 // ─── Small components ─────────────────────────────────────────────────────────
 
@@ -364,25 +346,15 @@ export default function DesktopFundLibraryView({ funds, setFunds, goals, loading
 
   // Sorting
   const handleSort = (key: SortKey) => {
-    if (sortKey === key) setSortAsc(a => !a)
-    else { setSortKey(key); setSortAsc(true) }
+    const next = nextSort({ sortKey, sortAsc }, key)
+    setSortKey(next.sortKey); setSortAsc(next.sortAsc)
   }
 
   // Filtered + sorted funds
-  const displayFunds = useMemo(() => {
-    let f = funds
-    if (typeFilter !== 'all') f = f.filter(x => x.fund_type === typeFilter)
-    if (query) {
-      const q = query.toLowerCase()
-      f = f.filter(x => x.code.toLowerCase().includes(q) || x.name.toLowerCase().includes(q))
-    }
-    return [...f].sort((a, b) => {
-      let cmp = 0
-      if (sortKey === 'nav') cmp = a.nav - b.nav
-      else cmp = a[sortKey].localeCompare(b[sortKey])
-      return sortAsc ? cmp : -cmp
-    })
-  }, [funds, typeFilter, query, sortKey, sortAsc])
+  const displayFunds = useMemo(
+    () => filterAndSortFunds(funds, { query, typeFilter, sortKey, sortAsc }),
+    [funds, typeFilter, query, sortKey, sortAsc],
+  )
 
   // Refresh NAV
   async function handleRefreshNav() {

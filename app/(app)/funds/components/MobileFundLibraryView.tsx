@@ -10,6 +10,8 @@ import { fmtNav, fmtCompact } from '@/lib/formatters'
 import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
 // Shared dialog a11y (Esc-to-close + focus trap + focus restore). Lives under
 // the Plan feature today; reused here so Funds sheets behave the same.
+import { TYPE_META, TYPE_FILTERS, FORM_TYPES, filterAndSortFunds, nextSort } from '@/features/funds/fundListModel'
+import type { TypeFilter } from '@/features/funds/contracts'
 import { useDialogA11y } from '@/components/ui/useDialogA11y'
 import { FundsEmptyState } from './FundsEmptyState'
 import { FundNavAge } from './FundNavAge'
@@ -36,20 +38,6 @@ type Toast = { id: number; message: string; type: 'success' | 'error' }
 type SortKey = 'code' | 'nav' | 'name'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-
-const TYPE_META: Record<FundType, { label: string; labelVi: string; color: string; bg: string }> = {
-  equity:   { label: 'Stock',    labelVi: 'Cổ phiếu',   color: 'var(--c-fund-equity)',   bg: 'var(--c-fund-equity-bg)' },
-  debt:     { label: 'Bond',     labelVi: 'Trái phiếu', color: 'var(--c-fund-debt)',     bg: 'var(--c-fund-debt-bg)' },
-  balanced: { label: 'Balanced', labelVi: 'Cân bằng',   color: 'var(--c-fund-balanced)', bg: 'var(--c-fund-balanced-bg)' },
-  gold:     { label: 'Gold',     labelVi: 'Vàng',       color: 'var(--c-fund-gold)',     bg: 'var(--c-fund-gold-bg)' },
-}
-
-const TYPE_FILTERS: Array<{ v: 'all' | FundType; label: string; labelVi: string }> = [
-  { v: 'all',      label: 'All',      labelVi: 'Tất cả' },
-  { v: 'equity',   label: 'Stock',    labelVi: 'Cổ phiếu' },
-  { v: 'debt',     label: 'Bond',     labelVi: 'Trái phiếu' },
-  { v: 'balanced', label: 'Balanced', labelVi: 'Cân bằng' },
-]
 
 // i18n key (in the `funds` namespace) for each sort option's label.
 const SORT_OPTIONS: Array<{ v: SortKey; key: 'colCode' | 'colNav' | 'colName' }> = [
@@ -107,7 +95,6 @@ function SortDropdown({ sortKey, sortAsc, onSort }: { sortKey: SortKey; sortAsc:
 
 // ─── Type dropdown ────────────────────────────────────────────────────────────
 
-const FORM_TYPES = (Object.keys(TYPE_META) as FundType[]).filter((ft) => ft !== 'gold')
 
 function TypeDropdown({ value, onChange }: { value: FundType; onChange: (v: FundType) => void }) {
   const locale = useLocale()
@@ -459,7 +446,7 @@ export default function MobileFundLibraryView({ funds, setFunds, goals, loading,
 
   // ── UI state ──────────────────────────────────────────────────────────────
   const [query, setQuery] = useState('')
-  const [filter, setFilter] = useState<'all' | FundType>('all')
+  const [filter, setFilter] = useState<TypeFilter>('all')
   const [sortKey, setSortKey] = useState<SortKey>('code')
   const [sortAsc, setSortAsc] = useState(true)
 
@@ -551,28 +538,16 @@ export default function MobileFundLibraryView({ funds, setFunds, goals, loading,
 
   // ── Sorted/filtered list ──────────────────────────────────────────────────
 
-  const sortedFunds = useMemo(() => {
-    let list = [...funds]
-    if (filter !== 'all') list = list.filter((f) => f.fund_type === filter)
-    if (query) {
-      const q = query.toLowerCase()
-      list = list.filter((f) => f.code.toLowerCase().includes(q) || f.name.toLowerCase().includes(q))
-    }
-    list.sort((a, b) => {
-      let cmp = 0
-      if (sortKey === 'nav') cmp = a.nav - b.nav
-      else if (sortKey === 'code') cmp = a.code.localeCompare(b.code)
-      else cmp = a.name.localeCompare(b.name)
-      return sortAsc ? cmp : -cmp
-    })
-    return list
-  }, [funds, filter, query, sortKey, sortAsc])
+  const sortedFunds = useMemo(
+    () => filterAndSortFunds(funds, { query, typeFilter: filter, sortKey, sortAsc }),
+    [funds, filter, query, sortKey, sortAsc],
+  )
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
   function handleSort(key: SortKey) {
-    if (sortKey === key) setSortAsc((v) => !v)
-    else { setSortKey(key); setSortAsc(true) }
+    const next = nextSort({ sortKey, sortAsc }, key)
+    setSortKey(next.sortKey); setSortAsc(next.sortAsc)
   }
 
   async function handleSave(data: SavePayload, existingId?: string) {

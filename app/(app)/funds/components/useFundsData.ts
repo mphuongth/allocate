@@ -6,23 +6,8 @@ import { useAdoptCacheOnce } from '@/lib/useHydrated'
 
 // ─── Shared types ─────────────────────────────────────────────────────────────
 
-export type FundType = 'balanced' | 'equity' | 'debt' | 'gold'
-
-export type Fund = {
-  id: string
-  name: string
-  code: string
-  fund_type: FundType
-  nav: number
-  nav_source_url: string | null
-  is_dca: boolean
-  dca_monthly_amount_vnd: number | null
-  dca_goal_id: string | null
-  created_at: string
-  updated_at: string
-}
-
-export type Goal = { goal_id: string; goal_name: string }
+export type { FundType, Fund, Goal } from '@/features/funds/contracts'
+import type { Fund, Goal } from '@/features/funds/contracts'
 
 export interface FundsData {
   funds: Fund[]
