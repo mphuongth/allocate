@@ -28,7 +28,28 @@ describe('classifyFailure', () => {
     expect(classifyFailure({ message: 'request failed with 504 Gateway Timeout' })).toBe('infra')
     expect(classifyFailure({ message: 'HTTP 429 Too Many Requests' })).toBe('infra')
     expect(classifyFailure({ message: 'apiResponse.json: status 502' })).toBe('infra')
-    expect(classifyFailure({ message: 'Received: 429' })).toBe('infra')
+  })
+
+  it('sees through the ANSI colour codes Playwright actually emits', () => {
+    const esc = '\u001b'
+    expect(
+      classifyFailure({
+        message: `Error: apiResponse: ${esc}[31mstatus 503${esc}[39m`,
+      }),
+    ).toBe('infra')
+  })
+
+  it('reports a bare status diff as a product failure — the honest default', () => {
+    // Instrumenting a real run showed the reporter receives only the diff:
+    // `TestResult.errors[]` carries no code snippet, so a throttled gateway and
+    // a money-value regression are textually identical here. Ambiguity resolves
+    // to 'product' so a genuine regression is never dismissed as infra.
+    const esc = '\u001b'
+    const real =
+      `Error: ${esc}[2mexpect(${esc}[22m${esc}[31mreceived${esc}[39m${esc}[2m).${esc}[22mtoBe${esc}[2m(${esc}[22m${esc}[32mexpected${esc}[39m${esc}[2m) // Object.is equality${esc}[22m\n\n` +
+      `Expected: ${esc}[32m400${esc}[39m\nReceived: ${esc}[31m503${esc}[39m`
+
+    expect(classifyFailure({ message: real })).toBe('product')
   })
 
   it('does not read a bare number in a stack frame or a value as a status code', () => {
@@ -43,6 +64,13 @@ describe('classifyFailure', () => {
       classifyFailure({ message: 'expect(received).toBe(expected)\n\nExpected: 429\nReceived: 0' }),
     ).toBe('product')
     expect(classifyFailure({ message: 'amount_vnd 502000 did not match' })).toBe('product')
+    expect(
+      classifyFailure({
+        message:
+          'expect(received).toBe(expected)\n\nExpected: 0\nReceived: 503\n    at e2e/planning.spec.ts:88:20',
+      }),
+    ).toBe('product')
+    expect(classifyFailure({ message: 'Received: 429' })).toBe('product')
   })
 
   it('classifies a webServer that never came up as infra', () => {

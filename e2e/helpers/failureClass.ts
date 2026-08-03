@@ -49,7 +49,6 @@ const INFRA_PATTERNS: RegExp[] = [
   /gateway timeout/i,
   /bad gateway/i,
   /\b(?:status(?:[ _]?code)?|http)\b\W{0,3}(?:429|50[234])\b/i,
-  /\breceived\s*:?\s+(?:429|50[234])\b/i,
   // The app server never came up at all. Playwright words this several ways
   // ("Timed out waiting … from config.webServer.", "Process from
   // config.webServer was not able to start."), so match the config key itself.
@@ -61,9 +60,29 @@ const INFRA_PATTERNS: RegExp[] = [
   /page crashed/i,
 ]
 
+/**
+ * Playwright colours its errors, so a real diff arrives as
+ * `Received: <ESC>[31m503<ESC>[39m` — the escape sits between the label and the
+ * number and defeats any pattern spanning the two. Strip them before matching.
+ */
+const ANSI = /\u001b\[[0-9;]*m/g
+
+/**
+ * Deliberately *not* a signal: an assertion diff of the form
+ * `Expected: 400 / Received: 503`. When a throttled gateway answers a status the
+ * test asserted on, that diff is all the reporter gets — `TestResult.errors[]`
+ * carries no code snippet (verified by instrumenting a real run), so there is no
+ * HTTP context to key on, and the identical text is what a money-value
+ * regression prints. Such a run is reported as a *product* failure: calling a
+ * genuine regression "infra" is the failure mode this classifier exists to
+ * prevent, so ambiguity resolves that way. Real throttling nearly always also
+ * carries one of the signals above — a socket error, a statement timeout, or
+ * the status phrase itself.
+ */
+
 /** Classify one failed test as infrastructure trouble or a product regression. */
 export function classifyFailure(failure: FailureInput): FailureKind {
-  const message = failure.message ?? ''
+  const message = (failure.message ?? '').replace(ANSI, '')
   if (!message) return 'product'
   return INFRA_PATTERNS.some((p) => p.test(message)) ? 'infra' : 'product'
 }

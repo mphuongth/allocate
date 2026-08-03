@@ -54,6 +54,14 @@ layer; it doesn't fail the run.
 - **product** — everything else, including a plain locator timeout (that is an
   element that never appeared, i.e. a real regression).
 
+Ambiguity resolves to *product* by design. A bare assertion diff
+(`Expected: 400 / Received: 503`) is **not** treated as infra: the reporter only
+receives the diff — `TestResult.errors[]` carries no code snippet — so a
+throttled gateway and a money-value regression are textually identical there.
+Calling a genuine regression "infra" is the failure mode this classifier exists
+to prevent. Real throttling nearly always also carries a socket error, a
+statement timeout, or the status phrase itself.
+
 A run whose failures are *all* infra prints an explicit note. Re-run it against
 a healthy stack before chasing the app.
 
