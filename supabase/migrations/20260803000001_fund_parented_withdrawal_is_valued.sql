@@ -50,6 +50,8 @@ with wd as (
          -- claim would be measured against two balances.
          p.fund_id          as parent_fund,
          p.goal_id          as parent_goal,
+         p.units            as parent_units,
+         p.amount_vnd       as parent_amount,
          coalesce(not (w.asset_type = 'fund' and w.fund_id is not null)
                   and p.transaction_type = 'investment'
                   and p.asset_type = 'fund' and p.fund_id is not null, false) as fund_parented
@@ -81,17 +83,24 @@ fund_buys as (
    group by t.user_id, t.goal_id, t.fund_id
 ),
 fund_sells as (
-  -- One bucket, both shapes. A fund-parented row's units are counted only where it
-  -- RECORDS them: the reader derives them when they are absent, and a derived
-  -- quantity is proportional by construction, so folding it in here would report
-  -- the derivation rather than the ledger. That makes the units side conservative —
-  -- it under-counts what such a row removes, never over-counts — which is the right
-  -- direction for a check that calls an overrun a violation.
+  -- One bucket, both shapes — measured by what the READER removes, which for a
+  -- fund-parented row with no units_withdrawn is a DERIVED quantity: the same
+  -- capped pro-rata share of the parent purchase that lib/withdrawalProgress
+  -- subtracts. Counting those rows as zero units looked conservative and was not:
+  -- a principal-only draw on a 100-unit purchase takes 100 units out of the bucket
+  -- in the dashboard, and an audit that scores it as nothing reports a bucket sold
+  -- past its units as clean — which is the one thing this check exists to catch.
   select w.user_id,
          case when w.fund_keyed then w.goal_id else w.parent_goal end as goal_id,
          case when w.fund_keyed then w.fund_id else w.parent_fund end as fund_id,
          sum(coalesce(w.principal_withdrawn, 0)) as out_principal,
-         sum(coalesce(w.units_withdrawn, 0))     as out_units,
+         sum(case when w.fund_keyed then coalesce(w.units_withdrawn, 0)
+                  else coalesce(w.units_withdrawn,
+                                case when coalesce(w.parent_units, 0) > 0 and coalesce(w.parent_amount, 0) > 0
+                                       then least(w.parent_units,
+                                                  w.parent_units * coalesce(w.principal_withdrawn, 0) / w.parent_amount)
+                                     else 0 end)
+             end)                                as out_units,
          count(*)                                as sells,
          min(w.transaction_id::text)             as a_sell
     from wd w
@@ -264,11 +273,22 @@ union all
 -- Do not repair one by hand off this row alone without checking what the dashboard
 -- already subtracts for it — the money is offset now, and subtracting it a second
 -- time would understate the holding by the same amount this once overstated it.
+--
+-- The message is gated on what the reader ACTUALLY does with the row. A parent
+-- that is fund-typed but carries no fund_id of its own — or that is itself a
+-- fund-typed withdrawal — is not a bucket: buildWithdrawalMaps leaves such a row on
+-- the parent axis, where nothing reads it, and the parent is not valued either. An
+-- audit that told an operator those were "valued against that fund bucket" would
+-- have them leave an unvalued row alone, which is the mistake this check is for.
 select 'parent_is_a_fund_purchase', 'review',
        w.user_id, w.transaction_id, w.parent_transaction_id, w.fund_id, w.goal_id,
-       format('draws %s đồng on fund purchase %s, valued against that fund bucket with units %s',
-              w.principal_withdrawn, w.parent_transaction_id,
-              case when w.units_withdrawn is null then 'derived pro-rata' else w.units_withdrawn::text end)
+       case when w.fund_parented
+              then format('draws %s đồng on fund purchase %s, valued against that fund bucket with units %s',
+                          w.principal_withdrawn, w.parent_transaction_id,
+                          case when w.units_withdrawn is null then 'derived pro-rata' else w.units_withdrawn::text end)
+            else format('draws %s đồng on fund-typed %s %s, which carries no fund of its own — no bucket values it',
+                        w.principal_withdrawn, w.parent_type, w.parent_transaction_id)
+       end
   from wd w
  where not w.fund_keyed and w.parent_asset = 'fund'
 

@@ -802,6 +802,90 @@ begin
   raise notice 'withdrawal_ledger_audit: both sale shapes share one bucket balance';
 end $$;
 
+-- A legacy row that records only PRINCIPAL still takes units out of the bucket:
+-- the reader derives them pro-rata from the purchase it names. An audit that
+-- scored such a row as zero units called a bucket sold past its units clean —
+-- 102 units out of 101, silent, which is the one thing this check is for.
+do $$
+declare
+  v_user uuid; v_goal uuid; v_fund uuid; v_big uuid; v_n int;
+begin
+  insert into auth.users (id, email) values (gen_random_uuid(), 'wd-audit-derived@test.invalid') returning id into v_user;
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Derived units') returning goal_id into v_goal;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Derived Fund', 'DRVF', 'equity', 10) returning id into v_fund;
+
+  alter table public.investment_transactions disable trigger user;
+
+  -- Two purchases at very different prices, so the bucket's average hides what the
+  -- named purchase actually gives up: 100 units for 1000 đồng, and 1 for 1000.
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal, v_fund, 'fund', 'investment', '2026-01-01', 1000, 100, 10)
+  returning transaction_id into v_big;
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal, v_fund, 'fund', 'investment', '2026-01-02', 1000, 1, 1000);
+
+  -- Principal-only draw on the 100-unit purchase: the reader takes all 100 units.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn)
+  values (v_user, v_goal, null, 'withdrawal', '2026-02-01', 1000, v_big, 1000);
+  -- Plus an ordinary 2-unit sell: 102 units asked of a bucket holding 101.
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units_withdrawn, principal_withdrawn)
+  values (v_user, v_goal, v_fund, 'fund', 'withdrawal', '2026-03-01', 20, 2, 20);
+
+  alter table public.investment_transactions enable trigger user;
+
+  select count(*) into v_n from public.withdrawal_ledger_audit
+   where user_id = v_user and check_name = 'fund_bucket_overdrawn' and fund_id = v_fund;
+  if v_n <> 1 then
+    raise exception 'the audit must count the units a principal-only row derives, got % overdraw(s)', v_n;
+  end if;
+
+  raise notice 'withdrawal_ledger_audit: derived units count against the bucket';
+end $$;
+
+-- A fund-typed parent with no fund of its own is NOT a bucket: the reader leaves
+-- such a row on the parent axis, where nothing reads it. Telling an operator it was
+-- "valued against that fund bucket" would have them leave an unvalued row alone.
+do $$
+declare
+  v_user uuid; v_goal uuid; v_orphan uuid; v_wd uuid; v_detail text;
+begin
+  insert into auth.users (id, email) values (gen_random_uuid(), 'wd-audit-nofund@test.invalid') returning id into v_user;
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'No fund') returning goal_id into v_goal;
+
+  alter table public.investment_transactions disable trigger user;
+
+  -- A fund purchase whose fund is gone (the FK is ON DELETE SET NULL).
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal, 'fund', 'investment', '2026-01-01', 1000000, 50, 20000)
+  returning transaction_id into v_orphan;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn)
+  values (v_user, v_goal, null, 'withdrawal', '2026-02-01', 400000, v_orphan, 400000)
+  returning transaction_id into v_wd;
+
+  alter table public.investment_transactions enable trigger user;
+
+  select detail into v_detail from public.withdrawal_ledger_audit
+   where transaction_id = v_wd and check_name = 'parent_is_a_fund_purchase';
+  if v_detail is null then
+    raise exception 'the row must still be reported';
+  end if;
+  if v_detail like '%valued against that fund bucket%' then
+    raise exception 'a parent with no fund is no bucket: the audit must not claim the row was valued';
+  end if;
+  if v_detail not like '%carries no fund of its own%' then
+    raise exception 'the detail must say why nothing values it, got: %', v_detail;
+  end if;
+
+  raise notice 'withdrawal_ledger_audit: no bucket, no claim that the row was valued';
+end $$;
+
 -- ═══ the contract itself ═══════════════════════════════════════════════════
 -- Two claims the view's header makes, kept honest here rather than in prose alone.
 do $$
