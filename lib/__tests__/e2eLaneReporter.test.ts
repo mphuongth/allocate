@@ -70,6 +70,41 @@ describe('LaneReporter', () => {
     expect(output()).not.toContain('Every failure looks like infrastructure')
   })
 
+  it('records an unexpected pass — a test.fail() that passed makes the run red', () => {
+    const { reporter, output } = makeReporter()
+    const unexpectedPass = {
+      expectedStatus: 'failed',
+      retries: 0,
+      titlePath: () => ['', 'smoke', 'a.spec.ts', 'known-broken test'],
+    } as unknown as TestCase
+
+    reporter.onBegin()
+    reporter.onTestEnd(unexpectedPass, {
+      status: 'passed',
+      retry: 0,
+      errors: [],
+    } as unknown as TestResult)
+    reporter.onEnd(failedRun)
+
+    expect(output()).toContain('1 product failure(s)')
+    expect(output()).toContain('known-broken test')
+  })
+
+  it('does not record an expected failure', () => {
+    const { reporter, output } = makeReporter()
+    const expectedFailure = {
+      expectedStatus: 'failed',
+      retries: 0,
+      titlePath: () => ['', 'smoke', 'a.spec.ts', 'known-broken test'],
+    } as unknown as TestCase
+
+    reporter.onBegin()
+    reporter.onTestEnd(expectedFailure, failedResult)
+    reporter.onEnd(passedRun)
+
+    expect(output()).toContain('no failures')
+  })
+
   it('stays quiet when nothing ran and nothing failed — e.g. `--list`', () => {
     const { reporter, output } = makeReporter()
 

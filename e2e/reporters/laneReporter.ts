@@ -32,7 +32,10 @@ class LaneReporter implements Reporter {
 
   onTestEnd(test: TestCase, result: TestResult) {
     this.finished += 1
-    if (result.status === 'passed' || result.status === 'skipped') return
+    if (result.status === 'skipped') return
+    // Compare against the *expected* status, not against 'passed': a test.fail()
+    // that passes turns the run red, and an expected failure does not. Checking
+    // `status === 'passed'` first would drop the former from the summary.
     if (result.status === test.expectedStatus) return
     // Retries: only the final attempt matters.
     if (result.retry < test.retries) return
