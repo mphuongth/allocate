@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import DesktopGoalCard from '../DesktopGoalCard'
-import type { GoalData } from '../../DashboardClient'
+import type { GoalData } from '@/features/dashboard/contracts'
 
 const mockGoal: GoalData = {
   goalId: 'goal-1',

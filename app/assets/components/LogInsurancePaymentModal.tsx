@@ -5,7 +5,7 @@ import { Check, Shield, X } from 'lucide-react'
 import { fmtCompact } from '@/lib/formatters'
 import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
 import { todayIso } from '@/lib/dates'
-import type { InsuranceData } from '../DashboardClient'
+import type { InsuranceData } from '@/features/dashboard/contracts'
 
 interface Props {
   open: boolean

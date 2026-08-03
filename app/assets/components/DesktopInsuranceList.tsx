@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Shield, Plus, AlertTriangle } from 'lucide-react'
 import { fmtCompact } from '@/lib/formatters'
 import { STATUS_COLOR, BAR_COLOR, insurancePaidState, insuranceStatusLabel } from './insuranceShared'
-import type { InsuranceData } from '../DashboardClient'
+import type { InsuranceData } from '@/features/dashboard/contracts'
 
 interface Props {
   insurance: InsuranceData[]

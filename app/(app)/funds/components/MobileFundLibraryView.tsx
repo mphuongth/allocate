@@ -10,12 +10,12 @@ import { fmtNav, fmtCompact } from '@/lib/formatters'
 import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
 // Shared dialog a11y (Esc-to-close + focus trap + focus restore). Lives under
 // the Plan feature today; reused here so Funds sheets behave the same.
-import { useDialogA11y } from '@/app/(app)/planning/components/useDialogA11y'
+import { useDialogA11y } from '@/components/ui/useDialogA11y'
 import { FundsEmptyState } from './FundsEmptyState'
 import { FundNavAge } from './FundNavAge'
 import type { Fund, Goal, FundType, FundsData, FundsBusy } from './useFundsData'
 import { useFundMutations } from './useFundMutations'
-import { useDialogMount } from '@/app/(app)/planning/components/useDialogMount'
+import { useDialogMount } from '@/components/ui/useDialogMount'
 
 // Matches the design's exact icon paths (stroke-based, strokeWidth 1.75)
 const IconEdit = ({ size = 14, color = 'currentColor' }: { size?: number; color?: string }) => (

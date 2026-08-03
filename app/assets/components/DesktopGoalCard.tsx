@@ -2,7 +2,7 @@
 
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import { ProgressCreditNote, progressCredit } from './goalDetailShared'
-import type { GoalData } from '../DashboardClient'
+import type { GoalData } from '@/features/dashboard/contracts'
 
 interface Props {
   goal: GoalData

@@ -8,7 +8,7 @@ import { useState, useRef } from 'react'
 import { Check, ChevronDown, ChevronUp, MoreHorizontal, Plus, RefreshCw, Target, TrendingUp, X } from 'lucide-react'
 import { fmt } from '@/lib/formatters'
 import { type GoalRow, type GoalItem } from '@/lib/planning'
-import { useCloseOnScroll } from './useDialogA11y'
+import { useCloseOnScroll } from '@/components/ui/useDialogA11y'
 import { EditIcon } from './planningIcons'
 
 export function GoalAllocationRow({ entry, isVI, onRecSkip, onRecRestore, onRecOverride, onRecEdit, onRecordBuy, onRecordDeposit, onLogContribution, onDcaSkip, onDcaRestore }: {

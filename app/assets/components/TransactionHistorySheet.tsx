@@ -5,7 +5,7 @@ import { useLocale } from 'next-intl'
 import { fmtCompact, fmtNav, fmtPct, fmtUnits } from '@/lib/formatters'
 import { TxRowsSkeleton } from './Skeletons'
 import LoadError from './LoadError'
-import { useDialogMount } from '@/app/(app)/planning/components/useDialogMount'
+import { useDialogMount } from '@/components/ui/useDialogMount'
 
 export interface PurchaseHistoryRow {
   purchase_date: string

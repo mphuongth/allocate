@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import DesktopInsuranceDetail from '../DesktopInsuranceDetail'
-import type { InsuranceData } from '../../DashboardClient'
+import type { InsuranceData } from '@/features/dashboard/contracts'
 
 const { toastErrorMock } = vi.hoisted(() => ({ toastErrorMock: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { error: toastErrorMock, success: vi.fn() } }))

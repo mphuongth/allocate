@@ -7,7 +7,7 @@ import {
   computeAllocationTotals,
   type OverviewLoadResult,
 } from '../overviewData'
-import type { DashboardData, FundBreakdownItem } from '../DashboardClient'
+import type { DashboardData, FundBreakdownItem } from '@/features/dashboard/contracts'
 
 function fund(fundType: string, currentValue: number): FundBreakdownItem {
   return {

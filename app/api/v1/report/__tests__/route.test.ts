@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { DashboardData } from '@/app/assets/DashboardClient'
+import type { DashboardData } from '@/features/dashboard/contracts'
 
 // The report endpoint used to render whatever DashboardData the client posted:
 // an authenticated user could forge every figure in their own PDF, and could

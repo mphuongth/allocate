@@ -49,7 +49,7 @@ const eslintConfig = defineConfig([
   // (`new Date().toISOString()` on its own is fine — that's a UTC *timestamp*,
   // which is exactly what `updated_at` and friends want.)
   {
-    files: ["app/**/*.{ts,tsx}", "lib/**/*.{ts,tsx}", "components/**/*.{ts,tsx}"],
+    files: ["app/**/*.{ts,tsx}", "lib/**/*.{ts,tsx}", "components/**/*.{ts,tsx}", "features/**/*.{ts,tsx}", "server/**/*.{ts,tsx}"],
     ignores: ["lib/dates.ts", "**/__tests__/**"],
     rules: {
       "no-restricted-syntax": ["error",

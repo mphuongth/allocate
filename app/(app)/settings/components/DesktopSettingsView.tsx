@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react'
 import { useLocale, useTranslations } from 'next-intl'
 import { type ThemeChoice } from '@/app/components/ThemeProvider'
-import { useDialogA11y } from '@/app/(app)/planning/components/useDialogA11y'
+import { useDialogA11y } from '@/components/ui/useDialogA11y'
 import {
   Sun, Moon, Settings, RefreshCw, TrendingUp,
   Coins, LogOut, Download, X, Check, Edit2,

@@ -1,7 +1,9 @@
 import { useEffect, useRef, type RefObject } from 'react'
 
-// Shared dialog accessibility for the Plan page's modal/sheet wrappers (DModal,
-// Sheet). While active it:
+// Shared dialog accessibility for every modal/sheet wrapper in the app — the
+// Plan page's DModal/Sheet, the settings views, the fund library, the dashboard
+// sheets. It was owned by Planning and imported from four other features, which
+// is what moved it here (#600). While active it:
 //   • closes on Escape,
 //   • moves focus into the dialog on open (unless something inside is already
 //     focused, e.g. an autoFocus field) and restores it to the previously

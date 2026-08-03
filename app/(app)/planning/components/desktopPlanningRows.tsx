@@ -8,7 +8,7 @@ import { useState, useRef } from 'react'
 import { Check, Plus, RefreshCw, TrendingUp, MoreHorizontal, X } from 'lucide-react'
 import { fmt } from '@/lib/formatters'
 import { type GoalItem } from '@/lib/planning'
-import { useCloseOnScroll } from './useDialogA11y'
+import { useCloseOnScroll } from '@/components/ui/useDialogA11y'
 import { EditIcon } from './planningIcons'
 
 function MenuBtn({ icon, label, onClick, danger, noBorder }: {

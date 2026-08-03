@@ -1,4 +1,4 @@
-import type { DashboardData } from './DashboardClient'
+import type { DashboardData } from '@/features/dashboard/contracts'
 
 const OVERVIEW_ENDPOINT = '/api/v1/dashboard/overview'
 

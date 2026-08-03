@@ -27,6 +27,11 @@ export default defineConfig({
         'app/**/*.{ts,tsx}',
         'lib/**/*.{ts,tsx}',
         'components/**/*.{ts,tsx}',
+        // The feature layer (#600): domain contracts, models and actions moved
+        // out of the UI. Counted like any other source so a module that lands
+        // here untested shows as 0% instead of vanishing from the report.
+        'features/**/*.{ts,tsx}',
+        'server/**/*.{ts,tsx}',
         'i18n/**/*.{ts,tsx}',
         // The Next.js middleware — auth redirects, session refresh, CSP. It's
         // the only application source at the repo root, and it runs on every
@@ -59,11 +64,14 @@ export default defineConfig({
       // guard the money paths the audit called out — raise them as tests land,
       // never lower them to make a red build green.
       thresholds: {
-        // Repo-wide floor, measured 2026-08-03 at 60.88 / 57.91 / 59.38 / 64.22.
-        statements: 60,
-        branches: 56,
-        functions: 58,
-        lines: 63,
+        // Repo-wide floor, measured 2026-08-03 at 61.69 / 58.20 / 60.42 / 65.14
+        // (up from 60.88 / 57.91 / 59.38 / 64.22 — #600 moved fully-covered
+        // contracts and the maturity grouping out of files the report counts as
+        // largely untested).
+        statements: 61,
+        branches: 57,
+        functions: 59,
+        lines: 64,
 
         // The money math. These modules are the ones that have actually shipped
         // bugs, and they are fully covered today — hold them there.

@@ -9,7 +9,7 @@
 // builder with the caller's own Supabase client, so the report can only ever
 // contain that user's real data.
 import type { createSupabaseServerClient } from '@/lib/supabase-server'
-import type { DashboardData } from '@/app/assets/DashboardClient'
+import type { DashboardData } from '@/features/dashboard/contracts'
 import { isNavStale, insuranceStatus, isPlanMonthRealized, isInCurrentCycle, realizedRecurringContributions } from '@/lib/finance'
 import { buildWithdrawalMaps } from '@/lib/withdrawalProgress'
 import { heldForMergeContributions } from '@/lib/heldForMerge'
