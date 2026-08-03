@@ -26,6 +26,10 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+declare
+  -- The parent as the SHAPE check sees it, read under a lock (below).
+  v_shape_asset text;
+  v_shape_fund  uuid;
 begin
   if tg_op = 'UPDATE' then
     -- Deleting a source is an ordinary ledger action, and BOTH links a withdrawal
@@ -115,15 +119,25 @@ begin
   -- the fund branch requires BOTH asset_type='fund' and a fund_id.
   if new.parent_transaction_id is not null
      and (new.asset_type is distinct from 'fund' or new.fund_id is null) then
-    if exists (
-      select 1
-        from public.investment_transactions p
-        join public.funds f on f.id = p.fund_id
-       where p.transaction_id = new.parent_transaction_id
-         and p.user_id = new.user_id
-         and p.transaction_type = 'investment'
-         and p.asset_type = 'fund'
-    ) then
+    -- LOCKED, for the same reason every other measurement here is (see the header
+    -- of 20260730000002): read unlocked, this races the very edit that creates the
+    -- shape. A conversion of the parent bank → fund running concurrently with this
+    -- insert saw no child yet, while this saw the parent's old bank version — and
+    -- then check_withdrawal_balance locked the parent, waited for that conversion,
+    -- and measured the row against a fund purchase whose shape had just been
+    -- waved through. Taking the lock here makes the two serialize whichever wins:
+    -- this statement re-reads the committed parent and refuses, or the conversion
+    -- waits and finds the child.
+    select p.asset_type, p.fund_id
+      into v_shape_asset, v_shape_fund
+      from public.investment_transactions p
+     where p.transaction_id = new.parent_transaction_id
+       and p.user_id = new.user_id
+       and p.transaction_type = 'investment'
+       for update;
+
+    if v_shape_asset = 'fund' and v_shape_fund is not null
+       and exists (select 1 from public.funds f where f.id = v_shape_fund) then
       raise exception 'withdrawal invariant: a fund sale must be keyed by its fund (asset_type=fund + fund_id), not parented to purchase %',
         new.parent_transaction_id using errcode = 'check_violation';
     end if;
