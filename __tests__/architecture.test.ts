@@ -107,10 +107,15 @@ describe('layer boundaries (#600)', () => {
     expect(sourceFiles('app/components')).toEqual([])
   })
 
-  it('exports no types from DashboardClient', () => {
-    // The concrete instance of all of the above: the dashboard's DTOs live in a
+  it.each([
+    'app/assets/DashboardClient.tsx',
+    'app/(app)/planning/PlanningClient.tsx',
+  ])('exports no types from %s', (file) => {
+    // The concrete instance of all of the above: a screen's DTOs live in a
     // layer-neutral contract module, not in the component that renders them.
-    const src = readFileSync(path.join(root, 'app/assets/DashboardClient.tsx'), 'utf8')
+    // Both of these declared theirs inline, so every shared model, hook and
+    // route that needed one had to import it back out of `'use client'` code.
+    const src = readFileSync(path.join(root, file), 'utf8')
     expect(src).not.toMatch(/^export (interface|type) /m)
   })
 })

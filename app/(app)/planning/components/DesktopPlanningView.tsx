@@ -22,20 +22,14 @@ import { DModal, PlanTable, THead, AllocationCard } from './desktopPlanningCards
 import { type GoalItem } from '@/lib/planning'
 import { usePlanningDerivations } from '../usePlanningDerivations'
 import { usePlanningActions, buildBuyEdit, buildContributionPrefill } from '../usePlanningActions'
+import { monthLabel as formatMonthLabel, goalProgress, fixedExpenseRow, insuranceRow, savedPercent } from '@/features/planning/planModel'
 import { saveIncome, deletePlan, saveOtherExpense } from '../planActions'
 import { relationshipLabel } from '@/app/assets/components/insuranceShared'
 import { businessYearMonth } from '@/lib/dates'
 import type {
   MonthlyPlan, FundInvestment, DirectSaving, FixedExpense,
   InsuranceMember, OtherExpense, RecurringSaving, RecurringSavingOverride, RecurringFulfillment, DcaSkip, Fund, Goal,
-} from '../PlanningClient'
-
-// ─── Pure helpers ─────────────────────────────────────────────────────────────
-
-const SHORT_MONTHS_EN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-const SHORT_MONTHS_VI = ['Th1','Th2','Th3','Th4','Th5','Th6','Th7','Th8','Th9','Th10','Th11','Th12']
-const LONG_MONTHS_EN  = ['January','February','March','April','May','June','July','August','September','October','November','December']
-const LONG_MONTHS_VI  = ['Tháng 1','Tháng 2','Tháng 3','Tháng 4','Tháng 5','Tháng 6','Tháng 7','Tháng 8','Tháng 9','Tháng 10','Tháng 11','Tháng 12']
+} from '@/features/planning/contracts'
 
 // ─── Shared button style ──────────────────────────────────────────────────────
 
@@ -125,12 +119,10 @@ export default function DesktopPlanningView({
     plan, investments, savings, fixedExpenses, insuranceMembers, otherExpenses,
     recurringSavings, recurringSavingOverrides, recurringFulfillments, dcaSkips, funds, goals, isVI,
   })
-  const savedPct = plan && plan.salary_vnd > 0 ? Math.round(totalGoalAmount / plan.salary_vnd * 100) : 0
+  const savedPct = (plan && savedPercent(totalGoalAmount, plan.salary_vnd)) ?? 0
 
-  const shortMonths = isVI ? SHORT_MONTHS_VI : SHORT_MONTHS_EN
-  const longMonths  = isVI ? LONG_MONTHS_VI  : LONG_MONTHS_EN
-  const monthLabel  = `${longMonths[month - 1]} ${year}`
-  const shortLabel  = `${shortMonths[month - 1]} ${year}`
+  const monthLabel = formatMonthLabel(month, year, isVI)
+  const shortLabel = formatMonthLabel(month, year, isVI, { short: true })
   const today       = businessYearMonth()
   const isCurrentMonth = month === today.month && year === today.year
 
@@ -413,8 +405,7 @@ export default function DesktopPlanningView({
                   {byGoal.length === 0 ? (
                     <tr><td colSpan={3} style={{ padding: '16px', textAlign: 'center', color: 'var(--c-muted)', fontSize: 12 }}>{isVI ? 'Chưa có phân bổ nào' : 'No allocations yet'}</td></tr>
                   ) : byGoal.map(g => {
-                    const pct = g.totalAllocated > 0 ? Math.min(100, Math.round(g.contributed / g.totalAllocated * 100)) : (g.contributed > 0 ? 100 : 0)
-                    const met = g.totalAllocated > 0 && g.contributed >= g.totalAllocated
+                    const { pct, met } = goalProgress(g)
                     return (
                     <React.Fragment key={g.goalId}>
                       <tr style={{ background: 'var(--c-card-2)', borderBottom: '1px solid var(--c-line)' }}>
@@ -498,21 +489,19 @@ export default function DesktopPlanningView({
                   {fixedExpenses.length === 0 ? (
                     <tr><td colSpan={3} style={{ padding: '16px', textAlign: 'center', color: 'var(--c-muted)', fontSize: 12 }}>{isVI ? 'Chưa có chi phí cố định nào' : 'No fixed expenses yet'}</td></tr>
                   ) : fixedExpenses.map((fe, i) => {
-                    const skipped    = fe.override === 0
-                    const isOverridden = !skipped && fe.override != null && fe.override !== fe.amount_vnd
-                    const amount     = skipped ? 0 : (fe.override ?? fe.amount_vnd)
+                    const row = fixedExpenseRow(fe)
                     return (
                       <DPlanRow
                         key={fe.expense_id}
                         primary={fe.expense_name}
-                        secondary={skipped ? (isVI ? 'Bỏ qua tháng này' : 'Skipped') : isOverridden ? (isVI ? '(đã ghi đè)' : '(overridden)') : null}
-                        amount={amount}
-                        muted={skipped}
+                        secondary={row.skipped ? (isVI ? 'Bỏ qua tháng này' : 'Skipped') : row.overridden ? (isVI ? '(đã ghi đè)' : '(overridden)') : null}
+                        amount={row.amount}
+                        muted={row.skipped}
                         last={i === fixedExpenses.length - 1}
                         isVI={isVI}
                         onSkip={() => handleFESkip(fe)}
-                        onRestore={fe.override != null ? () => handleFERestore(fe) : undefined}
-                        onOverride={() => { setOverrideModal({ id: fe.expense_id, name: fe.expense_name, defaultAmount: fe.amount_vnd, type: 'fe' }); setOverrideVal(String(fe.override ?? fe.amount_vnd)) }}
+                        onRestore={row.hasStoredOverride ? () => handleFERestore(fe) : undefined}
+                        onOverride={() => { setOverrideModal({ id: fe.expense_id, name: fe.expense_name, defaultAmount: fe.amount_vnd, type: 'fe' }); setOverrideVal(String(row.overrideDefault)) }}
                       />
                     )
                   })}
@@ -546,23 +535,21 @@ export default function DesktopPlanningView({
                   {insuranceMembers.length === 0 ? (
                     <tr><td colSpan={5} style={{ padding: '16px', textAlign: 'center', color: 'var(--c-muted)', fontSize: 12 }}>{isVI ? 'Chưa có thành viên bảo hiểm nào' : 'No insurance members yet'}</td></tr>
                   ) : insuranceMembers.map((m, i) => {
-                    const defaultMonthly = Math.round(m.annual_payment_vnd / 12)
-                    const monthly    = m.monthlyOverride ?? defaultMonthly
-                    const isOverridden = !m.excluded && m.monthlyOverride != null
+                    const row = insuranceRow(m)
                     return (
                       <DPlanRow
                         key={m.member_id}
                         primary={m.member_name}
                         relationship={relationshipLabel(m.relationship, isVI)}
-                        defaultAmount={defaultMonthly}
-                        secondary={m.excluded ? (isVI ? 'Bỏ qua tháng này' : 'Skipped') : isOverridden ? (isVI ? '(đã ghi đè)' : '(overridden)') : null}
-                        amount={m.excluded ? 0 : monthly}
-                        muted={m.excluded}
+                        defaultAmount={row.defaultMonthly}
+                        secondary={row.excluded ? (isVI ? 'Bỏ qua tháng này' : 'Skipped') : row.overridden ? (isVI ? '(đã ghi đè)' : '(overridden)') : null}
+                        amount={row.amount}
+                        muted={row.excluded}
                         last={i === insuranceMembers.length - 1}
                         isVI={isVI}
                         onSkip={() => handleInsSkip(m)}
-                        onRestore={m.excluded || m.monthlyOverride != null ? () => handleInsRestore(m) : undefined}
-                        onOverride={() => { setOverrideModal({ id: m.member_id, name: m.member_name, defaultAmount: defaultMonthly, type: 'ins' }); setOverrideVal(String(m.monthlyOverride ?? defaultMonthly)) }}
+                        onRestore={row.excluded || row.hasStoredOverride ? () => handleInsRestore(m) : undefined}
+                        onOverride={() => { setOverrideModal({ id: m.member_id, name: m.member_name, defaultAmount: row.defaultMonthly, type: 'ins' }); setOverrideVal(String(row.overrideDefault)) }}
                       />
                     )
                   })}

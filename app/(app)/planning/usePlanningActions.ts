@@ -3,7 +3,7 @@ import { todayIso } from '@/lib/dates'
 import type { GoalItem, GoalRow } from '@/lib/planning'
 import type { EditableTransaction, PrefillTransaction } from '@/app/assets/components/AddTransactionSheet'
 import type { BookTopUpTarget } from '@/app/assets/components/RecurringBookTopUpSheet'
-import type { MonthlyPlan, FixedExpense, InsuranceMember, FundInvestment } from './PlanningClient'
+import type { MonthlyPlan, FixedExpense, InsuranceMember, FundInvestment } from '@/features/planning/contracts'
 
 export type OverrideType = 'fe' | 'rec' | 'ins'
 

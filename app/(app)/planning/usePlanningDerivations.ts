@@ -8,7 +8,7 @@ import {
 import type {
   MonthlyPlan, FundInvestment, DirectSaving, FixedExpense, InsuranceMember,
   OtherExpense, RecurringSaving, RecurringSavingOverride, RecurringFulfillment, DcaSkip, Fund, Goal,
-} from './PlanningClient'
+} from '@/features/planning/contracts'
 
 // Effective monthly totals. A `override === 0` fixed expense is skipped for the
 // month; an `excluded` insurance member is skipped; otherwise the override (if
