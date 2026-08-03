@@ -64,8 +64,18 @@ session so spec runs are instant:
 
 ```bash
 supabase start                     # local stack on :54321 / :54322
+npm run db:baseline                # restore the hosted-project DML baseline
 supabase status -o env             # copy API_URL / ANON_KEY / SERVICE_ROLE_KEY
 ```
+
+`npm run db:baseline` is not optional on a stack created by a recent Supabase
+CLI. A hosted project grants `anon`/`authenticated`/`service_role` full DML on
+`public` through default privileges, so no migration carries a `GRANT`; the
+local stack grants only the non-DML part, and seeding fails with
+`42501 permission denied for table …`. The script tops up DML *only for roles
+still present in an object's ACL*, so migration-level revocations survive it —
+see `supabase/scripts/restore-dml-baseline.sql`. It is idempotent, a no-op on a
+stack that already has the grants, and CI runs the very same script.
 
 Put those in `.env.e2e` (gitignored):
 
@@ -96,15 +106,11 @@ production project, in CI and locally alike.
 - Both start a **local Supabase stack inside the runner**. The shared NANO test
   project throttles under the suite's write load — that is what made CI E2E
   unusable in #313 — so nothing points at it.
-- After the stack starts, one SQL step restores the **hosted-project DML
-  baseline**. A hosted project grants `anon`/`authenticated`/`service_role` full
-  DML on `public` through default privileges (which is why no migration carries
-  a `GRANT`); the CLI's local stack grants only the non-DML part, so seeding
-  fails with `42501 permission denied`. The step tops up DML *only for roles
-  still present in an object's ACL*, so a migration's
-  `revoke all on <table> from anon, authenticated` survives it — the revoked
-  tables stay revoked and function `EXECUTE` grants are left alone. Verified
-  against a stack reproduced locally with the same CLI version.
+- After the stack starts, CI runs `npm run db:baseline` — the same script the
+  local setup above uses, so the two can't drift. It restores the hosted-project
+  DML baseline while leaving migration-level revocations (and every function
+  `EXECUTE` grant) alone. Verified against a stack reproduced locally with the
+  same CLI version CI installs.
 - The Playwright HTML report and `test-results/` are uploaded as artifacts on
   failure.
 
