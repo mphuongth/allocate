@@ -220,6 +220,27 @@ describe('DesktopSettingsView — price sync', () => {
     expect(screen.queryByText(/updated/i)).not.toBeInTheDocument()
     fetchSpy.mockRestore()
   })
+
+  // #552: the button called the cron routes, which need CRON_SECRET in a header
+  // no browser sends, so every user got "Sync failed". Both views shared that
+  // wiring and both E2E specs asserted the wrong URL, so both stayed green.
+  // The mobile view carries the same guard; the desktop one is here rather than
+  // in a second desktop E2E (#597).
+  it('calls the user-scoped endpoints rather than the cron routes', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
+      new Response(JSON.stringify({ results: [{ id: 'f1', nav: 10000 }] }), { status: 200 })
+    )
+    render(<DesktopSettingsView {...defaultProps} />)
+    await userEvent.click(screen.getByRole('button', { name: /sync now/i }))
+    await waitFor(() => expect(screen.getByText(/updated/i)).toBeInTheDocument())
+    const urls = fetchSpy.mock.calls.map((c) => String(c[0]))
+    expect(urls).toEqual(expect.arrayContaining([
+      '/api/v1/funds/refresh-nav',
+      '/api/v1/gold-price/refresh',
+    ]))
+    expect(urls.some((u) => u.includes('/api/cron/'))).toBe(false)
+    fetchSpy.mockRestore()
+  })
 })
 
 // ─── Data / Export section ───────────────────────────────────────────────────────

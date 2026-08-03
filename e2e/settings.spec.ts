@@ -62,43 +62,12 @@ test('Sync now calls the user-scoped endpoints and is authenticated', async ({ p
   await expect(page.getByRole('button', { name: /sync now/i })).toBeEnabled({ timeout: 10_000 })
 })
 
-test('Sync now reports success when both refreshes succeed', async ({ page }) => {
-  // Stubbed so the assertion is about the app's own success path rather than
-  // whether DOJI and the fund providers happen to be reachable right now.
-  await page.route('**/api/v1/funds/refresh-nav', r =>
-    r.fulfill({ status: 200, contentType: 'application/json', body: '{"results":[{"id":"f1","nav":10000}]}' }))
-  await page.route('**/api/v1/gold-price/refresh', r =>
-    r.fulfill({ status: 200, contentType: 'application/json', body: '{"price_per_chi":8500000}' }))
-
-  await page.getByRole('button', { name: /sync now/i }).click()
-
-  await expect(page.getByText(/updated/i).first()).toBeVisible({ timeout: 10_000 })
-  await expect(page.getByText(/sync failed/i)).toHaveCount(0)
-})
-
-// Both limited: nothing was persisted, so this really is "wait a moment".
-test('Sync now distinguishes a rate-limited sync from a failure', async ({ page }) => {
-  const limited = { status: 429, contentType: 'application/json', headers: { 'Retry-After': '30' }, body: '{"error":"Too many refresh requests."}' }
-  await page.route('**/api/v1/funds/refresh-nav', r => r.fulfill(limited))
-  await page.route('**/api/v1/gold-price/refresh', r => r.fulfill(limited))
-
-  await page.getByRole('button', { name: /sync now/i }).click()
-
-  await expect(page.getByText(/too many syncs/i)).toBeVisible({ timeout: 10_000 })
-  await expect(page.getByText(/sync failed/i)).toHaveCount(0)
-})
-
-// Only one limited: gold still persisted a price, so reporting "rate-limited"
-// would deny work that happened. This mix isn't hypothetical — the two limits
-// differ by design (NAV 5/min, gold 10/min).
-test('Sync now reports partial when only one endpoint is limited', async ({ page }) => {
-  await page.route('**/api/v1/funds/refresh-nav', r =>
-    r.fulfill({ status: 429, contentType: 'application/json', headers: { 'Retry-After': '30' }, body: '{"error":"Too many"}' }))
-  await page.route('**/api/v1/gold-price/refresh', r =>
-    r.fulfill({ status: 200, contentType: 'application/json', body: '{"price_per_chi":8500000}' }))
-
-  await page.getByRole('button', { name: /sync now/i }).click()
-
-  await expect(page.getByText(/partly updated/i)).toBeVisible({ timeout: 10_000 })
-  await expect(page.getByText(/sync failed/i)).toHaveCount(0)
-})
+// The three verdicts the button can report — updated / partly updated / too many
+// syncs — used to be pinned here with every response stubbed, which made them
+// assertions about the app's own status logic and nothing else. They now live
+// where that logic does (#597):
+//   app/(app)/settings/__tests__/useSettingsController.test.tsx (the verdict)
+//   app/(app)/settings/components/__tests__/MobileSettingsView.test.tsx
+//   app/(app)/settings/components/__tests__/DesktopSettingsView.test.tsx
+//     (the rendered status text, and that the user-scoped routes are the ones
+//      called — the actual #552 regression)

@@ -531,3 +531,47 @@ describe('AddTransactionSheet — prefill create mode (plan contribution)', () =
     })
   })
 })
+
+// Moved down from e2e/add-transaction.spec.ts (#597). The asset-type chips, the
+// direction pair and its bank relabelling, and the two footer actions are all
+// prop-driven rendering — a real browser proved nothing here beyond six extra
+// page loads. The one sheet behaviour that genuinely needs a browser (the title
+// sitting outside every scroll container, which depends on real layout) stays
+// in the E2E spec.
+describe('AddTransactionSheet — asset type / direction matrix', () => {
+  it('offers all three asset types', () => {
+    render(<AddTransactionSheet open onClose={vi.fn()} />)
+    for (const label of ['Fund', 'Bank', 'Gold']) {
+      expect(screen.getByRole('button', { name: label })).toBeInTheDocument()
+    }
+  })
+
+  it('offers Buy and Sell for a fund', () => {
+    render(<AddTransactionSheet open onClose={vi.fn()} />)
+    expect(screen.getByRole('button', { name: 'buy' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'sell' })).toBeInTheDocument()
+  })
+
+  it('relabels the directions Deposit / Withdraw once Bank is selected', () => {
+    render(<AddTransactionSheet open onClose={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Bank' }))
+
+    expect(screen.getByRole('button', { name: 'deposit' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'withdraw' })).toBeInTheDocument()
+    // The fund wording must be gone, not merely joined by the bank wording.
+    expect(screen.queryByRole('button', { name: 'buy' })).not.toBeInTheDocument()
+  })
+
+  it('renders the Cancel and Save actions', () => {
+    render(<AddTransactionSheet open onClose={vi.fn()} />)
+    expect(screen.getByRole('button', { name: 'cancel' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'save' })).toBeInTheDocument()
+  })
+
+  it('closes when Cancel is clicked', () => {
+    const onClose = vi.fn()
+    render(<AddTransactionSheet open onClose={onClose} />)
+    fireEvent.click(screen.getByRole('button', { name: 'cancel' }))
+    expect(onClose).toHaveBeenCalled()
+  })
+})
