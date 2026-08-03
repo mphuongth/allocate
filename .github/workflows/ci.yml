@@ -115,6 +115,16 @@ jobs:
       - name: Start a local Supabase stack (applies every migration from scratch)
         run: supabase start -x studio,imgproxy,edge-runtime,logflare,vector,mailpit,supavisor
 
+      - name: Restore the hosted-project DML baseline
+        # Same reason as the E2E lane: a hosted project grants anon/authenticated/
+        # service_role full DML on `public` through default privileges, so the
+        # app's migrations carry no GRANTs. The CLI's local stack grants only the
+        # non-DML part, so a test that runs an RPC as `service_role` fails with
+        # `42501 permission denied for table …`. The script tops up DML only for
+        # roles still present in an object's ACL, so migration-level revocations
+        # survive it.
+        run: npm run db:baseline
+
       - name: Run the SQL test suite
         run: npm run test:db
 
