@@ -2,13 +2,13 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useLocale, useTranslations } from 'next-intl'
-import { type ThemeChoice } from '@/app/components/ThemeProvider'
+import { type ThemeChoice } from '@/components/layout/ThemeProvider'
 import { useDialogA11y } from '@/components/ui/useDialogA11y'
 import {
   Globe, Sun, Moon, Settings, Download, RefreshCw,
   TrendingUp, Coins, LogOut, ChevronRight, Check,
 } from 'lucide-react'
-import { useNavigation } from '@/app/components/navigation/NavigationContext'
+import { useNavigation } from '@/components/navigation/NavigationContext'
 import DownloadReportSheet from '@/app/assets/components/DownloadReportSheet'
 import { useSettingsController } from '../useSettingsController'
 import { useManagedTimeout } from '../useManagedTimeout'

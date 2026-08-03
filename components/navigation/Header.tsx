@@ -4,7 +4,7 @@ import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import Breadcrumb from './Breadcrumb'
 import UserMenu from './UserMenu'
 import { useNavigation } from './NavigationContext'
-import ThemeToggleButton from '../ThemeToggleButton'
+import ThemeToggleButton from '@/components/layout/ThemeToggleButton'
 import { useTranslations } from 'next-intl'
 
 export default function Header() {

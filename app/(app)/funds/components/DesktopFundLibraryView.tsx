@@ -6,8 +6,8 @@ import { useTranslations, useLocale } from 'next-intl'
 import { Plus, RefreshCw, Search, X } from 'lucide-react'
 import { fmtCompact, fmtNav } from '@/lib/formatters'
 import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
-import { Skeleton } from '@/app/components/ui/Skeleton'
-import { SyncPill } from '@/app/components/ui/SyncPill'
+import { Skeleton } from '@/components/ui/Skeleton'
+import { SyncPill } from '@/components/ui/SyncPill'
 // Shared dialog a11y (Esc-to-close + focus trap + focus restore). Lives under
 // the Plan feature today; reused here so Funds dialogs behave the same.
 import { useDialogA11y } from '@/components/ui/useDialogA11y'

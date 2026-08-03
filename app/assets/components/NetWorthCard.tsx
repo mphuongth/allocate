@@ -3,7 +3,7 @@
 import { useLocale, useTranslations } from 'next-intl'
 import { TrendingUp, TrendingDown } from 'lucide-react'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
-import { CairnLoader } from '@/app/components/ui/CairnLoader'
+import { CairnLoader } from '@/components/ui/CairnLoader'
 import { TIME_RANGES, type TimeRange, type ChartPoint } from './netWorthHistory'
 import Sparkline from './Sparkline'
 

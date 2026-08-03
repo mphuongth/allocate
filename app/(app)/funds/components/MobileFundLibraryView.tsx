@@ -3,9 +3,9 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslations, useLocale } from 'next-intl'
 import { Plus, RefreshCw, Search, X, ChevronDown, Check } from 'lucide-react'
-import { useNavigation } from '@/app/components/navigation/NavigationContext'
-import { Skeleton } from '@/app/components/ui/Skeleton'
-import { SyncPill } from '@/app/components/ui/SyncPill'
+import { useNavigation } from '@/components/navigation/NavigationContext'
+import { Skeleton } from '@/components/ui/Skeleton'
+import { SyncPill } from '@/components/ui/SyncPill'
 import { fmtNav, fmtCompact } from '@/lib/formatters'
 import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
 // Shared dialog a11y (Esc-to-close + focus trap + focus restore). Lives under

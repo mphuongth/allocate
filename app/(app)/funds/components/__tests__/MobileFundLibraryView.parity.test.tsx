@@ -12,7 +12,7 @@ vi.mock('next-intl', () => ({
   useLocale: () => 'en',
 }))
 vi.mock('@/lib/formatters', () => ({ fmtNav: (n: number) => String(n), fmtCompact: (n: number) => `${n}` }))
-vi.mock('@/app/components/navigation/NavigationContext', () => ({ useNavigation: () => ({ setMobileTopBar: vi.fn() }) }))
+vi.mock('@/components/navigation/NavigationContext', () => ({ useNavigation: () => ({ setMobileTopBar: vi.fn() }) }))
 
 function makeFund(over: Partial<Fund> = {}): Fund {
   return {

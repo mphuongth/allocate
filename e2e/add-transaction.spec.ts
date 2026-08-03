@@ -7,7 +7,7 @@ test.use({ viewport: { width: 390, height: 844 } })
 // the four tabbed pages, the Fund/Bank/Gold chips, the Buy/Sell (and Bank's
 // Deposit/Withdraw) pair, the Save/Cancel actions, and the body scroll lock —
 // is prop-driven rendering that a browser only re-proved at ~1 page load each:
-//   app/components/navigation/__tests__/MobileBottomTabs.test.tsx
+//   components/navigation/__tests__/MobileBottomTabs.test.tsx
 //     (the center + on /dashboard, /planning, /funds, /settings)
 //   app/assets/components/__tests__/AddTransactionSheet.test.tsx
 //     (asset-type / direction matrix, Cancel closes, scroll lock, iOS zoom)

@@ -16,7 +16,7 @@ type, hook or business rule belonged.
 | --- | --- | --- |
 | `app/` | Routes, layouts, route handlers, and (for now) the screens themselves | anything |
 | `features/<domain>/` | One domain's contracts, models, actions, and eventually its UI | `components/`, `lib/`, `server/`, other `features/` contracts |
-| `components/ui/`, `components/report/` | Reusable primitives and hooks with no domain knowledge | `lib/` |
+| `components/ui/`, `components/layout/`, `components/navigation/`, `components/report/` | Reusable primitives, hooks and app chrome with no domain knowledge | `lib/` |
 | `server/` | Server services and RPC orchestration | `lib/`, `features/*/contracts` |
 | `lib/` | Pure utilities and small infrastructure (money math, dates, Supabase clients) | `lib/`, `features/*/contracts` |
 | `supabase/` | Migrations and the SQL test suite | — |
@@ -58,13 +58,15 @@ Done:
 - Dashboard DTOs extracted to `features/dashboard/contracts.ts`; `lib/`, the
   report and the nav badge no longer import from `DashboardClient`.
 - `useDialogA11y` / `useDialogMount` moved out of Planning into `components/ui/`.
+- One component root: `app/components/` folded into `components/{ui,layout,navigation}`
+  and `features/landing/`. The app shell no longer imports a screen — the
+  add-transaction sheet reaches it as an opaque `overlays` node from the route
+  group, with its open flag in `NavigationContext`.
 
 Still open — incremental, as files are touched, not as a repo-wide rename:
 
 - `app/assets/` split into `features/dashboard`, `features/investments`,
   `features/goals`, `features/insurance`.
-- `app/components/` folded into the top-level `components/` root, once the
-  imports have moved.
 - Splitting the oversized modules: `DashboardClient`, Maturity Resolve, Fund
   Library. Keep the desktop/mobile shells separate where the UX genuinely
   differs; extract the shared models, actions and form fields.

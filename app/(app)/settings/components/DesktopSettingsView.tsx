@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { useLocale, useTranslations } from 'next-intl'
-import { type ThemeChoice } from '@/app/components/ThemeProvider'
+import { type ThemeChoice } from '@/components/layout/ThemeProvider'
 import { useDialogA11y } from '@/components/ui/useDialogA11y'
 import {
   Sun, Moon, Settings, RefreshCw, TrendingUp,

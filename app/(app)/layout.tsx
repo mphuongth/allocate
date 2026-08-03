@@ -1,7 +1,8 @@
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
-import AuthenticatedLayout from '@/app/components/layouts/AuthenticatedLayout'
+import AuthenticatedLayout from '@/components/layout/AuthenticatedLayout'
+import AddTransactionOverlay from './AddTransactionOverlay'
 import { buildCacheOwnerScript } from '@/lib/clientCache'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -23,7 +24,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           callback redirecting straight here. CacheOwnerAnnouncer below keeps
           handling every later auth-state change. */}
       <script nonce={nonce} dangerouslySetInnerHTML={{ __html: buildCacheOwnerScript(user.id) }} />
-      <AuthenticatedLayout userId={user.id} email={user.email ?? ''} displayName={displayName}>
+      <AuthenticatedLayout
+        userId={user.id}
+        email={user.email ?? ''}
+        displayName={displayName}
+        overlays={<AddTransactionOverlay />}
+      >
         {children}
       </AuthenticatedLayout>
     </>

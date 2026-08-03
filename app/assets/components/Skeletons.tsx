@@ -1,5 +1,5 @@
-import { Skeleton } from '@/app/components/ui/Skeleton'
-import { SparkDraw } from '@/app/components/ui/SparkDraw'
+import { Skeleton } from '@/components/ui/Skeleton'
+import { SparkDraw } from '@/components/ui/SparkDraw'
 
 /** Card chrome matching the real dashboard cards (GoalCard / NetWorthCard). */
 const skCard: React.CSSProperties = {
