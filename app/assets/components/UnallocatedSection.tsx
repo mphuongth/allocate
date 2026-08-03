@@ -6,7 +6,7 @@ import { iconHit } from './iconHit'
 import { SUCCESS_FLASH_MS } from '../successFlash'
 import { useTranslations } from 'next-intl'
 import { useLocale } from 'next-intl'
-import type { FundBreakdownItem, NonFundUnallocatedItem } from '../DashboardClient'
+import type { FundBreakdownItem, NonFundUnallocatedItem } from '@/features/dashboard/contracts'
 import { fmtCompact, fmtNav, fmtPct } from '@/lib/formatters'
 
 function DesktopAssignPicker({

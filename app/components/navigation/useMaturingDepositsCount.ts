@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { isActionableTermDeposit, MATURING_COUNT_EVENT } from '@/lib/maturity'
-import { actionableBooks } from '@/app/assets/maturityCardItems'
-import type { DashboardData } from '@/app/assets/DashboardClient'
+import { actionableBooks } from '@/features/dashboard/maturityCardItems'
+import type { DashboardData } from '@/features/dashboard/contracts'
 
 // Count of bank term deposits that currently need a renew/withdraw decision —
 // drives the nav badge so the user sees it from any page. Two sources, no

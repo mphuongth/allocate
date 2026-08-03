@@ -13,7 +13,7 @@ import AddTransactionSheet from './AddTransactionSheet'
 import { ASSET_TYPES, type AssetType, type LedgerTransaction, isWithdrawal, txKind, txPrimaryName, fmtTxDate } from './transactionUtils'
 import { toast } from 'sonner'
 import { deleteTransaction } from './deleteTransaction'
-import { useDialogMount } from '@/app/(app)/planning/components/useDialogMount'
+import { useDialogMount } from '@/components/ui/useDialogMount'
 
 interface Goal { goal_id: string; goal_name: string }
 interface Fund { id: string; name: string; code: string; nav: number }

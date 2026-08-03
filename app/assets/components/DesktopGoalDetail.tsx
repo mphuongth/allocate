@@ -6,7 +6,7 @@ import { iconHit } from './iconHit'
 import { toast } from 'sonner'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
-import type { GoalData } from '../DashboardClient'
+import type { GoalData } from '@/features/dashboard/contracts'
 import { GD_COLORS, TypeIcon, UnlinkSvg, BankInfoStrip, TopUpControl, RenewalSummaryLine, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
 import { buildCompositionSegments, buildInvRows, buildRenewalSummary } from './goalDetailRows'
 import { needsMaturityAction, needsBookMaturityAction } from './goalDetailMaturity'
@@ -20,7 +20,7 @@ import { deleteGoal, unholdTransaction, unassignInvestment, updateGoal } from '.
 import { SellWithdrawSheet } from './SellWithdrawSheet'
 import { invToSellItem } from './invToSellItem'
 import { useTranslations } from 'next-intl'
-import { useResetOnOpen, useResetOnChange } from '@/app/(app)/planning/components/useDialogMount'
+import { useResetOnOpen, useResetOnChange } from '@/components/ui/useDialogMount'
 import { monthsUntilYm } from '@/lib/dates'
 
 interface Props {

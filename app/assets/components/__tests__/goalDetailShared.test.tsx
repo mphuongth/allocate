@@ -3,7 +3,7 @@ import { type GoalDetailTx } from '../goalDetailShared'
 import { buildInvRows, buildRenewalSummary } from '../goalDetailRows'
 import { fmtMaturity } from '../goalDetailMaturity'
 import { calcDeadlineMonths, computeGoalCalculator, describeHistoryRow } from '../goalDetailModel'
-import type { FundBreakdownItem } from '../../DashboardClient'
+import type { FundBreakdownItem } from '@/features/dashboard/contracts'
 import { ArrowUpRight, ArrowDownRight, PiggyBank, GitMerge, RefreshCw } from 'lucide-react'
 import { todayIso, addDaysIso } from '@/lib/dates'
 

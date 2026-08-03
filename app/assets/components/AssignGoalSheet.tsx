@@ -6,7 +6,7 @@ import { iconHit } from './iconHit'
 import { useLocale } from 'next-intl'
 import { fmt, fmtCompact } from '@/lib/formatters'
 import LoadError from './LoadError'
-import { useDialogMount, useResetOnOpen } from '@/app/(app)/planning/components/useDialogMount'
+import { useDialogMount, useResetOnOpen } from '@/components/ui/useDialogMount'
 
 interface GoalOption {
   id: string

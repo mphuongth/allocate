@@ -10,7 +10,8 @@ import { todayIso } from '@/lib/dates'
 import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
 import { fmtTxDate } from './transactionUtils'
 import { fmtMaturity, type Maturity } from './goalDetailMaturity'
-import type { FundBreakdownItem } from '../DashboardClient'
+import type { InvRow } from '@/features/dashboard/contracts'
+export type { InvRow, InvTranche } from '@/features/dashboard/contracts'
 
 export const GD_COLORS: Record<string, string> = {
   fund: '#2563eb',
@@ -191,48 +192,6 @@ export function ProgressGatherNote({ amount, isVi, style }: { amount: number; is
       {text}
     </p>
   )
-}
-
-export interface InvRow {
-  id: string
-  name: string
-  type: string
-  value: number
-  gainPct: number | null
-  units: number | null
-  principal: number | null
-  interestRate: number | null
-  // Bank deposit maturity (YYYY-MM-DD); null for non-bank holdings or no term.
-  expiryDate: string | null
-  // When the (current) cycle was opened — used to derive the original term
-  // length on renewal. null for fund holdings.
-  investmentDate: string | null
-  fund: FundBreakdownItem | null
-  // Set for an accumulating ("Loại 2") book — the deposit_group_id its tranches
-  // share. Keeps the whole book out of the single-row term renew path and tells
-  // the UI to offer a top-up. null for term / one-off holdings.
-  depositGroupId?: string | null
-  // Structured bank reference (FK to banks.code) for a bank deposit; null for a
-  // non-bank holding or a deposit with no bank set yet. Drives the multi-source
-  // merge destination-bank default and the "N nguồn · M ngân hàng" provenance.
-  bankCode?: string | null
-  // Currency (default 'VND') + collateral flag. Carried for the merge eligibility
-  // rules ("same currency" / "not pledged"). null/false on legacy deposits.
-  currency?: string | null
-  isPledged?: boolean | null
-  // The book's tranches (top-ups), newest first, for the detail view. Each is one
-  // underlying row; present only on an accumulating book row.
-  tranches?: InvTranche[] | null
-}
-
-// One top-up of an accumulating book: an underlying investment_transactions row,
-// already net of any withdrawal parented to it.
-export interface InvTranche {
-  id: string
-  date: string
-  amount: number
-  rate: number | null
-  value: number
 }
 
 // Minimal shape buildInvRows needs — both views' richer InvestmentTx types

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import LogInsurancePaymentModal from '../LogInsurancePaymentModal'
-import type { InsuranceData } from '../../DashboardClient'
+import type { InsuranceData } from '@/features/dashboard/contracts'
 import { todayIso } from '@/lib/dates'
 
 const ins: InsuranceData = {

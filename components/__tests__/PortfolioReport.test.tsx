@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import React from 'react'
-import type { DashboardData, GoalData } from '@/app/assets/DashboardClient'
+import type { DashboardData, GoalData } from '@/features/dashboard/contracts'
 
 vi.mock('@react-pdf/renderer', () => ({
   Document: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),

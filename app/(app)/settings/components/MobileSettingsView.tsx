@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useLocale, useTranslations } from 'next-intl'
 import { type ThemeChoice } from '@/app/components/ThemeProvider'
-import { useDialogA11y } from '@/app/(app)/planning/components/useDialogA11y'
+import { useDialogA11y } from '@/components/ui/useDialogA11y'
 import {
   Globe, Sun, Moon, Settings, Download, RefreshCw,
   TrendingUp, Coins, LogOut, ChevronRight, Check,
@@ -12,7 +12,7 @@ import { useNavigation } from '@/app/components/navigation/NavigationContext'
 import DownloadReportSheet from '@/app/assets/components/DownloadReportSheet'
 import { useSettingsController } from '../useSettingsController'
 import { useManagedTimeout } from '../useManagedTimeout'
-import { useDialogMount, useResetOnOpen } from '@/app/(app)/planning/components/useDialogMount'
+import { useDialogMount, useResetOnOpen } from '@/components/ui/useDialogMount'
 
 interface Props {
   email: string

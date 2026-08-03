@@ -7,7 +7,7 @@ import { iconHit } from './iconHit'
 import { fmt } from '@/lib/formatters'
 import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
 import { CairnLoader } from '@/app/components/ui/CairnLoader'
-import { useDialogMount, useResetOnOpen } from '@/app/(app)/planning/components/useDialogMount'
+import { useDialogMount, useResetOnOpen } from '@/components/ui/useDialogMount'
 import { monthsUntilYm } from '@/lib/dates'
 
 interface Props {

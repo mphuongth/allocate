@@ -8,11 +8,11 @@ import { useState, useRef } from 'react'
 import { useLocale } from 'next-intl'
 import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
 import { fmtCompact } from '@/lib/formatters'
-import { useDialogA11y } from './useDialogA11y'
+import { useDialogA11y } from '@/components/ui/useDialogA11y'
 import { TrashIcon } from './planningIcons'
 import { saveIncome, deletePlan, saveOtherExpense } from '../planActions'
 import type { MonthlyPlan, OtherExpense } from '../PlanningClient'
-import { useDialogMount, useResetOnOpen } from './useDialogMount'
+import { useDialogMount, useResetOnOpen } from '@/components/ui/useDialogMount'
 
 export function Sheet({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode }) {
   const mounted = useDialogMount(open)

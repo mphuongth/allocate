@@ -7,7 +7,8 @@ vi.mock('next-intl', () => ({
   useTranslations: () => (k: string) => k,
 }))
 
-import { nonFundToSellItem, type NonFundUnallocatedItem } from '../DashboardClient'
+import { nonFundToSellItem } from '../DashboardClient'
+import type { NonFundUnallocatedItem } from '@/features/dashboard/contracts'
 
 // A non-fund holding with no user notes — the name then falls back to a type
 // label, which must follow the active locale (the bug: it leaked English

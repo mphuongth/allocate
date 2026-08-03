@@ -9,12 +9,12 @@ import { useLocale } from 'next-intl'
 import { ChevronRight, RefreshCw, Trash2, Edit2, Download, Calendar, ArrowDownRight } from 'lucide-react'
 import { fmtCompact, fmtPct } from '@/lib/formatters'
 import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
-import type { GoalData } from '../DashboardClient'
+import type { GoalData } from '@/features/dashboard/contracts'
 import { GD_COLORS, TypeIcon, UnlinkSvg, BankInfoStrip, TopUpControl, RenewalSummaryLine, type InvRow } from './goalDetailShared'
 import { needsMaturityAction, needsBookMaturityAction } from './goalDetailMaturity'
 import { buildRenewalSummary } from './goalDetailRows'
 import { updateGoal } from './goalActions'
-import { useDialogMount, useResetOnOpen } from '@/app/(app)/planning/components/useDialogMount'
+import { useDialogMount, useResetOnOpen } from '@/components/ui/useDialogMount'
 
 export function GoalActionsSheet({
   open,

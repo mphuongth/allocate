@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import InsuranceDetailSheet from '../InsuranceDetailSheet'
-import type { InsuranceData } from '../../DashboardClient'
+import type { InsuranceData } from '@/features/dashboard/contracts'
 
 const ins: InsuranceData = {
   insuranceId: 'ins-1',

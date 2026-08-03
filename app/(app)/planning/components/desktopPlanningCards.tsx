@@ -7,7 +7,7 @@
 import { useState, useRef } from 'react'
 import { ChevronUp, ChevronDown, X } from 'lucide-react'
 import { fmt, fmtCompact } from '@/lib/formatters'
-import { useDialogA11y } from './useDialogA11y'
+import { useDialogA11y } from '@/components/ui/useDialogA11y'
 
 export function DModal({ onClose, title, width = 400, children }: {
   onClose: () => void; title: string; width?: number; children: React.ReactNode

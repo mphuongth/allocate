@@ -1,6 +1,6 @@
 import { Document, Page, View, Text, StyleSheet, Font } from '@react-pdf/renderer'
 import path from 'path'
-import type { DashboardData } from '@/app/assets/DashboardClient'
+import type { DashboardData } from '@/features/dashboard/contracts'
 import { fmt, fmtPct } from '@/lib/formatters'
 import { formatBusinessDate } from '@/lib/dates'
 

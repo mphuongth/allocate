@@ -3,7 +3,7 @@
 // pure cores of their handlers (previously copy-pasted byte-for-byte) live
 // here; each view keeps its own state wiring.
 
-import type { DashboardData } from '@/app/assets/DashboardClient'
+import type { DashboardData } from '@/features/dashboard/contracts'
 
 // Moved to lib/clientCache so the sign-out in UserMenu shares one definition of
 // "this account's caches" — which now spans the service worker's Cache Storage,

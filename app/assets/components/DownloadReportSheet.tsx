@@ -7,8 +7,8 @@ import { useLocale } from 'next-intl'
 import { fmt } from '@/lib/formatters'
 import { CairnLoader } from '@/app/components/ui/CairnLoader'
 import { formatBusinessDate } from '@/lib/dates'
-import { useDialogA11y } from '@/app/(app)/planning/components/useDialogA11y'
-import { useDialogMount, useResetOnOpen } from '@/app/(app)/planning/components/useDialogMount'
+import { useDialogA11y } from '@/components/ui/useDialogA11y'
+import { useDialogMount, useResetOnOpen } from '@/components/ui/useDialogMount'
 
 interface Props {
   open: boolean

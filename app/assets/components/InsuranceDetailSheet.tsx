@@ -1,9 +1,9 @@
 'use client'
 
 import { useEffect } from 'react'
-import type { InsuranceData } from '../DashboardClient'
+import type { InsuranceData } from '@/features/dashboard/contracts'
 import DesktopInsuranceDetail from './DesktopInsuranceDetail'
-import { useDialogMount } from '@/app/(app)/planning/components/useDialogMount'
+import { useDialogMount } from '@/components/ui/useDialogMount'
 
 interface Props {
   ins: InsuranceData | null

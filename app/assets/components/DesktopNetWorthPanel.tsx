@@ -3,7 +3,7 @@
 import { ArrowDownToLine } from 'lucide-react'
 import { fmtCompact, fmtPct, fmtTimeAgo } from '@/lib/formatters'
 import { CairnLoader } from '@/app/components/ui/CairnLoader'
-import type { DashboardData } from '../DashboardClient'
+import type { DashboardData } from '@/features/dashboard/contracts'
 import type { AllocationTotals } from '../overviewData'
 import { TIME_RANGES, type TimeRange, type ChartPoint } from './netWorthHistory'
 import Sparkline from './Sparkline'

@@ -5,7 +5,7 @@
 // vocabulary is used across the app); GD_COLORS is the one value dependency.
 import { calcProjectedInterest } from '@/lib/finance'
 import { blendedRate } from '@/lib/accumulating'
-import type { FundBreakdownItem } from '../DashboardClient'
+import type { FundBreakdownItem } from '@/features/dashboard/contracts'
 import { GD_COLORS, type CompositionSeg, type InvRow, type InvTranche, type GoalDetailTx, type RenewalSummary } from './goalDetailShared'
 
 // Build the goal-detail "Cơ cấu / Composition" segments. The asset segments come

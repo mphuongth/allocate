@@ -22,7 +22,7 @@ import MaturityActionCard from './components/MaturityActionCard'
 import { MaturityResolveSheet, MaturityResolveModal } from './components/MaturityResolveSheet'
 import { isActionableTermDeposit, MATURING_COUNT_EVENT } from '@/lib/maturity'
 import { detectMergeClusters } from '@/lib/mergeCluster'
-import { actionableBooks } from './maturityCardItems'
+import { actionableBooks } from '@/features/dashboard/maturityCardItems'
 import { collapseUnallocatedBooks } from './unallocatedBooks'
 import type { InvRow } from './components/goalDetailShared'
 import { loadOverview, overviewErrorText, getCachedOverview, setCachedOverview, computeAllocationTotals } from './overviewData'
@@ -39,97 +39,7 @@ import InsuranceEmpty from './components/InsuranceEmpty'
 import AddInsuranceMemberModal from './components/AddInsuranceMemberModal'
 import { OverviewEmptyState } from './components/OverviewEmptyState'
 import DesktopGoalDetail from './components/DesktopGoalDetail'
-
-export interface FundBreakdownItem {
-  fundId: string
-  fundName: string
-  fundType: string
-  quantity: number
-  currentNAV: number
-  currentValue: number
-  purchasePrice: number
-  /** Remaining cost basis (Σ amount_vnd, net of prior sells) — what a sale takes out (#587). */
-  costBasis: number
-  profitLoss: number
-  profitLossPercentage: number
-  goalId: string | null
-}
-
-export interface GoalData {
-  goalId: string
-  goalName: string
-  targetAmount: number | null
-  targetDate: string | null
-  currentValue: number
-  // Progress-bar numerator: equals currentValue except that affects_progress=false
-  // withdrawals are added back, so the bar holds steady while net worth (currentValue)
-  // falls. Optional for back-compat with cached overview payloads predating the field.
-  progressValue?: number
-  totalInvested: number
-  profitLoss: number
-  profitLossPercentage: number
-  progressPercentage: number | null
-  transactionCount: number
-  funds: FundBreakdownItem[]
-  nonFunds?: NonFundUnallocatedItem[]
-  // "Ví chờ gộp": settle-with-hold settlements still pooled in this goal. Shown as
-  // a "đang chờ gộp" chip (with unhold) and preselected in the anchor's merge sheet.
-  // transactionId is the held WITHDRAWAL row. Optional for cached payloads.
-  heldForMerge?: Array<{ transactionId: string; amount: number; anchorInvId: string | null; name: string | null }>
-}
-
-export interface InsuranceData {
-  insuranceId: string
-  insuranceName: string
-  coverageType: string | null
-  annualPremium: number
-  amountSaved: number
-  savingsProgressPercentage: number
-  status: 'on_track' | 'upcoming' | 'overdue' | 'completed' | 'ready'
-  nextPaymentDate: string | null
-  lastPaymentDate: string | null
-}
-
-export interface NonFundUnallocatedItem {
-  transactionId: string
-  type: string
-  amount: number
-  currentValue: number
-  interestRate: number | null
-  expiryDate: string | null
-  investmentDate: string
-  notes: string | null
-  units: number | null
-  // Set on a tranche of an accumulating book — keeps the book out of the
-  // maturity "needs attention" card (it isn't renewed via the single-row flow).
-  depositGroupId?: string | null
-  // Structured bank (FK) + currency + pledged flag — null/false on legacy
-  // deposits. Drive the merge destination-bank default and the eligibility
-  // "same currency" / "not pledged" rules (see lib/mergeEligibility).
-  bankCode?: string | null
-  currency?: string | null
-  isPledged?: boolean | null
-}
-
-export interface DashboardData {
-  netWorth: {
-    totalAssets: number
-    totalLiabilities: number
-    netWorth: number
-    totalInvested: number
-    currentValue: number
-    overallProfitLoss: number
-    overallProfitLossPercentage: number
-    navStale: boolean
-    hasGold: boolean
-    navUpdatedAt: string | null
-  }
-  goals: GoalData[]
-  unallocated: { totalValue: number; funds: FundBreakdownItem[]; nonFunds: NonFundUnallocatedItem[] }
-  byType: { bank: number; gold: number; stock: number }
-  goldUnits?: number
-  insurance: InsuranceData[]
-}
+import type { FundBreakdownItem, NonFundUnallocatedItem, DashboardData } from '@/features/dashboard/contracts'
 
 // Fetch fund detail (purchase history) from investment_transactions
 interface PurchaseHistory { purchase_date: string; units: number; nav_at_purchase: number }

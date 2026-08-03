@@ -7,7 +7,7 @@ import { createBrowserClient } from '@supabase/ssr'
 import { toast } from 'sonner'
 import { useTheme, type ThemeChoice } from '@/app/components/ThemeProvider'
 import { useNavigation } from '@/app/components/navigation/NavigationContext'
-import type { DashboardData } from '@/app/assets/DashboardClient'
+import type { DashboardData } from '@/features/dashboard/contracts'
 import { useManagedTimeout } from './useManagedTimeout'
 import {
   clearAppCaches, setLocaleCookie, refreshPrices, fetchOverview,

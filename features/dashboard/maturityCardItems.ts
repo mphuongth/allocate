@@ -14,7 +14,7 @@
 
 import { blendedRate } from '@/lib/accumulating'
 import { isActionableAccumulatingBook } from '@/lib/maturity'
-import type { InvRow } from './components/goalDetailShared'
+import type { InvRow } from '@/features/dashboard/contracts'
 
 // The minimal per-tranche shape this needs — structurally a NonFundUnallocatedItem
 // (so callers pass their overview items directly).
