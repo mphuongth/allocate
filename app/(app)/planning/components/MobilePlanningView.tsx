@@ -16,12 +16,13 @@ import { Sheet, SalarySheet, DeletePlanSheet, OtherExpenseSheet, SimpleOverrideS
 import { type GoalRow, type GoalItem } from '@/lib/planning'
 import { usePlanningDerivations } from '../usePlanningDerivations'
 import { usePlanningActions, buildBuyEdit, buildContributionPrefill } from '../usePlanningActions'
+import { monthLabel as formatMonthLabel, fixedExpenseRow, insuranceRow, savedPercent } from '@/features/planning/planModel'
 import { relationshipLabel } from '@/app/assets/components/insuranceShared'
 import { MobilePlanningSkeleton } from './PlanningSkeleton'
 import type {
   MonthlyPlan, FundInvestment, DirectSaving, FixedExpense,
   InsuranceMember, OtherExpense, RecurringSaving, RecurringSavingOverride, RecurringFulfillment, DcaSkip, Fund, Goal,
-} from '../PlanningClient'
+} from '@/features/planning/contracts'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -60,17 +61,6 @@ type SheetState =
   | { type: 'manage-fixed' }
   | { type: 'manage-recurring'; editId?: string }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-const SHORT_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-const LONG_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
-
-function getMonthLabel(month: number, year: number, short = false) {
-  const names = short ? SHORT_MONTHS : LONG_MONTHS
-  return `${names[month - 1]} ${year}`
-}
-
-
 // ─── Main MobilePlanningView ──────────────────────────────────────────────────
 
 export default function MobilePlanningView({
@@ -90,7 +80,8 @@ export default function MobilePlanningView({
   const [showAddInsurance, setShowAddInsurance] = useState(false)
   const [overrideTarget, setOverrideTarget] = useState<{ type: 'fe' | 'ins' | 'rec'; id: string; name: string; defaultAmount: number } | null>(null)
 
-  const monthLabel = getMonthLabel(month, year)
+  const monthLabel = formatMonthLabel(month, year, isVI)
+
 
   // ─── Computed totals ────────────────────────────────────────────────────────
 
@@ -102,6 +93,7 @@ export default function MobilePlanningView({
     plan, investments, savings, fixedExpenses, insuranceMembers, otherExpenses,
     recurringSavings, recurringSavingOverrides, recurringFulfillments, dcaSkips, funds, goals, isVI,
   })
+  const savedPct = plan ? savedPercent(totalGoals, plan.salary_vnd) : null
 
   // ─── Skip/restore handlers ─────────────────────────────────────────────────
   // Shared with the desktop view via usePlanningActions so both surfaces stay
@@ -145,14 +137,12 @@ export default function MobilePlanningView({
   // ─── Override sheet helpers ────────────────────────────────────────────────
 
   function openOverrideFE(expense: FixedExpense) {
-    const defaultAmt = (expense.override != null && expense.override > 0) ? expense.override : expense.amount_vnd
-    setOverrideTarget({ type: 'fe', id: expense.expense_id, name: expense.expense_name, defaultAmount: defaultAmt })
+    setOverrideTarget({ type: 'fe', id: expense.expense_id, name: expense.expense_name, defaultAmount: fixedExpenseRow(expense).overrideDefault })
     setSheet({ type: 'override-fe', expense })
   }
 
   function openOverrideIns(member: InsuranceMember) {
-    const defaultAmt = member.monthlyOverride ?? Math.round(member.annual_payment_vnd / 12)
-    setOverrideTarget({ type: 'ins', id: member.member_id, name: member.member_name, defaultAmount: defaultAmt })
+    setOverrideTarget({ type: 'ins', id: member.member_id, name: member.member_name, defaultAmount: insuranceRow(member).overrideDefault })
     setSheet({ type: 'override-ins', member })
   }
 
@@ -195,7 +185,7 @@ export default function MobilePlanningView({
               {[
                 { l: isVI ? 'Tổng chi' : 'Outflow', v: fmtCompact(totalOutflow), c: 'var(--c-ink)' },
                 { l: isVI ? 'Còn lại' : 'Remaining', v: fmtCompact(remaining), c: remaining >= 0 ? 'var(--c-pos)' : 'var(--c-neg)' },
-                { l: isVI ? '% Tiết kiệm' : 'Saved %', v: plan.salary_vnd > 0 ? `${Math.round((totalGoals / plan.salary_vnd) * 100)}%` : '—', c: 'var(--c-navy)' },
+                { l: isVI ? '% Tiết kiệm' : 'Saved %', v: savedPct != null ? `${savedPct}%` : '—', c: 'var(--c-navy)' },
               ].map((k, i) => (
                 <div key={i} style={{ background: 'var(--c-card)', padding: '10px 12px' }}>
                   <div style={{ fontSize: 10, color: 'var(--c-muted)' }}>{k.l}</div>
@@ -287,20 +277,18 @@ export default function MobilePlanningView({
                   </div>
                 )}
                 {fixedExpenses.map((fe, i) => {
-                  const isSkipped = fe.override === 0
-                  const hasOverride = fe.override != null && fe.override > 0 && fe.override !== fe.amount_vnd
-                  const thisMonth = isSkipped ? 0 : (fe.override ?? fe.amount_vnd)
-                  const secondary = isSkipped
+                  const row = fixedExpenseRow(fe)
+                  const secondary = row.skipped
                     ? (isVI ? 'Bỏ qua tháng này' : 'Skipped')
-                    : hasOverride ? (isVI ? '(đã ghi đè)' : '(overridden)') : null
+                    : row.overridden ? (isVI ? '(đã ghi đè)' : '(overridden)') : null
                   return (
                     <PlanLineItem
                       key={fe.expense_id}
                       primary={fe.expense_name}
                       secondary={secondary}
-                      amount={thisMonth}
-                      muted={isSkipped}
-                      overridden={hasOverride}
+                      amount={row.amount}
+                      muted={row.skipped}
+                      overridden={row.overridden}
                       last={i === fixedExpenses.length - 1}
                       isVI={isVI}
                       onSkip={() => handleSkipFE(fe)}
@@ -340,26 +328,24 @@ export default function MobilePlanningView({
                   </div>
                 )}
                 {insuranceMembers.map((m, i) => {
-                  const defaultMonthly = Math.round(m.annual_payment_vnd / 12)
-                  const hasOverride = m.monthlyOverride != null && m.monthlyOverride !== defaultMonthly
-                  const thisMonth = m.excluded ? 0 : (m.monthlyOverride ?? defaultMonthly)
+                  const row = insuranceRow(m)
                   // A phone has no room for Relationship/Default columns (the desktop
                   // table carries those), so the relationship rides the subtitle line.
                   // When overridden, append the default so the user still sees it.
                   const rel = relationshipLabel(m.relationship, isVI)
-                  const secondary = m.excluded
+                  const secondary = row.excluded
                     ? (isVI ? 'Bỏ qua tháng này' : 'Skipped')
-                    : hasOverride
-                      ? `${rel ? rel + ' · ' : ''}${isVI ? 'mặc định ' : 'default '}${fmt(defaultMonthly)}`
+                    : row.overridden
+                      ? `${rel ? rel + ' · ' : ''}${isVI ? 'mặc định ' : 'default '}${fmt(row.defaultMonthly)}`
                       : (rel || (isVI ? 'Đóng góp tháng' : 'Monthly contribution'))
                   return (
                     <PlanLineItem
                       key={m.member_id}
                       primary={m.member_name}
                       secondary={secondary}
-                      amount={thisMonth}
-                      muted={m.excluded}
-                      overridden={hasOverride}
+                      amount={row.amount}
+                      muted={row.excluded}
+                      overridden={row.overridden}
                       last={i === insuranceMembers.length - 1}
                       isVI={isVI}
                       onSkip={() => handleSkipIns(m)}

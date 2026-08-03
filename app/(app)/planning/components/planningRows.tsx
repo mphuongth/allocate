@@ -9,6 +9,7 @@ import { Check, ChevronDown, ChevronUp, MoreHorizontal, Plus, RefreshCw, Target,
 import { fmt } from '@/lib/formatters'
 import { type GoalRow, type GoalItem } from '@/lib/planning'
 import { useCloseOnScroll } from '@/components/ui/useDialogA11y'
+import { goalItemSublabel, goalProgress } from '@/features/planning/planModel'
 import { EditIcon } from './planningIcons'
 
 export function GoalAllocationRow({ entry, isVI, onRecSkip, onRecRestore, onRecOverride, onRecEdit, onRecordBuy, onRecordDeposit, onLogContribution, onDcaSkip, onDcaRestore }: {
@@ -24,8 +25,7 @@ export function GoalAllocationRow({ entry, isVI, onRecSkip, onRecRestore, onRecO
   onDcaRestore: (item: GoalItem) => void
 }) {
   const [open, setOpen] = useState(false)
-  const pct = entry.totalAllocated > 0 ? Math.min(100, Math.round(entry.contributed / entry.totalAllocated * 100)) : (entry.contributed > 0 ? 100 : 0)
-  const met = entry.totalAllocated > 0 && entry.contributed >= entry.totalAllocated
+  const { pct, met } = goalProgress(entry)
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px', borderTop: '1px solid var(--c-line)' }}>
@@ -115,15 +115,7 @@ function GoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit, onReco
   const skipped = !!item.skipped
   const recorded = !!item.recorded
 
-  const sublabel = skipped
-    ? (isVI ? 'Bỏ qua tháng này' : 'Skipped this month')
-    : item.overridden
-      ? (isVI ? 'Đã ghi đè tháng này' : 'Overridden this month')
-      : recorded
-        ? item.type === 'bank' ? (isVI ? 'Đã gửi tháng này' : 'Deposited this month') : (isVI ? 'Đã mua' : 'Recorded')
-        : item.type === 'fund'
-          ? 'Fund'
-          : item.isRecurring ? (isVI ? 'Tiết kiệm định kỳ' : 'Recurring saving') : (isVI ? 'Tiết kiệm' : 'Direct saving')
+  const sublabel = goalItemSublabel(item, isVI)
 
   function openMenu() {
     if (btnRef.current) {

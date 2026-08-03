@@ -9,6 +9,7 @@ import { Check, Plus, RefreshCw, TrendingUp, MoreHorizontal, X } from 'lucide-re
 import { fmt } from '@/lib/formatters'
 import { type GoalItem } from '@/lib/planning'
 import { useCloseOnScroll } from '@/components/ui/useDialogA11y'
+import { goalItemSublabel } from '@/features/planning/planModel'
 import { EditIcon } from './planningIcons'
 
 function MenuBtn({ icon, label, onClick, danger, noBorder }: {
@@ -99,15 +100,7 @@ export function DGoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit
   const skipped = !!item.skipped
   const recorded = !!item.recorded
 
-  const sublabel = skipped
-    ? (isVI ? 'Bỏ qua tháng này' : 'Skipped this month')
-    : item.overridden
-      ? (isVI ? 'Đã ghi đè tháng này' : 'Overridden this month')
-      : recorded
-        ? item.type === 'bank' ? (isVI ? 'Đã gửi tháng này' : 'Deposited this month') : (isVI ? 'Đã mua' : 'Recorded')
-        : item.type === 'fund'
-          ? 'Fund'
-          : item.isRecurring ? (isVI ? 'Tiết kiệm định kỳ' : 'Recurring saving') : (isVI ? 'Tiết kiệm' : 'Direct saving')
+  const sublabel = goalItemSublabel(item, isVI)
 
   function openMenu() {
     if (btnRef.current) {

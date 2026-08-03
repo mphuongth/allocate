@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { Plus, ChevronLeft } from 'lucide-react'
 import { fmt, fmtCompact } from '@/lib/formatters'
 import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
-import type { Goal } from '../PlanningClient'
+import type { Goal } from '@/features/planning/contracts'
 
 interface Saving {
   saving_id: string

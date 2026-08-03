@@ -9,98 +9,14 @@ import MobilePlanningView from './components/MobilePlanningView'
 import DesktopPlanningView from './components/DesktopPlanningView'
 import { useAdoptCacheOnce } from '@/lib/useHydrated'
 import { businessYearMonth } from '@/lib/dates'
-
-export interface MonthlyPlan {
-  id: string
-  month: number
-  year: number
-  salary_vnd: number
-}
-
-export interface FundInvestment {
-  transaction_id: string
-  plan_id: string
-  fund_id: string
-  goal_id: string | null
-  amount_vnd: number
-  units: number | null
-  unit_price: number | null
-  investment_date: string | null
-  is_dca_seeded: boolean
-  funds: { name: string; nav: number } | null
-  savings_goals: { goal_name: string } | null
-}
-
-export interface DirectSaving {
-  transaction_id: string
-  plan_id: string
-  goal_id: string | null
-  amount_vnd: number
-  interest_rate: number | null
-  expiry_date: string | null
-  investment_date: string
-  savings_goals: { goal_name: string } | null
-}
-
-export interface FixedExpense {
-  expense_id: string
-  expense_name: string
-  amount_vnd: number
-  override?: number // overridden monthly amount if set
-}
-
-export interface InsuranceMember {
-  member_id: string
-  member_name: string
-  relationship: string
-  annual_payment_vnd: number
-  payment_date: string | null
-  excluded?: boolean
-  monthlyOverride?: number
-}
-
-export interface OtherExpense {
-  id: string
-  plan_id: string
-  description: string
-  amount_vnd: number
-  created_at: string
-}
-
-export interface RecurringSaving {
-  saving_id: string
-  name: string
-  goal_id: string | null
-  amount_vnd: number
-  effective_from: string | null
-  effective_to: string | null
-  linked_deposit_tx_id?: string | null
-  savings_goals: { goal_name: string } | null
-}
-
-export interface RecurringSavingOverride {
-  recurring_saving_id: string
-  monthly_amount_override_vnd: number
-}
-
-// A recurring recorded this month via maturity-combine / book top-up. amount_vnd
-// is what was fulfilled; source distinguishes whether a plan-scoped deposit was
-// also logged (book top-up) so contributed isn't double-counted.
-export interface RecurringFulfillment {
-  recurring_saving_id: string
-  amount_vnd: number
-  source: string
-}
-
-export interface Fund {
-  id: string; name: string; nav: number
-  is_dca?: boolean
-  dca_monthly_amount_vnd?: number | null
-  dca_goal_id?: string | null
-}
-
-export interface DcaSkip { fund_id: string }
-export interface Goal { goal_id: string; goal_name: string }
+import { monthLabel } from '@/features/planning/planModel'
+// The plan's data shapes live in a layer-neutral contract module (#603) so the
+// shared derivations, actions and row model don't have to import a type out of
+// this `'use client'` component.
+import type {
+  MonthlyPlan, FundInvestment, DirectSaving, FixedExpense, InsuranceMember,
+  OtherExpense, RecurringSaving, RecurringSavingOverride, RecurringFulfillment, DcaSkip, Fund, Goal,
+} from '@/features/planning/contracts'
 
 const PLAN_CACHE_TTL = 2 * 60 * 1000
 function getPlanCache(month: number, year: number) {
@@ -121,9 +37,6 @@ function bustPlanCache(month: number, year: number) {
 
 function prevMonth(m: number, y: number) { return m === 1 ? { m: 12, y: y - 1 } : { m: m - 1, y } }
 function nextMonth(m: number, y: number) { return m === 12 ? { m: 1, y: y + 1 } : { m: m + 1, y } }
-
-const SHORT_MONTHS_EN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-const SHORT_MONTHS_VI = ['Th1','Th2','Th3','Th4','Th5','Th6','Th7','Th8','Th9','Th10','Th11','Th12']
 
 export default function PlanningClient() {
   const t = useTranslations('planning')
@@ -316,8 +229,7 @@ export default function PlanningClient() {
   }, [])
 
   useEffect(() => {
-    const shortMonths = isVI ? SHORT_MONTHS_VI : SHORT_MONTHS_EN
-    const shortLabel = `${shortMonths[month - 1]} ${year}`
+    const shortLabel = monthLabel(month, year, isVI, { short: true })
     setMobileTopBar({
       title: isVI ? 'Kế hoạch Tháng' : 'Monthly Plan',
       subtitle: isVI ? 'Kế hoạch' : 'Planning',

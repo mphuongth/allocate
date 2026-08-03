@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen, within, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import MobilePlanningView from '../MobilePlanningView'
-import type { MonthlyPlan, FixedExpense, InsuranceMember, OtherExpense, FundInvestment, DirectSaving, RecurringFulfillment } from '../../PlanningClient'
+import type { MonthlyPlan, FixedExpense, InsuranceMember, OtherExpense, FundInvestment, DirectSaving, RecurringFulfillment } from '@/features/planning/contracts'
 
 const { toastErrorMock } = vi.hoisted(() => ({ toastErrorMock: vi.fn() }))
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: toastErrorMock, success: vi.fn() }) }))
