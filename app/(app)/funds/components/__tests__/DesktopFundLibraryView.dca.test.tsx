@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import DesktopFundLibraryView from '../DesktopFundLibraryView'
-import type { Fund } from '../useFundsData'
+import type { Fund, Goal } from '../useFundsData'
 import { useFundsBusy } from './helpers/fundsBusy'
 
 // next-intl → return the key (and append params) so assertions stay language-agnostic.
@@ -37,14 +37,14 @@ function makeFund(over: Partial<Fund> = {}): Fund {
 }
 
 // Stateful harness so the view's optimistic setFunds re-renders the row.
-function Harness({ initial, reload }: { initial: Fund[]; reload: () => Promise<void> }) {
+function Harness({ initial, reload, goals = [] }: { initial: Fund[]; reload: () => Promise<void>; goals?: Goal[] }) {
   const [funds, setFunds] = useState(initial)
   return (
     <DesktopFundLibraryView
       {...useFundsBusy()}
       funds={funds}
       setFunds={setFunds}
-      goals={[]}
+      goals={goals}
       loading={false}
       error={false}
       reload={reload}
@@ -201,5 +201,90 @@ describe('DesktopFundLibraryView — DCA amount edit must not desync from the se
     expect(body.is_dca).toBe(true)
     expect(body.dca_monthly_amount_vnd).toBe(3_000_000)
     await waitFor(() => expect(reload).toHaveBeenCalled())
+  })
+})
+
+// The desktop row's goal dropdown has its own onChange → handleSetDcaGoal wiring,
+// separate from the mobile card's. #597 removed the desktop E2E round-trip as a
+// duplicate of the mobile one, which left that wiring uncovered: the render test
+// only asserts the select exists, and useFundMutations is reached through a
+// callback this view supplies. Deleting or miswiring the onChange would leave
+// goal selection dead at 1280px with every other test still green.
+describe('DesktopFundLibraryView — DCA goal dropdown wiring', () => {
+  const GOALS: Goal[] = [
+    { goal_id: 'g1', goal_name: 'House' },
+    { goal_id: 'g2', goal_name: 'University' },
+  ]
+
+  it('persists the chosen goal and keeps DCA on, without touching the amount', async () => {
+    render(
+      <Harness
+        goals={GOALS}
+        reload={reload}
+        initial={[makeFund({ is_dca: true, dca_monthly_amount_vnd: 2_000_000 })]}
+      />,
+    )
+
+    await userEvent.selectOptions(screen.getByTestId('dca-goal-f1'), 'g2')
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+    const [url, opts] = fetchMock.mock.calls[0]
+    expect(String(url)).toBe('/api/funds/f1')
+    expect(opts.method).toBe('PUT')
+    expect(JSON.parse(opts.body)).toMatchObject({
+      is_dca: true,
+      dca_goal_id: 'g2',
+      // #1: the amount must ride along, or the API resets it.
+      dca_monthly_amount_vnd: 2_000_000,
+    })
+  })
+
+  it('shows the new goal immediately, before the server answers', async () => {
+    let settle!: (v: unknown) => void
+    fetchMock.mockImplementation(() => new Promise(res => { settle = res }))
+
+    render(
+      <Harness
+        goals={GOALS}
+        reload={reload}
+        initial={[makeFund({ is_dca: true, dca_monthly_amount_vnd: 2_000_000 })]}
+      />,
+    )
+
+    await userEvent.selectOptions(screen.getByTestId('dca-goal-f1'), 'g1')
+
+    expect(screen.getByTestId('dca-goal-f1')).toHaveValue('g1')
+    settle({ ok: true, status: 200, json: () => Promise.resolve({}) })
+  })
+
+  it('puts the previous goal back when the save fails', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 500, json: () => Promise.resolve({}) })
+
+    render(
+      <Harness
+        goals={GOALS}
+        reload={reload}
+        initial={[makeFund({ is_dca: true, dca_monthly_amount_vnd: 2_000_000, dca_goal_id: 'g1' })]}
+      />,
+    )
+
+    await userEvent.selectOptions(screen.getByTestId('dca-goal-f1'), 'g2')
+
+    await waitFor(() => expect(screen.getByTestId('dca-goal-f1')).toHaveValue('g1'))
+  })
+
+  it('can clear the goal back to Unallocated', async () => {
+    render(
+      <Harness
+        goals={GOALS}
+        reload={reload}
+        initial={[makeFund({ is_dca: true, dca_monthly_amount_vnd: 2_000_000, dca_goal_id: 'g1' })]}
+      />,
+    )
+
+    await userEvent.selectOptions(screen.getByTestId('dca-goal-f1'), '')
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({ dca_goal_id: null })
   })
 })

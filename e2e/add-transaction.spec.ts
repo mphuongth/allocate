@@ -3,67 +3,30 @@ import { test, expect } from '@playwright/test'
 // Mobile viewport — the add button lives in the bottom tab bar (md:hidden)
 test.use({ viewport: { width: 390, height: 844 } })
 
+// Trimmed in #597. What used to live here — the add button appearing on each of
+// the four tabbed pages, the Fund/Bank/Gold chips, the Buy/Sell (and Bank's
+// Deposit/Withdraw) pair, the Save/Cancel actions, and the body scroll lock —
+// is prop-driven rendering that a browser only re-proved at ~1 page load each:
+//   app/components/navigation/__tests__/MobileBottomTabs.test.tsx
+//     (the center + on /dashboard, /planning, /funds, /settings)
+//   app/assets/components/__tests__/AddTransactionSheet.test.tsx
+//     (asset-type / direction matrix, Cancel closes, scroll lock, iOS zoom)
+// Two things a browser is still the only witness to stay: the entry point
+// actually wiring the tab-bar button to the sheet inside the real layout (the
+// smoke gate), and the title's position relative to real scroll containers,
+// which depends on layout jsdom does not compute.
+
 test.beforeEach(async ({ page }) => {
   const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000'
   const hostname = new URL(baseURL).hostname
   await page.context().addCookies([{ name: 'locale', value: 'en', domain: hostname, path: '/' }])
 })
 
-// ─── Add-button visibility ───────────────────────────────────────────────────
-// The add action is now the center + in the bottom tab bar (it replaced the
-// floating FAB), so it is present and consistent on every mobile page — including
-// Plan and Settings — and can never cover the Overview "Cần xử lý" card action.
-
-test('add button is visible on dashboard', async ({ page }) => {
-  await page.goto('/dashboard')
-  await page.waitForLoadState('networkidle')
-  await expect(page.getByRole('button', { name: /add transaction/i })).toBeVisible()
-})
-
-test('add button is visible on planning page', async ({ page }) => {
-  await page.goto('/planning')
-  await page.waitForLoadState('networkidle')
-  await expect(page.getByRole('button', { name: /add transaction/i })).toBeVisible()
-})
-
-test('add button is visible on settings page', async ({ page }) => {
-  await page.goto('/settings')
-  await page.waitForLoadState('networkidle')
-  await expect(page.getByRole('button', { name: /add transaction/i })).toBeVisible()
-})
-
-test('add button is visible on funds page', async ({ page }) => {
-  await page.goto('/funds')
-  await page.waitForLoadState('networkidle')
-  await expect(page.getByRole('button', { name: /add transaction/i })).toBeVisible()
-})
-
-// ─── Sheet open / close ──────────────────────────────────────────────────────
-
 test('clicking the add button opens Add transaction sheet', { tag: '@smoke' }, async ({ page }) => {
   await page.goto('/dashboard')
   await page.waitForLoadState('networkidle')
   await page.getByRole('button', { name: /add transaction/i }).click()
   await expect(page.locator('text=Add transaction').first()).toBeVisible({ timeout: 5_000 })
-})
-
-test('Add transaction sheet has Fund, Bank, Gold type options', async ({ page }) => {
-  await page.goto('/dashboard')
-  await page.waitForLoadState('networkidle')
-  await page.getByRole('button', { name: /add transaction/i }).click()
-  await expect(page.locator('text=Add transaction').first()).toBeVisible({ timeout: 5_000 })
-  await expect(page.getByRole('button', { name: /^fund$/i })).toBeVisible()
-  await expect(page.getByRole('button', { name: /^bank$/i })).toBeVisible()
-  await expect(page.getByRole('button', { name: /^gold$/i })).toBeVisible()
-})
-
-test('Add transaction sheet has Buy and Sell direction buttons', async ({ page }) => {
-  await page.goto('/dashboard')
-  await page.waitForLoadState('networkidle')
-  await page.getByRole('button', { name: /add transaction/i }).click()
-  await expect(page.locator('text=Add transaction').first()).toBeVisible({ timeout: 5_000 })
-  await expect(page.getByRole('button', { name: /^buy$/i })).toBeVisible()
-  await expect(page.getByRole('button', { name: /^sell$/i })).toBeVisible()
 })
 
 test('Add transaction sheet — title sits outside the scrollable body (structurally pinned)', async ({ page }) => {
@@ -92,57 +55,4 @@ test('Add transaction sheet — title sits outside the scrollable body (structur
     return true
   })
   expect(isOutsideScroll).toBe(true)
-})
-
-test('Add transaction sheet has a Save button', async ({ page }) => {
-  await page.goto('/dashboard')
-  await page.waitForLoadState('networkidle')
-  await page.getByRole('button', { name: /add transaction/i }).click()
-  await expect(page.locator('text=Add transaction').first()).toBeVisible({ timeout: 5_000 })
-  await expect(page.getByRole('button', { name: /^save$/i })).toBeVisible()
-})
-
-test('Add transaction sheet closes when Cancel is clicked', async ({ page }) => {
-  await page.goto('/dashboard')
-  await page.waitForLoadState('networkidle')
-  await page.getByRole('button', { name: /add transaction/i }).click()
-  await expect(page.locator('text=Add transaction').first()).toBeVisible({ timeout: 5_000 })
-  await page.getByRole('button', { name: /^cancel$/i }).click()
-  await expect(page.locator('text=Add transaction').first()).not.toBeVisible({ timeout: 5_000 })
-})
-
-// ─── Background scroll lock (issue #219) ─────────────────────────────────────
-// While the sheet is open the page behind it must not scroll, otherwise the user
-// can drag the underlying page around behind the modal.
-test('opening the sheet locks background scroll', async ({ page }) => {
-  await page.goto('/dashboard')
-  await page.waitForLoadState('networkidle')
-  await expect(page.evaluate(() => getComputedStyle(document.body).overflow)).resolves.not.toBe('hidden')
-
-  await page.getByRole('button', { name: /add transaction/i }).click()
-  await expect(page.locator('text=Add transaction').first()).toBeVisible({ timeout: 5_000 })
-
-  await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).overflow)).toBe('hidden')
-})
-
-test('closing the sheet restores background scroll', async ({ page }) => {
-  await page.goto('/dashboard')
-  await page.waitForLoadState('networkidle')
-  await page.getByRole('button', { name: /add transaction/i }).click()
-  await expect(page.locator('text=Add transaction').first()).toBeVisible({ timeout: 5_000 })
-  await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).overflow)).toBe('hidden')
-
-  await page.getByRole('button', { name: /^cancel$/i }).click()
-  await expect(page.locator('text=Add transaction').first()).not.toBeVisible({ timeout: 5_000 })
-  await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).overflow)).not.toBe('hidden')
-})
-
-test('switching to Bank type shows Deposit and Withdraw directions', async ({ page }) => {
-  await page.goto('/dashboard')
-  await page.waitForLoadState('networkidle')
-  await page.getByRole('button', { name: /add transaction/i }).click()
-  await expect(page.locator('text=Add transaction').first()).toBeVisible({ timeout: 5_000 })
-  await page.getByRole('button', { name: /^bank$/i }).click()
-  await expect(page.getByRole('button', { name: /^deposit$/i })).toBeVisible()
-  await expect(page.getByRole('button', { name: /^withdraw$/i })).toBeVisible()
 })

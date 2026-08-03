@@ -5,11 +5,10 @@ import { test, expect } from '@playwright/test'
 // Presence/render coverage (headings, profile card, Edit modal prefill/close,
 // language + appearance pills, Currency-removed, Price sync / Data rows, Sign out,
 // version) lives in the fast component test
-// app/(app)/settings/components/__tests__/DesktopSettingsView.test.tsx. Only the two
-// real round-trips that a component test (which mocks Supabase/fetch) cannot prove
-// stay here: a profile save propagating to the live desktop sidebar via
-// NavigationContext, and Sync now reaching the real user-scoped refresh endpoints
-// with a session the server accepts.
+// app/(app)/settings/components/__tests__/DesktopSettingsView.test.tsx. Only the one
+// real round-trip that a component test (which mocks Supabase/fetch) cannot prove
+// stays here: a profile save propagating to the live desktop sidebar via
+// NavigationContext.
 test.use({ viewport: { width: 1280, height: 800 } })
 
 test.beforeEach(async ({ page }) => {
@@ -20,41 +19,16 @@ test.beforeEach(async ({ page }) => {
   await page.waitForLoadState('networkidle')
 })
 
-// Both views shared the same broken wiring, so both specs asserted the cron URL
-// and both stayed green while the button reported "Sync failed" (#552). The
-// mobile spec carries the fuller coverage; this keeps the desktop view honest
-// about the one thing that differs — its own handler.
-test('desktop: Sync now calls the user-scoped endpoints and is authenticated', async ({ page }) => {
-  const navResponse = page.waitForResponse(
-    r => r.url().includes('/api/v1/funds/refresh-nav'),
-    { timeout: 20_000 }
-  )
-  const goldResponse = page.waitForResponse(
-    r => r.url().includes('/api/v1/gold-price/refresh'),
-    { timeout: 20_000 }
-  )
-  await page.getByRole('button', { name: /sync now/i }).click()
-  const [nav, gold] = await Promise.all([navResponse, goldResponse])
-
-  // 401 is exactly what the cron routes returned to a browser.
-  expect(nav.status(), 'NAV refresh must not reject the session').not.toBe(401)
-  expect(gold.status(), 'gold refresh must not reject the session').not.toBe(401)
-
-  await expect(page.getByRole('button', { name: /sync now/i })).toBeEnabled({ timeout: 10_000 })
-})
-
-test('desktop: Sync now reports success when both refreshes succeed', async ({ page }) => {
-  await page.route('**/api/v1/funds/refresh-nav', r =>
-    r.fulfill({ status: 200, contentType: 'application/json', body: '{"results":[{"id":"f1","nav":10000}]}' }))
-  await page.route('**/api/v1/gold-price/refresh', r =>
-    r.fulfill({ status: 200, contentType: 'application/json', body: '{"price_per_chi":8500000}' }))
-
-  await page.getByRole('button', { name: /sync now/i }).click()
-
-  await expect(page.getByText(/updated/i).first()).toBeVisible({ timeout: 10_000 })
-  await expect(page.getByText(/sync failed/i)).toHaveCount(0)
-})
-
+// Sync now is gone from this spec (#597). Both views drive the same
+// useSettingsController, so "which URL does the button call" and "what does it
+// report" are one behaviour tested twice at 1280px and at 390px. The mobile spec
+// keeps the single un-stubbed round-trip that proves a browser session is
+// accepted by the real endpoints (#552); the desktop view's own copy of the
+// cron-route guard moved down to DesktopSettingsView.test.tsx.
+//
+// What stays is the one thing genuinely desktop-shaped: the sidebar only exists
+// at this viewport, and nothing but a real save can prove it re-renders from
+// NavigationContext without a route refresh.
 test('desktop: saving a new name updates the sidebar avatar/name without a refresh', async ({ page }) => {
   const sidebar = page.locator('[data-testid="desktop-sidebar"]')
   await expect(sidebar).toBeVisible()

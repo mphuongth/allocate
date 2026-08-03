@@ -114,3 +114,48 @@ describe('POST /api/v1/fund-investments', () => {
     expect(h.lookups).not.toContain('savings_goals')
   })
 })
+
+// A direct invariant test for the business date this route derives on its own
+// (#597). The suite proved the rule in lib/dates and proved the UI once a
+// browser was already running, but nothing pinned it at the API boundary — and
+// the boundary is where #591 actually bit: the server clock is UTC, so between
+// 00:00 and 06:59 Vietnam time an omitted investment_date filed the holding
+// under *yesterday*, and the contribution landed in the wrong month.
+describe('POST /api/v1/fund-investments — business date (#591)', () => {
+  beforeEach(() => {
+    h.user = { id: 'user-1' }
+    h.fund = { data: { id: FUND }, error: null }
+    h.goal = { data: { goal_id: GOAL }, error: null }
+    h.inserted = { data: { transaction_id: TX }, error: null }
+    h.insert = null
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => vi.useRealTimers())
+
+  it('files an omitted date under the Vietnam day, not the UTC one', async () => {
+    // 23:30 UTC on the 3rd is already 06:30 on the 4th in Asia/Ho_Chi_Minh.
+    vi.setSystemTime(new Date('2026-08-03T23:30:00Z'))
+
+    await call({ fund_id: FUND, amount_vnd: 2_000_000, units_purchased: 100, nav_at_purchase: 20_000 })
+
+    expect(h.insert).toMatchObject({ investment_date: '2026-08-04' })
+  })
+
+  it('still honours an explicit date', async () => {
+    vi.setSystemTime(new Date('2026-08-03T23:30:00Z'))
+
+    await call(body({ investment_date: '2026-07-01' }))
+
+    expect(h.insert).toMatchObject({ investment_date: '2026-07-01' })
+  })
+
+  it('agrees with the UTC day outside the 00:00–06:59 window', async () => {
+    // Same calendar day in both zones — the rule must not shift a normal date.
+    vi.setSystemTime(new Date('2026-08-03T09:00:00Z'))
+
+    await call({ fund_id: FUND, amount_vnd: 2_000_000, units_purchased: 100, nav_at_purchase: 20_000 })
+
+    expect(h.insert).toMatchObject({ investment_date: '2026-08-03' })
+  })
+})
