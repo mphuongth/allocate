@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeNewPrincipal, renewEndpoint, buildRenewBody } from '../maturityResolveModel'
+import { computeNewPrincipal, renewEndpoint, buildRenewBody } from '../resolveModel'
 
 // The maturity-resolve write model (#467): the new principal + the renew/collapse
 // request body, per resolution mode. Extracted from MaturityResolveBody so the

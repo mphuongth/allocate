@@ -14,7 +14,7 @@ import { fieldLabel, moneyInput, MoneyInputCore } from './maturityResolveFields'
 
 export function MergeSourcesSection({
   mergeableOrdered, classOf, isSelected, toggleSource, overrideSource, blockReasonText,
-  overridden, mergeRecv, setMergeRecv, setMergeTotal, setMergeTotalTouched, mergeTotal, onMergeTotalChange, isMultiSource,
+  isOverridden, mergeRecv, setReceived, mergeTotal, onMergeTotalChange, isMultiSource,
   windowDays, setWindowDays, banks, destBank, setDestBank, selectedSources, mergeReceivedTotal,
   mergeSourceCount, mergeBankCount, t,
 }: {
@@ -24,11 +24,9 @@ export function MergeSourcesSection({
   toggleSource: (s: InvRow) => void
   overrideSource: (s: InvRow) => void
   blockReasonText: (reason: MergeClassification['reason'], gapDays: number | null) => string
-  overridden: Record<string, boolean>
+  isOverridden: (id: string) => boolean
   mergeRecv: Record<string, string>
-  setMergeRecv: (updater: (prev: Record<string, string>) => Record<string, string>) => void
-  setMergeTotal: (v: string) => void
-  setMergeTotalTouched: (v: boolean) => void
+  setReceived: (id: string, value: string) => void
   mergeTotal: string
   onMergeTotalChange: (v: string) => void
   isMultiSource: boolean
@@ -74,7 +72,7 @@ export function MergeSourcesSection({
                   const c = classOf.get(s.id)
                   const sel = isSelected(s.id)
                   // A blocked source the user hasn't (yet) folded in early.
-                  const blocked = !!c && !c.eligible && !overridden[s.id] && !sel
+                  const blocked = !!c && !c.eligible && !isOverridden(s.id) && !sel
                   if (blocked) {
                     return (
                       <div key={s.id} data-testid={`merge-source-${s.id}`}
@@ -111,14 +109,14 @@ export function MergeSourcesSection({
                         <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
                         {/* Mark a source folded in past its window so the early-settlement
                             risk stays visible after the override. */}
-                        {overridden[s.id] && <span style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--c-warn)', flexShrink: 0, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{t.mergeEarly}</span>}
+                        {isOverridden(s.id) && <span style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--c-warn)', flexShrink: 0, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{t.mergeEarly}</span>}
                         <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmtCompact(s.value ?? s.principal ?? 0)}</span>
                       </button>
                       {sel && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 28 }}>
                           <span style={{ fontSize: 11, color: 'var(--c-muted)', flexShrink: 0 }}>{t.mergeReceivedLabel}</span>
                           <MoneyInputCore compact testId={`merge-received-${s.id}`} value={mergeRecv[s.id] ?? ''}
-                            onChange={(v) => { setMergeRecv((prev) => ({ ...prev, [s.id]: v })); setMergeTotal(''); setMergeTotalTouched(false) }} />
+                            onChange={(v) => setReceived(s.id, v)} />
                         </div>
                       )}
                     </div>

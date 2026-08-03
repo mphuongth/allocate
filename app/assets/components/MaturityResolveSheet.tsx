@@ -37,7 +37,10 @@ import {
   allocateCumulative,
   type RenewMode,
 } from '@/lib/maturity'
-import { computeNewPrincipal, renewEndpoint, buildRenewBody } from './maturityResolveModel'
+import { maturityResolveStrings } from '@/features/dashboard/maturity/strings'
+import { holdAnchorsFor, mergeProvenance } from '@/features/dashboard/maturity/mergeSelection'
+import { useMergeSelection } from '@/features/dashboard/maturity/useMergeSelection'
+import { computeNewPrincipal, renewEndpoint, buildRenewBody } from '@/features/dashboard/maturity/resolveModel'
 import { linkedSavingFor, type RecurringLinkCandidate, type RecurringLinkResult } from '@/lib/recurringLink'
 import { classifyMergeSources, type MergeBlockReason } from '@/lib/mergeEligibility'
 import { todayIso } from '@/lib/dates'
@@ -146,11 +149,6 @@ export function MaturityResolveBody({
   // overrides of that default (so widening the window can re-default an untouched
   // source without clobbering a manual pick). `overridden` flags an out-of-window
   // source the user chose to fold in early ("Gộp sớm?").
-  const [mergeSel, setMergeSel] = useState<Record<string, boolean>>({})
-  const [overridden, setOverridden] = useState<Record<string, boolean>>({})
-  const [mergeRecv, setMergeRecv] = useState<Record<string, string>>({})
-  const [mergeTotal, setMergeTotal] = useState('')
-  const [, setMergeTotalTouched] = useState(false)
   // Maturity window (days): siblings maturing within this many days of the anchor
   // are eligible. The slider widens it (folding in farther deposits = early
   // settlement = a possible interest penalty).
@@ -190,100 +188,18 @@ export function MaturityResolveBody({
   // (same window/currency/not-pledged, via the shared PR2 predicate — D as anchor,
   // THIS deposit as the source). No anchor ⇒ plain withdraw, no hold fork (per the
   // owner's gate). The nearest later maturity is the default anchor.
-  const holdAnchors = goalId == null || isBook
-    ? []
-    : (siblingDeposits ?? [])
-        .filter((s) => s.id !== inv.id && s.type === 'bank' && !s.depositGroupId && (s.principal ?? s.value ?? 0) > 0)
-        .filter((s) => (s.expiryDate ?? '') > (inv.expiryDate ?? '')) // anchor matures later
-        .filter((s) => classifyMergeSources(
-          { id: s.id, type: s.type, expiryDate: s.expiryDate, principal: s.principal, value: s.value, depositGroupId: s.depositGroupId, currency: s.currency, isPledged: s.isPledged },
-          [{ id: inv.id, type: inv.type, expiryDate: inv.expiryDate, principal: inv.principal, value: inv.value, depositGroupId: inv.depositGroupId, currency: inv.currency, isPledged: inv.isPledged }],
-          windowDays,
-        )[0]?.eligible)
-        .sort((a, b) => (a.expiryDate ?? '').localeCompare(b.expiryDate ?? ''))
+  const holdAnchors = holdAnchorsFor(inv, siblingDeposits, goalId, isBook, windowDays)
   const holdAnchor = holdAnchors[0] ?? null
   const canHold = !!holdAnchor
   const holdReceivedNum = holdReceived.trim() === '' ? 0 : Number(holdReceived)
 
-  // Effective selection: an explicit toggle wins; an overridden source is on; else
-  // the eligibility default.
-  function isSelected(id: string): boolean {
-    if (id in mergeSel) return mergeSel[id]
-    if (overridden[id]) return true
-    return !!classOf.get(id)?.eligible
-  }
-  const selectedSources = mergeableOrdered.filter((s) => isSelected(s.id))
-  const mergeReceivedTotal = selectedSources.reduce((sum, s) => sum + (Number(mergeRecv[s.id]) || 0), 0)
-  // Provenance for the multi-source merge: the new deposit combines the anchor (D)
-  // with every folded source, so "N nguồn" counts D + the selected sources. "M
-  // ngân hàng" is the distinct real banks among them — a NULL bank_code (a legacy
-  // deposit with no bank set) is excluded so it doesn't inflate the bank count.
-  const combinedBankCodes = new Set<string>()
-  if (inv.bankCode) combinedBankCodes.add(inv.bankCode)
-  selectedSources.forEach((s) => { if (s.bankCode) combinedBankCodes.add(s.bankCode) })
-  const mergeSourceCount = selectedSources.length + 1
-  const mergeBankCount = combinedBankCodes.size
-  const isMultiSource = selectedSources.length > 1
+  const {
+    selectedSources, mergeReceivedTotal, mergeRecv, mergeTotal,
+    isSelected, isOverridden, toggleSource, overrideSource, setReceived, onMergeTotalChange,
+  } = useMergeSelection(mergeableOrdered, (id) => !!classOf.get(id)?.eligible, windowDays)
 
-  // Prefill a source's received with its current value (the user edits it down to
-  // the real cash if early settlement is penalised). No-op once it has a value.
-  function prefillReceived(s: InvRow) {
-    setMergeRecv((prev) =>
-      prev[s.id] === undefined || prev[s.id] === ''
-        ? { ...prev, [s.id]: String(Math.round(s.value ?? s.principal ?? 0)) }
-        : prev,
-    )
-  }
-
-  // Toggle a source on/off (eligible or already-overridden). Turning an overridden
-  // source off also drops the override, so it returns to the dimmed "Gộp sớm?" row.
-  function toggleSource(s: InvRow) {
-    const on = !isSelected(s.id)
-    setMergeSel((prev) => ({ ...prev, [s.id]: on }))
-    if (on) prefillReceived(s)
-    else if (overridden[s.id]) setOverridden((prev) => { const n = { ...prev }; delete n[s.id]; return n })
-  }
-
-  // Fold an out-of-window source in early ("Gộp sớm?"): override the window block,
-  // select it, and prefill its received cash.
-  function overrideSource(s: InvRow) {
-    setOverridden((prev) => ({ ...prev, [s.id]: true }))
-    setMergeSel((prev) => ({ ...prev, [s.id]: true }))
-    prefillReceived(s)
-  }
-
-  // Keep the received map in step with the eligibility default: when the picker
-  // opens (and whenever the window widens), prefill any now-selected source that
-  // doesn't yet have a received value, so a preselected sibling never submits 0₫.
-  useEffect(() => {
-    setMergeRecv((prev) => {
-      let changed = false
-      const next = { ...prev }
-      mergeableOrdered.forEach((s) => {
-        if (isSelected(s.id) && (next[s.id] === undefined || next[s.id] === '')) {
-          next[s.id] = String(Math.round(s.value ?? s.principal ?? 0))
-          changed = true
-        }
-      })
-      return changed ? next : prev
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [windowDays])
-
-  // Editing the single TOTAL splits it across the selected sources with the same
-  // cumulative-window allocation the SQL uses — so Σ(received) === the total the
-  // user typed, exactly (no rounding drift between client preview and server).
-  function onMergeTotalChange(v: string) {
-    setMergeTotal(v); setMergeTotalTouched(true)
-    const total = Math.round(Number(v) || 0)
-    const sel = mergeableOrdered.filter((s) => isSelected(s.id))
-    const alloc = allocateCumulative(total, sel.map((s) => Math.round(s.principal ?? s.value ?? 0)))
-    setMergeRecv((prev) => {
-      const next = { ...prev }
-      sel.forEach((s, i) => { next[s.id] = String(alloc[i]) })
-      return next
-    })
-  }
+  const { sourceCount: mergeSourceCount, bankCount: mergeBankCount, isMultiSource } =
+    mergeProvenance(inv, selectedSources)
 
   // Load the bank reference list once for the destination picker — only when
   // there are siblings to merge (the picker is merge-only), so plain renewals
@@ -372,6 +288,8 @@ export function MaturityResolveBody({
   const newMaturityFmt = fmtMaturity(newMaturity, isVi)?.formatted ?? newMaturity
   const payout = principal + iNum
 
+  const t = maturityResolveStrings(isVi, matured)
+
   // Guard against writing a zero/empty principal, a non-positive term, clearing
   // the rate (which would drop the deposit out of maturity tracking), or a new
   // maturity that isn't strictly after the old one (a zero/negative-length cycle).
@@ -389,127 +307,6 @@ export function MaturityResolveBody({
   const tooEarlyToRenew = !matured && daysLeft > 1
   const canRenew = tNum > 0 && rateValid && amountValid && newPrincipal > 0 && maturityValid && !tooEarlyToRenew
 
-  const t = isVi ? {
-    summarySuffix: 'năm', perYr: 'năm', mo: 'tháng',
-    why: matured
-      ? 'Sổ đã đáo hạn. Nếu không xử lý, ngân hàng thường tự tái tục theo kỳ hạn cũ. Hãy ghi nhận quyết định của bạn.'
-      : 'Sổ sắp đáo hạn. Chọn cách xử lý cho kỳ tiếp theo.',
-    prompt: 'Bạn muốn làm gì?',
-    newAmount: 'Số tiền kỳ mới', interestReceived: 'Lãi thực nhận',
-    interestPaidOut: 'Lãi thực nhận (rút ra)',
-    interestSavedHint: 'Số lãi này được lưu vĩnh viễn vào lịch sử tái tục.',
-    newTerm: 'Kỳ hạn mới', newRate: 'Lãi suất kỳ mới',
-    newCycle: 'Kỳ mới', newMaturityLabel: 'Ngày đáo hạn mới',
-    maturityHint: 'Tự tính theo kỳ hạn, tính từ ngày đáo hạn cũ. Sửa nếu ngân hàng chốt ngày khác.',
-    resetDate: 'Đặt lại', maturityTooEarly: 'Ngày đáo hạn mới phải sau ngày đáo hạn cũ.',
-    interestIn: 'Lãi nhập gốc', interestOut: 'Lãi rút ra',
-    totalPayout: 'Tổng nhận về',
-    cancel: 'Hủy', confirmRenew: 'Xác nhận tái tục', confirmWithdraw: 'Đánh dấu chờ rút',
-    renewed: 'Đã tái tục', renewedSub: (p: string, d: string) => `Kỳ mới ${p} · đáo hạn ${d}`,
-    combineLabel: 'Tất toán & gửi lại (gộp định kỳ)',
-    combineSubPick: 'Chọn khoản định kỳ để gộp',
-    combineSub: (amt: string) => `Cộng ${amt} định kỳ tháng này rồi gửi lại`,
-    whichRecurring: 'Gộp kèm khoản định kỳ nào?',
-    pickHint: 'Chọn một khoản để gộp, hoặc bỏ trống để chỉ tái tục gốc + lãi.',
-    toAccount: 'Về tài khoản thường', principalOut: 'Gốc tất toán',
-    recurringThisMonth: 'Gửi định kỳ tháng này',
-    redepositAmount: 'Số tiền gửi lại',
-    redepositHint: (amt: string) => `Gợi ý ${amt} (gốc + lãi + định kỳ) — sửa nếu thực tế khác.`,
-    markDeposited: (amt: string) => `Đánh dấu đã gửi định kỳ tháng này (${amt})`,
-    confirmCombine: 'Lưu sổ mới',
-    mergeSub: 'Gộp sổ tiết kiệm khác vào lần gửi lại',
-    mergeTitle: 'Gộp sổ khác',
-    mergeTitleMulti: 'Gộp nhiều nguồn',
-    mergeHint: 'Chọn các sổ để tất toán sớm và gộp vào lần gửi lại này.',
-    mergeReceivedLabel: 'Thực nhận',
-    mergeTotalLabel: 'Tổng gộp thêm',
-    mergePenalty: 'Tất toán trước hạn có thể bị phạt lãi — nhập số tiền thực nhận, không phải giá trị hiện tại.',
-    destBankLabel: 'Ngân hàng đích',
-    destBankNone: 'Không chọn',
-    provenance: (n: number, m: number) => `Gộp từ ${n} nguồn · ${m} ngân hàng`,
-    mergedSourcesLabel: 'Đã gộp',
-    windowLabel: (n: number) => `Cửa sổ đáo hạn: ${n} ngày`,
-    windowHint: 'Nới cửa sổ để gộp thêm sổ — chờ lâu hơn = thiệt lãi.',
-    mergeEarly: 'Gộp sớm?',
-    reasonOutOfWindow: (n: number) => `Đáo hạn cách ${n} ngày — phá kỳ mất lãi`,
-    reasonCurrency: 'Khác loại tiền',
-    reasonPledged: 'Đang thế chấp — bị phong toả',
-    reasonGoal: 'Khác mục tiêu',
-    reasonBlocked: 'Chưa đủ điều kiện',
-    holdNudge: (anchor: string, date: string) => `«${anchor}» đáo hạn ${date} cùng mục tiêu — để dành gộp thay vì rút?`,
-    holdForkPrompt: 'Tất toán sổ này thế nào?',
-    holdCardTitle: 'Để dành gộp',
-    holdCardSub: (anchor: string) => `Giữ tiền chờ gộp vào «${anchor}» — không rời mục tiêu`,
-    cashCardTitle: 'Rút ra ví',
-    cashCardSub: 'Tiền rời khỏi mục tiêu như rút thường',
-    holdReceivedLabel: 'Số tiền thực nhận',
-    holdConfirm: 'Xác nhận để dành',
-    holdDone: 'Đã để dành gộp',
-    holdDoneSub: (anchor: string) => `Đang chờ gộp vào «${anchor}»`,
-    heldSectionTitle: 'Ví chờ gộp',
-    heldSectionHint: 'Các sổ đã tất toán để dành — gộp vào lần gửi lại này.',
-    heldUnholdHint: 'Bỏ chọn để giữ lại trong ví chờ gộp.',
-  } : {
-    summarySuffix: 'yr', perYr: 'yr', mo: 'mo',
-    why: matured
-      ? 'This deposit has matured. Banks usually auto-renew at the same term — record what you decided.'
-      : 'This deposit is about to mature. Choose how to handle the next cycle.',
-    prompt: 'What do you want to do?',
-    newAmount: 'New amount', interestReceived: 'Interest received',
-    interestPaidOut: 'Interest received (paid out)',
-    interestSavedHint: 'This interest is saved permanently to the renewal history.',
-    newTerm: 'New term', newRate: 'New interest rate',
-    newCycle: 'New cycle', newMaturityLabel: 'New maturity',
-    maturityHint: 'Auto-calculated from the term, starting at the old maturity date. Edit if your bank set a different date.',
-    resetDate: 'Reset', maturityTooEarly: 'New maturity must be after the old maturity date.',
-    interestIn: 'Interest added', interestOut: 'Interest out',
-    totalPayout: 'Total payout',
-    cancel: 'Cancel', confirmRenew: 'Confirm renewal', confirmWithdraw: 'Mark for withdrawal',
-    renewed: 'Deposit renewed', renewedSub: (p: string, d: string) => `New term ${p} · matures ${d}`,
-    combineLabel: 'Settle & re-deposit (merge recurring)',
-    combineSubPick: 'Pick a recurring to merge',
-    combineSub: (amt: string) => `Add ${amt} recurring, then re-deposit`,
-    whichRecurring: 'Which recurring to merge?',
-    pickHint: 'Pick one to merge, or leave none to renew principal + interest only.',
-    toAccount: 'To your account', principalOut: 'Principal out',
-    recurringThisMonth: 'Recurring this month',
-    redepositAmount: 'Re-deposit amount',
-    redepositHint: (amt: string) => `Suggested ${amt} (principal + interest + recurring) — edit if reality differs.`,
-    markDeposited: (amt: string) => `Mark this month's recurring as deposited (${amt})`,
-    confirmCombine: 'Save new deposit',
-    mergeSub: 'Fold other deposits into the re-deposit',
-    mergeTitle: 'Merge other deposits',
-    mergeTitleMulti: 'Merge multiple sources',
-    mergeHint: 'Pick deposits to settle early and fold into this re-deposit.',
-    mergeReceivedLabel: 'Received',
-    mergeTotalLabel: 'Total merged in',
-    mergePenalty: 'Early settlement may forfeit interest — enter the cash received, not the current value.',
-    destBankLabel: 'Destination bank',
-    destBankNone: 'No bank',
-    provenance: (n: number, m: number) => `Combined from ${n} sources · ${m} banks`,
-    mergedSourcesLabel: 'Merged in',
-    windowLabel: (n: number) => `Maturity window: ${n} days`,
-    windowHint: 'Widen the window to fold in more deposits — waiting longer forfeits interest.',
-    mergeEarly: 'Merge early?',
-    reasonOutOfWindow: (n: number) => `Matures ${n}d apart — early settlement`,
-    reasonCurrency: 'Different currency',
-    reasonPledged: 'Pledged as collateral',
-    reasonGoal: 'Different goal',
-    reasonBlocked: 'Not eligible yet',
-    holdNudge: (anchor: string, date: string) => `“${anchor}” matures ${date} in the same goal — hold for merge instead of withdrawing?`,
-    holdForkPrompt: 'How do you want to settle this?',
-    holdCardTitle: 'Hold for merge',
-    holdCardSub: (anchor: string) => `Keep the cash for merging into “${anchor}” — stays in the goal`,
-    cashCardTitle: 'Withdraw to wallet',
-    cashCardSub: 'Money leaves the goal, like a normal withdrawal',
-    holdReceivedLabel: 'Cash received',
-    holdConfirm: 'Confirm hold',
-    holdDone: 'Held for merge',
-    holdDoneSub: (anchor: string) => `Waiting to merge into “${anchor}”`,
-    heldSectionTitle: 'Merge holding pool',
-    heldSectionHint: 'Deposits already settled and parked — fold them into this re-deposit.',
-    heldUnholdHint: 'Deselect to leave it in the pool.',
-  }
 
   // Human-readable reason for a blocked source.
   function blockReasonText(reason: MergeBlockReason | null, gapDays: number | null): string {
@@ -759,8 +556,7 @@ export function MaturityResolveBody({
             <MergeSourcesSection
               mergeableOrdered={mergeableOrdered} classOf={classOf} isSelected={isSelected}
               toggleSource={toggleSource} overrideSource={overrideSource} blockReasonText={blockReasonText}
-              overridden={overridden} mergeRecv={mergeRecv} setMergeRecv={setMergeRecv}
-              setMergeTotal={setMergeTotal} setMergeTotalTouched={setMergeTotalTouched}
+              isOverridden={isOverridden} mergeRecv={mergeRecv} setReceived={setReceived}
               mergeTotal={mergeTotal} onMergeTotalChange={onMergeTotalChange} isMultiSource={isMultiSource}
               windowDays={windowDays} setWindowDays={setWindowDays} banks={banks} destBank={destBank} setDestBank={setDestBank}
               selectedSources={selectedSources} mergeReceivedTotal={mergeReceivedTotal}
