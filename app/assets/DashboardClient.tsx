@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { Plus, ArrowDownToLine, ChevronDown, Check } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Plus, ArrowDownToLine } from 'lucide-react'
 import { useTranslations, useLocale } from 'next-intl'
 import { useNavigation } from '@/components/navigation/NavigationContext'
 import { CreateGoalSheet } from './components/CreateGoalSheet'
@@ -20,12 +20,27 @@ import AddTransactionSheet, { type PrefillTransaction } from './components/AddTr
 import RecentActivityCard from './components/RecentActivityCard'
 import MaturityActionCard from './components/MaturityActionCard'
 import { MaturityResolveSheet, MaturityResolveModal } from './components/MaturityResolveSheet'
-import { isActionableTermDeposit, MATURING_COUNT_EVENT } from '@/lib/maturity'
-import { detectMergeClusters } from '@/lib/mergeCluster'
-import { actionableBooks } from '@/features/dashboard/maturityCardItems'
-import { collapseUnallocatedBooks } from './unallocatedBooks'
-import type { InvRow } from './components/goalDetailShared'
-import { loadOverview, overviewErrorText, getCachedOverview, setCachedOverview, computeAllocationTotals } from './overviewData'
+import { MATURING_COUNT_EVENT } from '@/lib/maturity'
+import { collapseUnallocatedBooks } from '@/features/dashboard/unallocatedBooks'
+import { computeAllocationTotals } from '@/features/dashboard/overviewData'
+import { useOverviewData } from '@/features/dashboard/useOverviewData'
+import { useFundPurchaseHistory } from '@/features/dashboard/useFundPurchaseHistory'
+import {
+  isDashboardEmpty,
+  sortGoals,
+  tagNonFunds,
+  maturingCount,
+  maturingDeposits as deriveMaturingDeposits,
+  mergeClusterSummaries,
+  goalSiblingInvRows,
+  goalHeldSiblings,
+  findFund,
+  nonFundToSellItem,
+  sellItemForFund,
+  sellItemForMaturingDeposit,
+  type SortValue,
+  type MaturingDep,
+} from '@/features/dashboard/dashboardModel'
 import { fetchNetWorthHistory, type TimeRange, type ChartPoint } from './components/netWorthHistory'
 import { fmtTimeAgo } from '@/lib/formatters'
 import { assignInvestmentToGoal } from '@/lib/assignToGoal'
@@ -38,130 +53,9 @@ import DesktopInsuranceDetail from './components/DesktopInsuranceDetail'
 import InsuranceEmpty from './components/InsuranceEmpty'
 import AddInsuranceMemberModal from './components/AddInsuranceMemberModal'
 import { OverviewEmptyState } from './components/OverviewEmptyState'
+import SortDropdown from './components/SortDropdown'
 import DesktopGoalDetail from './components/DesktopGoalDetail'
-import type { FundBreakdownItem, NonFundUnallocatedItem, DashboardData } from '@/features/dashboard/contracts'
-
-// Fetch fund detail (purchase history) from investment_transactions
-interface PurchaseHistory { purchase_date: string; units: number; nav_at_purchase: number }
-
-type SortValue = 'manual' | 'progressDesc' | 'progressAsc' | 'alpha'
-
-function SortDropdown({ value, onChange, options }: {
-  value: SortValue
-  onChange: (v: SortValue) => void
-  options: { value: SortValue; label: string }[]
-}) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-  const current = options.find((o) => o.value === value)
-
-  useEffect(() => {
-    if (!open) return
-    function onDown(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', onDown)
-    return () => document.removeEventListener('mousedown', onDown)
-  }, [open])
-
-  return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      <button
-        onClick={() => setOpen((o) => !o)}
-        style={{
-          display: 'inline-flex', alignItems: 'center', gap: 4,
-          fontSize: 13, padding: '5px 10px', cursor: 'pointer',
-          background: 'var(--c-card)', border: '1px solid var(--c-line)',
-          borderRadius: 8, color: 'var(--c-ink)', fontFamily: 'inherit', fontWeight: 500,
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {current?.label}
-        <ChevronDown size={12} style={{ color: 'var(--c-muted)', flexShrink: 0 }} />
-      </button>
-      {open && (
-        <div style={{
-          position: 'absolute', top: 'calc(100% + 4px)', right: 0, zIndex: 50,
-          background: 'var(--c-card)', border: '1px solid var(--c-line)',
-          borderRadius: 10, boxShadow: 'var(--shadow-pop)',
-          minWidth: 160, overflow: 'hidden',
-        }}>
-          {options.map((o) => (
-            <button
-              key={o.value}
-              onClick={() => { onChange(o.value); setOpen(false) }}
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                width: '100%', padding: '10px 14px', border: 'none', cursor: 'pointer',
-                background: o.value === value ? 'var(--c-navy-tint)' : 'transparent',
-                color: o.value === value ? 'var(--c-navy)' : 'var(--c-ink)',
-                fontSize: 14, fontFamily: 'inherit', fontWeight: o.value === value ? 600 : 400,
-                textAlign: 'left',
-              }}
-            >
-              {o.label}
-              {o.value === value && <Check size={13} />}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// Map a dashboard overview non-fund holding to the InvRow shape the maturity
-// resolve flow expects.
-function nonFundToInvRow(it: NonFundUnallocatedItem, isVi: boolean): InvRow {
-  return {
-    id: it.transactionId,
-    name: it.notes ?? (it.type === 'bank' ? (isVi ? 'Tiền gửi' : 'Bank deposit') : it.type),
-    type: it.type,
-    value: it.currentValue,
-    gainPct: it.amount > 0 ? ((it.currentValue - it.amount) / it.amount) * 100 : null,
-    units: it.units,
-    principal: it.amount,
-    interestRate: it.interestRate,
-    expiryDate: it.expiryDate,
-    investmentDate: it.investmentDate,
-    fund: null,
-    depositGroupId: it.depositGroupId ?? null,
-    bankCode: it.type === 'bank' ? (it.bankCode ?? null) : null,
-    currency: it.currency ?? null,
-    isPledged: it.isPledged ?? false,
-  }
-}
-
-// A maturing deposit plus the context needed to act on it: the goal it belongs
-// to (null when unassigned) and the raw item for the withdraw flow.
-interface MaturingDep {
-  inv: InvRow
-  goalId: string | null
-  raw: NonFundUnallocatedItem
-  // The goal's other bank deposits, attached when the resolve flow opens so the
-  // merge UI can fold close-maturing siblings into this re-deposit. Computed lazily
-  // (only on open) to keep it off the hot maturingDeposits list.
-  siblings?: InvRow[]
-  // Pooled "Ví chờ gộp" holdings in this goal, attached on open so the merge sheet
-  // can preselect them as held_sources (consumed in place, no second withdrawal).
-  heldSiblings?: { id: string; name: string | null; amount: number }[]
-}
-
-// Build the SellWithdrawSheet payload for a non-fund holding (bank/gold/stock).
-// `isVi` localises the no-notes fallback name, mirroring nonFundToInvRow — without
-// it a Vietnamese user saw the raw English "Bank deposit" / "Gold" in the sheet.
-export function nonFundToSellItem(item: NonFundUnallocatedItem, isVi: boolean): SellItem {
-  return {
-    type: item.type as 'bank' | 'gold' | 'stock',
-    name: item.notes ?? (item.type === 'bank' ? (isVi ? 'Tiền gửi' : 'Bank deposit') : item.type === 'gold' ? (isVi ? 'Vàng' : 'Gold') : item.type),
-    currentValue: item.currentValue,
-    units: item.units ?? undefined,
-    navPerUnit: item.units && item.units > 0 ? item.currentValue / item.units : undefined,
-    interestRate: item.interestRate ?? undefined,
-    transactionId: item.transactionId, // for a book this is the anchor (= deposit_group_id)
-    purchasePrice: item.amount,
-    depositGroupId: item.depositGroupId ?? null,
-  }
-}
+import type { FundBreakdownItem, NonFundUnallocatedItem } from '@/features/dashboard/contracts'
 
 function useIsDesktop(): boolean {
   const [isDesktop, setIsDesktop] = useState(false)
@@ -180,18 +74,9 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const locale = useLocale()
   const { userName, setMobileTopBar } = useNavigation()
   const isDesktop = useIsDesktop()
-  const [data, setData] = useState<DashboardData | null>(null)
-  const [loading, setLoading] = useState(true)
-  // Re-fetch while data is already on screen → number-refresh state (pulse + XS
-  // Cairn), as opposed to `loading` which drives the first-paint skeleton.
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState('')
-  const [fundDetailId, setFundDetailId] = useState<string | null>(null)
+  const fundHistory = useFundPurchaseHistory()
   const [goalPickerFundId, setGoalPickerFundId] = useState<string | null>(null)
   const [goalPickerFundItem, setGoalPickerFundItem] = useState<{ name: string; value: number; type: string } | null>(null)
-  const [purchaseHistory, setPurchaseHistory] = useState<PurchaseHistory[]>([])
-  const [historyLoading, setHistoryLoading] = useState(false)
-  const [historyError, setHistoryError] = useState(false)
   const [nonFundPickerTxId, setNonFundPickerTxId] = useState<string | null>(null)
   const [nonFundPickerItem, setNonFundPickerItem] = useState<{ name: string; value: number; type: string } | null>(null)
   const [goalSort, setGoalSort] = useState<SortValue>('manual')
@@ -199,8 +84,6 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const [sellItem, setSellItem] = useState<SellItem | null>(null)
   const [sellSheetOpen, setSellSheetOpen] = useState(false)
   const [isGeneratingReport, setIsGeneratingReport] = useState(false)
-  const [historyKey, setHistoryKey] = useState(0)
-  const [pullY, setPullY] = useState(0)
   // Track the goal by id rather than by object reference. When fetchData
   // refreshes data.goals (e.g. after an Unallocated → Assign-to-goal flow),
   // selectedGoal automatically picks up the new GoalData with updated funds
@@ -222,12 +105,16 @@ export default function DashboardClient({ userId }: { userId: string }) {
   // from a goal detail). Cleared on close so the plain FAB/button path stays blank.
   const [addTxPrefill, setAddTxPrefill] = useState<PrefillTransaction | null>(null)
   const [showAddInsurance, setShowAddInsurance] = useState(false)
+  // Data loading — cache-first paint, silent refresh, the error banner and the
+  // three PWA-only staleness rules — all belongs to useOverviewData now (#602).
+  const { data, loading, refreshing, error, pullY, historyKey, bumpHistoryKey, refresh: fetchData } =
+    useOverviewData(userId, tc('error'))
+
   const selectedGoal = data?.goals.find((g) => g.goalId === selectedGoalId) ?? null
   // Derive the selected insurance from fresh data (mirrors selectedGoal) so the
   // detail panel reflects updates after mark-paid / log-payment refetches
   // instead of rendering a stale snapshot.
   const selectedInsurance = data?.insurance.find((i) => i.insuranceId === selectedInsuranceId) ?? null
-  const PULL_THRESHOLD = 65
 
   // Goal/insurance selection is rendered differently per breakpoint — desktop
   // shows a right-side panel, mobile a sheet gated by separate state. Crossing
@@ -250,132 +137,6 @@ export default function DashboardClient({ userId }: { userId: string }) {
     fetchNetWorthHistory(timeRange).then((h) => { if (!cancelled) setHistory(h) })
     return () => { cancelled = true }
   }, [timeRange, historyKey])
-
-  const fetchDataRef = useRef<(opts?: { force?: boolean }) => Promise<void>>(async () => {})
-  const hasDataRef = useRef(false)
-  const touchStartY = useRef(-1)
-
-  const fetchData = useCallback(async (opts?: { force?: boolean }) => {
-    const cached = !opts?.force && getCachedOverview(userId)
-    if (cached) {
-      setData(cached)
-      hasDataRef.current = true
-      setLoading(false)
-      return
-    }
-    // Only show skeleton on initial load — if data is already visible, refresh
-    // silently with the number-refresh pulse instead.
-    if (!hasDataRef.current) setLoading(true)
-    else setRefreshing(true)
-    setError('')
-
-    // Resilient load: retries once on a transient failure (e.g. the service
-    // worker's synthetic "Offline" 503 from a slow cold start) and falls back to
-    // the last cached snapshot before ever surfacing an error banner.
-    const result = await loadOverview({
-      getCache: (allowStale) => getCachedOverview(userId, { allowStale }),
-      setCache: (json) => setCachedOverview(userId, json),
-    })
-
-    if (result.data) {
-      setData(result.data)
-      hasDataRef.current = true
-      setHistoryKey((k) => k + 1)
-      // Only mark a real network refresh (not a stale-cache fallback) so the PWA
-      // foreground-staleness check still triggers a true refetch later.
-      if (!result.fromCache) {
-        try { localStorage.setItem('pwa_last_fetch', String(Date.now())) } catch {}
-      }
-    }
-    setError(overviewErrorText(result, tc('error')) ?? '')
-    setLoading(false)
-    setRefreshing(false)
-  }, [userId, tc])
-
-  useEffect(() => { fetchDataRef.current = fetchData }, [fetchData])
-
-  // Initial load — on PWA, bust cache if last fetch was > 30s ago (handles force quit + reopen)
-  useEffect(() => {
-    const isPWA = window.matchMedia('(display-mode: standalone)').matches ||
-      (window.navigator as { standalone?: boolean }).standalone === true
-    if (!isPWA) { fetchData(); return }
-    try {
-      const last = localStorage.getItem('pwa_last_fetch')
-      const stale = !last || Date.now() - Number(last) > 30_000
-      fetchData(stale ? { force: true } : undefined)
-    } catch { fetchData() }
-  }, [fetchData])
-
-  // PWA only: refresh when foregrounded after > 30s in background
-  useEffect(() => {
-    const isPWA = window.matchMedia('(display-mode: standalone)').matches ||
-      (window.navigator as { standalone?: boolean }).standalone === true
-    if (!isPWA) return
-    let hiddenAt = 0
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') {
-        hiddenAt = Date.now()
-      } else if (hiddenAt > 0 && Date.now() - hiddenAt > 30_000) {
-        fetchDataRef.current({ force: true })
-      }
-    }
-    document.addEventListener('visibilitychange', onVisibilityChange)
-    return () => document.removeEventListener('visibilitychange', onVisibilityChange)
-  }, [])
-
-  // PWA only: pull-to-refresh
-  useEffect(() => {
-    const isPWA = window.matchMedia('(display-mode: standalone)').matches ||
-      (window.navigator as { standalone?: boolean }).standalone === true
-    if (!isPWA) return
-    let pullCurrent = 0
-    const onTouchStart = (e: TouchEvent) => {
-      touchStartY.current = window.scrollY === 0 ? e.touches[0].clientY : -1
-    }
-    const onTouchMove = (e: TouchEvent) => {
-      if (touchStartY.current < 0) return
-      const delta = e.touches[0].clientY - touchStartY.current
-      if (delta > 0) {
-        pullCurrent = Math.min(delta * 0.5, 80)
-        setPullY(pullCurrent)
-      }
-    }
-    const onTouchEnd = () => {
-      if (pullCurrent >= PULL_THRESHOLD) fetchDataRef.current({ force: true })
-      pullCurrent = 0
-      setPullY(0)
-      touchStartY.current = -1
-    }
-    document.addEventListener('touchstart', onTouchStart, { passive: true })
-    document.addEventListener('touchmove', onTouchMove, { passive: true })
-    document.addEventListener('touchend', onTouchEnd)
-    return () => {
-      document.removeEventListener('touchstart', onTouchStart)
-      document.removeEventListener('touchmove', onTouchMove)
-      document.removeEventListener('touchend', onTouchEnd)
-    }
-  }, [])
-
-  async function handleFundClick(fundId: string) {
-    setFundDetailId(fundId)
-    setPurchaseHistory([])
-    setHistoryError(false)
-    setHistoryLoading(true)
-    try {
-      const res = await fetch(`/api/v1/fund-investments?fund_id=${fundId}`)
-      if (!res.ok) throw new Error('load failed')
-      const items = await res.json()
-      setPurchaseHistory(
-        (items as Array<{ nav_at_purchase: number; units_purchased: number; investment_date: string | null; created_at: string }>)
-          .map((i) => ({ purchase_date: i.investment_date ?? i.created_at, units: i.units_purchased, nav_at_purchase: i.nav_at_purchase }))
-          .sort((a, b) => new Date(b.purchase_date).getTime() - new Date(a.purchase_date).getTime())
-      )
-    } catch {
-      // Distinguish a failed load from a genuinely empty history.
-      setHistoryError(true)
-    }
-    setHistoryLoading(false)
-  }
 
   async function handleGenerateReport() {
     if (!data || isGeneratingReport) return
@@ -423,30 +184,11 @@ export default function DashboardClient({ userId }: { userId: string }) {
   // Same filter as the card and the badge hook, so they can't disagree.
   useEffect(() => {
     if (!data) return
-    // Tag each tranche with its goal bucket, then group books GLOBALLY — same as
-    // the card below — so the badge and the card can't disagree even if a book is
-    // momentarily split across goals. Term deposits count one each; a book counts
-    // as ONE. isVi is irrelevant to the count, so pass false.
-    const tagged = [
-      ...data.goals.flatMap((g) => (g.nonFunds ?? []).map((it) => ({ it, goalId: g.goalId }))),
-      ...data.unallocated.nonFunds.map((it) => ({ it, goalId: null as string | null })),
-    ]
-    const count = tagged.filter(({ it }) => isActionableTermDeposit(it)).length + actionableBooks(tagged, false).length
-    window.dispatchEvent(new CustomEvent(MATURING_COUNT_EVENT, { detail: count }))
+    window.dispatchEvent(new CustomEvent(MATURING_COUNT_EVENT, { detail: maturingCount(tagNonFunds(data)) }))
   }, [data])
 
   function openSellFund(fund: FundBreakdownItem) {
-    setSellItem({
-      type: 'fund',
-      name: fund.fundName,
-      currentValue: fund.currentValue,
-      units: fund.quantity,
-      navPerUnit: fund.currentNAV,
-      gainPct: fund.profitLossPercentage,
-      fundId: fund.fundId,
-      purchasePrice: fund.purchasePrice,
-      costBasis: fund.costBasis,
-    })
+    setSellItem(sellItemForFund(fund))
     setSellSheetOpen(true)
   }
 
@@ -455,82 +197,25 @@ export default function DashboardClient({ userId }: { userId: string }) {
     setSellSheetOpen(true)
   }
 
-  const isEmpty = data && data.goals.length === 0 && data.unallocated.funds.length === 0 && data.unallocated.nonFunds.length === 0 && data.insurance.length === 0
-
-  const sortedGoals = data ? (() => {
-    const goals = [...data.goals]
-    if (goalSort === 'progressDesc') goals.sort((a, b) => (b.progressPercentage ?? 0) - (a.progressPercentage ?? 0))
-    else if (goalSort === 'progressAsc') goals.sort((a, b) => (a.progressPercentage ?? 0) - (b.progressPercentage ?? 0))
-    else if (goalSort === 'alpha') goals.sort((a, b) => a.goalName.localeCompare(b.goalName))
-    return goals
-  })() : []
+  const isVi = locale === 'vi'
+  const isEmpty = isDashboardEmpty(data)
+  const sortedGoals = data ? sortGoals(data.goals, goalSort) : []
 
   // Asset-allocation buckets for the allocation bar. fundTotal sums all fund
   // types (incl. unexpected ones) so nothing drops out of the bar (#3).
   const allocationTotals = data ? computeAllocationTotals(data) : null
-
-  // Find fund item for detail modal
-  const allFunds = data ? [...data.unallocated.funds, ...data.goals.flatMap((g) => g.funds)] : []
-  const detailFund = fundDetailId ? allFunds.find((f) => f.fundId === fundDetailId) : null
+  const detailFund = findFund(data, fundHistory.fundId)
 
   // Roll an unallocated accumulating book's tranches into one row (the assign/sell
   // actions then act on the whole book — /assign cascades a book's goal atomically).
   const unallocatedNonFunds = data ? collapseUnallocatedBooks(data.unallocated.nonFunds) : []
 
-  const isVi = locale === 'vi'
-
-  // Term deposits (assigned + unassigned) that need a renew/withdraw decision,
-  // carrying the context needed to act on each.
-  // Single term deposits surface one row each; an accumulating book surfaces as
-  // ONE grouped row (its tranches rolled up via actionableBooks) that opens the
-  // collapse flow. We tag every tranche with its goal bucket, then group books
-  // GLOBALLY across buckets so a momentarily goal-split book still shows one row
-  // (full principal, anchor's goal) — and matches the badge count above. A book's
-  // `raw` is its anchor tranche — context only; withdraw isn't offered for a book.
-  const taggedNonFunds = data ? [
-    ...data.goals.flatMap((g) => (g.nonFunds ?? []).map((it) => ({ it, goalId: g.goalId as string | null }))),
-    ...data.unallocated.nonFunds.map((it) => ({ it, goalId: null as string | null })),
-  ] : []
-  const maturingDeposits: MaturingDep[] = [
-    ...taggedNonFunds.filter(({ it }) => isActionableTermDeposit(it))
-      .map(({ it, goalId }) => ({ inv: nonFundToInvRow(it, isVi), goalId, raw: it })),
-    ...actionableBooks(taggedNonFunds, isVi)
-      .map((b) => ({ inv: b.inv, goalId: b.goalId, raw: b.anchor })),
-  ]
-
-  // Auto-detect goals whose deposits fall close together, so the card can offer a
-  // one-tap "gộp lại" (merge) shortcut. Fed from ALL the goal's bank deposits (not
-  // just the actionable ones) with an `actionable` flag: the anchor must be due now
-  // — that's what the card surfaces and the sheet opens on — but a close-maturing
-  // sibling counts even if it isn't due yet, exactly matching what the sheet
-  // preselects. Reuses the eligibility rules, so the banner can't over-promise.
-  const mergeClusters = detectMergeClusters(
-    taggedNonFunds.map(({ it, goalId }) => ({
-      id: it.transactionId, goalId, type: it.type, expiryDate: it.expiryDate,
-      depositGroupId: it.depositGroupId ?? null, principal: it.amount, value: it.currentValue,
-      currency: it.currency ?? null, isPledged: it.isPledged ?? false,
-      actionable: isActionableTermDeposit(it),
-    })),
-  ).map((c) => ({ anchorId: c.anchorId, size: c.size }))
-
-  // A goal's OTHER bank deposits, mapped to InvRows the merge flow can fold into a
-  // re-deposit. Books are mapped too but the sheet filters them out. Empty for an
-  // unassigned deposit (merge is goal-scoped).
-  function goalSiblingInvRows(goalId: string | null, excludeId: string): InvRow[] {
-    if (!data || goalId == null) return []
-    const goal = data.goals.find((g) => g.goalId === goalId)
-    return (goal?.nonFunds ?? [])
-      .filter((it) => it.transactionId !== excludeId && it.type === 'bank')
-      .map((it) => nonFundToInvRow(it, isVi))
-  }
-
-  // The goal's pooled "Ví chờ gộp" holdings, for preselect in the anchor's merge
-  // sheet. Empty for an unassigned deposit (the pool is goal-scoped).
-  function goalHeldSiblings(goalId: string | null): { id: string; name: string | null; amount: number }[] {
-    if (!data || goalId == null) return []
-    const goal = data.goals.find((g) => g.goalId === goalId)
-    return (goal?.heldForMerge ?? []).map((h) => ({ id: h.transactionId, name: h.name, amount: h.amount }))
-  }
+  // Deposits needing a renew/withdraw decision, and the goals whose deposits fall
+  // close enough together to offer a one-tap "gộp lại". Both derive from the same
+  // tagged tranches as the nav badge above, so they cannot disagree.
+  const taggedNonFunds = tagNonFunds(data)
+  const maturingDeposits = deriveMaturingDeposits(taggedNonFunds, isVi)
+  const mergeClusters = mergeClusterSummaries(taggedNonFunds)
 
   // Open the resolve flow for a maturing deposit, attaching the goal's siblings so
   // the merge UI is available (and close-maturing ones preselect) plus any pooled
@@ -538,8 +223,8 @@ export default function DashboardClient({ userId }: { userId: string }) {
   function openResolve(dep: MaturingDep) {
     setResolveDep({
       ...dep,
-      siblings: goalSiblingInvRows(dep.goalId, dep.inv.id),
-      heldSiblings: goalHeldSiblings(dep.goalId),
+      siblings: goalSiblingInvRows(data, dep.goalId, dep.inv.id, isVi),
+      heldSiblings: goalHeldSiblings(data, dep.goalId),
     })
   }
 
@@ -557,12 +242,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
   // clears `resolveDep` before invoking onWithdraw.
   function withdrawMaturingDeposit(dep: MaturingDep | null) {
     if (!dep) return
-    // For a book, withdraw the WHOLE book — build the sell item from the rolled-up
-    // row (book total + anchor id + depositGroupId) so the full-close sheet
-    // prefills the book balance, not just the anchor tranche's value.
-    const item: SellItem = dep.inv.depositGroupId
-      ? { type: 'bank', name: dep.inv.name, currentValue: dep.inv.value, transactionId: dep.inv.id, purchasePrice: dep.inv.principal ?? dep.inv.value, depositGroupId: dep.inv.depositGroupId, interestRate: dep.inv.interestRate ?? undefined }
-      : nonFundToSellItem(dep.raw, isVi)
+    const item = sellItemForMaturingDeposit(dep, isVi)
     if (dep.goalId) {
       const goal = data?.goals.find((g) => g.goalId === dep.goalId)
       setMaturityWithdraw({
@@ -722,7 +402,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                       unallocatedAmount={data.unallocated.totalValue}
                       funds={data.unallocated.funds}
                       nonFunds={unallocatedNonFunds}
-                      onFundClick={handleFundClick}
+                      onFundClick={fundHistory.open}
                       onAssignToGoal={(fundId, name, value, type) => { setGoalPickerFundId(fundId); setGoalPickerFundItem({ name, value, type }) }}
                       onSellFund={openSellFund}
                       onAssignNonFundToGoal={(txId, name, value, type) => { setNonFundPickerTxId(txId); setNonFundPickerItem({ name, value, type }) }}
@@ -892,7 +572,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                   unallocatedAmount={data.unallocated.totalValue}
                   funds={data.unallocated.funds}
                   nonFunds={unallocatedNonFunds}
-                  onFundClick={handleFundClick}
+                  onFundClick={fundHistory.open}
                   onAssignToGoal={(fundId, name, value, type) => { setGoalPickerFundId(fundId); setGoalPickerFundItem({ name, value, type }) }}
                   onSellFund={openSellFund}
                   onAssignNonFundToGoal={(txId, name, value, type) => { setNonFundPickerTxId(txId); setNonFundPickerItem({ name, value, type }) }}
@@ -969,8 +649,8 @@ export default function DashboardClient({ userId }: { userId: string }) {
 
       {/* Transaction History Sheet */}
       <TransactionHistorySheet
-        open={!!(fundDetailId && detailFund)}
-        onClose={() => { setFundDetailId(null); setPurchaseHistory([]); setHistoryLoading(false); setHistoryError(false) }}
+        open={!!(fundHistory.fundId && detailFund)}
+        onClose={fundHistory.close}
         fundName={detailFund?.fundName ?? ''}
         currentNAV={detailFund?.currentNAV ?? 0}
         quantity={detailFund?.quantity ?? 0}
@@ -978,10 +658,10 @@ export default function DashboardClient({ userId }: { userId: string }) {
         purchasePrice={detailFund?.purchasePrice ?? 0}
         profitLoss={detailFund?.profitLoss ?? 0}
         profitLossPercentage={detailFund?.profitLossPercentage ?? 0}
-        purchaseHistory={purchaseHistory}
-        loading={historyLoading}
-        error={historyError}
-        onRetry={() => { if (fundDetailId) handleFundClick(fundDetailId) }}
+        purchaseHistory={fundHistory.items}
+        loading={fundHistory.loading}
+        error={fundHistory.failed}
+        onRetry={() => { if (fundHistory.fundId) fundHistory.open(fundHistory.fundId) }}
       />
 
       {/* Assign Goal Sheet — funds */}
@@ -1084,7 +764,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
       <AddTransactionSheet
         open={desktopAddTxOpen}
         onClose={() => { setDesktopAddTxOpen(false); setAddTxPrefill(null) }}
-        onSaved={() => { fetchData({ force: true }); setHistoryKey((k) => k + 1) }}
+        onSaved={() => { fetchData({ force: true }); bumpHistoryKey() }}
         desktop={isDesktop}
         prefill={addTxPrefill}
       />

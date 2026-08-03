@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import DesktopNetWorthPanel from '../DesktopNetWorthPanel'
 import type { DashboardData } from '@/features/dashboard/contracts'
-import type { AllocationTotals } from '../../overviewData'
+import type { AllocationTotals } from '@/features/dashboard/overviewData'
 
 // DesktopNetWorthPanel takes data/allocationTotals/locale as props (no next-intl),
 // so it renders in isolation. These cover the desktop-overview E2E presence checks

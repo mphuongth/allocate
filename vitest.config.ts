@@ -64,14 +64,14 @@ export default defineConfig({
       // guard the money paths the audit called out — raise them as tests land,
       // never lower them to make a red build green.
       thresholds: {
-        // Repo-wide floor, measured 2026-08-03 at 61.69 / 58.20 / 60.42 / 65.14
-        // (up from 60.88 / 57.91 / 59.38 / 64.22 — #600 moved fully-covered
-        // contracts and the maturity grouping out of files the report counts as
-        // largely untested).
-        statements: 61,
-        branches: 57,
-        functions: 59,
-        lines: 64,
+        // Repo-wide floor, measured 2026-08-03 at 62.94 / 59.05 / 62.24 / 66.26
+        // (up from 61.69 / 58.20 / 60.42 / 65.14 — #602 lifted the dashboard's
+        // view model and data loading out of a component only a full-page
+        // render could reach, and tested them directly).
+        statements: 62,
+        branches: 58,
+        functions: 61,
+        lines: 65,
 
         // The money math. These modules are the ones that have actually shipped
         // bugs, and they are fully covered today — hold them there.
