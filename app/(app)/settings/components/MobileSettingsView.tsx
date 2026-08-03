@@ -4,25 +4,16 @@ import { useState, useEffect, useRef } from 'react'
 import { useLocale, useTranslations } from 'next-intl'
 import { type ThemeChoice } from '@/components/layout/ThemeProvider'
 import { useDialogA11y } from '@/components/ui/useDialogA11y'
-import {
-  Globe, Sun, Moon, Settings, Download, RefreshCw,
-  TrendingUp, Coins, LogOut, ChevronRight, Check,
-} from 'lucide-react'
+import { Globe, Sun, Download, RefreshCw, LogOut, ChevronRight, Check } from 'lucide-react'
 import { useNavigation } from '@/components/navigation/NavigationContext'
 import DownloadReportSheet from '@/app/assets/components/DownloadReportSheet'
 import { useSettingsController } from '../useSettingsController'
-import { useManagedTimeout } from '../useManagedTimeout'
+import { useProfileEditor } from '@/features/settings/useProfileEditor'
+import {
+  themeOptions, themeLabel, localeOptions, localeLabel, priceSources,
+  type SettingsViewProps,
+} from '@/features/settings/settingsOptions'
 import { useDialogMount, useResetOnOpen } from '@/components/ui/useDialogMount'
-
-interface Props {
-  email: string
-  initials: string
-  displayName: string
-}
-
-// How long the "Saved" success flash stays up before the sheet/modal closes.
-// Kept in sync with DesktopSettingsView so both views feel identical.
-const SAVE_FLASH_MS = 1400
 
 // ─── Bottom sheet wrapper ──────────────────────────────────────────────────────
 
@@ -94,20 +85,9 @@ function ProfileSheet({ open, onClose, onSave, displayName, email }: {
   email: string
 }) {
   const t = useTranslations('settings')
-  const [name, setName] = useState(displayName)
-  const [saved, setSaved] = useState(false)
-  const scheduleTimeout = useManagedTimeout()
+  const { name, setName, saved, save, reset } = useProfileEditor(displayName, onSave, onClose)
 
-  useResetOnOpen(open, () => { setName(displayName); setSaved(false) }, displayName)
-
-  async function handleSave() {
-    // Only flash "Saved" and close once the persist actually succeeded — a
-    // failed update surfaces a toast (from onSave) and keeps the form open.
-    const ok = await onSave(name)
-    if (!ok) return
-    setSaved(true)
-    scheduleTimeout(() => { setSaved(false); onClose() }, SAVE_FLASH_MS)
-  }
+  useResetOnOpen(open, reset, displayName)
 
   return (
     <BottomSheet open={open} onClose={onClose} title={t('profileModalTitle')} dismissOnBackdrop={false}>
@@ -173,7 +153,7 @@ function ProfileSheet({ open, onClose, onSave, displayName, email }: {
               {t('cancel')}
             </button>
             <button
-              onClick={handleSave}
+              onClick={save}
               style={{
                 flex: 2, padding: '10px 0', fontSize: 13, fontWeight: 600,
                 minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -208,11 +188,7 @@ function AppearanceSheet({ open, onClose, onApply, current }: {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
-  const options: { v: ThemeChoice; icon: React.ReactNode; label: string }[] = [
-    { v: 'light',  icon: <Sun size={18} />,      label: t('appearanceLight')  },
-    { v: 'dark',   icon: <Moon size={18} />,     label: t('appearanceDark')   },
-    { v: 'system', icon: <Settings size={18} />, label: t('appearanceSystem') },
-  ]
+  const options = themeOptions(t)
 
   // onApply is the controller's selectTheme — it both persists the choice and
   // hands it to the theme provider, so the sheet doesn't touch either directly.
@@ -226,21 +202,21 @@ function AppearanceSheet({ open, onClose, onApply, current }: {
       <div style={{ display: 'grid', gap: 8, marginBottom: 14 }}>
         {options.map(opt => (
           <button
-            key={opt.v}
-            onClick={() => setSelected(opt.v)}
+            key={opt.value}
+            onClick={() => setSelected(opt.value)}
             style={{
               width: '100%', textAlign: 'left', padding: '14px 16px',
-              background: selected === opt.v ? 'var(--c-navy-tint)' : 'var(--c-card)',
-              border: `1.5px solid ${selected === opt.v ? 'var(--c-navy)' : 'var(--c-line)'}`,
+              background: selected === opt.value ? 'var(--c-navy-tint)' : 'var(--c-card)',
+              border: `1.5px solid ${selected === opt.value ? 'var(--c-navy)' : 'var(--c-line)'}`,
               borderRadius: 12, cursor: 'pointer', fontFamily: 'inherit',
               display: 'flex', alignItems: 'center', gap: 12, transition: 'all 120ms',
             }}
           >
-            <span style={{ color: selected === opt.v ? 'var(--c-navy)' : 'var(--c-muted)' }}>{opt.icon}</span>
-            <span style={{ fontSize: 13, fontWeight: 600, color: selected === opt.v ? 'var(--c-navy)' : 'var(--c-ink)', flex: 1 }}>
+            <span style={{ color: selected === opt.value ? 'var(--c-navy)' : 'var(--c-muted)' }}><opt.Icon size={18} /></span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: selected === opt.value ? 'var(--c-navy)' : 'var(--c-ink)', flex: 1 }}>
               {opt.label}
             </span>
-            {selected === opt.v && (
+            {selected === opt.value && (
               <div style={{ width: 20, height: 20, borderRadius: 10, background: 'var(--c-btn-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Check size={12} strokeWidth={2.5} color="#fff" />
               </div>
@@ -283,10 +259,7 @@ function LanguageSheet({ open, onClose, onApply, currentLocale }: {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
-  const options = [
-    { v: 'en', label: t('languageEnglish') },
-    { v: 'vi', label: t('languageVietnamese') },
-  ]
+  const options = localeOptions(t)
 
   function handleApply() {
     onApply(selected)
@@ -298,21 +271,21 @@ function LanguageSheet({ open, onClose, onApply, currentLocale }: {
       <div style={{ display: 'grid', gap: 8, marginBottom: 14 }}>
         {options.map(opt => (
           <button
-            key={opt.v}
-            onClick={() => setSelected(opt.v)}
+            key={opt.value}
+            onClick={() => setSelected(opt.value)}
             style={{
               width: '100%', textAlign: 'left', padding: '14px 16px', minHeight: 44,
-              background: selected === opt.v ? 'var(--c-navy-tint)' : 'var(--c-card)',
-              border: `1.5px solid ${selected === opt.v ? 'var(--c-navy)' : 'var(--c-line)'}`,
+              background: selected === opt.value ? 'var(--c-navy-tint)' : 'var(--c-card)',
+              border: `1.5px solid ${selected === opt.value ? 'var(--c-navy)' : 'var(--c-line)'}`,
               borderRadius: 12, cursor: 'pointer', fontFamily: 'inherit',
               display: 'flex', alignItems: 'center', gap: 12, transition: 'all 120ms',
             }}
           >
-            <span style={{ color: selected === opt.v ? 'var(--c-navy)' : 'var(--c-muted)' }}><Globe size={18} /></span>
-            <span style={{ fontSize: 13, fontWeight: 600, color: selected === opt.v ? 'var(--c-navy)' : 'var(--c-ink)', flex: 1 }}>
+            <span style={{ color: selected === opt.value ? 'var(--c-navy)' : 'var(--c-muted)' }}><opt.Icon size={18} /></span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: selected === opt.value ? 'var(--c-navy)' : 'var(--c-ink)', flex: 1 }}>
               {opt.label}
             </span>
-            {selected === opt.v && (
+            {selected === opt.value && (
               <div style={{ width: 20, height: 20, borderRadius: 10, background: 'var(--c-btn-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Check size={12} strokeWidth={2.5} color="#fff" />
               </div>
@@ -375,7 +348,7 @@ function SettingsRow({ icon, label, value, onClick, last = false }: {
 
 // ─── Main component ────────────────────────────────────────────────────────────
 
-export default function MobileSettingsView({ email, initials, displayName }: Props) {
+export default function MobileSettingsView({ email, initials, displayName }: SettingsViewProps) {
   const locale = useLocale()
   const t = useTranslations('settings')
   const { setMobileTopBar } = useNavigation()
@@ -396,12 +369,10 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
 
   const isSyncing = c.syncStatus === 'syncing'
 
-  const localeLabel = locale === 'vi' ? t('languageVietnamese') : t('languageEnglish')
-  const appearanceLabel = c.themeChoice === 'dark'
-    ? t('appearanceDark')
-    : c.themeChoice === 'light'
-    ? t('appearanceLight')
-    : t('appearanceSystem')
+  // Both summaries read off the same option lists the sheets render, so a new
+  // choice can't appear in the picker and be missing from the row.
+  const currentLocaleLabel = localeLabel(locale, t)
+  const appearanceLabel = themeLabel(c.themeChoice, t)
 
   return (
     <>
@@ -444,7 +415,7 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
             <SettingsRow
               icon={<Globe size={16} />}
               label={t('language')}
-              value={localeLabel}
+              value={currentLocaleLabel}
               onClick={() => setShowLanguage(true)}
             />
             <SettingsRow
@@ -498,26 +469,13 @@ export default function MobileSettingsView({ email, initials, displayName }: Pro
 
             {/* Source rows */}
             <div style={{ display: 'grid', gap: 8, padding: '12px 0 0', borderTop: '1px solid var(--c-line)' }}>
-              {[
-                {
-                  icon: <TrendingUp size={14} />,
-                  color: '#2563eb',
-                  label: t('fundNav'),
-                  note: t('fundNavNote'),
-                },
-                {
-                  icon: <Coins size={14} />,
-                  color: 'var(--c-fund-gold)',
-                  label: t('goldPrice'),
-                  note: t('goldNote'),
-                },
-              ].map((row, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {priceSources(t).map((row) => (
+                <div key={row.key} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div style={{
                     width: 28, height: 28, borderRadius: 7, background: 'var(--c-card-2)',
                     color: row.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                   }}>
-                    {row.icon}
+                    <row.Icon size={14} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-ink)' }}>{row.label}</div>

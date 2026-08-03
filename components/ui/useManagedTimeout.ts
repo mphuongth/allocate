@@ -9,7 +9,9 @@ import { useCallback, useEffect, useRef } from 'react'
 // stacking a second one.
 //
 // Lived inside MobileSettingsView; desktop used a bare setTimeout and leaked
-// (#570). Shared so both views get the cleanup.
+// (#570). Shared so both views get the cleanup, and moved here from the settings
+// route when the profile editor became a feature module (#603) — it knows
+// nothing about settings, so under docs/architecture.md it is a UI primitive.
 export function useManagedTimeout() {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 

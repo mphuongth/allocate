@@ -76,15 +76,23 @@ Done:
   the skipped/overridden/amount rules for a fixed expense and an insurance
   member) into `features/planning/planModel.ts`. Three of those copies had
   already drifted. The table and the card stack stay separate.
+- Settings desktop/mobile drift (#603): the theme, language and price-source
+  tables in `features/settings/settingsOptions.ts` — each had been declared
+  twice, with a third hand-written chain on mobile to summarise the current
+  choice in the row — and the profile editor's draft + save-flash sequence in
+  `useProfileEditor`, replacing a copy in each view that carried its own
+  `SAVE_FLASH_MS`. `useManagedTimeout` moved to `components/ui/`; it knows
+  nothing about settings.
 - One component root: `app/components/` folded into `components/{ui,layout,navigation}`
   and `features/landing/`. The app shell no longer imports a screen — the
   add-transaction sheet reaches it as an opaque `overlays` node from the route
   group, with its open flag in `NavigationContext`.
 
+All three drift areas in #603 are done: Fund Library, Planning, Settings.
+
 Still open — incremental, as files are touched, not as a repo-wide rename:
 
 - `app/assets/` split into `features/dashboard`, `features/investments`,
-  `features/goals`, `features/insurance`.
-- Settings desktop/mobile drift (#603) — Fund Library and Planning are done.
-  Keep the shells separate where the UX genuinely differs; extract the shared
-  models, actions and form fields.
+  `features/goals`, `features/insurance`. This is the standing rule for new
+  work, not a migration anyone should schedule: move a file the first time you
+  have a reason to open it.

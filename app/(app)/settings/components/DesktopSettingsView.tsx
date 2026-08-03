@@ -2,25 +2,14 @@
 
 import { useState, useRef } from 'react'
 import { useLocale, useTranslations } from 'next-intl'
-import { type ThemeChoice } from '@/components/layout/ThemeProvider'
 import { useDialogA11y } from '@/components/ui/useDialogA11y'
-import {
-  Sun, Moon, Settings, RefreshCw, TrendingUp,
-  Coins, LogOut, Download, X, Check, Edit2,
-} from 'lucide-react'
+import { RefreshCw, LogOut, Download, X, Check, Edit2 } from 'lucide-react'
 import DownloadReportSheet from '@/app/assets/components/DownloadReportSheet'
 import { useSettingsController } from '../useSettingsController'
-import { useManagedTimeout } from '../useManagedTimeout'
-
-interface Props {
-  email: string
-  initials: string
-  displayName: string
-}
-
-// How long the "Saved" success flash stays up before the modal closes.
-// Kept in sync with MobileSettingsView so both views feel identical.
-const SAVE_FLASH_MS = 1400
+import { useProfileEditor } from '@/features/settings/useProfileEditor'
+import {
+  themeOptions, localeOptions, priceSources, type SettingsViewProps,
+} from '@/features/settings/settingsOptions'
 
 // ─── Desktop Modal ─────────────────────────────────────────────────────────────
 
@@ -128,41 +117,22 @@ function SettingRow({ icon, label, onClick, last = false }: {
 
 // ─── Main component ────────────────────────────────────────────────────────────
 
-export default function DesktopSettingsView({ email, initials, displayName }: Props) {
+export default function DesktopSettingsView({ email, initials, displayName }: SettingsViewProps) {
   const locale = useLocale()
   const t = useTranslations('settings')
   const c = useSettingsController({ initials, displayName })
 
-  // Modal state — the desktop's own chrome. The editor lives inline here rather
-  // than in a child component (mobile's ProfileSheet), so its draft and its
-  // success flash stay with the modal.
+  // Modal state — the desktop's own chrome. The editor's draft and save-flash
+  // sequence is the shared hook; what lives here is the modal that wraps it.
   const [showProfile, setShowProfile] = useState(false)
-  const [profileSaved, setProfileSaved] = useState(false)
-  const [profileName, setProfileName] = useState(displayName)
-  const scheduleSaveFlashReset = useManagedTimeout()
+  const profile = useProfileEditor(c.displayName, c.saveProfile, () => setShowProfile(false))
 
   function handleOpenProfile() {
-    setProfileName(c.displayName)
-    setProfileSaved(false)
+    profile.reset()
     setShowProfile(true)
   }
 
-  async function handleSaveProfile() {
-    // Only flash "Saved" and close once the persist succeeded — a failed update
-    // surfaces a toast (from saveProfile) and keeps the modal open.
-    const ok = await c.saveProfile(profileName)
-    if (!ok) return
-    setProfileSaved(true)
-    scheduleSaveFlashReset(() => { setProfileSaved(false); setShowProfile(false) }, SAVE_FLASH_MS)
-  }
-
   const isSyncing = c.syncStatus === 'syncing'
-
-  const themeOptions: { v: ThemeChoice; icon: React.ReactNode; label: string }[] = [
-    { v: 'light',  icon: <Sun size={13} color="currentColor" />,      label: t('appearanceLight')  },
-    { v: 'dark',   icon: <Moon size={13} color="currentColor" />,     label: t('appearanceDark')   },
-    { v: 'system', icon: <Settings size={13} color="currentColor" />, label: t('appearanceSystem') },
-  ]
 
   return (
     <div data-testid="desktop-settings-view" className="hidden md:flex" style={{ flex: 1, flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
@@ -223,19 +193,19 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
                   {t('language')}
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  {[{ v: 'en', l: t('languageEnglish') }, { v: 'vi', l: t('languageVietnamese') }].map(o => (
+                  {localeOptions(t).map(o => (
                     <button
-                      key={o.v}
-                      onClick={() => c.switchLocale(o.v)}
+                      key={o.value}
+                      onClick={() => c.switchLocale(o.value)}
                       style={{
                         padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 500,
-                        background: locale === o.v ? 'var(--c-btn-primary)' : 'var(--c-card-2)',
-                        color: locale === o.v ? '#fff' : 'var(--c-muted)',
-                        border: `1px solid ${locale === o.v ? 'var(--c-btn-primary)' : 'var(--c-line)'}`,
+                        background: locale === o.value ? 'var(--c-btn-primary)' : 'var(--c-card-2)',
+                        color: locale === o.value ? '#fff' : 'var(--c-muted)',
+                        border: `1px solid ${locale === o.value ? 'var(--c-btn-primary)' : 'var(--c-line)'}`,
                         cursor: 'pointer', fontFamily: 'inherit', transition: 'all 120ms',
                       }}
                     >
-                      {o.l}
+                      {o.label}
                     </button>
                   ))}
                 </div>
@@ -247,20 +217,20 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
                   {t('appearance')}
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  {themeOptions.map(o => (
+                  {themeOptions(t).map(o => (
                     <button
-                      key={o.v}
-                      onClick={() => c.selectTheme(o.v)}
+                      key={o.value}
+                      onClick={() => c.selectTheme(o.value)}
                       style={{
                         display: 'flex', alignItems: 'center', gap: 6,
                         padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 500,
-                        background: c.themeChoice === o.v ? 'var(--c-navy-tint)' : 'var(--c-card-2)',
-                        color: c.themeChoice === o.v ? 'var(--c-navy)' : 'var(--c-muted)',
-                        border: `1px solid ${c.themeChoice === o.v ? 'var(--c-navy)' : 'var(--c-line)'}`,
+                        background: c.themeChoice === o.value ? 'var(--c-navy-tint)' : 'var(--c-card-2)',
+                        color: c.themeChoice === o.value ? 'var(--c-navy)' : 'var(--c-muted)',
+                        border: `1px solid ${c.themeChoice === o.value ? 'var(--c-navy)' : 'var(--c-line)'}`,
                         cursor: 'pointer', fontFamily: 'inherit', transition: 'all 120ms',
                       }}
                     >
-                      {o.icon}
+                      <o.Icon size={13} color="currentColor" />
                       {o.label}
                     </button>
                   ))}
@@ -324,13 +294,10 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
                 </button>
               </div>
               <div style={{ display: 'grid', gap: 10, paddingTop: 12, borderTop: '1px solid var(--c-line)' }}>
-                {[
-                  { icon: <TrendingUp size={13} />, color: '#2563eb', label: t('fundNav'),   note: t('fundNavNote') },
-                  { icon: <Coins size={13} />, color: 'var(--c-fund-gold)', label: t('goldPrice'), note: t('goldNote') },
-                ].map((row, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                {priceSources(t).map((row) => (
+                  <div key={row.key} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <div style={{ width: 28, height: 28, borderRadius: 7, background: 'var(--c-card-2)', color: row.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      {row.icon}
+                      <row.Icon size={13} />
                     </div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-ink)' }}>{row.label}</div>
@@ -357,8 +324,8 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
       </div>
 
       {/* ─── Edit profile modal ─────────────────────────────────────────────── */}
-      <DModal open={showProfile} onClose={() => { setShowProfile(false); setProfileSaved(false) }} title={t('profileModalTitle')} dismissOnBackdrop={false}>
-        {profileSaved ? (
+      <DModal open={showProfile} onClose={() => { setShowProfile(false); profile.reset() }} title={t('profileModalTitle')} dismissOnBackdrop={false}>
+        {profile.saved ? (
           <div style={{ padding: '28px 0', textAlign: 'center' }}>
             <div style={{ width: 52, height: 52, borderRadius: 26, background: 'var(--c-pos-tint)', color: 'var(--c-pos)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
               <Check size={26} strokeWidth={2.5} />
@@ -372,8 +339,8 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
                 {t('fullName')}
               </label>
               <input
-                value={profileName}
-                onChange={e => setProfileName(e.target.value)}
+                value={profile.name}
+                onChange={e => profile.setName(e.target.value)}
                 autoFocus
                 style={{
                   width: '100%', padding: '9px 12px', fontSize: 13,
@@ -413,7 +380,7 @@ export default function DesktopSettingsView({ email, initials, displayName }: Pr
                 {t('cancel')}
               </button>
               <button
-                onClick={handleSaveProfile}
+                onClick={profile.save}
                 className="cn-btn primary"
                 style={{ flex: 2, justifyContent: 'center' }}
               >
