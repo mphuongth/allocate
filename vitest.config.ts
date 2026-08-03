@@ -32,6 +32,13 @@ export default defineConfig({
         // the only application source at the repo root, and it runs on every
         // page navigation, so it belongs in the report like any route.
         'proxy.ts',
+        // Deliberately NOT here: public/sw.js. lib/__tests__/serviceWorker.test.ts
+        // does exercise the real worker, but it loads the file as text and runs
+        // it through `new Function(...)`, which v8 cannot attribute back to the
+        // source. Adding it reports a flat 0% across 140 statements — measured —
+        // so it would drag the global floor down while labelling a well-tested
+        // file untested. Attributing it properly means reworking that harness to
+        // load the worker through the module pipeline.
       ],
       exclude: [
         '**/__tests__/**',
