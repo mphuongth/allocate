@@ -41,7 +41,7 @@ async function goalSnapshot(page: Page, goalId: string): Promise<{ progressValue
 }
 
 test.describe('Term-deposit maturity — merge a sibling deposit into the re-deposit', () => {
-  test('settles the sibling early and folds its cash into the renewed principal, no double-count', async ({ page }) => {
+  test('settles the sibling early and folds its cash into the renewed principal, no double-count', { tag: '@smoke' }, async ({ page }) => {
     test.slow()
     const goal = await api.createGoal({ goal_name: 'E2E Merge Goal', target_amount: 200_000_000 })
     // D: matured term deposit (rolls forward on renewal). S: an active sibling

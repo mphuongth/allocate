@@ -8,7 +8,7 @@ import * as api from './helpers/api'
 // lib/__tests__/validation.test.ts.
 
 test.describe('API input validation', () => {
-  test('POST /api/v1/savings-goals rejects amount with Infinity (400)', async ({ request }) => {
+  test('POST /api/v1/savings-goals rejects amount with Infinity (400)', { tag: '@smoke' }, async ({ request }) => {
     const res = await request.post('/api/v1/savings-goals', {
       data: {
         goal_name: 'Test',
@@ -37,7 +37,7 @@ test.describe('API input validation', () => {
     expect(res.status()).toBe(400)
   })
 
-  test('GET /api/v1/savings-goals/<bad-uuid> rejects malformed UUID (400)', async ({ request }) => {
+  test('GET /api/v1/savings-goals/<bad-uuid> rejects malformed UUID (400)', { tag: '@smoke' }, async ({ request }) => {
     const res = await request.get('/api/v1/savings-goals/not-a-uuid')
     expect(res.status()).toBe(400)
   })
@@ -68,7 +68,7 @@ test.describe('API input validation', () => {
     expect(res.status()).toBe(400)
   })
 
-  test('POST /api/v1/investment-transactions rejects malformed investment_date (400)', async ({ request }) => {
+  test('POST /api/v1/investment-transactions rejects malformed investment_date (400)', { tag: '@smoke' }, async ({ request }) => {
     const res = await request.post('/api/v1/investment-transactions', {
       data: {
         asset_type: 'bank',
@@ -237,7 +237,7 @@ test.describe('API input validation', () => {
       data: Buffer.from(raw),
     })
 
-  test('POST /api/v1/savings-goals rejects a syntactically invalid body (400)', async ({ request }) => {
+  test('POST /api/v1/savings-goals rejects a syntactically invalid body (400)', { tag: '@smoke' }, async ({ request }) => {
     const res = await rawPost(request, '{"goal_name": ')
     expect(res.status()).toBe(400)
   })

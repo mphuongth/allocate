@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 
-test('sidebar links navigate to correct routes', async ({ page }) => {
+test('sidebar links navigate to correct routes', { tag: '@smoke' }, async ({ page }) => {
   await page.goto('/dashboard')
   await page.waitForLoadState('networkidle')
 

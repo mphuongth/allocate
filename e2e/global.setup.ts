@@ -49,7 +49,7 @@ setup('authenticate', async ({ page }) => {
   await page.context().storageState({ path: AUTH_FILE })
 
   // Seed one bank transaction so the dashboard isn't empty
-  await admin.from('investment_transactions').insert({
+  const seededTransaction = await admin.from('investment_transactions').insert({
     user_id: userId,
     asset_type: 'bank',
     amount_vnd: 10_000_000,
@@ -59,11 +59,19 @@ setup('authenticate', async ({ page }) => {
   })
 
   // Seed one insurance member so the insurance section is always visible
-  await admin.from('insurance_members').insert({
+  const seededMember = await admin.from('insurance_members').insert({
     user_id: userId,
     member_name: 'E2e Member',
     relationship: 'Self',
     annual_payment_vnd: 5_000_000,
     payment_date: '2026-06-01',
   })
+
+  // Fail loudly if seeding didn't land. Swallowing these errors made a database
+  // the suite couldn't write to look like a setup that succeeded — every spec
+  // then failed later, far from the cause (#595).
+  const seedError = seededTransaction.error ?? seededMember.error
+  if (seedError) {
+    throw new Error(`Failed to seed the E2E fixtures: ${seedError.message}`)
+  }
 })

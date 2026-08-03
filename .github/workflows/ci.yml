@@ -28,12 +28,21 @@ jobs:
       - name: Run unit tests
         run: npm test -- --run
 
-  # E2E (Playwright) runs LOCALLY, not in CI. The dedicated test Supabase project
-  # is a small NANO instance whose Disk IO budget can't sustain the suite's write
-  # load — CI runs throttled and timed out (~72 min, cascading failures). Run E2E
-  # locally against a local Supabase stack instead — see "Running E2E locally" in
-  # the README. Unit tests remain the CI gate, and the guard in e2e/helpers/guard.ts
-  # still prevents E2E from ever targeting production.
+  # Browser gate on every PR: the ~19 `@smoke`-tagged tests only (#595). The
+  # full suite stays off the PR path — it takes ~7.6 min serial and runs nightly
+  # via .github/workflows/e2e.yml (also dispatchable on demand).
+  #
+  # Both lanes run against a local Supabase stack started inside the runner. The
+  # shared test project is a NANO instance whose Disk IO budget can't sustain the
+  # suite's write load — pointing CI at it throttled and timed out (~72 min,
+  # cascading failures), which is why E2E was pulled from CI in #313. The guard in
+  # e2e/helpers/guard.ts still prevents E2E from ever targeting production.
+  e2e-smoke:
+    name: E2E Smoke
+    needs: test
+    uses: ./.github/workflows/e2e.yml
+    with:
+      lane: smoke
 
   # Apply pending migrations to the production Supabase project on every merge to
   # main, so schema changes ship automatically instead of needing a manual
