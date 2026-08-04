@@ -37,6 +37,8 @@ declare
   v_user  uuid;
   v_goal  uuid;
   v_bank  uuid;
+  v_bank_b uuid;
+  v_snap  uuid;
   v_gold  uuid;
   v_drift uuid;
   v_tiny  uuid;
@@ -50,6 +52,9 @@ begin
 
   insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
   values (v_user, v_goal, 'bank', 'investment', '2026-01-01', 100000000) returning transaction_id into v_bank;
+  -- Something for a renewal stamp to point at, further down.
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
+  values (v_user, v_goal, 'bank', 'investment', '2026-01-01', 1) returning transaction_id into v_bank_b;
 
   insert into public.investment_transactions
     (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn)
@@ -98,6 +103,33 @@ begin
     raise exception 'turning a holding into a withdrawal under a claim must be refused';
   exception when sqlstate '23514' then null;
   end;
+  set constraints all deferred;
+
+  -- Stamping a LIVE deposit as renewal history takes its whole balance away
+  -- without touching a single number on it: active_investment_transactions
+  -- excludes history, so the dashboard has no holding left for the claim to apply
+  -- to and both leave the totals together. The fund half of this is refused
+  -- through the bucket; this is the same act on the parent axis.
+  begin
+    update public.investment_transactions set renewed_from_transaction_id = v_bank_b
+     where transaction_id = v_bank;
+    set constraints all immediate;
+    raise exception 'filing a live holding as renewal history under a claim must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+  set constraints all deferred;
+
+  -- But a snapshot the renewal RPCs actually wrote must keep working: it is
+  -- INSERTED as history and partial withdrawals are re-parented onto it (#585),
+  -- which is how a renewed deposit stops double-counting them. Those claims are
+  -- inert by design, so measuring them against it would refuse the renewal itself.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, renewed_from_transaction_id)
+  values (v_user, v_goal, 'bank', 'investment', '2026-01-01', 100000000, v_bank_b) returning transaction_id into v_snap;
+  update public.investment_transactions set parent_transaction_id = v_snap
+   where parent_transaction_id = v_bank and transaction_type = 'withdrawal';
+  update public.investment_transactions set amount_vnd = 100000001 where transaction_id = v_snap;
+  set constraints all immediate;
   set constraints all deferred;
 
   -- ── gold: the quantity is a balance too ───────────────────────────────────
@@ -240,6 +272,9 @@ declare
   v_buy   uuid;
   v_buy_b uuid;
   v_other uuid;
+  v_fund_t uuid;
+  v_buy_t uuid;
+  i       int;
   v_msg   text;
 begin
   insert into auth.users (id, email) values (gen_random_uuid(), 'src-fund@test.invalid') returning id into v_user;
@@ -298,6 +333,34 @@ begin
     update public.investment_transactions set units = null where transaction_id = v_buy;
     set constraints all immediate;
     raise exception 'nulling a fund purchase''s units under a sale must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+  set constraints all deferred;
+
+  -- The bucket forgives the same per-sale rounding the parent axis does, and for
+  -- the same reason: the fund allocation rule is checked per sale with no running
+  -- total. The fund twin of the audit suite's tiny ledger — a 1 đồng / 5 unit
+  -- purchase carrying three legal 1-đồng sales — was refused every later edit,
+  -- including one that only GREW the purchase.
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Tiny Fund', 'TNYF', 'equity', 1) returning id into v_fund_t;
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal, v_fund_t, 'fund', 'investment', '2026-01-01', 1, 5, 1) returning transaction_id into v_buy_t;
+  for i in 1..3 loop
+    insert into public.investment_transactions
+      (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, principal_withdrawn, units_withdrawn)
+    values (v_user, v_goal, v_fund_t, 'fund', 'withdrawal', '2026-02-01', 1, 1, 1);
+  end loop;
+  update public.investment_transactions set units = 6 where transaction_id = v_buy_t;
+  set constraints all immediate;
+  set constraints all deferred;
+
+  -- Per sale, not unbounded: emptying that bucket is still refused.
+  begin
+    update public.investment_transactions set units = 0.1, amount_vnd = 0 where transaction_id = v_buy_t;
+    set constraints all immediate;
+    raise exception 'emptying a bucket must not be forgiven as rounding';
   exception when sqlstate '23514' then null;
   end;
   set constraints all deferred;

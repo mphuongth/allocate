@@ -133,6 +133,14 @@ declare
   v_par_units  numeric;
   v_par_basis  bigint;
   v_key        bigint;
+  -- One đồng per sale, for the reason the parent axis needs it: the proportional
+  -- allocation is checked per sale with no running total and no carve-out once the
+  -- remaining basis rounds to nothing, so a 1 đồng / 5 unit purchase legally
+  -- carries three 1-đồng sales. A flat đồng refused every later edit of such a
+  -- bucket, including one that only GREW the purchase. Units stay flat: that bound
+  -- withholds its epsilon at zero, so it cannot accumulate.
+  v_sales      int;
+  v_par_count  int;
 begin
   v_key := pg_catalog.hashtextextended(
     p_user::text || ':' || p_fund::text || ':' || coalesce(p_goal::text, ''), 0);
@@ -155,8 +163,8 @@ begin
      and t.renewed_from_transaction_id is null
      and t.units is not null;
 
-  select coalesce(sum(w.units_withdrawn), 0), coalesce(sum(w.principal_withdrawn), 0)
-    into v_out_units, v_out_basis
+  select coalesce(sum(w.units_withdrawn), 0), coalesce(sum(w.principal_withdrawn), 0), count(*)
+    into v_out_units, v_out_basis, v_sales
     from public.investment_transactions w
    where w.user_id = p_user and w.fund_id = p_fund and w.asset_type = 'fund'
      and w.transaction_type = 'withdrawal'
@@ -168,8 +176,8 @@ begin
   select coalesce(sum(case when coalesce(w.units_withdrawn, 0) > 0 then w.units_withdrawn
                            else least(p.units, p.units * coalesce(w.principal_withdrawn, 0) / p.amount_vnd)
                       end), 0),
-         coalesce(sum(coalesce(w.principal_withdrawn, 0)), 0)
-    into v_par_units, v_par_basis
+         coalesce(sum(coalesce(w.principal_withdrawn, 0)), 0), count(*)
+    into v_par_units, v_par_basis, v_par_count
     from public.investment_transactions w
     join public.investment_transactions p
       on p.transaction_id = w.parent_transaction_id
@@ -185,8 +193,17 @@ begin
 
   v_out_units := v_out_units + v_par_units;
   v_out_basis := v_out_basis + v_par_basis;
+  -- Deliberately NOT gated on the bucket still holding something, unlike the
+  -- parent axis. The flat đồng this replaces was ungated too, and a purchase-less
+  -- bucket is a real state a relocation can leave (#587) — withdrawal_ledger_audit
+  -- has a fixture standing on exactly that tolerance, and REPORTS such a bucket
+  -- rather than having the invariant refuse it. This change makes the allowance
+  -- per sale instead of flat; tightening the empty case is a different decision
+  -- and not this issue's to take. The units bound still catches what matters:
+  -- emptying a bucket that has sold units is refused there whatever the basis says.
+  v_sales     := v_sales + v_par_count;
 
-  if v_out_units > v_units + 0.0001 or v_out_basis > v_basis + 1 then
+  if v_out_units > v_units + 0.0001 or v_out_basis > v_basis + v_sales then
     raise exception 'withdrawal invariant: this fund bucket would be left owing % units / % of basis it does not hold',
       v_out_units - v_units, v_out_basis - v_basis using errcode = 'check_violation';
   end if;
@@ -287,7 +304,13 @@ begin
   -- claim vanished together, which is worse than the overdraw this file exists to
   -- refuse. `units = 0` is NOT this case: that row is still valued, just as an
   -- ordinary holding rather than a fund bucket.
+  -- And a row stamped as renewal HISTORY is out of active_investment_transactions
+  -- altogether, so the dashboard has no holding left for these claims to apply to.
+  -- Stamping a live 100,000,000 deposit carrying a 60,000,000 withdrawal took both
+  -- out of the totals at once — the fund half of this was already refused through
+  -- the bucket, this is the same act on the parent axis.
   if src.transaction_type is distinct from 'investment'
+     or src.renewed_from_transaction_id is not null
      or (src.asset_type = 'fund' and src.units is null) then
     v_have       := 0;
     v_have_units := 0;
@@ -343,7 +366,16 @@ begin
    where t.transaction_id = new.transaction_id;
   if not found then return null; end if;
 
-  perform public.check_source_backs_claims(v_row);
+  -- A row that was ALREADY history before this statement is not something this
+  -- edit took away, and the renewal RPCs write exactly that shape on purpose: the
+  -- snapshot is inserted as history and partial withdrawals are re-parented onto it
+  -- (#585), which is how a renewed deposit stops double-counting them. Those claims
+  -- are inert by design — the snapshot is not an active holding — so measuring them
+  -- against it would refuse the renewal itself. What is measured is a LIVE holding
+  -- becoming history, which is a balance leaving.
+  if old.renewed_from_transaction_id is null then
+    perform public.check_source_backs_claims(v_row);
+  end if;
 
   -- A purchase that LEFT a bucket — its fund cleared, its asset_type changed, its
   -- goal moved — shrinks the bucket it came from by everything it held, and the
