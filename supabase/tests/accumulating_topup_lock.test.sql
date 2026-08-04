@@ -11,6 +11,8 @@ declare
   v_other_user uuid := gen_random_uuid();
   v_other_goal uuid;
   v_other_book uuid := gen_random_uuid();
+  v_historical_book uuid := gen_random_uuid();
+  v_saving uuid := gen_random_uuid();
   v_message text;
 begin
   insert into auth.users (id, email) values (v_user, 'accumulating-topup-lock@test.invalid');
@@ -84,6 +86,25 @@ begin
       raise exception 'foreign book metadata leaked: %', v_message;
     end if;
   end;
+
+  -- The recurring RPC uses the entered date too: a backfilled contribution from
+  -- before maturity remains valid even if the book is now past maturity.
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate, deposit_group_id
+  ) values (
+    v_historical_book, v_user, v_goal, 'bank', 'investment',
+    current_date - 31, current_date - 1, 10000000, 4, v_historical_book
+  );
+  insert into public.recurring_savings (
+    saving_id, user_id, goal_id, name, amount_vnd, linked_deposit_tx_id
+  ) values (
+    v_saving, v_user, v_goal, 'Historical recurring', 1000000, v_historical_book
+  );
+  perform public.record_recurring_book_topup(
+    v_historical_book, 1000000, 4, current_date - 2, v_saving,
+    to_char(current_date - 2, 'YYYY-MM')
+  );
 
   -- A maturity-day tranche would earn no term interest and must be refused even
   -- for legacy books without a configured pre-maturity lock.
