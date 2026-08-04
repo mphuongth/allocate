@@ -305,6 +305,16 @@ select 'parent_is_a_fund_purchase', 'review',
                           -- while the dashboard removed the derived quantity.
                           case when coalesce(w.units_withdrawn, 0) > 0 then w.units_withdrawn::text
                                else 'derived pro-rata' end)
+            -- The rest are not one shape and must not read as one. A parent that
+            -- holds no units is valued as an ordinary holding, and its withdrawal
+            -- is applied there by lib/depositValuation — a correct row, said so
+            -- plainly, because "nothing values it" would invite a repair that
+            -- subtracts the money a second time. A parent with no fund at all (or
+            -- one that is itself a withdrawal) really is valued by nothing.
+            when w.parent_asset = 'fund' and w.parent_fund is not null
+                 and coalesce(w.parent_units, 0) <= 0
+              then format('draws %s đồng on fund purchase %s, which holds no units — valued against that purchase, not a bucket',
+                          w.principal_withdrawn, w.parent_transaction_id)
             else format('draws %s đồng on fund-typed %s %s, which carries no fund of its own — no bucket values it',
                         w.principal_withdrawn, w.parent_type, w.parent_transaction_id)
        end
