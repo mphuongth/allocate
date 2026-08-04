@@ -56,7 +56,12 @@ with wd as (
          -- holding into a fund bucket on `asset_type === 'fund' && tx.units`, so a
          -- purchase with no units (a pending DCA seed) or zero units is valued as an
          -- ordinary holding and its withdrawal stays on the parent axis.
-         coalesce(not (w.asset_type = 'fund' and w.fund_id is not null)
+         -- The inner test is coalesced BEFORE the negation, like fund_keyed above:
+         -- asset_type is nullable, so `w.asset_type = 'fund'` on a row with a
+         -- retained fund_id and no asset_type is NULL, and `not NULL` is NULL —
+         -- which would file the row as neither fund-keyed nor fund-parented while
+         -- the reader charges the parent's bucket for it.
+         coalesce(not coalesce(w.asset_type = 'fund' and w.fund_id is not null, false)
                   and p.transaction_type = 'investment'
                   and p.asset_type = 'fund' and p.fund_id is not null
                   and coalesce(p.units, 0) > 0, false) as fund_parented

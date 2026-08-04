@@ -752,7 +752,7 @@ end $$;
 -- why these rows are planted with the trigger off.
 do $$
 declare
-  v_user uuid; v_goal uuid; v_fund uuid; v_buy uuid; v_par uuid; v_n int;
+  v_user uuid; v_goal uuid; v_fund uuid; v_buy uuid; v_par uuid; v_par_bare uuid; v_n int;
 begin
   insert into auth.users (id, email) values (gen_random_uuid(), 'wd-audit-606@test.invalid') returning id into v_user;
   insert into public.savings_goals (user_id, goal_name) values (v_user, 'Mixed shapes') returning goal_id into v_goal;
@@ -797,6 +797,25 @@ begin
                   where transaction_id = v_par and check_name = 'parent_is_a_fund_purchase'
                     and detail like '%valued against that fund bucket%') then
     raise exception 'the fund-parented row must still be reported for review';
+  end if;
+
+  -- The same claim wearing a RETAINED fund_id and no asset_type — what editing a
+  -- sell's asset_type off 'fund' leaves behind (the PUT clears fund_id only when
+  -- that field is sent). The reader reads it as not fund-keyed and charges the
+  -- parent's bucket, so the audit has to as well: written without coalescing the
+  -- inner test, `not (asset_type = 'fund' and ...)` is NULL for this row and it
+  -- fell out of both branches.
+  alter table public.investment_transactions disable trigger user;
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, units_withdrawn, principal_withdrawn)
+  values (v_user, v_goal, v_fund, null, 'withdrawal', '2026-03-02', 250000, v_buy, 10, 400000)
+  returning transaction_id into v_par_bare;
+  alter table public.investment_transactions enable trigger user;
+
+  if not exists (select 1 from public.withdrawal_ledger_audit
+                  where transaction_id = v_par_bare and check_name = 'parent_is_a_fund_purchase'
+                    and detail like '%valued against that fund bucket%') then
+    raise exception 'a claim with a retained fund_id and no asset_type must be read as the reader reads it';
   end if;
 
   raise notice 'withdrawal_ledger_audit: both sale shapes share one bucket balance';
