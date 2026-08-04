@@ -53,6 +53,14 @@ const SELL = {
   principal_withdrawn: 50_000_000,
 }
 
+const TOP_UP = {
+  transaction_type: 'investment',
+  asset_type: 'bank',
+  investment_date: '2026-07-31',
+  amount_vnd: 1_000_000,
+  tops_up_deposit_id: SOURCE,
+}
+
 const call = (body: Record<string, unknown> = SELL) =>
   POST(new NextRequest('https://app.test/api/v1/investment-transactions', {
     method: 'POST',
@@ -239,5 +247,61 @@ describe('POST /api/v1/investment-transactions — remaining balance', () => {
       h.insertResult = balanceRefusal(message)
       expect((await call()).status).toBe(400)
     }
+  })
+
+  describe('accumulating-deposit top-up lock', () => {
+    beforeEach(() => {
+      h.ref = {
+        data: {
+          transaction_id: SOURCE,
+          asset_type: 'bank',
+          deposit_group_id: SOURCE,
+          goal_id: null,
+          expiry_date: '2026-08-30',
+          bank_code: 'PVCOMBANK',
+          top_up_lock_days: 30,
+        },
+        error: null,
+      }
+    })
+
+    it('refuses a top-up at the inclusive lock-window boundary', async () => {
+      const res = await call(TOP_UP)
+
+      expect(res.status).toBe(400)
+      await expect(res.json()).resolves.toMatchObject({
+        code: 'top_up_locked_near_maturity',
+        error: expect.stringMatching(/30 days remain/),
+      })
+    })
+
+    it('refuses a top-up on the maturity date', async () => {
+      h.ref = {
+        data: {
+          ...(h.ref.data as Record<string, unknown>),
+          expiry_date: '2026-07-31',
+        },
+        error: null,
+      }
+
+      const res = await call(TOP_UP)
+
+      expect(res.status).toBe(400)
+      await expect(res.json()).resolves.toEqual({
+        error: 'Cannot top up a deposit on or after its maturity date.',
+      })
+    })
+
+    it('allows a top-up immediately before the lock window', async () => {
+      h.ref = {
+        data: {
+          ...(h.ref.data as Record<string, unknown>),
+          expiry_date: '2026-08-31',
+        },
+        error: null,
+      }
+
+      expect((await call(TOP_UP)).status).toBe(201)
+    })
   })
 })
