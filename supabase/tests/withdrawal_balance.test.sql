@@ -1187,7 +1187,7 @@ begin;
 do $$
 declare
   v_user uuid; v_goal uuid; v_goal2 uuid; v_fund uuid; v_fund2 uuid;
-  v_goal3 uuid; v_fund3 uuid; v_dep2 uuid; v_dep3 uuid; v_wd2 uuid;
+  v_goal3 uuid; v_fund3 uuid; v_dep2 uuid; v_dep3 uuid; v_dep4 uuid; v_wd2 uuid;
   v_buy uuid; v_buy2 uuid; v_buy3 uuid; v_dep uuid;
 begin
   insert into auth.users (id, email) values (gen_random_uuid(), 'fundkeyed@test.invalid') returning id into v_user;
@@ -1386,6 +1386,36 @@ begin
 
   -- Everything else about it still edits: the guard is about the rate, not the row.
   update public.investment_transactions set notes = 'renamed' where transaction_id = v_dep2;
+
+  -- The same shape assembled in TWO statements. Turning the parent into a valid
+  -- fund-keyed withdrawal takes it out of this guard's reach (it is no longer an
+  -- investment), so flipping transaction_type back on its own used to change no
+  -- column the trigger watched — and left a fund purchase under the legacy child.
+  -- Activating it is becoming one, and is measured as such.
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal3, v_fund3, 'fund', 'investment', '2026-01-01', 2000000, 50, 40000);
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
+  values (v_user, v_goal3, 'bank', 'investment', '2026-01-01', 1000000) returning transaction_id into v_dep4;
+  alter table public.investment_transactions disable trigger user;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn)
+  values (v_user, v_goal3, null, 'withdrawal', '2026-02-01', 400000, v_dep4, 400000);
+  alter table public.investment_transactions enable trigger user;
+
+  -- Step one is legal on its own: as a fund-keyed sell it draws on the bucket.
+  update public.investment_transactions
+     set transaction_type = 'withdrawal', asset_type = 'fund', fund_id = v_fund3,
+         units_withdrawn = 10, principal_withdrawn = 400000, amount_vnd = 250000
+   where transaction_id = v_dep4;
+
+  begin
+    update public.investment_transactions set transaction_type = 'investment'
+     where transaction_id = v_dep4;
+    raise exception 'activating a fund purchase under a legacy child must be measured, not waved through';
+  exception when sqlstate '23514' then null;
+  end;
 
   -- A child that carries its OWN fund draws on that bucket whatever its parent is,
   -- so it never blocks the conversion. (Dual-key sell: legal, the fund branch wins.)

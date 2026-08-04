@@ -54,7 +54,17 @@ begin
 
   -- BECOMING a fund purchase: every non-fund-keyed child would wake up parented to
   -- a fund, which is the shape 20260803000002 refuses at the child's own door.
-  if (old.asset_type is distinct from new.asset_type or old.fund_id is distinct from new.fund_id)
+  --
+  -- transaction_type counts as becoming one, and the trigger lists it too. Without
+  -- that, the guard was two updates wide: turn the parent into a valid fund-keyed
+  -- WITHDRAWAL first (this function returns — it is no longer an investment), then
+  -- flip transaction_type back on its own. The second statement changed no column
+  -- this trigger watched and left a fund purchase sitting under the legacy child,
+  -- which is the whole shape the migration exists to prevent. Verified against the
+  -- local stack: both steps were accepted.
+  if (old.asset_type is distinct from new.asset_type
+      or old.fund_id is distinct from new.fund_id
+      or old.transaction_type is distinct from new.transaction_type)
      and exists (
        select 1
          from public.investment_transactions w
@@ -99,7 +109,7 @@ revoke all on function public.enforce_parent_not_fund_under_withdrawals() from a
 
 drop trigger if exists investment_transactions_parent_not_fund on public.investment_transactions;
 create trigger investment_transactions_parent_not_fund
-  before update of asset_type, fund_id, amount_vnd, units
+  before update of transaction_type, asset_type, fund_id, amount_vnd, units
   on public.investment_transactions
   for each row
   when (new.transaction_type = 'investment')
