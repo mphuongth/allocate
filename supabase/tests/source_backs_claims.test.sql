@@ -39,6 +39,7 @@ declare
   v_bank  uuid;
   v_gold  uuid;
   v_drift uuid;
+  v_stock uuid;
   v_claimed bigint;
   v_msg   text;
 begin
@@ -139,9 +140,9 @@ begin
   -- A quantity-valued sale takes the proportional share of the remaining basis,
   -- and check_withdrawal_balance accepts it a đồng either way because that is what
   -- rounding a slice produces. So a run of sales it ACCEPTS can sum past the
-  -- holding: four below claim 101 against a basis of 100. Measured with a flat
-  -- đồng, that ledger became uneditable — the drift is the invariant's own, and no
-  -- edit that leaves the balance alone makes it worse.
+  -- holding: the four below claim 101 against a basis of 100. Measured with NO
+  -- tolerance at all, that ledger became uneditable — restating the same amount was
+  -- refused for a drift the invariant itself licensed and no edit made worse.
   insert into public.investment_transactions
     (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
   values (v_user, v_goal, 'gold', 'investment', '2026-01-01', 100, 4, 25) returning transaction_id into v_drift;
@@ -167,8 +168,19 @@ begin
   set constraints all immediate;
   set constraints all deferred;
 
-  -- The allowance is one đồng per sale that moved units, not a blank cheque: four
-  -- sales buy four đồng, and a real shrink is still refused.
+  -- The allowance is ONE đồng however many sales there are, not one per sale.
+  -- Each sale is measured against the balance earlier sales left, so every
+  -- allowance after the first is granted against an already-inflated remainder and
+  -- the aggregate can only ever drift by one — which is why the four sales above
+  -- land on 101 rather than 104. Counting them would buy real overdraw.
+  begin
+    update public.investment_transactions set amount_vnd = 99 where transaction_id = v_drift;
+    set constraints all immediate;
+    raise exception 'the đồng of rounding is one in total, not one per sale';
+  exception when sqlstate '23514' then null;
+  end;
+  set constraints all deferred;
+
   begin
     update public.investment_transactions set amount_vnd = 96 where transaction_id = v_drift;
     set constraints all immediate;
@@ -187,6 +199,26 @@ begin
   end;
   set constraints all deferred;
 
+  -- And the đồng is GOLD's, because gold is the only parent-axis holding whose
+  -- principal is a rounded proportional share. check_withdrawal_balance caps bank
+  -- and stock outright, so their claims can never sum past the holding and slack
+  -- there is not forgiveness of rounding — it is a đồng of real overdraw the
+  -- dashboard values at minus one. Units recorded on the sale must not buy it.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal, 'stock', 'investment', '2026-01-01', 100, 10, 10) returning transaction_id into v_stock;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_goal, 'stock', 'withdrawal', '2026-02-01', 80, v_stock, 80, 8);
+
+  begin
+    update public.investment_transactions set amount_vnd = 79 where transaction_id = v_stock;
+    set constraints all immediate;
+    raise exception 'a stock holding must not inherit gold''s rounding allowance';
+  exception when sqlstate '23514' then null;
+  end;
+  set constraints all deferred;
+
   raise notice 'one-source shrink: ok';
 end;
 $$;
@@ -199,6 +231,7 @@ declare
   v_fund  uuid;
   v_buy   uuid;
   v_buy_b uuid;
+  v_other uuid;
   v_msg   text;
 begin
   insert into auth.users (id, email) values (gen_random_uuid(), 'src-fund@test.invalid') returning id into v_user;
@@ -209,6 +242,10 @@ begin
   insert into public.investment_transactions
     (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
   values (v_user, v_goal, v_fund, 'fund', 'investment', '2026-01-01', 2000000, 100, 20000) returning transaction_id into v_buy;
+  -- Something for a renewal stamp to point at, further down.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
+  values (v_user, v_goal, 'bank', 'investment', '2026-01-01', 1) returning transaction_id into v_other;
 
   -- 60 of the 100 units, at the basis the allocation rule requires.
   insert into public.investment_transactions
@@ -253,6 +290,20 @@ begin
     update public.investment_transactions set units = null where transaction_id = v_buy;
     set constraints all immediate;
     raise exception 'nulling a fund purchase''s units under a sale must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+  set constraints all deferred;
+
+  -- Stamping a LIVE purchase as renewal history is the same subtraction again, and
+  -- the one that leaves no trace on the row's own shape: it stays a fund purchase
+  -- with its units, but every reader — and check_fund_bucket_solvent — leaves
+  -- history out of the sums, so the bucket the dashboard counts drops to nothing
+  -- while the sale stays. Watched because nothing about the columns above moves.
+  begin
+    update public.investment_transactions set renewed_from_transaction_id = v_other
+     where transaction_id = v_buy;
+    set constraints all immediate;
+    raise exception 'filing a live purchase as renewal history under a sale must be refused';
   exception when sqlstate '23514' then null;
   end;
   set constraints all deferred;
@@ -312,6 +363,7 @@ declare
   v_snap  uuid;
   v_buy   uuid;
   v_buy_b uuid;
+  v_other uuid;
   v_msg   text;
 begin
   insert into auth.users (id, email) values (gen_random_uuid(), 'src-delete@test.invalid') returning id into v_user;

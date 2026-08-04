@@ -179,25 +179,34 @@ security definer
 set search_path = ''
 as $$
 declare
-  -- The tolerances are PER SALE, and this side sums many of them, so they are
-  -- counted rather than taken flat.
+  -- ── how much rounding this side must forgive, and no more ────────────────
   --
-  -- A bank withdrawal is bounded outright (`principal_withdrawn > v_left`), so its
-  -- claims can never sum past the holding and it gets no slack at all — a deposit
-  -- covering a đồng less than what left it is owing a đồng.
+  -- The withdrawal side's tolerances are per sale, so summing many claims looks at
+  -- first like it should sum many tolerances. It does not, and getting that wrong
+  -- is over-permissive in a way that reopens this migration's own hole. Each sale
+  -- is measured against the balance EARLIER SALES LEFT, so every allowance after
+  -- the first is granted against an already-inflated remainder: u₂ ≤ (held − u₁) +
+  -- ε gives u₁ + u₂ ≤ held + ε, whatever the count. The aggregate can exceed the
+  -- holding by exactly ONE epsilon. (The four-sale gold ledger below drifts by one
+  -- đồng, not four — which is the same statement from the other direction.)
   --
-  -- A QUANTITY-valued sale is different, and gold is the case: its principal is the
-  -- proportional share of the remaining basis, and check_withdrawal_balance accepts
-  -- it a đồng either way because that is what rounding a slice produces. Four such
-  -- sales, each accepted, can therefore claim 101 against a basis of 100 — reproduced
-  -- on the local stack. Measured with a flat đồng, that ledger became UNEDITABLE:
-  -- restating the same amount, or correcting the units upward, was refused for a
-  -- drift the invariant itself licensed and nothing about the edit made worse. So
-  -- the allowance is one đồng per sale that moved units, and 0.0001 units likewise
-  -- (clients round units_withdrawn to four decimals). Zero such sales, zero slack,
-  -- which is what keeps a plain deposit's boundary exact.
+  -- WHO gets the đồng: gold, and only gold. check_withdrawal_balance runs the
+  -- proportional branch for a quantity-valued holding — where the principal is the
+  -- rounded share of the remaining basis and may land a đồng either way — and caps
+  -- bank and stock outright at `principal_withdrawn > v_left`. Claims on those can
+  -- never sum past the holding, so slack there is not forgiveness of rounding, it
+  -- is a đồng of real overdraw: a 100 stock holding with an 80 withdrawal was
+  -- editable down to 79, and the dashboard values that at −1.
+  --
+  -- The units epsilon is not asset-keyed, because the units bound it comes from is
+  -- not either: clients round units_withdrawn to four decimals, so a full sell of
+  -- any quantity-valued holding can post a hair more than it holds.
+  --
+  -- Both round a REAL balance and never create one — applied to a holding emptied
+  -- to nothing they would hand it slack it never had, the same carve-out the
+  -- withdrawal side makes for its own epsilon.
   c_units_epsilon constant numeric := 0.0001;
-  v_priced        int;
+  c_dong_epsilon  constant bigint  := 1;
   v_allow         bigint  := 0;
   v_allow_units   numeric := 0;
   v_out_principal bigint;
@@ -208,9 +217,12 @@ begin
   -- A fund purchase IS its bucket, and the bucket is what claims draw on. `units
   -- > 0` mirrors lib/withdrawalProgress exactly: a purchase with none is no
   -- bucket — the dashboard values it as an ordinary holding — so it falls through
-  -- to the parent axis below, where its claims actually sit.
+  -- to the parent axis below, where its claims actually sit. A renewal snapshot is
+  -- history rather than a holding, and check_fund_bucket_solvent leaves it out of
+  -- the sums for that reason, so it is not this bucket either.
   if src.transaction_type = 'investment' and src.asset_type = 'fund'
-     and src.fund_id is not null and coalesce(src.units, 0) > 0 then
+     and src.fund_id is not null and coalesce(src.units, 0) > 0
+     and src.renewed_from_transaction_id is null then
     perform public.check_fund_bucket_solvent(src.user_id, src.fund_id, src.goal_id);
     return;
   end if;
@@ -218,9 +230,8 @@ begin
   -- What is drawn on this row, summed the way check_withdrawal_balance's parent
   -- branch sums it — a fund-keyed sibling draws on its own bucket whatever it
   -- names as a parent, so counting it here would charge it twice.
-  select coalesce(sum(w.principal_withdrawn), 0), coalesce(sum(w.units_withdrawn), 0),
-         count(*) filter (where coalesce(w.units_withdrawn, 0) > 0)
-    into v_out_principal, v_out_units, v_priced
+  select coalesce(sum(w.principal_withdrawn), 0), coalesce(sum(w.units_withdrawn), 0)
+    into v_out_principal, v_out_units
     from public.investment_transactions w
    where w.parent_transaction_id = src.transaction_id
      and w.transaction_type = 'withdrawal'
@@ -235,12 +246,8 @@ begin
   v_have       := case when src.transaction_type = 'investment' then coalesce(src.amount_vnd, 0) else 0 end;
   v_have_units := case when src.transaction_type = 'investment' then coalesce(src.units, 0) else 0 end;
 
-  -- The allowance rounds a real balance; it never creates one. A holding with
-  -- nothing left is measured exactly, the same carve-out check_withdrawal_balance
-  -- makes for its units epsilon, so a sold-out source cannot be handed đồng it
-  -- never had.
-  if v_have > 0 then v_allow := v_priced; end if;
-  if v_have_units > 0 then v_allow_units := v_priced * c_units_epsilon; end if;
+  if v_have > 0 and src.asset_type = 'gold' then v_allow := c_dong_epsilon; end if;
+  if v_have_units > 0 then v_allow_units := c_units_epsilon; end if;
 
   -- The balances the messages report are the REAL ones, not the allowance-inflated
   -- figures the comparison uses: "a balance of 101" for a 100 đồng holding sends
@@ -303,12 +310,20 @@ begin
   -- dashboard dropped the purchase (it keys a fund holding on `units`), and the
   -- sale stayed. The row itself is measured on the parent axis by then, where a
   -- fund-keyed sell does not appear at all, so nothing else was going to catch it.
+  --
+  -- renewed_from_transaction_id is the second one, and it leaves no trace at all:
+  -- stamping it on a LIVE purchase files it as history, which every reader and
+  -- check_fund_bucket_solvent alike exclude from the sums. A 100-unit purchase
+  -- backing a 60-unit sale left a bucket the reader counts as 0 units against 60.
+  -- Watched in the trigger's `update of` list for the same reason.
   if old.transaction_type = 'investment' and old.asset_type = 'fund'
      and old.fund_id is not null and coalesce(old.units, 0) > 0
+     and old.renewed_from_transaction_id is null
      and not (new.transaction_type = 'investment' and new.asset_type = 'fund'
               and new.fund_id is not distinct from old.fund_id
               and new.goal_id is not distinct from old.goal_id
-              and coalesce(new.units, 0) > 0) then
+              and coalesce(new.units, 0) > 0
+              and new.renewed_from_transaction_id is null) then
     perform public.check_fund_bucket_solvent(old.user_id, old.fund_id, old.goal_id);
   end if;
 
@@ -323,7 +338,11 @@ revoke all on function public.enforce_source_backs_claims() from public, anon, a
 
 drop trigger if exists investment_transactions_source_backs_claims on public.investment_transactions;
 create constraint trigger investment_transactions_source_backs_claims
-  after update of transaction_type, asset_type, amount_vnd, units, fund_id, goal_id
+  -- Every column that can change what this row CONTRIBUTES to a balance, which
+  -- includes renewed_from_transaction_id: stamping it files a live purchase as
+  -- history, and history is left out of the bucket sums.
+  after update of transaction_type, asset_type, amount_vnd, units, fund_id, goal_id,
+                  renewed_from_transaction_id
   on public.investment_transactions
   -- INITIALLY DEFERRED, not IMMEDIATE: renewal is insolvent between its own
   -- statements (see the header). A caller that needs the answer sooner can SET
@@ -363,8 +382,11 @@ create constraint trigger investment_transactions_source_deleted
   after delete on public.investment_transactions
   deferrable initially deferred
   for each row
+  -- A renewal snapshot was never in the bucket's sums, so removing one cannot
+  -- leave it short.
   when (old.transaction_type = 'investment' and old.asset_type = 'fund'
-        and old.fund_id is not null and coalesce(old.units, 0) > 0)
+        and old.fund_id is not null and coalesce(old.units, 0) > 0
+        and old.renewed_from_transaction_id is null)
   execute function public.enforce_source_delete_backs_claims();
 
 -- ── deleting any other holding: caught as its children are orphaned ─────────
