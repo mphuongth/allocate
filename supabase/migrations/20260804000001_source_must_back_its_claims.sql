@@ -99,6 +99,24 @@
 -- A statement that touches two buckets (a relocation measures both ends) takes two
 -- of these locks, so two simultaneous and opposite relocations of one fund can
 -- still deadlock; Postgres aborts one of them, and the invariant holds either way.
+--
+-- WAITING FOR THE LOCK IS NOT ENOUGH ON ITS OWN, and the reason is the isolation
+-- level. Under READ COMMITTED the loser's next statement takes a fresh snapshot, so
+-- it measures the winner's committed edit and refuses — that is the whole mechanism.
+-- Under REPEATABLE READ the snapshot is frozen at the first statement, so the loser
+-- waits, reads its own stale view, and passes: verified, the two-purchase scenario
+-- above still ends at 40 units backing 60. So the lock is TRIED rather than waited
+-- for, and a contended bucket outside READ COMMITTED is answered with a
+-- serialization failure — the class such a caller is already written to retry, and
+-- the retry gets the fresh snapshot it needs. Nothing changes under READ COMMITTED,
+-- which is what PostgREST and every RPC here run at, and what 20260730000002's own
+-- header reasons in.
+--
+-- One gap remains, stated rather than papered over: a REPEATABLE READ transaction
+-- whose snapshot predates a bucket edit that COMMITTED before this check runs sees
+-- no contention to detect and measures the stale view. Closing that needs a fresh
+-- read inside a frozen transaction, which is not something a trigger can do. No
+-- writer in this codebase runs at that level.
 -- Re-issued rather than wrapped: the arithmetic below is verbatim from
 -- 20260803000004 and stays the only copy, with the lock taken ahead of it.
 create or replace function public.check_fund_bucket_solvent(p_user uuid, p_fund uuid, p_goal uuid)
@@ -114,9 +132,19 @@ declare
   v_out_basis  bigint;
   v_par_units  numeric;
   v_par_basis  bigint;
+  v_key        bigint;
 begin
-  perform pg_catalog.pg_advisory_xact_lock(
-    pg_catalog.hashtextextended(p_user::text || ':' || p_fund::text || ':' || coalesce(p_goal::text, ''), 0));
+  v_key := pg_catalog.hashtextextended(
+    p_user::text || ':' || p_fund::text || ':' || coalesce(p_goal::text, ''), 0);
+  if not pg_catalog.pg_try_advisory_xact_lock(v_key) then
+    -- Someone else is measuring this bucket. Waiting only helps if the sums below
+    -- will then be read fresh, which is a READ COMMITTED promise (see the header).
+    if pg_catalog.current_setting('transaction_isolation') <> 'read committed' then
+      raise exception 'withdrawal invariant: this fund bucket is being edited concurrently and cannot be measured against a frozen snapshot — retry the transaction'
+        using errcode = 'serialization_failure';
+    end if;
+    perform pg_catalog.pg_advisory_xact_lock(v_key);
+  end if;
 
   select coalesce(sum(t.units), 0), coalesce(sum(t.amount_vnd), 0)
     into v_units, v_basis
