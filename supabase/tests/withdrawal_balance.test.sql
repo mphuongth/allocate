@@ -1228,6 +1228,51 @@ begin
 end;
 $$;
 
+-- ── a new sale is measured against every claim on the bucket (#606) ──────────
+-- A legacy 10-unit claim sits in a 50-unit bucket. A 45-unit sell fits inside the
+-- fund-keyed sum alone, and the dashboard then subtracts all 55 and drops the five
+-- units left. The claim has to be part of the balance a new sale is measured
+-- against — one bucket, one sum.
+do $$
+declare
+  v_user uuid; v_goal uuid; v_fund uuid; v_buy uuid;
+begin
+  insert into auth.users (id, email) values (gen_random_uuid(), 'claimsum@test.invalid') returning id into v_user;
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Claims') returning goal_id into v_goal;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Claim Fund', 'CLMF', 'equity', 25000) returning id into v_fund;
+
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal, v_fund, 'fund', 'investment', '2026-01-01', 2000000, 50, 40000)
+  returning transaction_id into v_buy;
+
+  alter table public.investment_transactions disable trigger user;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, units_withdrawn, principal_withdrawn)
+  values (v_user, v_goal, null, 'withdrawal', '2026-02-01', 250000, v_buy, 10, 400000);
+  alter table public.investment_transactions enable trigger user;
+
+  begin
+    insert into public.investment_transactions
+      (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units_withdrawn, principal_withdrawn)
+    -- Proportional against the bucket as the OLD sum saw it (45 of 50 units of a
+    -- 2,000,000 basis), so what refuses it is the claim, not the allocation rule.
+    values (v_user, v_goal, v_fund, 'fund', 'withdrawal', '2026-03-01', 1125000, 45, 1800000);
+    raise exception 'a sale that fits only by ignoring the legacy claim must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- What the bucket really has left — 40 units and the 1,600,000 basis behind them
+  -- — still sells, in one go.
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units_withdrawn, principal_withdrawn)
+  values (v_user, v_goal, v_fund, 'fund', 'withdrawal', '2026-03-01', 1000000, 40, 1600000);
+
+  raise notice 'a new sale counts the bucket''s legacy claims: ok';
+end;
+$$;
+
 rollback;
 
 begin;
