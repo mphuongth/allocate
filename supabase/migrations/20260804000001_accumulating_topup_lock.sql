@@ -6,12 +6,12 @@ alter table public.investment_transactions
   add constraint investment_transactions_top_up_lock_days_check
   check (top_up_lock_days is null or (top_up_lock_days >= 0 and top_up_lock_days <= 3650));
 
-create or replace function public.assert_accumulating_book_topup_allowed(p_book_id uuid, p_top_up_date date)
+create or replace function public.assert_accumulating_book_topup_allowed(p_book_id uuid, p_owner_id uuid, p_top_up_date date)
 returns void language plpgsql security definer set search_path = '' as $$
 declare v_anchor public.investment_transactions; v_days_left integer;
 begin
   select * into v_anchor from public.investment_transactions
-   where transaction_id = p_book_id and deposit_group_id = p_book_id for update;
+   where transaction_id = p_book_id and deposit_group_id = p_book_id and user_id = p_owner_id for update;
   if not found then raise exception 'accumulating top-up: accumulating book not found' using errcode = 'no_data_found'; end if;
   if v_anchor.expiry_date is null then return; end if;
   v_days_left := v_anchor.expiry_date - p_top_up_date;
@@ -24,19 +24,27 @@ begin
 end;
 $$;
 
-revoke all on function public.assert_accumulating_book_topup_allowed(uuid, date) from public, anon, authenticated;
+revoke all on function public.assert_accumulating_book_topup_allowed(uuid, uuid, date) from public, anon, authenticated;
 
 create or replace function public.enforce_accumulating_book_topup_lock()
 returns trigger language plpgsql security definer set search_path = '' as $$
 begin
-  if new.transaction_id <> new.deposit_group_id then
-    perform public.assert_accumulating_book_topup_allowed(new.deposit_group_id, new.investment_date);
+  if new.transaction_type = 'investment'
+     and new.deposit_group_id is not null
+     and new.transaction_id <> new.deposit_group_id
+     and (tg_op = 'INSERT'
+       or old.deposit_group_id is distinct from new.deposit_group_id
+       or old.investment_date is distinct from new.investment_date) then
+    -- Include NEW.user_id in the SECURITY DEFINER lookup. This must happen
+    -- before reading a locked anchor so a foreign book cannot reveal its
+    -- maturity or lock window through the resulting error.
+    perform public.assert_accumulating_book_topup_allowed(new.deposit_group_id, new.user_id, new.investment_date);
   end if;
   return new;
 end;
 $$;
 
 create trigger investment_transactions_accumulating_topup_lock
-  before insert on public.investment_transactions for each row
-  when (new.transaction_type = 'investment' and new.deposit_group_id is not null)
+  before insert or update of deposit_group_id, investment_date on public.investment_transactions
+  for each row
   execute function public.enforce_accumulating_book_topup_lock();

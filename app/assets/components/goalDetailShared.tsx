@@ -313,13 +313,14 @@ export function TopUpControl({ inv, isVi, onDone }: { inv: InvRow; isVi: boolean
   const [error, setError] = useState('')
   if (!inv.depositGroupId) return null
 
-  const eligibility = classifyAccumulatingTopUp({ topUpDate: todayIso(), expiryDate: inv.expiryDate, lockDays: inv.topUpLockDays ?? null })
-  if (eligibility.status !== 'allowed') {
-    const message = eligibility.status === 'locked-near-maturity'
-      ? (isVi ? `Sổ không nhận nạp thêm trong ${eligibility.lockDays} ngày trước đáo hạn (còn ${eligibility.daysRemaining} ngày).` : `This deposit stops accepting top-ups ${eligibility.lockDays} days before maturity (${eligibility.daysRemaining} days remain).`)
-      : (isVi ? 'Sổ đã đến ngày đáo hạn nên không thể nạp thêm.' : 'This deposit has reached maturity and cannot accept another top-up.')
-    return <p data-testid="top-up-locked" style={{ margin: '0 0 8px', padding: '9px 10px', borderRadius: 10, background: 'var(--c-warn-tint)', color: 'var(--c-warn)', fontSize: 12, lineHeight: 1.45 }}>{message}</p>
-  }
+  // Eligibility follows the date the user is recording, not today's date: a
+  // legitimate historical top-up can predate the book's lock window.
+  const eligibility = classifyAccumulatingTopUp({ topUpDate: date, expiryDate: inv.expiryDate, lockDays: inv.topUpLockDays ?? null })
+  const lockMessage = eligibility.status === 'locked-near-maturity'
+    ? (isVi ? `Sổ không nhận nạp thêm trong ${eligibility.lockDays} ngày trước đáo hạn (còn ${eligibility.daysRemaining} ngày).` : `This deposit stops accepting top-ups ${eligibility.lockDays} days before maturity (${eligibility.daysRemaining} days remain).`)
+    : eligibility.status === 'matured'
+      ? (isVi ? 'Sổ đã đến ngày đáo hạn nên không thể nạp thêm.' : 'This deposit has reached maturity and cannot accept another top-up.')
+      : null
 
   const amt = Number(amount)
   async function submit() {
@@ -362,10 +363,11 @@ export function TopUpControl({ inv, isVi, onDone }: { inv: InvRow; isVi: boolean
                 <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={field} />
               </div>
             </div>
+            {lockMessage && <p data-testid="top-up-locked" style={{ margin: 0, padding: '9px 10px', borderRadius: 10, background: 'var(--c-warn-tint)', color: 'var(--c-warn)', fontSize: 12, lineHeight: 1.45 }}>{lockMessage}</p>}
             {error && <p style={{ margin: 0, fontSize: 13, color: 'var(--c-neg)' }}>{error}</p>}
             <div style={{ display: 'flex', gap: 8 }}>
               <button type="button" onClick={() => setOpen(false)} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: '1px solid var(--c-line)', background: 'var(--c-card)', color: 'var(--c-ink)', fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>{isVi ? 'Huỷ' : 'Cancel'}</button>
-              <button type="button" data-testid="top-up-submit" onClick={submit} disabled={saving || !(amt > 0)} style={{ flex: 2, padding: '10px 0', borderRadius: 10, border: 'none', background: 'var(--c-btn-primary)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit', opacity: saving || !(amt > 0) ? 0.6 : 1 }}>{isVi ? 'Nạp thêm' : 'Top up'}</button>
+              <button type="button" data-testid="top-up-submit" onClick={submit} disabled={saving || !(amt > 0) || eligibility.status !== 'allowed'} style={{ flex: 2, padding: '10px 0', borderRadius: 10, border: 'none', background: 'var(--c-btn-primary)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit', opacity: saving || !(amt > 0) || eligibility.status !== 'allowed' ? 0.6 : 1 }}>{isVi ? 'Nạp thêm' : 'Top up'}</button>
             </div>
           </div>
         </div>
