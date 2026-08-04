@@ -94,22 +94,56 @@ test.describe('withdrawal balance enforcement (#587)', () => {
     expect(outgoing[0].principal_withdrawn).toBe(100_000_000)
   })
 
-  // The guard sits on a BEFORE UPDATE too, and parent_transaction_id is
-  // ON DELETE SET NULL — so deleting a partially withdrawn deposit orphans its
-  // children through an update that lands on the trigger. An early version of
-  // this change refused that update and turned an ordinary delete into a 500.
-  // The suite missed it because the test helpers delete children first; the route
-  // does not, so drive the route.
-  test('a source that has been partly withdrawn can still be deleted', async ({ request }) => {
+  // parent_transaction_id is ON DELETE SET NULL, so deleting a partly withdrawn
+  // deposit orphans its children through an update that lands on the trigger.
+  // That used to be permitted, and the cash stayed in history filed under no
+  // holding at all — #607. #608 refuses it from both ends: an edit may not take a
+  // source below what has left it, and a delete is that edit taken all the way.
+  //
+  // This is the one path that has to be driven through the ROUTE rather than a
+  // helper: the helpers delete children first, so they never produce the orphan,
+  // and it is the route that has to turn the refusal into a 409 the user can act
+  // on instead of a 500.
+  test('a source that has been partly withdrawn cannot be deleted under its withdrawal', async ({ request }) => {
     expect((await request.post('/api/v1/investment-transactions', { data: withdraw(30_000_000) })).status()).toBe(201)
 
-    const del = await request.delete(`/api/v1/investment-transactions/${depositId}`)
-    expect(del.status()).toBe(200)
+    const refused = await request.delete(`/api/v1/investment-transactions/${depositId}`)
+    expect(refused.status()).toBe(409)
+    expect((await refused.json()).code).toBe('withdrawal_invariant')
 
-    const listed = await (await request.get(
+    // Still there, and still whole.
+    let listed = await (await request.get(
       `/api/v1/investment-transactions?goal_id=${goalId}&limit=100`)).json()
-    const rows = listed.transactions as Array<{ transaction_id: string }>
+    let rows = listed.transactions as Array<{ transaction_id: string; transaction_type: string }>
+    expect(rows.find((t) => t.transaction_id === depositId)).toBeDefined()
+
+    // The remedy is the ledger's own: remove the withdrawal, then the holding.
+    const wd = rows.find((t) => t.transaction_type === 'withdrawal')!
+    expect((await request.delete(`/api/v1/investment-transactions/${wd.transaction_id}`)).status()).toBe(200)
+    expect((await request.delete(`/api/v1/investment-transactions/${depositId}`)).status()).toBe(200)
+
+    listed = await (await request.get(
+      `/api/v1/investment-transactions?goal_id=${goalId}&limit=100`)).json()
+    rows = listed.transactions as Array<{ transaction_id: string; transaction_type: string }>
     expect(rows.find((t) => t.transaction_id === depositId)).toBeUndefined()
+  })
+
+  // The edit half of the same rule, through the route: PUT already maps the
+  // family to a 400, so shrinking a deposit under what has left it must read as a
+  // refused edit rather than a 404 or a server fault.
+  test('a source cannot be edited below what has been withdrawn from it', async ({ request }) => {
+    expect((await request.post('/api/v1/investment-transactions', { data: withdraw(80_000_000) })).status()).toBe(201)
+
+    const refused = await request.put(`/api/v1/investment-transactions/${depositId}`, {
+      data: { amount_vnd: 50_000_000 },
+    })
+    expect(refused.status()).toBe(400)
+    expect((await refused.json()).code).toBe('withdrawal_invariant')
+
+    // Down to exactly what is left is an ordinary correction, not an overdraw.
+    expect((await request.put(`/api/v1/investment-transactions/${depositId}`, {
+      data: { amount_vnd: 80_000_000 },
+    })).status()).toBe(200)
   })
 
   // Selling a gold lot whose principal doesn't divide evenly by its units: the

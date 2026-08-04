@@ -280,6 +280,14 @@ begin
   -- ═══ the planted violations ════════════════════════════════════════════════
   -- Disabling the user triggers is the only way in: these are precisely the shapes
   -- the invariant refuses, which is why they can only exist as HISTORY.
+  --
+  -- ALTER TABLE refuses to run while a constraint trigger has events queued, and
+  -- the #608 source checks are DEFERRED (renewal is insolvent between its own
+  -- statements, so they can only be asked at the end). Flushing just those two —
+  -- not ALL — leaves every other deferrable trigger in this file at the timing it
+  -- was written for, and they are restored after the plant. Same pair either side
+  -- of every disable/enable below.
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted immediate;
   alter table public.investment_transactions disable trigger user;
 
   -- A held-for-merge row with no source. #588 requires one, through a DEFERRED
@@ -590,6 +598,8 @@ begin
 
   alter table public.investment_transactions enable trigger user;
 
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted deferred;
+
   -- ═══ every planted row must be named, by the right check ═══════════════════
   -- Asserting the CHECK NAME and not merely "something was reported": a row caught
   -- by the wrong check sends whoever reads the report after the wrong repair.
@@ -759,6 +769,8 @@ begin
   insert into public.funds (user_id, name, code, fund_type, nav)
   values (v_user, 'Mixed Fund', 'MIXF', 'equity', 25000) returning id into v_fund;
 
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted immediate;
+
   alter table public.investment_transactions disable trigger user;
 
   insert into public.investment_transactions
@@ -776,6 +788,8 @@ begin
   returning transaction_id into v_par;
 
   alter table public.investment_transactions enable trigger user;
+
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted deferred;
 
   -- 55 of 50 units, whichever shape took them.
   select count(*) into v_n from public.withdrawal_ledger_audit
@@ -805,12 +819,14 @@ begin
   -- parent's bucket, so the audit has to as well: written without coalescing the
   -- inner test, `not (asset_type = 'fund' and ...)` is NULL for this row and it
   -- fell out of both branches.
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted immediate;
   alter table public.investment_transactions disable trigger user;
   insert into public.investment_transactions
     (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, units_withdrawn, principal_withdrawn)
   values (v_user, v_goal, v_fund, null, 'withdrawal', '2026-03-02', 250000, v_buy, 10, 400000)
   returning transaction_id into v_par_bare;
   alter table public.investment_transactions enable trigger user;
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted deferred;
 
   if not exists (select 1 from public.withdrawal_ledger_audit
                   where transaction_id = v_par_bare and check_name = 'parent_is_a_fund_purchase'
@@ -833,6 +849,8 @@ begin
   insert into public.savings_goals (user_id, goal_name) values (v_user, 'Derived units') returning goal_id into v_goal;
   insert into public.funds (user_id, name, code, fund_type, nav)
   values (v_user, 'Derived Fund', 'DRVF', 'equity', 10) returning id into v_fund;
+
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted immediate;
 
   alter table public.investment_transactions disable trigger user;
 
@@ -859,6 +877,8 @@ begin
   values (v_user, v_goal, v_fund, 'fund', 'withdrawal', '2026-03-01', 20, 2, 20);
 
   alter table public.investment_transactions enable trigger user;
+
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted deferred;
 
   select count(*) into v_n from public.withdrawal_ledger_audit
    where user_id = v_user and check_name = 'fund_bucket_overdrawn' and fund_id = v_fund;
@@ -888,6 +908,8 @@ begin
   insert into auth.users (id, email) values (gen_random_uuid(), 'wd-audit-nofund@test.invalid') returning id into v_user;
   insert into public.savings_goals (user_id, goal_name) values (v_user, 'No fund') returning goal_id into v_goal;
 
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted immediate;
+
   alter table public.investment_transactions disable trigger user;
 
   insert into public.funds (user_id, name, code, fund_type, nav)
@@ -905,6 +927,8 @@ begin
 
   alter table public.investment_transactions enable trigger user;
 
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted deferred;
+
   select detail into v_detail from public.withdrawal_ledger_audit
    where transaction_id = v_wd and check_name = 'parent_is_a_fund_purchase';
   if v_detail is null then
@@ -921,6 +945,7 @@ begin
   -- sentence: it IS valued — as an ordinary holding, with its withdrawal applied on
   -- the parent axis — so telling an operator nothing values it invites a repair
   -- that subtracts the money twice.
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted immediate;
   alter table public.investment_transactions disable trigger user;
   insert into public.investment_transactions
     (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
@@ -931,6 +956,7 @@ begin
   values (v_user, v_goal, null, 'withdrawal', '2026-02-01', 400000, v_zero, 400000)
   returning transaction_id into v_zero_wd;
   alter table public.investment_transactions enable trigger user;
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted deferred;
 
   select detail into v_detail from public.withdrawal_ledger_audit
    where transaction_id = v_zero_wd and check_name = 'parent_is_a_fund_purchase';
@@ -945,6 +971,7 @@ begin
   -- rows from the holdings pass, so the purchase is valued by nothing and neither
   -- is the claim on it. Saying it is "valued against that purchase" would be the
   -- same false comfort in the other direction.
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted immediate;
   alter table public.investment_transactions disable trigger user;
   insert into public.investment_transactions
     (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, is_dca_seeded)
@@ -955,6 +982,7 @@ begin
   values (v_user, v_goal, null, 'withdrawal', '2026-02-01', 400000, v_pending, 400000)
   returning transaction_id into v_pending_wd;
   alter table public.investment_transactions enable trigger user;
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted deferred;
 
   select detail into v_detail from public.withdrawal_ledger_audit
    where transaction_id = v_pending_wd and check_name = 'parent_is_a_fund_purchase';
@@ -986,6 +1014,7 @@ begin
   -- audit CANNOT see it, and this test exists so that silence is never mistaken for
   -- a guarantee: if someone later makes this ledger report, the header's claim has
   -- changed and both must be revisited together.
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted immediate;
   alter table public.investment_transactions disable trigger user;
   insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
   values (v_user, v_g, 'gold', 'investment', '2026-01-01', 1000, 100, 10) returning transaction_id into v_s;
@@ -994,6 +1023,8 @@ begin
          (v_user, v_g, 'gold', 'withdrawal', '2026-03-01', 1, v_s, 503, 50);
 
   alter table public.investment_transactions enable trigger user;
+
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted deferred;
 
   select count(*) into v_any from public.withdrawal_ledger_audit where user_id = v_user;
   if v_any <> 0 then

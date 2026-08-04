@@ -349,6 +349,21 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
         { status: 409 },
       )
     }
+    // A withdrawal is still drawn on this holding (#608). Deleting it would leave
+    // that cash filed under no holding at all — the ledger owes what nothing backs
+    // — so the invariant refuses it. A conflict the user resolves by removing the
+    // withdrawal first, not a fault, and 500 would call it one. Matched on the
+    // family prefix exactly as PUT and POST do, so a refusal added later cannot
+    // fall through as the wrong status.
+    if (error.message?.includes('withdrawal invariant:')) {
+      return NextResponse.json(
+        {
+          error: 'A withdrawal is recorded against this holding. Remove it before deleting the holding.',
+          code: 'withdrawal_invariant',
+        },
+        { status: 409 },
+      )
+    }
     console.error('investment-transactions delete: statement failed', error.message)
     return NextResponse.json({ error: 'Failed to delete transaction', code: 'delete_failed' }, { status: 500 })
   }
