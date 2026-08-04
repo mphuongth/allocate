@@ -27,9 +27,15 @@
 -- too, and only for children that are actually derived from it: one that RECORDS a
 -- positive units_withdrawn is read as written, so it must not freeze the edit.
 --
--- (The general case — lowering a holding's amount below what has already been
--- withdrawn — is the mirror hole 20260730000002 names in its header and #608 owns.
--- This is only the part #606 introduced by deriving from the parent's price.)
+-- (The general case — lowering a holding below what has already been withdrawn — is
+-- the mirror hole 20260730000002 names in its header and #608 owns. It is NOT
+-- special to legacy children: shrinking a fund purchase under an ordinary
+-- fund-keyed sell leaves the same bucket owing units it does not hold, today,
+-- unchanged by any of this. What #606 adds is that a legacy child now draws on the
+-- bucket like any other sell — so it joins that hole rather than making a new one,
+-- and the fix belongs where the whole class is fixed. What is guarded here is only
+-- the part #606 did introduce: the RATE such a child's units are derived at, which
+-- nothing but this edit can move.)
 --
 -- Scope, deliberately narrow:
 --   • Only a purchase with a non-fund-keyed child. An ordinary fund holding, whose
@@ -46,6 +52,10 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+declare
+  v_rate_kept        boolean;
+  v_max_principal    bigint;
+  v_derived_children int;
 begin
   if new.transaction_type is distinct from 'investment'
      or new.asset_type is distinct from 'fund' or new.fund_id is null then
@@ -84,17 +94,33 @@ begin
   -- re-measures. Only children that are actually derived from it are affected: one
   -- that RECORDS a positive units_withdrawn is read as written, whatever this
   -- purchase later costs, so it must not freeze an ordinary edit.
-  if (old.amount_vnd is distinct from new.amount_vnd or old.units is distinct from new.units)
-     and exists (
-       select 1
-         from public.investment_transactions w
-        where w.parent_transaction_id = new.transaction_id
-          and w.transaction_type = 'withdrawal'
-          and (w.asset_type is distinct from 'fund' or w.fund_id is null)
-          and coalesce(w.units_withdrawn, 0) <= 0
-     ) then
-    raise exception 'withdrawal invariant: fund purchase % cannot change its amount or units while a withdrawal that is not keyed by a fund derives its units from it',
-      new.transaction_id using errcode = 'check_violation';
+  if old.amount_vnd is distinct from new.amount_vnd or old.units is distinct from new.units then
+    -- What the RATE does to each derived child, rather than whether the columns
+    -- moved: `units x principal / amount` is unchanged by a proportional correction
+    -- (50 units / 2,000,000 restated as 100 / 4,000,000 takes exactly the same
+    -- quantity out of the bucket), and freezing both columns refused that edit for
+    -- no gain. The cap has to hold still too: the derivation is capped at the
+    -- purchase's own units, and that cap only ever binds for a child whose
+    -- principal exceeds the purchase's cost — so an edit is safe when the rate is
+    -- preserved and no derived child is in that position on either side of it.
+    v_rate_kept := coalesce(old.units, 0) > 0 and coalesce(old.amount_vnd, 0) > 0
+               and coalesce(new.units, 0) > 0 and coalesce(new.amount_vnd, 0) > 0
+               and old.units * new.amount_vnd = new.units * old.amount_vnd;
+
+    select coalesce(max(w.principal_withdrawn), 0), count(*)
+      into v_max_principal, v_derived_children
+      from public.investment_transactions w
+     where w.parent_transaction_id = new.transaction_id
+       and w.transaction_type = 'withdrawal'
+       and (w.asset_type is distinct from 'fund' or w.fund_id is null)
+       and coalesce(w.units_withdrawn, 0) <= 0;
+
+    if v_derived_children > 0
+       and not (v_rate_kept
+                and v_max_principal <= least(coalesce(old.amount_vnd, 0), coalesce(new.amount_vnd, 0))) then
+      raise exception 'withdrawal invariant: fund purchase % cannot change the rate a withdrawal that is not keyed by a fund derives its units at',
+        new.transaction_id using errcode = 'check_violation';
+    end if;
   end if;
 
   return new;

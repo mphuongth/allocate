@@ -1364,6 +1364,13 @@ begin
   exception when sqlstate '23514' then null;
   end;
 
+  -- A proportional correction leaves every derived quantity identical — the rate
+  -- `units x principal / amount` is what the child is read at — so it goes through.
+  update public.investment_transactions set units = 100, amount_vnd = 4000000, unit_price = 40000
+   where transaction_id = v_dep2;
+  update public.investment_transactions set units = 50, amount_vnd = 2000000, unit_price = 40000
+   where transaction_id = v_dep2;
+
   -- A legacy child that RECORDS its units is read as written, whatever this
   -- purchase later costs — so it must not freeze an ordinary edit. Give the child
   -- units and the same re-pricing goes through.
