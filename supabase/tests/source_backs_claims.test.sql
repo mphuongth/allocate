@@ -39,7 +39,9 @@ declare
   v_bank  uuid;
   v_gold  uuid;
   v_drift uuid;
+  v_tiny  uuid;
   v_stock uuid;
+  i       int;
   v_claimed bigint;
   v_msg   text;
 begin
@@ -168,33 +170,39 @@ begin
   set constraints all immediate;
   set constraints all deferred;
 
-  -- The allowance is ONE đồng however many sales there are, not one per sale.
-  -- Each sale is measured against the balance earlier sales left, so every
-  -- allowance after the first is granted against an already-inflated remainder and
-  -- the aggregate can only ever drift by one — which is why the four sales above
-  -- land on 101 rather than 104. Counting them would buy real overdraw.
+  -- The allowance is a đồng PER SALE, because the proportional branch has no
+  -- running total and no carve-out at zero: once the remaining basis rounds to
+  -- nothing, every further sale may still take its đồng. The audit suite's own
+  -- legal fixture is the extreme of it — a 1 đồng / 5 chỉ holding sold in three
+  -- 1-unit slices, three đồng out of one, every write accepted. Measured with a
+  -- flat đồng that holding could not even have its units GROWN.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal, 'gold', 'investment', '2026-01-01', 1, 5, 1) returning transaction_id into v_tiny;
+  for i in 1..3 loop
+    insert into public.investment_transactions
+      (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
+    values (v_user, v_goal, 'gold', 'withdrawal', '2026-02-01', 1, v_tiny, 1, 1);
+  end loop;
+  update public.investment_transactions set units = 6 where transaction_id = v_tiny;
+  set constraints all immediate;
+  set constraints all deferred;
+
+  -- Per sale is not unbounded, and it still rounds a real balance rather than
+  -- creating one: emptied to nothing, the holding gets no đồng at all.
   begin
-    update public.investment_transactions set amount_vnd = 99 where transaction_id = v_drift;
+    update public.investment_transactions set amount_vnd = 0 where transaction_id = v_tiny;
     set constraints all immediate;
-    raise exception 'the đồng of rounding is one in total, not one per sale';
+    raise exception 'an emptied holding must not inherit the rounding allowance';
   exception when sqlstate '23514' then null;
   end;
   set constraints all deferred;
 
+  -- Back on the four-sale ledger: four sales buy four đồng and no more.
   begin
     update public.investment_transactions set amount_vnd = 96 where transaction_id = v_drift;
     set constraints all immediate;
     raise exception 'shrinking past the per-sale rounding allowance must be refused';
-  exception when sqlstate '23514' then null;
-  end;
-  set constraints all deferred;
-
-  -- And it rounds a real balance rather than creating one: a holding emptied to
-  -- nothing is measured exactly, with no đồng of slack to spend.
-  begin
-    update public.investment_transactions set amount_vnd = 0, units = 0 where transaction_id = v_drift;
-    set constraints all immediate;
-    raise exception 'an emptied holding must not inherit the rounding allowance';
   exception when sqlstate '23514' then null;
   end;
   set constraints all deferred;
@@ -341,6 +349,21 @@ begin
   -- One unit further and the parented claim is what tips it: 60 fund-keyed units
   -- would still fit inside the 79 left. Before #606 this claim was invisible to
   -- the bucket, so the edit passed.
+  -- NULLING the units is not the same as zeroing them, and it is worse: the
+  -- dashboard drops a fund row with null units outright (the pending-DCA
+  -- exclusion), so the purchase stops being valued at all. With a legacy claim
+  -- parented to it, BOTH leave the dashboard together — no overdraw to find,
+  -- because the holding and what draws on it vanish at the same time. The bucket
+  -- recheck cannot see it either: its join excludes a purchase with no units, and
+  -- so excludes that purchase's claim with it.
+  begin
+    update public.investment_transactions set units = null where transaction_id = v_buy_b;
+    set constraints all immediate;
+    raise exception 'nulling the units of a purchase carrying a claim must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+  set constraints all deferred;
+
   begin
     update public.investment_transactions set units = 19, amount_vnd = 380000 where transaction_id = v_buy_b;
     set constraints all immediate;

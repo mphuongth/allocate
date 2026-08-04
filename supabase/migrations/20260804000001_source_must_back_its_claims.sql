@@ -181,32 +181,39 @@ as $$
 declare
   -- ── how much rounding this side must forgive, and no more ────────────────
   --
-  -- The withdrawal side's tolerances are per sale, so summing many claims looks at
-  -- first like it should sum many tolerances. It does not, and getting that wrong
-  -- is over-permissive in a way that reopens this migration's own hole. Each sale
-  -- is measured against the balance EARLIER SALES LEFT, so every allowance after
-  -- the first is granted against an already-inflated remainder: u₂ ≤ (held − u₁) +
-  -- ε gives u₁ + u₂ ≤ held + ε, whatever the count. The aggregate can exceed the
-  -- holding by exactly ONE epsilon. (The four-sale gold ledger below drifts by one
-  -- đồng, not four — which is the same statement from the other direction.)
+  -- The withdrawal side's tolerances are per sale, and whether they ACCUMULATE
+  -- across a ledger turns on one detail that differs between the two: what happens
+  -- when the holding runs out. Getting it wrong is over-permissive one way and
+  -- makes legal ledgers uneditable the other, and this file has now been wrong in
+  -- both directions.
   --
-  -- WHO gets the đồng: gold, and only gold. check_withdrawal_balance runs the
-  -- proportional branch for a quantity-valued holding — where the principal is the
-  -- rounded share of the remaining basis and may land a đồng either way — and caps
-  -- bank and stock outright at `principal_withdrawn > v_left`. Claims on those can
-  -- never sum past the holding, so slack there is not forgiveness of rounding, it
-  -- is a đồng of real overdraw: a 100 stock holding with an 80 withdrawal was
-  -- editable down to 79, and the dashboard values that at −1.
+  -- UNITS do not accumulate. The bound is `v_left_units + (case when v_left_units >
+  -- 0 then ε else 0)` — the epsilon is WITHHELD at zero, so it never rounds an
+  -- empty holding upward. Each sale is measured against what earlier sales left,
+  -- so u₂ ≤ (held − u₁) + ε gives u₁ + u₂ ≤ held + ε whatever the count. Counting
+  -- them let a 10-unit sold gold holding be restated at 9.99985.
   --
-  -- The units epsilon is not asset-keyed, because the units bound it comes from is
-  -- not either: clients round units_withdrawn to four decimals, so a full sell of
-  -- any quantity-valued holding can post a hair more than it holds.
+  -- PRINCIPAL does accumulate, and only for gold. The proportional branch has no
+  -- running total at all — it checks `abs(principal − round(share)) ≤ 1`, with no
+  -- carve-out at zero. So when the remaining basis rounds to nothing every further
+  -- sale may still take its đồng: the audit suite's own legal fixture is a 1 đồng /
+  -- 5 chỉ holding sold in three 1-unit slices, three đồng out of one, every write
+  -- accepted (withdrawal_ledger_audit.test.sql — "'Σ principal ≤ basis' was never
+  -- the invariant's rule for gold"). A flat đồng made that holding uneditable: even
+  -- GROWING its units was refused. So the principal allowance is one đồng per
+  -- quantity-valued sale.
   --
-  -- Both round a REAL balance and never create one — applied to a holding emptied
-  -- to nothing they would hand it slack it never had, the same carve-out the
-  -- withdrawal side makes for its own epsilon.
+  -- And gold ALONE. check_withdrawal_balance caps bank and stock outright at
+  -- `principal_withdrawn > v_left`, so their claims can never sum past the holding
+  -- and slack there forgives no rounding — it is a đồng of real overdraw. A 100
+  -- stock holding with an 80 withdrawal was editable down to 79, which the
+  -- dashboard values at minus one.
+  --
+  -- Both round a REAL balance and never create one: applied to a holding emptied to
+  -- nothing they would hand it slack it never had, the same carve-out the units
+  -- bound above makes for itself.
   c_units_epsilon constant numeric := 0.0001;
-  c_dong_epsilon  constant bigint  := 1;
+  v_priced        int;
   v_allow         bigint  := 0;
   v_allow_units   numeric := 0;
   v_out_principal bigint;
@@ -230,8 +237,9 @@ begin
   -- What is drawn on this row, summed the way check_withdrawal_balance's parent
   -- branch sums it — a fund-keyed sibling draws on its own bucket whatever it
   -- names as a parent, so counting it here would charge it twice.
-  select coalesce(sum(w.principal_withdrawn), 0), coalesce(sum(w.units_withdrawn), 0)
-    into v_out_principal, v_out_units
+  select coalesce(sum(w.principal_withdrawn), 0), coalesce(sum(w.units_withdrawn), 0),
+         count(*) filter (where coalesce(w.units_withdrawn, 0) > 0)
+    into v_out_principal, v_out_units, v_priced
     from public.investment_transactions w
    where w.parent_transaction_id = src.transaction_id
      and w.transaction_type = 'withdrawal'
@@ -243,10 +251,24 @@ begin
   -- values no balance for it, so every claim parented to it is unbacked. That is
   -- the same hole reached through transaction_type instead of amount_vnd, which
   -- is why the trigger watches that column too.
-  v_have       := case when src.transaction_type = 'investment' then coalesce(src.amount_vnd, 0) else 0 end;
-  v_have_units := case when src.transaction_type = 'investment' then coalesce(src.units, 0) else 0 end;
+  -- A fund row with NULL units is the same statement in the dashboard's own words:
+  -- lib/dashboardOverview drops it from `investments` outright (the pending-DCA
+  -- exclusion), so it is valued at nothing whatever its amount_vnd says. Nulling
+  -- the units of a purchase carrying a legacy parented claim therefore took BOTH
+  -- out of the dashboard at once — no overdraw to find, because the holding and its
+  -- claim vanished together, which is worse than the overdraw this file exists to
+  -- refuse. `units = 0` is NOT this case: that row is still valued, just as an
+  -- ordinary holding rather than a fund bucket.
+  if src.transaction_type is distinct from 'investment'
+     or (src.asset_type = 'fund' and src.units is null) then
+    v_have       := 0;
+    v_have_units := 0;
+  else
+    v_have       := coalesce(src.amount_vnd, 0);
+    v_have_units := coalesce(src.units, 0);
+  end if;
 
-  if v_have > 0 and src.asset_type = 'gold' then v_allow := c_dong_epsilon; end if;
+  if v_have > 0 and src.asset_type = 'gold' then v_allow := v_priced; end if;
   if v_have_units > 0 then v_allow_units := c_units_epsilon; end if;
 
   -- The balances the messages report are the REAL ones, not the allowance-inflated
