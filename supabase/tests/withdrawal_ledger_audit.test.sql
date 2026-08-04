@@ -883,7 +883,7 @@ end $$;
 do $$
 declare
   v_user uuid; v_goal uuid; v_orphan uuid; v_wd uuid; v_detail text;
-  v_nofund_fund uuid; v_zero uuid; v_zero_wd uuid;
+  v_nofund_fund uuid; v_zero uuid; v_zero_wd uuid; v_pending uuid; v_pending_wd uuid;
 begin
   insert into auth.users (id, email) values (gen_random_uuid(), 'wd-audit-nofund@test.invalid') returning id into v_user;
   insert into public.savings_goals (user_id, goal_name) values (v_user, 'No fund') returning goal_id into v_goal;
@@ -939,6 +939,30 @@ begin
   end if;
   if v_detail not like '%holds no units%' then
     raise exception 'the detail must say the purchase holds no units, got: %', v_detail;
+  end if;
+
+  -- A PENDING seed (units null) is a third case again: the overview drops those
+  -- rows from the holdings pass, so the purchase is valued by nothing and neither
+  -- is the claim on it. Saying it is "valued against that purchase" would be the
+  -- same false comfort in the other direction.
+  alter table public.investment_transactions disable trigger user;
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, is_dca_seeded)
+  values (v_user, v_goal, v_nofund_fund, 'fund', 'investment', '2026-01-01', 1000000, null, null, false)
+  returning transaction_id into v_pending;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn)
+  values (v_user, v_goal, null, 'withdrawal', '2026-02-01', 400000, v_pending, 400000)
+  returning transaction_id into v_pending_wd;
+  alter table public.investment_transactions enable trigger user;
+
+  select detail into v_detail from public.withdrawal_ledger_audit
+   where transaction_id = v_pending_wd and check_name = 'parent_is_a_fund_purchase';
+  if v_detail like '%valued against%' then
+    raise exception 'a claim on a pending seed is valued by nothing; the audit said: %', v_detail;
+  end if;
+  if v_detail not like '%nothing values either row%' then
+    raise exception 'the detail must say neither row is valued, got: %', v_detail;
   end if;
 
   raise notice 'withdrawal_ledger_audit: no bucket, no claim that the row was valued';
