@@ -180,6 +180,29 @@ begin
   set constraints all immediate;
   set constraints all deferred;
 
+  -- Clearing the UNITS is the quietest way out of a bucket, and the one a
+  -- column-by-column guard misses: the fund, the asset type, the goal and the
+  -- transaction type are all untouched, so nothing about the row says it moved —
+  -- but the dashboard keys a fund holding on `units`, so the purchase disappears
+  -- from the bucket and the sale stays. The row is measured on the parent axis by
+  -- then, where a fund-keyed sell does not appear at all.
+  begin
+    update public.investment_transactions set units = 0 where transaction_id = v_buy;
+    set constraints all immediate;
+    raise exception 'clearing a fund purchase''s units under a sale must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+  set constraints all deferred;
+
+  -- Null is the same act spelled differently, and the PUT route accepts both.
+  begin
+    update public.investment_transactions set units = null where transaction_id = v_buy;
+    set constraints all immediate;
+    raise exception 'nulling a fund purchase''s units under a sale must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+  set constraints all deferred;
+
   -- Leaving the fund takes the purchase out of the bucket entirely, which is the
   -- same subtraction as shrinking it to nothing.
   begin

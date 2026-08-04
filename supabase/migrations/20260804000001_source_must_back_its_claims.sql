@@ -72,6 +72,105 @@
 -- fires no FK update at all and there is nothing to catch. Its bucket answers
 -- instead, at commit, where the deleted row has already left the sums.
 
+-- ─── Why the bucket check takes a lock ───────────────────────────────────────
+--
+-- check_fund_bucket_solvent reads its two sums unlocked, which was enough while a
+-- relocation was the only thing that called it. Measuring EDITS through it opens
+-- an interleaving nothing serializes: two transactions shrinking DIFFERENT
+-- purchases of one bucket each lock only their own row, each reads the other at
+-- its old size, and both pass. Verified against the local stack — two 50-unit
+-- purchases and a 60-unit sale, each purchase edited to 20 in a concurrent
+-- session: both committed, 40 units left backing 60, no error.
+--
+-- The row lock the withdrawal side uses (SELECT ... FOR UPDATE over the bucket in
+-- transaction_id order) cannot be reused here. It works there because the sale
+-- takes every lock itself, in one order; an EDIT already holds the lock on the row
+-- it is changing before any check runs, so two edits enter with locks held in
+-- opposite orders and would deadlock instead of serialising.
+--
+-- So the bucket takes ONE lock, on the bucket itself, keyed by (user, fund, goal)
+-- — a transaction-scoped advisory lock, released at commit like any other. The
+-- loser waits, and its next statement then reads a fresh snapshot containing the
+-- winner's committed edit, which is exactly the balance it should be measured
+-- against. Edits against SALES need nothing new: a sale locks the purchase rows,
+-- an edit holds one of them, so those two already serialise.
+--
+-- A hash collision costs a wait between two unrelated buckets and nothing else.
+-- A statement that touches two buckets (a relocation measures both ends) takes two
+-- of these locks, so two simultaneous and opposite relocations of one fund can
+-- still deadlock; Postgres aborts one of them, and the invariant holds either way.
+-- Re-issued rather than wrapped: the arithmetic below is verbatim from
+-- 20260803000004 and stays the only copy, with the lock taken ahead of it.
+create or replace function public.check_fund_bucket_solvent(p_user uuid, p_fund uuid, p_goal uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_units      numeric;
+  v_out_units  numeric;
+  v_basis      bigint;
+  v_out_basis  bigint;
+  v_par_units  numeric;
+  v_par_basis  bigint;
+begin
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(p_user::text || ':' || p_fund::text || ':' || coalesce(p_goal::text, ''), 0));
+
+  select coalesce(sum(t.units), 0), coalesce(sum(t.amount_vnd), 0)
+    into v_units, v_basis
+    from public.investment_transactions t
+   where t.user_id = p_user and t.fund_id = p_fund and t.asset_type = 'fund'
+     and t.transaction_type = 'investment'
+     and t.goal_id is not distinct from p_goal
+     and t.renewed_from_transaction_id is null
+     and t.units is not null;
+
+  select coalesce(sum(w.units_withdrawn), 0), coalesce(sum(w.principal_withdrawn), 0)
+    into v_out_units, v_out_basis
+    from public.investment_transactions w
+   where w.user_id = p_user and w.fund_id = p_fund and w.asset_type = 'fund'
+     and w.transaction_type = 'withdrawal'
+     and w.goal_id is not distinct from p_goal;
+
+  -- The legacy claims, priced the way the reader prices them: recorded units when
+  -- there are any, the capped pro-rata share of the named purchase when there are
+  -- not. Keyed by the PURCHASE's goal, because that is the bucket it draws on.
+  select coalesce(sum(case when coalesce(w.units_withdrawn, 0) > 0 then w.units_withdrawn
+                           else least(p.units, p.units * coalesce(w.principal_withdrawn, 0) / p.amount_vnd)
+                      end), 0),
+         coalesce(sum(coalesce(w.principal_withdrawn, 0)), 0)
+    into v_par_units, v_par_basis
+    from public.investment_transactions w
+    join public.investment_transactions p
+      on p.transaction_id = w.parent_transaction_id
+   where w.user_id = p_user
+     and w.transaction_type = 'withdrawal'
+     and (w.asset_type is distinct from 'fund' or w.fund_id is null)
+     and p.transaction_type = 'investment'
+     and p.asset_type = 'fund'
+     and p.fund_id = p_fund
+     and p.goal_id is not distinct from p_goal
+     and coalesce(p.units, 0) > 0
+     and coalesce(p.amount_vnd, 0) > 0;
+
+  v_out_units := v_out_units + v_par_units;
+  v_out_basis := v_out_basis + v_par_basis;
+
+  if v_out_units > v_units + 0.0001 or v_out_basis > v_basis + 1 then
+    raise exception 'withdrawal invariant: this fund bucket would be left owing % units / % of basis it does not hold',
+      v_out_units - v_units, v_out_basis - v_basis using errcode = 'check_violation';
+  end if;
+end;
+$$;
+
+comment on function public.check_fund_bucket_solvent(uuid, uuid, uuid) is
+  'Raises when a (goal, fund) bucket would be left owing more units or basis than its purchases hold, under a lock on the bucket so two concurrent edits of it cannot both pass (#587, #606, #608).';
+
+revoke all on function public.check_fund_bucket_solvent(uuid, uuid, uuid) from public;
+revoke all on function public.check_fund_bucket_solvent(uuid, uuid, uuid) from anon, authenticated;
+
 -- ── the measurement ─────────────────────────────────────────────────────────
 create or replace function public.check_source_backs_claims(src public.investment_transactions)
 returns void
@@ -170,12 +269,21 @@ begin
   -- Deleting the fund itself needs no exemption here: it clears fund_id on the
   -- purchases and the sells alike, so the old bucket is empty on both sides and
   -- the check is 0 against 0.
+  --
+  -- Stated as "was a bucket, and is not still THAT bucket" rather than as a list
+  -- of the columns that can move it. As a list it missed the quietest way out:
+  -- clearing `units` alone. The PUT route accepts both 0 and null there, and
+  -- neither the fund, the asset type, the goal nor the transaction type changes —
+  -- so a 100-unit purchase backing a 60-unit sale was emptied and committed, the
+  -- dashboard dropped the purchase (it keys a fund holding on `units`), and the
+  -- sale stayed. The row itself is measured on the parent axis by then, where a
+  -- fund-keyed sell does not appear at all, so nothing else was going to catch it.
   if old.transaction_type = 'investment' and old.asset_type = 'fund'
      and old.fund_id is not null and coalesce(old.units, 0) > 0
-     and (old.fund_id is distinct from new.fund_id
-          or old.asset_type is distinct from new.asset_type
-          or old.goal_id is distinct from new.goal_id
-          or old.transaction_type is distinct from new.transaction_type) then
+     and not (new.transaction_type = 'investment' and new.asset_type = 'fund'
+              and new.fund_id is not distinct from old.fund_id
+              and new.goal_id is not distinct from old.goal_id
+              and coalesce(new.units, 0) > 0) then
     perform public.check_fund_bucket_solvent(old.user_id, old.fund_id, old.goal_id);
   end if;
 

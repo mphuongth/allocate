@@ -174,6 +174,55 @@ test.describe('withdrawal balance enforcement (#587)', () => {
   // fund_id is ON DELETE SET NULL too, so deleting a fund orphans its sells
   // through the same kind of update as deleting a deposit. Same failure mode, a
   // different route — and the helpers hide it the same way.
+  // The source side has its own race, and it is not the sells' one: two edits
+  // shrinking DIFFERENT purchases of the SAME bucket. Each locks only its own row,
+  // so each read the other at full size and both passed — two 50-unit purchases
+  // and a 60-unit sale, edited to 20 each, left 40 units backing 60 with no error.
+  // The bucket check now takes a lock on the bucket itself, which only a real
+  // stack with two connections can show.
+  test('two edits racing to shrink the same fund bucket: exactly one wins', async ({ request }) => {
+    const fund = await api.createFund({
+      name: `E2E WdBalance Race ${Date.now()}`,
+      code: `WBR${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+      fund_type: 'equity',
+      nav: 20_000,
+    })
+    const buys = await Promise.all([1, 2].map((n) => api.createTransaction({
+      asset_type: 'fund', fund_id: fund.id, goal_id: goalId,
+      amount_vnd: 1_000_000, units: 50, unit_price: 20_000,
+      investment_date: `2026-01-0${n}`, notes: 'E2E wd balance race',
+    })))
+    const sell = await request.post('/api/v1/investment-transactions', {
+      data: {
+        transaction_type: 'withdrawal', asset_type: 'fund', fund_id: fund.id,
+        investment_date: '2026-02-01', amount_vnd: 1_200_000,
+        units_withdrawn: 60, principal_withdrawn: 1_200_000, goal_id: goalId,
+        notes: 'E2E wd balance race',
+      },
+    })
+    expect(sell.status()).toBe(201)
+
+    try {
+      // Either edit alone leaves 70 units backing 60 and is fine. Both together
+      // leave 40, so exactly one may land.
+      const shrink = (id: string) => request.put(`/api/v1/investment-transactions/${id}`,
+        { data: { amount_vnd: 400_000, units: 20 } })
+      const [a, b] = await Promise.all([shrink(buys[0].transaction_id), shrink(buys[1].transaction_id)])
+      expect([a.status(), b.status()].sort()).toEqual([200, 400])
+
+      // And the bucket agrees: 70 units still held against the 60 sold.
+      const listed = await (await request.get(
+        `/api/v1/investment-transactions?goal_id=${goalId}&limit=100`)).json()
+      const held = (listed.transactions as Array<{ transaction_type: string; units: number | null }>)
+        .filter((t) => t.transaction_type === 'investment')
+        .reduce((sum, t) => sum + (t.units ?? 0), 0)
+      expect(held).toBe(70)
+    } finally {
+      await api.deleteAllTransactionsByNotes('E2E wd balance race')
+      await api.deleteFund(fund.id)
+    }
+  })
+
   test('a fund that has been sold from can still be deleted', async ({ request }) => {
     const fund = await api.createFund({
       name: `E2E WdBalance Del ${Date.now()}`,
