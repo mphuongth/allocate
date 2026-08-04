@@ -48,12 +48,9 @@ begin
       using errcode = 'no_data_found';
   end if;
 
-  -- The shared assertion compares against p_investment_date. It allows a
-  -- historical record before the cutoff even after the book has matured, while
-  -- the INSERT trigger below remains the database backstop for every writer.
-  perform public.assert_accumulating_book_topup_allowed(
-    p_book_id, v_anchor.user_id, p_investment_date
-  );
+  -- The INSERT trigger applies the shared assertion using p_investment_date.
+  -- Keep this SECURITY INVOKER RPC from calling that private helper directly:
+  -- authenticated callers are deliberately not granted EXECUTE on it.
 
   insert into public.investment_transactions (
     user_id, goal_id, asset_type, transaction_type, amount_vnd,
