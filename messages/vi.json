@@ -890,6 +890,7 @@
     "merge_target": "Đã có khoản tất toán được gộp vào sổ này nên không thể xoá.",
     "settlement_pending": "Có khoản tất toán đang chờ gộp vào sổ này. Hãy huỷ khoản chờ gộp trước.",
     "referenced": "Bản ghi khác vẫn tham chiếu tới giao dịch này. Hãy gỡ tham chiếu đó trước khi xoá.",
+    "withdrawal_invariant": "Có khoản rút/bán ghi nhận trên khoản này. Hãy xoá khoản rút/bán đó trước khi xoá.",
     "not_found": "Giao dịch này không còn tồn tại.",
     "delete_failed": "Không xoá được giao dịch. Vui lòng thử lại.",
     "network": "Lỗi kết nối — giao dịch chưa được xoá.",
