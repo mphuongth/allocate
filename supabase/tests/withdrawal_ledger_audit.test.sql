@@ -261,12 +261,21 @@ begin
   insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id)
   values (v_user, v_goal_b, 'fund', 'investment', '2026-03-01', 999, 100, 10, v_late_fund);
 
-  -- An orphan bucket the invariant itself allows. A 0.0001-unit sell worth a đồng
-  -- is left behind when its purchase moves to another goal: check_fund_bucket_solvent
-  -- (#587) refuses a relocation only when the bucket would be left owing MORE than
-  -- 0.0001 units or one đồng, so this state is reachable with every trigger enabled.
-  -- A purchase-less bucket is therefore not corrupt by itself, and calling it one
-  -- would hand an operator a repair to make on a ledger nobody wrote wrong.
+  -- An orphan bucket: a 0.0001-unit sell worth a đồng, left behind when its
+  -- purchase moved to another goal. A purchase-less bucket is not corrupt by
+  -- itself, and calling it one would hand an operator a repair to make on a ledger
+  -- nobody wrote wrong — which is what this fixture is here to prove.
+  --
+  -- It used to be reachable with every trigger enabled, because
+  -- check_fund_bucket_solvent's units epsilon was flat: a bucket left owing
+  -- EXACTLY 0.0001 units passed. #608 withholds that epsilon when the bucket holds
+  -- no units, the same carve-out check_withdrawal_balance always made for its own —
+  -- it forgives a client's rounding of a real balance, it does not conjure one.
+  -- Flat, it also let a 0.0001-unit purchase backing a 0.0001-unit sale be edited
+  -- to zero units, after which the purchase left the fund accumulator and its whole
+  -- principal reappeared on the dashboard. So the relocation is refused now, and
+  -- the bucket is planted the way every other unreachable shape in this file is.
+  -- What the audit must say about it is unchanged.
   insert into public.savings_goals (user_id, goal_name) values (v_user, 'Orphan target') returning goal_id into v_orphan_goal;
   insert into public.funds (user_id, name, code, fund_type, nav)
   values (v_user, 'Orphan Fund', 'ORPH', 'equity', 1) returning id into v_orphan_fund;
@@ -275,7 +284,11 @@ begin
   insert into public.investment_transactions
     (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, fund_id, principal_withdrawn, units_withdrawn)
   values (v_user, v_goal_b, 'fund', 'withdrawal', '2026-02-01', 1, v_orphan_fund, 1, 0.0001);
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted immediate;
+  alter table public.investment_transactions disable trigger user;
   update public.investment_transactions set goal_id = v_orphan_goal where transaction_id = v_orphan_buy;
+  alter table public.investment_transactions enable trigger user;
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted deferred;
 
   -- ═══ the planted violations ════════════════════════════════════════════════
   -- Disabling the user triggers is the only way in: these are precisely the shapes

@@ -274,6 +274,8 @@ declare
   v_other uuid;
   v_fund_t uuid;
   v_buy_t uuid;
+  v_fund_e uuid;
+  v_buy_e uuid;
   i       int;
   v_msg   text;
 begin
@@ -333,6 +335,29 @@ begin
     update public.investment_transactions set units = null where transaction_id = v_buy;
     set constraints all immediate;
     raise exception 'nulling a fund purchase''s units under a sale must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+  set constraints all deferred;
+
+  -- The units epsilon is withheld when the bucket holds none. Flat, it forgave the
+  -- one edit that empties a bucket whose whole quantity IS an epsilon: a
+  -- 0.0001-unit purchase backing a 0.0001-unit sale, taken to zero units, passed
+  -- because 0.0001 > 0 + 0.0001 is false. The purchase then leaves the fund
+  -- accumulator, is valued as an ordinary holding, and its whole principal
+  -- reappears on the dashboard while the sale has nothing left to reduce.
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Epsilon Fund', 'EPSF', 'equity', 20000) returning id into v_fund_e;
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal, v_fund_e, 'fund', 'investment', '2026-01-01', 1000000, 0.0001, 20000) returning transaction_id into v_buy_e;
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, principal_withdrawn, units_withdrawn)
+  values (v_user, v_goal, v_fund_e, 'fund', 'withdrawal', '2026-02-01', 1000000, 1000000, 0.0001);
+
+  begin
+    update public.investment_transactions set units = 0 where transaction_id = v_buy_e;
+    set constraints all immediate;
+    raise exception 'an epsilon-sized bucket must not be emptied on the epsilon';
   exception when sqlstate '23514' then null;
   end;
   set constraints all deferred;

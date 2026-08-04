@@ -203,7 +203,14 @@ begin
   -- emptying a bucket that has sold units is refused there whatever the basis says.
   v_sales     := v_sales + v_par_count;
 
-  if v_out_units > v_units + 0.0001 or v_out_basis > v_basis + v_sales then
+  -- The units epsilon is WITHHELD when the bucket holds none, the same carve-out
+  -- check_withdrawal_balance makes for its own: it forgives a client's rounding of
+  -- a real balance, it does not conjure one. Flat, it let a 0.0001-unit purchase
+  -- backing a 0.0001-unit sale be edited to zero units — the purchase then leaves
+  -- the fund accumulator and is valued as an ordinary holding, so its whole
+  -- principal reappears on the dashboard while the sale has nothing left to reduce.
+  if v_out_units > v_units + (case when v_units > 0 then 0.0001 else 0 end)
+     or v_out_basis > v_basis + v_sales then
     raise exception 'withdrawal invariant: this fund bucket would be left owing % units / % of basis it does not hold',
       v_out_units - v_units, v_out_basis - v_basis using errcode = 'check_violation';
   end if;
