@@ -213,12 +213,27 @@ describe('buildWithdrawalMaps', () => {
       expect(fundWdMapAll.get('goal-1::fund-1')).toEqual({ units: 50, cost: 9_000_000 })
     })
 
-    it('derives no units from a purchase that records none (a pending DCA seed)', () => {
+    // A purchase with no units is no bucket: lib/dashboardOverview keys a fund
+    // holding on `asset_type === 'fund' && tx.units`, so a pending DCA seed (units
+    // null) or a zero-unit purchase is valued as an ordinary holding — reduced
+    // through the PARENT map. Redirecting there would file the claim where nothing
+    // reads it and give the purchase its principal back.
+    it('leaves a withdrawal on the parent axis when the purchase records no units', () => {
       const wd = makeWithdrawal({
         parent_transaction_id: 'buy-1', units_withdrawn: null, principal_withdrawn: 500_000,
       })
-      const { fundWdMapAll } = buildWithdrawalMaps([wd], [{ ...buy, units: null }])
-      expect(fundWdMapAll.get('goal-1::fund-1')).toEqual({ units: 0, cost: 500_000 })
+      const { fundWdMapAll, parentWdMapAll } = buildWithdrawalMaps([wd], [{ ...buy, units: null }])
+      expect(fundWdMapAll.size).toBe(0)
+      expect(parentWdMapAll.get('buy-1')).toEqual({ principal: 500_000, units: 0 })
+    })
+
+    it('leaves it on the parent axis for a zero-unit purchase too', () => {
+      const wd = makeWithdrawal({
+        parent_transaction_id: 'buy-1', units_withdrawn: null, principal_withdrawn: 500_000,
+      })
+      const { fundWdMapAll, parentWdMapAll } = buildWithdrawalMaps([wd], [{ ...buy, units: 0 }])
+      expect(fundWdMapAll.size).toBe(0)
+      expect(parentWdMapAll.get('buy-1')).toEqual({ principal: 500_000, units: 0 })
     })
 
     it('keeps the progress axis: an affects_progress=false row is valued but not progressed', () => {

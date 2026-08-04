@@ -1177,6 +1177,61 @@ $$;
 rollback;
 
 begin;
+
+-- ── a relocation must count the claims the reader counts (#606) ──────────────
+-- Two purchases in one bucket, a 45-unit fund-keyed sell and a legacy 10-unit
+-- claim parented to the first. Moving the SECOND purchase out leaves 50 units
+-- backing 55 — the bucket solvency check saw only the fund-keyed 45 and waved it
+-- through, and the dashboard then subtracts all 55 and drops the holding.
+do $$
+declare
+  v_user uuid; v_goal uuid; v_goal_b uuid; v_fund uuid; v_buy_a uuid; v_buy_b uuid;
+begin
+  insert into auth.users (id, email) values (gen_random_uuid(), 'bucketmove@test.invalid') returning id into v_user;
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Bucket') returning goal_id into v_goal;
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Elsewhere') returning goal_id into v_goal_b;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Move Fund', 'MVF', 'equity', 25000) returning id into v_fund;
+
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal, v_fund, 'fund', 'investment', '2026-01-01', 2000000, 50, 40000)
+  returning transaction_id into v_buy_a;
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal, v_fund, 'fund', 'investment', '2026-01-02', 2000000, 50, 40000)
+  returning transaction_id into v_buy_b;
+
+  -- 45 of the bucket's 100 units, keyed by the fund: an ordinary sell.
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units_withdrawn, principal_withdrawn)
+  values (v_user, v_goal, v_fund, 'fund', 'withdrawal', '2026-02-01', 1125000, 45, 1800000);
+
+  -- The legacy claim on purchase A (planted with the trigger off — no longer writable).
+  alter table public.investment_transactions disable trigger user;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, units_withdrawn, principal_withdrawn)
+  values (v_user, v_goal, null, 'withdrawal', '2026-03-01', 250000, v_buy_a, 10, 400000);
+  alter table public.investment_transactions enable trigger user;
+
+  begin
+    update public.investment_transactions set goal_id = v_goal_b where transaction_id = v_buy_b;
+    raise exception 'moving a purchase out from under the claims on its bucket must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- Moving the purchase the claim NAMES takes the claim with it — the claim is
+  -- keyed by its parent's goal — so the bucket it leaves is short of nothing.
+  update public.investment_transactions set goal_id = v_goal_b where transaction_id = v_buy_a;
+
+  raise notice 'a relocation counts parented claims: ok';
+end;
+$$;
+
+rollback;
+
+begin;
+
 -- ── a fund sale is keyed by its fund, not parented to the purchase (#606) ─────
 -- The reader values a withdrawal parented to a fund purchase against that
 -- purchase's (goal, fund) bucket. This function measured the same row against the
@@ -1412,8 +1467,11 @@ begin
   alter table public.investment_transactions enable trigger user;
 
   -- Step one is legal on its own: as a fund-keyed sell it draws on the bucket.
+  -- (units set too, so flipping it back would produce a real bucket purchase —
+  -- one with no units is no bucket and none of this applies.)
   update public.investment_transactions
      set transaction_type = 'withdrawal', asset_type = 'fund', fund_id = v_fund3,
+         units = 50, unit_price = 40000,
          units_withdrawn = 10, principal_withdrawn = 400000, amount_vnd = 250000
    where transaction_id = v_dep4;
 

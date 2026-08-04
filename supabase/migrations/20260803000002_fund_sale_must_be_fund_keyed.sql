@@ -30,6 +30,7 @@ declare
   -- The parent as the SHAPE check sees it, read under a lock (below).
   v_shape_asset text;
   v_shape_fund  uuid;
+  v_shape_units numeric;
 begin
   if tg_op = 'UPDATE' then
     -- Deleting a source is an ordinary ledger action, and BOTH links a withdrawal
@@ -128,15 +129,18 @@ begin
     -- waved through. Taking the lock here makes the two serialize whichever wins:
     -- this statement re-reads the committed parent and refuses, or the conversion
     -- waits and finds the child.
-    select p.asset_type, p.fund_id
-      into v_shape_asset, v_shape_fund
+    select p.asset_type, p.fund_id, coalesce(p.units, 0)
+      into v_shape_asset, v_shape_fund, v_shape_units
       from public.investment_transactions p
      where p.transaction_id = new.parent_transaction_id
        and p.user_id = new.user_id
        and p.transaction_type = 'investment'
        for update;
 
-    if v_shape_asset = 'fund' and v_shape_fund is not null
+    -- `units > 0` for the same reason lib/withdrawalProgress asks it: a purchase
+    -- with no units is no bucket — the dashboard values it as an ordinary holding —
+    -- so a withdrawal on it stays on the parent axis and is not the forbidden shape.
+    if v_shape_asset = 'fund' and v_shape_fund is not null and v_shape_units > 0
        and exists (select 1 from public.funds f where f.id = v_shape_fund) then
       raise exception 'withdrawal invariant: a fund sale must be keyed by its fund (asset_type=fund + fund_id), not parented to purchase %',
         new.parent_transaction_id using errcode = 'check_violation';

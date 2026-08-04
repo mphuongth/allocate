@@ -91,10 +91,18 @@ export function buildWithdrawalMaps(withdrawals: WithdrawalRow[], parents: Paren
     map.set(key, e)
   }
 
-  // Only fund purchases are indexed — every other parent stays on the parent axis.
+  // Only fund purchases the dashboard actually accumulates as a fund holding are
+  // indexed — every other parent stays on the parent axis.
+  //
+  // `p.units` is part of that, not a tidy-up: lib/dashboardOverview keys a holding
+  // into a fund bucket on `asset_type === 'fund' && tx.units`, so a purchase with
+  // ZERO units (the validators allow one) is valued as an ordinary holding and has
+  // no bucket at all. Redirecting its withdrawal would file the claim where nothing
+  // reads it and hand the purchase its full principal back — the #606 bug, from the
+  // other side.
   const fundParents = new Map<string, ParentRow>()
   for (const p of parents) {
-    if (p.asset_type === 'fund' && p.fund_id && p.transaction_type !== 'withdrawal') {
+    if (p.asset_type === 'fund' && p.fund_id && p.units && p.transaction_type !== 'withdrawal') {
       fundParents.set(p.transaction_id, p)
     }
   }

@@ -57,8 +57,12 @@ declare
   v_max_principal    bigint;
   v_derived_children int;
 begin
+  -- `units > 0` mirrors lib/withdrawalProgress: a purchase with no units is no
+  -- bucket (the dashboard values it as an ordinary holding), so a withdrawal on it
+  -- stays on the parent axis and none of this applies.
   if new.transaction_type is distinct from 'investment'
-     or new.asset_type is distinct from 'fund' or new.fund_id is null then
+     or new.asset_type is distinct from 'fund' or new.fund_id is null
+     or coalesce(new.units, 0) <= 0 then
     return new;
   end if;
 

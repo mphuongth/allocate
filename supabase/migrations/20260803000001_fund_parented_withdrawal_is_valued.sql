@@ -52,9 +52,14 @@ with wd as (
          p.goal_id          as parent_goal,
          p.units            as parent_units,
          p.amount_vnd       as parent_amount,
+         -- `p.units > 0` mirrors the reader exactly: lib/dashboardOverview keys a
+         -- holding into a fund bucket on `asset_type === 'fund' && tx.units`, so a
+         -- purchase with no units (a pending DCA seed) or zero units is valued as an
+         -- ordinary holding and its withdrawal stays on the parent axis.
          coalesce(not (w.asset_type = 'fund' and w.fund_id is not null)
                   and p.transaction_type = 'investment'
-                  and p.asset_type = 'fund' and p.fund_id is not null, false) as fund_parented
+                  and p.asset_type = 'fund' and p.fund_id is not null
+                  and coalesce(p.units, 0) > 0, false) as fund_parented
     from public.investment_transactions w
     left join public.investment_transactions p on p.transaction_id = w.parent_transaction_id
    where w.transaction_type = 'withdrawal'
