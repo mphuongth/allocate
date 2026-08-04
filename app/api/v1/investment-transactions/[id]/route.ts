@@ -173,6 +173,20 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         p_set_bank: bank_code !== undefined, p_bank_code: cleanBankCode ?? null,
       })
       .single()
+    // A tranche is a holding like any other, so shrinking one below what has been
+    // withdrawn from it is refused at the table (#608) — and this branch returns
+    // before the mapping further down ever runs. Without its own check the same
+    // conflict answers 400 for a plain deposit and 500 for a book tranche, which
+    // tells the user the app broke rather than what to do about it.
+    if (bookErr?.message?.includes('withdrawal invariant:')) {
+      return NextResponse.json(
+        {
+          error: 'A withdrawal is recorded against this deposit. Remove it before changing the deposit this way.',
+          code: 'withdrawal_invariant',
+        },
+        { status: 400 },
+      )
+    }
     if (bookErr || !row) {
       console.error('update_deposit_book: atomic book edit failed', bookErr?.message)
       return NextResponse.json({ error: 'Failed to update deposit book' }, { status: 500 })

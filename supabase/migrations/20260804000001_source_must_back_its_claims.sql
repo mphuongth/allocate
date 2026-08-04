@@ -179,13 +179,27 @@ security definer
 set search_path = ''
 as $$
 declare
-  -- The units tolerance the rest of this family uses — clients round
-  -- units_withdrawn to four decimals, so a FULL sell can post a hair more than
-  -- the holding and the source is allowed to be restated at exactly that.
-  -- Principal has NO tolerance, matching check_withdrawal_balance's parent branch:
-  -- it compares `principal_withdrawn > v_left` outright, and a source that covers
-  -- a đồng less than what left it is owing a đồng.
+  -- The tolerances are PER SALE, and this side sums many of them, so they are
+  -- counted rather than taken flat.
+  --
+  -- A bank withdrawal is bounded outright (`principal_withdrawn > v_left`), so its
+  -- claims can never sum past the holding and it gets no slack at all — a deposit
+  -- covering a đồng less than what left it is owing a đồng.
+  --
+  -- A QUANTITY-valued sale is different, and gold is the case: its principal is the
+  -- proportional share of the remaining basis, and check_withdrawal_balance accepts
+  -- it a đồng either way because that is what rounding a slice produces. Four such
+  -- sales, each accepted, can therefore claim 101 against a basis of 100 — reproduced
+  -- on the local stack. Measured with a flat đồng, that ledger became UNEDITABLE:
+  -- restating the same amount, or correcting the units upward, was refused for a
+  -- drift the invariant itself licensed and nothing about the edit made worse. So
+  -- the allowance is one đồng per sale that moved units, and 0.0001 units likewise
+  -- (clients round units_withdrawn to four decimals). Zero such sales, zero slack,
+  -- which is what keeps a plain deposit's boundary exact.
   c_units_epsilon constant numeric := 0.0001;
+  v_priced        int;
+  v_allow         bigint  := 0;
+  v_allow_units   numeric := 0;
   v_out_principal bigint;
   v_out_units     numeric;
   v_have          bigint;
@@ -204,8 +218,9 @@ begin
   -- What is drawn on this row, summed the way check_withdrawal_balance's parent
   -- branch sums it — a fund-keyed sibling draws on its own bucket whatever it
   -- names as a parent, so counting it here would charge it twice.
-  select coalesce(sum(w.principal_withdrawn), 0), coalesce(sum(w.units_withdrawn), 0)
-    into v_out_principal, v_out_units
+  select coalesce(sum(w.principal_withdrawn), 0), coalesce(sum(w.units_withdrawn), 0),
+         count(*) filter (where coalesce(w.units_withdrawn, 0) > 0)
+    into v_out_principal, v_out_units, v_priced
     from public.investment_transactions w
    where w.parent_transaction_id = src.transaction_id
      and w.transaction_type = 'withdrawal'
@@ -220,13 +235,23 @@ begin
   v_have       := case when src.transaction_type = 'investment' then coalesce(src.amount_vnd, 0) else 0 end;
   v_have_units := case when src.transaction_type = 'investment' then coalesce(src.units, 0) else 0 end;
 
-  if v_out_principal > v_have then
+  -- The allowance rounds a real balance; it never creates one. A holding with
+  -- nothing left is measured exactly, the same carve-out check_withdrawal_balance
+  -- makes for its units epsilon, so a sold-out source cannot be handed đồng it
+  -- never had.
+  if v_have > 0 then v_allow := v_priced; end if;
+  if v_have_units > 0 then v_allow_units := v_priced * c_units_epsilon; end if;
+
+  -- The balances the messages report are the REAL ones, not the allowance-inflated
+  -- figures the comparison uses: "a balance of 101" for a 100 đồng holding sends
+  -- the reader looking for a đồng that was never there.
+  if v_out_principal > v_have + v_allow then
     raise exception 'withdrawal invariant: holding % would be left owing % it does not hold (% withdrawn against a balance of %)',
       src.transaction_id, v_out_principal - v_have, v_out_principal, v_have
       using errcode = 'check_violation';
   end if;
 
-  if v_out_units > v_have_units + c_units_epsilon then
+  if v_out_units > v_have_units + v_allow_units then
     raise exception 'withdrawal invariant: holding % would be left owing % units it does not hold (% units withdrawn against % held)',
       src.transaction_id, v_out_units - v_have_units, v_out_units, v_have_units
       using errcode = 'check_violation';

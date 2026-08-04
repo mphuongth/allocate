@@ -38,6 +38,8 @@ declare
   v_goal  uuid;
   v_bank  uuid;
   v_gold  uuid;
+  v_drift uuid;
+  v_claimed bigint;
   v_msg   text;
 begin
   insert into auth.users (id, email) values (gen_random_uuid(), 'src-parent@test.invalid') returning id into v_user;
@@ -131,6 +133,58 @@ begin
   -- Exactly what is out, on both axes at once.
   update public.investment_transactions set units = 6, amount_vnd = 48000000 where transaction_id = v_gold;
   set constraints all immediate;
+  set constraints all deferred;
+
+  -- ── a ledger the invariant's own rounding put over the line ───────────────
+  -- A quantity-valued sale takes the proportional share of the remaining basis,
+  -- and check_withdrawal_balance accepts it a đồng either way because that is what
+  -- rounding a slice produces. So a run of sales it ACCEPTS can sum past the
+  -- holding: four below claim 101 against a basis of 100. Measured with a flat
+  -- đồng, that ledger became uneditable — the drift is the invariant's own, and no
+  -- edit that leaves the balance alone makes it worse.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal, 'gold', 'investment', '2026-01-01', 100, 4, 25) returning transaction_id into v_drift;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn, units_withdrawn)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-02-01', 1, v_drift, 26, 1),
+         (v_user, v_goal, 'gold', 'withdrawal', '2026-03-01', 1, v_drift, 26, 1),
+         (v_user, v_goal, 'gold', 'withdrawal', '2026-04-01', 1, v_drift, 25, 1),
+         (v_user, v_goal, 'gold', 'withdrawal', '2026-05-01', 1, v_drift, 24, 1);
+
+  select coalesce(sum(w.principal_withdrawn), 0) into v_claimed
+    from public.investment_transactions w where w.parent_transaction_id = v_drift;
+  if v_claimed <= 100 then
+    raise exception 'the fixture must actually drift over the basis, got %', v_claimed;
+  end if;
+
+  -- Restating the same amount, and correcting the units upward: neither takes
+  -- anything away, so neither may be refused.
+  update public.investment_transactions set amount_vnd = 100 where transaction_id = v_drift;
+  set constraints all immediate;
+  set constraints all deferred;
+  update public.investment_transactions set units = 5 where transaction_id = v_drift;
+  set constraints all immediate;
+  set constraints all deferred;
+
+  -- The allowance is one đồng per sale that moved units, not a blank cheque: four
+  -- sales buy four đồng, and a real shrink is still refused.
+  begin
+    update public.investment_transactions set amount_vnd = 96 where transaction_id = v_drift;
+    set constraints all immediate;
+    raise exception 'shrinking past the per-sale rounding allowance must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+  set constraints all deferred;
+
+  -- And it rounds a real balance rather than creating one: a holding emptied to
+  -- nothing is measured exactly, with no đồng of slack to spend.
+  begin
+    update public.investment_transactions set amount_vnd = 0, units = 0 where transaction_id = v_drift;
+    set constraints all immediate;
+    raise exception 'an emptied holding must not inherit the rounding allowance';
+  exception when sqlstate '23514' then null;
+  end;
   set constraints all deferred;
 
   raise notice 'one-source shrink: ok';

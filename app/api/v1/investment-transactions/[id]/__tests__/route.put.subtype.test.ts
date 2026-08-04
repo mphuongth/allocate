@@ -20,6 +20,7 @@ const h = vi.hoisted(() => ({
   updates: null as Record<string, unknown> | null,
   updateResult: { data: { transaction_id: '11111111-1111-4111-8111-111111111111' } as unknown, error: null as unknown },
   rpcCalls: [] as { name: string; args: Record<string, unknown> }[],
+  rpcResult: { data: { transaction_id: '11111111-1111-4111-8111-111111111111' } as unknown, error: null as unknown },
 }))
 
 vi.mock('@/lib/supabase-server', () => {
@@ -44,7 +45,7 @@ vi.mock('@/lib/supabase-server', () => {
       from: (table: string) => chainFor(table),
       rpc: (name: string, args: Record<string, unknown>) => {
         h.rpcCalls.push({ name, args })
-        return { single: async () => ({ data: { transaction_id: TX_ID }, error: null }) }
+        return { single: async () => h.rpcResult }
       },
     }),
   }
@@ -73,6 +74,7 @@ beforeEach(() => {
   h.updates = null
   h.updateResult = { data: { transaction_id: TX_ID }, error: null }
   h.rpcCalls = []
+  h.rpcResult = { data: { transaction_id: TX_ID }, error: null }
   vi.spyOn(console, 'error').mockImplementation(() => {})
 })
 
@@ -199,6 +201,34 @@ describe('PUT /api/v1/investment-transactions/[id] — subtype normalization (#5
     const res = await put({ asset_type: 'gold', amount_vnd: 1_000_000 })
     expect(res.status).toBe(400)
     expect(await res.json()).toMatchObject({ code: 'book_type_change' })
+  })
+
+  // A book tranche takes the RPC path, which returns before the plain-update
+  // branch's `withdrawal invariant:` mapping ever runs. Left to the generic
+  // handler, shrinking a tranche below what has been withdrawn from it (#608)
+  // answered 500 — the app looking broken — while the identical conflict on an
+  // ordinary deposit answered 400 with something the user can act on.
+  it('maps the withdrawal invariant to a 400 on the book path too', async () => {
+    h.existing = { deposit_group_id: 'book-1', asset_type: 'bank' }
+    h.rpcResult = {
+      data: null,
+      error: { message: 'withdrawal invariant: holding abc would be left owing 30000000 it does not hold' },
+    }
+
+    const res = await put({ amount_vnd: 1_000_000 })
+
+    expect(res.status).toBe(400)
+    expect(await res.json()).toMatchObject({ code: 'withdrawal_invariant' })
+  })
+
+  it('still reports an unrecognised book failure as a server error', async () => {
+    h.existing = { deposit_group_id: 'book-1', asset_type: 'bank' }
+    h.rpcResult = { data: null, error: { message: 'deadlock detected' } }
+
+    const res = await put({ amount_vnd: 1_000_000 })
+
+    expect(res.status).toBe(500)
+    expect(JSON.stringify(await res.json())).not.toContain('deadlock')
   })
 
   it('does not normalize a legacy row whose asset type is unknown', async () => {
