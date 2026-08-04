@@ -1242,7 +1242,7 @@ begin;
 do $$
 declare
   v_user uuid; v_goal uuid; v_goal2 uuid; v_fund uuid; v_fund2 uuid;
-  v_goal3 uuid; v_fund3 uuid; v_dep2 uuid; v_dep3 uuid; v_dep4 uuid; v_wd2 uuid;
+  v_goal3 uuid; v_fund3 uuid; v_fund4 uuid; v_dep2 uuid; v_dep3 uuid; v_dep4 uuid; v_dep5 uuid; v_wd2 uuid;
   v_buy uuid; v_buy2 uuid; v_buy3 uuid; v_dep uuid;
 begin
   insert into auth.users (id, email) values (gen_random_uuid(), 'fundkeyed@test.invalid') returning id into v_user;
@@ -1479,6 +1479,29 @@ begin
     update public.investment_transactions set transaction_type = 'investment'
      where transaction_id = v_dep4;
     raise exception 'activating a fund purchase under a legacy child must be measured, not waved through';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- GAINING units makes a bucket out of a holding that was not one, so every child
+  -- on the parent axis becomes a claim against it — including one that RECORDS its
+  -- units, which the re-pricing branch alone would let through.
+  -- Its own fund, so this fixture cannot move the bucket the sells above measure.
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Gains Fund', 'GNSF', 'equity', 25000) returning id into v_fund4;
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal3, v_fund4, 'fund', 'investment', '2026-01-01', 1000000, 0, 0)
+  returning transaction_id into v_dep5;
+  alter table public.investment_transactions disable trigger user;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, units_withdrawn, principal_withdrawn)
+  values (v_user, v_goal3, null, 'withdrawal', '2026-02-01', 400000, v_dep5, 8, 400000);
+  alter table public.investment_transactions enable trigger user;
+
+  begin
+    update public.investment_transactions set units = 40, unit_price = 25000
+     where transaction_id = v_dep5;
+    raise exception 'giving a holding units makes it a bucket and must be measured';
   exception when sqlstate '23514' then null;
   end;
 

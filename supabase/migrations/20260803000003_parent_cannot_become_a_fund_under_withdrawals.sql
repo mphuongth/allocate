@@ -76,9 +76,16 @@ begin
   -- this trigger watched and left a fund purchase sitting under the legacy child,
   -- which is the whole shape the migration exists to prevent. Verified against the
   -- local stack: both steps were accepted.
+  --
+  -- GAINING units is becoming one too, for the same reason `units > 0` gates this
+  -- function at all: a purchase with none is no bucket, so its children sit on the
+  -- parent axis — and the statement that gives it units makes every one of them a
+  -- claim on a bucket. The pricing branch below would only have caught the children
+  -- whose units are derived; this catches the rest.
   if (old.asset_type is distinct from new.asset_type
       or old.fund_id is distinct from new.fund_id
-      or old.transaction_type is distinct from new.transaction_type)
+      or old.transaction_type is distinct from new.transaction_type
+      or (coalesce(old.units, 0) <= 0 and coalesce(new.units, 0) > 0))
      and exists (
        select 1
          from public.investment_transactions w
