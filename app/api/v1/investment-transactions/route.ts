@@ -2,7 +2,8 @@ import { randomUUID } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validateBankCode, validateDate, validateEnum, validateNotes, validatePositiveIntParam, validateRate, validateUUID } from '@/lib/validation'
-import { isFutureInvestmentDate, todayIso } from '@/lib/dates'
+import { isFutureInvestmentDate } from '@/lib/dates'
+import { classifyAccumulatingTopUp } from '@/lib/accumulatingTopUp'
 import { readJsonBody } from '@/lib/apiBody'
 
 const ASSET_TYPES = ['fund', 'bank', 'stock', 'gold'] as const
@@ -43,7 +44,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from('investment_transactions')
-    .select('transaction_id, goal_id, asset_type, transaction_type, parent_transaction_id, renewed_from_transaction_id, deposit_group_id, interest_earned_vnd, investment_date, amount_vnd, unit_price, units, interest_rate, expiry_date, notes, fund_id, bank_code, currency, is_pledged, principal_withdrawn, units_withdrawn, affects_progress, held_for_merge, consumed_by_inv_id, merge_anchor_inv_id, savings_goals(goal_name), funds(id, name, nav)', { count: 'exact' })
+    .select('transaction_id, goal_id, asset_type, transaction_type, parent_transaction_id, renewed_from_transaction_id, deposit_group_id, interest_earned_vnd, investment_date, amount_vnd, unit_price, units, interest_rate, expiry_date, notes, fund_id, bank_code, currency, is_pledged, top_up_lock_days, principal_withdrawn, units_withdrawn, affects_progress, held_for_merge, consumed_by_inv_id, merge_anchor_inv_id, savings_goals(goal_name), funds(id, name, nav)', { count: 'exact' })
     .eq('user_id', user.id)
     .order('investment_date', { ascending: false })
     .range(offset, offset + limit - 1)
@@ -72,7 +73,7 @@ export async function POST(request: NextRequest) {
   const parsed = await readJsonBody(request)
   if (!parsed.ok) return parsed.response
   const body = parsed.body
-  const { goal_id, asset_type, transaction_type = 'investment', investment_date, amount_vnd, unit_price, units, interest_rate, notes, fund_id, plan_id, expiry_date, parent_transaction_id, principal_withdrawn, units_withdrawn, affects_progress, accumulating, tops_up_deposit_id, bank_code, held_for_merge, merge_target_goal_id, merge_anchor_inv_id } = body
+  const { goal_id, asset_type, transaction_type = 'investment', investment_date, amount_vnd, unit_price, units, interest_rate, notes, fund_id, plan_id, expiry_date, parent_transaction_id, principal_withdrawn, units_withdrawn, affects_progress, accumulating, tops_up_deposit_id, bank_code, top_up_lock_days, held_for_merge, merge_target_goal_id, merge_anchor_inv_id } = body
 
   const isWithdrawal = transaction_type === 'withdrawal'
 
@@ -93,6 +94,7 @@ export async function POST(request: NextRequest) {
   let cleanUnitsWithdrawn: number | null = null
   let cleanTopsUpId: string | null = null
   let cleanBankCode: string | null = null
+  let cleanTopUpLockDays: number | null = null
   // "Ví chờ gộp": a settle-with-hold parks the closed deposit's cash for a future
   // merge. Only meaningful on a withdrawal; the target goal/anchor say where the
   // pool synthesizes the cash back to and which deposit it's waiting on.
@@ -129,6 +131,11 @@ export async function POST(request: NextRequest) {
     if (units_withdrawn != null && units_withdrawn !== '') cleanUnitsWithdrawn = validateAmount(units_withdrawn, 'units_withdrawn')
     if (tops_up_deposit_id) cleanTopsUpId = validateUUID(tops_up_deposit_id, 'tops_up_deposit_id')
     if (bank_code != null && bank_code !== '') cleanBankCode = validateBankCode(bank_code, 'bank_code')
+    if (top_up_lock_days != null && top_up_lock_days !== '') {
+      const lockDays = Number(top_up_lock_days)
+      if (!Number.isInteger(lockDays) || lockDays < 0 || lockDays > 3650) throw new ValidationError('top_up_lock_days must be a whole number from 0 to 3650')
+      cleanTopUpLockDays = lockDays
+    }
     if (cleanHeldForMerge) {
       if (merge_target_goal_id) cleanMergeTargetGoalId = validateUUID(merge_target_goal_id, 'merge_target_goal_id')
       if (merge_anchor_inv_id) cleanMergeAnchorInvId = validateUUID(merge_anchor_inv_id, 'merge_anchor_inv_id')
@@ -316,7 +323,7 @@ export async function POST(request: NextRequest) {
   if (cleanTopsUpId) {
     const { data: anchor } = await supabase
       .from('investment_transactions')
-      .select('asset_type, deposit_group_id, goal_id, expiry_date, bank_code')
+      .select('asset_type, deposit_group_id, goal_id, expiry_date, bank_code, top_up_lock_days')
       .eq('transaction_id', cleanTopsUpId)
       .eq('user_id', user.id)
       .single()
@@ -324,17 +331,15 @@ export async function POST(request: NextRequest) {
     if (anchor.asset_type !== 'bank' || !anchor.deposit_group_id) {
       return NextResponse.json({ error: 'Can only top up an accumulating bank deposit.' }, { status: 400 })
     }
-    // A matured book is closed: a new tranche dated today would sit past the
-    // book's maturity and accrue zero interest (capped at expiry) — i.e. money
-    // silently into a dead book. Block it.
-    if (anchor.expiry_date && anchor.expiry_date < todayIso()) {
-      return NextResponse.json({ error: 'Cannot top up a deposit that has already matured.' }, { status: 400 })
-    }
+    const eligibility = classifyAccumulatingTopUp({ topUpDate: cleanInvestmentDate, expiryDate: anchor.expiry_date, lockDays: anchor.top_up_lock_days ?? null })
+    if (eligibility.status === 'matured') return NextResponse.json({ error: 'Cannot top up a deposit on or after its maturity date.' }, { status: 400 })
+    if (eligibility.status === 'locked-near-maturity') return NextResponse.json({ error: `This deposit no longer accepts top-ups: ${eligibility.daysRemaining} days remain before maturity (its lock window is ${eligibility.lockDays} days).`, code: 'top_up_locked_near_maturity' }, { status: 400 })
     depositGroupId = anchor.deposit_group_id
     effectiveGoalId = anchor.goal_id            // the tranche belongs to the book's goal
     effectiveExpiry = anchor.expiry_date        // book maturity, copied down to every tranche
     effectiveAssetType = 'bank'
     effectiveBankCode = anchor.bank_code ?? null // tranche inherits the book's bank
+    cleanTopUpLockDays = anchor.top_up_lock_days ?? null
   } else if (accumulating) {
     // New accumulating book: the anchor self-groups so deposit_group_id IS NOT
     // NULL ⇔ accumulating, and the anchor is the row whose group = its own id.
@@ -371,6 +376,7 @@ export async function POST(request: NextRequest) {
       // Structured bank only applies to bank deposits; funds/gold have no bank.
       // A top-up tranche inherits the book's bank (effectiveBankCode).
       bank_code: effectiveAssetType === 'bank' ? effectiveBankCode : null,
+      top_up_lock_days: depositGroupId ? cleanTopUpLockDays : null,
       // The held-for-merge pool is created by create_held_settlement, never here
       // (#588). Written out rather than left to the column defaults so a body
       // carrying these fields cannot ride in on a row this path builds.
@@ -382,6 +388,9 @@ export async function POST(request: NextRequest) {
     .single()
 
   if (error) {
+    if (error.message?.startsWith('accumulating top-up: ')) {
+      return NextResponse.json({ error: error.message.slice('accumulating top-up: '.length), code: 'top_up_locked_near_maturity' }, { status: 400 })
+    }
     // The withdrawal invariant refused it (20260730000002). Every refusal it
     // raises carries this prefix, so the whole family maps to a 400 with one
     // match — listing the messages individually meant a new refusal fell through

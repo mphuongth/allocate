@@ -87,8 +87,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     .single()
   if (error || !tranche) {
     const msg = error?.message ?? ''
+    if (msg.startsWith('accumulating top-up: ')) {
+      return NextResponse.json({ error: msg.slice('accumulating top-up: '.length), code: 'top_up_locked_near_maturity' }, { status: 400 })
+    }
     if (msg.includes('cannot top up a matured book')) {
-      return NextResponse.json({ error: 'Cannot top up a deposit that has already matured.' }, { status: 400 })
+      return NextResponse.json({ error: 'Cannot top up a deposit on or after its maturity date.' }, { status: 400 })
     }
     if (msg.includes('accumulating book not found')) {
       return NextResponse.json({ error: 'Linked book not found.' }, { status: 404 })

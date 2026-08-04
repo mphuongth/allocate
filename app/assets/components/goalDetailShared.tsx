@@ -7,6 +7,7 @@ import { useState, type CSSProperties } from 'react'
 import { TrendingUp, Building, Coins, BarChart2, Target, RefreshCw, Plus } from 'lucide-react'
 import { fmtCompact } from '@/lib/formatters'
 import { todayIso } from '@/lib/dates'
+import { classifyAccumulatingTopUp } from '@/lib/accumulatingTopUp'
 import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
 import { fmtTxDate } from './transactionUtils'
 import { fmtMaturity, type Maturity } from './goalDetailMaturity'
@@ -225,6 +226,7 @@ export interface GoalDetailTx {
   // null/false on legacy deposits.
   currency?: string | null
   is_pledged?: boolean | null
+  top_up_lock_days?: number | null
 }
 
 // Roll up a deposit's renewal history from the snapshot rows that point at it.
@@ -310,6 +312,14 @@ export function TopUpControl({ inv, isVi, onDone }: { inv: InvRow; isVi: boolean
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   if (!inv.depositGroupId) return null
+
+  const eligibility = classifyAccumulatingTopUp({ topUpDate: todayIso(), expiryDate: inv.expiryDate, lockDays: inv.topUpLockDays ?? null })
+  if (eligibility.status !== 'allowed') {
+    const message = eligibility.status === 'locked-near-maturity'
+      ? (isVi ? `Sổ không nhận nạp thêm trong ${eligibility.lockDays} ngày trước đáo hạn (còn ${eligibility.daysRemaining} ngày).` : `This deposit stops accepting top-ups ${eligibility.lockDays} days before maturity (${eligibility.daysRemaining} days remain).`)
+      : (isVi ? 'Sổ đã đến ngày đáo hạn nên không thể nạp thêm.' : 'This deposit has reached maturity and cannot accept another top-up.')
+    return <p data-testid="top-up-locked" style={{ margin: '0 0 8px', padding: '9px 10px', borderRadius: 10, background: 'var(--c-warn-tint)', color: 'var(--c-warn)', fontSize: 12, lineHeight: 1.45 }}>{message}</p>
+  }
 
   const amt = Number(amount)
   async function submit() {

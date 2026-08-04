@@ -132,6 +132,8 @@ export interface InvRow {
   // rules ("same currency" / "not pledged"). null/false on legacy deposits.
   currency?: string | null
   isPledged?: boolean | null
+  /** Optional inclusive pre-maturity lock window for adding a new book tranche. */
+  topUpLockDays?: number | null
   // The book's tranches (top-ups), newest first, for the detail view. Each is one
   // underlying row; present only on an accumulating book row.
   tranches?: InvTranche[] | null

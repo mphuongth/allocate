@@ -184,6 +184,7 @@ export interface TxForm {
   bankAmount: string
   rate: string
   maturity: string
+  topUpLockDays?: string
   goldProvider: string
   goldUnit: 'chi' | 'luong'
   goldQty: string
@@ -268,6 +269,7 @@ export function buildBuyPayload(form: TxForm, planId: string | null): BuildResul
       expiry_date: form.maturity || null,
       // An accumulating book: the route self-groups this anchor row for later top-ups.
       ...(form.depositType === 'accumulating' ? { accumulating: true } : {}),
+      ...(form.depositType === 'accumulating' && form.topUpLockDays != null && form.topUpLockDays !== '' ? { top_up_lock_days: Number(form.topUpLockDays) } : {}),
     } }
   }
   const gold = normalizeGold(form.goldQty, form.goldPrice, form.goldUnit)
