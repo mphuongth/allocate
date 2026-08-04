@@ -115,12 +115,17 @@ export function useOverviewData(userId: string, errorText: string): OverviewStat
   // Initial load. In a PWA, bust the cache if the last fetch was over 30s ago —
   // that covers force-quit + reopen, where the process resumes with stale state.
   useEffect(() => {
-    if (!isStandalone()) { refresh(); return }
-    try {
-      const last = localStorage.getItem('pwa_last_fetch')
-      const stale = !last || Date.now() - Number(last) > PWA_STALE_MS
-      refresh(stale ? { force: true } : undefined)
-    } catch { refresh() }
+    // Deferring prevents a synchronous state update while React commits this
+    // effect, and lets cleanup cancel the work if the component unmounts.
+    const timeoutId = window.setTimeout(() => {
+      if (!isStandalone()) { refresh(); return }
+      try {
+        const last = localStorage.getItem('pwa_last_fetch')
+        const stale = !last || Date.now() - Number(last) > PWA_STALE_MS
+        refresh(stale ? { force: true } : undefined)
+      } catch { refresh() }
+    }, 0)
+    return () => window.clearTimeout(timeoutId)
   }, [refresh])
 
   // PWA only: refresh when foregrounded after more than 30s in the background.
