@@ -241,6 +241,22 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     )
   }
 
+  // The withdrawal invariant refused the edit. An asset-type change can create the
+  // shape a withdrawal may not wear — a holding becoming a fund purchase while a
+  // withdrawal that is not keyed by a fund draws on it (#606) — and the row is
+  // right there on screen, so 404 'not found' would describe it as something else
+  // entirely. Matched on the family prefix, exactly as POST does, so a refusal
+  // added later cannot fall through as the wrong status.
+  if (error?.message?.includes('withdrawal invariant:')) {
+    return NextResponse.json(
+      {
+        error: 'A withdrawal is recorded against this holding. Remove it before changing the holding this way.',
+        code: 'withdrawal_invariant',
+      },
+      { status: 400 },
+    )
+  }
+
   if (error || !transaction) return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
 
   // (Accumulating books took the atomic update_deposit_book path above; only

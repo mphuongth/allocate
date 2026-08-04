@@ -204,7 +204,13 @@ export async function buildDashboardOverview(
   // steady). currentValue and progressValue below are computed independently
   // so a "doesn't count toward progress" withdrawal lowers net worth without
   // moving the bar — and the dashboard agrees with the goal-detail tab.
-  const { parentWdMap, fundWdMap, parentWdMapAll, fundWdMapAll } = buildWithdrawalMaps(withdrawals)
+  //
+  // The raw rows are passed as the parent index (not `investments`): a withdrawal
+  // that names a FUND PURCHASE as its parent draws on that purchase's (goal, fund)
+  // bucket, and resolving that needs the purchase itself — including a pending
+  // DCA seed, which `investments` drops but which a withdrawal can still name
+  // (#606). buildWithdrawalMaps ignores every non-fund-purchase row it is given.
+  const { parentWdMap, fundWdMap, parentWdMapAll, fundWdMapAll } = buildWithdrawalMaps(withdrawals, allTxsRaw)
 
   const insuranceMembers = insuranceRes.data ?? []
   const goldPricePerChi: number | null = goldPriceRes.data?.price_per_chi ?? null

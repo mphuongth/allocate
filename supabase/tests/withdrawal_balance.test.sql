@@ -352,17 +352,16 @@ begin
   insert into public.investment_transactions (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
   values (v_user, v_goal, v_fund, 'fund', 'investment', '2026-01-01', 90000000, 4500, 20000) returning transaction_id into v_buy;
 
-  -- Parented to that fund purchase: allowed, but still bounded by the row it
-  -- names — 90M is there, 200M is not.
-  insert into public.investment_transactions
-    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn)
-  values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 10000000, v_buy, 10000000);
-
+  -- Parented to that fund purchase: refused (#606). It used to be allowed and
+  -- bounded by the row it names, which gave the fund bucket a SECOND balance —
+  -- the reader values such a row against the bucket, so a sell keyed by the fund
+  -- and one parented to a purchase in it could each pass their own reading and
+  -- together take more units than the bucket holds. A fund sale carries its fund.
   begin
     insert into public.investment_transactions
       (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn)
-    values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-02', 200000000, v_buy, 200000000);
-    raise exception 'even an oddly parented withdrawal is bounded by the row it names';
+    values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 10000000, v_buy, 10000000);
+    raise exception 'a withdrawal parented to a fund purchase must be refused';
   exception when sqlstate '23514' then null;
   end;
 
@@ -1172,6 +1171,400 @@ begin
   end;
 
   raise notice 'held-for-merge exception boundary: ok';
+end;
+$$;
+
+rollback;
+
+begin;
+
+-- ── a relocation must count the claims the reader counts (#606) ──────────────
+-- Two purchases in one bucket, a 45-unit fund-keyed sell and a legacy 10-unit
+-- claim parented to the first. Moving the SECOND purchase out leaves 50 units
+-- backing 55 — the bucket solvency check saw only the fund-keyed 45 and waved it
+-- through, and the dashboard then subtracts all 55 and drops the holding.
+do $$
+declare
+  v_user uuid; v_goal uuid; v_goal_b uuid; v_fund uuid; v_buy_a uuid; v_buy_b uuid;
+begin
+  insert into auth.users (id, email) values (gen_random_uuid(), 'bucketmove@test.invalid') returning id into v_user;
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Bucket') returning goal_id into v_goal;
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Elsewhere') returning goal_id into v_goal_b;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Move Fund', 'MVF', 'equity', 25000) returning id into v_fund;
+
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal, v_fund, 'fund', 'investment', '2026-01-01', 2000000, 50, 40000)
+  returning transaction_id into v_buy_a;
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal, v_fund, 'fund', 'investment', '2026-01-02', 2000000, 50, 40000)
+  returning transaction_id into v_buy_b;
+
+  -- 45 of the bucket's 100 units, keyed by the fund: an ordinary sell.
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units_withdrawn, principal_withdrawn)
+  values (v_user, v_goal, v_fund, 'fund', 'withdrawal', '2026-02-01', 1125000, 45, 1800000);
+
+  -- The legacy claim on purchase A (planted with the trigger off — no longer writable).
+  alter table public.investment_transactions disable trigger user;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, units_withdrawn, principal_withdrawn)
+  values (v_user, v_goal, null, 'withdrawal', '2026-03-01', 250000, v_buy_a, 10, 400000);
+  alter table public.investment_transactions enable trigger user;
+
+  begin
+    update public.investment_transactions set goal_id = v_goal_b where transaction_id = v_buy_b;
+    raise exception 'moving a purchase out from under the claims on its bucket must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- Moving the purchase the claim NAMES takes the claim with it — the claim is
+  -- keyed by its parent's goal — so the bucket it leaves is short of nothing.
+  update public.investment_transactions set goal_id = v_goal_b where transaction_id = v_buy_a;
+
+  raise notice 'a relocation counts parented claims: ok';
+end;
+$$;
+
+-- ── a new sale is measured against every claim on the bucket (#606) ──────────
+-- A legacy 10-unit claim sits in a 50-unit bucket. A 45-unit sell fits inside the
+-- fund-keyed sum alone, and the dashboard then subtracts all 55 and drops the five
+-- units left. The claim has to be part of the balance a new sale is measured
+-- against — one bucket, one sum.
+do $$
+declare
+  v_user uuid; v_goal uuid; v_fund uuid; v_buy uuid;
+begin
+  insert into auth.users (id, email) values (gen_random_uuid(), 'claimsum@test.invalid') returning id into v_user;
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Claims') returning goal_id into v_goal;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Claim Fund', 'CLMF', 'equity', 25000) returning id into v_fund;
+
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal, v_fund, 'fund', 'investment', '2026-01-01', 2000000, 50, 40000)
+  returning transaction_id into v_buy;
+
+  alter table public.investment_transactions disable trigger user;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, units_withdrawn, principal_withdrawn)
+  values (v_user, v_goal, null, 'withdrawal', '2026-02-01', 250000, v_buy, 10, 400000);
+  alter table public.investment_transactions enable trigger user;
+
+  begin
+    insert into public.investment_transactions
+      (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units_withdrawn, principal_withdrawn)
+    -- Proportional against the bucket as the OLD sum saw it (45 of 50 units of a
+    -- 2,000,000 basis), so what refuses it is the claim, not the allocation rule.
+    values (v_user, v_goal, v_fund, 'fund', 'withdrawal', '2026-03-01', 1125000, 45, 1800000);
+    raise exception 'a sale that fits only by ignoring the legacy claim must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- What the bucket really has left — 40 units and the 1,600,000 basis behind them
+  -- — still sells, in one go.
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units_withdrawn, principal_withdrawn)
+  values (v_user, v_goal, v_fund, 'fund', 'withdrawal', '2026-03-01', 1000000, 40, 1600000);
+
+  raise notice 'a new sale counts the bucket''s legacy claims: ok';
+end;
+$$;
+
+rollback;
+
+begin;
+
+-- ── a fund sale is keyed by its fund, not parented to the purchase (#606) ─────
+-- The reader values a withdrawal parented to a fund purchase against that
+-- purchase's (goal, fund) bucket. This function measured the same row against the
+-- purchase's own principal, so ONE bucket had TWO balances: a 50-unit purchase
+-- took a 45-unit fund-keyed sell and a 10-unit parented sell, each legal against
+-- its own reading, 55 units out of 50 — and the dashboard, subtracting all 55,
+-- drops the holding five units early. The shape is refused instead.
+do $$
+declare
+  v_user uuid; v_goal uuid; v_goal2 uuid; v_fund uuid; v_fund2 uuid;
+  v_goal3 uuid; v_fund3 uuid; v_fund4 uuid; v_dep2 uuid; v_dep3 uuid; v_dep4 uuid; v_dep5 uuid; v_wd2 uuid;
+  v_buy uuid; v_buy2 uuid; v_buy3 uuid; v_dep uuid;
+begin
+  insert into auth.users (id, email) values (gen_random_uuid(), 'fundkeyed@test.invalid') returning id into v_user;
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Fund keyed') returning goal_id into v_goal;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Keyed Fund', 'KEYF', 'equity', 25000) returning id into v_fund;
+
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal, v_fund, 'fund', 'investment', '2026-01-01', 2000000, 50, 40000)
+  returning transaction_id into v_buy;
+
+  -- The pair that used to fit: 45 units through the bucket, 10 more through the
+  -- purchase. The first is an ordinary sell and stays legal.
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd,
+     units_withdrawn, principal_withdrawn)
+  values (v_user, v_goal, v_fund, 'fund', 'withdrawal', '2026-02-01', 1125000, 45, 1800000);
+
+  begin
+    insert into public.investment_transactions
+      (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+       parent_transaction_id, units_withdrawn, principal_withdrawn)
+    values (v_user, v_goal, null, 'withdrawal', '2026-03-01', 250000, v_buy, 10, 400000);
+    raise exception 'a sale parented to a fund purchase must be refused, not measured against the purchase';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- Not about the missing asset_type, and not about the units either: the shape is
+  -- refused for naming a fund purchase as its source at all.
+  begin
+    insert into public.investment_transactions
+      (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+       parent_transaction_id, principal_withdrawn)
+    values (v_user, v_goal, 'bank', 'withdrawal', '2026-03-01', 100000, v_buy, 100000);
+    raise exception 'a bank-typed withdrawal on a fund purchase must be refused too';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- The same 10 units, keyed by the fund: now measured against the bucket, which
+  -- has 5 units and 200,000 đồng left — so this is refused for what it really is.
+  begin
+    insert into public.investment_transactions
+      (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd,
+       units_withdrawn, principal_withdrawn)
+    values (v_user, v_goal, v_fund, 'fund', 'withdrawal', '2026-03-01', 250000, 10, 400000);
+    raise exception 'ten units out of the five the bucket has left must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- And what the bucket does still hold goes through.
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd,
+     units_withdrawn, principal_withdrawn)
+  values (v_user, v_goal, v_fund, 'fund', 'withdrawal', '2026-03-01', 125000, 5, 200000);
+
+  -- A deposit parent is untouched by any of this.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
+  values (v_user, v_goal, 'bank', 'investment', '2026-01-01', 10000000) returning transaction_id into v_dep;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn)
+  values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 4000000, v_dep, 4000000);
+
+  -- Deleting a fund must still work for a sell that named BOTH its fund and a
+  -- purchase in it. The FK clears fund_id on both sides, the orphan path re-measures
+  -- the row, and it lands in the parent branch — where the parent is fund-typed but
+  -- no longer carries a fund, so it is no bucket and nothing is refused. Asking only
+  -- about asset_type turned an ordinary fund deletion into an error.
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal, v_fund, 'fund', 'investment', '2026-04-01', 1000000, 40, 25000)
+  returning transaction_id into v_buy2;
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, units_withdrawn, principal_withdrawn)
+  values (v_user, v_goal, v_fund, 'fund', 'withdrawal', '2026-04-02', 250000, v_buy2, 10, 250000);
+
+  -- ...and in the order that used to decide it. ON DELETE SET NULL clears every
+  -- referencing row in ONE statement, in no defined order, so the sell can be
+  -- re-measured before its parent has been cleared — and then the parent still
+  -- shows the fund that is already gone. Touching the purchase moves it behind the
+  -- sell in the heap, which is the ordering that raised. What settles it is that
+  -- the fund ROW is gone by then, whichever row the cascade reaches first.
+  update public.investment_transactions set notes = 'moved behind the sell'
+   where transaction_id = v_buy2;
+
+  delete from public.funds where id = v_fund;
+
+  if exists (select 1 from public.investment_transactions where transaction_id = v_buy2 and fund_id is not null) then
+    raise exception 'deleting the fund should have cleared the purchase''s fund_id';
+  end if;
+
+  -- A goal holding a LEGACY row of this shape must still be deletable. Deleting a
+  -- goal clears goal_id on every transaction (ON DELETE SET NULL) and the deferred
+  -- trigger re-measures each one; refusing the shape there would make history
+  -- undeletable, so the refusal lives in the new-claim path only. The legacy row is
+  -- planted with the trigger off, which is the only way it can exist now.
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Legacy goal') returning goal_id into v_goal2;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Legacy Fund', 'LGCF', 'equity', 25000) returning id into v_fund2;
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal2, v_fund2, 'fund', 'investment', '2026-01-01', 2000000, 50, 40000)
+  returning transaction_id into v_buy3;
+
+  alter table public.investment_transactions disable trigger user;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn)
+  values (v_user, v_goal2, null, 'withdrawal', '2026-02-01', 400000, v_buy3, 400000);
+  alter table public.investment_transactions enable trigger user;
+
+  delete from public.savings_goals where goal_id = v_goal2;
+
+  if exists (select 1 from public.investment_transactions where transaction_id = v_buy3 and goal_id is not null) then
+    raise exception 'deleting the goal should have cleared the purchase''s goal_id';
+  end if;
+
+  -- Deleting the FUND out from under the same legacy row is fine too.
+  delete from public.funds where id = v_fund2;
+
+  -- The same shape assembled from the OTHER end: the child's trigger cannot see a
+  -- statement that only touches the parent, and PUT lets a holding change its asset
+  -- type (#593) — so a bank deposit with a withdrawal on it could be edited into a
+  -- fund purchase and the withdrawal woke up parented to a fund. The parent is asked
+  -- the question now.
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Converted') returning goal_id into v_goal3;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Convert Fund', 'CNVF', 'equity', 25000) returning id into v_fund3;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
+  values (v_user, v_goal3, 'bank', 'investment', '2026-01-01', 2000000) returning transaction_id into v_dep2;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn)
+  values (v_user, v_goal3, 'bank', 'withdrawal', '2026-02-01', 400000, v_dep2, 400000)
+  returning transaction_id into v_wd2;
+
+  begin
+    update public.investment_transactions
+       set asset_type = 'fund', fund_id = v_fund3, units = 50, unit_price = 40000
+     where transaction_id = v_dep2;
+    raise exception 'a holding must not become a fund purchase under a withdrawal that is not fund-keyed';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- Removing the withdrawal is what unblocks it: the guard is about the shape the
+  -- edit would create, not about the edit.
+  delete from public.investment_transactions where transaction_id = v_wd2;
+  update public.investment_transactions
+     set asset_type = 'fund', fund_id = v_fund3, units = 50, unit_price = 40000
+   where transaction_id = v_dep2;
+
+  -- Re-pricing a purchase that carries a legacy child is refused for the same
+  -- reason: those units are derived from this purchase's price, so moving it
+  -- rewrites what the dashboard takes out of the bucket for a row nothing
+  -- re-measures. Planted with the trigger off — the only way the child can exist.
+  alter table public.investment_transactions disable trigger user;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn)
+  values (v_user, v_goal3, null, 'withdrawal', '2026-03-01', 500000, v_dep2, 500000);
+  alter table public.investment_transactions enable trigger user;
+
+  begin
+    update public.investment_transactions set units = 25, unit_price = 80000
+     where transaction_id = v_dep2;
+    raise exception 'a fund purchase must not be re-priced under a legacy child';
+  exception when sqlstate '23514' then null;
+  end;
+  begin
+    update public.investment_transactions set amount_vnd = 4000000
+     where transaction_id = v_dep2;
+    raise exception 'a fund purchase must not have its amount changed under a legacy child';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- A proportional correction leaves every derived quantity identical — the rate
+  -- `units x principal / amount` is what the child is read at — so it goes through.
+  update public.investment_transactions set units = 100, amount_vnd = 4000000, unit_price = 40000
+   where transaction_id = v_dep2;
+  update public.investment_transactions set units = 50, amount_vnd = 2000000, unit_price = 40000
+   where transaction_id = v_dep2;
+
+  -- A legacy child that RECORDS its units is read as written, whatever this
+  -- purchase later costs — so it must not freeze an ordinary edit. Give the child
+  -- units and the same re-pricing goes through.
+  -- (Off, because touching the child's own amounts is a RAISED claim and the child's
+  -- trigger refuses the legacy shape there — giving it a fund is what legalises it.)
+  alter table public.investment_transactions disable trigger user;
+  update public.investment_transactions set units_withdrawn = 12.5
+   where parent_transaction_id = v_dep2 and transaction_type = 'withdrawal';
+  alter table public.investment_transactions enable trigger user;
+
+  update public.investment_transactions set units = 25, unit_price = 80000
+   where transaction_id = v_dep2;
+  update public.investment_transactions set units = 50, unit_price = 40000
+   where transaction_id = v_dep2;
+
+  alter table public.investment_transactions disable trigger user;
+  update public.investment_transactions set units_withdrawn = null
+   where parent_transaction_id = v_dep2 and transaction_type = 'withdrawal';
+  alter table public.investment_transactions enable trigger user;
+
+  -- Everything else about it still edits: the guard is about the rate, not the row.
+  update public.investment_transactions set notes = 'renamed' where transaction_id = v_dep2;
+
+  -- The same shape assembled in TWO statements. Turning the parent into a valid
+  -- fund-keyed withdrawal takes it out of this guard's reach (it is no longer an
+  -- investment), so flipping transaction_type back on its own used to change no
+  -- column the trigger watched — and left a fund purchase under the legacy child.
+  -- Activating it is becoming one, and is measured as such.
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal3, v_fund3, 'fund', 'investment', '2026-01-01', 2000000, 50, 40000);
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
+  values (v_user, v_goal3, 'bank', 'investment', '2026-01-01', 1000000) returning transaction_id into v_dep4;
+  alter table public.investment_transactions disable trigger user;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn)
+  values (v_user, v_goal3, null, 'withdrawal', '2026-02-01', 400000, v_dep4, 400000);
+  alter table public.investment_transactions enable trigger user;
+
+  -- Step one is legal on its own: as a fund-keyed sell it draws on the bucket.
+  -- (units set too, so flipping it back would produce a real bucket purchase —
+  -- one with no units is no bucket and none of this applies.)
+  update public.investment_transactions
+     set transaction_type = 'withdrawal', asset_type = 'fund', fund_id = v_fund3,
+         units = 50, unit_price = 40000,
+         units_withdrawn = 10, principal_withdrawn = 400000, amount_vnd = 250000
+   where transaction_id = v_dep4;
+
+  begin
+    update public.investment_transactions set transaction_type = 'investment'
+     where transaction_id = v_dep4;
+    raise exception 'activating a fund purchase under a legacy child must be measured, not waved through';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- GAINING units makes a bucket out of a holding that was not one, so every child
+  -- on the parent axis becomes a claim against it — including one that RECORDS its
+  -- units, which the re-pricing branch alone would let through.
+  -- Its own fund, so this fixture cannot move the bucket the sells above measure.
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Gains Fund', 'GNSF', 'equity', 25000) returning id into v_fund4;
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_user, v_goal3, v_fund4, 'fund', 'investment', '2026-01-01', 1000000, 0, 0)
+  returning transaction_id into v_dep5;
+  alter table public.investment_transactions disable trigger user;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, units_withdrawn, principal_withdrawn)
+  values (v_user, v_goal3, null, 'withdrawal', '2026-02-01', 400000, v_dep5, 8, 400000);
+  alter table public.investment_transactions enable trigger user;
+
+  begin
+    update public.investment_transactions set units = 40, unit_price = 25000
+     where transaction_id = v_dep5;
+    raise exception 'giving a holding units makes it a bucket and must be measured';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- A child that carries its OWN fund draws on that bucket whatever its parent is,
+  -- so it never blocks the conversion. (Dual-key sell: legal, the fund branch wins.)
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
+  values (v_user, v_goal3, 'bank', 'investment', '2026-01-01', 5000000) returning transaction_id into v_dep3;
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, units_withdrawn, principal_withdrawn)
+  values (v_user, v_goal3, v_fund3, 'fund', 'withdrawal', '2026-02-01', 250000, v_dep3, 10, 400000);
+
+  update public.investment_transactions
+     set asset_type = 'fund', fund_id = v_fund3, units = 100, unit_price = 50000
+   where transaction_id = v_dep3;
+
+  raise notice 'a fund sale must be keyed by its fund: ok';
 end;
 $$;
 

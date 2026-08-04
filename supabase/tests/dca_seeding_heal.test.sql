@@ -64,10 +64,17 @@ begin
 
   -- A withdrawal referencing the second recorded row — this is what would be
   -- orphaned if the healing deleted v_rec2.
+  --
+  -- Planted with the trigger off: since #606 a fund sale must be keyed by its fund,
+  -- so this shape can no longer be WRITTEN. It is what the ledger may already hold
+  -- — rows from before that rule — and the healing step has to be safe over the
+  -- data as it is, not only over the data the API would accept today.
+  alter table investment_transactions disable trigger user;
   insert into investment_transactions
     (user_id, parent_transaction_id, transaction_type, asset_type, amount_vnd, principal_withdrawn, investment_date, affects_progress)
     values (v_user, v_rec2, 'withdrawal', null, 500000, 500000, '2099-11-15', true)
     returning transaction_id into v_wd;
+  alter table investment_transactions enable trigger user;
 
   -- ---- Run the healing exactly as the migration does -----------------------
   update investment_transactions it
