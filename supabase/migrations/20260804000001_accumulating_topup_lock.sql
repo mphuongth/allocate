@@ -34,7 +34,12 @@ begin
      and new.transaction_id <> new.deposit_group_id
      and (tg_op = 'INSERT'
        or old.deposit_group_id is distinct from new.deposit_group_id
-       or old.investment_date is distinct from new.investment_date) then
+       or old.investment_date is distinct from new.investment_date
+       -- A row that BECOMES an investment is a new tranche as far as the book is
+       -- concerned. Without this, a booked row could be turned into a withdrawal
+       -- (which this trigger skips), redated inside the lock window, and turned
+       -- back — the last step changing no other tracked column.
+       or old.transaction_type is distinct from new.transaction_type) then
     -- Include NEW.user_id in the SECURITY DEFINER lookup. This must happen
     -- before reading a locked anchor so a foreign book cannot reveal its
     -- maturity or lock window through the resulting error.
@@ -44,7 +49,8 @@ begin
 end;
 $$;
 
+drop trigger if exists investment_transactions_accumulating_topup_lock on public.investment_transactions;
 create trigger investment_transactions_accumulating_topup_lock
-  before insert or update of deposit_group_id, investment_date on public.investment_transactions
+  before insert or update of deposit_group_id, investment_date, transaction_type on public.investment_transactions
   for each row
   execute function public.enforce_accumulating_book_topup_lock();

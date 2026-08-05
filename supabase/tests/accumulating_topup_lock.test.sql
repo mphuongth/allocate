@@ -8,6 +8,7 @@ declare
   v_goal uuid;
   v_book uuid := gen_random_uuid();
   v_ungrouped uuid := gen_random_uuid();
+  v_parked uuid := gen_random_uuid();
   v_other_user uuid := gen_random_uuid();
   v_other_goal uuid;
   v_other_book uuid := gen_random_uuid();
@@ -57,6 +58,29 @@ begin
     update public.investment_transactions set deposit_group_id = v_book
       where transaction_id = v_ungrouped;
     raise exception 'joining a locked book must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- Nor by parking the row outside the trigger's reach: a booked tranche that
+  -- is turned into a withdrawal, redated inside the lock window and turned back
+  -- into an investment must face the policy on the way back in.
+  begin
+    insert into public.investment_transactions (
+      transaction_id, user_id, goal_id, asset_type, transaction_type,
+      investment_date, expiry_date, amount_vnd, interest_rate, deposit_group_id
+    ) values (v_parked, v_user, v_goal, 'bank', 'investment',
+      '2026-07-01', '2026-09-03', 1000000, 4, v_book);
+    update public.investment_transactions
+       set transaction_type = 'withdrawal', parent_transaction_id = v_book,
+           principal_withdrawn = 1000000
+     where transaction_id = v_parked;
+    update public.investment_transactions set investment_date = '2026-08-04'
+     where transaction_id = v_parked;
+    update public.investment_transactions
+       set transaction_type = 'investment', parent_transaction_id = null,
+           principal_withdrawn = null
+     where transaction_id = v_parked;
+    raise exception 'a redated tranche must be refused when it becomes an investment again';
   exception when sqlstate '23514' then null;
   end;
 
