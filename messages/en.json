@@ -892,6 +892,7 @@
     "merge_target": "Another settlement has been merged into this deposit, so it can’t be removed.",
     "settlement_pending": "A settlement is waiting to be merged into this deposit. Cancel that pending settlement first.",
     "referenced": "Another record still references this transaction. Remove that reference before deleting it.",
+    "withdrawal_invariant": "A withdrawal or sale is recorded against this holding. Remove it before deleting the holding.",
     "not_found": "This transaction no longer exists.",
     "delete_failed": "Couldn’t delete this transaction. Please try again.",
     "network": "Connection problem — the transaction wasn’t deleted.",

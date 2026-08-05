@@ -6,6 +6,7 @@ export type DeleteFailureCode =
   | 'merge_target'          // another settlement has been merged INTO this deposit
   | 'settlement_pending'    // a settlement is held, waiting to merge into this one
   | 'referenced'            // some other record still points at this row
+  | 'withdrawal_invariant'  // a withdrawal still draws on this holding (#608)
   | 'not_found'             // already gone
   | 'delete_failed'         // the server tried and failed
   | 'network'               // the request never got an answer
@@ -42,11 +43,16 @@ export async function deleteTransaction(txId: string): Promise<DeleteResult> {
   }
 }
 
-const CODES: readonly DeleteFailureCode[] = [
+// Keep in step with DeleteFailureCode AND with messages/*.json: a code the route
+// returns but this list omits falls through to 'unknown', so the toast says
+// "couldn't delete this transaction" in place of the instruction the refusal was
+// added to give. That is how withdrawal_invariant arrived — the route mapped it,
+// the client did not, and the actionable half of the change was invisible.
+export const DELETE_FAILURE_CODES: readonly DeleteFailureCode[] = [
   'settlement_consumed', 'merge_target', 'settlement_pending',
-  'referenced', 'not_found', 'delete_failed', 'network', 'unknown',
+  'referenced', 'withdrawal_invariant', 'not_found', 'delete_failed', 'network', 'unknown',
 ]
 
 function isFailureCode(v: unknown): v is DeleteFailureCode {
-  return typeof v === 'string' && (CODES as readonly string[]).includes(v)
+  return typeof v === 'string' && (DELETE_FAILURE_CODES as readonly string[]).includes(v)
 }

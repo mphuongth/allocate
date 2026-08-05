@@ -399,13 +399,24 @@ begin
   exception when sqlstate '23514' then null;
   end;
 
-  -- Deleting a source that has withdrawals is an ordinary ledger action. The FK
-  -- is ON DELETE SET NULL, so Postgres orphans the children — an UPDATE that
-  -- lands on this trigger. It must not turn a delete into an error.
+  -- Deleting a source that still has withdrawals USED to be an ordinary ledger
+  -- action: the FK is ON DELETE SET NULL, so Postgres orphaned the children and
+  -- the cash stayed in history filed under no holding at all — silent, and the
+  -- open half of #607. #608 refuses the shrinking edit, and a delete is that edit
+  -- taken all the way, so it is refused by the same rule (20260804000001). The
+  -- remedy is the ledger's own: remove the withdrawal, then the holding.
+  begin
+    delete from public.investment_transactions where transaction_id = v_snap;
+    raise exception 'deleting a source that still has withdrawals must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  delete from public.investment_transactions where transaction_id = v_wd;
   delete from public.investment_transactions where transaction_id = v_snap;
 
-  if (select parent_transaction_id from public.investment_transactions where transaction_id = v_wd) is not null then
-    raise exception 'the orphaned withdrawal should have lost its parent';
+  if exists (select 1 from public.investment_transactions
+              where transaction_id in (v_wd, v_snap)) then
+    raise exception 'the withdrawal and its source should both be gone';
   end if;
 
   raise notice 'withdrawal parent kinds + source deletion: ok';
@@ -1208,11 +1219,20 @@ begin
   values (v_user, v_goal, v_fund, 'fund', 'withdrawal', '2026-02-01', 1125000, 45, 1800000);
 
   -- The legacy claim on purchase A (planted with the trigger off — no longer writable).
+  -- ALTER TABLE refuses to run while a constraint trigger has events queued, and
+  -- the #608 source checks are DEFERRED (renewal is insolvent between its own
+  -- statements, so they can only be asked at the end). Flushing just those two —
+  -- not ALL — leaves every other deferrable trigger in this file at the timing it
+  -- was written for. Restored after the plant, so the rest of the block still sees
+  -- them the way a real transaction does. Same pair either side of every
+  -- disable/enable below.
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted immediate;
   alter table public.investment_transactions disable trigger user;
   insert into public.investment_transactions
     (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, units_withdrawn, principal_withdrawn)
   values (v_user, v_goal, null, 'withdrawal', '2026-03-01', 250000, v_buy_a, 10, 400000);
   alter table public.investment_transactions enable trigger user;
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted deferred;
 
   begin
     update public.investment_transactions set goal_id = v_goal_b where transaction_id = v_buy_b;
@@ -1247,11 +1267,14 @@ begin
   values (v_user, v_goal, v_fund, 'fund', 'investment', '2026-01-01', 2000000, 50, 40000)
   returning transaction_id into v_buy;
 
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted immediate;
+
   alter table public.investment_transactions disable trigger user;
   insert into public.investment_transactions
     (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, units_withdrawn, principal_withdrawn)
   values (v_user, v_goal, null, 'withdrawal', '2026-02-01', 250000, v_buy, 10, 400000);
   alter table public.investment_transactions enable trigger user;
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted deferred;
 
   begin
     insert into public.investment_transactions
@@ -1395,11 +1418,14 @@ begin
   values (v_user, v_goal2, v_fund2, 'fund', 'investment', '2026-01-01', 2000000, 50, 40000)
   returning transaction_id into v_buy3;
 
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted immediate;
+
   alter table public.investment_transactions disable trigger user;
   insert into public.investment_transactions
     (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn)
   values (v_user, v_goal2, null, 'withdrawal', '2026-02-01', 400000, v_buy3, 400000);
   alter table public.investment_transactions enable trigger user;
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted deferred;
 
   delete from public.savings_goals where goal_id = v_goal2;
 
@@ -1445,11 +1471,13 @@ begin
   -- reason: those units are derived from this purchase's price, so moving it
   -- rewrites what the dashboard takes out of the bucket for a row nothing
   -- re-measures. Planted with the trigger off — the only way the child can exist.
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted immediate;
   alter table public.investment_transactions disable trigger user;
   insert into public.investment_transactions
     (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn)
   values (v_user, v_goal3, null, 'withdrawal', '2026-03-01', 500000, v_dep2, 500000);
   alter table public.investment_transactions enable trigger user;
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted deferred;
 
   begin
     update public.investment_transactions set units = 25, unit_price = 80000
@@ -1476,20 +1504,25 @@ begin
   -- units and the same re-pricing goes through.
   -- (Off, because touching the child's own amounts is a RAISED claim and the child's
   -- trigger refuses the legacy shape there — giving it a fund is what legalises it.)
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted immediate;
   alter table public.investment_transactions disable trigger user;
   update public.investment_transactions set units_withdrawn = 12.5
    where parent_transaction_id = v_dep2 and transaction_type = 'withdrawal';
   alter table public.investment_transactions enable trigger user;
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted deferred;
 
   update public.investment_transactions set units = 25, unit_price = 80000
    where transaction_id = v_dep2;
   update public.investment_transactions set units = 50, unit_price = 40000
    where transaction_id = v_dep2;
 
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted immediate;
+
   alter table public.investment_transactions disable trigger user;
   update public.investment_transactions set units_withdrawn = null
    where parent_transaction_id = v_dep2 and transaction_type = 'withdrawal';
   alter table public.investment_transactions enable trigger user;
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted deferred;
 
   -- Everything else about it still edits: the guard is about the rate, not the row.
   update public.investment_transactions set notes = 'renamed' where transaction_id = v_dep2;
@@ -1505,20 +1538,43 @@ begin
   insert into public.investment_transactions
     (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
   values (v_user, v_goal3, 'bank', 'investment', '2026-01-01', 1000000) returning transaction_id into v_dep4;
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted immediate;
   alter table public.investment_transactions disable trigger user;
   insert into public.investment_transactions
     (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn)
   values (v_user, v_goal3, null, 'withdrawal', '2026-02-01', 400000, v_dep4, 400000);
   alter table public.investment_transactions enable trigger user;
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted deferred;
 
-  -- Step one is legal on its own: as a fund-keyed sell it draws on the bucket.
-  -- (units set too, so flipping it back would produce a real bucket purchase —
-  -- one with no units is no bucket and none of this applies.)
+  -- Step one used to be legal on its own — as a fund-keyed sell the converted row
+  -- draws on the bucket. #608 closes that door first: turning the holding into a
+  -- withdrawal takes its balance away while the legacy child still draws 400,000
+  -- on it, which is the same refusal as shrinking it to nothing.
+  begin
+    update public.investment_transactions
+       set transaction_type = 'withdrawal', asset_type = 'fund', fund_id = v_fund3,
+           units = 50, unit_price = 40000,
+           units_withdrawn = 10, principal_withdrawn = 400000, amount_vnd = 250000
+     where transaction_id = v_dep4;
+    set constraints investment_transactions_source_backs_claims immediate;
+    raise exception 'converting a holding into a withdrawal under a claim must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+  set constraints investment_transactions_source_backs_claims deferred;
+
+  -- The shape is still reachable as HISTORY, so step two must go on being guarded
+  -- on its own account: a ledger written before either guard existed contains it,
+  -- and activating such a row is what 20260803000003 refuses. Planted with the
+  -- user triggers off, which is the only way in now.
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted immediate;
+  alter table public.investment_transactions disable trigger user;
   update public.investment_transactions
      set transaction_type = 'withdrawal', asset_type = 'fund', fund_id = v_fund3,
          units = 50, unit_price = 40000,
          units_withdrawn = 10, principal_withdrawn = 400000, amount_vnd = 250000
    where transaction_id = v_dep4;
+  alter table public.investment_transactions enable trigger user;
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted deferred;
 
   begin
     update public.investment_transactions set transaction_type = 'investment'
@@ -1537,11 +1593,13 @@ begin
     (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
   values (v_user, v_goal3, v_fund4, 'fund', 'investment', '2026-01-01', 1000000, 0, 0)
   returning transaction_id into v_dep5;
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted immediate;
   alter table public.investment_transactions disable trigger user;
   insert into public.investment_transactions
     (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, units_withdrawn, principal_withdrawn)
   values (v_user, v_goal3, null, 'withdrawal', '2026-02-01', 400000, v_dep5, 8, 400000);
   alter table public.investment_transactions enable trigger user;
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted deferred;
 
   begin
     update public.investment_transactions set units = 40, unit_price = 25000
