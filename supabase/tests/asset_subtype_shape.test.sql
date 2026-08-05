@@ -92,6 +92,15 @@ begin
   exception when sqlstate '23514' then null;
   end;
 
+  -- The accumulating book's top-up lock window is deposit terms too (#638).
+  begin
+    insert into public.investment_transactions
+      (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, top_up_lock_days)
+    values (v_user, v_goal, 'gold', 'investment', '2026-01-01', 1000000, 2, 3500000, 30);
+    raise exception 'gold carrying a top-up lock window must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
   begin
     insert into public.investment_transactions
       (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, interest_earned_vnd)

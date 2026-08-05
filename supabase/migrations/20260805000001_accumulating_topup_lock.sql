@@ -6,6 +6,40 @@ alter table public.investment_transactions
   add constraint investment_transactions_top_up_lock_days_check
   check (top_up_lock_days is null or (top_up_lock_days >= 0 and top_up_lock_days <= 3650));
 
+-- The lock window is deposit terms, so it joins the rest of them in the subtype
+-- shape (#593): a fund/gold/stock row may not carry it, and a bank -> gold edit
+-- clears it with the others (lib/assetTypeFields.ts nulls the whole exclusive
+-- set). Restated in full rather than patched, because a CHECK cannot be altered
+-- in place — this is 20260802000001's constraint plus one column.
+alter table public.investment_transactions
+  drop constraint if exists investment_transactions_subtype_shape;
+
+alter table public.investment_transactions
+  add constraint investment_transactions_subtype_shape check (
+    transaction_type <> 'investment'
+    or asset_type is null
+    or case asset_type
+         when 'bank' then
+           fund_id is null and units is null and unit_price is null
+         when 'fund' then
+           interest_rate is null and expiry_date is null and bank_code is null
+           and interest_earned_vnd is null and deposit_group_id is null
+           and top_up_lock_days is null
+         when 'gold' then
+           fund_id is null and interest_rate is null and expiry_date is null
+           and bank_code is null and interest_earned_vnd is null and deposit_group_id is null
+           and top_up_lock_days is null
+         when 'stock' then
+           fund_id is null and interest_rate is null and expiry_date is null
+           and bank_code is null and interest_earned_vnd is null and deposit_group_id is null
+           and top_up_lock_days is null
+         else true
+       end
+  );
+
+comment on constraint investment_transactions_subtype_shape on public.investment_transactions is
+  'An investment row carries only its own asset type''s fields (#593, #638). See lib/assetTypeFields.ts for the same table in application code.';
+
 create or replace function public.assert_accumulating_book_topup_allowed(p_book_id uuid, p_owner_id uuid, p_top_up_date date)
 returns void language plpgsql security definer set search_path = '' as $$
 declare v_anchor public.investment_transactions; v_days_left integer;
