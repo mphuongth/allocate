@@ -133,6 +133,23 @@ returns trigger language plpgsql security definer set search_path = '' as $$
 declare v_group uuid; v_expiry date; v_lock integer; v_date date; v_days integer;
 begin
   v_group := new.deposit_group_id;
+
+  -- LOCK THE WHOLE BOOK FIRST, then read it in the statements below. Two edits
+  -- to different rows of one book would otherwise each measure the other's old
+  -- committed value — redating a tranche one day later while the other shortens
+  -- maturity by one day, each fine on its own, landing a tranche inside the
+  -- window neither transaction ever saw. Locking first makes the second edit
+  -- wait and then take a fresh snapshot, which is how the withdrawal balance is
+  -- kept atomic (20260730000002). By transaction_id so two books being edited
+  -- at once cannot deadlock on each other's rows. Two edits racing INSIDE one
+  -- book can still deadlock — each already holds the row it wrote — and Postgres
+  -- then aborts one of them, which is the safe answer either way: the book is
+  -- never left in a state neither transaction agreed to.
+  perform 1 from public.investment_transactions
+   where deposit_group_id = v_group
+   order by transaction_id
+   for update;
+
   select expiry_date, top_up_lock_days into v_expiry, v_lock
     from public.investment_transactions
    where transaction_id = v_group and deposit_group_id = v_group;
