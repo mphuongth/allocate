@@ -195,6 +195,30 @@ describe('DELETE /api/v1/investment-transactions/[id]', () => {
     expect(body.error).toMatch(/settlement/i)
   })
 
+  // Deleting a holding that a withdrawal still draws on is refused by the source
+  // side of the withdrawal invariant (#608): the cash would be left filed under no
+  // holding, which is silent and permanent. Like the settlement above it arrives as
+  // a check violation rather than the 23503 this handler was built around, so
+  // without its own branch an ordinary conflict reads as a server fault.
+  it('returns 409 when a withdrawal still draws on the holding', async () => {
+    h.deleteResult = {
+      data: null,
+      error: {
+        code: '23514',
+        message: 'withdrawal invariant: holding abc cannot be deleted while this withdrawal still draws 60000000 on it',
+      },
+    }
+
+    const res = await call()
+
+    expect(res.status).toBe(409)
+    const body = await res.json()
+    expect(body.code).toBe('withdrawal_invariant')
+    expect(body.error).toMatch(/withdrawal/i)
+    // The database's own sentence, with the row ids in it, is not the user's.
+    expect(JSON.stringify(body)).not.toContain('60000000')
+  })
+
   it('returns a generic 409 for an unrecognised foreign-key reference', async () => {
     h.deleteResult = {
       data: null,

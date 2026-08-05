@@ -173,6 +173,20 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         p_set_bank: bank_code !== undefined, p_bank_code: cleanBankCode ?? null,
       })
       .single()
+    // A tranche is a holding like any other, so shrinking one below what has been
+    // withdrawn from it is refused at the table (#608) — and this branch returns
+    // before the mapping further down ever runs. Without its own check the same
+    // conflict answers 400 for a plain deposit and 500 for a book tranche, which
+    // tells the user the app broke rather than what to do about it.
+    if (bookErr?.message?.includes('withdrawal invariant:')) {
+      return NextResponse.json(
+        {
+          error: 'A withdrawal is recorded against this deposit. Remove it before changing the deposit this way.',
+          code: 'withdrawal_invariant',
+        },
+        { status: 400 },
+      )
+    }
     if (bookErr || !row) {
       console.error('update_deposit_book: atomic book edit failed', bookErr?.message)
       return NextResponse.json({ error: 'Failed to update deposit book' }, { status: 500 })
@@ -346,6 +360,21 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
       }
       return NextResponse.json(
         { error: 'Another record still references this transaction. Remove that reference before deleting it.', code: 'referenced' },
+        { status: 409 },
+      )
+    }
+    // A withdrawal is still drawn on this holding (#608). Deleting it would leave
+    // that cash filed under no holding at all — the ledger owes what nothing backs
+    // — so the invariant refuses it. A conflict the user resolves by removing the
+    // withdrawal first, not a fault, and 500 would call it one. Matched on the
+    // family prefix exactly as PUT and POST do, so a refusal added later cannot
+    // fall through as the wrong status.
+    if (error.message?.includes('withdrawal invariant:')) {
+      return NextResponse.json(
+        {
+          error: 'A withdrawal is recorded against this holding. Remove it before deleting the holding.',
+          code: 'withdrawal_invariant',
+        },
         { status: 409 },
       )
     }

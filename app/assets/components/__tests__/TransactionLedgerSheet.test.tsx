@@ -102,6 +102,7 @@ describe('TransactionLedgerSheet — a refused delete says why', () => {
     ['settlement_consumed'],
     ['settlement_pending'],
     ['merge_target'],
+    ['withdrawal_invariant'],
   ])('surfaces the %s refusal', async (code) => {
     mockWithDelete({ ok: false, status: 409, body: { error: 'nope', code } })
     render(<TransactionLedgerSheet open desktop locale="en" onClose={() => {}} />)

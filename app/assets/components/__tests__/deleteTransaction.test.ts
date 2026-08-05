@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { deleteTransaction } from '../deleteTransaction'
+import { deleteTransaction, DELETE_FAILURE_CODES } from '../deleteTransaction'
 
 // DELETE /api/v1/investment-transactions/:id refuses for several distinct,
 // user-actionable reasons — a settlement already merged, one still waiting to
@@ -33,6 +33,7 @@ describe('deleteTransaction', () => {
     ['merge_target'],
     ['settlement_pending'],
     ['referenced'],
+    ['withdrawal_invariant'],
     ['not_found'],
     ['delete_failed'],
   ])('passes through the %s code unchanged', async (code) => {
@@ -58,5 +59,23 @@ describe('deleteTransaction', () => {
       new Response('<html>502 Bad Gateway</html>', { status: 502 }),
     )
     await expect(deleteTransaction('tx-1')).resolves.toEqual({ ok: false, code: 'unknown' })
+  })
+
+  // The gap that let withdrawal_invariant ship half-done: the route mapped the
+  // refusal, the client did not list it, and it fell through to "couldn't delete
+  // this transaction" — the generic sentence, in place of the instruction the
+  // refusal exists to give. Pinning the three lists to each other catches the next
+  // one at the point it is added rather than in a bug report.
+  it('has a translation for every code the client accepts, in every language', async () => {
+    const en = (await import('@/messages/en.json')).default.deleteTransaction as Record<string, string>
+    const vi = (await import('@/messages/vi.json')).default.deleteTransaction as Record<string, string>
+
+    for (const code of DELETE_FAILURE_CODES) {
+      expect(en[code], `messages/en.json is missing deleteTransaction.${code}`).toBeTruthy()
+      expect(vi[code], `messages/vi.json is missing deleteTransaction.${code}`).toBeTruthy()
+    }
+    // And nothing translated that the client can never produce.
+    expect(Object.keys(en).sort()).toEqual([...DELETE_FAILURE_CODES].sort())
+    expect(Object.keys(vi).sort()).toEqual([...DELETE_FAILURE_CODES].sort())
   })
 })
