@@ -111,6 +111,48 @@ begin
     end if;
   end;
 
+  -- Naming the book's owner in user_id does not buy the answer either. RLS
+  -- rejects a row the caller will not own, but only AFTER before-row triggers
+  -- run, so the guard must decline to speak for a row that is not the caller's.
+  -- The grant mirrors the deployed database, where `authenticated` is the role
+  -- PostgREST uses; the surrounding transaction rolls it back.
+  grant select, insert on public.investment_transactions to authenticated;
+  perform set_config('request.jwt.claims', json_build_object('sub', v_user::text)::text, true);
+  perform set_config('request.jwt.claim.sub', v_user::text, true);
+  begin
+    set local role authenticated;
+    insert into public.investment_transactions (
+      user_id, goal_id, asset_type, transaction_type, investment_date,
+      expiry_date, amount_vnd, interest_rate, deposit_group_id
+    ) values (v_other_user, v_other_goal, 'bank', 'investment', '2026-08-04',
+      '2026-09-03', 1000000, 4, v_other_book);
+    reset role;
+    raise exception 'impersonating the book owner must be rejected';
+  exception when insufficient_privilege then
+    reset role;
+  when others then
+    reset role;
+    get stacked diagnostics v_message = message_text;
+    raise exception 'foreign book metadata leaked to an impersonating caller: %', v_message;
+  end;
+
+  -- The same authenticated caller still meets the policy on their own book:
+  -- declining to speak for foreign rows must not disable the guard.
+  begin
+    set local role authenticated;
+    insert into public.investment_transactions (
+      user_id, goal_id, asset_type, transaction_type, investment_date,
+      expiry_date, amount_vnd, interest_rate, deposit_group_id
+    ) values (v_user, v_goal, 'bank', 'investment', '2026-08-04',
+      '2026-09-03', 1000000, 4, v_book);
+    reset role;
+    raise exception 'an authenticated owner must still meet the lock window';
+  exception when sqlstate '23514' then
+    reset role;
+  end;
+  perform set_config('request.jwt.claims', '', true);
+  perform set_config('request.jwt.claim.sub', '', true);
+
   -- The recurring RPC uses the entered date too: a backfilled contribution from
   -- before maturity remains valid even if the book is now past maturity.
   insert into public.investment_transactions (

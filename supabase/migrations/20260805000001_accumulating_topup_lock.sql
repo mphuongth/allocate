@@ -40,9 +40,16 @@ begin
        -- (which this trigger skips), redated inside the lock window, and turned
        -- back — the last step changing no other tracked column.
        or old.transaction_type is distinct from new.transaction_type) then
-    -- Include NEW.user_id in the SECURITY DEFINER lookup. This must happen
-    -- before reading a locked anchor so a foreign book cannot reveal its
-    -- maturity or lock window through the resulting error.
+    -- NEW.user_id scopes the SECURITY DEFINER lookup so a book owned by someone
+    -- else answers "not found" instead of reporting its maturity and lock window.
+    -- But an authenticated caller writes NEW.user_id themselves, and the RLS
+    -- WITH CHECK that refuses a foreign owner runs AFTER before-row triggers —
+    -- so naming the owner would otherwise buy the same answer. Say nothing about
+    -- a row this caller will not own and let RLS refuse it. auth.uid() is null
+    -- for the service role and for SQL writers, which still get the backstop.
+    if auth.uid() is not null and new.user_id is distinct from auth.uid() then
+      return new;
+    end if;
     perform public.assert_accumulating_book_topup_allowed(new.deposit_group_id, new.user_id, new.investment_date);
   end if;
   return new;
