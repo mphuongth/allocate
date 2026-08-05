@@ -9,6 +9,8 @@ declare
   v_book uuid := gen_random_uuid();
   v_ungrouped uuid := gen_random_uuid();
   v_parked uuid := gen_random_uuid();
+  v_moving_book uuid := gen_random_uuid();
+  v_moving_tranche uuid := gen_random_uuid();
   v_other_user uuid := gen_random_uuid();
   v_other_goal uuid;
   v_other_book uuid := gen_random_uuid();
@@ -183,6 +185,55 @@ begin
     raise exception 'a maturity-day top-up must be refused';
   exception when sqlstate '23514' then null;
   end;
+
+  -- ── Moving the book's maturity is the same decision, from the other side ──
+  -- v_moving holds one tranche dated 2026-08-04, well inside a 2026-12-31 book.
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate,
+    deposit_group_id, top_up_lock_days
+  ) values (
+    v_moving_book, v_user, v_goal, 'bank', 'investment',
+    '2026-01-01', '2026-12-31', 10000000, 4, v_moving_book, 30
+  );
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate, deposit_group_id
+  ) values (
+    v_moving_tranche, v_user, v_goal, 'bank', 'investment',
+    '2026-08-04', '2026-12-31', 1000000, 4, v_moving_book
+  );
+
+  -- Pulling maturity in until that tranche sits inside the lock window is the
+  -- refusal the tranche's own date would have earned.
+  begin
+    perform public.update_deposit_book(
+      v_moving_book, false, null, true, '2026-09-03'::date, false, null,
+      false, null, false, null, false, null, false, null);
+    raise exception 'shortening maturity into the lock window must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- Pulling it in past the tranche entirely leaves money in a dead book.
+  begin
+    perform public.update_deposit_book(
+      v_moving_book, false, null, true, '2026-07-01'::date, false, null,
+      false, null, false, null, false, null, false, null);
+    raise exception 'shortening maturity past a tranche must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- Pushing maturity out is always fine.
+  perform public.update_deposit_book(
+    v_moving_book, false, null, true, '2027-06-30'::date, false, null,
+    false, null, false, null, false, null, false, null);
+
+  -- Adopting or tightening the policy on an existing book stays possible: the
+  -- lock window governs tranches recorded from then on, and the stored value is
+  -- an editable snapshot (#638). Only a maturity move re-judges what is already
+  -- in the book.
+  update public.investment_transactions set top_up_lock_days = 400
+   where transaction_id = v_moving_book;
 
   raise notice 'accumulating top-up lock: OK';
 end;

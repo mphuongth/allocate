@@ -95,3 +95,55 @@ create trigger investment_transactions_accumulating_topup_lock
   before insert or update of deposit_group_id, investment_date, transaction_type on public.investment_transactions
   for each row
   execute function public.enforce_accumulating_book_topup_lock();
+
+-- Moving the book's maturity is the same decision seen from the other side: a
+-- tranche the policy would refuse today must not become one by pulling maturity
+-- in around it. The extreme is a tranche left dated after its own book's
+-- maturity — money in a dead book, which is what the insert path exists to stop.
+--
+-- Why the anchor and not the tranches: update_deposit_book cascades expiry_date
+-- to the whole group in ONE statement, so a row-level trigger on a tranche might
+-- read the anchor before or after its own update, depending on heap order. This
+-- fires once for the anchor and reads the group at the END of the statement,
+-- when the new maturity is whatever it is going to be — the same reasoning as
+-- investment_transactions_book_dissolved_whole (20260802000002).
+--
+-- Deliberately NOT fired by a change to top_up_lock_days: the stored window is
+-- an editable snapshot of the bank's policy (#638), and adopting or tightening
+-- it on a book that already holds tranches must stay possible. It governs what
+-- joins the book from then on.
+create or replace function public.enforce_book_maturity_fits_tranches()
+returns trigger language plpgsql security definer set search_path = '' as $$
+declare v_date date; v_days integer;
+begin
+  select t.investment_date, new.expiry_date - t.investment_date
+    into v_date, v_days
+    from public.investment_transactions t
+   where t.deposit_group_id = new.deposit_group_id
+     and t.transaction_id <> t.deposit_group_id
+     and t.transaction_type = 'investment'
+     and new.expiry_date - t.investment_date <= coalesce(new.top_up_lock_days, 0)
+   order by t.investment_date
+   limit 1;
+  if found then
+    if v_days <= 0 then
+      raise exception 'accumulating top-up: this book holds a top-up dated % , which the new maturity % would leave at or past maturity', v_date, new.expiry_date
+        using errcode = 'check_violation';
+    end if;
+    raise exception 'accumulating top-up: this book holds a top-up dated % , which the new maturity % would put inside its % day lock window', v_date, new.expiry_date, new.top_up_lock_days
+      using errcode = 'check_violation';
+  end if;
+  return null;
+end;
+$$;
+
+drop trigger if exists investment_transactions_book_maturity_fits_tranches on public.investment_transactions;
+create constraint trigger investment_transactions_book_maturity_fits_tranches
+  after update of expiry_date on public.investment_transactions
+  deferrable initially immediate
+  for each row
+  when (new.deposit_group_id is not null
+        and new.transaction_id = new.deposit_group_id
+        and new.transaction_type = 'investment'
+        and old.expiry_date is distinct from new.expiry_date)
+  execute function public.enforce_book_maturity_fits_tranches();
