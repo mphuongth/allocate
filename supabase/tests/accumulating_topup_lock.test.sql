@@ -17,6 +17,7 @@ declare
   v_historical_book uuid := gen_random_uuid();
   v_saving uuid := gen_random_uuid();
   v_message text;
+  v_lock_days integer;
 begin
   insert into auth.users (id, email) values (v_user, 'accumulating-topup-lock@test.invalid');
   insert into public.savings_goals (user_id, goal_name) values (v_user, 'Top-up lock') returning goal_id into v_goal;
@@ -173,6 +174,20 @@ begin
     v_historical_book, 1000000, 4, current_date - 2, v_saving,
     to_char(current_date - 2, 'YYYY-MM')
   );
+
+  -- A recurring tranche carries the book's lock window like a manual one does.
+  -- Goal detail reads book metadata off whichever group row its page contains,
+  -- so a tranche without it renders the book as open.
+  update public.investment_transactions set top_up_lock_days = 30
+   where transaction_id = v_historical_book;
+  select top_up_lock_days into v_lock_days
+    from public.record_recurring_book_topup(
+      v_historical_book, 1000000, 4, current_date - 40, v_saving,
+      to_char(current_date - 40, 'YYYY-MM')
+    );
+  if v_lock_days is distinct from 30 then
+    raise exception 'a recurring tranche must carry the book lock window, got %', v_lock_days;
+  end if;
 
   -- A maturity-day tranche would earn no term interest and must be refused even
   -- for legacy books without a configured pre-maturity lock.

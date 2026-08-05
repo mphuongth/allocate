@@ -52,14 +52,18 @@ begin
   -- Keep this SECURITY INVOKER RPC from calling that private helper directly:
   -- authenticated callers are deliberately not granted EXECUTE on it.
 
+  -- Every tranche carries the book's terms, the lock window included: goal detail
+  -- reads book metadata off whichever group row it has (the anchor may not be in
+  -- the page it fetched), so a tranche missing the window would render the book
+  -- as open and offer a top-up the trigger then refuses.
   insert into public.investment_transactions (
     user_id, goal_id, asset_type, transaction_type, amount_vnd,
     investment_date, expiry_date, interest_rate, notes,
-    deposit_group_id, plan_id, affects_progress
+    deposit_group_id, plan_id, affects_progress, top_up_lock_days
   ) values (
     v_anchor.user_id, v_anchor.goal_id, 'bank', 'investment', p_amount_vnd,
     p_investment_date, v_anchor.expiry_date, p_interest_rate, v_anchor.notes,
-    p_book_id, p_plan_id, true
+    p_book_id, p_plan_id, true, v_anchor.top_up_lock_days
   )
   returning * into v_tranche;
 
