@@ -60,6 +60,9 @@ begin
       '2026-08-04', '2026-09-03', 1000000, 4);
     update public.investment_transactions set deposit_group_id = v_book
       where transaction_id = v_ungrouped;
+    -- The edit checks are deferred so a multi-statement book edit is judged on
+    -- its final state; force them here to see the refusal from inside the test.
+    set constraints all immediate;
     raise exception 'joining a locked book must be refused';
   exception when sqlstate '23514' then null;
   end;
@@ -83,6 +86,7 @@ begin
        set transaction_type = 'investment', parent_transaction_id = null,
            principal_withdrawn = null
      where transaction_id = v_parked;
+    set constraints all immediate;
     raise exception 'a redated tranche must be refused when it becomes an investment again';
   exception when sqlstate '23514' then null;
   end;
@@ -225,6 +229,9 @@ begin
     perform public.update_deposit_book(
       v_moving_book, false, null, true, '2026-09-03'::date, false, null,
       false, null, false, null, false, null, false, null);
+    -- The edit checks are deferred so a multi-statement book edit is judged on
+    -- its final state; force them here to see the refusal from inside the test.
+    set constraints all immediate;
     raise exception 'shortening maturity into the lock window must be refused';
   exception when sqlstate '23514' then null;
   end;
@@ -234,6 +241,7 @@ begin
     perform public.update_deposit_book(
       v_moving_book, false, null, true, '2026-07-01'::date, false, null,
       false, null, false, null, false, null, false, null);
+    set constraints all immediate;
     raise exception 'shortening maturity past a tranche must be refused';
   exception when sqlstate '23514' then null;
   end;
@@ -242,6 +250,18 @@ begin
   perform public.update_deposit_book(
     v_moving_book, false, null, true, '2027-06-30'::date, false, null,
     false, null, false, null, false, null, false, null);
+  set constraints all immediate;
+
+  -- One edit, both sides: pulling maturity in to 2026-09-03 WOULD put the
+  -- 2026-08-04 tranche inside the window, but the same edit moves that tranche
+  -- to 2026-08-03, one day outside it. update_deposit_book cascades the maturity
+  -- in one statement and rewrites the tranche's date in the next, so only the
+  -- final state may be judged.
+  set constraints all deferred;
+  perform public.update_deposit_book(
+    v_moving_tranche, false, null, true, '2026-09-03'::date, false, null,
+    false, null, true, '2026-08-03'::date, false, null, false, null);
+  set constraints all immediate;
 
   -- Adopting or tightening the policy on an existing book stays possible: the
   -- lock window governs tranches recorded from then on, and the stored value is

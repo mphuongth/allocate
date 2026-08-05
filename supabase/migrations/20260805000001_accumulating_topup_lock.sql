@@ -90,60 +90,86 @@ begin
 end;
 $$;
 
+-- A new tranche is judged as it arrives: the error points at the insert that
+-- caused it, and the FOR UPDATE on the anchor is then held for the rest of the
+-- transaction, so two top-ups racing each other are measured one after the other.
 drop trigger if exists investment_transactions_accumulating_topup_lock on public.investment_transactions;
 create trigger investment_transactions_accumulating_topup_lock
-  before insert or update of deposit_group_id, investment_date, transaction_type on public.investment_transactions
+  before insert on public.investment_transactions
   for each row
   execute function public.enforce_accumulating_book_topup_lock();
 
--- Moving the book's maturity is the same decision seen from the other side: a
--- tranche the policy would refuse today must not become one by pulling maturity
--- in around it. The extreme is a tranche left dated after its own book's
--- maturity — money in a dead book, which is what the insert path exists to stop.
+-- ── Editing an existing book: judged on the final state ─────────────────────
 --
--- Why the anchor and not the tranches: update_deposit_book cascades expiry_date
--- to the whole group in ONE statement, so a row-level trigger on a tranche might
--- read the anchor before or after its own update, depending on heap order. This
--- fires once for the anchor and reads the group at the END of the statement,
--- when the new maturity is whatever it is going to be — the same reasoning as
--- investment_transactions_book_dissolved_whole (20260802000002).
+-- An UPDATE reaches the same policy from several sides, and one edit can use
+-- more than one of them at once:
+--
+--   • a tranche's date moves into the window, or an ungrouped row joins a book
+--     after the cutoff, or a booked row parked as a withdrawal comes back as an
+--     investment;
+--   • the BOOK's maturity is pulled in around a tranche that was fine before —
+--     the extreme being a tranche left dated after its own book's maturity,
+--     money in a dead book, which is what the insert guard exists to stop.
+--
+-- None of these can be judged where they happen. update_deposit_book cascades
+-- expiry_date to the whole group in ONE statement and then updates the edited
+-- tranche's own date in the NEXT one, so a per-statement check sees the book
+-- half-edited: shortening maturity while moving that tranche back out of the
+-- window would be refused on the first statement even though the state the
+-- caller asked for is perfectly valid.
+--
+-- So this is one DEFERRED check of the whole book, from whichever row changed.
+-- It asks the only question that matters — when this transaction is done, does
+-- every tranche still fit its book? — and the RPC's several statements are one
+-- transaction. Inserts stay immediate above: there the answer cannot change
+-- later in the transaction, and immediate feedback is worth more.
 --
 -- Deliberately NOT fired by a change to top_up_lock_days: the stored window is
 -- an editable snapshot of the bank's policy (#638), and adopting or tightening
 -- it on a book that already holds tranches must stay possible. It governs what
 -- joins the book from then on.
-create or replace function public.enforce_book_maturity_fits_tranches()
+create or replace function public.assert_accumulating_book_still_fits()
 returns trigger language plpgsql security definer set search_path = '' as $$
-declare v_date date; v_days integer;
+declare v_group uuid; v_expiry date; v_lock integer; v_date date; v_days integer;
 begin
-  select t.investment_date, new.expiry_date - t.investment_date
+  v_group := new.deposit_group_id;
+  select expiry_date, top_up_lock_days into v_expiry, v_lock
+    from public.investment_transactions
+   where transaction_id = v_group and deposit_group_id = v_group;
+  -- No anchor (the book was dissolved in this transaction) or no maturity: the
+  -- policy has nothing to say.
+  if not found or v_expiry is null then return null; end if;
+
+  select t.investment_date, v_expiry - t.investment_date
     into v_date, v_days
     from public.investment_transactions t
-   where t.deposit_group_id = new.deposit_group_id
-     and t.transaction_id <> t.deposit_group_id
+   where t.deposit_group_id = v_group
+     and t.transaction_id <> v_group
      and t.transaction_type = 'investment'
-     and new.expiry_date - t.investment_date <= coalesce(new.top_up_lock_days, 0)
+     and v_expiry - t.investment_date <= coalesce(v_lock, 0)
    order by t.investment_date
    limit 1;
-  if found then
-    if v_days <= 0 then
-      raise exception 'accumulating top-up: this book holds a top-up dated % , which the new maturity % would leave at or past maturity', v_date, new.expiry_date
-        using errcode = 'check_violation';
-    end if;
-    raise exception 'accumulating top-up: this book holds a top-up dated % , which the new maturity % would put inside its % day lock window', v_date, new.expiry_date, new.top_up_lock_days
+  if not found then return null; end if;
+
+  if v_days <= 0 then
+    raise exception 'accumulating top-up: this book holds a top-up dated %, at or past its maturity of %', v_date, v_expiry
       using errcode = 'check_violation';
   end if;
-  return null;
+  raise exception 'accumulating top-up: this book holds a top-up dated %, inside the % day lock window before its maturity of %', v_date, v_lock, v_expiry
+    using errcode = 'check_violation';
 end;
 $$;
 
 drop trigger if exists investment_transactions_book_maturity_fits_tranches on public.investment_transactions;
-create constraint trigger investment_transactions_book_maturity_fits_tranches
-  after update of expiry_date on public.investment_transactions
-  deferrable initially immediate
+drop trigger if exists investment_transactions_book_still_fits on public.investment_transactions;
+create constraint trigger investment_transactions_book_still_fits
+  after update of deposit_group_id, investment_date, transaction_type, expiry_date
+  on public.investment_transactions
+  deferrable initially deferred
   for each row
   when (new.deposit_group_id is not null
-        and new.transaction_id = new.deposit_group_id
-        and new.transaction_type = 'investment'
-        and old.expiry_date is distinct from new.expiry_date)
-  execute function public.enforce_book_maturity_fits_tranches();
+        and (old.deposit_group_id is distinct from new.deposit_group_id
+          or old.investment_date is distinct from new.investment_date
+          or old.transaction_type is distinct from new.transaction_type
+          or old.expiry_date is distinct from new.expiry_date))
+  execute function public.assert_accumulating_book_still_fits();
