@@ -21,7 +21,6 @@ const h = vi.hoisted(() => ({
   updateResult: { data: { transaction_id: '11111111-1111-4111-8111-111111111111' } as unknown, error: null as unknown },
   rpcResult: { data: { transaction_id: '11111111-1111-4111-8111-111111111111' } as unknown, error: null as unknown },
   rpcCalls: [] as { name: string; args: Record<string, unknown> }[],
-  rpcResult: { data: { transaction_id: '11111111-1111-4111-8111-111111111111' } as unknown, error: null as unknown },
 }))
 
 vi.mock('@/lib/supabase-server', () => {
@@ -76,7 +75,6 @@ beforeEach(() => {
   h.updateResult = { data: { transaction_id: TX_ID }, error: null }
   h.rpcResult = { data: { transaction_id: TX_ID }, error: null }
   h.rpcCalls = []
-  h.rpcResult = { data: { transaction_id: TX_ID }, error: null }
   vi.spyOn(console, 'error').mockImplementation(() => {})
 })
 
