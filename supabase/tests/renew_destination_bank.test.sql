@@ -125,6 +125,58 @@ begin
     raise exception 'a null destination must leave the bank as is, got %', v_renewed.bank_code;
   end if;
 
+  -- 3) The DISPLAYED name follows the money. A structured deposit stores the
+  --    chosen bank's name in `notes` (that is what the goal holdings list shows),
+  --    so moving the code alone left a deposit at VCB still reading "PVcomBank".
+  insert into public.investment_transactions (
+    user_id, goal_id, asset_type, transaction_type, investment_date,
+    amount_vnd, interest_rate, expiry_date, bank_code, notes
+  )
+  values (v_user, v_goal, 'bank', 'investment', '2026-01-01', 10000000, 6, '2026-07-01', 'PVCB', 'PVcomBank')
+  returning transaction_id into v_tx;
+
+  select * into v_renewed from public.renew_term_deposit_with_merge(
+    p_tx_id => v_tx, p_amount_vnd => 10000000, p_interest_rate => 6,
+    p_expiry_date => '2027-01-01', p_investment_date => '2026-07-01',
+    p_interest_earned_vnd => 0, p_fulfill_saving_id => null, p_fulfill_ym => null,
+    p_fulfill_amount => null, p_fulfill_source => null,
+    p_merge_source_ids => '{}', p_merge_received => '{}',
+    p_bank_code => 'VCB', p_held_source_ids => '{}'
+  );
+  if v_renewed.notes is distinct from 'Vietcombank' then
+    raise exception 'the deposit must be relabelled for its new bank, got %', v_renewed.notes;
+  end if;
+
+  -- The closed cycle keeps the bank it was actually held at.
+  select * into v_snapshot from public.investment_transactions
+   where renewed_from_transaction_id = v_tx;
+  if v_snapshot.notes is distinct from 'PVcomBank' then
+    raise exception 'the snapshot must keep the old bank name, got %', v_snapshot.notes;
+  end if;
+
+  -- 4) A name the USER chose is theirs — moving banks must not overwrite it.
+  insert into public.investment_transactions (
+    user_id, goal_id, asset_type, transaction_type, investment_date,
+    amount_vnd, interest_rate, expiry_date, bank_code, notes
+  )
+  values (v_user, v_goal, 'bank', 'investment', '2026-01-01', 10000000, 6, '2026-07-01', 'PVCB', 'Sổ cưới')
+  returning transaction_id into v_tx;
+
+  select * into v_renewed from public.renew_term_deposit_with_merge(
+    p_tx_id => v_tx, p_amount_vnd => 10000000, p_interest_rate => 6,
+    p_expiry_date => '2027-01-01', p_investment_date => '2026-07-01',
+    p_interest_earned_vnd => 0, p_fulfill_saving_id => null, p_fulfill_ym => null,
+    p_fulfill_amount => null, p_fulfill_source => null,
+    p_merge_source_ids => '{}', p_merge_received => '{}',
+    p_bank_code => 'VCB', p_held_source_ids => '{}'
+  );
+  if v_renewed.notes is distinct from 'Sổ cưới' then
+    raise exception 'a user-chosen name must survive the move, got %', v_renewed.notes;
+  end if;
+  if v_renewed.bank_code is distinct from 'VCB' then
+    raise exception 'the bank must still move for a custom-named deposit, got %', v_renewed.bank_code;
+  end if;
+
   raise notice 'renew_destination_bank.test.sql: OK';
 end $$;
 
