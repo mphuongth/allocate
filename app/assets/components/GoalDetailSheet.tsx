@@ -406,6 +406,33 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
               )}
               {!txLoading && invRows.map((inv, i) => {
                 const typeColor = GD_COLORS[inv.type] ?? 'var(--c-muted)'
+                // A recurring saving has no transaction behind it, so it carries
+                // no options menu — every action there would post an id the API
+                // rejects (#640). It is labelled instead, so the missing menu
+                // reads as intent rather than a gap.
+                const readOnly = !!inv.isRecurring
+                const meta = inv.units != null
+                  ? `${inv.units.toLocaleString('vi-VN')} ${isVI ? 'phần' : inv.units === 1 ? 'unit' : 'units'}`
+                  : readOnly
+                    ? (isVI ? 'Góp theo kế hoạch — sửa ở mục Kế hoạch' : 'Plan-driven — manage it in Planning')
+                    : inv.principal != null
+                      ? `${isVI ? 'Gốc' : 'Principal'} ${fmtCompact(inv.principal)}`
+                      : ''
+                const label = (
+                  <>
+                    <div style={{ fontSize: 13, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, color: 'var(--c-ink)' }}>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{inv.name}</span>
+                      {readOnly && (
+                        <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 999, background: 'var(--c-card-2)', color: 'var(--c-muted)', flexShrink: 0 }}>
+                          {isVI ? 'Định kỳ' : 'Recurring'}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
+                      {meta}
+                    </div>
+                  </>
+                )
                 return (
                   <div
                     key={inv.id}
@@ -423,22 +450,17 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
                       <TypeIcon type={inv.type} size={16} />
                     </div>
 
-                    {/* Name + meta — tappable */}
-                    <button
-                      onClick={() => { setActionInv(inv); setInvestActionOpen(true) }}
-                      style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit' }}
-                    >
-                      <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--c-ink)' }}>
-                        {inv.name}
-                      </div>
-                      <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
-                        {inv.units != null
-                          ? `${inv.units.toLocaleString('vi-VN')} ${isVI ? 'phần' : inv.units === 1 ? 'unit' : 'units'}`
-                          : inv.principal != null
-                            ? `${isVI ? 'Gốc' : 'Principal'} ${fmtCompact(inv.principal)}`
-                            : ''}
-                      </div>
-                    </button>
+                    {/* Name + meta — tappable, except for a read-only row */}
+                    {readOnly ? (
+                      <div style={{ flex: 1, minWidth: 0 }}>{label}</div>
+                    ) : (
+                      <button
+                        onClick={() => { setActionInv(inv); setInvestActionOpen(true) }}
+                        style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit' }}
+                      >
+                        {label}
+                      </button>
+                    )}
 
                     {/* Value + gain */}
                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
@@ -451,13 +473,15 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
                     </div>
 
                     {/* ⋯ button */}
-                    <button
-                      onClick={() => { setActionInv(inv); setInvestActionOpen(true) }}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, color: 'var(--c-muted)', flexShrink: 0 }}
-                      aria-label="Options"
-                    >
-                      <MoreHorizontal size={16} />
-                    </button>
+                    {!readOnly && (
+                      <button
+                        onClick={() => { setActionInv(inv); setInvestActionOpen(true) }}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, color: 'var(--c-muted)', flexShrink: 0 }}
+                        aria-label="Options"
+                      >
+                        <MoreHorizontal size={16} />
+                      </button>
+                    )}
                   </div>
                 )
               })}
@@ -702,7 +726,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
         open={resolveOpen}
         inv={actionInv}
         goalId={goal.goalId}
-        siblingDeposits={invRows}
+        siblingDeposits={invRows.filter((r) => !r.isRecurring)}
         heldSiblings={(goal.heldForMerge ?? []).map((h) => ({ id: h.transactionId, name: h.name, amount: h.amount }))}
         isVi={isVI}
         onClose={() => setResolveOpen(false)}

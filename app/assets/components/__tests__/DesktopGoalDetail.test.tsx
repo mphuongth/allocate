@@ -522,3 +522,48 @@ describe('DesktopGoalDetail — singular month wording (issue #262)', () => {
     expect(screen.queryByText('1 months')).not.toBeInTheDocument()
   })
 })
+
+// Desktop half of #640 — same rule as the mobile sheet: a synthesized recurring
+// contribution is value in the goal, not a transaction, so it carries no
+// withdraw / sell / unassign / renew menu.
+describe('DesktopGoalDetail — recurring contributions are not holdings (#640)', () => {
+  const recurringRow = {
+    transaction_id: 'recurring:saving-1:2026-08-01',
+    transaction_type: 'investment',
+    asset_type: 'bank',
+    fund_id: null,
+    fund_name: null,
+    parent_transaction_id: null,
+    investment_date: '2026-08-01',
+    amount_vnd: 5_000_000,
+    units: null,
+    interest_rate: null,
+    expiry_date: null,
+    notes: 'PVComBank',
+    principal_withdrawn: null,
+    units_withdrawn: null,
+    is_recurring: true,
+  }
+  const bankTx = { ...recurringRow, transaction_id: 'tx-bank', amount_vnd: 20_000_000, interest_rate: 0, notes: 'Real deposit', is_recurring: false }
+
+  beforeEach(() => {
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('recurring-contributions')) {
+        return Promise.resolve({ ok: true, json: async () => ({ contributions: [recurringRow] }) })
+      }
+      if (url.includes('investment-transactions')) {
+        return Promise.resolve({ ok: true, json: async () => ({ transactions: [bankTx] }) })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+  })
+
+  it('shows the contribution but offers no Options menu for it', async () => {
+    render(<DesktopGoalDetail {...baseProps} />)
+
+    await waitFor(() => expect(screen.getByText('PVComBank')).toBeInTheDocument())
+    expect(screen.getByText('Recurring')).toBeInTheDocument()
+    expect(screen.getByText('Real deposit')).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /^Options$/ })).toHaveLength(1)
+  })
+})

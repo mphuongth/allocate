@@ -721,3 +721,58 @@ describe('GoalDetailSheet — refreshKey triggers refetch', () => {
     await waitFor(() => expect(screen.getByText('VNINDEX ETF')).toBeInTheDocument(), { timeout: 3_000 })
   })
 })
+
+// A recurring saving has no investment_transactions row — the goal-detail load
+// merges the API's synthesized `recurring:<id>:<date>` rows into the same list.
+// They are real value in the goal, but nothing about them can be withdrawn,
+// sold, unassigned or renewed: posting that synthetic id is the 400 in #640.
+describe('GoalDetailSheet — recurring contributions are not holdings (#640)', () => {
+  const recurringRow = {
+    ...mockTx,
+    transaction_id: 'recurring:saving-1:2026-08-01',
+    asset_type: 'bank',
+    fund_id: null,
+    fund_name: null,
+    investment_date: '2026-08-01',
+    amount_vnd: 5_000_000,
+    units: null,
+    unit_price: null,
+    notes: 'PVComBank',
+    is_recurring: true,
+  }
+  const bankTx = {
+    ...mockTx,
+    transaction_id: 'tx-bank',
+    asset_type: 'bank',
+    fund_id: null,
+    fund_name: null,
+    amount_vnd: 20_000_000,
+    units: null,
+    unit_price: null,
+    interest_rate: 0,
+    notes: 'Real deposit',
+  }
+
+  beforeEach(() => {
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('recurring-contributions')) {
+        return Promise.resolve({ ok: true, json: async () => ({ contributions: [recurringRow] }) })
+      }
+      if (url.includes('investment-transactions')) {
+        return Promise.resolve({ ok: true, json: async () => ({ transactions: [bankTx] }) })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+  })
+
+  it('shows the contribution but offers no Options menu for it', async () => {
+    render(<GoalDetailSheet {...baseProps} goal={{ ...mockGoal, funds: [] }} />)
+
+    await waitFor(() => expect(screen.getByText('PVComBank')).toBeInTheDocument())
+    // Labelled for what it is, so the missing menu reads as intent, not a gap.
+    expect(screen.getByText('Recurring')).toBeInTheDocument()
+    // Exactly one row is actionable: the real deposit.
+    expect(screen.getByText('Real deposit')).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /^Options$/ })).toHaveLength(1)
+  })
+})
