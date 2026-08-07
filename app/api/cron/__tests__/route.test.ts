@@ -50,9 +50,13 @@ vi.mock('@/lib/scrape-gold', () => ({
   scrapeGoldPrice: async () => { h.goldCalls++; return 8_500_000 },
 }))
 
-vi.mock('@/lib/scrape-fund-nav', () => ({
-  scrapeFundNav: async () => { h.navCalls++; return { nav: 12_345 } },
-}))
+vi.mock('@/lib/fmarket-nav', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/fmarket-nav')>()
+  return {
+    ...actual,
+    fetchFmarketNavIndex: async () => { h.navCalls++; return new Map([['DCDS', 12_345]]) },
+  }
+})
 
 const ORIGINAL_ENV = process.env
 const CRON_SECRET = 'cron-secret'
@@ -71,7 +75,7 @@ const ROUTES = [
     load: () => import('../refresh-navs/route'),
     seedSuccess: () => {
       h.results['funds:select'] = {
-        data: [{ id: 'fund-1', nav_source_url: 'https://www.vcbf.com/fund' }],
+        data: [{ id: 'fund-1', code: 'DCDS', nav_source_url: 'https://www.vcbf.com/fund' }],
         error: null,
       }
       h.results['funds:update'] = { data: null, error: null }
