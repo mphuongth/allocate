@@ -1,16 +1,15 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { scrapeFundNav, normalizeNavUrl } from '@/lib/scrape-fund-nav'
-import { mapWithConcurrency } from '@/lib/concurrency'
+import { fetchFmarketNavIndex, lookupFundNav } from '@/lib/fmarket-nav'
 
-// Bound the user-triggered NAV refresh fan-out (#515): rate-limit per user,
-// de-duplicate by provider URL, and cap outbound scrape concurrency.
+// Bound the user-triggered NAV refresh (#515): rate-limit per user, then read
+// every fund's NAV from a single upstream request.
 // The rate-limit policy (5 req / 60 s) is hardcoded inside the RPC, not passed
 // from here, so a client calling the RPC directly can't weaken it.
 const RATE_LIMIT_WINDOW_SECONDS = 60
-const SCRAPE_CONCURRENCY = 4
 
 type FundRow = { id: string; name: string; code: string; nav_source_url: string | null }
+type Result = { id: string; name: string; code: string; nav?: number; updatedAt?: string; error?: string }
 
 export async function POST() {
   const supabase = await createSupabaseServerClient()
@@ -23,14 +22,14 @@ export async function POST() {
   }
 
   // Durable per-user rate limit (atomic fixed window in Postgres). One account
-  // must not be able to repeatedly trigger the whole scrape fan-out.
+  // must not be able to repeatedly trigger the outbound refresh.
   const { data: rl, error: rlError } = await supabase.rpc('check_nav_refresh_rate_limit')
   const verdict = Array.isArray(rl) ? rl[0] : rl
   if (rlError || !verdict) {
     // Fail CLOSED: if we can't verify the rate limit (RPC error, missing verdict,
-    // or the migration not yet applied), refuse rather than let the scrape fan-out
-    // run uncapped exactly when the DB is unhealthy. Refresh is non-essential, so
-    // a 503 the client can retry is the safe default.
+    // or the migration not yet applied), refuse rather than let the refresh run
+    // uncapped exactly when the DB is unhealthy. Refresh is non-essential, so a
+    // 503 the client can retry is the safe default.
     console.error('[refresh-nav] rate-limit check unavailable:', rlError)
     return NextResponse.json(
       { error: 'Rate limit check unavailable. Please try again shortly.' },
@@ -45,7 +44,10 @@ export async function POST() {
     )
   }
 
-  // Fetch all funds that have a nav_source_url
+  // nav_source_url stays the per-fund opt-in for automatic pricing — the funds a
+  // user pointed at a provider are the funds they want synced. It is no longer
+  // fetched: NAVs come from the Fmarket feed keyed by fund code (see
+  // lib/fmarket-nav.ts for why the per-provider scrapers were retired).
   const { data: funds, error: fetchError } = await supabase
     .from('funds')
     .select('id, name, code, nav_source_url')
@@ -60,49 +62,58 @@ export async function POST() {
     return NextResponse.json({ results: [] })
   }
 
-  // De-duplicate by normalized source URL: many funds can share one provider
-  // page, so scrape each distinct URL exactly once and fan the result back to
-  // every fund on it. This is what the daily cron already does — the
-  // user-triggered path was the one still scraping per-fund.
-  const urlToFunds = new Map<string, FundRow[]>()
-  for (const fund of funds as FundRow[]) {
-    const key = normalizeNavUrl(fund.nav_source_url!)
-    const list = urlToFunds.get(key) ?? []
-    list.push(fund)
-    urlToFunds.set(key, list)
+  const rows = funds as FundRow[]
+
+  // One request covers every fund, so an upstream failure is total rather than
+  // per-fund. Report it against each fund anyway: the client renders per-fund
+  // rows, and a 200 with visible errors keeps a provider outage from looking
+  // like a broken app.
+  let index
+  try {
+    index = await fetchFmarketNavIndex()
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to fetch fund prices'
+    return NextResponse.json({
+      results: rows.map((f) => ({ id: f.id, name: f.name, code: f.code, error: message })),
+    })
   }
 
-  // Bounded concurrency instead of an unbounded Promise.all over every URL.
-  const uniqueUrls = Array.from(urlToFunds.keys())
-  const scraped = await mapWithConcurrency(uniqueUrls, SCRAPE_CONCURRENCY, async (url) => ({
-    url,
-    result: await scrapeFundNav(url),
-  }))
+  // Group by resolved NAV so funds sharing a price update in one statement,
+  // and collect the unmatched ones as per-fund errors.
+  const results: Result[] = []
+  const byNav = new Map<number, FundRow[]>()
+  for (const fund of rows) {
+    const nav = lookupFundNav(index, fund.code)
+    if (nav === null) {
+      results.push({
+        id: fund.id,
+        name: fund.name,
+        code: fund.code,
+        error: `No fund matching code "${fund.code}" is listed upstream`,
+      })
+      continue
+    }
+    const group = byNav.get(nav) ?? []
+    group.push(fund)
+    byNav.set(nav, group)
+  }
 
-  const results: unknown[] = []
-  for (const { url, result } of scraped) {
-    const group = urlToFunds.get(url)!
-    if ('nav' in result) {
-      const ids = group.map((f) => f.id)
-      const { data: updated, error: updateError } = await supabase
-        .from('funds')
-        .update({ nav: result.nav, updated_at: new Date().toISOString() })
-        .in('id', ids)
-        .eq('user_id', user.id)
-        .select('id, name, code, nav, updated_at')
+  for (const [nav, group] of byNav) {
+    const ids = group.map((f) => f.id)
+    const { data: updated, error: updateError } = await supabase
+      .from('funds')
+      .update({ nav, updated_at: new Date().toISOString() })
+      .in('id', ids)
+      .eq('user_id', user.id)
+      .select('id, name, code, nav, updated_at')
 
-      if (updateError || !updated) {
-        for (const f of group) {
-          results.push({ id: f.id, name: f.name, code: f.code, error: 'Failed to update in database' })
-        }
-      } else {
-        for (const u of updated) {
-          results.push({ id: u.id, name: u.name, code: u.code, nav: u.nav, updatedAt: u.updated_at })
-        }
+    if (updateError || !updated) {
+      for (const f of group) {
+        results.push({ id: f.id, name: f.name, code: f.code, error: 'Failed to update in database' })
       }
     } else {
-      for (const f of group) {
-        results.push({ id: f.id, name: f.name, code: f.code, error: result.error })
+      for (const u of updated) {
+        results.push({ id: u.id, name: u.name, code: u.code, nav: u.nav, updatedAt: u.updated_at })
       }
     }
   }

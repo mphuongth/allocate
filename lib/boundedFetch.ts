@@ -7,13 +7,12 @@ export const SCRAPE_TIMEOUT_MS = 10_000
 export const SCRAPE_MAX_BYTES = 2 * 1024 * 1024 // 2 MB — the pages we scrape are tens of KB
 
 // Process-wide cap on concurrent outbound provider requests. This bounds the
-// TRUE fan-out regardless of how it nests: a route may already limit how many
-// URLs scrape at once, but one Dragon Capital scrape alone issues ~15 requests
-// via Promise.all, so without a per-request cap a handful of scrapes could still
-// open hundreds of sockets. Every fetch below goes through this gate.
-// Exported because the NAV scraper's Node-https path (used for providers whose
-// TLS the fetch path can't negotiate) must share the SAME gate — two separate
-// semaphores would each allow the cap, doubling the real ceiling.
+// TRUE fan-out regardless of how it nests, so no route can open an unbounded
+// number of sockets by looping. Every fetch below goes through this gate.
+//
+// The per-fund fan-out it was written against is gone — NAVs now come from one
+// Fmarket request rather than a scrape per provider page — but the gate stays as
+// the backstop for whatever calls this next.
 const MAX_CONCURRENT_HTTP = 6
 export const httpSemaphore = new Semaphore(MAX_CONCURRENT_HTTP)
 

@@ -10,7 +10,7 @@
 import { NextResponse } from 'next/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { ValidationError, validateAmount } from '@/lib/validation'
-import { validateNavSourceUrl } from '@/lib/scrape-fund-nav'
+import { validateNavSourceUrl } from '@/lib/navSourceUrl'
 
 export const FUND_TYPES = ['balanced', 'equity', 'debt', 'gold'] as const
 export type FundType = (typeof FUND_TYPES)[number]
