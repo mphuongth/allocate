@@ -10,7 +10,7 @@
 import { NextResponse } from 'next/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { ValidationError, validateAmount } from '@/lib/validation'
-import { isFundCodePriceable } from '@/lib/fmarket-nav'
+import { isFundCodePriceable, normalizeFundCode } from '@/lib/fmarket-nav'
 
 export const FUND_TYPES = ['balanced', 'equity', 'debt', 'gold'] as const
 export type FundType = (typeof FUND_TYPES)[number]
@@ -171,16 +171,37 @@ export async function dcaGoalOwnershipError(
  * means a fund that shows a sync toggle and then silently never updates —
  * failure discovered days later, at the next refresh, with no obvious cause.
  *
- * Only checked when the flag is being turned on: an off fund's code is never
- * looked up, so it costs nothing and constrains nothing.
+ * Guards a *transition*, not a state. `previous` is the fund as stored; passing
+ * it means "already-on-and-unchanged is none of this check's business". Without
+ * that, every DCA amount, goal and disable write would be gated too: those all
+ * PUT the fund's current `nav_auto_sync: true` back, so a fund whose code the
+ * feed happens not to list — including an opt-in migrated from the old
+ * nav_source_url, which was never checked against anything — would answer 400 to
+ * edits that have nothing to do with pricing. It also keeps the upstream request
+ * on deliberate actions (create, enable, rename the code) rather than on every
+ * save.
  *
  * Fails OPEN when the feed can't be reached. An outage is not evidence about the
  * code, and must not stand between someone and editing their own fund — the
  * worst case is a fund saved with sync on that reports a per-fund error at the
  * next refresh, which is exactly the state it would be in anyway.
  */
-export async function unpriceableFundCodeError(fields: FundFields): Promise<NextResponse | null> {
+export async function unpriceableFundCodeError(
+  fields: FundFields,
+  previous?: { code: string; nav_auto_sync: boolean } | null,
+): Promise<NextResponse | null> {
+  // Off, or absent on an update — nothing is being switched on.
   if (fields.nav_auto_sync !== true) return null
+
+  // Already on, and the code isn't moving: this write changes nothing the check
+  // is about.
+  if (
+    previous?.nav_auto_sync === true &&
+    normalizeFundCode(previous.code) === normalizeFundCode(fields.code)
+  ) {
+    return null
+  }
+
   const priceable = await isFundCodePriceable(fields.code)
   if (priceable === false) {
     return badRequest(

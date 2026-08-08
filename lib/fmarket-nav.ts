@@ -74,7 +74,25 @@ export function buildNavIndex(rows: unknown): NavIndex {
   return index
 }
 
-export async function fetchFmarketNavIndex(): Promise<NavIndex> {
+// Short-lived reuse of the last good index, shared by every caller in a warm
+// instance. NAVs move once a business day, so the staleness this can introduce
+// is far below the resolution of the data — while the burst it absorbs is real:
+// the write-time code check runs on user-driven saves, and without this each one
+// pulled the whole ~270 KB product list from the provider.
+//
+// Deliberately not a substitute for a durable rate limit, which the refresh
+// routes still carry: a cache bounds repeat cost, not first-call cost.
+const INDEX_TTL_MS = 60_000
+let cached: { at: number; index: NavIndex } | null = null
+
+// Exported for tests: module state outlives a single test file otherwise.
+export function clearFmarketNavCache(): void {
+  cached = null
+}
+
+export async function fetchFmarketNavIndex(now: number = Date.now()): Promise<NavIndex> {
+  if (cached && now - cached.at < INDEX_TTL_MS) return cached.index
+
   const body = await boundedFetchText(FMARKET_FILTER_URL, {
     method: 'POST',
     headers: {
@@ -91,7 +109,12 @@ export async function fetchFmarketNavIndex(): Promise<NavIndex> {
   } catch {
     throw new Error('Fmarket: response was not JSON')
   }
-  return buildNavIndex(rows)
+
+  // Only a validated index is cached. Caching a throw would turn one bad
+  // response into a minute of failures for every caller.
+  const index = buildNavIndex(rows)
+  cached = { at: now, index }
+  return index
 }
 
 // Exact match on the normalized code, then a unique-suffix fallback so a fund

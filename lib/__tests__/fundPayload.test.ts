@@ -2,7 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const priceable = vi.hoisted(() => ({ result: true as boolean | null }))
 
-vi.mock('@/lib/fmarket-nav', () => ({
+// Only the network call is stubbed; code normalization is pure and is what
+// decides whether a code "changed", so the real one has to run here.
+vi.mock('@/lib/fmarket-nav', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/fmarket-nav')>()),
   isFundCodePriceable: async () => priceable.result,
 }))
 
@@ -232,5 +235,49 @@ describe('unpriceableFundCodeError', () => {
   it('allows the save when the feed cannot be reached', async () => {
     priceable.result = null
     expect(await unpriceableFundCodeError({ ...fields, nav_auto_sync: true })).toBeNull()
+  })
+
+  // The regression Codex caught on #644. Every DCA amount / goal / disable write
+  // PUTs the fund's current nav_auto_sync back, so gating on the flag's *value*
+  // rather than on a transition made those writes 400 for any synced fund whose
+  // code the feed doesn't list — including opt-ins migrated from nav_source_url,
+  // which were never checked against anything.
+  it('skips the check when sync was already on and the code has not moved', async () => {
+    priceable.result = false
+    const previous = { code: 'MYSTERY', nav_auto_sync: true }
+
+    expect(await unpriceableFundCodeError({ ...fields, code: 'MYSTERY', nav_auto_sync: true }, previous))
+      .toBeNull()
+  })
+
+  it('ignores how the unchanged code was spelled', async () => {
+    priceable.result = false
+    const previous = { code: 'VCBF-BCF', nav_auto_sync: true }
+
+    expect(await unpriceableFundCodeError({ ...fields, code: 'vcbfbcf', nav_auto_sync: true }, previous))
+      .toBeNull()
+  })
+
+  it('still checks when sync is being switched on', async () => {
+    priceable.result = false
+    const previous = { code: 'MYSTERY', nav_auto_sync: false }
+
+    expect((await unpriceableFundCodeError({ ...fields, code: 'MYSTERY', nav_auto_sync: true }, previous))?.status)
+      .toBe(400)
+  })
+
+  it('still checks when the code changes on an already-synced fund', async () => {
+    priceable.result = false
+    const previous = { code: 'DCDS', nav_auto_sync: true }
+
+    expect((await unpriceableFundCodeError({ ...fields, code: 'MYSTERY', nav_auto_sync: true }, previous))?.status)
+      .toBe(400)
+  })
+
+  it('checks a create, which has no previous state', async () => {
+    priceable.result = false
+
+    expect((await unpriceableFundCodeError({ ...fields, code: 'MYSTERY', nav_auto_sync: true }, null))?.status)
+      .toBe(400)
   })
 })

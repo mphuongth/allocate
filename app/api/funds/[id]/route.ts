@@ -50,7 +50,17 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   if (!payload.ok) return payload.response
   const { fund: fields, dca } = payload
 
-  const unpriceable = await unpriceableFundCodeError(fields)
+  // Read the stored pricing state so the code check only fires on a real
+  // transition — see unpriceableFundCodeError. A miss here is not a 404: the
+  // update below already scopes by id + user_id and reports a missing row.
+  const { data: previous } = await supabase
+    .from('funds')
+    .select('code, nav_auto_sync')
+    .eq('id', id)
+    .eq('user_id', user.id)
+    .maybeSingle()
+
+  const unpriceable = await unpriceableFundCodeError(fields, previous)
   if (unpriceable) return unpriceable
 
   const update: Record<string, unknown> = { ...fields }

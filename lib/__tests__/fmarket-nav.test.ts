@@ -15,7 +15,7 @@ vi.mock('../boundedFetch', () => ({
   },
 }))
 
-const { fetchFmarketNavIndex, isFundCodePriceable } = await import('../fmarket-nav')
+const { fetchFmarketNavIndex, isFundCodePriceable, clearFmarketNavCache } = await import('../fmarket-nav')
 
 // A slice of the real feed, values as returned on 2026-08-07 and cross-checked
 // against each provider's own site.
@@ -106,6 +106,7 @@ describe('fetchFmarketNavIndex', () => {
     h.calls = []
     h.body = feed(ROWS)
     h.error = null
+    clearFmarketNavCache()
   })
 
   it('returns an index built from the feed', async () => {
@@ -149,6 +150,7 @@ describe('isFundCodePriceable — write-time check', () => {
     h.calls = []
     h.body = feed(ROWS)
     h.error = null
+    clearFmarketNavCache()
   })
 
   it('accepts a code the feed can price, in any spelling', async () => {
@@ -175,5 +177,53 @@ describe('isFundCodePriceable — write-time check', () => {
   it('returns null when the feed is reachable but unusable', async () => {
     h.body = '<html>maintenance</html>'
     await expect(isFundCodePriceable('VCBF-BCF')).resolves.toBeNull()
+  })
+})
+
+// Codex flagged the write-time check as an unbounded outbound request per save
+// (PR #644). The durable rate limits stay where they were — they bound a
+// deliberate refresh — but a burst of saves must not each pull the ~270 KB
+// product list, so a warm instance reuses the last good index briefly.
+describe('fetchFmarketNavIndex — short-lived reuse', () => {
+  beforeEach(() => {
+    h.calls = []
+    h.body = feed(ROWS)
+    h.error = null
+    clearFmarketNavCache()
+  })
+
+  it('serves repeat callers from one upstream request', async () => {
+    const a = await fetchFmarketNavIndex(1_000)
+    const b = await fetchFmarketNavIndex(1_500)
+
+    expect(h.calls).toHaveLength(1)
+    expect(b.get('DCDS')).toBe(a.get('DCDS'))
+  })
+
+  it('refetches once the window has passed', async () => {
+    await fetchFmarketNavIndex(1_000)
+    await fetchFmarketNavIndex(1_000 + 60_001)
+
+    expect(h.calls).toHaveLength(2)
+  })
+
+  // Caching a throw would turn one bad response into a minute of failures for
+  // every caller, including the daily cron.
+  it('does not cache a failure', async () => {
+    h.error = new Error('Upstream responded 503 for api.fmarket.vn')
+    await expect(fetchFmarketNavIndex(1_000)).rejects.toThrow(/503/)
+
+    h.error = null
+    await expect(fetchFmarketNavIndex(1_100)).resolves.toBeInstanceOf(Map)
+    expect(h.calls).toHaveLength(2)
+  })
+
+  it('does not cache an unusable payload', async () => {
+    h.body = feed([])
+    await expect(fetchFmarketNavIndex(1_000)).rejects.toThrow(/no priced funds/i)
+
+    h.body = feed(ROWS)
+    await expect(fetchFmarketNavIndex(1_100)).resolves.toBeInstanceOf(Map)
+    expect(h.calls).toHaveLength(2)
   })
 })

@@ -7,6 +7,16 @@ const h = vi.hoisted(() => ({
   updateResult: { data: { id: 'f1' }, error: null } as { data: unknown; error: unknown },
   rpcResult: { data: { id: 'f1' }, error: null } as { data: unknown; error: unknown },
   rpcCalls: [] as Array<{ fn: string; args: Record<string, unknown> }>,
+  // The fund as stored, read before the write so the fund-code check can tell a
+  // real pricing change from a DCA edit that merely echoes the current flag.
+  previous: { code: 'VFMVF1', nav_auto_sync: false } as { code: string; nav_auto_sync: boolean } | null,
+  priceable: true as boolean | null,
+}))
+
+// The write-time code check reaches upstream; stub the network, keep the logic.
+vi.mock('@/lib/fmarket-nav', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/fmarket-nav')>()),
+  isFundCodePriceable: async () => h.priceable,
 }))
 
 vi.mock('@/lib/supabase-server', () => {
@@ -14,6 +24,7 @@ vi.mock('@/lib/supabase-server', () => {
     update: (payload: Record<string, unknown>) => { h.captured = payload; return chain },
     select: () => chain,
     eq: () => chain,
+    maybeSingle: async () => ({ data: h.previous, error: null }),
     single: async () => h.updateResult,
   }
   return {
@@ -51,6 +62,8 @@ beforeEach(() => {
   h.updateResult = { data: { id: 'f1' }, error: null }
   h.rpcResult = { data: { id: 'f1' }, error: null }
   h.rpcCalls = []
+  h.previous = { code: 'VFMVF1', nav_auto_sync: false }
+  h.priceable = true
 })
 
 describe('PUT /api/funds/[id] — DCA fields use partial-update semantics (sibling of #411)', () => {
@@ -122,5 +135,36 @@ describe('PUT /api/funds/[id] — DCA fields use partial-update semantics (sibli
     expect(h.captured!.dca_monthly_amount_vnd).toBe(2_000_000)
     expect(h.captured!.dca_goal_id).toBe(goal)
     expect(h.rpcCalls).toHaveLength(0)
+  })
+})
+
+// Codex, reviewing #644: the fund-code check gated on the flag's *value*, but
+// every DCA amount / goal / disable write PUTs the fund's current
+// `nav_auto_sync: true` straight back. So any synced fund whose code the feed
+// doesn't list — including an opt-in migrated from the old nav_source_url, which
+// was never validated against anything — answered 400 to edits that have nothing
+// to do with pricing. The check now guards a transition.
+describe('PUT /api/funds/[id] — the fund-code check guards a transition, not a state', () => {
+  it('lets a DCA write through on a synced fund the feed cannot price', async () => {
+    h.previous = { code: 'MYSTERY', nav_auto_sync: true }
+    h.priceable = false
+
+    const res = await PUT(makeReq({
+      ...baseBody, code: 'MYSTERY', nav_auto_sync: true, is_dca: true, dca_monthly_amount_vnd: 2_000_000,
+    }), ctx)
+
+    expect(res.status).toBe(200)
+    expect(h.captured).toMatchObject({ dca_monthly_amount_vnd: 2_000_000 })
+  })
+
+  it('still refuses to switch pricing on for a code the feed cannot price', async () => {
+    h.previous = { code: 'MYSTERY', nav_auto_sync: false }
+    h.priceable = false
+
+    const res = await PUT(makeReq({ ...baseBody, code: 'MYSTERY', nav_auto_sync: true }), ctx)
+
+    expect(res.status).toBe(400)
+    expect((await res.json()).error).toMatch(/MYSTERY/)
+    expect(h.captured).toBeNull()
   })
 })
