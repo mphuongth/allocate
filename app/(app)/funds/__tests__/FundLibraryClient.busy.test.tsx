@@ -33,7 +33,7 @@ const FUND: Fund = {
   code: 'VFMVF1',
   fund_type: 'equity',
   nav: 36120,
-  nav_source_url: null,
+  nav_auto_sync: false,
   is_dca: true,
   dca_monthly_amount_vnd: 2_000_000,
   dca_goal_id: null,

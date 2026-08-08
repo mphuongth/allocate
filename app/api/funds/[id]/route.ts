@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { readJsonBody } from '@/lib/apiBody'
-import { parseFundPayload, dcaGoalOwnershipError } from '@/lib/fundPayload'
+import { parseFundPayload, dcaGoalOwnershipError, unpriceableFundCodeError } from '@/lib/fundPayload'
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -50,6 +50,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   if (!payload.ok) return payload.response
   const { fund: fields, dca } = payload
 
+  const unpriceable = await unpriceableFundCodeError(fields)
+  if (unpriceable) return unpriceable
+
   const update: Record<string, unknown> = { ...fields }
   if (dca) {
     Object.assign(update, dca)
@@ -72,7 +75,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           p_code: update.code,
           p_fund_type: update.fund_type,
           p_nav: update.nav,
-          p_nav_source_url: update.nav_source_url,
+          // undefined when the caller didn't send the flag; the RPC coalesces a
+          // null back to the stored value rather than switching sync off.
+          p_nav_auto_sync: update.nav_auto_sync ?? null,
         })
         .single()
     : await supabase

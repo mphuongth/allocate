@@ -8,7 +8,7 @@ import { fetchFmarketNavIndex, lookupFundNav } from '@/lib/fmarket-nav'
 // from here, so a client calling the RPC directly can't weaken it.
 const RATE_LIMIT_WINDOW_SECONDS = 60
 
-type FundRow = { id: string; name: string; code: string; nav_source_url: string | null }
+type FundRow = { id: string; name: string; code: string }
 type Result = { id: string; name: string; code: string; nav?: number; updatedAt?: string; error?: string }
 
 export async function POST() {
@@ -44,15 +44,14 @@ export async function POST() {
     )
   }
 
-  // nav_source_url stays the per-fund opt-in for automatic pricing — the funds a
-  // user pointed at a provider are the funds they want synced. It is no longer
-  // fetched: NAVs come from the Fmarket feed keyed by fund code (see
-  // lib/fmarket-nav.ts for why the per-provider scrapers were retired).
+  // nav_auto_sync is the per-fund opt-in; the NAV itself comes from the Fmarket
+  // feed matched on funds.code (see lib/fmarket-nav.ts for why the per-provider
+  // scrapers were retired).
   const { data: funds, error: fetchError } = await supabase
     .from('funds')
-    .select('id, name, code, nav_source_url')
+    .select('id, name, code')
     .eq('user_id', user.id)
-    .not('nav_source_url', 'is', null)
+    .eq('nav_auto_sync', true)
 
   if (fetchError) {
     return NextResponse.json({ error: 'Failed to fetch funds' }, { status: 500 })

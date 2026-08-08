@@ -1,5 +1,12 @@
-import { describe, it, expect } from 'vitest'
-import { parseFundPayload } from '../fundPayload'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+
+const priceable = vi.hoisted(() => ({ result: true as boolean | null }))
+
+vi.mock('@/lib/fmarket-nav', () => ({
+  isFundCodePriceable: async () => priceable.result,
+}))
+
+const { parseFundPayload, unpriceableFundCodeError } = await import('../fundPayload')
 
 // POST /api/funds and PUT /api/funds/[id] carried identical copies of this
 // validation, so a rule could be tightened on one and missed on the other
@@ -11,7 +18,6 @@ const valid = {
   code: ' vfmvf1 ',
   fund_type: 'equity',
   nav: 36120,
-  nav_source_url: null,
 }
 
 const parse = (body: Record<string, unknown>, mode: 'create' | 'update' = 'create') =>
@@ -74,11 +80,8 @@ describe('parseFundPayload — common fields', () => {
       .toEqual({ status: 400, error: 'Invalid goal' })
   })
 
-  // The stored URL is fetched server-side later, so the allowlist is what stops
-  // it being pointed at an internal address.
-  it('rejects a NAV source URL outside the vendor allowlist', async () => {
-    expect((await rejection({ ...valid, nav_source_url: 'http://169.254.169.254/latest/meta-data' })).status).toBe(400)
-    expect((await rejection({ ...valid, nav_source_url: 'https://evil.example.com/nav' })).status).toBe(400)
+  it('rejects a non-boolean nav_auto_sync', async () => {
+    expect((await rejection({ ...valid, nav_auto_sync: 'yes' })).status).toBe(400)
   })
 })
 
@@ -159,5 +162,75 @@ describe('parseFundPayload — update mode', () => {
     const result = parse({ ...valid, is_dca: 'yes' }, 'create')
 
     expect(result.ok && result.dca?.is_dca).toBe(false)
+  })
+})
+
+describe('parseFundPayload — nav_auto_sync', () => {
+  it('create defaults automatic pricing to off', () => {
+    const result = parse(valid, 'create')
+
+    expect(result.ok && result.fund.nav_auto_sync).toBe(false)
+  })
+
+  it('create stores the flag when it is sent', () => {
+    const result = parse({ ...valid, nav_auto_sync: true }, 'create')
+
+    expect(result.ok && result.fund.nav_auto_sync).toBe(true)
+  })
+
+  // The important one. A PUT that only edits the name must not carry an implicit
+  // "and switch automatic pricing off" — that is the #590 shape, a write wiping
+  // configuration the user never touched. Omission leaves the column alone, so
+  // the key must be absent rather than false.
+  it('update leaves the column untouched when the flag is not sent', () => {
+    const result = parse(valid, 'update')
+
+    expect(result.ok && 'nav_auto_sync' in result.fund).toBe(false)
+  })
+
+  it('update writes the flag when it is sent, including turning it off', () => {
+    expect(parse({ ...valid, nav_auto_sync: true }, 'update')).toMatchObject({
+      fund: { nav_auto_sync: true },
+    })
+    expect(parse({ ...valid, nav_auto_sync: false }, 'update')).toMatchObject({
+      fund: { nav_auto_sync: false },
+    })
+  })
+})
+
+// Turning automatic pricing on for a code the feed cannot match produces a fund
+// that shows a sync toggle and then never updates — a failure discovered days
+// later at the next refresh, with nothing pointing at the cause. The check runs
+// at write time so the user is told while still looking at the form.
+describe('unpriceableFundCodeError', () => {
+  const fields = { name: 'A', code: 'DCDS', fund_type: 'equity' as const, nav: 1 }
+
+  beforeEach(() => { priceable.result = true })
+
+  it('allows a code the feed can price', async () => {
+    expect(await unpriceableFundCodeError({ ...fields, nav_auto_sync: true })).toBeNull()
+  })
+
+  it('rejects a code the feed cannot price, naming it', async () => {
+    priceable.result = false
+    const res = await unpriceableFundCodeError({ ...fields, code: 'MYSTERY', nav_auto_sync: true })
+
+    expect(res?.status).toBe(400)
+    expect((await res!.json()).error).toMatch(/MYSTERY/)
+  })
+
+  // The code only has to be priceable if it is going to be priced. Someone
+  // tracking a fund by hand can call it whatever they like.
+  it('does not check the code when automatic pricing is off or unchanged', async () => {
+    priceable.result = false
+    expect(await unpriceableFundCodeError({ ...fields, nav_auto_sync: false })).toBeNull()
+    expect(await unpriceableFundCodeError({ ...fields })).toBeNull()
+  })
+
+  // Fails OPEN, unlike the refresh routes. A feed outage is not evidence about
+  // the code and must not block someone editing their own fund.
+  it('allows the save when the feed cannot be reached', async () => {
+    priceable.result = null
+    expect(await unpriceableFundCodeError({ ...fields, nav_auto_sync: true })).toBeNull()
   })
 })

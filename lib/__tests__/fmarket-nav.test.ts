@@ -15,7 +15,7 @@ vi.mock('../boundedFetch', () => ({
   },
 }))
 
-const { fetchFmarketNavIndex } = await import('../fmarket-nav')
+const { fetchFmarketNavIndex, isFundCodePriceable } = await import('../fmarket-nav')
 
 // A slice of the real feed, values as returned on 2026-08-07 and cross-checked
 // against each provider's own site.
@@ -141,5 +141,39 @@ describe('fetchFmarketNavIndex', () => {
   it('reports an unexpected envelope shape', async () => {
     h.body = JSON.stringify({ status: 200 })
     await expect(fetchFmarketNavIndex()).rejects.toThrow(/not an array/i)
+  })
+})
+
+describe('isFundCodePriceable — write-time check', () => {
+  beforeEach(() => {
+    h.calls = []
+    h.body = feed(ROWS)
+    h.error = null
+  })
+
+  it('accepts a code the feed can price, in any spelling', async () => {
+    await expect(isFundCodePriceable('VCBF-BCF')).resolves.toBe(true)
+    await expect(isFundCodePriceable('vcbfbcf')).resolves.toBe(true)
+  })
+
+  it('rejects a code nothing upstream matches', async () => {
+    await expect(isFundCodePriceable('MYSTERY')).resolves.toBe(false)
+  })
+
+  it('rejects an empty code without going upstream at all', async () => {
+    await expect(isFundCodePriceable('   ')).resolves.toBe(false)
+    expect(h.calls).toHaveLength(0)
+  })
+
+  // Fail OPEN, unlike the refresh routes. A feed outage says nothing about the
+  // code, and must not stand between someone and editing their own fund.
+  it('returns null when the feed cannot be reached, rather than false', async () => {
+    h.error = new Error('Upstream responded 503 for api.fmarket.vn')
+    await expect(isFundCodePriceable('VCBF-BCF')).resolves.toBeNull()
+  })
+
+  it('returns null when the feed is reachable but unusable', async () => {
+    h.body = '<html>maintenance</html>'
+    await expect(isFundCodePriceable('VCBF-BCF')).resolves.toBeNull()
   })
 })

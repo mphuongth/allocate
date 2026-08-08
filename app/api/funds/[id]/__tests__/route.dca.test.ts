@@ -79,7 +79,7 @@ describe('PUT /api/funds/[id] — DCA fields use partial-update semantics (sibli
         p_code: 'VFMVF1',
         p_fund_type: 'equity',
         p_nav: 36120,
-        p_nav_source_url: null,
+        p_nav_auto_sync: null,
       },
     }])
   })

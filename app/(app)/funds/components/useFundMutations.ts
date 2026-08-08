@@ -95,7 +95,7 @@ export function useFundMutations({
         code: fund.code,
         fund_type: fund.fund_type,
         nav: fund.nav,
-        nav_source_url: fund.nav_source_url,
+        nav_auto_sync: fund.nav_auto_sync,
         ...dca,
       }),
     }), [])

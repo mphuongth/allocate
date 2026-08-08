@@ -9,7 +9,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // most 1 is the stronger form of the old de-duplication guarantee.
 const h = vi.hoisted(() => ({
   user: { id: 'user-1' } as { id: string } | null,
-  funds: [] as { id: string; name: string; code: string; nav_source_url: string }[],
+  funds: [] as { id: string; name: string; code: string }[],
   fundsError: null as unknown,
   rate: { allowed: true, retry_after_seconds: 0 } as { allowed: boolean; retry_after_seconds: number },
   rateError: null as unknown,
@@ -100,7 +100,7 @@ describe('POST /api/v1/funds/refresh-nav — rate limit (#515)', () => {
     // e.g. the RPC not migrated yet, or a transient DB error. We must not let the
     // refresh run uncapped when we can't verify the limit.
     h.rateError = { message: 'function does not exist' }
-    h.funds = [{ id: 'a', name: 'A', code: 'A', nav_source_url: 'https://vcbf.com/ok' }]
+    h.funds = [{ id: 'a', name: 'A', code: 'A' }]
     h.navByCode = { A: 10 }
     const res = await POST()
     expect(res.status).toBe(503)
@@ -126,9 +126,9 @@ describe('POST /api/v1/funds/refresh-nav — rate limit (#515)', () => {
 describe('POST /api/v1/funds/refresh-nav — one upstream request', () => {
   it('hits the feed exactly once however many funds are being refreshed', async () => {
     h.funds = [
-      { id: 'a', name: 'A', code: 'VCBF-BCF', nav_source_url: 'https://vcbf.com/quy/bcf' },
-      { id: 'b', name: 'B', code: 'VCBF-FIF', nav_source_url: 'https://vcbf.com/quy/fif' },
-      { id: 'c', name: 'C', code: 'SSISCA', nav_source_url: 'https://ssiam.com.vn/x' },
+      { id: 'a', name: 'A', code: 'VCBF-BCF' },
+      { id: 'b', name: 'B', code: 'VCBF-FIF' },
+      { id: 'c', name: 'C', code: 'SSISCA' },
     ]
     h.navByCode = { VCBFBCF: 40789.29, VCBFFIF: 16024.72, SSISCA: 41110.8 }
     const res = await POST()
@@ -144,8 +144,8 @@ describe('POST /api/v1/funds/refresh-nav — one upstream request', () => {
   // each get their own number.
   it('gives sibling funds from one provider their own distinct NAV', async () => {
     h.funds = [
-      { id: 'a', name: 'Blue Chip', code: 'VCBF-BCF', nav_source_url: 'https://vcbf.com/quy/bcf' },
-      { id: 'b', name: 'Bond', code: 'VCBF-FIF', nav_source_url: 'https://vcbf.com/quy/fif' },
+      { id: 'a', name: 'Blue Chip', code: 'VCBF-BCF' },
+      { id: 'b', name: 'Bond', code: 'VCBF-FIF' },
     ]
     h.navByCode = { VCBFBCF: 40789.29, VCBFFIF: 16024.72 }
     const res = await POST()
@@ -159,8 +159,8 @@ describe('POST /api/v1/funds/refresh-nav — one upstream request', () => {
 describe('POST /api/v1/funds/refresh-nav — partial failure (#515)', () => {
   it('reports a per-fund error for an unlisted code but still 200s with the successes', async () => {
     h.funds = [
-      { id: 'a', name: 'A', code: 'DCDS', nav_source_url: 'https://dragoncapital.com.vn/ok' },
-      { id: 'c', name: 'C', code: 'MYSTERY', nav_source_url: 'https://ssiam.com.vn/bad' },
+      { id: 'a', name: 'A', code: 'DCDS' },
+      { id: 'c', name: 'C', code: 'MYSTERY' },
     ]
     h.navByCode = { DCDS: 93915.08 }
     const res = await POST()
@@ -175,8 +175,8 @@ describe('POST /api/v1/funds/refresh-nav — partial failure (#515)', () => {
   // not as a request failure that reads like a broken app.
   it('reports the upstream error against every fund rather than failing the request', async () => {
     h.funds = [
-      { id: 'a', name: 'A', code: 'DCDS', nav_source_url: 'https://dragoncapital.com.vn/ok' },
-      { id: 'b', name: 'B', code: 'VESAF', nav_source_url: 'https://vinacapital.com/vesaf' },
+      { id: 'a', name: 'A', code: 'DCDS' },
+      { id: 'b', name: 'B', code: 'VESAF' },
     ]
     h.upstreamError = new Error('Upstream responded 503 for api.fmarket.vn')
     const res = await POST()
@@ -187,7 +187,7 @@ describe('POST /api/v1/funds/refresh-nav — partial failure (#515)', () => {
   })
 
   it('reports a database failure against the affected funds', async () => {
-    h.funds = [{ id: 'a', name: 'A', code: 'DCDS', nav_source_url: 'https://dragoncapital.com.vn/ok' }]
+    h.funds = [{ id: 'a', name: 'A', code: 'DCDS' }]
     h.navByCode = { DCDS: 93915.08 }
     h.updateError = { message: 'write failed' }
     const res = await POST()

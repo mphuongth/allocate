@@ -36,6 +36,7 @@ vi.mock('@supabase/supabase-js', () => ({
           select: () => chain,
           update: () => { op = 'update'; return chain },
           not: () => chain,
+          eq: () => chain,
           in: () => chain,
           then: (resolve: (v: unknown) => void) =>
             resolve(h.results[`${table}:${op}`] ?? { data: [], error: null }),
@@ -75,7 +76,7 @@ const ROUTES = [
     load: () => import('../refresh-navs/route'),
     seedSuccess: () => {
       h.results['funds:select'] = {
-        data: [{ id: 'fund-1', code: 'DCDS', nav_source_url: 'https://www.vcbf.com/fund' }],
+        data: [{ id: 'fund-1', code: 'DCDS' }],
         error: null,
       }
       h.results['funds:update'] = { data: null, error: null }

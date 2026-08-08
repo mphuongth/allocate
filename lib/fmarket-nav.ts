@@ -110,5 +110,25 @@ export function lookupFundNav(index: NavIndex, code: unknown): number | null {
   for (const [indexed, nav] of index) {
     if (indexed.endsWith(key)) candidates.add(nav)
   }
+
   return candidates.size === 1 ? [...candidates][0] : null
+}
+
+// Answers "would automatic pricing actually find this fund?" at write time, so a
+// code that can never price is rejected while the user is still looking at the
+// form — rather than saved happily and discovered broken at the next sync.
+//
+// Returns null for "couldn't check". The upstream feed being down says nothing
+// about the code, and must not stop someone editing their own fund: callers are
+// expected to fail OPEN on null. That is the opposite of the refresh routes,
+// which fail closed — there, an unverifiable price is a price not worth storing;
+// here, an unverifiable code is no reason to block a save.
+export async function isFundCodePriceable(code: unknown): Promise<boolean | null> {
+  if (normalizeFundCode(code) === '') return false
+  try {
+    const index = await fetchFmarketNavIndex()
+    return lookupFundNav(index, code) !== null
+  } catch {
+    return null
+  }
 }

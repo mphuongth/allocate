@@ -30,7 +30,7 @@ function makeFund(over: Partial<Fund> = {}): Fund {
     code: 'VFMVF1',
     fund_type: 'equity',
     nav: 36120,
-    nav_source_url: null,
+    nav_auto_sync: false,
     is_dca: false,
     dca_monthly_amount_vnd: null,
     dca_goal_id: null,
@@ -77,7 +77,7 @@ describe('MobileFundLibraryView — relative NAV-age label must not jump across 
     const updatedAt = new Date(base - 5 * 60_000).toISOString()
 
     const { rerender } = render(
-      <Harness initial={[makeFund({ nav_source_url: 'http://example.test', updated_at: updatedAt })]} reload={vi.fn(() => Promise.resolve())} />,
+      <Harness initial={[makeFund({ nav_auto_sync: true, updated_at: updatedAt })]} reload={vi.fn(() => Promise.resolve())} />,
     )
 
         // Sanity: the card renders the "Updated …" line at all, bucketed as 5m.
@@ -92,7 +92,7 @@ describe('MobileFundLibraryView — relative NAV-age label must not jump across 
     // below would fail. After the fix the bucket is memoized on updated_at → 5m.
     vi.setSystemTime(base + 3 * 60_000)
     rerender(
-      <Harness initial={[makeFund({ nav_source_url: 'http://example.test', updated_at: updatedAt })]} reload={vi.fn(() => Promise.resolve())} />,
+      <Harness initial={[makeFund({ nav_auto_sync: true, updated_at: updatedAt })]} reload={vi.fn(() => Promise.resolve())} />,
     )
 
     expect(screen.getByText(/updatedAgo/).textContent).toContain(':5}')
