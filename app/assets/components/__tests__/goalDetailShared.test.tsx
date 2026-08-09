@@ -254,6 +254,59 @@ describe('buildInvRows', () => {
   })
 })
 
+// A recurring saving is a plan definition with no investment_transactions row.
+// The goal-detail load merges the API's synthesized per-month rows
+// (`recurring:<savingId>:<date>`) into the same list, so without special handling
+// they render as ordinary holdings — and withdrawing one posts that synthetic id
+// as parent_transaction_id, which the API rejects outright (#640).
+describe('buildInvRows — synthesized recurring contributions (#640)', () => {
+  const rec = (over: Partial<GoalDetailTx>): GoalDetailTx => baseTx({
+    asset_type: 'bank', notes: 'PVComBank', is_recurring: true, ...over,
+  })
+
+  it('rolls every realized month of one recurring saving into a single row', () => {
+    const rows = buildInvRows(
+      [
+        rec({ transaction_id: 'recurring:s1:2026-06-01', investment_date: '2026-06-01', amount_vnd: 5_000_000 }),
+        rec({ transaction_id: 'recurring:s1:2026-07-01', investment_date: '2026-07-01', amount_vnd: 5_000_000 }),
+      ],
+      [], null, true,
+    )
+    expect(rows).toHaveLength(1)
+    expect(rows[0].name).toBe('PVComBank')
+    expect(rows[0].value).toBe(10_000_000)     // the goal really holds both months
+    expect(rows[0].principal).toBe(10_000_000)
+    expect(rows[0].investmentDate).toBe('2026-06-01') // the first month contributed
+  })
+
+  it('flags the row as recurring so the UI can withhold the transaction-only actions', () => {
+    const rows = buildInvRows(
+      [rec({ transaction_id: 'recurring:s1:2026-06-01', amount_vnd: 5_000_000 })],
+      [], null, true,
+    )
+    expect(rows[0].isRecurring).toBe(true)
+    // No transaction backs it: nothing here may be posted as a parent id.
+    expect(rows[0].depositGroupId ?? null).toBeNull()
+    expect(rows[0].expiryDate).toBeNull()
+  })
+
+  it('keeps each recurring saving separate and never folds one into a real deposit', () => {
+    const rows = buildInvRows(
+      [
+        baseTx({ transaction_id: 'b1', asset_type: 'bank', amount_vnd: 20_000_000, interest_rate: 0, notes: 'PVComBank' }),
+        rec({ transaction_id: 'recurring:s1:2026-06-01', amount_vnd: 5_000_000 }),
+        rec({ transaction_id: 'recurring:s2:2026-06-01', notes: 'VCB định kỳ', amount_vnd: 1_000_000 }),
+      ],
+      [], null, true,
+    )
+    expect(rows).toHaveLength(3)
+    const real = rows.find((r) => r.id === 'b1')!
+    expect(real.isRecurring ?? false).toBe(false) // a real deposit stays actionable
+    expect(real.value).toBe(20_000_000)
+    expect(rows.filter((r) => r.isRecurring)).toHaveLength(2)
+  })
+})
+
 describe('fmtMaturity (issue #263)', () => {
   it('returns null for a missing date', () => {
     expect(fmtMaturity(null, false)).toBeNull()
