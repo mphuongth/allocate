@@ -339,15 +339,22 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
                     <TypeIcon type={inv.type} size={13} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--c-ink)' }}>
-                      {inv.name}
+                    <div style={{ fontSize: 12, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, color: 'var(--c-ink)' }}>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{inv.name}</span>
+                      {inv.isRecurring && (
+                        <span style={{ fontSize: 9, fontWeight: 600, padding: '1px 6px', borderRadius: 999, background: 'var(--c-card-2)', color: 'var(--c-muted)', flexShrink: 0 }}>
+                          {isVi ? 'Định kỳ' : 'Recurring'}
+                        </span>
+                      )}
                     </div>
                     <div style={{ fontSize: 10, color: 'var(--c-muted)', marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>
                       {inv.units != null
                         ? `${inv.units.toLocaleString('vi-VN')} ${isVi ? 'phần' : inv.units === 1 ? 'unit' : 'units'}`
-                        : inv.principal != null
-                          ? `${isVi ? 'Gốc' : 'Principal'} ${fmtCompact(inv.principal)}`
-                          : ''}
+                        : inv.isRecurring
+                          ? (isVi ? 'Góp theo kế hoạch — sửa ở mục Kế hoạch' : 'Plan-driven — manage it in Planning')
+                          : inv.principal != null
+                            ? `${isVi ? 'Gốc' : 'Principal'} ${fmtCompact(inv.principal)}`
+                            : ''}
                     </div>
                   </div>
                   <div style={{ textAlign: 'right', flexShrink: 0 }}>
@@ -358,14 +365,18 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
                       </div>
                     )}
                   </div>
-                  <button
-                    onClick={() => { setActionInv(inv); setShowInvOptions(true) }}
-                    className="cn-btn ghost"
-                    style={{ ...iconHit, flexShrink: 0 }}
-                    aria-label="Options"
-                  >
-                    <MoreHorizontal size={14} color="var(--c-muted)" />
-                  </button>
+                  {/* A recurring saving has no transaction behind it: every action
+                      in this menu would post an id the API rejects (#640). */}
+                  {!inv.isRecurring && (
+                    <button
+                      onClick={() => { setActionInv(inv); setShowInvOptions(true) }}
+                      className="cn-btn ghost"
+                      style={{ ...iconHit, flexShrink: 0 }}
+                      aria-label="Options"
+                    >
+                      <MoreHorizontal size={14} color="var(--c-muted)" />
+                    </button>
+                  )}
                 </div>
               ))}
             </>
@@ -580,7 +591,7 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
         <MaturityResolveModal
           inv={actionInv}
           goalId={goal.goalId}
-          siblingDeposits={invRows}
+          siblingDeposits={invRows.filter((r) => !r.isRecurring)}
           heldSiblings={(goal.heldForMerge ?? []).map((h) => ({ id: h.transactionId, name: h.name, amount: h.amount }))}
           isVi={isVi}
           onClose={() => setShowResolve(false)}

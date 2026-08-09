@@ -4,10 +4,11 @@ import { boundedFetchText } from '../boundedFetch'
 // Every outbound scrape must be bounded: an absolute timeout, a hard byte cap on
 // the streamed body, and a status check before anything is parsed (#530).
 //
-// This logic already existed inside lib/scrape-fund-nav.ts but was module-
-// private, so lib/scrape-gold.ts fetched completely unguarded. Extracting it
-// gives both scrapers one implementation to be correct in — and adds the status
-// check the NAV version was missing.
+// This logic already existed inside the since-retired lib/scrape-fund-nav.ts but
+// was module-private, so lib/scrape-gold.ts fetched completely unguarded.
+// Extracting it gave both callers one implementation to be correct in — and
+// added the status check the NAV version was missing. Both price sources still
+// go through it.
 
 function streamOf(chunks: Uint8Array[]): ReadableStream<Uint8Array> {
   return new ReadableStream({

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { scrapeFundNav } from '@/lib/scrape-fund-nav'
+import { fetchFmarketNavIndex, lookupFundNav } from '@/lib/fmarket-nav'
 import { verifyCronAuth } from '@/lib/cron-auth'
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 
@@ -15,9 +15,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 })
   }
 
+  // nav_source_url is the per-fund opt-in for automatic pricing; the NAV itself
+  // comes from the Fmarket feed keyed by fund code (see lib/fmarket-nav.ts).
   const { data: funds, error: fetchError } = await supabaseAdmin
     .from('funds')
-    .select('id, nav_source_url')
+    .select('id, code, nav_source_url')
     .not('nav_source_url', 'is', null)
 
   if (fetchError) {
@@ -28,29 +30,37 @@ export async function GET(request: Request) {
     return NextResponse.json({ updated: 0, failed: 0 })
   }
 
-  // Group fund IDs by nav_source_url to scrape each URL once
-  const urlToFundIds = new Map<string, string[]>()
-  for (const fund of funds) {
-    const url = fund.nav_source_url as string
-    const ids = urlToFundIds.get(url) ?? []
+  // One request prices every fund for every user, so an upstream failure fails
+  // the whole run — report it as such rather than as `failed: 0`.
+  let index
+  try {
+    index = await fetchFmarketNavIndex()
+  } catch (err) {
+    console.error('[cron refresh-navs] upstream fetch failed:', err)
+    return NextResponse.json({ updated: 0, failed: funds.length })
+  }
+
+  // Group by resolved NAV so every fund sharing a price updates in one
+  // statement, across all users.
+  const byNav = new Map<number, string[]>()
+  let failed = 0
+  for (const fund of funds as { id: string; code: string }[]) {
+    const nav = lookupFundNav(index, fund.code)
+    if (nav === null) {
+      failed += 1
+      continue
+    }
+    const ids = byNav.get(nav) ?? []
     ids.push(fund.id)
-    urlToFundIds.set(url, ids)
+    byNav.set(nav, ids)
   }
 
   let updated = 0
-  let failed = 0
-
   await Promise.all(
-    Array.from(urlToFundIds.entries()).map(async ([url, ids]) => {
-      const result = await scrapeFundNav(url)
-      if ('error' in result) {
-        failed += ids.length
-        return
-      }
-
+    Array.from(byNav.entries()).map(async ([nav, ids]) => {
       const { error } = await supabaseAdmin
         .from('funds')
-        .update({ nav: result.nav, updated_at: new Date().toISOString() })
+        .update({ nav, updated_at: new Date().toISOString() })
         .in('id', ids)
 
       if (error) {
