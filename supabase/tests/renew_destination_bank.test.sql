@@ -177,6 +177,71 @@ begin
     raise exception 'the bank must still move for a custom-named deposit, got %', v_renewed.bank_code;
   end if;
 
+  -- 5) The label is a bank name spelled with different capitalisation.
+  --    Real deposits carry "PVCombank" while the reference list says "PVcomBank";
+  --    an exact, case-sensitive comparison skipped the rename and left the user
+  --    looking at their old bank after moving to Eximbank.
+  insert into public.investment_transactions (
+    user_id, goal_id, asset_type, transaction_type, investment_date,
+    amount_vnd, interest_rate, expiry_date, bank_code, notes
+  )
+  values (v_user, v_goal, 'bank', 'investment', '2026-01-01', 10000000, 6, '2026-07-01', 'PVCB', 'PVCombank')
+  returning transaction_id into v_tx;
+
+  select * into v_renewed from public.renew_term_deposit_with_merge(
+    p_tx_id => v_tx, p_amount_vnd => 10000000, p_interest_rate => 6,
+    p_expiry_date => '2027-01-01', p_investment_date => '2026-07-01',
+    p_interest_earned_vnd => 0, p_fulfill_saving_id => null, p_fulfill_ym => null,
+    p_fulfill_amount => null, p_fulfill_source => null,
+    p_merge_source_ids => '{}', p_merge_received => '{}',
+    p_bank_code => 'EIB', p_held_source_ids => '{}'
+  );
+  if v_renewed.notes is distinct from 'Eximbank' then
+    raise exception 'a differently-capitalised bank name must still be renamed, got %', v_renewed.notes;
+  end if;
+
+  -- 6) A deposit predating the structured bank field: no bank_code to compare
+  --    against, but the label is plainly a bank name. Choosing a destination is
+  --    the user saying where the money now is, so the label must follow.
+  insert into public.investment_transactions (
+    user_id, goal_id, asset_type, transaction_type, investment_date,
+    amount_vnd, interest_rate, expiry_date, bank_code, notes
+  )
+  values (v_user, v_goal, 'bank', 'investment', '2026-01-01', 10000000, 6, '2026-07-01', null, 'PVcomBank')
+  returning transaction_id into v_tx;
+
+  select * into v_renewed from public.renew_term_deposit_with_merge(
+    p_tx_id => v_tx, p_amount_vnd => 10000000, p_interest_rate => 6,
+    p_expiry_date => '2027-01-01', p_investment_date => '2026-07-01',
+    p_interest_earned_vnd => 0, p_fulfill_saving_id => null, p_fulfill_ym => null,
+    p_fulfill_amount => null, p_fulfill_source => null,
+    p_merge_source_ids => '{}', p_merge_received => '{}',
+    p_bank_code => 'EIB', p_held_source_ids => '{}'
+  );
+  if v_renewed.notes is distinct from 'Eximbank' then
+    raise exception 'a legacy bank-named deposit must be renamed on the move, got %', v_renewed.notes;
+  end if;
+
+  -- 7) Staying put changes nothing, whatever the label looks like.
+  insert into public.investment_transactions (
+    user_id, goal_id, asset_type, transaction_type, investment_date,
+    amount_vnd, interest_rate, expiry_date, bank_code, notes
+  )
+  values (v_user, v_goal, 'bank', 'investment', '2026-01-01', 10000000, 6, '2026-07-01', 'PVCB', 'PVCombank')
+  returning transaction_id into v_tx;
+
+  select * into v_renewed from public.renew_term_deposit_with_merge(
+    p_tx_id => v_tx, p_amount_vnd => 10000000, p_interest_rate => 6,
+    p_expiry_date => '2027-01-01', p_investment_date => '2026-07-01',
+    p_interest_earned_vnd => 0, p_fulfill_saving_id => null, p_fulfill_ym => null,
+    p_fulfill_amount => null, p_fulfill_source => null,
+    p_merge_source_ids => '{}', p_merge_received => '{}',
+    p_bank_code => 'PVCB', p_held_source_ids => '{}'
+  );
+  if v_renewed.notes is distinct from 'PVCombank' then
+    raise exception 'renewing at the same bank must not touch the label, got %', v_renewed.notes;
+  end if;
+
   raise notice 'renew_destination_bank.test.sql: OK';
 end $$;
 
