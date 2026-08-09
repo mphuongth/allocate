@@ -1,12 +1,13 @@
--- Covers 20260807000001_fund_nav_auto_sync_flag.sql.
+-- Covers 20260809000002_drop_fund_nav_source_url.sql — the contract half of the
+-- nav_source_url → nav_auto_sync swap. (The expand half has its own test,
+-- fund_nav_auto_sync_column.test.sql, which pins the opposite property: that
+-- both columns and both overloads coexist.)
 --
--- funds.nav_auto_sync replaced funds.nav_source_url as the per-fund opt-in for
--- automatic NAV pricing. The interesting part is not the column but how
--- disable_fund_dca writes it: the RPC updates the whole fund config in one
--- statement, so a caller that doesn't send the flag must leave it alone. The
--- column is NOT NULL, so a bare `nav_auto_sync = p_nav_auto_sync` would either
--- fail the write or silently switch someone's pricing off — the #590 shape,
--- where a write wipes configuration the user never touched.
+-- What matters here is that the old side is gone completely and the surviving
+-- side behaves. A half-removal is the dangerous outcome: Postgres overloads on
+-- argument types, so a leftover nav_source_url overload would stay callable and
+-- PostgREST would route any request naming p_nav_source_url to a function
+-- writing a dropped column.
 --
 -- Runs against the local stack; everything happens inside a transaction that is
 -- rolled back, so it mutates nothing. Any failed assertion RAISEs and, under
@@ -28,12 +29,12 @@ begin
   -- The RPC is security invoker and filters on auth.uid().
   perform set_config('request.jwt.claims', json_build_object('sub', v_user::text)::text, true);
 
-  -- The column exists, is NOT NULL, and defaults to off: a fund created without
-  -- mentioning it is not silently opted into outbound pricing requests.
   insert into funds (user_id, name, code, fund_type, nav, is_dca, dca_monthly_amount_vnd)
     values (v_user, 'Synced Fund', 'DCDS', 'equity', 93915.08, true, 2000000)
     returning id into v_on;
 
+  -- NOT NULL with a false default: a fund created without mentioning the column
+  -- is not silently opted into outbound pricing requests.
   select nav_auto_sync into v_flag from funds where id = v_on;
   if v_flag is distinct from false then
     raise exception 'nav_auto_sync must default to false, got %', v_flag;
@@ -42,7 +43,7 @@ begin
   update funds set nav_auto_sync = true where id = v_on;
 
   -- nav_source_url must be gone, not merely unused: a retained column that
-  -- nothing writes is what this migration existed to remove.
+  -- nothing writes decays into a trap for the next reader.
   if exists (
     select 1 from information_schema.columns
      where table_schema = 'public' and table_name = 'funds' and column_name = 'nav_source_url'
@@ -50,8 +51,38 @@ begin
     raise exception 'nav_source_url should have been dropped';
   end if;
 
+  -- The pre-migration overload must be gone, not left callable beside the new
+  -- one. The comparison uses the FULL identity-arguments string, names included:
+  -- pg_get_function_identity_arguments returns 'p_fund_id uuid, ...', so an
+  -- earlier version of this check that compared against 'uuid, text, ...' could
+  -- never match and passed no matter what the database contained.
+  if exists (
+    select 1
+      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'public'
+       and p.proname = 'disable_fund_dca'
+       and pg_get_function_identity_arguments(p.oid)
+           = 'p_fund_id uuid, p_name text, p_code text, p_fund_type text, p_nav numeric, p_nav_source_url text'
+  ) then
+    raise exception 'the nav_source_url overload of disable_fund_dca still exists';
+  end if;
+
+  if not exists (
+    select 1
+      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'public'
+       and p.proname = 'disable_fund_dca'
+       and pg_get_function_identity_arguments(p.oid)
+           = 'p_fund_id uuid, p_name text, p_code text, p_fund_type text, p_nav numeric, p_nav_auto_sync boolean'
+  ) then
+    raise exception 'the nav_auto_sync overload of disable_fund_dca is missing';
+  end if;
+
   -- NULL means "the caller didn't send the flag" → keep the stored setting.
-  perform public.disable_fund_dca(v_on, 'Synced Fund', 'DCDS', 'equity', 93915.08, null);
+  -- Once the text overload is gone an untyped NULL is unambiguous, but the cast
+  -- stays: it is what made this assertion meaningful while both existed, and
+  -- removing it would leave the test silently dependent on the drop above.
+  perform public.disable_fund_dca(v_on, 'Synced Fund', 'DCDS', 'equity', 93915.08, null::boolean);
 
   select nav_auto_sync, is_dca into v_flag, v_is_dca from funds where id = v_on;
   if v_flag is not true then
@@ -81,24 +112,10 @@ begin
     raise exception 'an explicit true must turn automatic pricing on, got %', v_flag;
   end if;
 
-  -- The pre-migration overload must be gone, not left callable beside the new
-  -- one: Postgres overloads on argument types, so a stale six-text signature
-  -- would keep accepting writes that set the flag from a URL string.
-  if exists (
-    select 1
-      from pg_proc p
-      join pg_namespace n on n.oid = p.pronamespace
-     where n.nspname = 'public'
-       and p.proname = 'disable_fund_dca'
-       and pg_get_function_identity_arguments(p.oid) = 'uuid, text, text, text, numeric, text'
-  ) then
-    raise exception 'the old disable_fund_dca(uuid,text,text,text,numeric,text) overload still exists';
-  end if;
-
-  -- The backfill disables funds_updated_at so migrated funds don't all appear
-  -- freshly repriced (the views render NAV age from updated_at). A migration
-  -- that disabled a trigger and failed to re-enable it would silently stop
-  -- stamping updated_at from then on — the kind of damage nothing reports.
+  -- Both migrations hold funds_updated_at off for their backfill so reconciled
+  -- funds don't all look freshly repriced. One that disabled a trigger and
+  -- failed to re-enable it would silently stop stamping updated_at from then
+  -- on — the kind of damage nothing reports.
   if not exists (
     select 1
       from pg_trigger t join pg_class c on c.oid = t.tgrelid
