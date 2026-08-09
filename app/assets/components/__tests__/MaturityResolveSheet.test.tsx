@@ -17,6 +17,13 @@ import { todayIso, addDaysIso } from '@/lib/dates'
 function daysFromNow(n: number): string {
   return addDaysIso(todayIso(), n)
 }
+// The sheet also GETs /api/v1/banks on mount (the destination-bank picker, #640),
+// so assertions about what a renewal WROTE must look at the write calls, not the
+// raw call count.
+function writeCalls(fetchMock: { mock: { calls: unknown[][] } }) {
+  return fetchMock.mock.calls.filter((c) => (c[1] as { method?: string } | undefined)?.method != null)
+}
+
 // A matured term deposit: value (compounded) > principal, expiry in the past.
 const maturedDeposit: InvRow = {
   id: 'tx-bank-1',
@@ -58,8 +65,8 @@ describe('MaturityResolveBody', () => {
     )
     await user.click(screen.getByRole('button', { name: /Confirm renewal/i }))
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
-    const [url, opts] = fetchMock.mock.calls[0]
+    await waitFor(() => expect(writeCalls(fetchMock)).toHaveLength(1))
+    const [url, opts] = writeCalls(fetchMock)[0] as [string, { method: string; body: string }]
     expect(url).toBe('/api/v1/investment-transactions/tx-bank-1/renew')
     expect(opts.method).toBe('POST')
     expect(JSON.parse(opts.body)).toMatchObject({
@@ -90,7 +97,7 @@ describe('MaturityResolveBody', () => {
     const confirm = screen.getByRole('button', { name: /Xác nhận tái tục|Confirm renewal/i })
     expect(confirm).toBeDisabled()
     await user.click(confirm)
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(writeCalls(fetchMock)).toHaveLength(0)
   })
 
   it('still allows renewal for a deposit maturing tomorrow (within the route tolerance)', () => {
@@ -133,8 +140,8 @@ describe('MaturityResolveBody', () => {
     fireEvent.change(screen.getByTestId('maturity-date-input'), { target: { value: '2027-03-15' } })
     await user.click(screen.getByRole('button', { name: /Confirm renewal/i }))
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
-    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({
+    await waitFor(() => expect(writeCalls(fetchMock)).toHaveLength(1))
+    expect(JSON.parse((writeCalls(fetchMock)[0][1] as { body: string }).body)).toMatchObject({
       expiry_date: '2027-03-15',
       investment_date: maturedDeposit.expiryDate, // still anchored to the old maturity
     })
@@ -154,7 +161,7 @@ describe('MaturityResolveBody', () => {
     const confirm = screen.getByRole('button', { name: /Confirm renewal/i })
     expect(confirm).toBeDisabled()
     await user.click(confirm)
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(writeCalls(fetchMock)).toHaveLength(0)
   })
 
   it('suggests the original term length derived from the open + maturity dates', () => {
@@ -180,7 +187,7 @@ describe('MaturityResolveBody', () => {
     const confirm = screen.getByRole('button', { name: /Confirm renewal/i })
     expect(confirm).toBeDisabled()
     await user.click(confirm)
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(writeCalls(fetchMock)).toHaveLength(0)
   })
 
   // ── Merge-on-renew: fold sibling bank deposits into the re-deposit ──────────
@@ -357,7 +364,7 @@ describe('MaturityResolveBody', () => {
       investmentDate: daysFromNow(-120), fund: null, bankCode: null,
     }
 
-    it('shows a destination bank picker defaulting to the anchor bank once a source is selected', async () => {
+    it('shows a destination bank picker defaulting to the settling deposit\'s bank', async () => {
       const user = userEvent.setup()
       stubBanksAndRecurring()
       render(
@@ -365,10 +372,12 @@ describe('MaturityResolveBody', () => {
           isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
       )
       await user.click(await screen.findByRole('button', { name: /Settle & re-deposit/i }))
-      expect(screen.queryByTestId('merge-dest-bank')).toBeNull() // hidden until a source is picked
+      // Available from the start — the new cycle has a bank whether or not any
+      // sibling is folded into it (#640).
+      const sel = (await screen.findByTestId('dest-bank')) as HTMLSelectElement
+      expect(sel.value).toBe('TCB')
       await user.click(screen.getByTestId('merge-override-sib-vcb'))
-      const sel = (await screen.findByTestId('merge-dest-bank')) as HTMLSelectElement
-      expect(sel.value).toBe('TCB') // defaults to the settling deposit's bank
+      expect((screen.getByTestId('dest-bank') as HTMLSelectElement).value).toBe('TCB')
     })
 
     it('labels the section "Merge multiple sources" and shows provenance only when >1 source is selected', async () => {
@@ -409,7 +418,7 @@ describe('MaturityResolveBody', () => {
       expect(prov).toMatch(/2 banks/i)
 
       // Move the destination to MB and confirm it rides the request.
-      fireEvent.change(screen.getByTestId('merge-dest-bank'), { target: { value: 'MB' } })
+      fireEvent.change(screen.getByTestId('dest-bank'), { target: { value: 'MB' } })
       await user.click(screen.getByRole('button', { name: /Save new deposit/i }))
       await waitFor(() => {
         const renewCall = fetchMock.mock.calls.find((c) => String(c[0]).endsWith('/renew'))
@@ -432,6 +441,42 @@ describe('MaturityResolveBody', () => {
 
       const sources = await screen.findByTestId('maturity-renewed-sources')
       expect(sources.textContent).toContain('Vikki VCB')
+    })
+
+    // The reported case (#640): one maturing deposit, this month's recurring
+    // folded in, and the money moving to another bank. Nothing to merge — so the
+    // destination bank used to be unreachable and the user had to withdraw by hand.
+    it('moves a lone deposit to another bank on a plain renewal', async () => {
+      const user = userEvent.setup()
+      const fetchMock = stubBanksAndRecurring()
+      render(
+        <MaturityResolveBody inv={anchorTCB} goalId="goal-1" siblingDeposits={[anchorTCB]}
+          isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
+      )
+
+      const sel = (await screen.findByTestId('dest-bank')) as HTMLSelectElement
+      expect(sel.value).toBe('TCB')
+      fireEvent.change(sel, { target: { value: 'VCB' } })
+      await user.click(screen.getByRole('button', { name: /Confirm renewal/i }))
+
+      await waitFor(() => expect(fetchMock.mock.calls.some((c) => String(c[0]).endsWith('/renew'))).toBe(true))
+      const renewCall = fetchMock.mock.calls.find((c) => String(c[0]).endsWith('/renew'))!
+      expect(JSON.parse(renewCall[1].body).bank_code).toBe('VCB')
+    })
+
+    it('leaves bank_code out when the bank is not changed', async () => {
+      const user = userEvent.setup()
+      const fetchMock = stubBanksAndRecurring()
+      render(
+        <MaturityResolveBody inv={anchorTCB} goalId="goal-1" siblingDeposits={[anchorTCB]}
+          isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
+      )
+      await screen.findByTestId('dest-bank')
+      await user.click(screen.getByRole('button', { name: /Confirm renewal/i }))
+
+      await waitFor(() => expect(fetchMock.mock.calls.some((c) => String(c[0]).endsWith('/renew'))).toBe(true))
+      const renewCall = fetchMock.mock.calls.find((c) => String(c[0]).endsWith('/renew'))!
+      expect(JSON.parse(renewCall[1].body).bank_code).toBeUndefined()
     })
   })
 
@@ -804,6 +849,6 @@ describe('MaturityResolveBody', () => {
 
     expect(onClose).toHaveBeenCalled()
     await waitFor(() => expect(onWithdraw).toHaveBeenCalled())
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(writeCalls(fetchMock)).toHaveLength(0)
   })
 })

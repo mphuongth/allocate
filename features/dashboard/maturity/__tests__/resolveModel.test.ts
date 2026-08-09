@@ -42,7 +42,7 @@ const bodyBase = {
   newMaturity: '2027-01-01', baseDate: '2026-07-01', iNum: 600_000,
   pickedCand: null as { saving_id: string } | null, markFulfilled: true, fulfillYm: '2026-07', linkedAmt: 0,
   selectedSources: [] as { id: string; name?: string | null }[], mergeRecv: {} as Record<string, string>,
-  destBank: '', selectedHeld: [] as { id: string; name?: string | null }[],
+  destBank: '', currentBank: '', selectedHeld: [] as { id: string; name?: string | null }[],
 }
 
 describe('buildRenewBody', () => {
@@ -78,11 +78,31 @@ describe('buildRenewBody', () => {
     expect(b.fulfill_recurring).toEqual({ saving_id: 'sav1', ym: '2026-07', amount: 1_000_000 })
   })
 
-  it('combine with no merge sources leaves merge_sources / bank_code undefined', () => {
-    const b = buildRenewBody({ mode: 'combine', ...bodyBase, redepositNum: 12_000_000, destBank: 'VCB' })
+  it('combine with no merge sources leaves merge_sources undefined but still moves the bank', () => {
+    // Settling one deposit, folding this month's recurring in, and re-depositing
+    // at ANOTHER bank has no sibling to merge — the destination bank used to be
+    // dropped here, which left the user no way to change bank at all (#640).
+    const b = buildRenewBody({ mode: 'combine', ...bodyBase, redepositNum: 12_000_000, currentBank: 'PVCB', destBank: 'VCB' })
     expect(b.amount_vnd).toBe(12_000_000)
     expect(b.merge_sources).toBeUndefined()
-    expect(b.bank_code).toBeUndefined()
+    expect(b.bank_code).toBe('VCB')
+  })
+
+  it('a plain renewal can move the deposit to another bank', () => {
+    const b = buildRenewBody({ mode: 'principal_interest', ...bodyBase, currentBank: 'PVCB', destBank: 'MB' })
+    expect(b.bank_code).toBe('MB')
+    expect(b.merge_sources).toBeUndefined()
+  })
+
+  it('omits bank_code when the bank is unchanged, or unset, or the holding is a book', () => {
+    // Unchanged: nothing to move, so the request stays a plain renewal.
+    expect(buildRenewBody({ mode: 'principal_interest', ...bodyBase, currentBank: 'PVCB', destBank: 'PVCB' }).bank_code).toBeUndefined()
+    // "Không đặt" can't clear a bank (the RPC reads null as "leave as is").
+    expect(buildRenewBody({ mode: 'principal_interest', ...bodyBase, currentBank: 'PVCB', destBank: '' }).bank_code).toBeUndefined()
+    // A book collapses through a route that takes no bank.
+    expect(buildRenewBody({ mode: 'principal_interest', ...bodyBase, isBook: true, currentBank: 'PVCB', destBank: 'MB' }).bank_code).toBeUndefined()
+    // Withdrawing opens no new cycle to place at a bank.
+    expect(buildRenewBody({ mode: 'withdraw', ...bodyBase, currentBank: 'PVCB', destBank: 'MB' }).bank_code).toBeUndefined()
   })
 
   it('combine without a recurring pick or unchecked fulfillment omits fulfill_recurring', () => {

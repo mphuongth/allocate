@@ -29,6 +29,35 @@ export const dateInput: React.CSSProperties = {
   WebkitAppearance: 'none', appearance: 'none',
 }
 
+// Where the new cycle is deposited. Offered on every renewal, not only when
+// sibling deposits are folded in — moving a matured deposit to another bank is
+// the ordinary reason to re-deposit it, and it used to be reachable only through
+// the merge section (#640). Sending an unchanged pick is a no-op server-side.
+export function DestinationBankField({ banks, value, onChange, label, noneLabel, hint }: {
+  banks: { code: string; name: string }[]
+  value: string
+  onChange: (v: string) => void
+  label: string
+  noneLabel: string
+  hint?: string
+}) {
+  return (
+    <div>
+      <div style={fieldLabel}>{label}</div>
+      <select
+        data-testid="dest-bank"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{ ...moneyInput, fontWeight: 600 }}
+      >
+        <option value="">{noneLabel}</option>
+        {banks.map((b) => <option key={b.code} value={b.code}>{b.name}</option>)}
+      </select>
+      {hint && <p style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--c-muted)', lineHeight: 1.4 }}>{hint}</p>}
+    </div>
+  )
+}
+
 export function MoneyInputCore({ value, onChange, testId, style, compact }: {
   value: string; onChange: (v: string) => void; testId?: string;
   style?: React.CSSProperties; compact?: boolean

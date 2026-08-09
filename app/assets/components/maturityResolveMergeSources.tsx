@@ -10,12 +10,12 @@ import { Check, Lock, SlidersHorizontal } from 'lucide-react'
 import { fmtCompact } from '@/lib/formatters'
 import type { InvRow } from './goalDetailShared'
 import type { MergeClassification } from '@/lib/mergeEligibility'
-import { fieldLabel, moneyInput, MoneyInputCore } from './maturityResolveFields'
+import { fieldLabel, MoneyInputCore } from './maturityResolveFields'
 
 export function MergeSourcesSection({
   mergeableOrdered, classOf, isSelected, toggleSource, overrideSource, blockReasonText,
   isOverridden, mergeRecv, setReceived, mergeTotal, onMergeTotalChange, isMultiSource,
-  windowDays, setWindowDays, banks, destBank, setDestBank, selectedSources, mergeReceivedTotal,
+  windowDays, setWindowDays, selectedSources, mergeReceivedTotal,
   mergeSourceCount, mergeBankCount, t,
 }: {
   mergeableOrdered: InvRow[]
@@ -32,9 +32,6 @@ export function MergeSourcesSection({
   isMultiSource: boolean
   windowDays: number
   setWindowDays: (v: number) => void
-  banks: { code: string; name: string }[]
-  destBank: string
-  setDestBank: (v: string) => void
   selectedSources: InvRow[]
   mergeReceivedTotal: number
   mergeSourceCount: number
@@ -44,7 +41,6 @@ export function MergeSourcesSection({
     windowLabel: (n: number) => string; windowHint: string
     mergeReceivedLabel: string; mergeTotalLabel: string; mergeEarly: string; mergePenalty: string
     provenance: (n: number, m: number) => string
-    destBankLabel: string; destBankNone: string
   }
 }) {
   return (
@@ -130,14 +126,6 @@ export function MergeSourcesSection({
                   <p data-testid="merge-provenance" style={{ margin: 0, fontSize: 11, fontWeight: 600, color: 'var(--c-navy)', lineHeight: 1.45 }}>
                     {t.provenance(mergeSourceCount, mergeBankCount)}
                   </p>
-                  {/* Destination bank for the combined re-deposit (default = D's bank) */}
-                  <div>
-                    <div style={fieldLabel}>{t.destBankLabel}</div>
-                    <select data-testid="merge-dest-bank" value={destBank} onChange={(e) => setDestBank(e.target.value)} style={{ ...moneyInput, fontWeight: 600 }}>
-                      <option value="">{t.destBankNone}</option>
-                      {banks.map((b) => <option key={b.code} value={b.code}>{b.name}</option>)}
-                    </select>
-                  </div>
                   {/* One editable TOTAL that splits across the selected sources */}
                   {selectedSources.length > 1 && (
                     <div>
