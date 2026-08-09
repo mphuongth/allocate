@@ -95,6 +95,24 @@ begin
     raise exception 'the old disable_fund_dca(uuid,text,text,text,numeric,text) overload still exists';
   end if;
 
+  -- The backfill disables funds_updated_at so migrated funds don't all appear
+  -- freshly repriced (the views render NAV age from updated_at). A migration
+  -- that disabled a trigger and failed to re-enable it would silently stop
+  -- stamping updated_at from then on — the kind of damage nothing reports.
+  if not exists (
+    select 1
+      from pg_trigger t join pg_class c on c.oid = t.tgrelid
+     where c.relname = 'funds' and t.tgname = 'funds_updated_at' and t.tgenabled = 'O'
+  ) then
+    raise exception 'funds_updated_at must be enabled after the migration';
+  end if;
+
+  -- And it must still actually fire.
+  update funds set updated_at = timestamptz '2020-01-01' where id = v_off;
+  if (select updated_at from funds where id = v_off) = timestamptz '2020-01-01' then
+    raise exception 'funds_updated_at did not stamp the row';
+  end if;
+
   perform set_config('request.jwt.claims', '', true);
 
   raise notice 'fund_nav_auto_sync.test.sql: OK';

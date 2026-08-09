@@ -18,9 +18,25 @@ alter table public.funds
 
 -- Preserve every existing opt-in: a fund that had a source URL was being synced,
 -- and must keep being synced.
+--
+-- funds_updated_at is held off for exactly this statement. It is a BEFORE UPDATE
+-- trigger that stamps now() unconditionally — it overwrites even an explicit
+-- `set updated_at = <old value>`, so restoring the timestamps afterwards is not
+-- an option. Both fund-library views render the NAV age from updated_at whenever
+-- nav_auto_sync is true, so letting it fire here would tell every user that
+-- every fund had just been repriced, at the one moment their prices are in fact
+-- as old as they were before the deploy. This migration moves a flag; it fetches
+-- no NAV and must not claim to have.
+--
+-- Only this trigger is disabled, by name: the ownership and owner-immutability
+-- guards on funds stay armed for the write.
+alter table public.funds disable trigger funds_updated_at;
+
 update public.funds
    set nav_auto_sync = true
  where nav_source_url is not null;
+
+alter table public.funds enable trigger funds_updated_at;
 
 comment on column public.funds.nav_auto_sync is
   'Whether this fund''s NAV is refreshed automatically from the upstream price feed, matched by funds.code.';
