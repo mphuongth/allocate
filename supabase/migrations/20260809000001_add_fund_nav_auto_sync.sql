@@ -20,6 +20,16 @@ comment on column public.funds.nav_auto_sync is
 -- Preserve every existing opt-in: a fund that had a source URL was being synced,
 -- and must keep being synced once the new column is the one consulted.
 --
+-- This backfill goes stale, by design, and the contract migration must repeat
+-- it. The release still in production writes nav_source_url and knows nothing
+-- about nav_auto_sync, so any fund opted in or out during the compatibility
+-- window ends up with the two columns disagreeing — a fund created with a source
+-- URL keeps the false default and would silently stop syncing the moment reads
+-- move to the boolean. Re-running this statement immediately before dropping
+-- nav_source_url reconciles them atomically, at the one instant no writer can
+-- still be using the old column. It is in the drop migration; this comment is
+-- here because that is where someone would look for the reason.
+--
 -- funds_updated_at is held off for exactly this statement. It is a BEFORE UPDATE
 -- trigger that stamps now() unconditionally — it overwrites even an explicit
 -- `set updated_at = <old value>`, so restoring the timestamps afterwards is not

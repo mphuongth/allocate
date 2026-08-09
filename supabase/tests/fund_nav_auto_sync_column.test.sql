@@ -69,15 +69,28 @@ begin
   -- The new overload: NULL means "flag not sent" → keep the stored value. A
   -- partial write must not switch automatic pricing off behind the user, and the
   -- column is NOT NULL so a bare assignment would fail the write outright.
-  update funds set nav_auto_sync = true where id = v_fund;
-  perform public.disable_fund_dca(v_fund, 'Fund', 'DCDS', 'equity', 93915.08, null);
+  --
+  -- The cast is load-bearing while both overloads exist. An untyped NULL resolves
+  -- to the TEXT one — measured: it nulls nav_source_url and never touches
+  -- nav_auto_sync, so this assertion would pass without the boolean overload
+  -- being called at all.
+  -- nav_source_url is given a value first precisely so the wrong overload would
+  -- be visible: the text one would null it.
+  update funds set nav_auto_sync = true, nav_source_url = 'https://www.vcbf.com/keep' where id = v_fund;
+  perform public.disable_fund_dca(v_fund, 'Fund', 'DCDS', 'equity', 93915.08, null::boolean);
 
-  select nav_auto_sync, is_dca into v_flag, v_is_dca from funds where id = v_fund;
+  select nav_auto_sync, is_dca, nav_source_url into v_flag, v_is_dca, v_url from funds where id = v_fund;
   if v_flag is not true then
     raise exception 'a partial update must not switch automatic pricing off, got %', v_flag;
   end if;
   if v_is_dca is not false then
     raise exception 'disable_fund_dca must still turn DCA off';
+  end if;
+  -- Proves the boolean overload is the one that ran: the text overload would
+  -- have written nav_source_url. Without this the assertion above is satisfied
+  -- by the wrong function.
+  if v_url is distinct from 'https://www.vcbf.com/keep' then
+    raise exception 'the text overload ran instead of the boolean one (nav_source_url = %)', coalesce(v_url, 'NULL');
   end if;
 
   -- An explicit value is honoured — "unchanged" must not swallow a real change.
