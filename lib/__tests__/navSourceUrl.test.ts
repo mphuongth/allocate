@@ -1,11 +1,13 @@
-import { describe, it, expect, vi, afterEach } from 'vitest'
-import { isAllowedNavHost, validateNavSourceUrl, scrapeFundNav, normalizeNavUrl } from '../scrape-fund-nav'
+import { describe, it, expect } from 'vitest'
+import { isAllowedNavHost, validateNavSourceUrl } from '../navSourceUrl'
 import { ValidationError } from '../validation'
 
-// SSRF guard: nav_source_url is user-supplied and later fetched server-side (by
-// the refresh-nav route + the daily cron). The host gate must be an EXACT match
-// on the vendor domains — the old `hostname.includes('vcbf.com')` substring gate
-// let attacker-controlled hosts like evilvcbf.com / vcbf.com.attacker.com through.
+// SSRF guard: nav_source_url is user-supplied and stored. Nothing fetches it
+// today — NAVs come from the Fmarket feed keyed by fund code — but a stored URL
+// is one refactor away from being fetched again, so the host gate stays and must
+// be an EXACT match on the vendor domains: the old `hostname.includes('vcbf.com')`
+// substring gate let attacker-controlled hosts like evilvcbf.com /
+// vcbf.com.attacker.com through.
 
 describe('isAllowedNavHost — exact vendor-host match', () => {
   it('accepts the exact vendor domains and their subdomains', () => {
@@ -61,47 +63,5 @@ describe('validateNavSourceUrl — write-time SSRF validation', () => {
     expect(() => validateNavSourceUrl('https://169.254.169.254/latest/meta-data/')).toThrow(ValidationError)
     expect(() => validateNavSourceUrl('not a url')).toThrow(ValidationError)
     expect(() => validateNavSourceUrl(42)).toThrow(ValidationError)
-  })
-})
-
-describe('scrapeFundNav — rejects disallowed hosts before any fetch', () => {
-  it('returns an Unsupported-domain error for a substring-bypass host (no network hit)', async () => {
-    const res = await scrapeFundNav('https://evilvcbf.com/x')
-    expect(res).toEqual({ error: expect.stringMatching(/unsupported domain/i) })
-  })
-})
-
-describe('normalizeNavUrl — de-dup key', () => {
-  it('lowercases the host but preserves path case (Dragon/VinaCapital fund codes)', () => {
-    expect(normalizeNavUrl('https://WWW.DragonCapital.com.vn/individual/vi/x/VEOF'))
-      .toBe('https://www.dragoncapital.com.vn/individual/vi/x/VEOF')
-  })
-
-  it('collapses trailing slash and fragment so trivially-different URLs share one scrape', () => {
-    const a = normalizeNavUrl('https://vcbf.com/quy/vcbf-fif/')
-    const b = normalizeNavUrl('https://vcbf.com/quy/vcbf-fif#nav')
-    expect(a).toBe(b)
-  })
-
-  it('returns the trimmed input unchanged when it is not a valid URL', () => {
-    expect(normalizeNavUrl('  not a url  ')).toBe('not a url')
-  })
-})
-
-describe('scrapeFundNav — bounded provider fetch (timeout + size cap)', () => {
-  afterEach(() => { vi.unstubAllGlobals() })
-
-  it('turns an oversized response body into a per-fund error, not a hang', async () => {
-    // 3 MB body exceeds the 2 MB cap → boundedFetchText throws → { error }.
-    const huge = 'x'.repeat(3 * 1024 * 1024)
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(huge)))
-    const res = await scrapeFundNav('https://vcbf.com/quy/vcbf-fif')
-    expect(res).toHaveProperty('error')
-  })
-
-  it('turns a fetch/timeout rejection into a per-fund error', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('The operation was aborted due to timeout') }))
-    const res = await scrapeFundNav('https://vcbf.com/quy/vcbf-fif')
-    expect(res).toEqual({ error: expect.stringMatching(/timeout|abort/i) })
   })
 })
