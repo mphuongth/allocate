@@ -5,11 +5,15 @@ const h = vi.hoisted(() => ({
   calls: [] as { url: string; init: Record<string, unknown> }[],
   body: '',
   error: null as Error | null,
+  gate: null as Promise<void> | null,
 }))
 
 vi.mock('../boundedFetch', () => ({
   boundedFetchText: async (url: string, init: Record<string, unknown> = {}) => {
     h.calls.push({ url, init })
+    // `gate` lets a test hold the response open, which is the only way to have
+    // more than one caller in flight at once.
+    if (h.gate) await h.gate
     if (h.error) throw h.error
     return h.body
   },
@@ -106,6 +110,7 @@ describe('fetchFmarketNavIndex', () => {
     h.calls = []
     h.body = feed(ROWS)
     h.error = null
+    h.gate = null
     clearFmarketNavCache()
   })
 
@@ -150,6 +155,7 @@ describe('isFundCodePriceable — write-time check', () => {
     h.calls = []
     h.body = feed(ROWS)
     h.error = null
+    h.gate = null
     clearFmarketNavCache()
   })
 
@@ -189,6 +195,7 @@ describe('fetchFmarketNavIndex — short-lived reuse', () => {
     h.calls = []
     h.body = feed(ROWS)
     h.error = null
+    h.gate = null
     clearFmarketNavCache()
   })
 
@@ -225,5 +232,58 @@ describe('fetchFmarketNavIndex — short-lived reuse', () => {
     h.body = feed(ROWS)
     await expect(fetchFmarketNavIndex(1_100)).resolves.toBeInstanceOf(Map)
     expect(h.calls).toHaveLength(2)
+  })
+})
+
+// Codex, second pass on #644: caching only the resolved index still let a burst
+// stampede — every concurrent caller misses the cache before the first response
+// lands and starts its own full-feed fetch. The outbound semaphore paces those
+// at 6 at a time; it does not prevent them. The in-flight promise is now shared.
+describe('fetchFmarketNavIndex — concurrent callers share one request', () => {
+  beforeEach(() => {
+    h.calls = []
+    h.body = feed(ROWS)
+    h.error = null
+    h.gate = null
+    clearFmarketNavCache()
+  })
+
+  it('collapses a burst of cache misses into a single upstream fetch', async () => {
+    let open: () => void = () => {}
+    h.gate = new Promise<void>((r) => { open = r })
+
+    // All five start before any response can land.
+    const bursting = Array.from({ length: 5 }, () => fetchFmarketNavIndex(1_000))
+    open()
+    const indexes = await Promise.all(bursting)
+
+    expect(h.calls).toHaveLength(1)
+    for (const index of indexes) expect(index.get('DCDS')).toBe(93915.08)
+  })
+
+  it('gives every joiner the same failure and lets the next caller retry', async () => {
+    let open: () => void = () => {}
+    h.gate = new Promise<void>((r) => { open = r })
+    h.error = new Error('Upstream responded 503 for api.fmarket.vn')
+
+    const bursting = Array.from({ length: 3 }, () => fetchFmarketNavIndex(1_000))
+    open()
+    const settled = await Promise.allSettled(bursting)
+
+    expect(h.calls).toHaveLength(1)
+    for (const r of settled) expect(r.status).toBe('rejected')
+
+    // A failed flight must not be inherited by whoever comes next.
+    h.gate = null
+    h.error = null
+    await expect(fetchFmarketNavIndex(1_100)).resolves.toBeInstanceOf(Map)
+    expect(h.calls).toHaveLength(2)
+  })
+
+  it('serves callers arriving after the flight from the cache, not a new flight', async () => {
+    await fetchFmarketNavIndex(1_000)
+    await Promise.all([fetchFmarketNavIndex(1_100), fetchFmarketNavIndex(1_200)])
+
+    expect(h.calls).toHaveLength(1)
   })
 })

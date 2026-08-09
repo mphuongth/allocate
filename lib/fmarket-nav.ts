@@ -81,18 +81,42 @@ export function buildNavIndex(rows: unknown): NavIndex {
 // pulled the whole ~270 KB product list from the provider.
 //
 // Deliberately not a substitute for a durable rate limit, which the refresh
-// routes still carry: a cache bounds repeat cost, not first-call cost.
+// routes still carry: this bounds what one warm instance costs the provider, not
+// what a fleet of cold ones does.
 const INDEX_TTL_MS = 60_000
 let cached: { at: number; index: NavIndex } | null = null
+
+// The request currently in flight, if any. Storing only the *resolved* index
+// leaves a stampede: concurrent callers all miss the cache before the first
+// response lands, and each starts its own full-feed fetch — the outbound
+// semaphore then paces them 6 at a time rather than preventing them. Sharing the
+// promise collapses any burst into one upstream request.
+let inFlight: Promise<NavIndex> | null = null
 
 // Exported for tests: module state outlives a single test file otherwise.
 export function clearFmarketNavCache(): void {
   cached = null
+  inFlight = null
 }
 
 export async function fetchFmarketNavIndex(now: number = Date.now()): Promise<NavIndex> {
   if (cached && now - cached.at < INDEX_TTL_MS) return cached.index
 
+  // Join the request already running rather than starting a second one. A
+  // rejection reaches every joiner, which is what they'd each have got anyway,
+  // and `inFlight` is cleared either way so the next caller retries rather than
+  // inheriting a stale failure.
+  if (inFlight) return inFlight
+
+  inFlight = fetchNavIndexUncached(now)
+  try {
+    return await inFlight
+  } finally {
+    inFlight = null
+  }
+}
+
+async function fetchNavIndexUncached(now: number): Promise<NavIndex> {
   const body = await boundedFetchText(FMARKET_FILTER_URL, {
     method: 'POST',
     headers: {
