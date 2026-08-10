@@ -317,19 +317,28 @@ begin
      set successor_deposit_tx_id = v_new_id, updated_at = now()
    where transaction_id = p_source_book_id;
 
-  -- Recurring-driven: the month is contributed to B, marked fulfilled, and the
-  -- saving now points at B. A saving linked elsewhere is not this flow's to move.
+  -- EVERY saving pointing at the old book follows it. The source stops accepting
+  -- contributions the moment this commits, so a saving left behind would be
+  -- funding a book that refuses it — and the monthly plan would have no way to
+  -- record the month at all. This runs whichever entry point opened the
+  -- successor: the manual one names no saving, and would otherwise strand them.
+  --
+  -- LOCK them while reading. The book lock says nothing about these rows, so
+  -- without it a relink landing between the read and the write would be
+  -- silently overwritten.
+  perform 1 from public.recurring_savings
+   where user_id = v_source.user_id and linked_deposit_tx_id = p_source_book_id
+   order by saving_id
+   for update;
+
+  -- Recurring-driven: the month is also contributed to B and marked fulfilled.
+  -- A saving linked elsewhere is not this flow's to move.
   if p_saving_id is not null then
-    -- LOCK the saving while checking it. The book lock says nothing about this
-    -- row, so without it another request could relink the saving between the
-    -- check and the write below, and this call would silently overwrite that
-    -- newer choice — moving a saving that no longer points here.
     if not exists (
       select 1 from public.recurring_savings
        where saving_id = p_saving_id
          and user_id = v_source.user_id
          and linked_deposit_tx_id = p_source_book_id
-       for update
     ) then
       raise exception 'successor book: that recurring saving is not linked to this book'
         using errcode = 'check_violation';
@@ -349,15 +358,12 @@ begin
           source     = excluded.source,
           updated_at = now();
 
-    update public.recurring_savings
-       set linked_deposit_tx_id = v_new_id, updated_at = now()
-     where saving_id = p_saving_id
-       and linked_deposit_tx_id = p_source_book_id;
-    if not found then
-      raise exception 'successor book: that recurring saving moved while this was being recorded'
-        using errcode = 'check_violation';
-    end if;
   end if;
+
+  update public.recurring_savings
+     set linked_deposit_tx_id = v_new_id, updated_at = now()
+   where user_id = v_source.user_id
+     and linked_deposit_tx_id = p_source_book_id;
 
   return v_book;
 end;

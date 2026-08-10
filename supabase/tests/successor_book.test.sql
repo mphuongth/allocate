@@ -20,6 +20,7 @@ declare
   v_open_book uuid := gen_random_uuid();
   v_short_book uuid := gen_random_uuid();
   v_tail public.investment_transactions;
+  v_extra_saving uuid := gen_random_uuid();
 begin
   insert into auth.users (id, email) values (v_user, 'successor-book@test.invalid');
   insert into public.savings_goals (user_id, goal_name) values (v_user, 'Successor') returning goal_id into v_goal;
@@ -263,9 +264,24 @@ begin
   -- ── A successor cannot be withdrawn out from under its source ────────────
   -- A full close clears the successor's own group, which would leave the source
   -- promising to merge into a row that is no longer a book at all.
+  -- ── Every saving on the old book follows it, even a manual handover ──────
+  -- The source stops accepting contributions the moment the handover commits,
+  -- so a saving left pointing at it could never be recorded again.
+  insert into public.recurring_savings (
+    saving_id, user_id, goal_id, name, amount_vnd, linked_deposit_tx_id
+  ) values (
+    v_extra_saving, v_user, v_goal, 'Also here', 500000, v_short_book
+  );
+
   -- v_short_book is still locked and unpromised, so it can open one now.
   select * into v_tail from public.open_successor_book(
     v_short_book, 1000000, 4, current_date - 2, current_date + 400, 30, null, null, null, null);
+  select linked_deposit_tx_id into v_linked
+    from public.recurring_savings where saving_id = v_extra_saving;
+  if v_linked is distinct from v_tail.transaction_id then
+    raise exception 'a saving on the old book must follow it, found %', v_linked;
+  end if;
+
   begin
     update public.investment_transactions set deposit_group_id = null
      where transaction_id = v_tail.transaction_id;
