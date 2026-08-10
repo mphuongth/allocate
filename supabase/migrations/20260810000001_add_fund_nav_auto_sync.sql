@@ -20,22 +20,11 @@ comment on column public.funds.nav_auto_sync is
 -- Preserve every existing opt-in: a fund that had a source URL was being synced,
 -- and must keep being synced once the new column is the one consulted.
 --
--- This backfill goes stale, by design, and the contract migration reconciles it.
--- The release still in production writes nav_source_url and knows nothing about
--- nav_auto_sync, so any fund opted in or out during the compatibility window
--- ends up with the two columns disagreeing.
---
--- Note that the reconciliation is NOT this statement run again. This one only
--- ever sets true, which repairs a fund opted *in* during the window but leaves a
--- fund opted *out* still flagged true — silently switching the user's pricing
--- back on. The contract migration therefore derives the flag in both directions,
---
---     set nav_auto_sync = (nav_source_url is not null)
---
--- immediately before dropping the column, at the one instant no writer can still
--- be using it. That statement's behaviour is pinned by
--- supabase/tests/fund_nav_auto_sync_column.test.sql, which can still exercise it
--- here while both columns exist; after the drop there is nothing left to compare.
+-- A snapshot on its own would go stale: the release still in production writes
+-- nav_source_url and knows nothing about nav_auto_sync, so a fund opted in or
+-- out afterwards would leave the two columns disagreeing. The trigger added
+-- below keeps them in step for as long as that release is live, which is why
+-- there is no reconciliation to run later — see the note there.
 --
 -- funds_updated_at is held off for exactly this statement. It is a BEFORE UPDATE
 -- trigger that stamps now() unconditionally — it overwrites even an explicit
@@ -54,6 +43,44 @@ update public.funds
  where nav_source_url is not null;
 
 alter table public.funds enable trigger funds_updated_at;
+
+-- Keep the two columns in step while the old release is still writing the old
+-- one. This is what removes the need to reconcile them later, and reconciling
+-- later is not actually possible to do correctly: by the time the contract
+-- migration runs, the new release has already been live for several minutes
+-- writing nav_auto_sync *without* touching nav_source_url, so a
+-- `set nav_auto_sync = (nav_source_url is not null)` at that point cannot tell a
+-- fund the old code opted in from one the user has just switched off — and would
+-- reverse the latter. Fixing the drift at the source leaves nothing to guess.
+--
+-- The two guards are what make this safe across both deployment windows:
+--
+--   * UPDATE OF nav_source_url — fires only when a statement actually assigns
+--     that column. The old release always sends it; the new release never
+--     mentions it, so a post-cutover flag change is left alone.
+--   * the INSERT escape below — BEFORE INSERT has no column list, so without it
+--     a row inserted by the new release with the flag on and no URL (there is no
+--     URL to send any more) would be forced back off.
+create or replace function public.sync_fund_nav_auto_sync()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  -- Nothing to derive from: respect whatever the caller supplied.
+  if tg_op = 'INSERT' and new.nav_source_url is null then
+    return new;
+  end if;
+
+  new.nav_auto_sync := new.nav_source_url is not null;
+  return new;
+end;
+$$;
+
+create trigger funds_sync_nav_auto_sync
+  before insert or update of nav_source_url on public.funds
+  for each row
+  execute function public.sync_fund_nav_auto_sync();
 
 -- disable_fund_dca writes the fund config in the same transaction as the DCA
 -- cleanup, so its signature carries whichever column is authoritative. Add the

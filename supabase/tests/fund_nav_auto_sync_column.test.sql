@@ -122,38 +122,60 @@ begin
     raise exception 'funds_updated_at did not stamp the row';
   end if;
 
-  -- The reconciliation the contract migration will run, pinned here because this
-  -- is the last release in which it can be checked: once nav_source_url is
-  -- dropped there is nothing left to derive the flag from.
-  --
-  -- It has to work in BOTH directions. A one-way `set nav_auto_sync = true where
-  -- nav_source_url is not null` repairs a fund opted in during the compatibility
-  -- window but leaves one opted *out* still flagged true, switching that user's
-  -- automatic pricing back on behind them. Measured: under the one-way form the
-  -- opted-out row below stays true.
+  -- The trigger that keeps the two columns in step, exercised across BOTH
+  -- deployment windows. It is what removes the need to reconcile them at the
+  -- drop — a reconciliation there cannot tell a fund the old release opted in
+  -- from one the user has just switched off, and would reverse the latter.
   declare
-    v_opted_in  uuid;
-    v_opted_out uuid;
+    v_w1_in   uuid;
+    v_w1_none uuid;
+    v_w2_new  uuid;
   begin
-    -- Opted in by the old release after the backfill: URL set, flag still default.
-    insert into funds (user_id, name, code, fund_type, nav, nav_source_url, nav_auto_sync)
-      values (v_user, 'Opted In', 'RECIN', 'equity', 1000, 'https://www.vcbf.com/in', false)
-      returning id into v_opted_in;
-
-    -- Opted out by the old release after the backfill: URL cleared, flag stale.
-    insert into funds (user_id, name, code, fund_type, nav, nav_source_url, nav_auto_sync)
-      values (v_user, 'Opted Out', 'RECOUT', 'equity', 1000, null, true)
-      returning id into v_opted_out;
-
-    update public.funds
-       set nav_auto_sync = (nav_source_url is not null)
-     where nav_auto_sync is distinct from (nav_source_url is not null);
-
-    if (select nav_auto_sync from funds where id = v_opted_in) is not true then
-      raise exception 'reconciliation must opt in a fund that gained a source URL';
+    -- Window 1 — the release still in production writes only nav_source_url.
+    insert into funds (user_id, name, code, fund_type, nav, nav_source_url)
+      values (v_user, 'W1 In', 'W1IN', 'equity', 1000, 'https://www.vcbf.com/in')
+      returning id into v_w1_in;
+    if (select nav_auto_sync from funds where id = v_w1_in) is not true then
+      raise exception 'insert with a source URL must switch pricing on';
     end if;
-    if (select nav_auto_sync from funds where id = v_opted_out) is not false then
-      raise exception 'reconciliation must opt out a fund whose source URL was cleared';
+
+    insert into funds (user_id, name, code, fund_type, nav, nav_source_url)
+      values (v_user, 'W1 None', 'W1NONE', 'equity', 1000, null)
+      returning id into v_w1_none;
+    if (select nav_auto_sync from funds where id = v_w1_none) is not false then
+      raise exception 'insert without a source URL must leave pricing off';
+    end if;
+
+    update funds set nav_source_url = null where id = v_w1_in;
+    if (select nav_auto_sync from funds where id = v_w1_in) is not false then
+      raise exception 'clearing the source URL must switch pricing off';
+    end if;
+
+    update funds set nav_source_url = 'https://www.vcbf.com/back' where id = v_w1_in;
+    if (select nav_auto_sync from funds where id = v_w1_in) is not true then
+      raise exception 'setting the source URL must switch pricing on';
+    end if;
+
+    -- Window 2 — the new release is live but this migration's successor has not
+    -- run yet. It writes nav_auto_sync and never mentions nav_source_url, so the
+    -- trigger must stay out of the way. This is the case the reconciliation got
+    -- wrong: measured, it flipped a user's "off" back to "on".
+    update funds set nav_auto_sync = false where id = v_w1_in;
+    if (select nav_auto_sync from funds where id = v_w1_in) is not false then
+      raise exception 'a post-cutover switch-off must survive, source URL notwithstanding';
+    end if;
+
+    update funds set nav_auto_sync = true where id = v_w1_none;
+    if (select nav_auto_sync from funds where id = v_w1_none) is not true then
+      raise exception 'a post-cutover switch-on must survive with no source URL';
+    end if;
+
+    -- ...including on insert, where BEFORE INSERT has no column list to filter on.
+    insert into funds (user_id, name, code, fund_type, nav, nav_auto_sync)
+      values (v_user, 'W2 New', 'W2NEW', 'equity', 1000, true)
+      returning id into v_w2_new;
+    if (select nav_auto_sync from funds where id = v_w2_new) is not true then
+      raise exception 'a fund created after cutover must keep the flag it was given';
     end if;
   end;
 
