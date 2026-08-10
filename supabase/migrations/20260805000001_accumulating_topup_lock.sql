@@ -132,7 +132,8 @@ create trigger investment_transactions_accumulating_topup_lock
 -- unrelated, perfectly valid ones. So:
 --
 --   • a tranche that changed is judged on its own, and cleared if it was
---     already inside the window before and has not moved further in;
+--     already inside the window before this edit — with one floor that nothing
+--     clears: it may never end up dated at or past its book's maturity;
 --   • a maturity move is judged only when it moves IN, since that is the only
 --     direction that can hurt a tranche standing still — and a book given its
 --     first maturity is judged in full, having no previous position to be
@@ -207,11 +208,17 @@ begin
        and t.transaction_type = 'investment';
     if not found then return null; end if;                       -- left the book, or is not an investment
     if v_days > coalesce(v_lock, 0) then return null; end if;    -- outside the window: nothing to answer for
-    -- Already inside it before this edit, and no deeper in now: grandfathered.
-    if old.deposit_group_id = v_group
+    -- Inside the window and already there before this edit: grandfathered, and
+    -- it stays editable. How far in it moves is not compared, because there is
+    -- no honest baseline to compare against — a compound edit that also moves
+    -- the maturity rewrites this row in an earlier statement, so its OLD here
+    -- already carries the new maturity. What the floor below refuses instead is
+    -- the one outcome that is never a matter of degree: sitting at or past
+    -- maturity, which is money in a dead book.
+    if v_days > 0
+       and old.deposit_group_id = v_group
        and old.transaction_type = 'investment'
-       and v_expiry - old.investment_date <= coalesce(v_lock, 0)
-       and v_days >= v_expiry - old.investment_date then
+       and v_expiry - old.investment_date <= coalesce(v_lock, 0) then
       return null;
     end if;
   end if;

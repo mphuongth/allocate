@@ -317,17 +317,31 @@ begin
    where transaction_id = v_old_outside;
   set constraints all immediate;
 
-  -- A itself stays editable, as long as the edit does not push it deeper in.
+  -- A itself stays editable, in either direction inside the window.
   update public.investment_transactions set investment_date = '2026-08-13'
    where transaction_id = v_old_inside;
   set constraints all immediate;
+  update public.investment_transactions set investment_date = '2026-08-20'
+   where transaction_id = v_old_inside;
+  set constraints all immediate;
+
+  -- One outcome it can never be edited into: at or past the book's maturity.
   begin
-    update public.investment_transactions set investment_date = '2026-08-20'
+    update public.investment_transactions set investment_date = '2026-09-03'
      where transaction_id = v_old_inside;
     set constraints all immediate;
-    raise exception 'moving a grandfathered tranche further into the window must be refused';
+    raise exception 'redating a tranche onto its maturity must be refused';
   exception when sqlstate '23514' then null;
   end;
+
+  -- One edit that extends maturity AND moves A later leaves A better off
+  -- (20 days remaining, then 24), so it is not a deeper breach.
+  set constraints all deferred;
+  update public.investment_transactions set expiry_date = '2026-09-13'
+   where deposit_group_id = v_old_book;
+  update public.investment_transactions set investment_date = '2026-08-20'
+   where transaction_id = v_old_inside;
+  set constraints all immediate;
 
   -- Pushing maturity out is fine even while A breaches: it can only help.
   update public.investment_transactions set expiry_date = '2027-01-31'
