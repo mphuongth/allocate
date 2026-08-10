@@ -188,6 +188,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       )
     }
     if (bookErr || !row) {
+      if (bookErr?.message?.startsWith('accumulating top-up: ')) {
+        return NextResponse.json(
+          { error: bookErr.message.slice('accumulating top-up: '.length), code: 'top_up_locked_near_maturity' },
+          { status: 400 },
+        )
+      }
       console.error('update_deposit_book: atomic book edit failed', bookErr?.message)
       return NextResponse.json({ error: 'Failed to update deposit book' }, { status: 500 })
     }

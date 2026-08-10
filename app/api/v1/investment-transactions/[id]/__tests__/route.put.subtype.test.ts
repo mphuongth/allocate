@@ -19,8 +19,8 @@ const h = vi.hoisted(() => ({
   existing: { deposit_group_id: null as string | null, asset_type: 'bank' as string | null },
   updates: null as Record<string, unknown> | null,
   updateResult: { data: { transaction_id: '11111111-1111-4111-8111-111111111111' } as unknown, error: null as unknown },
-  rpcCalls: [] as { name: string; args: Record<string, unknown> }[],
   rpcResult: { data: { transaction_id: '11111111-1111-4111-8111-111111111111' } as unknown, error: null as unknown },
+  rpcCalls: [] as { name: string; args: Record<string, unknown> }[],
 }))
 
 vi.mock('@/lib/supabase-server', () => {
@@ -73,8 +73,8 @@ beforeEach(() => {
   h.existing = { deposit_group_id: null, asset_type: 'bank' }
   h.updates = null
   h.updateResult = { data: { transaction_id: TX_ID }, error: null }
-  h.rpcCalls = []
   h.rpcResult = { data: { transaction_id: TX_ID }, error: null }
+  h.rpcCalls = []
   vi.spyOn(console, 'error').mockImplementation(() => {})
 })
 
@@ -186,6 +186,19 @@ describe('PUT /api/v1/investment-transactions/[id] — subtype normalization (#5
     const res = await put({ asset_type: 'bank', amount_vnd: 1_000_000 })
     expect(res.status).toBe(200)
     expect(h.rpcCalls.map((c) => c.name)).toEqual(['update_deposit_book'])
+  })
+
+  it('reports a locked tranche-date edit as a correctable policy error', async () => {
+    h.existing = { deposit_group_id: 'book-1', asset_type: 'bank' }
+    h.rpcResult = {
+      data: null,
+      error: { message: 'accumulating top-up: this deposit no longer accepts top-ups: 30 days remain before maturity (its lock window is 30 days)' },
+    }
+
+    const res = await put({ investment_date: '2026-08-04' })
+
+    expect(res.status).toBe(400)
+    await expect(res.json()).resolves.toMatchObject({ code: 'top_up_locked_near_maturity' })
   })
 
   it('reports a book the database refused to convert as a conflict, not a missing row', async () => {

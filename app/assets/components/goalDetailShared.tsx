@@ -7,6 +7,7 @@ import { useState, type CSSProperties } from 'react'
 import { TrendingUp, Building, Coins, BarChart2, Target, RefreshCw, Plus } from 'lucide-react'
 import { fmtCompact } from '@/lib/formatters'
 import { todayIso } from '@/lib/dates'
+import { classifyAccumulatingTopUp } from '@/lib/accumulatingTopUp'
 import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
 import { fmtTxDate } from './transactionUtils'
 import { fmtMaturity, type Maturity } from './goalDetailMaturity'
@@ -225,6 +226,7 @@ export interface GoalDetailTx {
   // null/false on legacy deposits.
   currency?: string | null
   is_pledged?: boolean | null
+  top_up_lock_days?: number | null
   // Set on the rows the recurring-contributions endpoint synthesizes for a
   // goal's recurring savings. They have no investment_transactions row behind
   // them — `transaction_id` is a `recurring:<savingId>:<date>` label, not an id
@@ -316,6 +318,15 @@ export function TopUpControl({ inv, isVi, onDone }: { inv: InvRow; isVi: boolean
   const [error, setError] = useState('')
   if (!inv.depositGroupId) return null
 
+  // Eligibility follows the date the user is recording, not today's date: a
+  // legitimate historical top-up can predate the book's lock window.
+  const eligibility = classifyAccumulatingTopUp({ topUpDate: date, expiryDate: inv.expiryDate, lockDays: inv.topUpLockDays ?? null })
+  const lockMessage = eligibility.status === 'locked-near-maturity'
+    ? (isVi ? `Sổ không nhận nạp thêm trong ${eligibility.lockDays} ngày trước đáo hạn (còn ${eligibility.daysRemaining} ngày).` : `This deposit stops accepting top-ups ${eligibility.lockDays} days before maturity (${eligibility.daysRemaining} days remain).`)
+    : eligibility.status === 'matured'
+      ? (isVi ? 'Sổ đã đến ngày đáo hạn nên không thể nạp thêm.' : 'This deposit has reached maturity and cannot accept another top-up.')
+      : null
+
   const amt = Number(amount)
   async function submit() {
     if (!(amt > 0)) { setError(isVi ? 'Cần nhập số tiền' : 'Amount is required'); return }
@@ -357,10 +368,11 @@ export function TopUpControl({ inv, isVi, onDone }: { inv: InvRow; isVi: boolean
                 <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={field} />
               </div>
             </div>
+            {lockMessage && <p data-testid="top-up-locked" style={{ margin: 0, padding: '9px 10px', borderRadius: 10, background: 'var(--c-warn-tint)', color: 'var(--c-warn)', fontSize: 12, lineHeight: 1.45 }}>{lockMessage}</p>}
             {error && <p style={{ margin: 0, fontSize: 13, color: 'var(--c-neg)' }}>{error}</p>}
             <div style={{ display: 'flex', gap: 8 }}>
               <button type="button" onClick={() => setOpen(false)} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: '1px solid var(--c-line)', background: 'var(--c-card)', color: 'var(--c-ink)', fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>{isVi ? 'Huỷ' : 'Cancel'}</button>
-              <button type="button" data-testid="top-up-submit" onClick={submit} disabled={saving || !(amt > 0)} style={{ flex: 2, padding: '10px 0', borderRadius: 10, border: 'none', background: 'var(--c-btn-primary)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit', opacity: saving || !(amt > 0) ? 0.6 : 1 }}>{isVi ? 'Nạp thêm' : 'Top up'}</button>
+              <button type="button" data-testid="top-up-submit" onClick={submit} disabled={saving || !(amt > 0) || eligibility.status !== 'allowed'} style={{ flex: 2, padding: '10px 0', borderRadius: 10, border: 'none', background: 'var(--c-btn-primary)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit', opacity: saving || !(amt > 0) || eligibility.status !== 'allowed' ? 0.6 : 1 }}>{isVi ? 'Nạp thêm' : 'Top up'}</button>
             </div>
           </div>
         </div>

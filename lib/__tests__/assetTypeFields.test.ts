@@ -18,7 +18,7 @@ describe('ASSET_SUBTYPE_FIELDS (#593)', () => {
   })
 
   it('keeps the deposit-only columns out of every non-bank type', () => {
-    for (const field of ['interest_rate', 'expiry_date', 'bank_code', 'interest_earned_vnd', 'deposit_group_id']) {
+    for (const field of ['interest_rate', 'expiry_date', 'bank_code', 'interest_earned_vnd', 'deposit_group_id', 'top_up_lock_days']) {
       expect(ASSET_SUBTYPE_FIELDS.bank).toContain(field)
       expect(ASSET_SUBTYPE_FIELDS.fund).not.toContain(field)
       expect(ASSET_SUBTYPE_FIELDS.gold).not.toContain(field)

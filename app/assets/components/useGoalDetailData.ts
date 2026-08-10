@@ -25,6 +25,7 @@ export interface InvestmentTx {
   is_recurring?: boolean
   held_for_merge?: boolean | null
   consumed_by_inv_id?: string | null
+  top_up_lock_days?: number | null
 }
 
 export interface UseGoalDetailData {

@@ -28,6 +28,8 @@
     "termDeposit": "Có kỳ hạn",
     "flexDeposit": "Không kỳ hạn",
     "accumulatingDeposit": "Tích luỹ",
+    "topUpLockDays": "Ngừng nhận nạp trước đáo hạn (ngày)",
+    "topUpLockHint": "Để trống nếu sổ không có khoảng khóa nộp thêm.",
     "topUp": "Nạp thêm",
     "topUpDeposit": "Nạp thêm vào sổ",
     "topUpAmount": "Số tiền nạp (₫)",

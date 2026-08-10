@@ -171,6 +171,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
   const [bankAmount, setBankAmount] = useState('')
   const [rate, setRate] = useState('')
   const [maturity, setMaturity] = useState('')
+  const [topUpLockDays, setTopUpLockDays] = useState('')
 
   // gold fields
   const [goldProvider, setGoldProvider] = useState('PNJ')
@@ -313,6 +314,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
     setBankAmount('')
     setRate('')
     setMaturity('')
+    setTopUpLockDays('')
     setGoldProvider('PNJ')
     setGoldUnit('chi')
     setGoldQty('')
@@ -390,7 +392,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
     const form: TxForm = {
       assetType, date, goalId, note,
       fundId, amount, units, nav, selectedFundNav: selectedFund?.nav,
-      bankCode, selectedBankName, depositType, bankAmount, rate, maturity,
+      bankCode, selectedBankName, depositType, bankAmount, rate, maturity, topUpLockDays,
       goldProvider, goldUnit, goldQty, goldPrice,
     }
 
@@ -538,6 +540,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
               bankAmount={bankAmount} setBankAmount={setBankAmount}
               rate={rate} setRate={setRate}
               maturity={maturity} setMaturity={setMaturity} date={date}
+              topUpLockDays={topUpLockDays} setTopUpLockDays={setTopUpLockDays}
               inputStyle={inputStyle} labelStyle={labelStyle}
             />
           )}

@@ -25,14 +25,15 @@ export type SubtypeAssetType = 'fund' | 'bank' | 'gold' | 'stock'
  * - gold  — quantity in chỉ and the price per chỉ; no fund, no deposit terms.
  * - stock — legacy, priced like gold (quantity × price), never a deposit.
  * - bank  — the deposit terms; a deposit has no units, no NAV and no fund.
- *   `deposit_group_id` ties an accumulating book's tranches together, and
- *   `interest_earned_vnd` is what a renewal booked.
+ *   `deposit_group_id` ties an accumulating book's tranches together,
+ *   `interest_earned_vnd` is what a renewal booked, and `top_up_lock_days` is
+ *   how long before maturity the bank stops accepting top-ups.
  */
 export const ASSET_SUBTYPE_FIELDS: Record<SubtypeAssetType, readonly string[]> = {
   fund: ['fund_id', 'units', 'unit_price'],
   gold: ['units', 'unit_price'],
   stock: ['units', 'unit_price'],
-  bank: ['interest_rate', 'expiry_date', 'bank_code', 'interest_earned_vnd', 'deposit_group_id'],
+  bank: ['interest_rate', 'expiry_date', 'bank_code', 'interest_earned_vnd', 'deposit_group_id', 'top_up_lock_days'],
 }
 
 /** Every column that belongs to at least one asset type but not to all of them. */

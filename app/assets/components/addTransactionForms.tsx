@@ -101,7 +101,7 @@ export function BuyFundFields({
 
 export function BuyBankFields({
   banks, bankCode, setBankCode, depositType, setDepositType,
-  bankAmount, setBankAmount, rate, setRate, maturity, setMaturity, date,
+  bankAmount, setBankAmount, rate, setRate, maturity, setMaturity, topUpLockDays, setTopUpLockDays, date,
   inputStyle, labelStyle,
 }: {
   banks: Bank[]
@@ -115,6 +115,8 @@ export function BuyBankFields({
   setRate: (v: string) => void
   maturity: string
   setMaturity: (v: string) => void
+  topUpLockDays: string
+  setTopUpLockDays: (v: string) => void
   date: string
   inputStyle: React.CSSProperties
   labelStyle: React.CSSProperties
@@ -200,6 +202,13 @@ export function BuyBankFields({
             onChange={(e) => setMaturity(e.target.value)}
             style={inputStyle}
           />
+        </div>
+      )}
+      {depositType === 'accumulating' && (
+        <div>
+          <label style={labelStyle}>{t('topUpLockDays')}</label>
+          <input type="number" min="0" step="1" value={topUpLockDays} onChange={(e) => setTopUpLockDays(e.target.value)} placeholder="30" style={inputStyle} />
+          <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 4 }}>{t('topUpLockHint')}</div>
         </div>
       )}
       {depositType !== 'flex' && Number(bankAmount) > 0 && Number(rate) > 0 && maturity && (() => {

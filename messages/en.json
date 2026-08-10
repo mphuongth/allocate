@@ -28,6 +28,8 @@
     "termDeposit": "Term",
     "flexDeposit": "Flexible",
     "accumulatingDeposit": "Accumulating",
+    "topUpLockDays": "Stop top-ups before maturity (days)",
+    "topUpLockHint": "Leave blank when this deposit has no pre-maturity lock window.",
     "topUp": "Top up",
     "topUpDeposit": "Top up deposit",
     "topUpAmount": "Top-up amount (₫)",
