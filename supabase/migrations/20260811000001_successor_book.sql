@@ -304,8 +304,15 @@ begin
     raise exception 'successor book: this book still accepts a contribution dated %, so record it as a top-up', p_investment_date
       using errcode = 'check_violation';
   end if;
-  -- Whatever the successor's own terms, it has to outlive the book it takes
-  -- over from, since the merge happens when that one matures.
+  -- The new book has to be open for business: a contribution can be historical,
+  -- but a book that has already matured cannot take the next one — and every
+  -- recurring link is about to be moved onto it.
+  if p_expiry_date <= current_date then
+    raise exception 'successor book: the new book must mature in the future'
+      using errcode = 'check_violation';
+  end if;
+  -- And it has to outlive the book it takes over from, since the merge happens
+  -- when that one matures.
   if v_source.expiry_date is not null and p_expiry_date <= v_source.expiry_date then
     raise exception 'successor book: the new maturity must come after the old book''s (%)', v_source.expiry_date
       using errcode = 'check_violation';
@@ -411,3 +418,22 @@ create trigger recurring_savings_link_not_handed_over
   for each row
   when (new.linked_deposit_tx_id is not null)
   execute function public.enforce_recurring_link_not_handed_over();
+
+-- Deleting the source is the other way to drop the promise silently: the row
+-- carrying the link goes, and with it the plan — while any remaining tranches
+-- are left grouped under an anchor that no longer exists. Same answer as
+-- closing it: cancel the handover first, on purpose.
+create or replace function public.enforce_successor_before_delete()
+returns trigger language plpgsql set search_path = '' as $$
+begin
+  raise exception 'successor book: this book is promised to a successor, so cancel the handover before deleting it'
+    using errcode = 'check_violation';
+end;
+$$;
+
+drop trigger if exists investment_transactions_successor_before_delete on public.investment_transactions;
+create trigger investment_transactions_successor_before_delete
+  before delete on public.investment_transactions
+  for each row
+  when (old.successor_deposit_tx_id is not null)
+  execute function public.enforce_successor_before_delete();

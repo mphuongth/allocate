@@ -21,6 +21,7 @@ declare
   v_short_book uuid := gen_random_uuid();
   v_tail public.investment_transactions;
   v_extra_saving uuid := gen_random_uuid();
+  v_dated_book uuid := gen_random_uuid();
 begin
   insert into auth.users (id, email) values (v_user, 'successor-book@test.invalid');
   insert into public.savings_goals (user_id, goal_name) values (v_user, 'Successor') returning goal_id into v_goal;
@@ -309,6 +310,31 @@ begin
     update public.recurring_savings set linked_deposit_tx_id = v_short_book
      where saving_id = v_extra_saving;
     raise exception 'linking to a handed-over book must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- A book that matured a while ago, being caught up on late.
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate, deposit_group_id
+  ) values (
+    v_dated_book, v_user, v_goal, 'bank', 'investment',
+    current_date - 400, current_date - 60, 10000000, 4, v_dated_book
+  );
+
+  -- ── A successor that has already matured cannot take the next month ─────
+  -- A contribution may be historical; the book it opens may not be.
+  begin
+    perform public.open_successor_book(
+      v_dated_book, 1000000, 4, current_date - 200, current_date - 10, 30, null, null, null, null);
+    raise exception 'a successor that already matured must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- ── Deleting the source drops the promise as silently as closing it ──────
+  begin
+    delete from public.investment_transactions where transaction_id = v_short_book;
+    raise exception 'deleting a promised book must be refused';
   exception when sqlstate '23514' then null;
   end;
 
