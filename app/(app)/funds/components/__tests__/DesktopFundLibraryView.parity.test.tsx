@@ -16,7 +16,7 @@ vi.mock('@/lib/formatters', () => ({ fmtNav: (n: number) => String(n), fmtCompac
 function makeFund(over: Partial<Fund> = {}): Fund {
   return {
     id: 'f1', name: 'VFMVF1 Equity Fund', code: 'VFMVF1', fund_type: 'equity', nav: 36120,
-    nav_source_url: null, is_dca: false, dca_monthly_amount_vnd: null, dca_goal_id: null,
+    nav_auto_sync: false, is_dca: false, dca_monthly_amount_vnd: null, dca_goal_id: null,
     created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z', ...over,
   }
 }
@@ -30,7 +30,7 @@ afterEach(() => vi.unstubAllGlobals())
 
 describe('DesktopFundLibraryView — P2 parity/feedback', () => {
   it('Refresh button carries an explanatory title when disabled (no NAV source URL on any fund)', () => {
-    render(<Harness initial={[makeFund({ nav_source_url: null })]} />)
+    render(<Harness initial={[makeFund({ nav_auto_sync: false })]} />)
     const btn = screen.getByRole('button', { name: /refresh/i })
     expect(btn).toBeDisabled()
     expect(btn).toHaveAttribute('title', 'refreshDisabledHint')

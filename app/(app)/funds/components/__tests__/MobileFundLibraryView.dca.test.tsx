@@ -29,7 +29,7 @@ function makeFund(over: Partial<Fund> = {}): Fund {
     code: 'VFMVF1',
     fund_type: 'equity',
     nav: 36120,
-    nav_source_url: null,
+    nav_auto_sync: false,
     is_dca: false,
     dca_monthly_amount_vnd: null,
     dca_goal_id: null,

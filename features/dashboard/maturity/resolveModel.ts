@@ -53,13 +53,23 @@ export function buildRenewBody(args: {
   selectedSources: RenewSource[]
   mergeRecv: Record<string, string>
   destBank: string
+  /** The bank the deposit sits at today — `bank_code` is sent only when it moves. */
+  currentBank: string
   selectedHeld: RenewSource[]
 }): Record<string, unknown> {
   const {
     mode, isBook, newPrincipal, redepositNum, rate, newMaturity, baseDate, iNum,
-    pickedCand, markFulfilled, fulfillYm, linkedAmt, selectedSources, mergeRecv, destBank, selectedHeld,
+    pickedCand, markFulfilled, fulfillYm, linkedAmt, selectedSources, mergeRecv, destBank, currentBank, selectedHeld,
   } = args
   const isCombine = mode === 'combine'
+  // The new cycle can be placed at a different bank — on any renewal, not only
+  // when siblings are folded in. Gating this on merge sources left a lone
+  // maturing deposit no way to change bank at all (#640). Sent only when it
+  // actually moves: the RPC reads null as "leave the bank as is", so an empty
+  // pick can't clear one, and an unchanged pick would needlessly route a plain
+  // renewal through the merge function. A book collapses via a route that takes
+  // no bank, and a withdrawal opens no new cycle to place.
+  const movesBank = !isBook && mode !== 'withdraw' && !!destBank && destBank !== currentBank
   return {
     amount_vnd: isCombine ? Math.round(redepositNum) : Math.round(newPrincipal),
     interest_rate: Number(rate),
@@ -72,7 +82,7 @@ export function buildRenewBody(args: {
     merge_sources: isCombine && selectedSources.length > 0
       ? selectedSources.map((s) => ({ tx_id: s.id, received: Math.round(Number(mergeRecv[s.id]) || 0) }))
       : undefined,
-    bank_code: isCombine && selectedSources.length > 0 ? (destBank || null) : undefined,
+    bank_code: movesBank ? destBank : undefined,
     held_sources: isCombine && selectedHeld.length > 0 ? selectedHeld.map((h) => h.id) : undefined,
   }
 }

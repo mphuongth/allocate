@@ -137,6 +137,11 @@ export interface InvRow {
   // The book's tranches (top-ups), newest first, for the detail view. Each is one
   // underlying row; present only on an accumulating book row.
   tranches?: InvTranche[] | null
+  // A rolled-up recurring saving: real value in the goal, but backed by a plan
+  // definition instead of an investment_transactions row. There is no transaction
+  // to withdraw, sell, unassign or renew — every surface must withhold those
+  // actions rather than post the synthesized id the API rejects (#640).
+  isRecurring?: boolean
 }
 
 // One top-up of an accumulating book: an underlying investment_transactions row,

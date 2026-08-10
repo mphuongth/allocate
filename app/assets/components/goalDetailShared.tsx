@@ -227,6 +227,11 @@ export interface GoalDetailTx {
   currency?: string | null
   is_pledged?: boolean | null
   top_up_lock_days?: number | null
+  // Set on the rows the recurring-contributions endpoint synthesizes for a
+  // goal's recurring savings. They have no investment_transactions row behind
+  // them — `transaction_id` is a `recurring:<savingId>:<date>` label, not an id
+  // anything may be posted against (#640).
+  is_recurring?: boolean
 }
 
 // Roll up a deposit's renewal history from the snapshot rows that point at it.

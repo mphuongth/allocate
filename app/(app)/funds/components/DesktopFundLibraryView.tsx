@@ -323,7 +323,7 @@ export default function DesktopFundLibraryView({ funds, setFunds, goals, loading
   const [formCode, setFormCode] = useState('')
   const [formType, setFormType] = useState<FundType | ''>('')
   const [formNav, setFormNav] = useState('')
-  const [formNavUrl, setFormNavUrl] = useState('')
+  const [formAutoSync, setFormAutoSync] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -375,11 +375,11 @@ export default function DesktopFundLibraryView({ funds, setFunds, goals, loading
 
   // Add/Edit modal open
   function openAddModal() {
-    setFormName(''); setFormCode(''); setFormType('equity'); setFormNav(''); setFormNavUrl(''); setFormError(null); setEditTarget(null); setModalMode('add')
+    setFormName(''); setFormCode(''); setFormType('equity'); setFormNav(''); setFormAutoSync(false); setFormError(null); setEditTarget(null); setModalMode('add')
   }
   function openEditModal(fund: Fund, e?: { stopPropagation: () => void }) {
     e?.stopPropagation()
-    setFormName(fund.name); setFormCode(fund.code); setFormType(fund.fund_type); setFormNav(String(fund.nav)); setFormNavUrl(fund.nav_source_url ?? ''); setFormError(null); setEditTarget(fund); setModalMode('edit')
+    setFormName(fund.name); setFormCode(fund.code); setFormType(fund.fund_type); setFormNav(String(fund.nav)); setFormAutoSync(fund.nav_auto_sync); setFormError(null); setEditTarget(fund); setModalMode('edit')
   }
   function closeModal() { setModalMode(null); setEditTarget(null); setFormError(null) }
 
@@ -397,7 +397,7 @@ export default function DesktopFundLibraryView({ funds, setFunds, goals, loading
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: formName.trim(), code: formCode.trim(), fund_type: formType, nav: navNum, nav_source_url: formNavUrl.trim() || null }),
+        body: JSON.stringify({ name: formName.trim(), code: formCode.trim(), fund_type: formType, nav: navNum, nav_auto_sync: formAutoSync }),
       })
       const data = await res.json()
       if (!res.ok) { setFormError(res.status === 409 ? t('codeExists') : data.error || t('error')); return }
@@ -540,8 +540,8 @@ export default function DesktopFundLibraryView({ funds, setFunds, goals, loading
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
             <button
               onClick={handleRefreshNav}
-              disabled={refreshing || !funds.some(f => f.nav_source_url)}
-              title={funds.some(f => f.nav_source_url) ? undefined : t('refreshDisabledHint')}
+              disabled={refreshing || !funds.some(f => f.nav_auto_sync)}
+              title={funds.some(f => f.nav_auto_sync) ? undefined : t('refreshDisabledHint')}
               className="cn-btn ghost"
               style={{ padding: '7px 10px', gap: 5, fontSize: 12, display: 'flex', alignItems: 'center' }}
             >
@@ -635,7 +635,7 @@ export default function DesktopFundLibraryView({ funds, setFunds, goals, loading
                         <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
                           {fmtNav(fund.nav)}
                         </span>
-                        {fund.nav_source_url && fund.updated_at && (
+                        {fund.nav_auto_sync && fund.updated_at && (
                           <FundNavAge isoStr={fund.updated_at} style={{ fontSize: 10, color: 'var(--c-muted)', marginTop: 2 }} />
                         )}
                       </td>
@@ -770,15 +770,18 @@ export default function DesktopFundLibraryView({ funds, setFunds, goals, loading
                 placeholder={t('navPlaceholder')}
               />
             </FormField>
-            <FormField label={t('navSourceLabel')}>
+            <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer' }}>
               <input
-                type="url"
-                value={formNavUrl}
-                onChange={e => setFormNavUrl(e.target.value)}
-                className="cn-input"
-                placeholder={t('navUrlPlaceholder')}
+                type="checkbox"
+                checked={formAutoSync}
+                onChange={e => setFormAutoSync(e.target.checked)}
+                style={{ marginTop: 2, width: 16, height: 16, accentColor: 'var(--c-navy)', cursor: 'pointer' }}
               />
-            </FormField>
+              <span style={{ display: 'grid', gap: 2 }}>
+                <span style={{ fontSize: 13, fontWeight: 600 }}>{t('navAutoSyncLabel')}</span>
+                <span style={{ fontSize: 11, color: 'var(--c-muted)' }}>{t('navAutoSyncHint')}</span>
+              </span>
+            </label>
             <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
               <button type="button" onClick={closeModal} className="cn-btn ghost" style={{ flex: 1, justifyContent: 'center', border: '1px solid var(--c-line)' }} disabled={saving}>
                 {tc('cancel')}

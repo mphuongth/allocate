@@ -153,8 +153,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // it ALSO closes each source and adds Σ(received) to the principal. amount_vnd
   // is then the BASE (principal + interest + recurring) — the RPC, not the
   // client, sums in the received cash, so the net-worth invariant can't diverge.
+  //
+  // A destination bank routes there too, even with nothing to merge: bank_code is
+  // applied by that function alone (`bank_code = coalesce(p_bank_code, bank_code)`),
+  // and its merge loop runs `1 .. coalesce(array_length(ids, 1), 0)` — zero
+  // iterations and a zero merge total for empty arrays — so the roll-forward,
+  // snapshot and re-parent are byte-for-byte the plain function's. Without this a
+  // lone maturing deposit could not be moved to another bank at all (#640).
   const hasMerge = cleanMergeSourceIds.length > 0 || cleanHeldSourceIds.length > 0
-  const { data: renewed, error: renewErr } = hasMerge
+  const { data: renewed, error: renewErr } = hasMerge || cleanBankCode != null
     ? await supabase
         .rpc('renew_term_deposit_with_merge', {
           p_tx_id: txId,

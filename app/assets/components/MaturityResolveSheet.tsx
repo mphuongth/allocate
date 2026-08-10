@@ -21,7 +21,7 @@
 import { useState, useEffect } from 'react'
 import { RefreshCw, Pencil, ArrowDownToLine, AlertTriangle, Check, Building2, X, Plus, PiggyBank } from 'lucide-react'
 import { fmt, fmtCompact } from '@/lib/formatters'
-import { fieldLabel, moneyInput, dateInput, MoneyField, WithdrawSection, HeldPoolSection } from './maturityResolveFields'
+import { fieldLabel, moneyInput, dateInput, MoneyField, WithdrawSection, HeldPoolSection, DestinationBankField } from './maturityResolveFields'
 import { MergeSourcesSection } from './maturityResolveMergeSources'
 import { RecurringRedepositSection } from './maturityResolveRecurring'
 import { CombineNewCycleSection } from './maturityResolveNewCycle'
@@ -200,11 +200,13 @@ export function MaturityResolveBody({
   const { sourceCount: mergeSourceCount, bankCount: mergeBankCount, isMultiSource } =
     mergeProvenance(inv, selectedSources)
 
-  // Load the bank reference list once for the destination picker — only when
-  // there are siblings to merge (the picker is merge-only), so plain renewals
-  // make no extra request. Failure is non-fatal — the picker just shows "no bank".
+  // Load the bank reference list once for the destination picker. Every renewal
+  // of a single deposit offers it now — moving the money to another bank is the
+  // ordinary reason to re-deposit (#640) — so this no longer waits for a sibling
+  // to merge. A book keeps its own bank (collapse takes none), so it still skips
+  // the request. Failure is non-fatal: the picker simply doesn't render.
   useEffect(() => {
-    if (mergeable.length === 0) return
+    if (isBook) return
     let cancelled = false
     fetch('/api/v1/banks')
       .then((r) => (r.ok ? r.json() : []))
@@ -397,7 +399,8 @@ export function MaturityResolveBody({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(buildRenewBody({
           mode, isBook, newPrincipal, redepositNum, rate, newMaturity, baseDate, iNum,
-          pickedCand, markFulfilled, fulfillYm, linkedAmt, selectedSources, mergeRecv, destBank, selectedHeld,
+          pickedCand, markFulfilled, fulfillYm, linkedAmt, selectedSources, mergeRecv,
+          destBank, currentBank: inv.bankCode ?? '', selectedHeld,
         })),
       })
       if (!res.ok) {
@@ -557,14 +560,14 @@ export function MaturityResolveBody({
               toggleSource={toggleSource} overrideSource={overrideSource} blockReasonText={blockReasonText}
               isOverridden={isOverridden} mergeRecv={mergeRecv} setReceived={setReceived}
               mergeTotal={mergeTotal} onMergeTotalChange={onMergeTotalChange} isMultiSource={isMultiSource}
-              windowDays={windowDays} setWindowDays={setWindowDays} banks={banks} destBank={destBank} setDestBank={setDestBank}
+              windowDays={windowDays} setWindowDays={setWindowDays}
               selectedSources={selectedSources} mergeReceivedTotal={mergeReceivedTotal}
               mergeSourceCount={mergeSourceCount} mergeBankCount={mergeBankCount}
               t={{
                 mergeTitle: t.mergeTitle, mergeTitleMulti: t.mergeTitleMulti, mergeHint: t.mergeHint,
                 windowLabel: t.windowLabel, windowHint: t.windowHint,
                 mergeReceivedLabel: t.mergeReceivedLabel, mergeTotalLabel: t.mergeTotalLabel, mergeEarly: t.mergeEarly, mergePenalty: t.mergePenalty,
-                provenance: t.provenance, destBankLabel: t.destBankLabel, destBankNone: t.destBankNone,
+                provenance: t.provenance,
               }}
             />
           )}
@@ -687,6 +690,18 @@ export function MaturityResolveBody({
       )}
 
       {error && <p style={{ margin: 0, fontSize: 13, color: 'var(--c-neg)' }}>{error}</p>}
+
+      {/* Where the new cycle is deposited. Shown for every renewal — a matured
+          deposit moving to another bank is the ordinary case, and it used to be
+          reachable only after picking a sibling to merge (#640). A book collapses
+          through a route that takes no bank, so it keeps its own. */}
+      {mode !== 'withdraw' && !isBook && banks.length > 0 && (
+        <DestinationBankField
+          banks={banks} value={destBank} onChange={setDestBank}
+          label={t.destBankLabel} noneLabel={t.destBankNone}
+          hint={destBank && destBank !== (inv.bankCode ?? '') ? t.destBankHint : undefined}
+        />
+      )}
 
       {/* Actions */}
       {tooEarlyToRenew && mode !== 'withdraw' && (

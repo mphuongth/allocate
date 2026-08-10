@@ -71,8 +71,10 @@ export function buildInvRows(
   }
 
   // Exclude withdrawals and renewal history snapshots — only live investment
-  // rows are active holdings.
-  const investmentRows = transactions.filter((tx) => tx.transaction_type !== 'withdrawal' && !tx.renewed_from_transaction_id)
+  // rows are active holdings. Recurring savings are excluded here too and rolled
+  // up separately below: they are contributions the plan says have happened, not
+  // transactions (#640).
+  const investmentRows = transactions.filter((tx) => tx.transaction_type !== 'withdrawal' && !tx.renewed_from_transaction_id && !tx.is_recurring)
   // Accumulating books collect their tranches by deposit_group_id; funds dedup to
   // one row per fund; everything else is one row per transaction.
   const deduped = new Map<string, GoalDetailTx>()
@@ -173,5 +175,52 @@ export function buildInvRows(
     }
   }).filter((row): row is InvRow => row !== null)
 
-  return [...singleRows, ...bookRows]
+  return [...singleRows, ...bookRows, ...recurringRows(transactions, isVi)]
+}
+
+// One row per recurring saving, summing every realized month the API synthesized
+// for it. The money is genuinely in the goal (the overview counts it toward the
+// value and the bar), so it belongs on the holdings tab — but it is backed by a
+// plan definition, not a transaction. Rolling the months together also keeps a
+// year-old plan from filling the tab with twelve identical rows. Flagged
+// `isRecurring` so the surfaces render it read-only: a withdrawal parented to
+// `recurring:<savingId>:<date>` is a 400 from the API, which is what the user
+// hit when they tried to move one to another bank (#640).
+function recurringRows(transactions: GoalDetailTx[], isVi: boolean): InvRow[] {
+  const bySaving = new Map<string, { name: string; type: string; amount: number; since: string }>()
+  for (const tx of transactions) {
+    if (!tx.is_recurring) continue
+    // The synthesized id is `recurring:<savingId>:<date>` — group on the saving,
+    // falling back to the whole id so an unexpected shape still groups sanely.
+    const key = tx.transaction_id.split(':').slice(0, 2).join(':')
+    const prev = bySaving.get(key)
+    const name = tx.notes ?? (isVi ? 'Tiết kiệm định kỳ' : 'Recurring saving')
+    if (prev) {
+      prev.amount += tx.amount_vnd
+      if (tx.investment_date < prev.since) prev.since = tx.investment_date
+    } else {
+      bySaving.set(key, { name, type: tx.asset_type, amount: tx.amount_vnd, since: tx.investment_date })
+    }
+  }
+
+  return Array.from(bySaving.entries()).map(([key, s]) => ({
+    id: key,
+    name: s.name,
+    type: s.type,
+    // No growth is modeled for a recurring contribution — the overview adds the
+    // same amount to value and to invested, so P&L stays neutral here too.
+    value: s.amount,
+    gainPct: null,
+    units: null,
+    principal: s.amount,
+    interestRate: null,
+    expiryDate: null,
+    investmentDate: s.since,
+    fund: null,
+    depositGroupId: null,
+    bankCode: null,
+    currency: null,
+    isPledged: false,
+    isRecurring: true,
+  }))
 }

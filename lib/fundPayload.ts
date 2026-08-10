@@ -10,7 +10,7 @@
 import { NextResponse } from 'next/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { ValidationError, validateAmount } from '@/lib/validation'
-import { validateNavSourceUrl } from '@/lib/scrape-fund-nav'
+import { isFundCodePriceable, normalizeFundCode } from '@/lib/fmarket-nav'
 
 export const FUND_TYPES = ['balanced', 'equity', 'debt', 'gold'] as const
 export type FundType = (typeof FUND_TYPES)[number]
@@ -23,7 +23,14 @@ export interface FundFields {
   code: string
   fund_type: FundType
   nav: number
-  nav_source_url: string | null
+  /**
+   * Absent on an update that didn't send the flag — the column is then left
+   * alone rather than written. Silently switching automatic pricing off because
+   * a caller omitted a field is the #590 failure mode (a write that wipes
+   * configuration the user never touched), so omission means "unchanged", not
+   * "off". On create it is always present.
+   */
+  nav_auto_sync?: boolean
 }
 
 /** The DCA columns. `null` in a result means "not sent" — leave them alone. */
@@ -50,7 +57,7 @@ export function parseFundPayload(
   body: Record<string, unknown>,
   mode: 'create' | 'update',
 ): FundPayloadResult {
-  const { name, code, fund_type, nav, nav_source_url, is_dca, dca_monthly_amount_vnd, dca_goal_id } = body
+  const { name, code, fund_type, nav, nav_auto_sync, is_dca, dca_monthly_amount_vnd, dca_goal_id } = body
 
   // Update rejects a non-boolean is_dca because the value decides whether the
   // DCA columns are written at all; create treats anything but `true` as off.
@@ -85,14 +92,9 @@ export function parseFundPayload(
     return { ok: false, response: badRequest('Invalid goal') }
   }
 
-  // Validate the NAV source URL (https + exact vendor-host allowlist) before it
-  // is stored and later fetched server-side — prevents SSRF.
-  let cleanNavUrl: string | null
-  try {
-    cleanNavUrl = validateNavSourceUrl(nav_source_url)
-  } catch (e) {
-    if (e instanceof ValidationError) return { ok: false, response: badRequest(e.message) }
-    throw e
+  // Whether this fund is priced automatically from the upstream feed.
+  if (nav_auto_sync !== undefined && typeof nav_auto_sync !== 'boolean') {
+    return { ok: false, response: badRequest('nav_auto_sync must be a boolean') }
   }
 
   const fund: FundFields = {
@@ -100,7 +102,12 @@ export function parseFundPayload(
     code: code.trim().toUpperCase(),
     fund_type: fund_type as FundType,
     nav: navNum,
-    nav_source_url: cleanNavUrl,
+  }
+
+  // Create defaults to off; update writes the column only when the flag was
+  // actually sent, so a partial write can't turn someone's sync off behind them.
+  if (mode === 'create' || nav_auto_sync !== undefined) {
+    fund.nav_auto_sync = nav_auto_sync === true
   }
 
   // Partial-update semantics: the Add/Edit form omits the DCA fields, so a
@@ -154,6 +161,56 @@ export async function dcaGoalOwnershipError(
 
   if (!goal) {
     return NextResponse.json({ error: "You don't have permission to access this goal." }, { status: 403 })
+  }
+  return null
+}
+
+/**
+ * Refuse to switch automatic pricing on for a code the upstream feed cannot
+ * price. `funds.code` is what the refresh routes match on, so an unlisted code
+ * means a fund that shows a sync toggle and then silently never updates —
+ * failure discovered days later, at the next refresh, with no obvious cause.
+ *
+ * Guards a *transition*, not a state. `previous` is the fund as stored; passing
+ * it means "already-on-and-unchanged is none of this check's business". Without
+ * that, every DCA amount, goal and disable write would be gated too: those all
+ * PUT the fund's current `nav_auto_sync: true` back, so a fund whose code the
+ * feed happens not to list — including an opt-in migrated from the old
+ * nav_source_url, which was never checked against anything — would answer 400 to
+ * edits that have nothing to do with pricing. It also keeps the upstream request
+ * on deliberate actions (create, enable, rename the code) rather than on every
+ * save.
+ *
+ * Fails OPEN when the feed can't be reached. An outage is not evidence about the
+ * code, and must not stand between someone and editing their own fund — the
+ * worst case is a fund saved with sync on that reports a per-fund error at the
+ * next refresh, which is exactly the state it would be in anyway.
+ */
+export async function unpriceableFundCodeError(
+  fields: FundFields,
+  previous?: { code: string; nav_auto_sync: boolean } | null,
+): Promise<NextResponse | null> {
+  // The flag as it will be AFTER this write, not as it was sent. An update that
+  // omits it keeps the stored value (see FundFields), so "absent" is not "off":
+  // reading the sent value alone let a rename slip through on an already-synced
+  // fund, writing an unlisted code that then failed every refresh in silence.
+  const willSync = fields.nav_auto_sync ?? previous?.nav_auto_sync ?? false
+  if (!willSync) return null
+
+  // Already on, and the code isn't moving: this write changes nothing the check
+  // is about.
+  if (
+    previous?.nav_auto_sync === true &&
+    normalizeFundCode(previous.code) === normalizeFundCode(fields.code)
+  ) {
+    return null
+  }
+
+  const priceable = await isFundCodePriceable(fields.code)
+  if (priceable === false) {
+    return badRequest(
+      `Automatic NAV updates need a fund code the price feed lists. "${fields.code}" isn't one — check the code, or turn automatic updates off.`,
+    )
   }
   return null
 }

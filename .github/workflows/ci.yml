@@ -164,9 +164,16 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      # Pinned, not "latest". On 2026-08-07 this job failed on a merge to main
+      # because CLI v2.112.0 shipped a regression in "supabase link" — it rejected
+      # the Management API's inserted_at timestamp, whose +00:00 offset the newly
+      # synced schema only accepted as "Z" (supabase/cli#6115, fixed in 2.113.0).
+      # Migrations apply AFTER Vercel has already deployed, so a broken CLI leaves
+      # production running new code against an old schema: the one failure in this
+      # pipeline that does not heal on its own. Bump deliberately.
       - uses: supabase/setup-cli@v2
         with:
-          version: latest
+          version: 2.113.0
 
       - name: Push migrations to the production database
         run: |

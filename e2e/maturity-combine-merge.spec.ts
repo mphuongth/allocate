@@ -229,8 +229,9 @@ test.describe('Term-deposit maturity — merge a sibling deposit into the re-dep
       await expect(prov).toContainText(/2 (nguồn|sources)/i)
       await expect(prov).toContainText(/2 (ngân hàng|banks)/i)
 
-      // The destination picker defaults to D's bank (VCB); move it to TCB.
-      const dest = page.getByTestId('merge-dest-bank')
+      // The destination picker defaults to D's bank (VCB); move it to TCB. It is
+      // no longer merge-scoped — every renewal offers it (#640).
+      const dest = page.getByTestId('dest-bank')
       await expect(dest).toHaveValue('VCB')
       await dest.selectOption('TCB')
 

@@ -13,7 +13,7 @@ export type Fund = {
   code: string
   fund_type: FundType
   nav: number
-  nav_source_url: string | null
+  nav_auto_sync: boolean
   is_dca: boolean
   dca_monthly_amount_vnd: number | null
   dca_goal_id: string | null

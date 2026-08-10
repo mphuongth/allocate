@@ -141,17 +141,18 @@ const PLAN_MONTHS = 6
 // are priced at the back-dated NAV, so the profit/loss the dashboard computes is a real
 // consequence of the buy dates rather than a number typed in by hand.
 //
-// nav_source_url must stay on the hosts lib/scrape-fund-nav.ts allows
-// (vcbf.com / ssiam.com.vn / dragoncapital.com.vn / vinacapital.com), otherwise the
-// NAV-refresh cron rejects the row.
+// Every seeded fund opts into automatic pricing (nav_auto_sync), which is matched
+// on `code` against the upstream feed — so these codes are the real ones, not
+// decorative. A code the feed doesn't list would seed a fund that shows a sync
+// toggle and then never updates.
 const FUNDS = [
-  { key: 'DCDS',   code: 'DCDS',     name: 'DC Chứng khoán Năng động',     fund_type: 'equity',   nav: 92450, growth: 0.0090, url: 'https://www.dragoncapital.com.vn/quy-mo/dcds' },
-  { key: 'DCBF',   code: 'DCBF',     name: 'DC Trái phiếu Việt Nam',        fund_type: 'debt',     nav: 26180, growth: 0.0050, url: 'https://www.dragoncapital.com.vn/quy-mo/dcbf' },
-  { key: 'VESAF',  code: 'VESAF',    name: 'VinaCapital VESAF',             fund_type: 'equity',   nav: 31240, growth: 0.0095, url: 'https://vinacapital.com/quy-mo/vesaf' },
-  { key: 'VEOF',   code: 'VEOF',     name: 'VinaCapital VEOF',              fund_type: 'equity',   nav: 28760, growth: 0.0085, url: 'https://vinacapital.com/quy-mo/veof' },
-  { key: 'SSISCA', code: 'SSISCA',   name: 'SSIAM SSI-SCA',                 fund_type: 'equity',   nav: 34900, growth: 0.0080, url: 'https://www.ssiam.com.vn/quy-mo/ssi-sca' },
-  { key: 'BCF',    code: 'VCBF-BCF', name: 'VCBF Blue Chip',                fund_type: 'equity',   nav: 36120, growth: 0.0078, url: 'https://www.vcbf.com/quy-mo/quy-co-phieu-hang-dau' },
-  { key: 'TBF',    code: 'VCBF-TBF', name: 'VCBF Cân bằng Chiến lược',      fund_type: 'balanced', nav: 29540, growth: 0.0062, url: 'https://www.vcbf.com/quy-mo/quy-can-bang-chien-luoc' },
+  { key: 'DCDS',   code: 'DCDS',     name: 'DC Chứng khoán Năng động',     fund_type: 'equity',   nav: 92450, growth: 0.0090 },
+  { key: 'DCBF',   code: 'DCBF',     name: 'DC Trái phiếu Việt Nam',        fund_type: 'debt',     nav: 26180, growth: 0.0050 },
+  { key: 'VESAF',  code: 'VESAF',    name: 'VinaCapital VESAF',             fund_type: 'equity',   nav: 31240, growth: 0.0095 },
+  { key: 'VEOF',   code: 'VEOF',     name: 'VinaCapital VEOF',              fund_type: 'equity',   nav: 28760, growth: 0.0085 },
+  { key: 'SSISCA', code: 'SSISCA',   name: 'SSIAM SSI-SCA',                 fund_type: 'equity',   nav: 34900, growth: 0.0080 },
+  { key: 'BCF',    code: 'VCBF-BCF', name: 'VCBF Blue Chip',                fund_type: 'equity',   nav: 36120, growth: 0.0078 },
+  { key: 'TBF',    code: 'VCBF-TBF', name: 'VCBF Cân bằng Chiến lược',      fund_type: 'balanced', nav: 29540, growth: 0.0062 },
 ]
 
 const GOLD_PRICE_PER_CHI = 9_850_000
@@ -517,7 +518,7 @@ const fundRows = await insert(
       code: f.code,
       fund_type: f.fund_type,
       nav: f.nav,
-      nav_source_url: f.url,
+      nav_auto_sync: true,
       is_dca: !!dca,
       dca_monthly_amount_vnd: dca ? dca.amount : null,
       dca_goal_id: dca ? goalId.get(dca.goal) : null,
