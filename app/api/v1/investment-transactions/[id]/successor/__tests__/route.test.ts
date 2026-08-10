@@ -111,6 +111,13 @@ describe('POST /api/v1/investment-transactions/[id]/successor (#638)', () => {
     expect(h.rpcCalls).toHaveLength(0)
   })
 
+  it('rejects a book opened without a rate', async () => {
+    const res = await call({ ...BODY, interest_rate: null })
+
+    expect(res.status).toBe(400)
+    expect(h.rpcCalls).toHaveLength(0)
+  })
+
   it('rejects a contribution dated in the future', async () => {
     const res = await call({ ...BODY, investment_date: '2099-01-01' })
 

@@ -65,19 +65,22 @@ export default function SuccessorBookSheet({
   if (!target) return null
   const amt = Number(amount)
   const datesOk = !!expiry && !!date && expiry > date
+  // The new book opens holding money, so it needs the rate that money earns.
+  const rateOk = Number(rate) > 0
 
   async function submit() {
     if (!target) return
     if (!(amt > 0)) { setError(isVi ? 'Cần nhập số tiền' : 'Amount is required'); return }
     if (!expiry) { setError(isVi ? 'Cần nhập ngày đáo hạn của sổ mới' : "The new book's maturity is required"); return }
     if (!datesOk) { setError(isVi ? 'Ngày đáo hạn phải sau ngày nạp' : 'Maturity must come after the contribution'); return }
+    if (!rateOk) { setError(isVi ? 'Cần nhập lãi suất' : 'Rate is required'); return }
     setSaving(true); setError('')
     try {
       const res = await fetch(`/api/v1/investment-transactions/${target.bookId}/successor`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           amount_vnd: Math.round(amt),
-          interest_rate: rate ? Number(rate) : null,
+          interest_rate: Number(rate),
           investment_date: date,
           expiry_date: expiry,
           top_up_lock_days: lockDays === '' ? null : Number(lockDays),
@@ -129,8 +132,8 @@ export default function SuccessorBookSheet({
         {error && <p data-testid="successor-error" style={{ margin: 0, fontSize: 13, color: 'var(--c-neg)' }}>{error}</p>}
         <div style={{ display: 'flex', gap: 8 }}>
           <button type="button" onClick={onClose} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: '1px solid var(--c-line)', background: 'var(--c-card)', color: 'var(--c-ink)', fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>{isVi ? 'Huỷ' : 'Cancel'}</button>
-          <button type="button" data-testid="successor-submit" onClick={submit} disabled={saving || !(amt > 0) || !datesOk}
-            style={{ flex: 2, padding: '10px 0', borderRadius: 10, border: 'none', background: 'var(--c-btn-primary)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit', opacity: saving || !(amt > 0) || !datesOk ? 0.6 : 1 }}>
+          <button type="button" data-testid="successor-submit" onClick={submit} disabled={saving || !(amt > 0) || !datesOk || !rateOk}
+            style={{ flex: 2, padding: '10px 0', borderRadius: 10, border: 'none', background: 'var(--c-btn-primary)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit', opacity: saving || !(amt > 0) || !datesOk || !rateOk ? 0.6 : 1 }}>
             {isVi ? 'Mở sổ mới' : 'Open the new book'}
           </button>
         </div>

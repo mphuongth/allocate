@@ -38,7 +38,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     bookId = validateUUID(id, 'id')
     cleanAmount = validateAmount(amount_vnd, 'amount_vnd')
     if (cleanAmount <= 0) throw new ValidationError('amount_vnd must be positive')
-    if (interest_rate != null && interest_rate !== '') cleanRate = validateRate(interest_rate, 'interest_rate')
+    // The new book opens holding real money, so it needs the rate that money
+    // earns — and a rateless deposit is not a valid target for a recurring link.
+    if (interest_rate == null || interest_rate === '') throw new ValidationError('interest_rate is required')
+    cleanRate = validateRate(interest_rate, 'interest_rate')
+    if (!(cleanRate > 0)) throw new ValidationError('interest_rate must be positive')
     cleanDate = validateDate(investment_date, 'investment_date')
     cleanExpiry = validateDate(expiry_date, 'expiry_date')
     if (cleanExpiry <= cleanDate) throw new ValidationError('expiry_date must be after investment_date')

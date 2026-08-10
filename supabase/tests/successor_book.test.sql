@@ -213,6 +213,35 @@ begin
   exception when sqlstate '23514' then null;
   end;
 
+  -- ── A book opens with real money, so it needs a rate ─────────────────────
+  begin
+    perform public.open_successor_book(
+      v_short_book, 1000000, null, current_date - 5, current_date + 400, 30, null, null, null, null);
+    raise exception 'a successor without a rate must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- ── Neither book may lose its maturity while the handover stands ─────────
+  begin
+    update public.investment_transactions set expiry_date = null
+     where transaction_id = v_c.transaction_id;
+    set constraints all immediate;
+    raise exception 'clearing the successor maturity must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- ── Dissolving the source drops the plan with it ─────────────────────────
+  -- The money has left; a merge planned for later is moot. The old maturity
+  -- flows clear deposit_group_id across the group and must not start failing.
+  update public.investment_transactions set deposit_group_id = null
+   where deposit_group_id = v_b.transaction_id;
+  set constraints all immediate;
+  select successor_deposit_tx_id into v_successor
+    from public.investment_transactions where transaction_id = v_b.transaction_id;
+  if v_successor is not null then
+    raise exception 'a dissolved book must not keep its successor, found %', v_successor;
+  end if;
+
   raise notice 'successor book: OK';
 end;
 $$;

@@ -102,15 +102,18 @@ export function useGoalDetailData(opts: {
         const missingAnchors = [...new Set(
           rows.map((r) => r.deposit_group_id).filter((id): id is string => !!id && !present.has(id)),
         )]
-        // One request for all of them: a goal with many older books would
-        // otherwise open one connection per anchor before the page could render.
-        const anchors: InvestmentTx[] = missingAnchors.length === 0 ? [] : await fetch(
-          `/api/v1/investment-transactions?ids=${missingAnchors.slice(0, 100).join(',')}&include_history=true&limit=100`,
-          { cache: 'no-store' },
-        )
-          .then((r) => r.ok ? r.json() : null)
-          .then((res) => res?.transactions ?? [])
-          .catch(() => [])
+        // Batched, because a goal holding many older books would otherwise open
+        // one connection per anchor before the page could render — and chunked
+        // rather than capped, so no book is quietly left reading a tranche.
+        const CHUNK = 100
+        const chunks: string[][] = []
+        for (let i = 0; i < missingAnchors.length; i += CHUNK) chunks.push(missingAnchors.slice(i, i + CHUNK))
+        const anchors: InvestmentTx[] = (await Promise.all(chunks.map((chunk) =>
+          fetch(`/api/v1/investment-transactions?ids=${chunk.join(',')}&include_history=true&limit=${CHUNK}`, { cache: 'no-store' })
+            .then((r) => r.ok ? r.json() : null)
+            .then((res) => (res?.transactions ?? []) as InvestmentTx[])
+            .catch(() => [] as InvestmentTx[]),
+        ))).flat()
 
         const merged: InvestmentTx[] = [...rows, ...anchors, ...(recRes.contributions ?? [])]
         merged.sort((a, b) => (a.investment_date < b.investment_date ? 1 : a.investment_date > b.investment_date ? -1 : 0))

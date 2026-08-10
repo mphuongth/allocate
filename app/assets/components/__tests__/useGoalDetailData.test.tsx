@@ -57,6 +57,30 @@ describe('useGoalDetailData (#467)', () => {
     expect(urls.filter(u => u.includes('ids=')).length).toBe(1)
   })
 
+  it('asks for every missing anchor, in batches', async () => {
+    const urls: string[] = []
+    const anchorIds = Array.from({ length: 150 }, (_, i) => `anchor-${i}`)
+    mockFetch((url) => {
+      urls.push(url)
+      if (url.includes('ids=')) {
+        const ids = new URL(url, 'https://app.test').searchParams.get('ids')!.split(',')
+        return { ok: true, body: { transactions: ids.map(id => ({ transaction_id: id, deposit_group_id: id, investment_date: '2025-01-01' })) } }
+      }
+      if (url.includes('/investment-transactions?')) {
+        return { ok: true, body: { transactions: anchorIds.map((id, i) => ({ transaction_id: `t${i}`, deposit_group_id: id, investment_date: '2026-05-01' })) } }
+      }
+      if (url.includes('/recurring-contributions')) return { ok: true, body: { contributions: [] } }
+      return { ok: true, body: {} }
+    })
+
+    const { result } = renderHook(() => useGoalDetailData({ goalId: 'g1', enabled: true, refreshKey: 0, txReload: 0 }))
+    await waitFor(() => expect(result.current.transactions).toHaveLength(300))
+
+    // 150 anchors over a 100-id cap: two requests, none of them dropped.
+    expect(urls.filter(u => u.includes('ids=')).length).toBe(2)
+    expect(result.current.transactions.filter(t => t.transaction_id.startsWith('anchor-'))).toHaveLength(150)
+  })
+
   it('does not ask for anchors the page already has', async () => {
     const urls: string[] = []
     mockFetch((url) => {

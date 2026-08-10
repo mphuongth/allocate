@@ -21,8 +21,35 @@ alter table public.investment_transactions
 alter table public.investment_transactions
   add constraint investment_transactions_successor_shape check (
     successor_deposit_tx_id is null
-    or (deposit_group_id = transaction_id and successor_deposit_tx_id <> transaction_id)
+    -- NULL-safe on purpose: `deposit_group_id = transaction_id` is NULL for a
+    -- dissolved row, and a CHECK passes on NULL, so the plain comparison would
+    -- let a row keep its successor after it stopped being a book.
+    or (deposit_group_id is not distinct from transaction_id
+        and successor_deposit_tx_id is distinct from transaction_id)
   );
+
+-- Which makes the dissolve flows the constraint's problem: withdraw_book_close_group
+-- and collapse_accumulating_book both clear deposit_group_id across the group,
+-- and they would now be refused. They should not be: once the book is dissolved
+-- its money has left, and a plan to merge it later is moot. Drop the plan with
+-- the book, the same way `on delete set null` drops it with a deleted successor.
+create or replace function public.clear_successor_when_book_dissolved()
+returns trigger language plpgsql set search_path = '' as $$
+begin
+  if new.successor_deposit_tx_id is not null
+     and new.deposit_group_id is distinct from new.transaction_id then
+    new.successor_deposit_tx_id := null;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists investment_transactions_successor_cleared_on_dissolve on public.investment_transactions;
+create trigger investment_transactions_successor_cleared_on_dissolve
+  before update of deposit_group_id on public.investment_transactions
+  for each row
+  when (old.successor_deposit_tx_id is not null)
+  execute function public.clear_successor_when_book_dissolved();
 
 create unique index if not exists investment_transactions_successor_unique
   on public.investment_transactions (successor_deposit_tx_id)
@@ -71,10 +98,14 @@ begin
     raise exception 'successor book: two books cannot succeed each other'
       using errcode = 'check_violation';
   end if;
-  -- The merge happens when the SOURCE matures, so the successor has to still be
-  -- open then. A successor maturing first is a plan that cannot be carried out.
-  if v_source.expiry_date is not null and v_successor.expiry_date is not null
-     and v_successor.expiry_date <= v_source.expiry_date then
+  -- The merge happens when the SOURCE matures, so both books need a maturity at
+  -- all — the edit route lets one be cleared — and the successor's has to come
+  -- after. A successor maturing first is a plan that cannot be carried out.
+  if v_source.expiry_date is null or v_successor.expiry_date is null then
+    raise exception 'successor book: both books need a maturity while the handover stands'
+      using errcode = 'check_violation';
+  end if;
+  if v_successor.expiry_date <= v_source.expiry_date then
     raise exception 'successor book: the successor must mature after the book it takes over from (% is not after %)',
       v_successor.expiry_date, v_source.expiry_date
       using errcode = 'check_violation';
@@ -201,6 +232,11 @@ begin
   end if;
   if p_amount_vnd is null or p_amount_vnd <= 0 then
     raise exception 'successor book: amount must be positive' using errcode = 'check_violation';
+  end if;
+  -- A deposit with no rate earns nothing here and is not a valid target for a
+  -- recurring link either, and this book opens holding real money.
+  if p_interest_rate is null or p_interest_rate <= 0 then
+    raise exception 'successor book: the new book needs its own rate' using errcode = 'check_violation';
   end if;
   if p_expiry_date is null or p_investment_date is null or p_expiry_date <= p_investment_date then
     raise exception 'successor book: the new maturity must come after the contribution'
