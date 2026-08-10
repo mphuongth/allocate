@@ -190,3 +190,32 @@ create constraint trigger investment_transactions_book_still_fits
           or old.transaction_type is distinct from new.transaction_type
           or old.expiry_date is distinct from new.expiry_date))
   execute function public.assert_accumulating_book_still_fits();
+
+-- The window is the BOOK's, so it lives on every row of the book, exactly as
+-- update_deposit_book cascades maturity, bank and goal. Goal detail reads book
+-- terms off whichever group row its page happens to hold — it fetches 200
+-- transactions and falls back to a tranche when the anchor is not among them —
+-- so a tranche left on the old value would render the book under a policy the
+-- database no longer applies, and offer a top-up the anchor then refuses.
+--
+-- Only the anchor can start this, so the cascade cannot recurse.
+create or replace function public.cascade_book_top_up_lock_days()
+returns trigger language plpgsql security definer set search_path = '' as $$
+begin
+  update public.investment_transactions
+     set top_up_lock_days = new.top_up_lock_days
+   where deposit_group_id = new.deposit_group_id
+     and transaction_id <> new.transaction_id
+     and top_up_lock_days is distinct from new.top_up_lock_days;
+  return null;
+end;
+$$;
+
+drop trigger if exists investment_transactions_book_lock_days_cascade on public.investment_transactions;
+create trigger investment_transactions_book_lock_days_cascade
+  after update of top_up_lock_days on public.investment_transactions
+  for each row
+  when (new.deposit_group_id is not null
+        and new.transaction_id = new.deposit_group_id
+        and old.top_up_lock_days is distinct from new.top_up_lock_days)
+  execute function public.cascade_book_top_up_lock_days();

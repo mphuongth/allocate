@@ -270,6 +270,16 @@ begin
   update public.investment_transactions set top_up_lock_days = 400
    where transaction_id = v_moving_book;
 
+  -- ...but the new window is the BOOK's, so it reaches every tranche. Goal
+  -- detail reads book terms off whichever group row its page holds, so a
+  -- tranche left on the old value would render the book under a policy the
+  -- database no longer applies.
+  select top_up_lock_days into v_lock_days
+    from public.investment_transactions where transaction_id = v_moving_tranche;
+  if v_lock_days is distinct from 400 then
+    raise exception 'a policy edit must reach every tranche, tranche has %', v_lock_days;
+  end if;
+
   raise notice 'accumulating top-up lock: OK';
 end;
 $$;
