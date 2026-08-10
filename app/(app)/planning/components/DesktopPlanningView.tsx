@@ -15,6 +15,7 @@ import FixedExpenseManager from './FixedExpenseManager'
 import RecurringSavingManager from './RecurringSavingManager'
 import AddTransactionSheet, { type EditableTransaction, type PrefillTransaction } from '@/app/assets/components/AddTransactionSheet'
 import RecurringBookTopUpSheet, { type BookTopUpTarget } from '@/app/assets/components/RecurringBookTopUpSheet'
+import SuccessorBookSheet, { type SuccessorTarget } from '@/app/assets/components/SuccessorBookSheet'
 import AddInsuranceMemberModal from '@/app/assets/components/AddInsuranceMemberModal'
 import { EditIcon, TrashIcon } from './planningIcons'
 import { DPlanRow, DGoalItemRow } from './desktopPlanningRows'
@@ -108,6 +109,7 @@ export default function DesktopPlanningView({
   // deposit, opens the same sheet in create mode (POST) pre-filled with the goal.
   const [prefillTx, setPrefillTx] = useState<PrefillTransaction | null>(null)
   const [bookTopUp, setBookTopUp] = useState<BookTopUpTarget | null>(null)
+  const [successor, setSuccessor] = useState<SuccessorTarget | null>(null)
 
   // ── Derived values ── (shared with the mobile view via usePlanningDerivations)
   const {
@@ -187,6 +189,7 @@ export default function DesktopPlanningView({
   async function recordRecurring(g: { goalId: string; isUnallocated: boolean }, item: GoalItem) {
     const result = await actions.probeRecurringRecord(item)
     if (result.kind === 'book-topup') setBookTopUp(result.target)
+    else if (result.kind === 'successor') setSuccessor(result.target)
     else if (result.kind === 'contribution') openContribution(g, { asset_type: 'bank', amount_vnd: item.amount })
   }
 
@@ -754,6 +757,12 @@ export default function DesktopPlanningView({
         isVi={isVI}
         onClose={() => setBookTopUp(null)}
         onDone={() => { onRefresh(); onToast(isVI ? 'Đã nạp vào sổ' : 'Topped up book') }}
+      />
+      <SuccessorBookSheet
+        target={successor}
+        isVi={isVI}
+        onClose={() => setSuccessor(null)}
+        onDone={() => { onRefresh(); onToast(isVI ? 'Đã mở sổ kế nhiệm' : 'Successor book opened') }}
       />
     </div>
   )

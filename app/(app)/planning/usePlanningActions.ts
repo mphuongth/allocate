@@ -3,6 +3,8 @@ import { todayIso } from '@/lib/dates'
 import type { GoalItem, GoalRow } from '@/lib/planning'
 import type { EditableTransaction, PrefillTransaction } from '@/app/assets/components/AddTransactionSheet'
 import type { BookTopUpTarget } from '@/app/assets/components/RecurringBookTopUpSheet'
+import type { SuccessorTarget } from '@/app/assets/components/SuccessorBookSheet'
+import { classifyAccumulatingTopUp } from '@/lib/accumulatingTopUp'
 import type { MonthlyPlan, FixedExpense, InsuranceMember, FundInvestment } from '@/features/planning/contracts'
 
 export type OverrideType = 'fe' | 'rec' | 'ins'
@@ -10,6 +12,7 @@ export type OverrideType = 'fe' | 'rec' | 'ins'
 export type RecordRecurringResult =
   | { kind: 'matured' }
   | { kind: 'book-topup'; target: BookTopUpTarget }
+  | { kind: 'successor'; target: SuccessorTarget }
   | { kind: 'contribution' }
 
 // Build the Add-Transaction edit payload for recording a planned DCA buy. Pure —
@@ -199,10 +202,29 @@ export function usePlanningActions(ctx: PlanningActionsCtx) {
           const dep = await res.json()
           const isBookAnchor = dep.deposit_group_id && dep.deposit_group_id === dep.transaction_id
           if (isBookAnchor) {
-            const matured = dep.expiry_date && dep.expiry_date < todayIso()
-            if (matured) {
-              onToast(isVI ? 'Sổ đã đáo hạn — hãy xử lý đáo hạn trước.' : 'This book has matured — handle its maturity first.')
-              return { kind: 'matured' }
+            const date = todayIso()
+            // A book that will not take this month's contribution is not a dead
+            // end: the answer is the successor book, prefilled with the month
+            // that could not go in (#638). A book that already has one is simply
+            // done — the contribution belongs to whatever it was replaced by.
+            const eligibility = classifyAccumulatingTopUp({ topUpDate: date, expiryDate: dep.expiry_date ?? null, lockDays: dep.top_up_lock_days ?? null })
+            if (eligibility.status !== 'allowed') {
+              if (dep.successor_deposit_tx_id) {
+                onToast(isVI ? 'Sổ này đã có sổ kế nhiệm — hãy ghi khoản này vào sổ đó.' : 'This book already has a successor — record this into that one.')
+                return { kind: 'matured' }
+              }
+              return {
+                kind: 'successor',
+                target: {
+                  bookId: dep.transaction_id,
+                  bookName: dep.notes || (isVI ? 'Sổ ngân hàng' : 'Bank deposit'),
+                  amount: item.amount, date, rate: dep.interest_rate ?? null,
+                  lockDays: dep.top_up_lock_days ?? null,
+                  savingId: item.recurringId,
+                  ym: `${year}-${String(month).padStart(2, '0')}`,
+                  planId: plan.id,
+                },
+              }
             }
             return {
               kind: 'book-topup',

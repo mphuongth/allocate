@@ -26,6 +26,7 @@ export interface InvestmentTx {
   held_for_merge?: boolean | null
   consumed_by_inv_id?: string | null
   top_up_lock_days?: number | null
+  successor_deposit_tx_id?: string | null
 }
 
 export interface UseGoalDetailData {

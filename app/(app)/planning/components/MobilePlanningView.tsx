@@ -8,6 +8,7 @@ import FixedExpenseManager from './FixedExpenseManager'
 import RecurringSavingManager from './RecurringSavingManager'
 import AddTransactionSheet, { type EditableTransaction, type PrefillTransaction } from '@/app/assets/components/AddTransactionSheet'
 import RecurringBookTopUpSheet, { type BookTopUpTarget } from '@/app/assets/components/RecurringBookTopUpSheet'
+import SuccessorBookSheet, { type SuccessorTarget } from '@/app/assets/components/SuccessorBookSheet'
 import AddInsuranceMemberModal from '@/app/assets/components/AddInsuranceMemberModal'
 import { EditIcon } from './planningIcons'
 import { GoalAllocationRow, PlanLineItem } from './planningRows'
@@ -77,6 +78,7 @@ export default function MobilePlanningView({
   const [buyEdit, setBuyEdit] = useState<EditableTransaction | null>(null)
   const [prefillTx, setPrefillTx] = useState<PrefillTransaction | null>(null)
   const [bookTopUp, setBookTopUp] = useState<BookTopUpTarget | null>(null)
+  const [successor, setSuccessor] = useState<SuccessorTarget | null>(null)
   const [showAddInsurance, setShowAddInsurance] = useState(false)
   const [overrideTarget, setOverrideTarget] = useState<{ type: 'fe' | 'ins' | 'rec'; id: string; name: string; defaultAmount: number } | null>(null)
 
@@ -126,6 +128,7 @@ export default function MobilePlanningView({
   async function recordRecurring(entry: GoalRow, item: GoalItem) {
     const result = await actions.probeRecurringRecord(item)
     if (result.kind === 'book-topup') setBookTopUp(result.target)
+    else if (result.kind === 'successor') setSuccessor(result.target)
     else if (result.kind === 'contribution') openContribution(entry, { asset_type: 'bank', amount_vnd: item.amount })
   }
 
@@ -497,6 +500,12 @@ export default function MobilePlanningView({
         isVi={isVI}
         onClose={() => setBookTopUp(null)}
         onDone={() => { onToast(isVI ? 'Đã nạp vào sổ' : 'Topped up book'); onRefresh() }}
+      />
+      <SuccessorBookSheet
+        target={successor}
+        isVi={isVI}
+        onClose={() => setSuccessor(null)}
+        onDone={() => { onToast(isVI ? 'Đã mở sổ kế nhiệm' : 'Successor book opened'); onRefresh() }}
       />
 
       <AddInsuranceMemberModal

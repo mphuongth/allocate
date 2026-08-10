@@ -5,6 +5,7 @@ vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: toastErrorMock
 
 import { usePlanningActions, buildBuyEdit, buildContributionPrefill } from '../usePlanningActions'
 import type { GoalItem } from '@/lib/planning'
+import { addDaysIso, todayIso } from '@/lib/dates'
 
 // usePlanningActions uses no React hooks internally — it returns plain async
 // functions — so it can be exercised directly. It's the single implementation
@@ -133,9 +134,29 @@ describe('usePlanningActions (#467 shared planning actions)', () => {
       }
     })
 
-    it('toasts and returns matured for a matured book', async () => {
+    // #638 Phase 2: a book that cannot take this month is not a dead end — the
+    // month goes into the successor, prefilled from what the plan already knows.
+    it('steers a matured book to a successor, carrying the month with it', async () => {
+      const { actions } = setup()
+      mockFetch(() => ({ ok: true, body: { transaction_id: 'tx1', deposit_group_id: 'tx1', expiry_date: '2000-01-01', interest_rate: 6, notes: 'My book' } }))
+      const r = await actions.probeRecurringRecord(item)
+      expect(r.kind).toBe('successor')
+      if (r.kind === 'successor') {
+        expect(r.target).toMatchObject({ bookId: 'tx1', bookName: 'My book', amount: 1_000_000, savingId: 'r1', ym: '2026-06' })
+      }
+    })
+
+    it('steers a book inside its lock window the same way', async () => {
+      const { actions } = setup()
+      mockFetch(() => ({ ok: true, body: { transaction_id: 'tx1', deposit_group_id: 'tx1', expiry_date: addDaysIso(todayIso(), 10), top_up_lock_days: 30, interest_rate: 6 } }))
+      const r = await actions.probeRecurringRecord(item)
+      expect(r.kind).toBe('successor')
+      if (r.kind === 'successor') expect(r.target.lockDays).toBe(30)
+    })
+
+    it('a book that already handed over sends the user to the successor instead', async () => {
       const { actions, onToast } = setup()
-      mockFetch(() => ({ ok: true, body: { transaction_id: 'tx1', deposit_group_id: 'tx1', expiry_date: '2000-01-01' } }))
+      mockFetch(() => ({ ok: true, body: { transaction_id: 'tx1', deposit_group_id: 'tx1', expiry_date: '2000-01-01', successor_deposit_tx_id: 'tx2' } }))
       const r = await actions.probeRecurringRecord(item)
       expect(r.kind).toBe('matured')
       expect(onToast).toHaveBeenCalled()

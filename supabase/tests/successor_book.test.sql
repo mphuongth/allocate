@@ -1,0 +1,139 @@
+-- A locked book hands its contributions to a successor book (#638, Phase 2).
+-- Run via `npm run test:db` after migrations are applied.
+begin;
+
+do $$
+declare
+  v_user uuid := gen_random_uuid();
+  v_other uuid := gen_random_uuid();
+  v_goal uuid;
+  v_other_goal uuid;
+  v_book uuid := gen_random_uuid();
+  v_foreign_book uuid := gen_random_uuid();
+  v_saving uuid := gen_random_uuid();
+  v_b public.investment_transactions;
+  v_c public.investment_transactions;
+  v_successor uuid;
+  v_linked uuid;
+  v_fulfilled bigint;
+begin
+  insert into auth.users (id, email) values (v_user, 'successor-book@test.invalid');
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Successor') returning goal_id into v_goal;
+
+  -- Book A: a 30-day lock and a maturity 24 days out, so it takes no more.
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate,
+    deposit_group_id, top_up_lock_days, bank_code, notes
+  ) values (
+    v_book, v_user, v_goal, 'bank', 'investment',
+    current_date - 200, current_date + 24, 10000000, 4,
+    v_book, 30, null, 'PVcomBank tích luỹ'
+  );
+
+  -- ── The successor carries the book's terms, and the link records it ───────
+  select * into v_b from public.open_successor_book(
+    v_book, 2000000, 4.2, current_date - 6, current_date + 359, 30, null, null, null, null);
+
+  if v_b.deposit_group_id is distinct from v_b.transaction_id then
+    raise exception 'the successor must be an accumulating book anchor';
+  end if;
+  if v_b.goal_id is distinct from v_goal then raise exception 'the successor must keep the goal'; end if;
+  if v_b.amount_vnd <> 2000000 then raise exception 'the successor must hold the contribution'; end if;
+  if v_b.expiry_date <> current_date + 359 then raise exception 'the successor takes the entered maturity'; end if;
+  if v_b.interest_rate <> 4.2 then raise exception 'the successor takes the entered rate'; end if;
+  if v_b.top_up_lock_days is distinct from 30 then raise exception 'the policy carries over as the default'; end if;
+
+  select successor_deposit_tx_id into v_successor
+    from public.investment_transactions where transaction_id = v_book;
+  if v_successor is distinct from v_b.transaction_id then
+    raise exception 'the source book must record its successor';
+  end if;
+
+  -- ── One successor per book ────────────────────────────────────────────────
+  begin
+    perform public.open_successor_book(
+      v_book, 1000000, 4, current_date - 5, current_date + 360, 30, null, null, null, null);
+    raise exception 'a second successor must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- ── A book cannot succeed itself, nor a book it already succeeds ─────────
+  begin
+    update public.investment_transactions set successor_deposit_tx_id = v_book
+     where transaction_id = v_book;
+    raise exception 'a book cannot be its own successor';
+  exception when sqlstate '23514' then null;
+  end;
+  begin
+    update public.investment_transactions
+       set successor_deposit_tx_id = v_book
+     where transaction_id = v_b.transaction_id;
+    raise exception 'the successor cannot point back at its source';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- ── Only a book may be named, and only one of the caller's own ───────────
+  insert into auth.users (id, email) values (v_other, 'successor-book-other@test.invalid');
+  insert into public.savings_goals (user_id, goal_name) values (v_other, 'Foreign') returning goal_id into v_other_goal;
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate, deposit_group_id
+  ) values (
+    v_foreign_book, v_other, v_other_goal, 'bank', 'investment',
+    current_date - 200, current_date + 150, 10000000, 4, v_foreign_book
+  );
+  begin
+    update public.investment_transactions set successor_deposit_tx_id = v_foreign_book
+     where transaction_id = v_b.transaction_id;
+    raise exception 'a foreign book must not be named as a successor';
+  exception when others then null;
+  end;
+
+  -- ── The recurring-driven flow moves the whole month in one transaction ───
+  insert into public.recurring_savings (
+    saving_id, user_id, goal_id, name, amount_vnd, linked_deposit_tx_id
+  ) values (
+    v_saving, v_user, v_goal, 'Monthly', 2000000, v_b.transaction_id
+  );
+
+  -- Now B is the one closing in on maturity, and the recurring points at it.
+  update public.investment_transactions set expiry_date = current_date + 20
+   where transaction_id = v_b.transaction_id;
+  set constraints all immediate;
+
+  select * into v_c from public.open_successor_book(
+    v_b.transaction_id, 2000000, 4.5, current_date - 4, current_date + 361, 30, null,
+    v_saving, to_char(current_date, 'YYYY-MM'), null);
+
+  select linked_deposit_tx_id into v_linked
+    from public.recurring_savings where saving_id = v_saving;
+  if v_linked is distinct from v_c.transaction_id then
+    raise exception 'the recurring link must move to the successor, found %', v_linked;
+  end if;
+
+  select amount_vnd into v_fulfilled
+    from public.recurring_saving_fulfillments
+   where recurring_saving_id = v_saving and ym = to_char(current_date, 'YYYY-MM');
+  if v_fulfilled is distinct from 2000000 then
+    raise exception 'the month must be fulfilled by the successor, found %', v_fulfilled;
+  end if;
+
+  -- A recurring saving linked to another book cannot be swept along: v_c is a
+  -- book of the caller's with no successor yet, and the saving now points at it,
+  -- so this fails on the link and not on some earlier guard.
+  update public.recurring_savings set linked_deposit_tx_id = v_book
+   where saving_id = v_saving;
+  begin
+    perform public.open_successor_book(
+      v_c.transaction_id, 1000000, 4, current_date - 3, current_date + 362, 30, null,
+      v_saving, to_char(current_date + 31, 'YYYY-MM'), null);
+    raise exception 'a recurring linked elsewhere must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  raise notice 'successor book: OK';
+end;
+$$;
+
+rollback;
