@@ -27,6 +27,9 @@ export interface InvestmentTx {
   consumed_by_inv_id?: string | null
   top_up_lock_days?: number | null
   successor_deposit_tx_id?: string | null
+  // Set on every row of an accumulating book; equals transaction_id on the
+  // anchor, which is the row that carries the book's terms.
+  deposit_group_id?: string | null
 }
 
 export interface UseGoalDetailData {
@@ -88,8 +91,24 @@ export function useGoalDetailData(opts: {
         .then((r) => r.ok ? r.json() : { contributions: [] })
         .catch(() => ({ contributions: [] })),
     ])
-      .then(([txRes, recRes]) => {
-        const merged: InvestmentTx[] = [...(txRes.transactions ?? []), ...(recRes.contributions ?? [])]
+      .then(async ([txRes, recRes]) => {
+        const rows: InvestmentTx[] = txRes.transactions ?? []
+        // A book's terms — maturity, bank, lock window, whether it has handed
+        // over to a successor — live on its ANCHOR, and this page holds only the
+        // newest 200 rows. An old book with recent tranches would otherwise be
+        // read off a tranche, which knows none of that, and would look like it
+        // still takes top-ups (#638). Ask for the few anchors that fell out.
+        const present = new Set(rows.map((r) => r.transaction_id))
+        const missingAnchors = [...new Set(
+          rows.map((r) => r.deposit_group_id).filter((id): id is string => !!id && !present.has(id)),
+        )]
+        const anchors = missingAnchors.length === 0 ? [] : (await Promise.all(
+          missingAnchors.map((id) => fetch(`/api/v1/investment-transactions/${id}`, { cache: 'no-store' })
+            .then((r) => r.ok ? r.json() : null)
+            .catch(() => null)),
+        )).filter((a): a is InvestmentTx => !!a?.transaction_id)
+
+        const merged: InvestmentTx[] = [...rows, ...anchors, ...(recRes.contributions ?? [])]
         merged.sort((a, b) => (a.investment_date < b.investment_date ? 1 : a.investment_date > b.investment_date ? -1 : 0))
         setTransactions(merged)
       })

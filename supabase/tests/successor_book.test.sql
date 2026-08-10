@@ -16,6 +16,7 @@ declare
   v_successor uuid;
   v_linked uuid;
   v_fulfilled bigint;
+  v_moved_goal uuid;
 begin
   insert into auth.users (id, email) values (v_user, 'successor-book@test.invalid');
   insert into public.savings_goals (user_id, goal_name) values (v_user, 'Successor') returning goal_id into v_goal;
@@ -69,6 +70,9 @@ begin
     update public.investment_transactions
        set successor_deposit_tx_id = v_book
      where transaction_id = v_b.transaction_id;
+    -- The pairing check is deferred so a multi-statement book edit is judged on
+    -- its final state; force it here to see the refusal from inside the test.
+    set constraints all immediate;
     raise exception 'the successor cannot point back at its source';
   exception when sqlstate '23514' then null;
   end;
@@ -86,6 +90,7 @@ begin
   begin
     update public.investment_transactions set successor_deposit_tx_id = v_foreign_book
      where transaction_id = v_b.transaction_id;
+    set constraints all immediate;
     raise exception 'a foreign book must not be named as a successor';
   exception when others then null;
   end;
@@ -129,6 +134,30 @@ begin
       v_c.transaction_id, 1000000, 4, current_date - 3, current_date + 362, 30, null,
       v_saving, to_char(current_date + 31, 'YYYY-MM'), null);
     raise exception 'a recurring linked elsewhere must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- ── A book that has handed over takes no more money ──────────────────────
+  -- The lock window alone does not cover this: a date before the window still
+  -- clears it, and the UI is not the only writer.
+  begin
+    insert into public.investment_transactions (
+      user_id, goal_id, asset_type, transaction_type, investment_date,
+      expiry_date, amount_vnd, interest_rate, deposit_group_id
+    ) values (v_user, v_goal, 'bank', 'investment', current_date - 100,
+      current_date + 24, 1000000, 4, v_book);
+    raise exception 'a top-up into a handed-over book must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- ── The pairing holds when the SUCCESSOR is the row that moves ───────────
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Elsewhere') returning goal_id into v_moved_goal;
+  begin
+    perform public.update_deposit_book(
+      v_b.transaction_id, true, v_moved_goal, false, null, false, null,
+      false, null, false, null, false, null, false, null);
+    set constraints all immediate;
+    raise exception 'moving the successor to another goal must be refused';
   exception when sqlstate '23514' then null;
   end;
 

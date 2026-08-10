@@ -42,45 +42,106 @@ create trigger investment_transactions_successor_fk_ownership
 -- pairing that could never be: a successor must itself be a live accumulating
 -- book, in the same goal and currency, and it must not already point back at
 -- the source (a two-book cycle has no maturity order).
-create or replace function public.enforce_successor_book_pairing()
-returns trigger language plpgsql security definer set search_path = '' as $$
-declare v_successor public.investment_transactions;
+create or replace function public.assert_successor_book_pairing(p_source_id uuid)
+returns void language plpgsql security definer set search_path = '' as $$
+declare v_source public.investment_transactions; v_successor public.investment_transactions;
 begin
-  if new.successor_deposit_tx_id is null then return new; end if;
+  select * into v_source from public.investment_transactions where transaction_id = p_source_id;
+  if not found or v_source.successor_deposit_tx_id is null then return; end if;
 
   select * into v_successor from public.investment_transactions
-   where transaction_id = new.successor_deposit_tx_id and user_id = new.user_id;
+   where transaction_id = v_source.successor_deposit_tx_id and user_id = v_source.user_id;
   -- Ownership is the fk trigger's job; say nothing here about a row that is not
   -- the caller's, so a foreign book cannot be probed through these messages.
-  if not found then return new; end if;
+  if not found then return; end if;
 
   if v_successor.deposit_group_id is distinct from v_successor.transaction_id then
     raise exception 'successor book: a successor must itself be an accumulating book'
       using errcode = 'check_violation';
   end if;
-  if v_successor.goal_id is distinct from new.goal_id then
+  if v_successor.goal_id is distinct from v_source.goal_id then
     raise exception 'successor book: both books must belong to the same goal'
       using errcode = 'check_violation';
   end if;
-  if coalesce(v_successor.currency, 'VND') is distinct from coalesce(new.currency, 'VND') then
+  if coalesce(v_successor.currency, 'VND') is distinct from coalesce(v_source.currency, 'VND') then
     raise exception 'successor book: both books must be in the same currency'
       using errcode = 'check_violation';
   end if;
-  if v_successor.successor_deposit_tx_id = new.transaction_id then
+  if v_successor.successor_deposit_tx_id = v_source.transaction_id then
     raise exception 'successor book: two books cannot succeed each other'
       using errcode = 'check_violation';
   end if;
-  return new;
+end;
+$$;
+
+-- The pairing can be broken from EITHER end: by re-pointing the source, or by
+-- editing the successor out from under it — moving that book to another goal is
+-- an ordinary transaction edit, and it would leave the source promising a merge
+-- that can never happen. So the check runs from whichever row moved, and looks
+-- both ways.
+--
+-- Deferred, for the reason the top-up guard is (#638): update_deposit_book
+-- rewrites a book across several statements, and only the state the transaction
+-- ends in is the state the user asked for.
+create or replace function public.enforce_successor_book_pairing()
+returns trigger language plpgsql security definer set search_path = '' as $$
+declare v_id uuid;
+begin
+  perform public.assert_successor_book_pairing(new.transaction_id);
+  for v_id in
+    select transaction_id from public.investment_transactions
+     where successor_deposit_tx_id = new.transaction_id
+  loop
+    perform public.assert_successor_book_pairing(v_id);
+  end loop;
+  return null;
 end;
 $$;
 
 drop trigger if exists investment_transactions_successor_pairing on public.investment_transactions;
-create trigger investment_transactions_successor_pairing
-  before insert or update of successor_deposit_tx_id, goal_id, currency
+create constraint trigger investment_transactions_successor_pairing
+  after insert or update of successor_deposit_tx_id, goal_id, currency, deposit_group_id
   on public.investment_transactions
+  deferrable initially deferred
   for each row
-  when (new.successor_deposit_tx_id is not null)
+  -- Only two kinds of row can affect a pairing: one that names a successor, and
+  -- a book anchor, which is the only kind that can BE one. Narrow, because a
+  -- deferred event is queued until commit and pending events block ALTER TABLE
+  -- on this table — every unrelated edit would otherwise carry one.
+  when (new.successor_deposit_tx_id is not null
+        or new.deposit_group_id = new.transaction_id)
   execute function public.enforce_successor_book_pairing();
+
+-- ── A book that has handed over is closed to new money ──────────────────────
+--
+-- The lock window does not cover this on its own: a contribution dated before
+-- the window still clears it, so a stale modal or a deliberately historical
+-- date could keep feeding the old book after its recurring link has moved —
+-- splitting one month's saving across two books. The handover is the same kind
+-- of fact as maturity, so it belongs in the same guard every writer passes.
+create or replace function public.assert_accumulating_book_topup_allowed(p_book_id uuid, p_owner_id uuid, p_top_up_date date)
+returns void language plpgsql security definer set search_path = '' as $$
+declare v_anchor public.investment_transactions; v_days_left integer;
+begin
+  select * into v_anchor from public.investment_transactions
+   where transaction_id = p_book_id and deposit_group_id = p_book_id and user_id = p_owner_id for update;
+  if not found then raise exception 'accumulating top-up: accumulating book not found' using errcode = 'no_data_found'; end if;
+  if v_anchor.successor_deposit_tx_id is not null then
+    raise exception 'accumulating top-up: this book has handed over to a successor, so contributions belong there'
+      using errcode = 'check_violation';
+  end if;
+  if v_anchor.expiry_date is null then return; end if;
+  v_days_left := v_anchor.expiry_date - p_top_up_date;
+  if v_days_left <= 0 then
+    raise exception 'accumulating top-up: cannot top up a deposit on or after its maturity date' using errcode = 'check_violation';
+  end if;
+  if v_anchor.top_up_lock_days is not null and v_days_left <= v_anchor.top_up_lock_days then
+    raise exception 'accumulating top-up: this deposit no longer accepts top-ups: % days remain before maturity (its lock window is % days)', v_days_left, v_anchor.top_up_lock_days using errcode = 'check_violation';
+  end if;
+end;
+$$;
+
+revoke all on function public.assert_accumulating_book_topup_allowed(uuid, uuid, date) from public, anon, authenticated;
 
 -- ── Opening the successor ───────────────────────────────────────────────────
 --
