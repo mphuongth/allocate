@@ -10,27 +10,21 @@
 --
 -- The drop is irreversible, and was confirmed before this was written.
 
--- Reconcile the two columns one last time.
+-- There is deliberately no reconciliation here.
 --
--- The expand backfill was a snapshot, and the release that has been live since
--- then writes nav_source_url without knowing about nav_auto_sync — so any fund
--- opted in or out during the compatibility window has the two columns
--- disagreeing. A fund created with a source URL in that window still carries the
--- false default and would silently stop syncing; one whose URL was cleared would
--- keep syncing. Re-deriving here fixes both, at the one instant no writer can
--- still be using the old column.
---
--- funds_updated_at is held off for the statement, as in the expand migration: it
--- stamps now() unconditionally, and the fund views render each fund's NAV age
--- from updated_at, so letting it fire would report every reconciled fund as
--- freshly repriced when no price was fetched.
-alter table public.funds disable trigger funds_updated_at;
+-- An earlier draft re-derived the flag — `set nav_auto_sync = (nav_source_url is
+-- not null)` — on the theory that the expand backfill had gone stale. It had,
+-- but this is the wrong place to fix it: by the time this runs, the release that
+-- reads nav_auto_sync has been live for several minutes writing it *without*
+-- touching nav_source_url. Re-deriving cannot tell a fund the old code opted in
+-- from one the user has just switched off, and reverses the latter — measured:
+-- a fund switched off after cutover came back on. The expand migration keeps the
+-- columns in step at the source instead, with funds_sync_nav_auto_sync, so by
+-- now they already agree and there is nothing to repair.
 
-update public.funds
-   set nav_auto_sync = (nav_source_url is not null)
- where nav_auto_sync is distinct from (nav_source_url is not null);
-
-alter table public.funds enable trigger funds_updated_at;
+-- That trigger exists only for the window this migration closes.
+drop trigger if exists funds_sync_nav_auto_sync on public.funds;
+drop function if exists public.sync_fund_nav_auto_sync();
 
 -- Postgres overloads on argument types, so the nav_source_url form has to be
 -- dropped explicitly — `create or replace` on the boolean form would leave it

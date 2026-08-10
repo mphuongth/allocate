@@ -112,7 +112,24 @@ begin
     raise exception 'an explicit true must turn automatic pricing on, got %', v_flag;
   end if;
 
-  -- Both migrations hold funds_updated_at off for their backfill so reconciled
+  -- The compatibility trigger goes with the column it existed to mirror. Left
+  -- behind it would fire on every insert and force nav_auto_sync off from a
+  -- column that no longer exists.
+  if exists (
+    select 1 from pg_trigger t join pg_class c on c.oid = t.tgrelid
+     where c.relname = 'funds' and t.tgname = 'funds_sync_nav_auto_sync'
+  ) then
+    raise exception 'the compatibility trigger funds_sync_nav_auto_sync was not dropped';
+  end if;
+
+  if exists (
+    select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'public' and p.proname = 'sync_fund_nav_auto_sync'
+  ) then
+    raise exception 'the compatibility trigger function was not dropped';
+  end if;
+
+  -- The expand migration holds funds_updated_at off for its backfill so migrated
   -- funds don't all look freshly repriced. One that disabled a trigger and
   -- failed to re-enable it would silently stop stamping updated_at from then
   -- on — the kind of damage nothing reports.
