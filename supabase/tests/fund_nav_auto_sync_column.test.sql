@@ -122,6 +122,41 @@ begin
     raise exception 'funds_updated_at did not stamp the row';
   end if;
 
+  -- The reconciliation the contract migration will run, pinned here because this
+  -- is the last release in which it can be checked: once nav_source_url is
+  -- dropped there is nothing left to derive the flag from.
+  --
+  -- It has to work in BOTH directions. A one-way `set nav_auto_sync = true where
+  -- nav_source_url is not null` repairs a fund opted in during the compatibility
+  -- window but leaves one opted *out* still flagged true, switching that user's
+  -- automatic pricing back on behind them. Measured: under the one-way form the
+  -- opted-out row below stays true.
+  declare
+    v_opted_in  uuid;
+    v_opted_out uuid;
+  begin
+    -- Opted in by the old release after the backfill: URL set, flag still default.
+    insert into funds (user_id, name, code, fund_type, nav, nav_source_url, nav_auto_sync)
+      values (v_user, 'Opted In', 'RECIN', 'equity', 1000, 'https://www.vcbf.com/in', false)
+      returning id into v_opted_in;
+
+    -- Opted out by the old release after the backfill: URL cleared, flag stale.
+    insert into funds (user_id, name, code, fund_type, nav, nav_source_url, nav_auto_sync)
+      values (v_user, 'Opted Out', 'RECOUT', 'equity', 1000, null, true)
+      returning id into v_opted_out;
+
+    update public.funds
+       set nav_auto_sync = (nav_source_url is not null)
+     where nav_auto_sync is distinct from (nav_source_url is not null);
+
+    if (select nav_auto_sync from funds where id = v_opted_in) is not true then
+      raise exception 'reconciliation must opt in a fund that gained a source URL';
+    end if;
+    if (select nav_auto_sync from funds where id = v_opted_out) is not false then
+      raise exception 'reconciliation must opt out a fund whose source URL was cleared';
+    end if;
+  end;
+
   perform set_config('request.jwt.claims', '', true);
 
   raise notice 'fund_nav_auto_sync_column.test.sql: OK';

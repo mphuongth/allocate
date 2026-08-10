@@ -20,15 +20,22 @@ comment on column public.funds.nav_auto_sync is
 -- Preserve every existing opt-in: a fund that had a source URL was being synced,
 -- and must keep being synced once the new column is the one consulted.
 --
--- This backfill goes stale, by design, and the contract migration must repeat
--- it. The release still in production writes nav_source_url and knows nothing
--- about nav_auto_sync, so any fund opted in or out during the compatibility
--- window ends up with the two columns disagreeing — a fund created with a source
--- URL keeps the false default and would silently stop syncing the moment reads
--- move to the boolean. Re-running this statement immediately before dropping
--- nav_source_url reconciles them atomically, at the one instant no writer can
--- still be using the old column. It is in the drop migration; this comment is
--- here because that is where someone would look for the reason.
+-- This backfill goes stale, by design, and the contract migration reconciles it.
+-- The release still in production writes nav_source_url and knows nothing about
+-- nav_auto_sync, so any fund opted in or out during the compatibility window
+-- ends up with the two columns disagreeing.
+--
+-- Note that the reconciliation is NOT this statement run again. This one only
+-- ever sets true, which repairs a fund opted *in* during the window but leaves a
+-- fund opted *out* still flagged true — silently switching the user's pricing
+-- back on. The contract migration therefore derives the flag in both directions,
+--
+--     set nav_auto_sync = (nav_source_url is not null)
+--
+-- immediately before dropping the column, at the one instant no writer can still
+-- be using it. That statement's behaviour is pinned by
+-- supabase/tests/fund_nav_auto_sync_column.test.sql, which can still exercise it
+-- here while both columns exist; after the drop there is nothing left to compare.
 --
 -- funds_updated_at is held off for exactly this statement. It is a BEFORE UPDATE
 -- trigger that stamps now() unconditionally — it overwrites even an explicit
