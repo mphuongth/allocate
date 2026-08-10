@@ -31,7 +31,14 @@ export async function GET(request: NextRequest) {
   const includeHistory = searchParams.get('include_history') === 'true'
   let page: number
   let limit: number
+  let idFilter: string[] | null = null
   try {
+    const ids = searchParams.get('ids')
+    if (ids) {
+      const parts = ids.split(',').filter(Boolean)
+      if (parts.length > 100) throw new ValidationError('ids accepts at most 100 transaction ids')
+      idFilter = parts.map((v, i) => validateUUID(v, `ids[${i}]`))
+    }
     // Only finite positive integers; garbage (page=abc) is a 400, not a NaN
     // range call. limit is clamped to the documented ceiling of 1000.
     page = validatePositiveIntParam(searchParams.get('page'), 'page', { fallback: 1 })
@@ -58,6 +65,11 @@ export async function GET(request: NextRequest) {
   if (goal_id) query = query.eq('goal_id', goal_id)
   if (plan_id) query = query.eq('plan_id', plan_id)
   if (unassigned === 'true') query = query.is('goal_id', null)
+  // `ids` fetches a named set in one round trip. Goal detail uses it to pull the
+  // few book anchors that fell outside its page — a book's terms live on the
+  // anchor, and a page of tranches knows none of them (#638). Capped, because
+  // the point is one small request instead of one request per id.
+  if (idFilter) query = query.in('transaction_id', idFilter)
 
   const { data: transactions, error, count } = await query
 

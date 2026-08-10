@@ -102,11 +102,15 @@ export function useGoalDetailData(opts: {
         const missingAnchors = [...new Set(
           rows.map((r) => r.deposit_group_id).filter((id): id is string => !!id && !present.has(id)),
         )]
-        const anchors = missingAnchors.length === 0 ? [] : (await Promise.all(
-          missingAnchors.map((id) => fetch(`/api/v1/investment-transactions/${id}`, { cache: 'no-store' })
-            .then((r) => r.ok ? r.json() : null)
-            .catch(() => null)),
-        )).filter((a): a is InvestmentTx => !!a?.transaction_id)
+        // One request for all of them: a goal with many older books would
+        // otherwise open one connection per anchor before the page could render.
+        const anchors: InvestmentTx[] = missingAnchors.length === 0 ? [] : await fetch(
+          `/api/v1/investment-transactions?ids=${missingAnchors.slice(0, 100).join(',')}&include_history=true&limit=100`,
+          { cache: 'no-store' },
+        )
+          .then((r) => r.ok ? r.json() : null)
+          .then((res) => res?.transactions ?? [])
+          .catch(() => [])
 
         const merged: InvestmentTx[] = [...rows, ...anchors, ...(recRes.contributions ?? [])]
         merged.sort((a, b) => (a.investment_date < b.investment_date ? 1 : a.investment_date > b.investment_date ? -1 : 0))

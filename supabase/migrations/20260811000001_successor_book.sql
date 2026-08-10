@@ -71,6 +71,14 @@ begin
     raise exception 'successor book: two books cannot succeed each other'
       using errcode = 'check_violation';
   end if;
+  -- The merge happens when the SOURCE matures, so the successor has to still be
+  -- open then. A successor maturing first is a plan that cannot be carried out.
+  if v_source.expiry_date is not null and v_successor.expiry_date is not null
+     and v_successor.expiry_date <= v_source.expiry_date then
+    raise exception 'successor book: the successor must mature after the book it takes over from (% is not after %)',
+      v_successor.expiry_date, v_source.expiry_date
+      using errcode = 'check_violation';
+  end if;
 end;
 $$;
 
@@ -100,7 +108,7 @@ $$;
 
 drop trigger if exists investment_transactions_successor_pairing on public.investment_transactions;
 create constraint trigger investment_transactions_successor_pairing
-  after insert or update of successor_deposit_tx_id, goal_id, currency, deposit_group_id
+  after insert or update of successor_deposit_tx_id, goal_id, currency, deposit_group_id, expiry_date
   on public.investment_transactions
   deferrable initially deferred
   for each row
@@ -200,6 +208,26 @@ begin
   end if;
   if p_investment_date > current_date + 1 then
     raise exception 'successor book: contribution date cannot be in the future'
+      using errcode = 'check_violation';
+  end if;
+  -- A successor is the answer to a bank that WILL NOT take the money. If the old
+  -- book still accepts this contribution on this date, opening one would retire
+  -- a perfectly usable book and move its recurring link for nothing — and the
+  -- contribution date is editable in the sheet, so this is reachable from the UI.
+  -- The eligibility rule is spelled out rather than delegated: the shared
+  -- assertion is deliberately not executable by `authenticated`, and this is a
+  -- SECURITY INVOKER function.
+  if v_source.expiry_date is null
+     or (v_source.expiry_date - p_investment_date > 0
+         and (v_source.top_up_lock_days is null
+              or v_source.expiry_date - p_investment_date > v_source.top_up_lock_days)) then
+    raise exception 'successor book: this book still accepts a contribution dated %, so record it as a top-up', p_investment_date
+      using errcode = 'check_violation';
+  end if;
+  -- Whatever the successor's own terms, it has to outlive the book it takes
+  -- over from, since the merge happens when that one matures.
+  if v_source.expiry_date is not null and p_expiry_date <= v_source.expiry_date then
+    raise exception 'successor book: the new maturity must come after the old book''s (%)', v_source.expiry_date
       using errcode = 'check_violation';
   end if;
 

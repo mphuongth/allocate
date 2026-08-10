@@ -38,8 +38,8 @@ describe('useGoalDetailData (#467)', () => {
     const urls: string[] = []
     mockFetch((url) => {
       urls.push(url)
-      if (url.includes('/investment-transactions/anchor-1')) {
-        return { ok: true, body: { transaction_id: 'anchor-1', deposit_group_id: 'anchor-1', investment_date: '2025-01-01', successor_deposit_tx_id: 'book-2' } }
+      if (url.includes('ids=anchor-1')) {
+        return { ok: true, body: { transactions: [{ transaction_id: 'anchor-1', deposit_group_id: 'anchor-1', investment_date: '2025-01-01', successor_deposit_tx_id: 'book-2' }] } }
       }
       if (url.includes('/investment-transactions?')) {
         return { ok: true, body: { transactions: [{ transaction_id: 't9', deposit_group_id: 'anchor-1', investment_date: '2026-05-01' }] } }
@@ -53,6 +53,8 @@ describe('useGoalDetailData (#467)', () => {
 
     const anchor = result.current.transactions.find(t => t.transaction_id === 'anchor-1')
     expect(anchor?.successor_deposit_tx_id).toBe('book-2')
+    // One request for the whole set, not one per anchor.
+    expect(urls.filter(u => u.includes('ids=')).length).toBe(1)
   })
 
   it('does not ask for anchors the page already has', async () => {
@@ -72,7 +74,7 @@ describe('useGoalDetailData (#467)', () => {
     const { result } = renderHook(() => useGoalDetailData({ goalId: 'g1', enabled: true, refreshKey: 0, txReload: 0 }))
     await waitFor(() => expect(result.current.txLoading).toBe(false))
 
-    expect(urls.some(u => /investment-transactions\/[^?]/.test(u))).toBe(false)
+    expect(urls.some(u => u.includes('ids='))).toBe(false)
   })
 
   it('does not fetch while disabled', async () => {

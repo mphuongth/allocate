@@ -17,6 +17,8 @@ declare
   v_linked uuid;
   v_fulfilled bigint;
   v_moved_goal uuid;
+  v_open_book uuid := gen_random_uuid();
+  v_short_book uuid := gen_random_uuid();
 begin
   insert into auth.users (id, email) values (v_user, 'successor-book@test.invalid');
   insert into public.savings_goals (user_id, goal_name) values (v_user, 'Successor') returning goal_id into v_goal;
@@ -103,7 +105,9 @@ begin
   );
 
   -- Now B is the one closing in on maturity, and the recurring points at it.
-  update public.investment_transactions set expiry_date = current_date + 20
+  -- Still after A's own maturity: a successor that matured first could never
+  -- absorb the book it succeeds.
+  update public.investment_transactions set expiry_date = current_date + 25
    where transaction_id = v_b.transaction_id;
   set constraints all immediate;
 
@@ -158,6 +162,54 @@ begin
       false, null, false, null, false, null, false, null);
     set constraints all immediate;
     raise exception 'moving the successor to another goal must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- ── A successor is only for a book that has actually closed its doors ────
+  -- v_open still takes contributions: nothing about it needs replacing.
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate,
+    deposit_group_id, top_up_lock_days
+  ) values (
+    v_open_book, v_user, v_goal, 'bank', 'investment',
+    current_date - 200, current_date + 100, 10000000, 4, v_open_book, 30
+  );
+  begin
+    perform public.open_successor_book(
+      v_open_book, 1000000, 4, current_date - 5, current_date + 400, 30, null, null, null, null);
+    raise exception 'a book that still accepts the contribution must not hand over';
+  exception when sqlstate '23514' then null;
+  end;
+
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate,
+    deposit_group_id, top_up_lock_days
+  ) values (
+    v_short_book, v_user, v_goal, 'bank', 'investment',
+    current_date - 200, current_date + 20, 10000000, 4, v_short_book, 30
+  );
+
+  -- ── The successor has to outlive the book it takes over from ─────────────
+  -- The merge happens at the SOURCE's maturity, so a successor maturing first
+  -- is a plan that can never be carried out — refused when it is opened...
+  begin
+    perform public.open_successor_book(
+      v_short_book, 1000000, 4, current_date - 5, current_date + 10, 30, null, null, null, null);
+    raise exception 'a successor maturing before its source must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+  -- ...and refused later, when either book's maturity is edited into that shape.
+  begin
+    perform public.update_deposit_book(
+      v_b.transaction_id, false, null, true, (current_date + 500)::date, false, null,
+      false, null, false, null, false, null, false, null);
+    perform public.update_deposit_book(
+      v_book, false, null, true, (current_date + 600)::date, false, null,
+      false, null, false, null, false, null, false, null);
+    set constraints all immediate;
+    raise exception 'pushing the source past its successor must be refused';
   exception when sqlstate '23514' then null;
   end;
 
