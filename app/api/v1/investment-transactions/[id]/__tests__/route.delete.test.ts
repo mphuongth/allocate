@@ -219,6 +219,26 @@ describe('DELETE /api/v1/investment-transactions/[id]', () => {
     expect(JSON.stringify(body)).not.toContain('60000000')
   })
 
+  // A book promised to a successor is deliberately undeletable (#638) — losing
+  // the plan is the failure the link exists to prevent — so the answer has to
+  // say what to undo, not that the server broke.
+  it('returns 409 telling the user to cancel the handover first', async () => {
+    h.deleteResult = {
+      data: null,
+      error: {
+        code: '23514',
+        message: 'successor book: this book is promised to a successor, so cancel the handover before deleting it',
+      },
+    }
+
+    const res = await call()
+
+    expect(res.status).toBe(409)
+    const body = await res.json()
+    expect(body.code).toBe('successor_planned')
+    expect(body.error).toMatch(/cancel the handover/i)
+  })
+
   it('returns a generic 409 for an unrecognised foreign-key reference', async () => {
     h.deleteResult = {
       data: null,

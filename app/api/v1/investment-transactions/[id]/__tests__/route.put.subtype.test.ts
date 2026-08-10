@@ -201,6 +201,19 @@ describe('PUT /api/v1/investment-transactions/[id] — subtype normalization (#5
     await expect(res.json()).resolves.toMatchObject({ code: 'top_up_locked_near_maturity' })
   })
 
+  it('reports a pairing the edit broke as a conflict the user can fix', async () => {
+    h.existing = { deposit_group_id: 'book-1', asset_type: 'bank' }
+    h.rpcResult = {
+      data: null,
+      error: { message: 'successor book: both books need a maturity while the handover stands' },
+    }
+
+    const res = await put({ expiry_date: null })
+
+    expect(res.status).toBe(409)
+    await expect(res.json()).resolves.toMatchObject({ code: 'successor_pairing' })
+  })
+
   it('reports a book the database refused to convert as a conflict, not a missing row', async () => {
     // The route's own guard reads deposit_group_id before it writes, so a
     // deposit that becomes a book in between (a recurring top-up self-groups its
