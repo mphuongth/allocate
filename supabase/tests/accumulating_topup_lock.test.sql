@@ -11,6 +11,9 @@ declare
   v_parked uuid := gen_random_uuid();
   v_moving_book uuid := gen_random_uuid();
   v_moving_tranche uuid := gen_random_uuid();
+  v_old_book uuid := gen_random_uuid();
+  v_old_inside uuid := gen_random_uuid();
+  v_old_outside uuid := gen_random_uuid();
   v_other_user uuid := gen_random_uuid();
   v_other_goal uuid;
   v_other_book uuid := gen_random_uuid();
@@ -279,6 +282,62 @@ begin
   if v_lock_days is distinct from 400 then
     raise exception 'a policy edit must reach every tranche, tranche has %', v_lock_days;
   end if;
+
+  -- ── A grandfathered tranche is not everyone else's problem ───────────────
+  -- v_old_book predates any policy: A sits 20 days from maturity, B 60 days.
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate, deposit_group_id
+  ) values (
+    v_old_book, v_user, v_goal, 'bank', 'investment',
+    '2026-01-01', '2026-09-03', 10000000, 4, v_old_book
+  );
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate, deposit_group_id
+  ) values (
+    v_old_inside, v_user, v_goal, 'bank', 'investment',
+    '2026-08-14', '2026-09-03', 1000000, 4, v_old_book
+  );
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate, deposit_group_id
+  ) values (
+    v_old_outside, v_user, v_goal, 'bank', 'investment',
+    '2026-07-05', '2026-09-03', 1000000, 4, v_old_book
+  );
+  -- Adopting the policy leaves A where it is.
+  update public.investment_transactions set top_up_lock_days = 30
+   where transaction_id = v_old_book;
+
+  -- Editing B, 60 days out, has nothing to do with A.
+  update public.investment_transactions set investment_date = '2026-07-06'
+   where transaction_id = v_old_outside;
+  set constraints all immediate;
+
+  -- A itself stays editable, as long as the edit does not push it deeper in.
+  update public.investment_transactions set investment_date = '2026-08-13'
+   where transaction_id = v_old_inside;
+  set constraints all immediate;
+  begin
+    update public.investment_transactions set investment_date = '2026-08-20'
+     where transaction_id = v_old_inside;
+    set constraints all immediate;
+    raise exception 'moving a grandfathered tranche further into the window must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- And the maturity may still move, answering only for what it pulls in.
+  update public.investment_transactions set expiry_date = '2026-09-01'
+   where deposit_group_id = v_old_book;
+  set constraints all immediate;
+  begin
+    update public.investment_transactions set expiry_date = '2026-08-01'
+     where deposit_group_id = v_old_book;
+    set constraints all immediate;
+    raise exception 'pulling maturity in around the outside tranche must be refused';
+  exception when sqlstate '23514' then null;
+  end;
 
   raise notice 'accumulating top-up lock: OK';
 end;

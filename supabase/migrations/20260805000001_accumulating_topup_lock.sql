@@ -118,16 +118,23 @@ create trigger investment_transactions_accumulating_topup_lock
 -- window would be refused on the first statement even though the state the
 -- caller asked for is perfectly valid.
 --
--- So this is one DEFERRED check of the whole book, from whichever row changed.
--- It asks the only question that matters — when this transaction is done, does
--- every tranche still fit its book? — and the RPC's several statements are one
--- transaction. Inserts stay immediate above: there the answer cannot change
--- later in the transaction, and immediate feedback is worth more.
+-- So this is one DEFERRED check, from whichever row changed, of the book as the
+-- transaction leaves it — and the RPC's several statements are one transaction.
+-- Inserts stay immediate above: there the answer cannot change later in the
+-- transaction, and immediate feedback is worth more.
 --
--- Deliberately NOT fired by a change to top_up_lock_days: the stored window is
--- an editable snapshot of the bank's policy (#638), and adopting or tightening
--- it on a book that already holds tranches must stay possible. It governs what
--- joins the book from then on.
+-- What it asks is whether the EDIT CREATED a breach, not whether the book is
+-- spotless. Those differ, because adopting a lock window on a book that already
+-- holds tranches is allowed on purpose (see the cascade below: the stored window
+-- is an editable snapshot of the bank's policy, and it governs what joins the
+-- book from then on). Such a tranche is grandfathered in — and a check that
+-- simply scanned the book would then find it during every later edit and refuse
+-- unrelated, perfectly valid ones. So:
+--
+--   • a tranche that changed is judged on its own, and cleared if it was
+--     already inside the window before and has not moved further in;
+--   • a maturity move is judged against the tranches it pulls INTO the window,
+--     not the ones that were already there.
 create or replace function public.assert_accumulating_book_still_fits()
 returns trigger language plpgsql security definer set search_path = '' as $$
 declare v_group uuid; v_expiry date; v_lock integer; v_date date; v_days integer;
@@ -157,16 +164,41 @@ begin
   -- policy has nothing to say.
   if not found or v_expiry is null then return null; end if;
 
-  select t.investment_date, v_expiry - t.investment_date
-    into v_date, v_days
-    from public.investment_transactions t
-   where t.deposit_group_id = v_group
-     and t.transaction_id <> v_group
-     and t.transaction_type = 'investment'
-     and v_expiry - t.investment_date <= coalesce(v_lock, 0)
-   order by t.investment_date
-   limit 1;
-  if not found then return null; end if;
+  if new.transaction_id = v_group then
+    -- The anchor moved the book's maturity. Only tranches this move pulls INTO
+    -- the window are its doing; ones already inside it were grandfathered when
+    -- the policy was adopted and are not this edit's to refuse.
+    select t.investment_date, v_expiry - t.investment_date
+      into v_date, v_days
+      from public.investment_transactions t
+     where t.deposit_group_id = v_group
+       and t.transaction_id <> v_group
+       and t.transaction_type = 'investment'
+       and v_expiry - t.investment_date <= coalesce(v_lock, 0)
+       and old.expiry_date - t.investment_date > coalesce(v_lock, 0)
+     order by t.investment_date
+     limit 1;
+    if not found then return null; end if;
+  else
+    -- One tranche changed. Read it back rather than trusting NEW: a row edited
+    -- twice in this transaction queues an event per statement, and only the
+    -- table says where it ended up.
+    select t.investment_date, v_expiry - t.investment_date
+      into v_date, v_days
+      from public.investment_transactions t
+     where t.transaction_id = new.transaction_id
+       and t.deposit_group_id = v_group
+       and t.transaction_type = 'investment';
+    if not found then return null; end if;                       -- left the book, or is not an investment
+    if v_days > coalesce(v_lock, 0) then return null; end if;    -- outside the window: nothing to answer for
+    -- Already inside it before this edit, and no deeper in now: grandfathered.
+    if old.deposit_group_id = v_group
+       and old.transaction_type = 'investment'
+       and v_expiry - old.investment_date <= coalesce(v_lock, 0)
+       and v_days >= v_expiry - old.investment_date then
+      return null;
+    end if;
+  end if;
 
   if v_days <= 0 then
     raise exception 'accumulating top-up: this book holds a top-up dated %, at or past its maturity of %', v_date, v_expiry
