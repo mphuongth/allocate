@@ -299,7 +299,11 @@ begin
   -- 00:00 and 06:59 Vietnam time the session's current_date is still yesterday,
   -- so a maturity of "today in Vietnam" would read as future to Postgres and
   -- mature to the app.
-  if p_investment_date > v_today + 1 then
+  -- No grace day. The route's own check is isFutureInvestmentDate with no grace,
+  -- and a direct PostgREST caller reaches this SECURITY INVOKER function without
+  -- passing through it — the grace only existed to absorb the UTC/Vietnam skew
+  -- that v_today now removes.
+  if p_investment_date > v_today then
     raise exception 'successor book: contribution date cannot be in the future'
       using errcode = 'check_violation';
   end if;

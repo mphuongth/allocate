@@ -349,6 +349,14 @@ begin
   exception when sqlstate '23514' then null;
   end;
 
+  -- ── Not even tomorrow: the money has not moved yet ──────────────────────
+  begin
+    perform public.open_successor_book(
+      v_dated_book, 1000000, 4, current_date + 1, current_date + 400, 30, null, null, null, null);
+    raise exception 'a contribution dated tomorrow must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
   raise notice 'successor book: OK';
 end;
 $$;
