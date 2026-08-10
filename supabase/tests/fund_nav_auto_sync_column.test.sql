@@ -1,4 +1,4 @@
--- Covers 20260809000001_add_fund_nav_auto_sync.sql — the expand half of the
+-- Covers 20260810000001_add_fund_nav_auto_sync.sql — the expand half of the
 -- nav_source_url → nav_auto_sync swap.
 --
 -- The property under test is compatibility: this migration must be invisible to
