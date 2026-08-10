@@ -133,8 +133,13 @@ create trigger investment_transactions_accumulating_topup_lock
 --
 --   • a tranche that changed is judged on its own, and cleared if it was
 --     already inside the window before and has not moved further in;
---   • a maturity move is judged against the tranches it pulls INTO the window,
---     not the ones that were already there.
+--   • a maturity move is judged only when it moves IN, since that is the only
+--     direction that can hurt a tranche standing still — and a book given its
+--     first maturity is judged in full, having no previous position to be
+--     measured against.
+--
+-- Neither leniency extends to making an existing breach worse: that is how a
+-- grandfathered tranche would end up dated past its own book's maturity.
 create or replace function public.assert_accumulating_book_still_fits()
 returns trigger language plpgsql security definer set search_path = '' as $$
 declare v_group uuid; v_expiry date; v_lock integer; v_date date; v_days integer;
@@ -165,9 +170,12 @@ begin
   if not found or v_expiry is null then return null; end if;
 
   if new.transaction_id = v_group then
-    -- The anchor moved the book's maturity. Only tranches this move pulls INTO
-    -- the window are its doing; ones already inside it were grandfathered when
-    -- the policy was adopted and are not this edit's to refuse.
+    -- The anchor moved the book's maturity. Pulling it IN is the only direction
+    -- that can hurt a tranche whose own date did not move, so that is the only
+    -- direction judged — and a book being given its FIRST maturity has no
+    -- previous position to be grandfathered against, so every tranche the new
+    -- maturity puts inside the window answers for itself.
+    if old.expiry_date is not null and v_expiry >= old.expiry_date then return null; end if;
     select t.investment_date, v_expiry - t.investment_date
       into v_date, v_days
       from public.investment_transactions t
@@ -175,11 +183,19 @@ begin
        and t.transaction_id <> v_group
        and t.transaction_type = 'investment'
        and v_expiry - t.investment_date <= coalesce(v_lock, 0)
-       and old.expiry_date - t.investment_date > coalesce(v_lock, 0)
      order by t.investment_date
      limit 1;
     if not found then return null; end if;
   else
+    -- Nothing about this row itself changed — the maturity cascade touched it.
+    -- The anchor's own event answers for that; judging it here would compare
+    -- its unmoved date against the new maturity and call it grandfathered.
+    if old.deposit_group_id is not distinct from new.deposit_group_id
+       and old.investment_date is not distinct from new.investment_date
+       and old.transaction_type is not distinct from new.transaction_type then
+      return null;
+    end if;
+
     -- One tranche changed. Read it back rather than trusting NEW: a row edited
     -- twice in this transaction queues an event per statement, and only the
     -- table says where it ended up.

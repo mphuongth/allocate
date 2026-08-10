@@ -14,6 +14,8 @@ declare
   v_old_book uuid := gen_random_uuid();
   v_old_inside uuid := gen_random_uuid();
   v_old_outside uuid := gen_random_uuid();
+  v_undated_book uuid := gen_random_uuid();
+  v_undated_tranche uuid := gen_random_uuid();
   v_other_user uuid := gen_random_uuid();
   v_other_goal uuid;
   v_other_book uuid := gen_random_uuid();
@@ -327,17 +329,57 @@ begin
   exception when sqlstate '23514' then null;
   end;
 
-  -- And the maturity may still move, answering only for what it pulls in.
-  update public.investment_transactions set expiry_date = '2026-09-01'
+  -- Pushing maturity out is fine even while A breaches: it can only help.
+  update public.investment_transactions set expiry_date = '2027-01-31'
    where deposit_group_id = v_old_book;
   set constraints all immediate;
+
+  -- Pulling it in is not, while a tranche is inside the window: that is how a
+  -- grandfathered tranche ends up dated past its own book's maturity.
   begin
-    update public.investment_transactions set expiry_date = '2026-08-01'
+    update public.investment_transactions set expiry_date = '2026-08-20'
      where deposit_group_id = v_old_book;
     set constraints all immediate;
-    raise exception 'pulling maturity in around the outside tranche must be refused';
+    raise exception 'pulling maturity in around a breaching tranche must be refused';
   exception when sqlstate '23514' then null;
   end;
+
+  -- ── A book given its first maturity is judged in full ────────────────────
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, amount_vnd, interest_rate, deposit_group_id, top_up_lock_days
+  ) values (
+    v_undated_book, v_user, v_goal, 'bank', 'investment',
+    '2026-01-01', 10000000, 4, v_undated_book, 30
+  );
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, amount_vnd, interest_rate, deposit_group_id, top_up_lock_days
+  ) values (
+    v_undated_tranche, v_user, v_goal, 'bank', 'investment',
+    '2026-08-04', 1000000, 4, v_undated_book, 30
+  );
+  -- There is no previous maturity to be grandfathered against, so a first
+  -- maturity that puts the tranche inside the window is refused...
+  begin
+    update public.investment_transactions set expiry_date = '2026-09-03'
+     where deposit_group_id = v_undated_book;
+    set constraints all immediate;
+    raise exception 'a first maturity inside the window must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+  -- ...as is one that leaves the tranche dated past maturity entirely.
+  begin
+    update public.investment_transactions set expiry_date = '2026-07-01'
+     where deposit_group_id = v_undated_book;
+    set constraints all immediate;
+    raise exception 'a first maturity behind a tranche must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+  -- One that clears the window is fine.
+  update public.investment_transactions set expiry_date = '2026-09-04'
+   where deposit_group_id = v_undated_book;
+  set constraints all immediate;
 
   raise notice 'accumulating top-up lock: OK';
 end;
