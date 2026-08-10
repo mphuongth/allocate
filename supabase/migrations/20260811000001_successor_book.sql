@@ -42,8 +42,11 @@ alter table public.investment_transactions
 create or replace function public.enforce_successor_before_dissolve()
 returns trigger language plpgsql set search_path = '' as $$
 begin
+  -- Judged on the OLD link alone. Clearing deposit_group_id and the successor in
+  -- ONE update would otherwise walk straight past this: the promise would be
+  -- dropped by the same statement that dissolves the book, which is exactly the
+  -- silent loss the guard exists to prevent. Cancelling is its own decision.
   if old.successor_deposit_tx_id is not null
-     and new.successor_deposit_tx_id is not null
      and new.deposit_group_id is distinct from new.transaction_id then
     raise exception 'successor book: this book is promised to a successor, so cancel the handover before closing it'
       using errcode = 'check_violation';
@@ -444,17 +447,30 @@ create trigger recurring_savings_link_not_handed_over
 -- carrying the link goes, and with it the plan — while any remaining tranches
 -- are left grouped under an anchor that no longer exists. Same answer as
 -- closing it: cancel the handover first, on purpose.
-create or replace function public.enforce_successor_before_delete()
+-- Deferred, and phrased as "did the successor survive?", because deleting the
+-- account cascades over this table in no guaranteed row order: refusing every
+-- promised source outright would abort account deletion depending on which row
+-- the cascade reached first. What actually matters is the state left behind — a
+-- promise pointing at a book that is still there, with nothing left to keep it.
+create or replace function public.enforce_successor_after_delete()
 returns trigger language plpgsql set search_path = '' as $$
 begin
-  raise exception 'successor book: this book is promised to a successor, so cancel the handover before deleting it'
-    using errcode = 'check_violation';
+  if exists (
+    select 1 from public.investment_transactions
+     where transaction_id = old.successor_deposit_tx_id
+  ) then
+    raise exception 'successor book: this book is promised to a successor, so cancel the handover before deleting it'
+      using errcode = 'check_violation';
+  end if;
+  return null;
 end;
 $$;
 
 drop trigger if exists investment_transactions_successor_before_delete on public.investment_transactions;
-create trigger investment_transactions_successor_before_delete
-  before delete on public.investment_transactions
+drop trigger if exists investment_transactions_successor_after_delete on public.investment_transactions;
+create constraint trigger investment_transactions_successor_after_delete
+  after delete on public.investment_transactions
+  deferrable initially deferred
   for each row
   when (old.successor_deposit_tx_id is not null)
-  execute function public.enforce_successor_before_delete();
+  execute function public.enforce_successor_after_delete();

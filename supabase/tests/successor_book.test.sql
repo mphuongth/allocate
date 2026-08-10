@@ -357,6 +357,26 @@ begin
   exception when sqlstate '23514' then null;
   end;
 
+  -- ── Clearing both columns at once is still a dissolve ───────────────────
+  begin
+    update public.investment_transactions
+       set deposit_group_id = null, successor_deposit_tx_id = null
+     where transaction_id = v_short_book;
+    raise exception 'dissolving while dropping the link in one update must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- ── Deleting the user takes both books, and that is allowed ─────────────
+  -- The cascade reaches these rows in no guaranteed order, so the check asks
+  -- whether the successor SURVIVED rather than refusing every promised source.
+  -- v_short_book is still promised to v_tail at this point, so this cascade is
+  -- the real case: both halves go, and the promise goes with them.
+  delete from auth.users where id = v_user;
+  set constraints all immediate;
+  if exists (select 1 from public.investment_transactions where user_id = v_user) then
+    raise exception 'the account cascade must remove both books';
+  end if;
+
   raise notice 'successor book: OK';
 end;
 $$;
