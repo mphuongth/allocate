@@ -338,6 +338,17 @@ begin
   exception when sqlstate '23514' then null;
   end;
 
+  -- ── A pair is two live deposits, and stays that way ─────────────────────
+  -- An ordinary edit can turn a row into a withdrawal, which takes it out of
+  -- holdings: a pair with one half like that promises a merge with nothing.
+  begin
+    update public.investment_transactions set transaction_type = 'withdrawal'
+     where transaction_id = v_tail.transaction_id;
+    set constraints all immediate;
+    raise exception 'a successor turned into a withdrawal must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
   raise notice 'successor book: OK';
 end;
 $$;

@@ -148,6 +148,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (rpcErr?.message?.includes('book changed since load')) {
       return NextResponse.json({ error: 'This deposit changed — please reload and try again.' }, { status: 409 })
     }
+    // Collapse is exactly when a promised book must NOT quietly become a plain
+    // deposit: the merge into its successor is what maturity is for (#638). The
+    // user has to withdraw the promise first, so say that rather than "failed".
+    if (rpcErr?.message?.startsWith('successor book: ')) {
+      return NextResponse.json(
+        { error: rpcErr.message.slice('successor book: '.length), code: 'successor_planned' },
+        { status: 409 },
+      )
+    }
     console.error('collapse: atomic collapse failed', rpcErr?.message)
     return NextResponse.json({ error: 'Failed to collapse book' }, { status: 500 })
   }

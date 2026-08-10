@@ -95,6 +95,14 @@ begin
     raise exception 'successor book: a successor must itself be an accumulating book'
       using errcode = 'check_violation';
   end if;
+  -- Either row can be turned into a withdrawal through an ordinary edit, which
+  -- takes it out of holdings entirely — a pair of which one half is not a live
+  -- investment promises a merge between something and nothing.
+  if v_source.transaction_type is distinct from 'investment'
+     or v_successor.transaction_type is distinct from 'investment' then
+    raise exception 'successor book: both books must stay live deposits'
+      using errcode = 'check_violation';
+  end if;
   -- Either side pledged freezes the merge this link promises, and a pledge can
   -- be applied long after the handover was arranged.
   if v_source.is_pledged or v_successor.is_pledged then
@@ -175,7 +183,7 @@ create constraint trigger investment_transactions_successor_pairing_ins
 
 drop trigger if exists investment_transactions_successor_pairing_upd on public.investment_transactions;
 create constraint trigger investment_transactions_successor_pairing_upd
-  after update of successor_deposit_tx_id, goal_id, currency, deposit_group_id, expiry_date, interest_rate, is_pledged
+  after update of successor_deposit_tx_id, goal_id, currency, deposit_group_id, expiry_date, interest_rate, is_pledged, transaction_type
   on public.investment_transactions
   deferrable initially deferred
   for each row
@@ -250,6 +258,7 @@ declare
   v_source public.investment_transactions;
   v_book public.investment_transactions;
   v_new_id uuid := gen_random_uuid();
+  v_today date := (now() at time zone 'Asia/Ho_Chi_Minh')::date;
 begin
   select * into v_source
     from public.investment_transactions
@@ -286,7 +295,11 @@ begin
     raise exception 'successor book: the new maturity must come after the contribution'
       using errcode = 'check_violation';
   end if;
-  if p_investment_date > current_date + 1 then
+  -- Business dates are Asia/Ho_Chi_Minh here as everywhere else (#591): between
+  -- 00:00 and 06:59 Vietnam time the session's current_date is still yesterday,
+  -- so a maturity of "today in Vietnam" would read as future to Postgres and
+  -- mature to the app.
+  if p_investment_date > v_today + 1 then
     raise exception 'successor book: contribution date cannot be in the future'
       using errcode = 'check_violation';
   end if;
@@ -307,7 +320,7 @@ begin
   -- The new book has to be open for business: a contribution can be historical,
   -- but a book that has already matured cannot take the next one — and every
   -- recurring link is about to be moved onto it.
-  if p_expiry_date <= current_date then
+  if p_expiry_date <= v_today then
     raise exception 'successor book: the new book must mature in the future'
       using errcode = 'check_violation';
   end if;
@@ -399,11 +412,15 @@ comment on function public.open_successor_book(uuid, bigint, numeric, date, date
 create or replace function public.enforce_recurring_link_not_handed_over()
 returns trigger language plpgsql security definer set search_path = '' as $$
 begin
+  -- LOCK the book while reading it: a link created concurrently with a handover
+  -- would otherwise read the source's pre-handover version and commit after it,
+  -- landing on a book that now refuses contributions.
   if exists (
     select 1 from public.investment_transactions
      where transaction_id = new.linked_deposit_tx_id
        and user_id = new.user_id
        and successor_deposit_tx_id is not null
+     for share
   ) then
     raise exception 'successor book: that book has handed over to a successor, so link the successor instead'
       using errcode = 'check_violation';
