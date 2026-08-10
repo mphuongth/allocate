@@ -5,17 +5,21 @@ const h = vi.hoisted(() => ({
   calls: [] as { url: string; init: Record<string, unknown> }[],
   body: '',
   error: null as Error | null,
+  gate: null as Promise<void> | null,
 }))
 
 vi.mock('../boundedFetch', () => ({
   boundedFetchText: async (url: string, init: Record<string, unknown> = {}) => {
     h.calls.push({ url, init })
+    // `gate` lets a test hold the response open, which is the only way to have
+    // more than one caller in flight at once.
+    if (h.gate) await h.gate
     if (h.error) throw h.error
     return h.body
   },
 }))
 
-const { fetchFmarketNavIndex } = await import('../fmarket-nav')
+const { fetchFmarketNavIndex, isFundCodePriceable, clearFmarketNavCache } = await import('../fmarket-nav')
 
 // A slice of the real feed, values as returned on 2026-08-07 and cross-checked
 // against each provider's own site.
@@ -106,6 +110,8 @@ describe('fetchFmarketNavIndex', () => {
     h.calls = []
     h.body = feed(ROWS)
     h.error = null
+    h.gate = null
+    clearFmarketNavCache()
   })
 
   it('returns an index built from the feed', async () => {
@@ -141,5 +147,143 @@ describe('fetchFmarketNavIndex', () => {
   it('reports an unexpected envelope shape', async () => {
     h.body = JSON.stringify({ status: 200 })
     await expect(fetchFmarketNavIndex()).rejects.toThrow(/not an array/i)
+  })
+})
+
+describe('isFundCodePriceable — write-time check', () => {
+  beforeEach(() => {
+    h.calls = []
+    h.body = feed(ROWS)
+    h.error = null
+    h.gate = null
+    clearFmarketNavCache()
+  })
+
+  it('accepts a code the feed can price, in any spelling', async () => {
+    await expect(isFundCodePriceable('VCBF-BCF')).resolves.toBe(true)
+    await expect(isFundCodePriceable('vcbfbcf')).resolves.toBe(true)
+  })
+
+  it('rejects a code nothing upstream matches', async () => {
+    await expect(isFundCodePriceable('MYSTERY')).resolves.toBe(false)
+  })
+
+  it('rejects an empty code without going upstream at all', async () => {
+    await expect(isFundCodePriceable('   ')).resolves.toBe(false)
+    expect(h.calls).toHaveLength(0)
+  })
+
+  // Fail OPEN, unlike the refresh routes. A feed outage says nothing about the
+  // code, and must not stand between someone and editing their own fund.
+  it('returns null when the feed cannot be reached, rather than false', async () => {
+    h.error = new Error('Upstream responded 503 for api.fmarket.vn')
+    await expect(isFundCodePriceable('VCBF-BCF')).resolves.toBeNull()
+  })
+
+  it('returns null when the feed is reachable but unusable', async () => {
+    h.body = '<html>maintenance</html>'
+    await expect(isFundCodePriceable('VCBF-BCF')).resolves.toBeNull()
+  })
+})
+
+// Codex flagged the write-time check as an unbounded outbound request per save
+// (PR #644). The durable rate limits stay where they were — they bound a
+// deliberate refresh — but a burst of saves must not each pull the ~270 KB
+// product list, so a warm instance reuses the last good index briefly.
+describe('fetchFmarketNavIndex — short-lived reuse', () => {
+  beforeEach(() => {
+    h.calls = []
+    h.body = feed(ROWS)
+    h.error = null
+    h.gate = null
+    clearFmarketNavCache()
+  })
+
+  it('serves repeat callers from one upstream request', async () => {
+    const a = await fetchFmarketNavIndex(1_000)
+    const b = await fetchFmarketNavIndex(1_500)
+
+    expect(h.calls).toHaveLength(1)
+    expect(b.get('DCDS')).toBe(a.get('DCDS'))
+  })
+
+  it('refetches once the window has passed', async () => {
+    await fetchFmarketNavIndex(1_000)
+    await fetchFmarketNavIndex(1_000 + 60_001)
+
+    expect(h.calls).toHaveLength(2)
+  })
+
+  // Caching a throw would turn one bad response into a minute of failures for
+  // every caller, including the daily cron.
+  it('does not cache a failure', async () => {
+    h.error = new Error('Upstream responded 503 for api.fmarket.vn')
+    await expect(fetchFmarketNavIndex(1_000)).rejects.toThrow(/503/)
+
+    h.error = null
+    await expect(fetchFmarketNavIndex(1_100)).resolves.toBeInstanceOf(Map)
+    expect(h.calls).toHaveLength(2)
+  })
+
+  it('does not cache an unusable payload', async () => {
+    h.body = feed([])
+    await expect(fetchFmarketNavIndex(1_000)).rejects.toThrow(/no priced funds/i)
+
+    h.body = feed(ROWS)
+    await expect(fetchFmarketNavIndex(1_100)).resolves.toBeInstanceOf(Map)
+    expect(h.calls).toHaveLength(2)
+  })
+})
+
+// Codex, second pass on #644: caching only the resolved index still let a burst
+// stampede — every concurrent caller misses the cache before the first response
+// lands and starts its own full-feed fetch. The outbound semaphore paces those
+// at 6 at a time; it does not prevent them. The in-flight promise is now shared.
+describe('fetchFmarketNavIndex — concurrent callers share one request', () => {
+  beforeEach(() => {
+    h.calls = []
+    h.body = feed(ROWS)
+    h.error = null
+    h.gate = null
+    clearFmarketNavCache()
+  })
+
+  it('collapses a burst of cache misses into a single upstream fetch', async () => {
+    let open: () => void = () => {}
+    h.gate = new Promise<void>((r) => { open = r })
+
+    // All five start before any response can land.
+    const bursting = Array.from({ length: 5 }, () => fetchFmarketNavIndex(1_000))
+    open()
+    const indexes = await Promise.all(bursting)
+
+    expect(h.calls).toHaveLength(1)
+    for (const index of indexes) expect(index.get('DCDS')).toBe(93915.08)
+  })
+
+  it('gives every joiner the same failure and lets the next caller retry', async () => {
+    let open: () => void = () => {}
+    h.gate = new Promise<void>((r) => { open = r })
+    h.error = new Error('Upstream responded 503 for api.fmarket.vn')
+
+    const bursting = Array.from({ length: 3 }, () => fetchFmarketNavIndex(1_000))
+    open()
+    const settled = await Promise.allSettled(bursting)
+
+    expect(h.calls).toHaveLength(1)
+    for (const r of settled) expect(r.status).toBe('rejected')
+
+    // A failed flight must not be inherited by whoever comes next.
+    h.gate = null
+    h.error = null
+    await expect(fetchFmarketNavIndex(1_100)).resolves.toBeInstanceOf(Map)
+    expect(h.calls).toHaveLength(2)
+  })
+
+  it('serves callers arriving after the flight from the cache, not a new flight', async () => {
+    await fetchFmarketNavIndex(1_000)
+    await Promise.all([fetchFmarketNavIndex(1_100), fetchFmarketNavIndex(1_200)])
+
+    expect(h.calls).toHaveLength(1)
   })
 })

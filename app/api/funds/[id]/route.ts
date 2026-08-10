@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { readJsonBody } from '@/lib/apiBody'
-import { parseFundPayload, dcaGoalOwnershipError } from '@/lib/fundPayload'
+import { parseFundPayload, dcaGoalOwnershipError, unpriceableFundCodeError } from '@/lib/fundPayload'
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -50,6 +50,19 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   if (!payload.ok) return payload.response
   const { fund: fields, dca } = payload
 
+  // Read the stored pricing state so the code check only fires on a real
+  // transition — see unpriceableFundCodeError. A miss here is not a 404: the
+  // update below already scopes by id + user_id and reports a missing row.
+  const { data: previous } = await supabase
+    .from('funds')
+    .select('code, nav_auto_sync')
+    .eq('id', id)
+    .eq('user_id', user.id)
+    .maybeSingle()
+
+  const unpriceable = await unpriceableFundCodeError(fields, previous)
+  if (unpriceable) return unpriceable
+
   const update: Record<string, unknown> = { ...fields }
   if (dca) {
     Object.assign(update, dca)
@@ -72,7 +85,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           p_code: update.code,
           p_fund_type: update.fund_type,
           p_nav: update.nav,
-          p_nav_source_url: update.nav_source_url,
+          // undefined when the caller didn't send the flag; the RPC coalesces a
+          // null back to the stored value rather than switching sync off.
+          p_nav_auto_sync: update.nav_auto_sync ?? null,
         })
         .single()
     : await supabase

@@ -198,7 +198,7 @@ function TypeChip({ type }: { type: FundType }) {
 // ─── FundForm ────────────────────────────────────────────────────────────────
 
 interface SavePayload {
-  name: string; code: string; fund_type: FundType; nav: number; nav_source_url: string | null
+  name: string; code: string; fund_type: FundType; nav: number; nav_auto_sync: boolean
 }
 
 function FundForm({ existing, title, onClose, onSave, saving, formError }: {
@@ -215,7 +215,7 @@ function FundForm({ existing, title, onClose, onSave, saving, formError }: {
   const [code, setCode] = useState(existing?.code ?? '')
   const [type, setType] = useState<FundType>(existing?.fund_type ?? 'equity')
   const [nav, setNav] = useState(existing ? String(existing.nav) : '')
-  const [navUrl, setNavUrl] = useState(existing?.nav_source_url ?? '')
+  const [autoSync, setAutoSync] = useState(existing?.nav_auto_sync ?? false)
 
   const disabled = !name.trim() || !code.trim() || !nav || Number(nav) <= 0 || saving
 
@@ -248,16 +248,24 @@ function FundForm({ existing, title, onClose, onSave, saving, formError }: {
         <label style={labelStyle}>{t('navLabel')}</label>
         <input type="text" inputMode="decimal" value={formatDecimalVN(nav)} onChange={(e) => setNav(parseDecimalVN(e.target.value))} placeholder={t('navPlaceholder')} style={{ ...inputStyle, fontVariantNumeric: 'tabular-nums' }} />
       </div>
-      <div style={{ display: 'grid', gap: 6 }}>
-        <label style={labelStyle}>{t('navSourceLabel')}</label>
-        <input type="url" value={navUrl} onChange={(e) => setNavUrl(e.target.value)} placeholder={t('navUrlPlaceholder')} style={inputStyle} />
-      </div>
+      <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+        <input
+          type="checkbox"
+          checked={autoSync}
+          onChange={(e) => setAutoSync(e.target.checked)}
+          style={{ marginTop: 2, width: 18, height: 18, accentColor: 'var(--c-navy)' }}
+        />
+        <span style={{ display: 'grid', gap: 2 }}>
+          <span style={{ ...labelStyle, marginBottom: 0 }}>{t('navAutoSyncLabel')}</span>
+          <span style={{ fontSize: 11, color: 'var(--c-muted)' }}>{t('navAutoSyncHint')}</span>
+        </span>
+      </label>
       <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
         <button onClick={onClose} disabled={saving} style={{ flex: 1, padding: '10px 14px', fontSize: 13, fontWeight: 600, border: '1px solid var(--c-line)', borderRadius: 10, background: 'var(--c-card)', color: 'var(--c-ink)', cursor: 'pointer', fontFamily: 'inherit' }}>
           {tc('cancel')}
         </button>
         <button
-          onClick={() => onSave({ name: name.trim(), code: code.trim(), fund_type: type, nav: Number(nav), nav_source_url: navUrl.trim() || null })}
+          onClick={() => onSave({ name: name.trim(), code: code.trim(), fund_type: type, nav: Number(nav), nav_auto_sync: autoSync })}
           disabled={disabled}
           style={{ flex: 2, padding: '10px 14px', fontSize: 13, fontWeight: 600, border: 'none', borderRadius: 10, background: disabled ? 'var(--c-line)' : 'var(--c-navy)', color: disabled ? 'var(--c-muted)' : '#fff', cursor: disabled ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
         >
@@ -329,7 +337,7 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
           <div style={{ fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
             {fmtNav(fund.nav)}
           </div>
-          {fund.nav_source_url && fund.updated_at && (
+          {fund.nav_auto_sync && fund.updated_at && (
             <FundNavAge isoStr={fund.updated_at} style={{ fontSize: 10, color: 'var(--c-muted)', marginTop: 1 }} />
           )}
         </div>
@@ -517,9 +525,9 @@ export default function MobileFundLibraryView({ funds, setFunds, goals, loading,
         <div style={{ display: 'flex', gap: 6 }}>
           <button
             onClick={handleRefreshNav}
-            disabled={refreshing || !funds.some((f) => f.nav_source_url)}
+            disabled={refreshing || !funds.some((f) => f.nav_auto_sync)}
             aria-label={t('refreshNav')}
-            style={{ padding: 8, background: 'transparent', border: '1px solid var(--c-line)', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', opacity: refreshing || !funds.some((f) => f.nav_source_url) ? 0.4 : 1 }}
+            style={{ padding: 8, background: 'transparent', border: '1px solid var(--c-line)', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', opacity: refreshing || !funds.some((f) => f.nav_auto_sync) ? 0.4 : 1 }}
           >
             <RefreshCw size={16} color="var(--c-ink)" />
           </button>

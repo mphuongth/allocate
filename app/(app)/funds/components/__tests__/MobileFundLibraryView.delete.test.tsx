@@ -18,7 +18,7 @@ vi.mock('@/components/navigation/NavigationContext', () => ({ useNavigation: () 
 function makeFund(over: Partial<Fund> = {}): Fund {
   return {
     id: 'f1', name: 'VFMVF1 Equity Fund', code: 'VFMVF1', fund_type: 'equity', nav: 36120,
-    nav_source_url: null, is_dca: false, dca_monthly_amount_vnd: null, dca_goal_id: null,
+    nav_auto_sync: false, is_dca: false, dca_monthly_amount_vnd: null, dca_goal_id: null,
     created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z', ...over,
   }
 }

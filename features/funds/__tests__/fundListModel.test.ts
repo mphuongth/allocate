@@ -9,7 +9,7 @@ import { filterAndSortFunds, nextSort, TYPE_META, TYPE_FILTERS, FORM_TYPES } fro
 
 const fund = (over: Partial<Fund> = {}): Fund => ({
   id: 'f1', name: 'VESAF', code: 'VESAF', fund_type: 'equity', nav: 20_000,
-  nav_source_url: null, is_dca: false, dca_monthly_amount_vnd: null, dca_goal_id: null,
+  nav_auto_sync: false, is_dca: false, dca_monthly_amount_vnd: null, dca_goal_id: null,
   created_at: '2026-01-01', updated_at: '2026-01-01', ...over,
 })
 

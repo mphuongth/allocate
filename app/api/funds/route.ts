@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { readJsonBody } from '@/lib/apiBody'
-import { parseFundPayload, dcaGoalOwnershipError } from '@/lib/fundPayload'
+import { parseFundPayload, dcaGoalOwnershipError, unpriceableFundCodeError } from '@/lib/fundPayload'
 
 // Canonical funds-list contract (#470): GET /api/funds → `{ funds: Fund[] }`,
 // each a full fund row (`select('*')`), ordered by name. Every consumer reads
@@ -49,6 +49,9 @@ export async function POST(request: NextRequest) {
   const payload = parseFundPayload(parsed.body, 'create')
   if (!payload.ok) return payload.response
   const { fund: fields, dca } = payload
+
+  const unpriceable = await unpriceableFundCodeError(fields)
+  if (unpriceable) return unpriceable
 
   if (dca.is_dca && dca.dca_goal_id) {
     const denied = await dcaGoalOwnershipError(supabase, dca.dca_goal_id, user.id)

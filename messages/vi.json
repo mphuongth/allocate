@@ -618,7 +618,8 @@
     "typeLabel": "Loại",
     "selectType": "Chọn loại",
     "navLabel": "NAV",
-    "navSourceLabel": "URL nguồn NAV (tùy chọn)",
+    "navAutoSyncLabel": "Tự động cập nhật NAV",
+    "navAutoSyncHint": "Lấy giá hằng ngày theo mã quỹ ở trên.",
     "saveBtn": "Lưu quỹ",
     "nameRequired": "Tên là bắt buộc.",
     "codeRequired": "Mã là bắt buộc.",
@@ -656,11 +657,10 @@
     "namePlaceholder": "vd: Quỹ cổ phiếu VFMVF1",
     "codePlaceholder": "vd: VFMVF1",
     "navPlaceholder": "vd: 36120",
-    "navUrlPlaceholder": "https://...",
     "editFund": "Sửa quỹ",
     "enableDca": "Bật DCA",
     "disableDca": "Tắt DCA",
-    "refreshDisabledHint": "Thêm URL nguồn NAV cho một quỹ để bật làm mới tự động.",
+    "refreshDisabledHint": "Bật “Tự động cập nhật NAV” cho một quỹ để dùng làm mới.",
     "toastDeleteInUse": "Không thể xóa quỹ này — nó đang được dùng trong một kế hoạch. Hãy gỡ khỏi kế hoạch trước."
   },
   "planning": {

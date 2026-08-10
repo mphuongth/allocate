@@ -74,7 +74,49 @@ export function buildNavIndex(rows: unknown): NavIndex {
   return index
 }
 
-export async function fetchFmarketNavIndex(): Promise<NavIndex> {
+// Short-lived reuse of the last good index, shared by every caller in a warm
+// instance. NAVs move once a business day, so the staleness this can introduce
+// is far below the resolution of the data — while the burst it absorbs is real:
+// the write-time code check runs on user-driven saves, and without this each one
+// pulled the whole ~270 KB product list from the provider.
+//
+// Deliberately not a substitute for a durable rate limit, which the refresh
+// routes still carry: this bounds what one warm instance costs the provider, not
+// what a fleet of cold ones does.
+const INDEX_TTL_MS = 60_000
+let cached: { at: number; index: NavIndex } | null = null
+
+// The request currently in flight, if any. Storing only the *resolved* index
+// leaves a stampede: concurrent callers all miss the cache before the first
+// response lands, and each starts its own full-feed fetch — the outbound
+// semaphore then paces them 6 at a time rather than preventing them. Sharing the
+// promise collapses any burst into one upstream request.
+let inFlight: Promise<NavIndex> | null = null
+
+// Exported for tests: module state outlives a single test file otherwise.
+export function clearFmarketNavCache(): void {
+  cached = null
+  inFlight = null
+}
+
+export async function fetchFmarketNavIndex(now: number = Date.now()): Promise<NavIndex> {
+  if (cached && now - cached.at < INDEX_TTL_MS) return cached.index
+
+  // Join the request already running rather than starting a second one. A
+  // rejection reaches every joiner, which is what they'd each have got anyway,
+  // and `inFlight` is cleared either way so the next caller retries rather than
+  // inheriting a stale failure.
+  if (inFlight) return inFlight
+
+  inFlight = fetchNavIndexUncached(now)
+  try {
+    return await inFlight
+  } finally {
+    inFlight = null
+  }
+}
+
+async function fetchNavIndexUncached(now: number): Promise<NavIndex> {
   const body = await boundedFetchText(FMARKET_FILTER_URL, {
     method: 'POST',
     headers: {
@@ -91,7 +133,12 @@ export async function fetchFmarketNavIndex(): Promise<NavIndex> {
   } catch {
     throw new Error('Fmarket: response was not JSON')
   }
-  return buildNavIndex(rows)
+
+  // Only a validated index is cached. Caching a throw would turn one bad
+  // response into a minute of failures for every caller.
+  const index = buildNavIndex(rows)
+  cached = { at: now, index }
+  return index
 }
 
 // Exact match on the normalized code, then a unique-suffix fallback so a fund
@@ -110,5 +157,25 @@ export function lookupFundNav(index: NavIndex, code: unknown): number | null {
   for (const [indexed, nav] of index) {
     if (indexed.endsWith(key)) candidates.add(nav)
   }
+
   return candidates.size === 1 ? [...candidates][0] : null
+}
+
+// Answers "would automatic pricing actually find this fund?" at write time, so a
+// code that can never price is rejected while the user is still looking at the
+// form — rather than saved happily and discovered broken at the next sync.
+//
+// Returns null for "couldn't check". The upstream feed being down says nothing
+// about the code, and must not stop someone editing their own fund: callers are
+// expected to fail OPEN on null. That is the opposite of the refresh routes,
+// which fail closed — there, an unverifiable price is a price not worth storing;
+// here, an unverifiable code is no reason to block a save.
+export async function isFundCodePriceable(code: unknown): Promise<boolean | null> {
+  if (normalizeFundCode(code) === '') return false
+  try {
+    const index = await fetchFmarketNavIndex()
+    return lookupFundNav(index, code) !== null
+  } catch {
+    return null
+  }
 }

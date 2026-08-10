@@ -343,7 +343,7 @@ export async function createFund(data: {
   code: string
   fund_type: string
   nav: number
-  nav_source_url?: string
+  nav_auto_sync?: boolean
   is_dca?: boolean
   dca_monthly_amount_vnd?: number
   dca_goal_id?: string

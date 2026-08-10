@@ -15,12 +15,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 })
   }
 
-  // nav_source_url is the per-fund opt-in for automatic pricing; the NAV itself
-  // comes from the Fmarket feed keyed by fund code (see lib/fmarket-nav.ts).
+  // nav_auto_sync is the per-fund opt-in; the NAV itself comes from the Fmarket
+  // feed matched on funds.code (see lib/fmarket-nav.ts).
   const { data: funds, error: fetchError } = await supabaseAdmin
     .from('funds')
-    .select('id, code, nav_source_url')
-    .not('nav_source_url', 'is', null)
+    .select('id, code')
+    .eq('nav_auto_sync', true)
 
   if (fetchError) {
     return NextResponse.json({ error: 'Failed to fetch funds' }, { status: 500 })

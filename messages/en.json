@@ -618,7 +618,8 @@
     "typeLabel": "Type",
     "selectType": "Select type",
     "navLabel": "NAV",
-    "navSourceLabel": "NAV Source URL (optional)",
+    "navAutoSyncLabel": "Update NAV automatically",
+    "navAutoSyncHint": "Fetches the price daily, matched on the fund code above.",
     "saveBtn": "Save Fund",
     "nameRequired": "Name is required.",
     "codeRequired": "Code is required.",
@@ -656,11 +657,10 @@
     "namePlaceholder": "e.g., VFMVF1 Equity Fund",
     "codePlaceholder": "e.g., VFMVF1",
     "navPlaceholder": "e.g., 36120",
-    "navUrlPlaceholder": "https://...",
     "editFund": "Edit fund",
     "enableDca": "Enable DCA",
     "disableDca": "Disable DCA",
-    "refreshDisabledHint": "Add a NAV source URL to a fund to enable auto-refresh.",
+    "refreshDisabledHint": "Turn on “Update NAV automatically” for a fund to use refresh.",
     "toastDeleteInUse": "Can't delete this fund — it's used in a monthly plan. Remove it from the plan first."
   },
   "planning": {
