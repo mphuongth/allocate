@@ -1,5 +1,5 @@
 -- Contract half of the nav_source_url → nav_auto_sync swap. The expand half
--- (20260809000001) added the column, backfilled it, and put the nav_auto_sync
+-- (20260810000001) added the column, backfilled it, and put the nav_auto_sync
 -- form of disable_fund_dca alongside the nav_source_url one so both releases
 -- could run at once. This removes the old side, now that nothing reads it.
 --

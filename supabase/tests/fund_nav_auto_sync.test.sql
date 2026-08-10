@@ -1,4 +1,4 @@
--- Covers 20260809000002_drop_fund_nav_source_url.sql — the contract half of the
+-- Covers 20260810000002_drop_fund_nav_source_url.sql — the contract half of the
 -- nav_source_url → nav_auto_sync swap. (The expand half has its own test,
 -- fund_nav_auto_sync_column.test.sql, which pins the opposite property: that
 -- both columns and both overloads coexist.)
