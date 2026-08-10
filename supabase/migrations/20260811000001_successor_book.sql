@@ -29,27 +29,36 @@ alter table public.investment_transactions
   );
 
 -- Which makes the dissolve flows the constraint's problem: withdraw_book_close_group
--- and collapse_accumulating_book both clear deposit_group_id across the group,
--- and they would now be refused. They should not be: once the book is dissolved
--- its money has left, and a plan to merge it later is moot. Drop the plan with
--- the book, the same way `on delete set null` drops it with a deleted successor.
-create or replace function public.clear_successor_when_book_dissolved()
+-- and collapse_accumulating_book both clear deposit_group_id across the group.
+--
+-- Clearing the link along with the book would be wrong, and quietly so. Collapse
+-- is what "handle maturity" runs today: it re-deposits the book's principal into
+-- a fresh term cycle. The money has NOT left — and that is precisely the moment
+-- the handover was made for, the merge into the successor that Phase 3 performs.
+-- Dropping the relationship there would lose the plan exactly when it comes due.
+--
+-- So a promised book is not dissolved by any route: the promise is cancelled
+-- first, deliberately, by whoever made it (DELETE on the successor endpoint).
+create or replace function public.enforce_successor_before_dissolve()
 returns trigger language plpgsql set search_path = '' as $$
 begin
-  if new.successor_deposit_tx_id is not null
+  if old.successor_deposit_tx_id is not null
+     and new.successor_deposit_tx_id is not null
      and new.deposit_group_id is distinct from new.transaction_id then
-    new.successor_deposit_tx_id := null;
+    raise exception 'successor book: this book is promised to a successor, so cancel the handover before closing it'
+      using errcode = 'check_violation';
   end if;
   return new;
 end;
 $$;
 
 drop trigger if exists investment_transactions_successor_cleared_on_dissolve on public.investment_transactions;
-create trigger investment_transactions_successor_cleared_on_dissolve
+drop trigger if exists investment_transactions_successor_before_dissolve on public.investment_transactions;
+create trigger investment_transactions_successor_before_dissolve
   before update of deposit_group_id on public.investment_transactions
   for each row
   when (old.successor_deposit_tx_id is not null)
-  execute function public.clear_successor_when_book_dissolved();
+  execute function public.enforce_successor_before_dissolve();
 
 create unique index if not exists investment_transactions_successor_unique
   on public.investment_transactions (successor_deposit_tx_id)
@@ -105,6 +114,13 @@ begin
     raise exception 'successor book: both books need a maturity while the handover stands'
       using errcode = 'check_violation';
   end if;
+  -- The successor holds real money and inherits the recurring link, and a
+  -- rateless deposit is not a valid target for one — the edit route can clear a
+  -- rate long after the book was opened.
+  if v_successor.interest_rate is null or v_successor.interest_rate <= 0 then
+    raise exception 'successor book: the successor needs a rate while the handover stands'
+      using errcode = 'check_violation';
+  end if;
   if v_successor.expiry_date <= v_source.expiry_date then
     raise exception 'successor book: the successor must mature after the book it takes over from (% is not after %)',
       v_successor.expiry_date, v_source.expiry_date
@@ -139,7 +155,7 @@ $$;
 
 drop trigger if exists investment_transactions_successor_pairing on public.investment_transactions;
 create constraint trigger investment_transactions_successor_pairing
-  after insert or update of successor_deposit_tx_id, goal_id, currency, deposit_group_id, expiry_date
+  after insert or update of successor_deposit_tx_id, goal_id, currency, deposit_group_id, expiry_date, interest_rate
   on public.investment_transactions
   deferrable initially deferred
   for each row

@@ -81,6 +81,21 @@ describe('useGoalDetailData (#467)', () => {
     expect(result.current.transactions.filter(t => t.transaction_id.startsWith('anchor-'))).toHaveLength(150)
   })
 
+  it('fails the load when an anchor batch fails, rather than rendering a book without its terms', async () => {
+    mockFetch((url) => {
+      if (url.includes('ids=')) return { ok: false }
+      if (url.includes('/investment-transactions?')) {
+        return { ok: true, body: { transactions: [{ transaction_id: 't9', deposit_group_id: 'anchor-1', investment_date: '2026-05-01' }] } }
+      }
+      if (url.includes('/recurring-contributions')) return { ok: true, body: { contributions: [] } }
+      return { ok: true, body: {} }
+    })
+
+    const { result } = renderHook(() => useGoalDetailData({ goalId: 'g1', enabled: true, refreshKey: 0, txReload: 0 }))
+    await waitFor(() => expect(result.current.txError).toBe(true))
+    expect(result.current.transactions).toEqual([])
+  })
+
   it('does not ask for anchors the page already has', async () => {
     const urls: string[] = []
     mockFetch((url) => {

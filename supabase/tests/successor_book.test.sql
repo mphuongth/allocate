@@ -221,6 +221,15 @@ begin
   exception when sqlstate '23514' then null;
   end;
 
+  -- ── Nor its rate: the successor holds money and inherits a recurring link ─
+  begin
+    update public.investment_transactions set interest_rate = null
+     where transaction_id = v_c.transaction_id;
+    set constraints all immediate;
+    raise exception 'clearing the successor rate must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
   -- ── Neither book may lose its maturity while the handover stands ─────────
   begin
     update public.investment_transactions set expiry_date = null
@@ -230,17 +239,23 @@ begin
   exception when sqlstate '23514' then null;
   end;
 
-  -- ── Dissolving the source drops the plan with it ─────────────────────────
-  -- The money has left; a merge planned for later is moot. The old maturity
-  -- flows clear deposit_group_id across the group and must not start failing.
+  -- ── A promised book is not closed behind the promise's back ─────────────
+  -- Collapse re-deposits the book's principal into a new cycle: the money has
+  -- NOT left, and that is the very moment the handover was made for. Losing the
+  -- link there would drop the plan exactly when it comes due.
+  begin
+    update public.investment_transactions set deposit_group_id = null
+     where deposit_group_id = v_b.transaction_id;
+    raise exception 'closing a promised book must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- Cancelling the handover first is the way out, and then it closes normally.
+  update public.investment_transactions set successor_deposit_tx_id = null
+   where transaction_id = v_b.transaction_id;
   update public.investment_transactions set deposit_group_id = null
    where deposit_group_id = v_b.transaction_id;
   set constraints all immediate;
-  select successor_deposit_tx_id into v_successor
-    from public.investment_transactions where transaction_id = v_b.transaction_id;
-  if v_successor is not null then
-    raise exception 'a dissolved book must not keep its successor, found %', v_successor;
-  end if;
 
   raise notice 'successor book: OK';
 end;

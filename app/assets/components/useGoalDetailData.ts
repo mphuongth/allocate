@@ -108,11 +108,14 @@ export function useGoalDetailData(opts: {
         const CHUNK = 100
         const chunks: string[][] = []
         for (let i = 0; i < missingAnchors.length; i += CHUNK) chunks.push(missingAnchors.slice(i, i + CHUNK))
+        // A failed anchor batch fails the load. These are not supplementary like
+        // the recurring contributions: without an anchor a book renders off a
+        // tranche, which does not know the book has handed over — so it would
+        // offer actions the database then refuses. A retry beats a wrong page.
         const anchors: InvestmentTx[] = (await Promise.all(chunks.map((chunk) =>
           fetch(`/api/v1/investment-transactions?ids=${chunk.join(',')}&include_history=true&limit=${CHUNK}`, { cache: 'no-store' })
-            .then((r) => r.ok ? r.json() : null)
-            .then((res) => (res?.transactions ?? []) as InvestmentTx[])
-            .catch(() => [] as InvestmentTx[]),
+            .then((r) => { if (!r.ok) throw new Error('anchor load failed'); return r.json() })
+            .then((res) => (res?.transactions ?? []) as InvestmentTx[]),
         ))).flat()
 
         const merged: InvestmentTx[] = [...rows, ...anchors, ...(recRes.contributions ?? [])]

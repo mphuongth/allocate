@@ -325,10 +325,24 @@ export function TopUpControl({ inv, isVi, onDone }: { inv: InvRow; isVi: boolean
   // A book that has handed over is done taking money: its contributions go to
   // the successor now, and what is left here is folded in at maturity (#638).
   if (inv.successorDepositTxId) {
+    // The database will not close a promised book — losing the plan at maturity
+    // is the failure the link exists to prevent — so the promise has to be
+    // withdrawable on purpose, or the deposit could never be closed at all.
     return (
-      <p data-testid="successor-planned" style={{ margin: '0 0 4px', padding: '9px 10px', borderRadius: 10, background: 'var(--c-canvas,#faf9f7)', border: '1px solid var(--c-line)', color: 'var(--c-muted)', fontSize: 12, lineHeight: 1.45 }}>
+      <div data-testid="successor-planned" style={{ margin: '0 0 4px', padding: '9px 10px', borderRadius: 10, background: 'var(--c-canvas,#faf9f7)', border: '1px solid var(--c-line)', color: 'var(--c-muted)', fontSize: 12, lineHeight: 1.45 }}>
         {isVi ? 'Sẽ gộp vào sổ kế nhiệm khi đáo hạn.' : 'Will merge into its successor book at maturity.'}
-      </p>
+        <button type="button" data-testid="cancel-successor-btn" disabled={saving}
+          onClick={async () => {
+            setSaving(true)
+            try {
+              const res = await fetch(`/api/v1/investment-transactions/${inv.id}/successor`, { method: 'DELETE' })
+              if (res.ok) onDone()
+            } finally { setSaving(false) }
+          }}
+          style={{ display: 'block', marginTop: 6, padding: 0, border: 'none', background: 'none', color: 'var(--c-navy)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline' }}>
+          {isVi ? 'Huỷ bàn giao' : 'Cancel the handover'}
+        </button>
+      </div>
     )
   }
 

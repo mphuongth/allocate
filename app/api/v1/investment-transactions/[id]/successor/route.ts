@@ -127,3 +127,37 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   return NextResponse.json(book, { status: 201 })
 }
+
+// Cancel a planned handover. The database will not let a promised book be closed
+// or collapsed — losing the plan at maturity is exactly the failure the link
+// exists to prevent — so the way out is to withdraw the promise on purpose.
+// The successor book itself stays: it holds real money and is nobody's to delete
+// from here.
+export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const supabase = await createSupabaseServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  let bookId: string
+  try {
+    bookId = validateUUID(id, 'id')
+  } catch (e) {
+    if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
+    throw e
+  }
+
+  const { data: book, error } = await supabase
+    .from('investment_transactions')
+    .update({ successor_deposit_tx_id: null, updated_at: new Date().toISOString() })
+    .eq('transaction_id', bookId)
+    .eq('user_id', user.id)
+    .select('transaction_id')
+    .single()
+
+  if (error || !book) {
+    if (error) console.error('cancel successor failed', error.message)
+    return NextResponse.json({ error: 'Deposit not found' }, { status: 404 })
+  }
+  return NextResponse.json({ transaction_id: book.transaction_id, successor_deposit_tx_id: null })
+}

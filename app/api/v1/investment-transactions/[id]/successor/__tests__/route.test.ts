@@ -19,18 +19,25 @@ const h = vi.hoisted(() => ({
   plan: { id: '44444444-4444-4444-8444-444444444444' } as unknown,
   rpcResult: { data: { transaction_id: '22222222-2222-4222-8222-222222222222' } as unknown, error: null as unknown },
   rpcCalls: [] as { name: string; args: Record<string, unknown> }[],
+  updates: null as Record<string, unknown> | null,
+  updateResult: { data: { transaction_id: '11111111-1111-4111-8111-111111111111' } as unknown, error: null as unknown },
 }))
 
 vi.mock('@/lib/supabase-server', () => ({
   createSupabaseServerClient: async () => ({
     auth: { getUser: async () => ({ data: { user: h.user } }) },
     from: (table: string) => {
+      let op: 'select' | 'update' = 'select'
       const c: Record<string, unknown> = {
         select: () => c,
         eq: () => c,
-        single: async () => (table === 'recurring_savings'
-          ? { data: h.saving, error: null }
-          : { data: h.plan, error: null }),
+        update: (payload: Record<string, unknown>) => { op = 'update'; h.updates = payload; return c },
+        single: async () => {
+          if (op === 'update') return h.updateResult
+          return table === 'recurring_savings'
+            ? { data: h.saving, error: null }
+            : { data: h.plan, error: null }
+        },
       }
       return c
     },
@@ -41,7 +48,7 @@ vi.mock('@/lib/supabase-server', () => ({
   }),
 }))
 
-const { POST } = await import('../route')
+const { POST, DELETE } = await import('../route')
 
 const BODY = {
   amount_vnd: 2_000_000,
@@ -66,6 +73,8 @@ beforeEach(() => {
   h.plan = { id: PLAN }
   h.rpcResult = { data: { transaction_id: NEW_BOOK }, error: null }
   h.rpcCalls = []
+  h.updates = null
+  h.updateResult = { data: { transaction_id: BOOK }, error: null }
   vi.spyOn(console, 'error').mockImplementation(() => {})
 })
 
@@ -147,5 +156,33 @@ describe('POST /api/v1/investment-transactions/[id]/successor (#638)', () => {
     h.rpcResult = { data: null, error: { message: 'successor book: accumulating book not found' } }
 
     expect((await call()).status).toBe(404)
+  })
+
+  // The database refuses to close a promised book, so the promise has to be
+  // withdrawable on purpose — otherwise the old deposit could never be closed.
+  describe('DELETE — cancelling the handover', () => {
+    const del = () =>
+      DELETE(
+        new Request(`https://app.test/api/v1/investment-transactions/${BOOK}/successor`, { method: 'DELETE' }) as unknown as NextRequest,
+        { params: Promise.resolve({ id: BOOK }) },
+      )
+
+    it('clears the link and leaves the successor book alone', async () => {
+      const res = await del()
+
+      expect(res.status).toBe(200)
+      expect(h.updates).toMatchObject({ successor_deposit_tx_id: null })
+      await expect(res.json()).resolves.toMatchObject({ successor_deposit_tx_id: null })
+    })
+
+    it('rejects an anonymous caller', async () => {
+      h.user = null
+      expect((await del()).status).toBe(401)
+    })
+
+    it('answers 404 for a deposit that is not the caller\'s', async () => {
+      h.updateResult = { data: null, error: null }
+      expect((await del()).status).toBe(404)
+    })
   })
 })
