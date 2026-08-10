@@ -19,6 +19,7 @@ declare
   v_moved_goal uuid;
   v_open_book uuid := gen_random_uuid();
   v_short_book uuid := gen_random_uuid();
+  v_tail public.investment_transactions;
 begin
   insert into auth.users (id, email) values (v_user, 'successor-book@test.invalid');
   insert into public.savings_goals (user_id, goal_name) values (v_user, 'Successor') returning goal_id into v_goal;
@@ -251,11 +252,27 @@ begin
   end;
 
   -- Cancelling the handover first is the way out, and then it closes normally.
+  -- Both ends of it: v_b promises to merge into v_c, and v_book promises to
+  -- merge into v_b, so v_b cannot leave until neither promise stands.
   update public.investment_transactions set successor_deposit_tx_id = null
-   where transaction_id = v_b.transaction_id;
+   where transaction_id in (v_b.transaction_id, v_book);
   update public.investment_transactions set deposit_group_id = null
    where deposit_group_id = v_b.transaction_id;
   set constraints all immediate;
+
+  -- ── A successor cannot be withdrawn out from under its source ────────────
+  -- A full close clears the successor's own group, which would leave the source
+  -- promising to merge into a row that is no longer a book at all.
+  -- v_short_book is still locked and unpromised, so it can open one now.
+  select * into v_tail from public.open_successor_book(
+    v_short_book, 1000000, 4, current_date - 2, current_date + 400, 30, null, null, null, null);
+  begin
+    update public.investment_transactions set deposit_group_id = null
+     where transaction_id = v_tail.transaction_id;
+    set constraints all immediate;
+    raise exception 'dissolving a book that is someone''s successor must be refused';
+  exception when sqlstate '23514' then null;
+  end;
 
   raise notice 'successor book: OK';
 end;

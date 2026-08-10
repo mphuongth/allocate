@@ -154,17 +154,32 @@ end;
 $$;
 
 drop trigger if exists investment_transactions_successor_pairing on public.investment_transactions;
-create constraint trigger investment_transactions_successor_pairing
-  after insert or update of successor_deposit_tx_id, goal_id, currency, deposit_group_id, expiry_date, interest_rate
+drop trigger if exists investment_transactions_successor_pairing_ins on public.investment_transactions;
+-- Two triggers rather than one, because the UPDATE side has to look at the row's
+-- OLD shape as well and OLD is not available to an INSERT trigger's WHEN.
+--
+-- Both stay narrow: a deferred event is queued until commit, and pending events
+-- block ALTER TABLE on this table, so every unrelated edit must not carry one.
+create constraint trigger investment_transactions_successor_pairing_ins
+  after insert on public.investment_transactions
+  deferrable initially deferred
+  for each row
+  when (new.successor_deposit_tx_id is not null)
+  execute function public.enforce_successor_book_pairing();
+
+drop trigger if exists investment_transactions_successor_pairing_upd on public.investment_transactions;
+create constraint trigger investment_transactions_successor_pairing_upd
+  after update of successor_deposit_tx_id, goal_id, currency, deposit_group_id, expiry_date, interest_rate
   on public.investment_transactions
   deferrable initially deferred
   for each row
-  -- Only two kinds of row can affect a pairing: one that names a successor, and
-  -- a book anchor, which is the only kind that can BE one. Narrow, because a
-  -- deferred event is queued until commit and pending events block ALTER TABLE
-  -- on this table — every unrelated edit would otherwise carry one.
+  -- A row that names a successor, a book anchor (the only kind that can BE one),
+  -- and a row that STOPPED being an anchor: a fully withdrawn successor has its
+  -- group cleared, and matching only on the new shape would let it slip away
+  -- from a source still promising to merge into it.
   when (new.successor_deposit_tx_id is not null
-        or new.deposit_group_id = new.transaction_id)
+        or new.deposit_group_id = new.transaction_id
+        or old.deposit_group_id = old.transaction_id)
   execute function public.enforce_successor_book_pairing();
 
 -- ── A book that has handed over is closed to new money ──────────────────────
@@ -305,11 +320,16 @@ begin
   -- Recurring-driven: the month is contributed to B, marked fulfilled, and the
   -- saving now points at B. A saving linked elsewhere is not this flow's to move.
   if p_saving_id is not null then
+    -- LOCK the saving while checking it. The book lock says nothing about this
+    -- row, so without it another request could relink the saving between the
+    -- check and the write below, and this call would silently overwrite that
+    -- newer choice — moving a saving that no longer points here.
     if not exists (
       select 1 from public.recurring_savings
        where saving_id = p_saving_id
          and user_id = v_source.user_id
          and linked_deposit_tx_id = p_source_book_id
+       for update
     ) then
       raise exception 'successor book: that recurring saving is not linked to this book'
         using errcode = 'check_violation';
@@ -331,7 +351,12 @@ begin
 
     update public.recurring_savings
        set linked_deposit_tx_id = v_new_id, updated_at = now()
-     where saving_id = p_saving_id;
+     where saving_id = p_saving_id
+       and linked_deposit_tx_id = p_source_book_id;
+    if not found then
+      raise exception 'successor book: that recurring saving moved while this was being recorded'
+        using errcode = 'check_violation';
+    end if;
   end if;
 
   return v_book;
