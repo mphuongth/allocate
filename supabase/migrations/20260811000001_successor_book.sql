@@ -95,6 +95,12 @@ begin
     raise exception 'successor book: a successor must itself be an accumulating book'
       using errcode = 'check_violation';
   end if;
+  -- Either side pledged freezes the merge this link promises, and a pledge can
+  -- be applied long after the handover was arranged.
+  if v_source.is_pledged or v_successor.is_pledged then
+    raise exception 'successor book: a pledged deposit cannot be part of a handover'
+      using errcode = 'check_violation';
+  end if;
   if v_successor.goal_id is distinct from v_source.goal_id then
     raise exception 'successor book: both books must belong to the same goal'
       using errcode = 'check_violation';
@@ -169,7 +175,7 @@ create constraint trigger investment_transactions_successor_pairing_ins
 
 drop trigger if exists investment_transactions_successor_pairing_upd on public.investment_transactions;
 create constraint trigger investment_transactions_successor_pairing_upd
-  after update of successor_deposit_tx_id, goal_id, currency, deposit_group_id, expiry_date, interest_rate
+  after update of successor_deposit_tx_id, goal_id, currency, deposit_group_id, expiry_date, interest_rate, is_pledged
   on public.investment_transactions
   deferrable initially deferred
   for each row
@@ -259,6 +265,13 @@ begin
   end if;
   if v_source.successor_deposit_tx_id is not null then
     raise exception 'successor book: this book already has a successor'
+      using errcode = 'check_violation';
+  end if;
+  -- Pledged collateral is frozen: it cannot be settled or merged (the held
+  -- settlement refuses it outright), so promising to fold it into another book
+  -- would be a plan the merge itself would later reject.
+  if v_source.is_pledged then
+    raise exception 'successor book: a pledged deposit cannot be handed over while it is collateral'
       using errcode = 'check_violation';
   end if;
   if p_amount_vnd is null or p_amount_vnd <= 0 then
@@ -371,3 +384,30 @@ $$;
 
 comment on function public.open_successor_book(uuid, bigint, numeric, date, date, integer, text, uuid, text, uuid) is
   'Open the accumulating book that takes over from one that stopped accepting top-ups, moving the recurring link and the month with it (#638).';
+
+-- The API refuses a recurring link to a handed-over book, and so does the table:
+-- RLS lets `authenticated` write recurring_savings directly, and a link that can
+-- never be funded is worse than a refused one — the plan would keep asking for a
+-- month it has nowhere to put.
+create or replace function public.enforce_recurring_link_not_handed_over()
+returns trigger language plpgsql security definer set search_path = '' as $$
+begin
+  if exists (
+    select 1 from public.investment_transactions
+     where transaction_id = new.linked_deposit_tx_id
+       and user_id = new.user_id
+       and successor_deposit_tx_id is not null
+  ) then
+    raise exception 'successor book: that book has handed over to a successor, so link the successor instead'
+      using errcode = 'check_violation';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists recurring_savings_link_not_handed_over on public.recurring_savings;
+create trigger recurring_savings_link_not_handed_over
+  before insert or update of linked_deposit_tx_id on public.recurring_savings
+  for each row
+  when (new.linked_deposit_tx_id is not null)
+  execute function public.enforce_recurring_link_not_handed_over();

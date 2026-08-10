@@ -18,7 +18,7 @@ export async function validateLinkedDeposit(
 ): Promise<string | null> {
   const { data, error } = await supabase
     .from('investment_transactions')
-    .select('asset_type, interest_rate, expiry_date, goal_id, transaction_type, deposit_group_id')
+    .select('asset_type, interest_rate, expiry_date, goal_id, transaction_type, deposit_group_id, successor_deposit_tx_id')
     .eq('transaction_id', txId)
     .eq('user_id', userId)
     .single()
@@ -38,6 +38,12 @@ export async function validateLinkedDeposit(
   // surviving anchor). A non-anchor tranche is not a linkable target.
   if (data.deposit_group_id != null && data.deposit_group_id !== txId) {
     return 'Link an accumulating book via its anchor deposit.'
+  }
+  // A book that has handed over refuses every contribution from here on (#638),
+  // so a link pointing at it could never be funded — and the monthly plan would
+  // answer the Saved pill with "it already has a successor" and nothing else.
+  if (data.successor_deposit_tx_id) {
+    return 'That book has handed over to a successor — link the successor instead.'
   }
   if ((data.goal_id ?? null) !== (recurringGoalId ?? null)) {
     return 'Linked deposit must belong to the same goal as the recurring saving.'

@@ -220,6 +220,7 @@ export function usePlanningActions(ctx: PlanningActionsCtx) {
                   bookName: dep.notes || (isVI ? 'Sổ ngân hàng' : 'Bank deposit'),
                   amount: item.amount, date, rate: dep.interest_rate ?? null,
                   lockDays: dep.top_up_lock_days ?? null,
+                  sourceExpiry: dep.expiry_date ?? null,
                   savingId: item.recurringId,
                   ym: `${year}-${String(month).padStart(2, '0')}`,
                   planId: plan.id,

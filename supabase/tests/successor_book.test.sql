@@ -133,7 +133,8 @@ begin
   -- A recurring saving linked to another book cannot be swept along: v_c is a
   -- book of the caller's with no successor yet, and the saving now points at it,
   -- so this fails on the link and not on some earlier guard.
-  update public.recurring_savings set linked_deposit_tx_id = v_book
+  -- (not at v_book: that one has handed over, and a link there is refused now)
+  update public.recurring_savings set linked_deposit_tx_id = null
    where saving_id = v_saving;
   begin
     perform public.open_successor_book(
@@ -287,6 +288,27 @@ begin
      where transaction_id = v_tail.transaction_id;
     set constraints all immediate;
     raise exception 'dissolving a book that is someone''s successor must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- ── Pledged collateral is frozen, so it cannot be promised away ──────────
+  update public.investment_transactions set is_pledged = true
+   where transaction_id = v_open_book;
+  update public.investment_transactions set expiry_date = current_date + 10
+   where deposit_group_id = v_open_book;
+  set constraints all immediate;
+  begin
+    perform public.open_successor_book(
+      v_open_book, 1000000, 4, current_date - 2, current_date + 400, 30, null, null, null, null);
+    raise exception 'a pledged book must not hand over';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- ── A recurring saving cannot be pointed at a book that handed over ──────
+  begin
+    update public.recurring_savings set linked_deposit_tx_id = v_short_book
+     where saving_id = v_extra_saving;
+    raise exception 'linking to a handed-over book must be refused';
   exception when sqlstate '23514' then null;
   end;
 

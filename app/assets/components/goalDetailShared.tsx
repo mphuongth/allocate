@@ -405,7 +405,7 @@ export function TopUpControl({ inv, isVi, onDone }: { inv: InvRow; isVi: boolean
                   straight into it (#638). */}
               {eligibility.status !== 'allowed' ? (
                 <button type="button" data-testid="open-successor-btn" disabled={!(amt > 0)}
-                  onClick={() => setSuccessor({ bookId: inv.id, bookName: inv.name, amount: Math.round(amt), date, rate: inv.interestRate ?? null, lockDays: inv.topUpLockDays ?? null })}
+                  onClick={() => setSuccessor({ bookId: inv.id, bookName: inv.name, amount: Math.round(amt), date, rate: inv.interestRate ?? null, lockDays: inv.topUpLockDays ?? null, sourceExpiry: inv.expiryDate ?? null })}
                   style={{ flex: 2, padding: '10px 0', borderRadius: 10, border: 'none', background: 'var(--c-btn-primary)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', opacity: amt > 0 ? 1 : 0.6 }}>
                   {isVi ? 'Mở sổ kế nhiệm' : 'Open successor book'}
                 </button>

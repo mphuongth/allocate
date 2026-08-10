@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { TopUpControl, type InvRow } from '../goalDetailShared'
 import { addDaysIso, todayIso } from '@/lib/dates'
 
@@ -59,6 +59,30 @@ describe('TopUpControl', () => {
 
     expect(screen.getByTestId('top-up-submit')).toBeInTheDocument()
     expect(screen.queryByTestId('open-successor-btn')).not.toBeInTheDocument()
+  })
+
+  // The date is editable inside the successor sheet, so the reason for opening
+  // one can evaporate while it is open (#638).
+  it('offers a plain top-up when the date moves back to one the old book accepts', async () => {
+    const calls: string[] = []
+    global.fetch = vi.fn(async (url: string | URL | Request) => {
+      calls.push(String(url))
+      return { ok: true, json: async () => ({}) } as Response
+    }) as unknown as typeof fetch
+
+    render(<TopUpControl inv={lockedBook} isVi={false} onDone={() => {}} />)
+    await screen.getByTestId('top-up-btn').click()
+    fireEvent.change(screen.getByTestId('top-up-amount'), { target: { value: '2000000' } })
+    fireEvent.click(screen.getByTestId('open-successor-btn'))
+
+    // Inside the sheet, back to a date the book still takes.
+    fireEvent.change(screen.getByTestId('successor-date'), { target: { value: addDaysIso(todayIso(), -25) } })
+    expect(screen.getByTestId('successor-not-needed')).toBeInTheDocument()
+    expect(screen.getByTestId('successor-submit')).toBeDisabled()
+
+    fireEvent.click(screen.getByTestId('record-topup-instead'))
+    await waitFor(() => expect(calls).toHaveLength(1))
+    expect(calls[0]).toBe('/api/v1/investment-transactions')
   })
 
   it('a book that already handed over says so instead of taking more money', () => {

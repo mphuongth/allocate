@@ -13,6 +13,7 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
 import { fmtCompact } from '@/lib/formatters'
+import { classifyAccumulatingTopUp } from '@/lib/accumulatingTopUp'
 
 export interface SuccessorTarget {
   bookId: string
@@ -21,6 +22,9 @@ export interface SuccessorTarget {
   date: string
   rate: number | null
   lockDays: number | null
+  /** The old book's maturity. The contribution date is editable here, and a date
+   *  the old book still accepts is a top-up, not a reason to replace it. */
+  sourceExpiry: string | null
   /** Set when the contribution is a recurring saving's month, not a one-off. */
   savingId?: string | null
   ym?: string | null
@@ -67,6 +71,12 @@ export default function SuccessorBookSheet({
   const datesOk = !!expiry && !!date && expiry > date
   // The new book opens holding money, so it needs the rate that money earns.
   const rateOk = Number(rate) > 0
+  // The date is editable, so the reason for opening a successor can evaporate
+  // while the sheet is open: on a date the old book still accepts, this is an
+  // ordinary top-up — and the server would refuse the handover anyway.
+  const sourceStillOpen = classifyAccumulatingTopUp({
+    topUpDate: date, expiryDate: target.sourceExpiry, lockDays: target.lockDays,
+  }).status === 'allowed'
 
   async function submit() {
     if (!target) return
@@ -89,6 +99,28 @@ export default function SuccessorBookSheet({
           plan_id: target.planId ?? null,
         }),
       })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); setError(d.error ?? (isVi ? 'Lỗi' : 'Error')); setSaving(false); return }
+      onDone(); onClose()
+    } catch { setError(isVi ? 'Lỗi kết nối' : 'Connection error') } finally { setSaving(false) }
+  }
+
+  // Record it where it actually belongs: the recurring endpoint when the month
+  // came from the plan (it files the fulfillment too), the ordinary top-up
+  // otherwise.
+  async function topUpInstead() {
+    if (!target) return
+    if (!(amt > 0)) { setError(isVi ? 'Cần nhập số tiền' : 'Amount is required'); return }
+    setSaving(true); setError('')
+    try {
+      const res = target.savingId
+        ? await fetch(`/api/v1/recurring-savings/${target.savingId}/topup`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ book_id: target.bookId, amount_vnd: Math.round(amt), interest_rate: Number(rate), investment_date: date, ym: target.ym, plan_id: target.planId ?? null }),
+          })
+        : await fetch('/api/v1/investment-transactions', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tops_up_deposit_id: target.bookId, asset_type: 'bank', investment_date: date, amount_vnd: Math.round(amt), interest_rate: rate ? Number(rate) : null }),
+          })
       if (!res.ok) { const d = await res.json().catch(() => ({})); setError(d.error ?? (isVi ? 'Lỗi' : 'Error')); setSaving(false); return }
       onDone(); onClose()
     } catch { setError(isVi ? 'Lỗi kết nối' : 'Connection error') } finally { setSaving(false) }
@@ -129,11 +161,22 @@ export default function SuccessorBookSheet({
             <input data-testid="successor-lock" type="text" inputMode="numeric" value={lockDays} onChange={(e) => setLockDays(e.target.value.replace(/\D/g, ''))} placeholder="30" style={field} />
           </div>
         </div>
+        {sourceStillOpen && (
+          <div data-testid="successor-not-needed" style={{ margin: 0, padding: '9px 10px', borderRadius: 10, background: 'var(--c-warn-tint)', color: 'var(--c-warn)', fontSize: 12, lineHeight: 1.45 }}>
+            {isVi
+              ? `${target.bookName} vẫn nhận nạp vào ngày này, nên đây là một lần nạp thêm chứ chưa cần sổ mới.`
+              : `${target.bookName} still accepts a contribution on that date, so this is a top-up rather than a new book.`}
+            <button type="button" data-testid="record-topup-instead" disabled={saving} onClick={topUpInstead}
+              style={{ display: 'block', marginTop: 6, padding: 0, border: 'none', background: 'none', color: 'inherit', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline' }}>
+              {isVi ? 'Ghi thành nạp thêm vào sổ cũ' : 'Record it as a top-up instead'}
+            </button>
+          </div>
+        )}
         {error && <p data-testid="successor-error" style={{ margin: 0, fontSize: 13, color: 'var(--c-neg)' }}>{error}</p>}
         <div style={{ display: 'flex', gap: 8 }}>
           <button type="button" onClick={onClose} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: '1px solid var(--c-line)', background: 'var(--c-card)', color: 'var(--c-ink)', fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>{isVi ? 'Huỷ' : 'Cancel'}</button>
-          <button type="button" data-testid="successor-submit" onClick={submit} disabled={saving || !(amt > 0) || !datesOk || !rateOk}
-            style={{ flex: 2, padding: '10px 0', borderRadius: 10, border: 'none', background: 'var(--c-btn-primary)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit', opacity: saving || !(amt > 0) || !datesOk || !rateOk ? 0.6 : 1 }}>
+          <button type="button" data-testid="successor-submit" onClick={submit} disabled={saving || !(amt > 0) || !datesOk || !rateOk || sourceStillOpen}
+            style={{ flex: 2, padding: '10px 0', borderRadius: 10, border: 'none', background: 'var(--c-btn-primary)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit', opacity: saving || !(amt > 0) || !datesOk || !rateOk || sourceStillOpen ? 0.6 : 1 }}>
             {isVi ? 'Mở sổ mới' : 'Open the new book'}
           </button>
         </div>
