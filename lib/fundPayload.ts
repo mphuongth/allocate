@@ -190,8 +190,12 @@ export async function unpriceableFundCodeError(
   fields: FundFields,
   previous?: { code: string; nav_auto_sync: boolean } | null,
 ): Promise<NextResponse | null> {
-  // Off, or absent on an update — nothing is being switched on.
-  if (fields.nav_auto_sync !== true) return null
+  // The flag as it will be AFTER this write, not as it was sent. An update that
+  // omits it keeps the stored value (see FundFields), so "absent" is not "off":
+  // reading the sent value alone let a rename slip through on an already-synced
+  // fund, writing an unlisted code that then failed every refresh in silence.
+  const willSync = fields.nav_auto_sync ?? previous?.nav_auto_sync ?? false
+  if (!willSync) return null
 
   // Already on, and the code isn't moving: this write changes nothing the check
   // is about.

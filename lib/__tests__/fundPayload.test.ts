@@ -280,4 +280,30 @@ describe('unpriceableFundCodeError', () => {
     expect((await unpriceableFundCodeError({ ...fields, code: 'MYSTERY', nav_auto_sync: true }, null))?.status)
       .toBe(400)
   })
+
+  // Omitting the flag on an update means "keep the stored setting", so it is not
+  // the same as sending false. Treating the two alike let a rename through on an
+  // already-synced fund: the new code was written, the fund stayed opted in, and
+  // every later refresh failed with nothing at the write to explain why.
+  it('checks a renamed code when the flag is omitted but stored on', async () => {
+    priceable.result = false
+    const previous = { code: 'DCDS', nav_auto_sync: true }
+
+    expect((await unpriceableFundCodeError({ ...fields, code: 'MYSTERY' }, previous))?.status)
+      .toBe(400)
+  })
+
+  it('still skips an omitted flag when the code has not moved', async () => {
+    priceable.result = false
+    const previous = { code: 'MYSTERY', nav_auto_sync: true }
+
+    expect(await unpriceableFundCodeError({ ...fields, code: 'MYSTERY' }, previous)).toBeNull()
+  })
+
+  it('still skips an omitted flag on a fund that is not synced', async () => {
+    priceable.result = false
+    const previous = { code: 'DCDS', nav_auto_sync: false }
+
+    expect(await unpriceableFundCodeError({ ...fields, code: 'MYSTERY' }, previous)).toBeNull()
+  })
 })
