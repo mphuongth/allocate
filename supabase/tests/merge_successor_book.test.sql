@@ -22,6 +22,7 @@ declare
   v_principals bigint[];
   v_other_goal uuid;
   v_side_goal uuid;
+  v_split_goal uuid;
   v_fund uuid;
 begin
   insert into auth.users (id, email) values (v_user, 'merge-successor@test.invalid');
@@ -224,6 +225,20 @@ begin
     raise exception 'a tranche that has not matured must block the merge';
   exception when sqlstate '23514' then null;
   end;
+  -- The same old edit flow could split a book across goals. Every closing
+  -- withdrawal lands in its own tranche's goal while the payout is credited in
+  -- the anchor's, so folding this would move that tranche's value sideways.
+  begin
+    insert into public.savings_goals (user_id, goal_name) values (v_user, 'Split') returning goal_id into v_split_goal;
+    update public.investment_transactions set goal_id = v_split_goal where transaction_id = v_a2;
+    set constraints all immediate;
+    perform public.merge_book_into_successor(v_a, v_received, 4.5, current_date, v_ids, v_principals, v_b.transaction_id);
+    raise exception 'a tranche filed under another goal must block the merge';
+  exception when sqlstate '23514' then null;
+  end;
+  update public.investment_transactions set goal_id = v_goal where transaction_id = v_a2;
+  set constraints all immediate;
+
   -- Split the other way: both matured, but this tranche later than the anchor.
   -- Dating the fold to the anchor's maturity would record its withdrawal, and
   -- start the successor's interest, before its cash existed.

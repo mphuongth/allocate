@@ -100,15 +100,25 @@ begin
    order by saving_id
    for update;
 
-  -- Both books, locked in id order — the same order every other pairing write
-  -- takes, so two of them cannot deadlock against each other.
+  -- The whole source book in ONE ordered acquisition, anchor included. Taking
+  -- the anchor first and its tranches later put an anchor→tranche edge in the
+  -- way of update_deposit_book, which locks the tranche it was handed and then
+  -- rewrites the group — the opposite direction, and a deadlock between them.
+  -- (That function still locks its group in whatever order the update finds, so
+  -- this removes our half of the cycle rather than the whole of it.)
   perform 1 from public.investment_transactions
-   where transaction_id in (
-     p_source_book_id,
-     (select successor_deposit_tx_id from public.investment_transactions
-       where transaction_id = p_source_book_id)
-   )
+   where deposit_group_id = p_source_book_id
    order by transaction_id
+   for update;
+
+  -- Then the successor's own anchor. A book cannot be both a source and a
+  -- successor — the pairing forbids chains — so no two merges can hold these
+  -- two in opposite orders.
+  perform 1 from public.investment_transactions
+   where transaction_id = (
+     select successor_deposit_tx_id from public.investment_transactions
+      where transaction_id = p_source_book_id
+   )
    for update;
 
   select * into v_source from public.investment_transactions
@@ -201,17 +211,6 @@ begin
    order by w.transaction_id
    for update;
 
-  -- LOCK EVERY TRANCHE BEFORE MEASURING. The balance below decides how much
-  -- cash the destination is credited with; read without the lock, a withdrawal
-  -- committing between the read and the loop would leave the destination holding
-  -- money that withdrawal also took.
-  perform 1 from public.investment_transactions
-   where deposit_group_id = p_source_book_id
-     and transaction_type = 'investment'
-     and renewed_from_transaction_id is null
-   order by transaction_id
-   for update;
-
   -- What the book still holds, after any partial withdrawals it has taken.
   select coalesce(sum(t.amount_vnd - coalesce((
            select sum(w.principal_withdrawn) from public.investment_transactions w
@@ -279,6 +278,25 @@ begin
             and w.transaction_type = 'withdrawal'), 0) > 0
   ) then
     raise exception 'merge successor: this book still holds a tranche that has not matured; it cannot be folded yet'
+      using errcode = 'check_violation';
+  end if;
+  -- ...and a tranche filed under a different goal from the book it belongs to,
+  -- which the same old edit flow could also leave behind. Every closing
+  -- withdrawal is written in its own tranche's goal while the whole payout is
+  -- credited in the anchor's, so folding such a book quietly moves that
+  -- tranche's value from one goal to the other.
+  if exists (
+    select 1 from public.investment_transactions t
+     where t.deposit_group_id = p_source_book_id
+       and t.transaction_type = 'investment'
+       and t.renewed_from_transaction_id is null
+       and t.goal_id is distinct from v_source.goal_id
+       and t.amount_vnd - coalesce((
+         select sum(w.principal_withdrawn) from public.investment_transactions w
+          where w.parent_transaction_id = t.transaction_id
+            and w.transaction_type = 'withdrawal'), 0) > 0
+  ) then
+    raise exception 'merge successor: this book holds a tranche filed under another goal; put it back before merging'
       using errcode = 'check_violation';
   end if;
   -- ...and the date the cash arrived is bounded by the LAST of them, not by the
