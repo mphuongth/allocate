@@ -12,6 +12,31 @@
 -- and retiring the promise are only correct together. Half of it committed is a
 -- book closed with its money nowhere, or money in two places at once.
 
+-- Where a credited tranche came from, said outright rather than inferred.
+--
+-- The guard below has to know "this row holds another book's payout" for as long
+-- as that is true, and every shape it could be read off is temporary: the row is
+-- a tranche of the successor until the successor itself closes, and its
+-- withdrawals look like any other consumption. So the merge records the fact.
+--
+-- Deliberately not a foreign key. This is history, not a live reference — an FK
+-- would null it when the source anchor is deleted, which is exactly the moment
+-- the freeze would be handed away. Deleting the account still removes the row
+-- itself. (It is also what Phase 4 needs to show "merged from A" on this side.)
+alter table public.investment_transactions
+  add column if not exists merged_from_book_id uuid;
+
+comment on column public.investment_transactions.merged_from_book_id is
+  'The accumulating book whose payout this tranche was credited with (#638, Phase 3). Historical fact, not a live reference.';
+
+-- Same-user only, like every other reference this table carries (#474, #525):
+-- a foreign uuid here would name someone else''s book in this one''s history.
+drop trigger if exists investment_transactions_merged_from_book_owner on public.investment_transactions;
+create trigger investment_transactions_merged_from_book_owner
+  before insert or update of merged_from_book_id, user_id on public.investment_transactions
+  for each row execute function public.enforce_user_scoped_fk_ownership(
+    'merged_from_book_id', 'investment_transactions', 'transaction_id');
+
 -- An earlier draft of this same migration took six arguments. Replacing it would
 -- leave both, and PostgREST cannot choose between two overloads — so the shape
 -- that no longer exists goes first. (This function has never reached production,
@@ -199,6 +224,21 @@ begin
     raise exception 'merge successor: this book has a withdrawal filed under another goal; move it back before merging'
       using errcode = 'check_violation';
   end if;
+  -- And one carrying renewal lineage, which readers treat as history and skip.
+  -- The balance below still subtracts it, so the merge would close only what is
+  -- left and the hidden portion would read as live beside the successor's
+  -- payout — and by then the folded-history guard refuses to correct it.
+  if exists (
+    select 1 from public.investment_transactions w
+     join public.investment_transactions t on t.transaction_id = w.parent_transaction_id
+     where t.deposit_group_id = p_source_book_id
+       and t.transaction_type = 'investment'
+       and w.transaction_type = 'withdrawal'
+       and w.renewed_from_transaction_id is not null
+  ) then
+    raise exception 'merge successor: this book has a withdrawal filed as renewal history; clear its lineage before merging'
+      using errcode = 'check_violation';
+  end if;
 
   -- The received cash is the client's number — a settled deposit pays out its
   -- principal plus interest, never a multiple of it. The same bound the renewal
@@ -216,11 +256,12 @@ begin
   insert into public.investment_transactions (
     transaction_id, user_id, goal_id, asset_type, transaction_type, amount_vnd,
     investment_date, expiry_date, interest_rate, notes, bank_code, currency,
-    deposit_group_id, top_up_lock_days, affects_progress
+    deposit_group_id, top_up_lock_days, affects_progress, merged_from_book_id
   ) values (
     v_new_id, v_dest.user_id, v_dest.goal_id, 'bank', 'investment', p_received_vnd,
     p_merge_date, v_dest.expiry_date, p_interest_rate, v_dest.notes,
-    v_dest.bank_code, v_dest.currency, v_dest.transaction_id, v_dest.top_up_lock_days, true
+    v_dest.bank_code, v_dest.currency, v_dest.transaction_id, v_dest.top_up_lock_days, true,
+    p_source_book_id
   )
   returning * into v_new;
 
@@ -600,29 +641,22 @@ begin
      and new.affects_progress is not distinct from old.affects_progress
      -- A row with a renewal parent is history, which valuation skips. Setting
      -- one here empties the successor of this cash without touching a figure.
-     and new.renewed_from_transaction_id is not distinct from old.renewed_from_transaction_id then
+     and new.renewed_from_transaction_id is not distinct from old.renewed_from_transaction_id
+     -- Erasing the marker below would hand the freeze away in one statement.
+     and new.merged_from_book_id is not distinct from old.merged_from_book_id then
     return new;
   end if;
 
-  -- Only a tranche INSIDE a book, which is the one shape this merge writes. An
-  -- ordinary re-deposit consumes siblings the same way — the renewal stamps
-  -- them and then rewrites its own amount — and that path is settled, with its
-  -- own rules and tests. Guarding it too broke it (the smoke lane caught it).
-  if old.deposit_group_id is null or old.deposit_group_id = old.transaction_id then
+  -- The row says so itself. Keying off shape instead — a tranche inside a book —
+  -- covered the ordinary re-deposit as well (the smoke lane caught that), and
+  -- then stopped covering this row the moment the successor book was closed and
+  -- every tranche's group was cleared.
+  if old.merged_from_book_id is null then
     return new;
   end if;
 
-  if exists (
-    select 1 from public.investment_transactions w
-     where w.consumed_by_inv_id = old.transaction_id
-       and w.transaction_type = 'withdrawal'
-       -- A held settlement's own consumption is the other path's business.
-       and coalesce(w.held_for_merge, false) = false
-  ) then
-    raise exception 'merge successor: another deposit was folded into this one, so what it holds cannot be rewritten'
-      using errcode = 'check_violation';
-  end if;
-  return new;
+  raise exception 'merge successor: another book was folded into this deposit, so what it holds cannot be rewritten'
+    using errcode = 'check_violation';
 end;
 $$;
 
@@ -630,9 +664,11 @@ revoke all on function public.guard_merge_credited_tranche_edited() from public,
 
 drop trigger if exists investment_transactions_credited_tranche_immutable on public.investment_transactions;
 create trigger investment_transactions_credited_tranche_immutable
-  before update of amount_vnd, units, unit_price, transaction_type, affects_progress, renewed_from_transaction_id
+  before update of amount_vnd, units, unit_price, transaction_type, affects_progress,
+                   renewed_from_transaction_id, merged_from_book_id
   on public.investment_transactions
   for each row
+  when (old.merged_from_book_id is not null)
   execute function public.guard_merge_credited_tranche_edited();
 
 -- (3) A recurring link arriving while the merge runs waits on the anchor lock,

@@ -199,6 +199,16 @@ begin
     raise exception 'a withdrawal filed under another goal must block the merge';
   exception when sqlstate '23514' then null;
   end;
+  -- Renewal lineage hides a withdrawal from every reader while the balance here
+  -- still subtracts it: the merge would close what is left and the hidden part
+  -- would read as live beside the payout, with the guards refusing to fix it.
+  begin
+    update public.investment_transactions set renewed_from_transaction_id = v_a
+     where parent_transaction_id = v_a2 and transaction_type = 'withdrawal';
+    perform public.merge_book_into_successor(v_a, v_received, 4.5, current_date, v_ids, v_principals, v_b.transaction_id);
+    raise exception 'a withdrawal filed as renewal history must block the merge';
+  exception when sqlstate '23514' then null;
+  end;
 
   -- ── The merge itself ─────────────────────────────────────────────────────
   select * into v_new from public.merge_book_into_successor(
@@ -299,6 +309,26 @@ begin
     update public.investment_transactions set renewed_from_transaction_id = v_b.transaction_id
      where transaction_id = v_new.transaction_id;
     raise exception 'the credited tranche must not be turned into renewal history';
+  exception when sqlstate '23514' then null;
+  end;
+  -- Nor by erasing what says it was credited in the first place.
+  begin
+    update public.investment_transactions set merged_from_book_id = null
+     where transaction_id = v_new.transaction_id;
+    raise exception 'the credited tranche must not be able to forget where it came from';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- And the freeze must outlive the book it landed in. B's own closure clears
+  -- every tranche's deposit_group_id, and while the guard keyed off that shape
+  -- the closure handed back an editable row — with the source shut for good.
+  update public.investment_transactions set deposit_group_id = null
+   where deposit_group_id = v_b.transaction_id;
+  set constraints all immediate;
+  begin
+    update public.investment_transactions set amount_vnd = amount_vnd + 5000000
+     where transaction_id = v_new.transaction_id;
+    raise exception 'closing the successor book must not unfreeze the credited tranche';
   exception when sqlstate '23514' then null;
   end;
 
