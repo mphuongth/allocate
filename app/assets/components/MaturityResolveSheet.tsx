@@ -117,6 +117,10 @@ export function MaturityResolveBody({
   const [maturityOverride, setMaturityOverride] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  // A book promised to a successor cannot be collapsed (#638) — the merge into
+  // that successor is what its maturity is for. Until that merge exists, the way
+  // out has to be reachable from here, or the refusal is a dead end.
+  const [handoverBlocked, setHandoverBlocked] = useState(false)
   const [done, setDone] = useState<null | { newPrincipal: number; newMaturity: string; sources: string[] }>(null)
   // Settle-with-hold success: the deposit was parked in the pool (no re-deposit).
   const [heldDone, setHeldDone] = useState<null | { anchorName: string }>(null)
@@ -406,6 +410,7 @@ export function MaturityResolveBody({
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
         setError(body.error ?? (isVi ? 'Không thể tái tục' : 'Could not renew'))
+        if (body.code === 'successor_planned') setHandoverBlocked(true)
         setSaving(false)
         return
       }
@@ -690,6 +695,20 @@ export function MaturityResolveBody({
       )}
 
       {error && <p style={{ margin: 0, fontSize: 13, color: 'var(--c-neg)' }}>{error}</p>}
+      {handoverBlocked && (
+        <button type="button" data-testid="cancel-handover-btn" disabled={saving}
+          onClick={async () => {
+            setSaving(true)
+            try {
+              const res = await fetch(`/api/v1/investment-transactions/${inv.id}/successor`, { method: 'DELETE' })
+              if (res.ok) { setHandoverBlocked(false); setError('') }
+              else setError(isVi ? 'Không huỷ được bàn giao' : 'Could not cancel the handover')
+            } catch { setError(isVi ? 'Lỗi kết nối' : 'Connection error') } finally { setSaving(false) }
+          }}
+          style={{ alignSelf: 'flex-start', padding: 0, border: 'none', background: 'none', color: 'var(--c-navy)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline' }}>
+          {isVi ? 'Huỷ bàn giao rồi thử lại' : 'Cancel the handover and try again'}
+        </button>
+      )}
 
       {/* Where the new cycle is deposited. Shown for every renewal — a matured
           deposit moving to another bank is the ordinary case, and it used to be
