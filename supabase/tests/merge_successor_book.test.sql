@@ -214,6 +214,28 @@ begin
   exception when sqlstate '23514' then null;
   end;
 
+  -- Nor rewritten: lowering what a withdrawal took gives the principal back just
+  -- as deleting it would, and the balance check does not see it because it
+  -- excludes the row being edited.
+  begin
+    update public.investment_transactions set principal_withdrawn = 1
+     where consumed_by_inv_id = v_new.transaction_id;
+    raise exception 'a consumed withdrawal must not be rewritten';
+  exception when sqlstate '23514' then null;
+  end;
+  begin
+    update public.investment_transactions set consumed_by_inv_id = null
+     where consumed_by_inv_id = v_new.transaction_id;
+    raise exception 'the lineage stamp must not be cleared';
+  exception when sqlstate '23514' then null;
+  end;
+  begin
+    update public.investment_transactions set principal_withdrawn = 1
+     where parent_transaction_id = v_a2 and consumed_by_inv_id is null;
+    raise exception 'an earlier withdrawal on a folded holding must not be rewritten';
+  exception when sqlstate '23514' then null;
+  end;
+
   -- ── The settled book stops being a book ──────────────────────────────────
   -- Still self-grouped, it would remain a valid target for a backdated top-up
   -- that resurrects it after its payout has gone.

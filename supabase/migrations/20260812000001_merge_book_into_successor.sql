@@ -317,3 +317,65 @@ create trigger investment_transactions_merged_withdrawal_kept
   for each row
   when (old.transaction_type = 'withdrawal' and old.parent_transaction_id is not null)
   execute function public.guard_merged_source_withdrawal_deleted();
+
+
+-- Deleting the row is not the only way to give the principal back: an edit that
+-- lowers principal_withdrawn does exactly the same, and the balance check does
+-- not catch it because it excludes the row being edited. Clearing the stamp is
+-- the other half — the lineage is what says the cash moved.
+--
+-- Stamping an unstamped row is left alone: that is how a merge records where the
+-- cash went in the first place.
+create or replace function public.guard_merged_source_withdrawal_edited()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare v_folded boolean;
+begin
+  if old.consumed_by_inv_id is not null
+     and new.consumed_by_inv_id is distinct from old.consumed_by_inv_id then
+    raise exception 'merge successor: this withdrawal records where the cash went, so that cannot be unset'
+      using errcode = 'check_violation';
+  end if;
+
+  -- The FK's own cleanup: deleting a holding sets its withdrawals' parent to
+  -- null rather than removing them. Nothing is restored by that — the holding
+  -- itself is gone — so it is not this guard's business. Re-parenting to a
+  -- DIFFERENT holding still is.
+  if new.parent_transaction_id is null and old.parent_transaction_id is not null
+     and new.principal_withdrawn is not distinct from old.principal_withdrawn
+     and new.amount_vnd is not distinct from old.amount_vnd then
+    return new;
+  end if;
+
+  if new.principal_withdrawn is not distinct from old.principal_withdrawn
+     and new.amount_vnd is not distinct from old.amount_vnd
+     and new.parent_transaction_id is not distinct from old.parent_transaction_id then
+    return new;
+  end if;
+
+  v_folded := old.consumed_by_inv_id is not null or exists (
+    select 1 from public.investment_transactions w
+     where w.parent_transaction_id = old.parent_transaction_id
+       and w.transaction_type = 'withdrawal'
+       and w.consumed_by_inv_id is not null
+  );
+  if v_folded then
+    raise exception 'merge successor: this holding was folded into another deposit, so its withdrawals cannot be rewritten'
+      using errcode = 'check_violation';
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function public.guard_merged_source_withdrawal_edited() from public, anon, authenticated;
+
+drop trigger if exists investment_transactions_merged_withdrawal_immutable on public.investment_transactions;
+create trigger investment_transactions_merged_withdrawal_immutable
+  before update of principal_withdrawn, amount_vnd, parent_transaction_id, consumed_by_inv_id
+  on public.investment_transactions
+  for each row
+  when (old.transaction_type = 'withdrawal' and old.parent_transaction_id is not null)
+  execute function public.guard_merged_source_withdrawal_edited();
