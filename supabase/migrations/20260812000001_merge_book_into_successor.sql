@@ -108,6 +108,18 @@ begin
       using errcode = 'check_violation';
   end if;
 
+  -- LOCK EVERY TRANCHE BEFORE MEASURING. The balance below decides how much
+  -- cash the destination is credited with; read without the lock, a withdrawal
+  -- committing between the read and the loop would leave the destination holding
+  -- money that withdrawal also took. The withdrawal path takes these same row
+  -- locks before it measures (20260730000002), so it waits for us or we for it.
+  perform 1 from public.investment_transactions
+   where deposit_group_id = p_source_book_id
+     and transaction_type = 'investment'
+     and renewed_from_transaction_id is null
+   order by transaction_id
+   for update;
+
   -- What the book still holds, after any partial withdrawals it has taken.
   select coalesce(sum(t.amount_vnd - coalesce((
            select sum(w.principal_withdrawn) from public.investment_transactions w
@@ -149,11 +161,17 @@ begin
   -- Close every live tranche, allocating the received cash across them in
   -- proportion to what each still held. The last one takes whatever rounding
   -- left behind, so the parts add up to the whole exactly.
+  -- Among the tranches that still hold something: a spent one is skipped by the
+  -- loop, so making it the remainder-taker would drop the rounding on the floor.
   select t.transaction_id into v_last
     from public.investment_transactions t
    where t.deposit_group_id = p_source_book_id
      and t.transaction_type = 'investment'
      and t.renewed_from_transaction_id is null
+     and t.amount_vnd - coalesce((
+       select sum(w.principal_withdrawn) from public.investment_transactions w
+        where w.parent_transaction_id = t.transaction_id
+          and w.transaction_type = 'withdrawal'), 0) > 0
    order by t.investment_date desc, t.transaction_id desc
    limit 1;
 
@@ -165,19 +183,24 @@ begin
      order by investment_date, transaction_id
      for update
   loop
-    -- A live tranche the caller never saw means the book changed under them (a
-    -- top-up landed while the confirmation was open). Abort rather than close a
-    -- tranche whose cash nobody counted. Plain P0001, not serialization_failure:
-    -- this is deterministic, and a pooler must not spin retrying it.
-    if array_position(p_tranche_ids, v_tranche.transaction_id) is null then
-      raise exception 'merge successor: book changed since load, reload and retry';
-    end if;
-
     v_effective := v_tranche.amount_vnd - coalesce((
       select sum(w.principal_withdrawn) from public.investment_transactions w
        where w.parent_transaction_id = v_tranche.transaction_id
          and w.transaction_type = 'withdrawal'), 0);
+    -- A tranche with nothing left is not the caller's to account for: the book
+    -- as they see it does not contain it (buildInvRows drops a tranche once its
+    -- principal is gone), so demanding its id would make such a book unmergeable
+    -- however many times they reloaded.
     if v_effective <= 0 then continue; end if;
+
+    -- One that DOES still hold something, and that the caller never saw, means
+    -- the book changed under them — a top-up landing while the confirmation was
+    -- open. Abort rather than close a tranche whose cash nobody counted. Plain
+    -- P0001, not serialization_failure: this is deterministic, and a pooler must
+    -- not spin retrying it.
+    if array_position(p_tranche_ids, v_tranche.transaction_id) is null then
+      raise exception 'merge successor: book changed since load, reload and retry';
+    end if;
 
     if v_tranche.transaction_id = v_last then
       v_share := p_received_vnd - v_allocated;

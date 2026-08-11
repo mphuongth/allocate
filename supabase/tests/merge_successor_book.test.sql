@@ -8,6 +8,7 @@ declare
   v_goal uuid;
   v_a uuid := gen_random_uuid();
   v_a2 uuid := gen_random_uuid();
+  v_a3 uuid := gen_random_uuid();
   v_b public.investment_transactions;
   v_saving uuid := gen_random_uuid();
   v_new public.investment_transactions;
@@ -43,6 +44,25 @@ begin
   insert into public.recurring_savings (
     saving_id, user_id, goal_id, name, amount_vnd, linked_deposit_tx_id
   ) values (v_saving, v_user, v_goal, 'Monthly', 1000000, v_a);
+
+  -- ── A spent tranche is not the caller's to name ──────────────────────────
+  -- The book as the user sees it drops a tranche once its principal is gone, so
+  -- demanding its id would make such a book unmergeable however often they
+  -- reloaded. v_a3 is fully withdrawn and deliberately left out of v_ids.
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate, deposit_group_id
+  ) values (
+    v_a3, v_user, v_goal, 'bank', 'investment',
+    current_date - 150, current_date - 3, 1000000, 4, v_a
+  );
+  insert into public.investment_transactions (
+    user_id, goal_id, asset_type, transaction_type, parent_transaction_id,
+    investment_date, amount_vnd, principal_withdrawn, affects_progress
+  ) values (
+    v_user, v_goal, 'bank', 'withdrawal', v_a3,
+    current_date - 20, 1000000, 1000000, true
+  );
 
   -- The handover A -> B, arranged while A was closing in on maturity.
   select * into v_b from public.open_successor_book(
