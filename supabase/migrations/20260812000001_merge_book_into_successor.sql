@@ -100,25 +100,23 @@ begin
    order by saving_id
    for update;
 
-  -- The whole source book in ONE ordered acquisition, anchor included. Taking
-  -- the anchor first and its tranches later put an anchor→tranche edge in the
-  -- way of update_deposit_book, which locks the tranche it was handed and then
-  -- rewrites the group — the opposite direction, and a deadlock between them.
-  -- (That function still locks its group in whatever order the update finds, so
-  -- this removes our half of the cycle rather than the whole of it.)
+  -- Every row this merge will touch, in ONE acquisition ordered by id: the whole
+  -- source book, anchor included, and the successor's anchor beside it.
+  --
+  -- Two separate steps cannot get this right, and both orders were tried. Anchor
+  -- first then tranches inverts update_deposit_book, which locks the tranche it
+  -- was handed and then rewrites the group. Source group first then the
+  -- successor inverts assert_successor_book_pairing, which takes the two anchors
+  -- in id order — so an edit on the successor holds that anchor and waits for
+  -- this one. Ordering the union by id satisfies the pairing exactly and leaves
+  -- only update_deposit_book's own unordered group update outside it.
   perform 1 from public.investment_transactions
    where deposit_group_id = p_source_book_id
+      or transaction_id = (
+        select successor_deposit_tx_id from public.investment_transactions
+         where transaction_id = p_source_book_id
+      )
    order by transaction_id
-   for update;
-
-  -- Then the successor's own anchor. A book cannot be both a source and a
-  -- successor — the pairing forbids chains — so no two merges can hold these
-  -- two in opposite orders.
-  perform 1 from public.investment_transactions
-   where transaction_id = (
-     select successor_deposit_tx_id from public.investment_transactions
-      where transaction_id = p_source_book_id
-   )
    for update;
 
   select * into v_source from public.investment_transactions
