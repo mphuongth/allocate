@@ -408,6 +408,17 @@ begin
   -- Far enough past the source's maturity, it is fine.
   select * into v_tail3 from public.open_successor_book(
     v_lockable, 1000000, 4, current_date - 2, current_date + 400, 30, null, null, null, null);
+  -- ...nor may its maturity be pulled into its own lock window: comparing the
+  -- two maturities says nothing about whether it can take money TODAY, which is
+  -- what the savings moved onto it need.
+  begin
+    update public.investment_transactions set expiry_date = current_date + 10
+     where transaction_id = v_tail3.transaction_id;
+    set constraints all immediate;
+    raise exception 'a successor left inside its own lock window must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
   -- ...and tightening its lock afterwards may not close that gap either.
   begin
     update public.investment_transactions set top_up_lock_days = 3000
@@ -422,11 +433,16 @@ begin
   -- v_lockable matured 15 days ago, and v_tail3 is now closing in on its own
   -- maturity. If v_tail3 could promise onward, the merge v_lockable is waiting
   -- for would be refused by the very guard that a handover installs.
+  -- This state only arises by AGEING: the pair was valid when it was made, and
+  -- then the calendar moved. No edit can produce it — the rule below refuses
+  -- terms that leave a successor unable to take money today — so the test ages
+  -- the rows with the pairing trigger off, the way time would have.
+  alter table public.investment_transactions disable trigger investment_transactions_successor_pairing_upd;
   update public.investment_transactions set expiry_date = current_date - 15
    where deposit_group_id = v_lockable;
   update public.investment_transactions set expiry_date = current_date + 20
    where deposit_group_id = v_tail3.transaction_id;
-  set constraints all immediate;
+  alter table public.investment_transactions enable trigger investment_transactions_successor_pairing_upd;
   begin
     perform public.open_successor_book(
       v_tail3.transaction_id, 1000000, 4, current_date - 1, current_date + 500, 30, null, null, null, null);

@@ -204,14 +204,20 @@ begin
   -- recurring saving transferred onto it, whose next contribution the book will
   -- refuse. Only the edit is judged, and only for a row someone succeeds into.
   if tg_op = 'UPDATE'
-     and old.expiry_date is distinct from new.expiry_date
+     and (old.expiry_date is distinct from new.expiry_date
+       or old.top_up_lock_days is distinct from new.top_up_lock_days)
      and new.expiry_date is not null
-     and new.expiry_date <= (now() at time zone 'Asia/Ho_Chi_Minh')::date
+     -- Inside its own window, not merely past: the pairing rules measure the
+     -- successor against the SOURCE's maturity, which says nothing about today
+     -- once that maturity is behind us. A book whose remaining term is shorter
+     -- than its own lock refuses the savings that were moved onto it.
+     and new.expiry_date - (now() at time zone 'Asia/Ho_Chi_Minh')::date
+         <= coalesce(new.top_up_lock_days, 0)
      and exists (
        select 1 from public.investment_transactions
         where successor_deposit_tx_id = new.transaction_id
      ) then
-    raise exception 'successor book: a successor cannot be given a maturity that has already passed'
+    raise exception 'successor book: a successor cannot be given terms that leave it unable to take a contribution today'
       using errcode = 'check_violation';
   end if;
 
