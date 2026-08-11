@@ -16,7 +16,7 @@ const PLAN = '44444444-4444-4444-8444-444444444444'
 const h = vi.hoisted(() => ({
   user: { id: 'user-1' } as { id: string } | null,
   saving: { linked_deposit_tx_id: '11111111-1111-4111-8111-111111111111' } as unknown,
-  plan: { id: '44444444-4444-4444-8444-444444444444' } as unknown,
+  plan: { id: '44444444-4444-4444-8444-444444444444', month: 8, year: 2026 } as unknown,
   rpcResult: { data: { transaction_id: '22222222-2222-4222-8222-222222222222' } as unknown, error: null as unknown },
   rpcCalls: [] as { name: string; args: Record<string, unknown> }[],
   updates: null as Record<string, unknown> | null,
@@ -70,7 +70,7 @@ const call = (body: Record<string, unknown> = BODY) =>
 beforeEach(() => {
   h.user = { id: 'user-1' }
   h.saving = { linked_deposit_tx_id: BOOK }
-  h.plan = { id: PLAN }
+  h.plan = { id: PLAN, month: 8, year: 2026 }
   h.rpcResult = { data: { transaction_id: NEW_BOOK }, error: null }
   h.rpcCalls = []
   h.updates = null
@@ -106,6 +106,25 @@ describe('POST /api/v1/investment-transactions/[id]/successor (#638)', () => {
     expect(h.rpcCalls[0].args).toMatchObject({
       p_saving_id: SAVING, p_ym: '2026-08', p_plan_id: PLAN,
     })
+  })
+
+  // The tranche carries the plan while the fulfillment is filed under ym; if
+  // they name different months, one month shows a contribution whose deposit it
+  // cannot find and the other counts a deposit it never planned.
+  it('refuses a plan from a different month than the contribution', async () => {
+    h.plan = { id: PLAN, month: 7, year: 2026 }
+
+    const res = await call({ ...BODY, saving_id: SAVING, ym: '2026-08', plan_id: PLAN })
+
+    expect(res.status).toBe(400)
+    expect(h.rpcCalls).toHaveLength(0)
+  })
+
+  it('accepts a plan for the same month', async () => {
+    const res = await call({ ...BODY, saving_id: SAVING, ym: '2026-08', plan_id: PLAN })
+
+    expect(res.status).toBe(201)
+    expect(h.rpcCalls[0].args).toMatchObject({ p_plan_id: PLAN, p_ym: '2026-08' })
   })
 
   it('rejects an anonymous caller', async () => {
@@ -175,7 +194,26 @@ describe('POST /api/v1/investment-transactions/[id]/successor (#638)', () => {
       await expect(res.json()).resolves.toMatchObject({ successor_deposit_tx_id: null })
     })
 
-    it('rejects an anonymous caller', async () => {
+    // The tranche carries the plan while the fulfillment is filed under ym; if
+  // they name different months, one month shows a contribution whose deposit it
+  // cannot find and the other counts a deposit it never planned.
+  it('refuses a plan from a different month than the contribution', async () => {
+    h.plan = { id: PLAN, month: 7, year: 2026 }
+
+    const res = await call({ ...BODY, saving_id: SAVING, ym: '2026-08', plan_id: PLAN })
+
+    expect(res.status).toBe(400)
+    expect(h.rpcCalls).toHaveLength(0)
+  })
+
+  it('accepts a plan for the same month', async () => {
+    const res = await call({ ...BODY, saving_id: SAVING, ym: '2026-08', plan_id: PLAN })
+
+    expect(res.status).toBe(201)
+    expect(h.rpcCalls[0].args).toMatchObject({ p_plan_id: PLAN, p_ym: '2026-08' })
+  })
+
+  it('rejects an anonymous caller', async () => {
       h.user = null
       expect((await del()).status).toBe(401)
     })

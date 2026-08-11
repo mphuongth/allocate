@@ -85,11 +85,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (cleanPlanId) {
     const { data: plan } = await supabase
       .from('monthly_plans')
-      .select('id')
+      .select('id, month, year')
       .eq('id', cleanPlanId)
       .eq('user_id', user.id)
       .single()
     if (!plan) return NextResponse.json({ error: 'Plan not found' }, { status: 404 })
+    // The tranche is tagged with the plan while the fulfillment is filed under
+    // `ym`. If those disagree, one month shows a contribution it cannot find the
+    // deposit for, and another counts a deposit it never planned.
+    if (cleanYm && `${plan.year}-${String(plan.month).padStart(2, '0')}` !== cleanYm) {
+      return NextResponse.json({ error: 'The plan and the contribution month must be the same month.' }, { status: 400 })
+    }
   }
 
   const { data: book, error } = await supabase
