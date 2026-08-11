@@ -246,6 +246,34 @@ begin
   exception when sqlstate '23514' then null;
   end;
 
+  -- Nor may the goal bar be told to ignore the withdrawal: valuation would still
+  -- close the source while progress counted its principal again.
+  begin
+    update public.investment_transactions set affects_progress = false
+     where consumed_by_inv_id = v_new.transaction_id;
+    raise exception 'affects_progress on a folded withdrawal must not be changed';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- And the holding itself: once the book is dissolved it looks like an ordinary
+  -- deposit to the edit route, and raising its amount passes the solvency check
+  -- because the withdrawals against it are smaller than the new amount.
+  begin
+    update public.investment_transactions set amount_vnd = amount_vnd + 5000000
+     where transaction_id = v_a2;
+    raise exception 'a folded holding must not be able to grow';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- A recurring saving cannot be attached to it afterwards either: nothing can
+  -- be paid into a deposit whose balance has gone.
+  begin
+    update public.recurring_savings set linked_deposit_tx_id = v_a2
+     where saving_id = v_saving;
+    raise exception 'linking to a folded deposit must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
   -- ── The settled book stops being a book ──────────────────────────────────
   -- Still self-grouped, it would remain a valid target for a backdated top-up
   -- that resurrects it after its payout has gone.

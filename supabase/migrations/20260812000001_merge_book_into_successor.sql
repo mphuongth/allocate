@@ -367,7 +367,11 @@ begin
 
   if new.principal_withdrawn is not distinct from old.principal_withdrawn
      and new.amount_vnd is not distinct from old.amount_vnd
-     and new.parent_transaction_id is not distinct from old.parent_transaction_id then
+     and new.parent_transaction_id is not distinct from old.parent_transaction_id
+     -- affects_progress decides whether the goal bar sees this withdrawal at
+     -- all: turned off, valuation still closes the source while progress counts
+     -- its principal again, beside the successor that now holds the cash.
+     and new.affects_progress is not distinct from old.affects_progress then
     return new;
   end if;
 
@@ -389,8 +393,91 @@ revoke all on function public.guard_merged_source_withdrawal_edited() from publi
 
 drop trigger if exists investment_transactions_merged_withdrawal_immutable on public.investment_transactions;
 create trigger investment_transactions_merged_withdrawal_immutable
-  before update of principal_withdrawn, amount_vnd, parent_transaction_id, consumed_by_inv_id, transaction_type
+  before update of principal_withdrawn, amount_vnd, parent_transaction_id, consumed_by_inv_id, transaction_type, affects_progress
   on public.investment_transactions
   for each row
   when (old.transaction_type = 'withdrawal' and old.parent_transaction_id is not null)
   execute function public.guard_merged_source_withdrawal_edited();
+
+
+-- The other side of the same coin. Once the merge dissolves the book, each
+-- source tranche is an ordinary deposit again as far as the edit route is
+-- concerned — and raising its amount_vnd sails past the solvency check, because
+-- the withdrawals recorded against it are still smaller than the new amount. The
+-- difference then shows up as a live holding while its payout sits in the
+-- successor.
+--
+-- So a holding whose balance was folded away is fixed in every column that says
+-- what it is worth or how it counts. Its history is a record of money that has
+-- already moved.
+create or replace function public.guard_folded_holding_edited()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if new.amount_vnd is not distinct from old.amount_vnd
+     and new.units is not distinct from old.units
+     and new.unit_price is not distinct from old.unit_price
+     and new.transaction_type is not distinct from old.transaction_type
+     and new.affects_progress is not distinct from old.affects_progress then
+    return new;
+  end if;
+
+  if exists (
+    select 1 from public.investment_transactions w
+     where w.parent_transaction_id = old.transaction_id
+       and w.transaction_type = 'withdrawal'
+       and w.consumed_by_inv_id is not null
+  ) then
+    raise exception 'merge successor: this deposit was folded into another one, so what it holds cannot be rewritten'
+      using errcode = 'check_violation';
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function public.guard_folded_holding_edited() from public, anon, authenticated;
+
+drop trigger if exists investment_transactions_folded_holding_immutable on public.investment_transactions;
+create trigger investment_transactions_folded_holding_immutable
+  before update of amount_vnd, units, unit_price, transaction_type, affects_progress
+  on public.investment_transactions
+  for each row
+  when (old.transaction_type = 'investment')
+  execute function public.guard_folded_holding_edited();
+
+-- (3) A recurring link arriving while the merge runs waits on the anchor lock,
+-- then re-reads a source whose successor has just been cleared — and accepts,
+-- because the promise is gone. The next statement dissolves the book, and the
+-- link is left pointing at something no top-up can reach. What the waiter has to
+-- see is not the promise but its outcome: this deposit's balance went elsewhere.
+create or replace function public.enforce_recurring_link_not_handed_over()
+returns trigger language plpgsql security definer set search_path = '' as $$
+declare v_successor uuid; v_folded boolean;
+begin
+  select successor_deposit_tx_id,
+         exists (
+           select 1 from public.investment_transactions w
+            where w.parent_transaction_id = t.transaction_id
+              and w.transaction_type = 'withdrawal'
+              and w.consumed_by_inv_id is not null
+         )
+    into v_successor, v_folded
+    from public.investment_transactions t
+   where t.transaction_id = new.linked_deposit_tx_id
+     and t.user_id = new.user_id
+   for share;
+
+  if found and v_successor is not null then
+    raise exception 'successor book: that book has handed over to a successor, so link the successor instead'
+      using errcode = 'check_violation';
+  end if;
+  if found and v_folded then
+    raise exception 'successor book: that deposit has been folded into another one, so link that one instead'
+      using errcode = 'check_violation';
+  end if;
+  return new;
+end;
+$$;
