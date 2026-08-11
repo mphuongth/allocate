@@ -336,6 +336,16 @@ security definer
 set search_path = ''
 as $$
 begin
+  -- The account going takes everything with it. Being immediate, this guard sees
+  -- each row of that cascade individually and would refuse the first folded one,
+  -- making any account that ever completed a merge undeletable. The owner's auth
+  -- row is already gone by the time the cascade reaches here, which is what
+  -- tells the two apart: unpicking history one row at a time is what this
+  -- refuses, not removing the account that history belongs to.
+  if not exists (select 1 from auth.users u where u.id = old.user_id) then
+    return old;
+  end if;
+
   if old.consumed_by_inv_id is not null or exists (
     select 1 from public.investment_transactions w
      where w.parent_transaction_id = old.parent_transaction_id

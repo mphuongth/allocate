@@ -365,6 +365,15 @@ begin
     raise exception 'the settled book must be dissolved, % rows still grouped', v_count;
   end if;
 
+  -- ── Deleting the account takes the whole merge with it ───────────────────
+  -- The guards above keep folded history from being unpicked one row at a time;
+  -- they must not make an account that ever completed a merge undeletable.
+  delete from auth.users where id = v_user;
+  select count(*) into v_count from public.investment_transactions where user_id = v_user;
+  if v_count <> 0 then
+    raise exception 'deleting the account must remove its rows, % left', v_count;
+  end if;
+
   raise notice 'merge successor book: OK';
 end;
 $$;
