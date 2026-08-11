@@ -23,6 +23,9 @@ declare
   v_extra_saving uuid := gen_random_uuid();
   v_dated_book uuid := gen_random_uuid();
   v_tail2 public.investment_transactions;
+  v_tail3 public.investment_transactions;
+  v_lockable uuid := gen_random_uuid();
+  v_rec_book uuid := gen_random_uuid();
 begin
   insert into auth.users (id, email) values (v_user, 'successor-book@test.invalid');
   insert into public.savings_goals (user_id, goal_name) values (v_user, 'Successor') returning goal_id into v_goal;
@@ -102,21 +105,25 @@ begin
   end;
 
   -- ── The recurring-driven flow moves the whole month in one transaction ───
+  -- Its own book, closing in on maturity, with the recurring pointing at it. B
+  -- cannot play this part: a successor must stay open past its source's
+  -- maturity, so it can never also be a book that is itself nearly mature.
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate,
+    deposit_group_id, top_up_lock_days
+  ) values (
+    v_rec_book, v_user, v_goal, 'bank', 'investment',
+    current_date - 200, current_date + 20, 10000000, 4, v_rec_book, 30
+  );
   insert into public.recurring_savings (
     saving_id, user_id, goal_id, name, amount_vnd, linked_deposit_tx_id
   ) values (
-    v_saving, v_user, v_goal, 'Monthly', 2000000, v_b.transaction_id
+    v_saving, v_user, v_goal, 'Monthly', 2000000, v_rec_book
   );
 
-  -- Now B is the one closing in on maturity, and the recurring points at it.
-  -- Still after A's own maturity: a successor that matured first could never
-  -- absorb the book it succeeds.
-  update public.investment_transactions set expiry_date = current_date + 25
-   where transaction_id = v_b.transaction_id;
-  set constraints all immediate;
-
   select * into v_c from public.open_successor_book(
-    v_b.transaction_id, 2000000, 4.5, current_date - 4, current_date + 361, 30, null,
+    v_rec_book, 2000000, 4.5, current_date - 4, current_date + 361, 30, null,
     v_saving, to_char(current_date, 'YYYY-MM'), null);
 
   select linked_deposit_tx_id into v_linked
@@ -250,18 +257,16 @@ begin
   -- link there would drop the plan exactly when it comes due.
   begin
     update public.investment_transactions set deposit_group_id = null
-     where deposit_group_id = v_b.transaction_id;
+     where deposit_group_id = v_rec_book;
     raise exception 'closing a promised book must be refused';
   exception when sqlstate '23514' then null;
   end;
 
   -- Cancelling the handover first is the way out, and then it closes normally.
-  -- Both ends of it: v_b promises to merge into v_c, and v_book promises to
-  -- merge into v_b, so v_b cannot leave until neither promise stands.
   update public.investment_transactions set successor_deposit_tx_id = null
-   where transaction_id in (v_b.transaction_id, v_book);
+   where transaction_id = v_rec_book;
   update public.investment_transactions set deposit_group_id = null
-   where deposit_group_id = v_b.transaction_id;
+   where deposit_group_id = v_rec_book;
   set constraints all immediate;
 
   -- ── A successor cannot be withdrawn out from under its source ────────────
@@ -355,6 +360,38 @@ begin
     perform public.open_successor_book(
       v_dated_book, 1000000, 4, current_date + 1, current_date + 400, 30, null, null, null, null);
     raise exception 'a contribution dated tomorrow must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- A locked book of its own, for the lock-window cases below.
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate,
+    deposit_group_id, top_up_lock_days
+  ) values (
+    v_lockable, v_user, v_goal, 'bank', 'investment',
+    current_date - 200, current_date + 20, 10000000, 4, v_lockable, 30
+  );
+
+  -- ── A successor must be open for business, now and at the handover ──────
+  -- 25 days out with a 30-day lock is a book already inside its own window: the
+  -- savings moved onto it could never contribute, and the merge would be refused
+  -- on the very day the old book matures.
+  begin
+    perform public.open_successor_book(
+      v_lockable, 1000000, 4, current_date - 2, current_date + 25, 30, null, null, null, null);
+    raise exception 'a successor born inside its own lock window must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+  -- Far enough past the source's maturity, it is fine.
+  select * into v_tail3 from public.open_successor_book(
+    v_lockable, 1000000, 4, current_date - 2, current_date + 400, 30, null, null, null, null);
+  -- ...and tightening its lock afterwards may not close that gap either.
+  begin
+    update public.investment_transactions set top_up_lock_days = 3000
+     where transaction_id = v_tail3.transaction_id;
+    set constraints all immediate;
+    raise exception 'tightening a successor lock past the source maturity must be refused';
   exception when sqlstate '23514' then null;
   end;
 

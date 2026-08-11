@@ -143,6 +143,14 @@ begin
       v_successor.expiry_date, v_source.expiry_date
       using errcode = 'check_violation';
   end if;
+  -- Far enough after it to still be open on the day: a successor inside its own
+  -- lock window when the source matures cannot receive the merge, and the lock
+  -- can be tightened long after the handover was arranged.
+  if v_successor.expiry_date - v_source.expiry_date <= coalesce(v_successor.top_up_lock_days, 0) then
+    raise exception 'successor book: the successor would be inside its own % day lock window when % matures',
+      v_successor.top_up_lock_days, v_source.expiry_date
+      using errcode = 'check_violation';
+  end if;
 end;
 $$;
 
@@ -202,7 +210,7 @@ create constraint trigger investment_transactions_successor_pairing_ins
 
 drop trigger if exists investment_transactions_successor_pairing_upd on public.investment_transactions;
 create constraint trigger investment_transactions_successor_pairing_upd
-  after update of successor_deposit_tx_id, goal_id, currency, deposit_group_id, expiry_date, interest_rate, is_pledged, transaction_type
+  after update of successor_deposit_tx_id, goal_id, currency, deposit_group_id, expiry_date, interest_rate, is_pledged, transaction_type, top_up_lock_days
   on public.investment_transactions
   deferrable initially deferred
   for each row
@@ -358,10 +366,23 @@ begin
       using errcode = 'check_violation';
   end if;
   -- And it has to outlive the book it takes over from, since the merge happens
-  -- when that one matures.
-  if v_source.expiry_date is not null and p_expiry_date <= v_source.expiry_date then
-    raise exception 'successor book: the new maturity must come after the old book''s (%)', v_source.expiry_date
+  -- when that one matures. Outliving it is not enough on its own: the successor
+  -- has its OWN lock window, and a term short enough to sit inside it is a book
+  -- that refuses the very contributions this handover is arranging — including
+  -- the merge itself, on the day the old book matures.
+  if p_expiry_date - v_today <= coalesce(p_top_up_lock_days, 0) then
+    raise exception 'successor book: the new book would already be inside its own % day lock window', coalesce(p_top_up_lock_days, 0)
       using errcode = 'check_violation';
+  end if;
+  if v_source.expiry_date is not null then
+    if p_expiry_date <= v_source.expiry_date then
+      raise exception 'successor book: the new maturity must come after the old book''s (%)', v_source.expiry_date
+        using errcode = 'check_violation';
+    end if;
+    if p_expiry_date - v_source.expiry_date <= coalesce(p_top_up_lock_days, 0) then
+      raise exception 'successor book: the new book must still accept a top-up when the old one matures on %', v_source.expiry_date
+        using errcode = 'check_violation';
+    end if;
   end if;
 
   -- The successor inherits what identifies the money — owner, goal, bank,
