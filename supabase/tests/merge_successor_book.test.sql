@@ -690,16 +690,12 @@ begin
     raise exception 'the collapse must still delete the credited tranche';
   end if;
 
-  -- ...and the freeze travels after it, at commit — so the collapse could write
-  -- the new cycle onto the anchor first. Flushing the deferred trigger here is
-  -- what commit does. The anchor now carries the payout, so rewriting what it
-  -- holds would take that cash while the source stays closed.
+  -- ...and the deposit it became goes on living. Freezing it because it once
+  -- absorbed a merged payout was tried and makes it unrenewable for good: the
+  -- renewal rewrites amount_vnd on this very row. Past the collapse the cash is
+  -- ordinary principal, under the ordinary rules.
   set constraints all immediate;
-  begin
-    update public.investment_transactions set amount_vnd = 1 where transaction_id = v_b;
-    raise exception 'the renewed anchor must not be rewritten once it carries a folded payout';
-  exception when sqlstate '23514' then null;
-  end;
+  perform public.renew_term_deposit(v_b, 11000000, 5.2, current_date + 400, current_date, 400000);
 
   raise notice 'merge successor book (successor still collapses): OK';
 end;

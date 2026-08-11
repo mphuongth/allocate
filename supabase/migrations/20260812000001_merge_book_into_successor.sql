@@ -832,44 +832,22 @@ create trigger investment_transactions_merge_lineage_follows
   when (old.merged_from_book_id is not null)
   execute function public.move_merge_lineage_to_book();
 
--- ...and the freeze travels after it, at commit rather than during the collapse.
+-- ...but the freeze does NOT travel with it, and that is deliberate.
 --
--- The anchor inherits the lineage but, without this, none of the protection: the
--- ordinary edit route could then rewrite what it holds — even below the payout it
--- now carries — while the source stayed closed for good. Marking it inside the
--- collapse instead would have frozen the anchor before that same collapse gets to
--- write the new cycle onto it, and the exemption that would take to undo is one
--- any edit sharing the transaction could stand behind. Deferred to commit, the
--- collapse finishes untouched and the row is frozen from the moment it is
--- visible to anyone else.
-create or replace function public.carry_merge_freeze_to_book()
-returns trigger
-language plpgsql
-security definer
-set search_path = ''
-as $$
-begin
-  if not exists (select 1 from auth.users u where u.id = old.user_id) then
-    return null;
-  end if;
-  update public.investment_transactions
-     set merged_from_book_id = coalesce(merged_from_book_id, old.merged_from_book_id)
-   where transaction_id = old.deposit_group_id
-     and merged_from_book_id is null;
-  return null;
-end;
-$$;
-
-revoke all on function public.carry_merge_freeze_to_book() from public, anon, authenticated;
-
-drop trigger if exists investment_transactions_merge_freeze_follows on public.investment_transactions;
-create constraint trigger investment_transactions_merge_freeze_follows
-  after delete on public.investment_transactions
-  deferrable initially deferred
-  for each row
-  when (old.merged_from_book_id is not null and old.deposit_group_id is not null
-        and old.deposit_group_id <> old.transaction_id)
-  execute function public.carry_merge_freeze_to_book();
+-- Carrying it onto the anchor reads as the obvious next step: the anchor now
+-- holds the payout, and an ordinary edit could write it away. It was tried. It
+-- makes that deposit permanently unrenewable — both renewal RPCs rewrite
+-- amount_vnd on that very row, so its next maturity fails outright, and a live
+-- deposit that can never be renewed again is certain breakage. What it would buy
+-- is protection against the ordinary editability that every deposit here already
+-- has.
+--
+-- So the line is drawn where the shape ends. While the credited tranche exists it
+-- is another book's payout sitting inside this one, and nothing may touch it.
+-- Once the successor is collapsed, that cash is principal of a live deposit under
+-- the same rules as any other — the withdrawal invariants, the balance checks.
+-- The source withdrawals still record where it went: consumed_by_inv_id is
+-- provenance, not a balance the anchor has to answer for.
 
 -- (3) A recurring link arriving while the merge runs waits on the anchor lock,
 -- then re-reads a source whose successor has just been cleared — and accepts,
