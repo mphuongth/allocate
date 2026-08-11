@@ -159,6 +159,22 @@ create or replace function public.enforce_successor_book_pairing()
 returns trigger language plpgsql security definer set search_path = '' as $$
 declare v_id uuid;
 begin
+  -- A pair ages naturally, so "already mature" is not a standing invariant — but
+  -- MOVING a successor's maturity into the past is an edit that strands every
+  -- recurring saving transferred onto it, whose next contribution the book will
+  -- refuse. Only the edit is judged, and only for a row someone succeeds into.
+  if tg_op = 'UPDATE'
+     and old.expiry_date is distinct from new.expiry_date
+     and new.expiry_date is not null
+     and new.expiry_date <= (now() at time zone 'Asia/Ho_Chi_Minh')::date
+     and exists (
+       select 1 from public.investment_transactions
+        where successor_deposit_tx_id = new.transaction_id
+     ) then
+    raise exception 'successor book: a successor cannot be given a maturity that has already passed'
+      using errcode = 'check_violation';
+  end if;
+
   perform public.assert_successor_book_pairing(new.transaction_id);
   for v_id in
     select transaction_id from public.investment_transactions
@@ -418,17 +434,19 @@ comment on function public.open_successor_book(uuid, bigint, numeric, date, date
 -- month it has nowhere to put.
 create or replace function public.enforce_recurring_link_not_handed_over()
 returns trigger language plpgsql security definer set search_path = '' as $$
+declare v_successor uuid;
 begin
-  -- LOCK the book while reading it: a link created concurrently with a handover
-  -- would otherwise read the source's pre-handover version and commit after it,
-  -- landing on a book that now refuses contributions.
-  if exists (
-    select 1 from public.investment_transactions
-     where transaction_id = new.linked_deposit_tx_id
-       and user_id = new.user_id
-       and successor_deposit_tx_id is not null
-     for share
-  ) then
+  -- LOCK the book, THEN read its successor. Locking inside a predicate that
+  -- already tests the successor locks nothing while a handover is uncommitted:
+  -- the visible version still has a null link, so the row does not match and the
+  -- write sails past to commit against a book that, moments later, refuses it.
+  -- The lock has to be taken on the row itself, whatever it currently says.
+  select successor_deposit_tx_id into v_successor
+    from public.investment_transactions
+   where transaction_id = new.linked_deposit_tx_id
+     and user_id = new.user_id
+   for share;
+  if found and v_successor is not null then
     raise exception 'successor book: that book has handed over to a successor, so link the successor instead'
       using errcode = 'check_violation';
   end if;

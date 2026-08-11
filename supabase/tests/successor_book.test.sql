@@ -357,6 +357,18 @@ begin
   exception when sqlstate '23514' then null;
   end;
 
+  -- ── A successor cannot be edited into a maturity already behind us ──────
+  -- The pair ages naturally, so this is about the EDIT: moving the successor's
+  -- maturity into the past strands every saving transferred onto it.
+  begin
+    perform public.update_deposit_book(
+      v_tail.transaction_id, false, null, true, (current_date - 1)::date, false, null,
+      false, null, false, null, false, null, false, null);
+    set constraints all immediate;
+    raise exception 'moving a successor maturity into the past must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
   -- ── Clearing both columns at once is still a dissolve ───────────────────
   begin
     update public.investment_transactions
