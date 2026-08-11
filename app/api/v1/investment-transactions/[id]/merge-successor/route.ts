@@ -13,6 +13,11 @@ const MERGE_TRANCHE_LIMIT = 2000
 // request quietly returns fewer. Pages of this size, read until one comes back
 // short, are how the whole book is actually seen.
 const PAGE = 500
+// `in.(...)` puts every id in the query string. At the tranche ceiling that is
+// one ~74 KB URL, past what the gateway in front of PostgREST will accept — and
+// paging the RANGE does not shorten the filter, so the preview failed outright
+// on exactly the large books paging exists for. Asked in bounded groups instead.
+const ID_CHUNK = 100
 
 async function readAllPages<T>(
   run: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
@@ -92,29 +97,36 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   const withdrawnBy = new Map<string, number>()
   if (tranchesRows.length > 0) {
     const ids = tranchesRows.map((r) => r.transaction_id)
-    // A book can carry more withdrawals than tranches, so this is paged too.
-    const wPages = await readAllPages<{ parent_transaction_id: string | null; principal_withdrawn: number | null }>(
-      (from, to) => supabase
-        .from('investment_transactions')
-        .select('parent_transaction_id, principal_withdrawn')
-        .eq('user_id', user.id)
-        .eq('transaction_type', 'withdrawal')
-        .in('parent_transaction_id', ids)
-        .order('transaction_id')
-        .range(from, to), MERGE_TRANCHE_LIMIT * 4)
-    if (wPages.error) {
-      console.error('merge preview failed', wPages.error)
-      return NextResponse.json({ error: 'Failed to read the book' }, { status: 500 })
-    }
-    if (wPages.truncated) {
-      return NextResponse.json(
-        { error: 'This book has more history than the merge can take at once.', code: 'book_too_large' },
-        { status: 422 },
-      )
-    }
-    for (const w of wPages.rows) {
-      if (!w.parent_transaction_id) continue
-      withdrawnBy.set(w.parent_transaction_id, (withdrawnBy.get(w.parent_transaction_id) ?? 0) + (w.principal_withdrawn ?? 0))
+    const WITHDRAWAL_LIMIT = MERGE_TRANCHE_LIMIT * 4
+    let seen = 0
+    // A book can carry more withdrawals than tranches, so each group is paged
+    // too — and the ceiling counts across groups, not within one.
+    for (let i = 0; i < ids.length; i += ID_CHUNK) {
+      const group = ids.slice(i, i + ID_CHUNK)
+      const wPages = await readAllPages<{ parent_transaction_id: string | null; principal_withdrawn: number | null }>(
+        (from, to) => supabase
+          .from('investment_transactions')
+          .select('parent_transaction_id, principal_withdrawn')
+          .eq('user_id', user.id)
+          .eq('transaction_type', 'withdrawal')
+          .in('parent_transaction_id', group)
+          .order('transaction_id')
+          .range(from, to), WITHDRAWAL_LIMIT - seen)
+      if (wPages.error) {
+        console.error('merge preview failed', wPages.error)
+        return NextResponse.json({ error: 'Failed to read the book' }, { status: 500 })
+      }
+      if (wPages.truncated) {
+        return NextResponse.json(
+          { error: 'This book has more history than the merge can take at once.', code: 'book_too_large' },
+          { status: 422 },
+        )
+      }
+      seen += wPages.rows.length
+      for (const w of wPages.rows) {
+        if (!w.parent_transaction_id) continue
+        withdrawnBy.set(w.parent_transaction_id, (withdrawnBy.get(w.parent_transaction_id) ?? 0) + (w.principal_withdrawn ?? 0))
+      }
     }
   }
 

@@ -16,6 +16,9 @@ const h = vi.hoisted(() => ({
   user: { id: 'user-1' } as { id: string } | null,
   rpcResult: { data: { transaction_id: '44444444-4444-4444-8444-444444444444' } as unknown, error: null as unknown },
   rpcCalls: [] as { name: string; args: Record<string, unknown> }[],
+  // What the preview asked the database for. Every filter and range, in order.
+  selects: [] as { table: string; in?: { column: string; values: string[] }; range?: [number, number] }[],
+  rowsFor: (_q: { in?: { column: string; values: string[] }; range?: [number, number] }) => [] as unknown[],
 }))
 
 vi.mock('@/lib/supabase-server', () => ({
@@ -25,10 +28,22 @@ vi.mock('@/lib/supabase-server', () => ({
       h.rpcCalls.push({ name, args })
       return { single: async () => h.rpcResult }
     },
+    from: (table: string) => {
+      const q: { table: string; in?: { column: string; values: string[] }; range?: [number, number] } = { table }
+      const builder: Record<string, unknown> = {}
+      for (const m of ['select', 'eq', 'is', 'order']) builder[m] = () => builder
+      builder.in = (column: string, values: string[]) => { q.in = { column, values }; return builder }
+      builder.range = (from: number, to: number) => {
+        q.range = [from, to]
+        h.selects.push(q)
+        return Promise.resolve({ data: h.rowsFor(q), error: null })
+      }
+      return builder
+    },
   }),
 }))
 
-const { POST } = await import('../route')
+const { POST, GET } = await import('../route')
 
 const BODY = {
   received_vnd: 12_500_000,
@@ -52,7 +67,41 @@ beforeEach(() => {
   h.user = { id: 'user-1' }
   h.rpcResult = { data: { transaction_id: NEW_TRANCHE }, error: null }
   h.rpcCalls = []
+  h.selects = []
+  h.rowsFor = () => []
   vi.spyOn(console, 'error').mockImplementation(() => {})
+})
+
+// A big book is the whole reason the preview reads from the server rather than
+// from the goal page's capped list, so the read has to survive one.
+describe('GET /api/v1/investment-transactions/[id]/merge-successor (#638)', () => {
+  it('asks for withdrawals in bounded groups, whatever the book’s size', async () => {
+    const trancheIds = Array.from({ length: 640 }, (_, i) =>
+      `${(i + 1).toString(16).padStart(8, '0')}-0000-4000-8000-000000000000`)
+    h.rowsFor = (q) => {
+      if (q.in) return []
+      const [from, to] = q.range!
+      return trancheIds.slice(from, to + 1).map((id) => ({
+        transaction_id: id, amount_vnd: 1_000_000, interest_rate: 4,
+        investment_date: '2026-01-01', expiry_date: '2026-12-31',
+        successor_deposit_tx_id: id === trancheIds[0] ? NEW_TRANCHE : null,
+      }))
+    }
+
+    const res = await GET(
+      new Request('https://app.test/x') as unknown as NextRequest,
+      { params: Promise.resolve({ id: trancheIds[0] }) },
+    )
+
+    expect(res.status).toBe(200)
+    const byId = h.selects.filter((q) => q.in)
+    expect(byId.length).toBeGreaterThan(1)
+    // One filter per group, never one filter carrying the whole book — that URL
+    // is tens of kilobytes and the gateway rejects it before PostgREST sees it.
+    for (const q of byId) expect(q.in!.values.length).toBeLessThanOrEqual(100)
+    // ...and every tranche is still accounted for, across the groups.
+    expect(byId.flatMap((q) => q.in!.values).sort()).toEqual([...trancheIds].sort())
+  })
 })
 
 describe('POST /api/v1/investment-transactions/[id]/merge-successor (#638)', () => {

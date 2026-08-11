@@ -276,6 +276,32 @@ begin
   exception when sqlstate '23514' then null;
   end;
 
+  -- Nor can the credited side be rewritten. The withdrawals that paid for this
+  -- tranche are frozen and allocate exactly what was received, so raising or
+  -- lowering it here invents or destroys money while the source stays closed
+  -- for good.
+  begin
+    update public.investment_transactions set amount_vnd = amount_vnd + 5000000
+     where transaction_id = v_new.transaction_id;
+    raise exception 'the credited tranche must not be rewritten';
+  exception when sqlstate '23514' then null;
+  end;
+  begin
+    update public.investment_transactions set affects_progress = false
+     where transaction_id = v_new.transaction_id;
+    raise exception 'the credited tranche must not be taken out of progress';
+  exception when sqlstate '23514' then null;
+  end;
+  -- The same trick that hides a folded withdrawal hides this: a row with a
+  -- renewal parent is history, which valuation skips — the source would stay
+  -- closed while the cash it paid out showed up nowhere.
+  begin
+    update public.investment_transactions set renewed_from_transaction_id = v_b.transaction_id
+     where transaction_id = v_new.transaction_id;
+    raise exception 'the credited tranche must not be turned into renewal history';
+  exception when sqlstate '23514' then null;
+  end;
+
   -- Nor an earlier partial withdrawal beside it: deleting that would restore the
   -- part the merge measured around, to a book whose payout is already elsewhere.
   begin

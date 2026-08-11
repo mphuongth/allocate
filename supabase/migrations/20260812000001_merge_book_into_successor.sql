@@ -581,6 +581,52 @@ create trigger investment_transactions_folded_holding_immutable
   when (old.transaction_type = 'investment')
   execute function public.guard_folded_holding_edited();
 
+-- (2b) ...and the other side of the same fact. The withdrawals that paid for the
+-- credited tranche are frozen and allocate exactly what the bank paid out, but
+-- nothing protected the row they point at: the ordinary book edit path could
+-- raise or lower it afterwards, inventing or destroying money while the source
+-- stayed closed for good. The pair only balances if both sides are held.
+create or replace function public.guard_merge_credited_tranche_edited()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if new.amount_vnd is not distinct from old.amount_vnd
+     and new.units is not distinct from old.units
+     and new.unit_price is not distinct from old.unit_price
+     and new.transaction_type is not distinct from old.transaction_type
+     and new.affects_progress is not distinct from old.affects_progress
+     -- A row with a renewal parent is history, which valuation skips. Setting
+     -- one here empties the successor of this cash without touching a figure.
+     and new.renewed_from_transaction_id is not distinct from old.renewed_from_transaction_id then
+    return new;
+  end if;
+
+  if exists (
+    select 1 from public.investment_transactions w
+     where w.consumed_by_inv_id = old.transaction_id
+       and w.transaction_type = 'withdrawal'
+       -- A held settlement's own consumption is the other path's business.
+       and coalesce(w.held_for_merge, false) = false
+  ) then
+    raise exception 'merge successor: another deposit was folded into this one, so what it holds cannot be rewritten'
+      using errcode = 'check_violation';
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function public.guard_merge_credited_tranche_edited() from public, anon, authenticated;
+
+drop trigger if exists investment_transactions_credited_tranche_immutable on public.investment_transactions;
+create trigger investment_transactions_credited_tranche_immutable
+  before update of amount_vnd, units, unit_price, transaction_type, affects_progress, renewed_from_transaction_id
+  on public.investment_transactions
+  for each row
+  execute function public.guard_merge_credited_tranche_edited();
+
 -- (3) A recurring link arriving while the merge runs waits on the anchor lock,
 -- then re-reads a source whose successor has just been cleared — and accepts,
 -- because the promise is gone. The next statement dissolves the book, and the
