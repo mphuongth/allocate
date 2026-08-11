@@ -26,6 +26,7 @@ declare
   v_tail3 public.investment_transactions;
   v_lockable uuid := gen_random_uuid();
   v_rec_book uuid := gen_random_uuid();
+  v_closed uuid := gen_random_uuid();
 begin
   insert into auth.users (id, email) values (v_user, 'successor-book@test.invalid');
   insert into public.savings_goals (user_id, goal_name) values (v_user, 'Successor') returning goal_id into v_goal;
@@ -496,6 +497,26 @@ begin
      where transaction_id in (v_dated_book, v_tail2.transaction_id);
     set constraints all immediate;
     raise exception 'deleting a promised anchor beside its successor must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- ── Repointing a promise is the same decision, judged the same way ──────
+  -- v_dated_book matured long ago and already promises v_tail2. Moving that
+  -- promise onto a book that cannot take money today would leave the overdue
+  -- merge with nowhere to land.
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate,
+    deposit_group_id, top_up_lock_days
+  ) values (
+    v_closed, v_user, v_goal, 'bank', 'investment',
+    current_date - 300, current_date + 10, 5000000, 4, v_closed, 30
+  );
+  begin
+    update public.investment_transactions set successor_deposit_tx_id = v_closed
+     where transaction_id = v_dated_book;
+    set constraints all immediate;
+    raise exception 'repointing onto a book that cannot receive must be refused';
   exception when sqlstate '23514' then null;
   end;
 

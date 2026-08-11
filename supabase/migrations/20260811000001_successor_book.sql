@@ -226,7 +226,8 @@ begin
   -- savings. The door has to be closed here too, or a book still taking money
   -- would start refusing it with its savings left pointing at it.
   if new.successor_deposit_tx_id is not null
-     and (tg_op = 'INSERT' or old.successor_deposit_tx_id is null)
+     and (tg_op = 'INSERT'
+       or old.successor_deposit_tx_id is distinct from new.successor_deposit_tx_id)
      and (new.expiry_date is null
           or (new.expiry_date - (now() at time zone 'Asia/Ho_Chi_Minh')::date > 0
               and (new.top_up_lock_days is null
@@ -240,8 +241,12 @@ begin
   -- one open_successor_book asks. A link written straight to the column must
   -- answer it too, or it lands the savings on a book that is already mature or
   -- inside its own lock window.
+  -- On every change of the link, not only when one first appears: repointing a
+  -- promise onto a different book is the same decision made again, and the new
+  -- destination has to be able to receive just as the first one did.
   if new.successor_deposit_tx_id is not null
-     and (tg_op = 'INSERT' or old.successor_deposit_tx_id is null) then
+     and (tg_op = 'INSERT'
+       or old.successor_deposit_tx_id is distinct from new.successor_deposit_tx_id) then
     select expiry_date, top_up_lock_days into v_dest_expiry, v_dest_lock
       from public.investment_transactions
      where transaction_id = new.successor_deposit_tx_id and user_id = new.user_id;
