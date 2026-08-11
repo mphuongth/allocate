@@ -445,6 +445,49 @@ begin
 end;
 $$;
 
+-- ── The ordinary re-deposit still folds a sibling in ────────────────────────
+--
+-- Renewing a deposit stamps the sibling's withdrawal as consumed by it and then
+-- rewrites its own amount. That is the same shape as a merge's credited tranche
+-- seen from the outside, and freezing both broke it — the smoke lane caught what
+-- this suite did not, so the case belongs here.
+do $$
+declare
+  v_user uuid := gen_random_uuid();
+  v_goal uuid;
+  v_d uuid := gen_random_uuid();
+  v_s uuid := gen_random_uuid();
+begin
+  insert into auth.users (id, email) values (v_user, 'merge-sibling@test.invalid');
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Sibling') returning goal_id into v_goal;
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate
+  ) values (v_d, v_user, v_goal, 'bank', 'investment', current_date - 380, current_date - 15, 20000000, 6);
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate
+  ) values (v_s, v_user, v_goal, 'bank', 'investment', current_date - 120, current_date + 60, 8000000, 6);
+
+  -- S is settled early and folded into D, exactly as the renewal does it.
+  insert into public.investment_transactions (
+    user_id, goal_id, asset_type, transaction_type, parent_transaction_id,
+    investment_date, amount_vnd, principal_withdrawn, affects_progress, consumed_by_inv_id
+  ) values (
+    v_user, v_goal, 'bank', 'withdrawal', v_s,
+    current_date, 8100000, 8000000, true, v_d
+  );
+
+  -- D rolls forward carrying that cash. Nothing here is a book merge, so
+  -- nothing here is frozen.
+  update public.investment_transactions
+     set amount_vnd = 28100000, expiry_date = current_date + 365
+   where transaction_id = v_d;
+
+  raise notice 'merge successor book (sibling re-deposit untouched): OK';
+end;
+$$;
+
 -- ── A successor that matured while the source sat unresolved ────────────────
 --
 -- The merge is dated when the bank paid the source out, and the successor's own

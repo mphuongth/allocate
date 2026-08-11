@@ -604,6 +604,14 @@ begin
     return new;
   end if;
 
+  -- Only a tranche INSIDE a book, which is the one shape this merge writes. An
+  -- ordinary re-deposit consumes siblings the same way — the renewal stamps
+  -- them and then rewrites its own amount — and that path is settled, with its
+  -- own rules and tests. Guarding it too broke it (the smoke lane caught it).
+  if old.deposit_group_id is null or old.deposit_group_id = old.transaction_id then
+    return new;
+  end if;
+
   if exists (
     select 1 from public.investment_transactions w
      where w.consumed_by_inv_id = old.transaction_id
