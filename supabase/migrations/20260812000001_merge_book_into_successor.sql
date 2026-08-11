@@ -832,6 +832,45 @@ create trigger investment_transactions_merge_lineage_follows
   when (old.merged_from_book_id is not null)
   execute function public.move_merge_lineage_to_book();
 
+-- ...and the freeze travels after it, at commit rather than during the collapse.
+--
+-- The anchor inherits the lineage but, without this, none of the protection: the
+-- ordinary edit route could then rewrite what it holds — even below the payout it
+-- now carries — while the source stayed closed for good. Marking it inside the
+-- collapse instead would have frozen the anchor before that same collapse gets to
+-- write the new cycle onto it, and the exemption that would take to undo is one
+-- any edit sharing the transaction could stand behind. Deferred to commit, the
+-- collapse finishes untouched and the row is frozen from the moment it is
+-- visible to anyone else.
+create or replace function public.carry_merge_freeze_to_book()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if not exists (select 1 from auth.users u where u.id = old.user_id) then
+    return null;
+  end if;
+  update public.investment_transactions
+     set merged_from_book_id = coalesce(merged_from_book_id, old.merged_from_book_id)
+   where transaction_id = old.deposit_group_id
+     and merged_from_book_id is null;
+  return null;
+end;
+$$;
+
+revoke all on function public.carry_merge_freeze_to_book() from public, anon, authenticated;
+
+drop trigger if exists investment_transactions_merge_freeze_follows on public.investment_transactions;
+create constraint trigger investment_transactions_merge_freeze_follows
+  after delete on public.investment_transactions
+  deferrable initially deferred
+  for each row
+  when (old.merged_from_book_id is not null and old.deposit_group_id is not null
+        and old.deposit_group_id <> old.transaction_id)
+  execute function public.carry_merge_freeze_to_book();
+
 -- (3) A recurring link arriving while the merge runs waits on the anchor lock,
 -- then re-reads a source whose successor has just been cleared — and accepts,
 -- because the promise is gone. The next statement dissolves the book, and the

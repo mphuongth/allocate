@@ -665,6 +665,11 @@ declare
   v_new uuid := current_setting('cairn.collapse_new')::uuid;
   v_target uuid;
 begin
+  -- Back to the default mode first: an earlier block in this transaction made
+  -- constraints immediate, and that sticks for the whole transaction — which
+  -- would fire the deferred freeze below mid-collapse and refuse the collapse's
+  -- own write. Nothing outside these tests ever issues SET CONSTRAINTS.
+  set constraints all deferred;
   perform public.collapse_accumulating_book(
     v_b, 10600000, 5.0, current_date + 365, current_date,
     array[v_b, v_new], array[100000::bigint, 200000::bigint]);
@@ -684,6 +689,17 @@ begin
   if exists (select 1 from public.investment_transactions where transaction_id = v_new) then
     raise exception 'the collapse must still delete the credited tranche';
   end if;
+
+  -- ...and the freeze travels after it, at commit — so the collapse could write
+  -- the new cycle onto the anchor first. Flushing the deferred trigger here is
+  -- what commit does. The anchor now carries the payout, so rewriting what it
+  -- holds would take that cash while the source stays closed.
+  set constraints all immediate;
+  begin
+    update public.investment_transactions set amount_vnd = 1 where transaction_id = v_b;
+    raise exception 'the renewed anchor must not be rewritten once it carries a folded payout';
+  exception when sqlstate '23514' then null;
+  end;
 
   raise notice 'merge successor book (successor still collapses): OK';
 end;
