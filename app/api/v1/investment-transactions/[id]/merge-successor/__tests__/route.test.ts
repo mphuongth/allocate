@@ -102,6 +102,38 @@ describe('GET /api/v1/investment-transactions/[id]/merge-successor (#638)', () =
     // ...and every tranche is still accounted for, across the groups.
     expect(byId.flatMap((q) => q.in!.values).sort()).toEqual([...trancheIds].sort())
   })
+
+  // The write only ever names tranches that still hold something, so a long
+  // history of spent ones is not what the ceiling is for. Counting raw rows
+  // rejected a book that would have merged perfectly well, and no reload could
+  // ever change that answer.
+  it('measures the ceiling against the tranches that still hold something', async () => {
+    const ids = Array.from({ length: 2400 }, (_, i) =>
+      `${(i + 1).toString(16).padStart(8, '0')}-0000-4000-8000-000000000000`)
+    const spent = new Set(ids.slice(0, 2000))
+    h.rowsFor = (q) => {
+      if (q.in) {
+        // Each spent tranche has one withdrawal taking all of it.
+        return q.in.values.filter((id) => spent.has(id))
+          .map((id) => ({ parent_transaction_id: id, principal_withdrawn: 1_000_000 }))
+      }
+      const [from, to] = q.range!
+      return ids.slice(from, to + 1).map((id) => ({
+        transaction_id: id, amount_vnd: 1_000_000, interest_rate: 4,
+        investment_date: '2026-01-01', expiry_date: '2026-12-31',
+        successor_deposit_tx_id: id === ids[0] ? NEW_TRANCHE : null,
+      }))
+    }
+
+    const res = await GET(
+      new Request('https://app.test/x') as unknown as NextRequest,
+      { params: Promise.resolve({ id: ids[0] }) },
+    )
+
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.tranches).toHaveLength(400)
+  })
 })
 
 describe('POST /api/v1/investment-transactions/[id]/merge-successor (#638)', () => {

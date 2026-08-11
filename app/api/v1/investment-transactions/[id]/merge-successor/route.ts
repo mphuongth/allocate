@@ -80,7 +80,11 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     .eq('transaction_type', 'investment')
     .is('renewed_from_transaction_id', null)
     .order('transaction_id')
-    .range(from, to), MERGE_TRANCHE_LIMIT)
+    // The ceiling belongs on the LIVE tranches, applied further down: what the
+    // write needs is every tranche that still holds something, and a long
+    // history of spent ones is not that. Capping the raw read at the same
+    // number rejected a book that would have merged perfectly well.
+    .range(from, to), MERGE_TRANCHE_LIMIT * 4)
 
   if (tranchePages.error) {
     console.error('merge preview failed', tranchePages.error)
@@ -144,6 +148,13 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
   if (tranches.length === 0) {
     return NextResponse.json({ error: 'Accumulating book not found.' }, { status: 404 })
+  }
+  // Now the ceiling, on what the write actually has to name.
+  if (tranches.length > MERGE_TRANCHE_LIMIT) {
+    return NextResponse.json(
+      { error: 'This book has more tranches than the merge can take at once.', code: 'book_too_large' },
+      { status: 422 },
+    )
   }
   // What the bank pays out: the principal still held plus the interest it
   // accrued, valued with the one formula the collapse route uses. The sheet's

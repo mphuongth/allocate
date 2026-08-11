@@ -213,6 +213,21 @@ begin
     raise exception 'a withdrawal filed under another goal must block the merge';
   exception when sqlstate '23514' then null;
   end;
+  -- A book whose expiries were left split by the old two-statement edit: the
+  -- anchor has matured, a tranche has not. Folding it would credit the
+  -- successor with cash the bank has not paid out.
+  begin
+    update public.investment_transactions set expiry_date = current_date + 30
+     where transaction_id = v_a2;
+    set constraints all immediate;
+    perform public.merge_book_into_successor(v_a, v_received, 4.5, current_date, v_ids, v_principals, v_b.transaction_id);
+    raise exception 'a tranche that has not matured must block the merge';
+  exception when sqlstate '23514' then null;
+  end;
+  update public.investment_transactions set expiry_date = current_date - 3
+   where transaction_id = v_a2;
+  set constraints all immediate;
+
   -- A withdrawal re-keyed to a fund is measured against that fund's bucket, not
   -- against the tranche it came out of — while the sum here subtracts it by
   -- parent all the same. The merge would close the apparent remainder and the

@@ -180,25 +180,16 @@ begin
       using errcode = 'check_violation';
   end if;
 
-  -- LOCK EVERY TRANCHE BEFORE MEASURING. The balance below decides how much
-  -- cash the destination is credited with; read without the lock, a withdrawal
-  -- committing between the read and the loop would leave the destination holding
-  -- money that withdrawal also took. The withdrawal path takes these same row
-  -- locks before it measures (20260730000002), so it waits for us or we for it.
-  perform 1 from public.investment_transactions
-   where deposit_group_id = p_source_book_id
-     and transaction_type = 'investment'
-     and renewed_from_transaction_id is null
-   order by transaction_id
-   for update;
-
-  -- And the withdrawals themselves, for the same reason one step further out.
-  -- Deleting an earlier partial withdrawal is refused once this merge's own
-  -- withdrawal exists — but a delete running concurrently cannot see that row
-  -- while it is uncommitted, so both would commit: the deleted principal comes
-  -- back to a source that is now dissolved, while the successor keeps the whole
-  -- payout. Holding these rows makes the delete wait for the answer instead of
-  -- deciding without it.
+  -- WITHDRAWALS FIRST, then the tranches they came out of. Editing a withdrawal
+  -- locks that row and only then reaches its parent, through the balance trigger
+  -- (20260803000005) — so taking the parents first inverts the pair and turns a
+  -- concurrent edit into a deadlock Postgres resolves by killing one side.
+  --
+  -- Holding them also settles a race of its own: deleting an earlier partial
+  -- withdrawal is refused once this merge's own withdrawal exists, but a delete
+  -- running concurrently cannot see that row while it is uncommitted, so both
+  -- would commit — the deleted principal back in a source that is by then
+  -- dissolved, while the successor keeps the whole payout.
   perform 1 from public.investment_transactions w
    where w.transaction_type = 'withdrawal'
      and w.parent_transaction_id in (
@@ -207,6 +198,17 @@ begin
           and t.transaction_type = 'investment'
      )
    order by w.transaction_id
+   for update;
+
+  -- LOCK EVERY TRANCHE BEFORE MEASURING. The balance below decides how much
+  -- cash the destination is credited with; read without the lock, a withdrawal
+  -- committing between the read and the loop would leave the destination holding
+  -- money that withdrawal also took.
+  perform 1 from public.investment_transactions
+   where deposit_group_id = p_source_book_id
+     and transaction_type = 'investment'
+     and renewed_from_transaction_id is null
+   order by transaction_id
    for update;
 
   -- What the book still holds, after any partial withdrawals it has taken.
@@ -255,6 +257,27 @@ begin
        and w.goal_id is distinct from t.goal_id
   ) then
     raise exception 'merge successor: this book has a withdrawal filed under another goal; move it back before merging'
+      using errcode = 'check_violation';
+  end if;
+  -- A tranche that has not matured, in a book whose anchor has. The old
+  -- two-statement edit flow could leave a book's expiries split
+  -- (20260618000004) and never normalised what was already there, so the
+  -- anchor's date does not answer for the rest. Closing a tranche the bank has
+  -- not paid out yet would credit the successor with cash that does not exist.
+  if exists (
+    select 1 from public.investment_transactions t
+     where t.deposit_group_id = p_source_book_id
+       and t.transaction_type = 'investment'
+       and t.renewed_from_transaction_id is null
+       and (t.expiry_date is null or t.expiry_date > v_today)
+       -- Only what still holds something: a spent tranche pays out nothing,
+       -- whatever date it carries.
+       and t.amount_vnd - coalesce((
+         select sum(w.principal_withdrawn) from public.investment_transactions w
+          where w.parent_transaction_id = t.transaction_id
+            and w.transaction_type = 'withdrawal'), 0) > 0
+  ) then
+    raise exception 'merge successor: this book still holds a tranche that has not matured; it cannot be folded yet'
       using errcode = 'check_violation';
   end if;
   -- And one re-keyed to a fund. buildWithdrawalMaps sends any withdrawal naming
