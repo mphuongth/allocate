@@ -536,7 +536,17 @@ begin
   -- DIFFERENT holding still is.
   if new.parent_transaction_id is null and old.parent_transaction_id is not null
      and new.principal_withdrawn is not distinct from old.principal_withdrawn
-     and new.amount_vnd is not distinct from old.amount_vnd then
+     and new.amount_vnd is not distinct from old.amount_vnd
+     -- ...and only when the holding really is gone. A client can null this
+     -- column on a holding that still stands, which is a detachment, not a
+     -- cleanup: the withdrawal would stop subtracting from a source that is
+     -- still there. The withdrawal-balance invariant (20260730000002) refuses
+     -- that on its own today, so this is not a hole — but a guard that leans on
+     -- its neighbour's conditions is one narrowing away from being one.
+     and not exists (
+       select 1 from public.investment_transactions p
+        where p.transaction_id = old.parent_transaction_id
+     ) then
     return new;
   end if;
 

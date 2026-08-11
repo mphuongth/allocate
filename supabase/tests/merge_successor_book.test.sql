@@ -332,6 +332,18 @@ begin
   exception when sqlstate '23514' then null;
   end;
 
+  -- Nor may a folded withdrawal be detached from the holding it came out of
+  -- while that holding still stands: it would stop subtracting, so the source
+  -- principal reappears beside the payout the successor now holds. (Either the
+  -- withdrawal-balance invariant or this migration's own guard refuses it; what
+  -- matters here is that it is refused.)
+  begin
+    update public.investment_transactions set parent_transaction_id = null
+     where consumed_by_inv_id = v_new.transaction_id;
+    raise exception 'a folded withdrawal must not be detached from a live holding';
+  exception when sqlstate '23514' then null;
+  end;
+
   -- Nor deleted outright. The lineage move that lets a collapse through also
   -- clears the foreign key that used to block this, so on its own the delete
   -- would take the successor's whole payout away while the source stays closed.
