@@ -257,6 +257,23 @@ begin
     raise exception 'merge successor: this book has a withdrawal filed under another goal; move it back before merging'
       using errcode = 'check_violation';
   end if;
+  -- And one re-keyed to a fund. buildWithdrawalMaps sends any withdrawal naming
+  -- an asset_type of 'fund' with a fund_id to that fund's bucket instead of to
+  -- the holding it came out of, while the balance below subtracts it by parent
+  -- regardless: the merge would close the apparent remainder and the rerouted
+  -- portion would go on reading as live beside the successor's payout. (The
+  -- post-fold guard freezes these columns; this is about what is already there.)
+  if exists (
+    select 1 from public.investment_transactions w
+     join public.investment_transactions t on t.transaction_id = w.parent_transaction_id
+     where t.deposit_group_id = p_source_book_id
+       and t.transaction_type = 'investment'
+       and w.transaction_type = 'withdrawal'
+       and (w.asset_type is distinct from 'bank' or w.fund_id is not null)
+  ) then
+    raise exception 'merge successor: this book has a withdrawal filed against a fund; key it back to the deposit before merging'
+      using errcode = 'check_violation';
+  end if;
   -- And one carrying renewal lineage, which readers treat as history and skip.
   -- The balance below still subtracts it, so the merge would close only what is
   -- left and the hidden portion would read as live beside the successor's

@@ -22,6 +22,7 @@ declare
   v_principals bigint[];
   v_other_goal uuid;
   v_side_goal uuid;
+  v_fund uuid;
 begin
   insert into auth.users (id, email) values (v_user, 'merge-successor@test.invalid');
   insert into public.savings_goals (user_id, goal_name) values (v_user, 'Merge') returning goal_id into v_goal;
@@ -212,6 +213,21 @@ begin
     raise exception 'a withdrawal filed under another goal must block the merge';
   exception when sqlstate '23514' then null;
   end;
+  -- A withdrawal re-keyed to a fund is measured against that fund's bucket, not
+  -- against the tranche it came out of — while the sum here subtracts it by
+  -- parent all the same. The merge would close the apparent remainder and the
+  -- rerouted portion would still read as live beside the successor's payout.
+  begin
+    insert into public.funds (user_id, name, code, fund_type, nav)
+    values (v_user, 'Sideways fund', 'SIDEWAYS', 'stock', 10000) returning id into v_fund;
+    update public.investment_transactions
+       set asset_type = 'fund', fund_id = v_fund
+     where parent_transaction_id = v_a2 and transaction_type = 'withdrawal';
+    perform public.merge_book_into_successor(v_a, v_received, 4.5, current_date, v_ids, v_principals, v_b.transaction_id);
+    raise exception 'a withdrawal re-keyed to a fund must block the merge';
+  exception when sqlstate '23514' then null;
+  end;
+
   -- Renewal lineage hides a withdrawal from every reader while the balance here
   -- still subtracts it: the merge would close what is left and the hidden part
   -- would read as live beside the payout, with the guards refusing to fix it.
