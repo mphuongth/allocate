@@ -1,0 +1,228 @@
+-- The promise kept: folding a matured book into the successor it was handed to
+-- (#638, Phase 3).
+--
+-- Phase 2 recorded the relationship and steered the contributions. What it could
+-- not do was end it: the old book reaches maturity holding real money, and the
+-- only thing the app knew how to do with a matured book — collapse it into a
+-- fresh cycle — is precisely what the handover said not to do. So a book with a
+-- successor had nowhere to go. This is where it goes.
+--
+-- One function, for the same reason the handover is one: closing the old book,
+-- allocating the cash it actually paid out, recording that cash in the new book
+-- and retiring the promise are only correct together. Half of it committed is a
+-- book closed with its money nowhere, or money in two places at once.
+
+create or replace function public.merge_book_into_successor(
+  p_source_book_id uuid,
+  p_received_vnd bigint,
+  p_interest_rate numeric,
+  p_merge_date date,
+  p_tranche_ids uuid[]
+)
+returns public.investment_transactions
+language plpgsql
+-- DEFINER for the same reason as open_successor_book: it has to clear the
+-- successor link, which no client may write. RLS therefore scopes nothing here,
+-- and every row it touches is checked against the caller explicitly.
+security definer
+set search_path = ''
+as $$
+declare
+  v_source public.investment_transactions;
+  v_dest public.investment_transactions;
+  v_tranche public.investment_transactions;
+  v_new public.investment_transactions;
+  v_new_id uuid := gen_random_uuid();
+  v_today date := (now() at time zone 'Asia/Ho_Chi_Minh')::date;
+  v_effective bigint;
+  v_total bigint := 0;
+  v_allocated bigint := 0;
+  v_share bigint;
+  v_last uuid;
+begin
+  -- Both books, locked in id order — the same order every other pairing write
+  -- takes, so two of them cannot deadlock against each other.
+  perform 1 from public.investment_transactions
+   where transaction_id in (
+     p_source_book_id,
+     (select successor_deposit_tx_id from public.investment_transactions
+       where transaction_id = p_source_book_id)
+   )
+   order by transaction_id
+   for update;
+
+  select * into v_source from public.investment_transactions
+   where transaction_id = p_source_book_id and deposit_group_id = p_source_book_id;
+  if not found then
+    raise exception 'merge successor: accumulating book not found' using errcode = 'no_data_found';
+  end if;
+  if auth.uid() is not null and v_source.user_id is distinct from auth.uid() then
+    raise exception 'merge successor: accumulating book not found' using errcode = 'no_data_found';
+  end if;
+  if v_source.successor_deposit_tx_id is null then
+    raise exception 'merge successor: this book has no successor to merge into'
+      using errcode = 'check_violation';
+  end if;
+
+  select * into v_dest from public.investment_transactions
+   where transaction_id = v_source.successor_deposit_tx_id;
+  if not found then
+    raise exception 'merge successor: the successor book is gone' using errcode = 'no_data_found';
+  end if;
+
+  -- What the pairing invariant has been holding all along is checked once more
+  -- here, at the only moment it has to be true for real.
+  if v_dest.user_id is distinct from v_source.user_id
+     or v_dest.goal_id is distinct from v_source.goal_id
+     or coalesce(v_dest.currency, 'VND') is distinct from coalesce(v_source.currency, 'VND')
+     or v_dest.deposit_group_id is distinct from v_dest.transaction_id
+     or v_dest.transaction_type is distinct from 'investment' then
+    raise exception 'merge successor: the successor is no longer a book this one can merge into'
+      using errcode = 'check_violation';
+  end if;
+  if v_source.is_pledged or v_dest.is_pledged then
+    raise exception 'merge successor: a pledged deposit cannot be merged while it is collateral'
+      using errcode = 'check_violation';
+  end if;
+
+  -- The merge is what maturity is for, so it does not happen before maturity —
+  -- the money has not been paid out yet.
+  if v_source.expiry_date is null or v_source.expiry_date > v_today then
+    raise exception 'merge successor: this book has not matured yet'
+      using errcode = 'check_violation';
+  end if;
+  if p_merge_date is null or p_merge_date > v_today then
+    raise exception 'merge successor: the merge date cannot be in the future'
+      using errcode = 'check_violation';
+  end if;
+  if p_merge_date < v_source.expiry_date then
+    raise exception 'merge successor: the cash is paid out at maturity (%), not before', v_source.expiry_date
+      using errcode = 'check_violation';
+  end if;
+  if p_received_vnd is null or p_received_vnd <= 0 then
+    raise exception 'merge successor: the received amount must be positive'
+      using errcode = 'check_violation';
+  end if;
+  if p_interest_rate is null or p_interest_rate <= 0 then
+    raise exception 'merge successor: the new tranche needs its own rate'
+      using errcode = 'check_violation';
+  end if;
+
+  -- What the book still holds, after any partial withdrawals it has taken.
+  select coalesce(sum(t.amount_vnd - coalesce((
+           select sum(w.principal_withdrawn) from public.investment_transactions w
+            where w.parent_transaction_id = t.transaction_id
+              and w.transaction_type = 'withdrawal'), 0)), 0)
+    into v_total
+    from public.investment_transactions t
+   where t.deposit_group_id = p_source_book_id
+     and t.transaction_type = 'investment'
+     and t.renewed_from_transaction_id is null;
+  if v_total <= 0 then
+    raise exception 'merge successor: this book is already fully withdrawn'
+      using errcode = 'check_violation';
+  end if;
+  -- The received cash is the client's number — a settled deposit pays out its
+  -- principal plus interest, never a multiple of it. The same bound the renewal
+  -- merge applies (20260620000006): loose enough for any real payout, tight
+  -- enough that a wrong number cannot inflate the destination out of nothing.
+  if p_received_vnd > v_total * 10 then
+    raise exception 'merge successor: the received amount is unreasonably large for this book'
+      using errcode = 'check_violation';
+  end if;
+
+  -- The cash lands in the successor FIRST, because every withdrawal below is
+  -- stamped with where it went. The insert passes the same top-up guard any
+  -- contribution to that book would — if it has since closed its own door, the
+  -- merge stops here rather than closing this book into nothing.
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type, amount_vnd,
+    investment_date, expiry_date, interest_rate, notes, bank_code, currency,
+    deposit_group_id, top_up_lock_days, affects_progress
+  ) values (
+    v_new_id, v_dest.user_id, v_dest.goal_id, 'bank', 'investment', p_received_vnd,
+    p_merge_date, v_dest.expiry_date, p_interest_rate, v_dest.notes,
+    v_dest.bank_code, v_dest.currency, v_dest.transaction_id, v_dest.top_up_lock_days, true
+  )
+  returning * into v_new;
+
+  -- Close every live tranche, allocating the received cash across them in
+  -- proportion to what each still held. The last one takes whatever rounding
+  -- left behind, so the parts add up to the whole exactly.
+  select t.transaction_id into v_last
+    from public.investment_transactions t
+   where t.deposit_group_id = p_source_book_id
+     and t.transaction_type = 'investment'
+     and t.renewed_from_transaction_id is null
+   order by t.investment_date desc, t.transaction_id desc
+   limit 1;
+
+  for v_tranche in
+    select * from public.investment_transactions
+     where deposit_group_id = p_source_book_id
+       and transaction_type = 'investment'
+       and renewed_from_transaction_id is null
+     order by investment_date, transaction_id
+     for update
+  loop
+    -- A live tranche the caller never saw means the book changed under them (a
+    -- top-up landed while the confirmation was open). Abort rather than close a
+    -- tranche whose cash nobody counted. Plain P0001, not serialization_failure:
+    -- this is deterministic, and a pooler must not spin retrying it.
+    if array_position(p_tranche_ids, v_tranche.transaction_id) is null then
+      raise exception 'merge successor: book changed since load, reload and retry';
+    end if;
+
+    v_effective := v_tranche.amount_vnd - coalesce((
+      select sum(w.principal_withdrawn) from public.investment_transactions w
+       where w.parent_transaction_id = v_tranche.transaction_id
+         and w.transaction_type = 'withdrawal'), 0);
+    if v_effective <= 0 then continue; end if;
+
+    if v_tranche.transaction_id = v_last then
+      v_share := p_received_vnd - v_allocated;
+    else
+      v_share := (p_received_vnd * v_effective) / v_total;
+      v_allocated := v_allocated + v_share;
+    end if;
+
+    insert into public.investment_transactions (
+      user_id, goal_id, asset_type, transaction_type, parent_transaction_id,
+      investment_date, amount_vnd, principal_withdrawn, affects_progress,
+      consumed_by_inv_id
+    ) values (
+      v_tranche.user_id, v_tranche.goal_id, 'bank', 'withdrawal', v_tranche.transaction_id,
+      p_merge_date, v_share, v_effective, true, v_new_id
+    );
+  end loop;
+
+  -- Anything still funding the old book now funds the new one — the old one has
+  -- nothing left to receive.
+  update public.recurring_savings
+     set linked_deposit_tx_id = v_dest.transaction_id, updated_at = now()
+   where user_id = v_source.user_id
+     and linked_deposit_tx_id in (
+       select transaction_id from public.investment_transactions
+        where deposit_group_id = p_source_book_id
+     );
+
+  -- The promise has been kept, so it stops standing. Nothing else may write this
+  -- column (20260811000001), which is why this function marks its own write.
+  perform set_config('app.successor_write', '1', true);
+  update public.investment_transactions
+     set successor_deposit_tx_id = null, updated_at = now()
+   where transaction_id = p_source_book_id;
+  perform set_config('app.successor_write', '', true);
+
+  return v_new;
+end;
+$$;
+
+comment on function public.merge_book_into_successor(uuid, bigint, numeric, date, uuid[]) is
+  'Fold a matured accumulating book into the successor it was handed to, closing it and retiring the promise (#638).';
+
+-- Executable by the people who own books, not by everyone: like the handover
+-- functions, this one trusts a null auth.uid() as the service role or SQL, and
+-- `anon` has one too.
+revoke all on function public.merge_book_into_successor(uuid, bigint, numeric, date, uuid[]) from public, anon;
+grant execute on function public.merge_book_into_successor(uuid, bigint, numeric, date, uuid[]) to authenticated, service_role;

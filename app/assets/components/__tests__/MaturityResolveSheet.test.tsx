@@ -883,4 +883,64 @@ describe('MaturityResolveBody', () => {
     await waitFor(() => expect(screen.queryByTestId('cancel-handover-btn')).not.toBeInTheDocument())
     expect(calls.some(c => c.method === 'DELETE' && c.url.endsWith('/tx-bank-1/successor'))).toBe(true)
   })
+
+  // Phase 3: a handed-over book is not renewed at maturity — it goes where it
+  // was promised, carrying the cash the bank actually paid out (#638).
+  it('offers the merge into the successor, prefilled with what the book is worth', async () => {
+    const calls: { url: string; body?: unknown }[] = []
+    global.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      calls.push({ url: String(url), body: init?.body ? JSON.parse(String(init.body)) : undefined })
+      if (init?.method === 'POST') return { ok: true, json: async () => ({ transaction_id: 'new-1' }) } as Response
+      return { ok: true, json: async () => ({ banks: [] }) } as Response
+    }) as unknown as typeof fetch
+
+    const book: InvRow = {
+      ...maturedDeposit,
+      depositGroupId: 'tx-bank-1',
+      successorDepositTxId: 'book-2',
+      tranches: [
+        { id: 'tr-1', date: daysFromNow(-300), amount: 20_000_000, rate: 4, value: 21_000_000 },
+        { id: 'tr-2', date: daysFromNow(-200), amount: 15_000_000, rate: 4.2, value: 16_030_000 },
+      ],
+    }
+    const onRenewed = vi.fn()
+    render(
+      <MaturityResolveBody inv={book} isVi={false} onClose={() => {}} onRenewed={onRenewed} onWithdraw={() => {}} />,
+    )
+
+    expect(screen.getByTestId('merge-successor-panel')).toBeInTheDocument()
+    // Prefilled with the book's value — principal plus the interest it accrued —
+    // for the user to confirm against the bank's slip.
+    expect((screen.getByTestId('merge-received') as HTMLInputElement).value).toBe(formatIntVN(String(book.value)))
+
+    fireEvent.click(screen.getByTestId('merge-successor-submit'))
+    await waitFor(() => expect(onRenewed).toHaveBeenCalled())
+
+    const post = calls.find(c => String(c.url).includes('/merge-successor'))!
+    expect(post).toBeTruthy()
+    // Every live tranche is named, so a top-up landing mid-confirmation is caught.
+    expect(post.body).toMatchObject({ received_vnd: book.value, tranche_ids: ['tr-1', 'tr-2'] })
+  })
+
+  it('surfaces a refusal from the merge rather than pretending it worked', async () => {
+    const onRenewed = vi.fn()
+    global.fetch = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        return { ok: false, json: async () => ({ error: 'this book has not matured yet', code: 'merge_refused' }) } as Response
+      }
+      return { ok: true, json: async () => ({ banks: [] }) } as Response
+    }) as unknown as typeof fetch
+
+    const book: InvRow = {
+      ...maturedDeposit, depositGroupId: 'tx-bank-1', successorDepositTxId: 'book-2',
+      tranches: [{ id: 'tr-1', date: daysFromNow(-300), amount: 35_000_000, rate: 4, value: 37_030_000 }],
+    }
+    render(
+      <MaturityResolveBody inv={book} isVi={false} onClose={() => {}} onRenewed={onRenewed} onWithdraw={() => {}} />,
+    )
+
+    fireEvent.click(screen.getByTestId('merge-successor-submit'))
+    await waitFor(() => expect(screen.getByText(/has not matured yet/i)).toBeInTheDocument())
+    expect(onRenewed).not.toHaveBeenCalled()
+  })
 })

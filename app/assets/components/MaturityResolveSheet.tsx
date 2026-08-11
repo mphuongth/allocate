@@ -121,6 +121,13 @@ export function MaturityResolveBody({
   // that successor is what its maturity is for. Until that merge exists, the way
   // out has to be reachable from here, or the refusal is a dead end.
   const [handoverBlocked, setHandoverBlocked] = useState(false)
+  // Phase 3: a book that was handed over has one thing left to do at maturity —
+  // go where it was promised. That is offered here instead of a renewal, since
+  // renewing it is the one thing the handover said would not happen.
+  const hasSuccessor = !!inv.successorDepositTxId
+  const [mergeRecvStr, setMergeRecvStr] = useState('')
+  const [mergeRate, setMergeRate] = useState(inv.interestRate != null ? String(inv.interestRate) : '')
+  const [mergeDate, setMergeDate] = useState(() => todayIso())
   const [done, setDone] = useState<null | { newPrincipal: number; newMaturity: string; sources: string[] }>(null)
   // Settle-with-hold success: the deposit was parked in the pool (no re-deposit).
   const [heldDone, setHeldDone] = useState<null | { anchorName: string }>(null)
@@ -381,6 +388,41 @@ export function MaturityResolveBody({
     }
   }
 
+  // The cash the bank actually paid out, defaulting to what the book is worth —
+  // principal plus the interest it accrued — which the user confirms or corrects
+  // against the slip.
+  const successorRecv = mergeRecvStr === '' ? Math.round(inv.value) : Number(mergeRecvStr)
+
+  async function handleMergeIntoSuccessor() {
+    if (!(successorRecv > 0) || !(Number(mergeRate) > 0)) {
+      setError(isVi ? 'Cần nhập số tiền và lãi suất' : 'Amount and rate are required')
+      return
+    }
+    setSaving(true); setError('')
+    try {
+      const res = await fetch(`/api/v1/investment-transactions/${inv.id}/merge-successor`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          received_vnd: Math.round(successorRecv),
+          interest_rate: Number(mergeRate),
+          merge_date: mergeDate,
+          // Naming what we saw: a top-up landing while this was open means the
+          // cash being confirmed is not the cash the book holds.
+          tranche_ids: (inv.tranches ?? []).map((t) => t.id),
+        }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        setError(body.error ?? (isVi ? 'Không gộp được' : 'Could not merge'))
+        setSaving(false)
+        return
+      }
+      onRenewed()
+      onClose()
+    } catch { setError(isVi ? 'Lỗi kết nối' : 'Connection error') } finally { setSaving(false) }
+  }
+
   async function handleConfirm() {
     if (mode === 'withdraw') {
       // The hold fork only exists when there's an eligible anchor; default is hold.
@@ -497,6 +539,44 @@ export function MaturityResolveBody({
         <AlertTriangle size={15} color="var(--c-warn)" strokeWidth={2.2} style={{ flexShrink: 0, marginTop: 1 }} />
         <p style={{ margin: 0, fontSize: 12.5, color: 'var(--c-warn)', lineHeight: 1.5 }}>{t.why}</p>
       </div>
+
+      {/* The promise, come due. A handed-over book is not renewed — it goes where
+          it was promised, carrying the cash the bank actually paid out (#638). */}
+      {hasSuccessor && (
+        <div data-testid="merge-successor-panel" style={{ display: 'grid', gap: 10, padding: '13px 14px', border: '1px solid var(--c-line)', borderRadius: 12, background: 'var(--c-card)' }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700 }}>{isVi ? 'Gộp vào sổ kế nhiệm' : 'Merge into the successor book'}</div>
+            <p style={{ margin: '4px 0 0', fontSize: 12, lineHeight: 1.5, color: 'var(--c-muted)' }}>
+              {isVi
+                ? 'Sổ này đã được hẹn gộp vào sổ kế nhiệm khi đáo hạn. Xác nhận số tiền ngân hàng thực trả để ghi vào sổ mới.'
+                : 'This book was promised to its successor at maturity. Confirm what the bank actually paid out, and it lands there.'}
+            </p>
+          </div>
+          <div>
+            <label style={fieldLabel}>{isVi ? 'Tiền thực nhận (₫)' : 'Cash received (₫)'}</label>
+            <input data-testid="merge-received" type="text" inputMode="numeric"
+              value={formatIntVN(mergeRecvStr === '' ? String(Math.round(inv.value)) : mergeRecvStr)}
+              onChange={(e) => setMergeRecvStr(parseIntVN(e.target.value))} style={moneyInput} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>
+              <label style={fieldLabel}>{isVi ? 'Lãi suất phần gộp' : 'Rate for this tranche'}</label>
+              <input data-testid="merge-rate" type="text" inputMode="decimal" value={mergeRate}
+                onChange={(e) => setMergeRate(e.target.value.replace(/[^0-9.,]/g, '').replace(',', '.'))} style={moneyInput} />
+            </div>
+            <div>
+              <label style={fieldLabel}>{isVi ? 'Ngày gộp' : 'Merge date'}</label>
+              <input data-testid="merge-date" type="date" value={mergeDate}
+                onChange={(e) => setMergeDate(e.target.value)} style={dateInput} />
+            </div>
+          </div>
+          <button type="button" data-testid="merge-successor-submit" disabled={saving || !(successorRecv > 0) || !(Number(mergeRate) > 0)}
+            onClick={handleMergeIntoSuccessor}
+            style={{ padding: '11px 0', borderRadius: 10, border: 'none', background: 'var(--c-btn-primary)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit', opacity: saving || !(successorRecv > 0) || !(Number(mergeRate) > 0) ? 0.6 : 1 }}>
+            {isVi ? 'Gộp vào sổ kế nhiệm' : 'Merge into the successor'}
+          </button>
+        </div>
+      )}
 
       {/* Discoverability nudge: a later-maturing sibling in this goal makes this
           deposit a hold-for-merge candidate. Surfaced up top so the option isn't
