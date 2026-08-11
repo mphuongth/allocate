@@ -106,7 +106,9 @@ begin
      where transaction_id = v_b.transaction_id;
     set constraints all immediate;
     raise exception 'a foreign book must not be named as a successor';
-  exception when others then null;
+  -- Catching `others` here would catch the line above too, and the case would
+  -- pass whether or not anything refused it.
+  exception when sqlstate '23514' or sqlstate '23503' then null;
   end;
 
   -- ── The recurring-driven flow moves the whole month in one transaction ───

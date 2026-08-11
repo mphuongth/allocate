@@ -488,6 +488,9 @@ create trigger investment_transactions_folded_holding_immutable
 -- because the promise is gone. The next statement dissolves the book, and the
 -- link is left pointing at something no top-up can reach. What the waiter has to
 -- see is not the promise but its outcome: this deposit's balance went elsewhere.
+-- (Redefined here, so it keeps the revoke the other guard functions carry: a
+-- SECURITY DEFINER function has no business being executable by everyone, even
+-- one that can only run as a trigger.)
 create or replace function public.enforce_recurring_link_not_handed_over()
 returns trigger language plpgsql security definer set search_path = '' as $$
 declare v_successor uuid; v_folded boolean;
@@ -516,3 +519,5 @@ begin
   return new;
 end;
 $$;
+
+revoke all on function public.enforce_recurring_link_not_handed_over() from public, anon, authenticated;
