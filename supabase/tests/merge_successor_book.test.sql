@@ -332,6 +332,17 @@ begin
   exception when sqlstate '23514' then null;
   end;
 
+  -- Nor may the lineage be walked up to the book by hand. A collapse moves it
+  -- there legitimately, but on its own that move is step one of taking the
+  -- payout: with nothing left pointing at the credited tranche, deleting it
+  -- stops being refused.
+  begin
+    update public.investment_transactions set consumed_by_inv_id = v_b.transaction_id
+     where consumed_by_inv_id = v_new.transaction_id;
+    raise exception 'the lineage must not be moved to the book outside a collapse';
+  exception when sqlstate '23514' then null;
+  end;
+
   -- Nor may a folded withdrawal be detached from the holding it came out of
   -- while that holding still stands: it would stop subtracting, so the source
   -- principal reappears beside the payout the successor now holds. (Either the

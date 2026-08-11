@@ -503,13 +503,21 @@ begin
   if old.consumed_by_inv_id is not null
      and new.consumed_by_inv_id is distinct from old.consumed_by_inv_id
      -- Unless it is following the tranche it named up to that tranche's own
-     -- book: renewing the successor deletes the credited tranche, and the cash
-     -- carries on inside the anchor. Anything else pointed elsewhere is still a
-     -- rewrite of where the cash went.
+     -- book, DURING the collapse that is deleting it — the same evidence the
+     -- delete trigger asks for, a snapshot this transaction has just written
+     -- for that book. Allowing the move on its own made it step one of taking
+     -- the payout: with nothing left pointing at the credited tranche, deleting
+     -- it stopped being refused.
      and not exists (
        select 1 from public.investment_transactions t
         where t.transaction_id = old.consumed_by_inv_id
           and t.deposit_group_id = new.consumed_by_inv_id
+          and exists (
+            select 1 from public.investment_transactions s
+             where s.renewed_from_transaction_id = t.deposit_group_id
+               and s.user_id = t.user_id
+               and s.xmin = pg_current_xact_id()::xid
+          )
      ) then
     raise exception 'merge successor: this withdrawal records where the cash went, so that cannot be unset'
       using errcode = 'check_violation';
