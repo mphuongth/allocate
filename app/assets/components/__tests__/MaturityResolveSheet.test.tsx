@@ -919,7 +919,12 @@ describe('MaturityResolveBody', () => {
     const post = calls.find(c => String(c.url).includes('/merge-successor'))!
     expect(post).toBeTruthy()
     // Every live tranche is named, so a top-up landing mid-confirmation is caught.
-    expect(post.body).toMatchObject({ received_vnd: book.value, tranche_ids: ['tr-1', 'tr-2'] })
+    expect(post.body).toMatchObject({
+      received_vnd: book.value,
+      tranche_ids: ['tr-1', 'tr-2'],
+      // ...and what each held, so a withdrawal landing mid-confirmation is caught too.
+      tranche_principals: [20_000_000, 15_000_000],
+    })
   })
 
   it('surfaces a refusal from the merge rather than pretending it worked', async () => {

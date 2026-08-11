@@ -34,6 +34,7 @@ const BODY = {
   interest_rate: 4.6,
   merge_date: '2026-08-01',
   tranche_ids: [T1, T2],
+  tranche_principals: [8_000_000, 4_500_000],
 }
 
 const call = (body: Record<string, unknown> = BODY) =>
@@ -66,6 +67,7 @@ describe('POST /api/v1/investment-transactions/[id]/merge-successor (#638)', () 
         p_interest_rate: 4.6,
         p_merge_date: '2026-08-01',
         p_tranche_ids: [T1, T2],
+        p_tranche_principals: [8_000_000, 4_500_000],
       },
     })
   })
@@ -77,6 +79,7 @@ describe('POST /api/v1/investment-transactions/[id]/merge-successor (#638)', () 
 
   it.each([
     ['no tranches named', { ...BODY, tranche_ids: [] }],
+    ['balances that do not match the tranches', { ...BODY, tranche_principals: [8_000_000] }],
     ['a rate of nothing', { ...BODY, interest_rate: null }],
     ['nothing received', { ...BODY, received_vnd: 0 }],
     ['a merge dated in the future', { ...BODY, merge_date: '2099-01-01' }],

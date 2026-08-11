@@ -19,6 +19,7 @@ declare
   v_received bigint := 12500000;
   v_count int;
   v_stamped int;
+  v_principals bigint[];
 begin
   insert into auth.users (id, email) values (v_user, 'merge-successor@test.invalid');
   insert into public.savings_goals (user_id, goal_name) values (v_user, 'Merge') returning goal_id into v_goal;
@@ -70,13 +71,14 @@ begin
     v_saving, to_char(current_date - 5, 'YYYY-MM'), null);
 
   v_ids := array[v_a, v_a2];
+  v_principals := array[8000000::bigint, 4000000::bigint];
 
   -- ── A book that is not yet due is not merged early ───────────────────────
   update public.investment_transactions set expiry_date = current_date + 5
    where deposit_group_id = v_a;
   set constraints all immediate;
   begin
-    perform public.merge_book_into_successor(v_a, v_received, 4.5, current_date, v_ids);
+    perform public.merge_book_into_successor(v_a, v_received, 4.5, current_date, v_ids, v_principals);
     raise exception 'merging a book before its maturity must be refused';
   exception when sqlstate '23514' then null;
   end;
@@ -86,26 +88,36 @@ begin
 
   -- ── A tranche the caller never saw aborts the whole thing ────────────────
   begin
-    perform public.merge_book_into_successor(v_a, v_received, 4.5, current_date, array[v_a]);
+    perform public.merge_book_into_successor(v_a, v_received, 4.5, current_date, array[v_a], array[8000000::bigint]);
     raise exception 'a book that changed since load must be refused';
   exception when others then null;
   end;
 
   -- ── Nothing arrives from nowhere ─────────────────────────────────────────
   begin
-    perform public.merge_book_into_successor(v_a, 0, 4.5, current_date, v_ids);
+    perform public.merge_book_into_successor(v_a, 0, 4.5, current_date, v_ids, v_principals);
     raise exception 'a merge of nothing must be refused';
   exception when sqlstate '23514' then null;
   end;
   begin
-    perform public.merge_book_into_successor(v_a, 999000000000, 4.5, current_date, v_ids);
+    perform public.merge_book_into_successor(v_a, 999000000000, 4.5, current_date, v_ids, v_principals);
     raise exception 'a received amount unmoored from the book must be refused';
   exception when sqlstate '23514' then null;
   end;
 
+  -- ── A balance that moved since the screen loaded is a changed book ───────
+  -- The ids are all still there; only what they hold has changed, which is
+  -- exactly the case ids alone cannot see.
+  begin
+    perform public.merge_book_into_successor(
+      v_a, v_received, 4.5, current_date, v_ids, array[7000000::bigint, 4000000::bigint]);
+    raise exception 'a tranche whose balance moved must be refused';
+  exception when others then null;
+  end;
+
   -- ── The merge itself ─────────────────────────────────────────────────────
   select * into v_new from public.merge_book_into_successor(
-    v_a, v_received, 4.6, current_date, v_ids);
+    v_a, v_received, 4.6, current_date, v_ids, v_principals);
 
   -- Exactly one tranche lands in B, holding the cash that was actually received.
   if v_new.deposit_group_id is distinct from v_b.transaction_id then
@@ -166,7 +178,7 @@ begin
 
   -- ── Once kept, it cannot be kept again ───────────────────────────────────
   begin
-    perform public.merge_book_into_successor(v_a, v_received, 4.6, current_date, v_ids);
+    perform public.merge_book_into_successor(v_a, v_received, 4.6, current_date, v_ids, v_principals);
     raise exception 'a book with no successor must not be merged';
   exception when others then null;
   end;

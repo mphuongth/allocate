@@ -22,13 +22,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const parsed = await readJsonBody(request)
   if (!parsed.ok) return parsed.response
   const body = parsed.body
-  const { received_vnd, interest_rate, merge_date, tranche_ids } = body
+  const { received_vnd, interest_rate, merge_date, tranche_ids, tranche_principals } = body
 
   let bookId: string
   let cleanReceived: number
   let cleanRate: number
   let cleanDate: string
   let cleanTrancheIds: string[]
+  let cleanTranchePrincipals: number[]
   try {
     bookId = validateUUID(id, 'id')
     cleanReceived = validateAmount(received_vnd, 'received_vnd')
@@ -42,6 +43,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
     if (tranche_ids.length > 500) throw new ValidationError('tranche_ids is too long')
     cleanTrancheIds = tranche_ids.map((v, i) => validateUUID(v, `tranche_ids[${i}]`))
+    // The balances the client saw, not just which rows it saw: a partial
+    // withdrawal landing after the confirmation loaded leaves every id in place
+    // while the payout being confirmed is no longer one this book can make.
+    if (!Array.isArray(tranche_principals) || tranche_principals.length !== cleanTrancheIds.length) {
+      throw new ValidationError('tranche_principals must match tranche_ids')
+    }
+    cleanTranchePrincipals = tranche_principals.map((v, i) => Math.round(validateAmount(v, `tranche_principals[${i}]`)))
   } catch (e) {
     if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
     throw e
@@ -58,6 +66,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       p_interest_rate: cleanRate,
       p_merge_date: cleanDate,
       p_tranche_ids: cleanTrancheIds,
+      p_tranche_principals: cleanTranchePrincipals,
     })
     .single<{ transaction_id: string }>()
 

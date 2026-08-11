@@ -17,7 +17,8 @@ create or replace function public.merge_book_into_successor(
   p_received_vnd bigint,
   p_interest_rate numeric,
   p_merge_date date,
-  p_tranche_ids uuid[]
+  p_tranche_ids uuid[],
+  p_tranche_principals bigint[]
 )
 returns public.investment_transactions
 language plpgsql
@@ -39,7 +40,13 @@ declare
   v_allocated bigint := 0;
   v_share bigint;
   v_last uuid;
+  v_idx int;
 begin
+  if p_tranche_principals is null
+     or array_length(p_tranche_principals, 1) is distinct from array_length(p_tranche_ids, 1) then
+    raise exception 'merge successor: every named tranche needs the balance it was seen holding'
+      using errcode = 'check_violation';
+  end if;
   -- Both books, locked in id order — the same order every other pairing write
   -- takes, so two of them cannot deadlock against each other.
   perform 1 from public.investment_transactions
@@ -193,19 +200,25 @@ begin
     -- however many times they reloaded.
     if v_effective <= 0 then continue; end if;
 
-    -- One that DOES still hold something, and that the caller never saw, means
-    -- the book changed under them — a top-up landing while the confirmation was
-    -- open. Abort rather than close a tranche whose cash nobody counted. Plain
-    -- P0001, not serialization_failure: this is deterministic, and a pooler must
-    -- not spin retrying it.
-    if array_position(p_tranche_ids, v_tranche.transaction_id) is null then
+    -- One that DOES still hold something has to be one the caller saw, holding
+    -- what they saw it hold. Ids alone are not enough: a partial withdrawal
+    -- landing after the confirmation screen loaded leaves every id in place
+    -- while the payout being confirmed is no longer the payout this book can
+    -- make — the destination would be credited with cash the withdrawal already
+    -- took. Comparing balances is what catches that. Plain P0001, not
+    -- serialization_failure: this is deterministic, and a pooler must not spin
+    -- retrying it.
+    v_idx := array_position(p_tranche_ids, v_tranche.transaction_id);
+    if v_idx is null or p_tranche_principals[v_idx] is distinct from v_effective then
       raise exception 'merge successor: book changed since load, reload and retry';
     end if;
 
     if v_tranche.transaction_id = v_last then
       v_share := p_received_vnd - v_allocated;
     else
-      v_share := (p_received_vnd * v_effective) / v_total;
+      -- In numeric: a multi-billion payout times a multi-billion balance passes
+      -- the bigint ceiling long before the division brings it back down.
+      v_share := floor((p_received_vnd::numeric * v_effective) / v_total)::bigint;
       v_allocated := v_allocated + v_share;
     end if;
 
@@ -241,11 +254,11 @@ begin
 end;
 $$;
 
-comment on function public.merge_book_into_successor(uuid, bigint, numeric, date, uuid[]) is
+comment on function public.merge_book_into_successor(uuid, bigint, numeric, date, uuid[], bigint[]) is
   'Fold a matured accumulating book into the successor it was handed to, closing it and retiring the promise (#638).';
 
 -- Executable by the people who own books, not by everyone: like the handover
 -- functions, this one trusts a null auth.uid() as the service role or SQL, and
 -- `anon` has one too.
-revoke all on function public.merge_book_into_successor(uuid, bigint, numeric, date, uuid[]) from public, anon;
-grant execute on function public.merge_book_into_successor(uuid, bigint, numeric, date, uuid[]) to authenticated, service_role;
+revoke all on function public.merge_book_into_successor(uuid, bigint, numeric, date, uuid[], bigint[]) from public, anon;
+grant execute on function public.merge_book_into_successor(uuid, bigint, numeric, date, uuid[], bigint[]) to authenticated, service_role;

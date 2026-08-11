@@ -407,9 +407,11 @@ export function MaturityResolveBody({
           received_vnd: Math.round(successorRecv),
           interest_rate: Number(mergeRate),
           merge_date: mergeDate,
-          // Naming what we saw: a top-up landing while this was open means the
-          // cash being confirmed is not the cash the book holds.
+          // Naming what we saw, and what each held: a top-up or a withdrawal
+          // landing while this was open means the cash being confirmed is not
+          // the cash the book holds.
           tranche_ids: (inv.tranches ?? []).map((t) => t.id),
+          tranche_principals: (inv.tranches ?? []).map((t) => Math.round(t.amount)),
         }),
       })
       if (!res.ok) {
