@@ -427,6 +427,10 @@ begin
      -- held_for_merge is how the holding-side guard tells a successor merge from
      -- a held settlement. Left editable, flipping it turns that guard off.
      and new.held_for_merge is not distinct from old.held_for_merge
+     -- And renewal lineage hides the row outright: the active-transactions view
+     -- and the default query both read a row carrying it as history, so the
+     -- withdrawal stops counting and the folded principal comes back.
+     and new.renewed_from_transaction_id is not distinct from old.renewed_from_transaction_id
      -- affects_progress decides whether the goal bar sees this withdrawal at
      -- all: turned off, valuation still closes the source while progress counts
      -- its principal again, beside the successor that now holds the cash.
@@ -465,7 +469,7 @@ drop trigger if exists investment_transactions_merged_withdrawal_immutable on pu
 create trigger investment_transactions_merged_withdrawal_immutable
   before update of principal_withdrawn, amount_vnd, parent_transaction_id,
     consumed_by_inv_id, transaction_type, affects_progress, goal_id,
-    asset_type, fund_id, units_withdrawn, held_for_merge
+    asset_type, fund_id, units_withdrawn, held_for_merge, renewed_from_transaction_id
   on public.investment_transactions
   for each row
   when (old.transaction_type = 'withdrawal' and old.parent_transaction_id is not null)

@@ -352,6 +352,15 @@ begin
   exception when sqlstate '23514' then null;
   end;
 
+  -- Nor dressed up as renewal history, which hides the row from the views that
+  -- count it and brings the folded principal back that way.
+  begin
+    update public.investment_transactions set renewed_from_transaction_id = v_b.transaction_id
+     where consumed_by_inv_id = v_new.transaction_id;
+    raise exception 'a folded withdrawal must not be turned into renewal history';
+  exception when sqlstate '23514' then null;
+  end;
+
   -- But deleting the goal must still work: the FK nulls goal_id on all of this,
   -- and a goal that once completed a merge cannot be made undeletable by it.
   delete from public.savings_goals where goal_id = v_other_goal;
