@@ -255,6 +255,16 @@ begin
       raise exception 'successor book: that book cannot take a contribution today, so it cannot be the successor'
         using errcode = 'check_violation';
     end if;
+    -- And nothing may be left funding the book that just closed its door. The
+    -- RPC moves those savings before this deferred check runs; a link written
+    -- straight to the column moves nothing, and would strand them.
+    if exists (
+      select 1 from public.recurring_savings
+       where linked_deposit_tx_id = new.transaction_id and user_id = new.user_id
+    ) then
+      raise exception 'successor book: recurring savings still point at this book, so they would be left funding a book that refuses them'
+        using errcode = 'check_violation';
+    end if;
   end if;
 
   perform public.assert_successor_book_pairing(new.transaction_id);
@@ -352,7 +362,12 @@ create or replace function public.open_successor_book(
 )
 returns public.investment_transactions
 language plpgsql
-security invoker
+-- DEFINER, because `authenticated` no longer holds the privilege to write
+-- successor_deposit_tx_id at all (see the revoke below): this function is the
+-- only supported way to arrange a handover, so it is the one thing that may.
+-- Which means RLS no longer scopes what it reads — every row it touches is
+-- checked against the caller explicitly.
+security definer
 set search_path = ''
 as $$
 declare
@@ -360,6 +375,7 @@ declare
   v_book public.investment_transactions;
   v_new_id uuid := gen_random_uuid();
   v_today date := (now() at time zone 'Asia/Ho_Chi_Minh')::date;
+  v_plan_ym text;
 begin
   -- SAVINGS FIRST, then the book. The other path through here — an ordinary
   -- recurring edit — locks its own saving row and only then waits for the book,
@@ -377,6 +393,12 @@ begin
      and deposit_group_id = p_source_book_id
    for update;
   if not found then
+    raise exception 'successor book: accumulating book not found'
+      using errcode = 'no_data_found';
+  end if;
+  -- RLS is not doing this for us any more. auth.uid() is null for the service
+  -- role and for SQL callers, which keep their reach.
+  if auth.uid() is not null and v_source.user_id is distinct from auth.uid() then
     raise exception 'successor book: accumulating book not found'
       using errcode = 'no_data_found';
   end if;
@@ -474,18 +496,22 @@ begin
   )
   returning * into v_book;
 
-  update public.investment_transactions
-     set successor_deposit_tx_id = v_new_id, updated_at = now()
-   where transaction_id = p_source_book_id;
 
-  -- EVERY saving pointing at the old book follows it. The source stops accepting
-  -- contributions the moment this commits, so a saving left behind would be
-  -- funding a book that refuses it — and the monthly plan would have no way to
-  -- record the month at all. This runs whichever entry point opened the
-  -- successor: the manual one names no saving, and would otherwise strand them.
-  --
-  -- They were locked at the top, before the book, so nothing can relink between
-  -- the read and the write below.
+  -- The plan tags the tranche while the fulfillment is filed under p_ym, so a
+  -- plan from another month splits one contribution across two. The route says
+  -- this too, but the route is not the only way in here.
+  if p_plan_id is not null and p_ym is not null then
+    select to_char(make_date(year, month, 1), 'YYYY-MM') into v_plan_ym
+      from public.monthly_plans
+     where id = p_plan_id and user_id = v_source.user_id;
+    if not found then
+      raise exception 'successor book: plan not found' using errcode = 'no_data_found';
+    end if;
+    if v_plan_ym is distinct from p_ym then
+      raise exception 'successor book: the plan is for % but the contribution is for %', v_plan_ym, p_ym
+        using errcode = 'check_violation';
+    end if;
+  end if;
 
   -- Recurring-driven: the month is also contributed to B and marked fulfilled.
   -- A saving linked elsewhere is not this flow's to move.
@@ -513,13 +539,23 @@ begin
       set amount_vnd = excluded.amount_vnd,
           source     = excluded.source,
           updated_at = now();
-
   end if;
 
+  -- SAVINGS BEFORE THE LINK. The moment the link lands, the old book refuses
+  -- contributions — so anything still pointing at it would be stranded, and the
+  -- guard that says so is entitled to run right there. Moving them first means
+  -- the book is never handed over while something still funds it, whether that
+  -- check is deferred to commit or forced earlier.
   update public.recurring_savings
      set linked_deposit_tx_id = v_new_id, updated_at = now()
    where user_id = v_source.user_id
      and linked_deposit_tx_id = p_source_book_id;
+
+  perform set_config('app.successor_write', '1', true);
+  update public.investment_transactions
+     set successor_deposit_tx_id = v_new_id, updated_at = now()
+   where transaction_id = p_source_book_id;
+  perform set_config('app.successor_write', '', true);
 
   return v_book;
 end;
@@ -603,3 +639,75 @@ create constraint trigger investment_transactions_successor_after_delete
   for each row
   when (old.successor_deposit_tx_id is not null)
   execute function public.enforce_successor_after_delete();
+
+
+-- Cancelling is the other write to the column, so it goes the same way: a
+-- function that may, called by a route that no longer can.
+create or replace function public.cancel_successor_book(p_source_book_id uuid)
+returns public.investment_transactions
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare v_row public.investment_transactions;
+begin
+  select * into v_row from public.investment_transactions
+   where transaction_id = p_source_book_id
+   for update;
+  if not found then
+    raise exception 'successor book: deposit not found' using errcode = 'no_data_found';
+  end if;
+  if auth.uid() is not null and v_row.user_id is distinct from auth.uid() then
+    raise exception 'successor book: deposit not found' using errcode = 'no_data_found';
+  end if;
+
+  perform set_config('app.successor_write', '1', true);
+  update public.investment_transactions
+     set successor_deposit_tx_id = null, updated_at = now()
+   where transaction_id = p_source_book_id
+  returning * into v_row;
+  perform set_config('app.successor_write', '', true);
+  return v_row;
+end;
+$$;
+
+-- ── The boundary ────────────────────────────────────────────────────────────
+--
+-- Every hole found in this feature that needed its own guard had the same
+-- shape: a client writing successor_deposit_tx_id directly, skipping the flow
+-- that gives the handover its meaning — the reason for it, the月 fulfillment,
+-- the recurring links that have to move with it. Guarding each path one at a
+-- time is endless, because the paths are however many ways there are to write
+-- a column.
+--
+-- So the column stops being a client's to write. The two functions above mark
+-- their own writes; anything else arriving with a real session behind it is
+-- refused here.
+--
+-- Not by privileges alone: a column-level revoke is undone by any later
+-- `grant update on all tables`, which is a normal thing for a project to do, so
+-- it stands as a second line rather than the boundary itself. auth.uid() is
+-- null for the service role, for migrations and for SQL maintenance, which keep
+-- their reach — the same convention the rest of this file uses.
+create or replace function public.enforce_successor_written_by_rpc()
+returns trigger language plpgsql set search_path = '' as $$
+begin
+  if (tg_op = 'INSERT' and new.successor_deposit_tx_id is not null
+      or tg_op = 'UPDATE' and old.successor_deposit_tx_id is distinct from new.successor_deposit_tx_id)
+     and auth.uid() is not null
+     and coalesce(current_setting('app.successor_write', true), '') <> '1' then
+    raise exception 'successor book: a handover is arranged through open_successor_book, not by writing the link'
+      using errcode = 'check_violation';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists investment_transactions_successor_rpc_only on public.investment_transactions;
+create trigger investment_transactions_successor_rpc_only
+  before insert or update of successor_deposit_tx_id on public.investment_transactions
+  for each row
+  execute function public.enforce_successor_written_by_rpc();
+
+revoke insert (successor_deposit_tx_id), update (successor_deposit_tx_id)
+  on public.investment_transactions from anon, authenticated;

@@ -27,6 +27,10 @@ declare
   v_lockable uuid := gen_random_uuid();
   v_rec_book uuid := gen_random_uuid();
   v_closed uuid := gen_random_uuid();
+  v_stray_saving uuid := gen_random_uuid();
+  v_plan uuid := gen_random_uuid();
+  v_plan_saving uuid := gen_random_uuid();
+  v_lockable2 uuid := gen_random_uuid();
 begin
   insert into auth.users (id, email) values (v_user, 'successor-book@test.invalid');
   insert into public.savings_goals (user_id, goal_name) values (v_user, 'Successor') returning goal_id into v_goal;
@@ -497,6 +501,68 @@ begin
      where transaction_id in (v_dated_book, v_tail2.transaction_id);
     set constraints all immediate;
     raise exception 'deleting a promised anchor beside its successor must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- ── The column is not a client's to write ───────────────────────────────
+  -- Every hole in this feature had one shape: a client writing the link
+  -- directly, skipping what gives a handover its meaning. The privilege is the
+  -- boundary; the guards above are what the two functions answer to.
+  -- The privilege is revoked, and the trigger holds even if a later
+  -- `grant update on all tables` hands it back — so the test grants it back and
+  -- checks the boundary still refuses. The grant mirrors the deployed database;
+  -- the surrounding transaction rolls it away.
+  if has_column_privilege('authenticated', 'public.investment_transactions',
+                          'successor_deposit_tx_id', 'UPDATE') then
+    raise exception 'authenticated must not hold the privilege on successor_deposit_tx_id';
+  end if;
+  grant select, update on public.investment_transactions to authenticated;
+  perform set_config('request.jwt.claims', json_build_object('sub', v_user::text)::text, true);
+  perform set_config('request.jwt.claim.sub', v_user::text, true);
+  begin
+    set local role authenticated;
+    update public.investment_transactions set successor_deposit_tx_id = v_tail2.transaction_id
+     where transaction_id = v_short_book;
+    reset role;
+    raise exception 'writing the link directly must be refused';
+  exception when sqlstate '23514' then
+    reset role;
+  end;
+  perform set_config('request.jwt.claims', '', true);
+  perform set_config('request.jwt.claim.sub', '', true);
+
+  -- Cancelling goes through its own function for the same reason.
+  perform public.cancel_successor_book(v_dated_book);
+  select successor_deposit_tx_id into v_successor
+    from public.investment_transactions where transaction_id = v_dated_book;
+  if v_successor is not null then
+    raise exception 'cancel_successor_book must clear the link';
+  end if;
+
+  -- A locked book with a saving on it, for the plan-month case.
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate,
+    deposit_group_id, top_up_lock_days
+  ) values (
+    v_lockable2, v_user, v_goal, 'bank', 'investment',
+    current_date - 200, current_date + 15, 8000000, 4, v_lockable2, 30
+  );
+  insert into public.recurring_savings (
+    saving_id, user_id, goal_id, name, amount_vnd, linked_deposit_tx_id
+  ) values (
+    v_plan_saving, v_user, v_goal, 'Planned', 1000000, v_lockable2
+  );
+
+  -- ── The plan and the contribution must name the same month ──────────────
+  insert into public.monthly_plans (id, user_id, month, year, salary_vnd)
+  values (v_plan, v_user, extract(month from current_date - 40)::int,
+          extract(year from current_date - 40)::int, 30000000);
+  begin
+    perform public.open_successor_book(
+      v_lockable2, 1000000, 4, current_date - 1, current_date + 400, 30, null,
+      v_plan_saving, to_char(current_date, 'YYYY-MM'), v_plan);
+    raise exception 'a plan from another month must be refused';
   exception when sqlstate '23514' then null;
   end;
 

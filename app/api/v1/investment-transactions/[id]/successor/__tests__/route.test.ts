@@ -186,11 +186,14 @@ describe('POST /api/v1/investment-transactions/[id]/successor (#638)', () => {
         { params: Promise.resolve({ id: BOOK }) },
       )
 
-    it('clears the link and leaves the successor book alone', async () => {
+    it('cancels through the function that owns the column', async () => {
       const res = await del()
 
       expect(res.status).toBe(200)
-      expect(h.updates).toMatchObject({ successor_deposit_tx_id: null })
+      // The column is not writable by clients at all, so the route cannot
+      // update it directly — it asks the function that may.
+      expect(h.updates).toBeNull()
+      expect(h.rpcCalls[0]).toMatchObject({ name: 'cancel_successor_book', args: { p_source_book_id: BOOK } })
       await expect(res.json()).resolves.toMatchObject({ successor_deposit_tx_id: null })
     })
 
@@ -219,7 +222,7 @@ describe('POST /api/v1/investment-transactions/[id]/successor (#638)', () => {
     })
 
     it('answers 404 for a deposit that is not the caller\'s', async () => {
-      h.updateResult = { data: null, error: null }
+      h.rpcResult = { data: null, error: { message: 'successor book: deposit not found' } }
       expect((await del()).status).toBe(404)
     })
   })

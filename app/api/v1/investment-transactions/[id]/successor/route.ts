@@ -153,16 +153,15 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     throw e
   }
 
+  // Through the RPC, not a direct update: the column is not writable by clients
+  // at all (#638). The two functions that own it are the only places that know
+  // what a handover involves.
   const { data: book, error } = await supabase
-    .from('investment_transactions')
-    .update({ successor_deposit_tx_id: null, updated_at: new Date().toISOString() })
-    .eq('transaction_id', bookId)
-    .eq('user_id', user.id)
-    .select('transaction_id')
-    .single()
+    .rpc('cancel_successor_book', { p_source_book_id: bookId })
+    .single<{ transaction_id: string }>()
 
   if (error || !book) {
-    if (error) console.error('cancel successor failed', error.message)
+    if (error) console.error('cancel_successor_book failed', error.message)
     return NextResponse.json({ error: 'Deposit not found' }, { status: 404 })
   }
   return NextResponse.json({ transaction_id: book.transaction_id, successor_deposit_tx_id: null })
