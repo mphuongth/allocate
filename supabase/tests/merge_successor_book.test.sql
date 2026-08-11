@@ -518,6 +518,45 @@ begin
 end;
 $$;
 
+-- ── Deleting the account still works after a merge ──────────────────────────
+--
+-- The lineage move above runs as a BEFORE DELETE trigger, so it also fires
+-- during the cascade from auth.users — where the goal these rows point at may
+-- already be gone, and rewriting them fails the ownership check. That made an
+-- account that had ever completed a merge undeletable.
+do $$
+declare
+  v_user uuid := gen_random_uuid();
+  v_goal uuid;
+  v_a uuid := gen_random_uuid();
+  v_b public.investment_transactions;
+  v_count int;
+begin
+  insert into auth.users (id, email) values (v_user, 'merge-erase@test.invalid');
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Erase') returning goal_id into v_goal;
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate, deposit_group_id, top_up_lock_days
+  ) values (
+    v_a, v_user, v_goal, 'bank', 'investment',
+    current_date - 300, current_date - 3, 8000000, 4, v_a, 30
+  );
+  select * into v_b from public.open_successor_book(
+    v_a, 2000000, 4.5, current_date - 5, current_date + 300, 30, null, null, null, null);
+  perform public.merge_book_into_successor(
+    v_a, 8300000, 4.5, current_date, array[v_a], array[8000000::bigint], v_b.transaction_id);
+  set constraints all immediate;
+
+  delete from auth.users where id = v_user;
+  select count(*) into v_count from public.investment_transactions where user_id = v_user;
+  if v_count <> 0 then
+    raise exception 'deleting the account must remove its rows, % left', v_count;
+  end if;
+
+  raise notice 'merge successor book (account still deletable): OK';
+end;
+$$;
+
 -- ── The successor can still be renewed the ordinary way ─────────────────────
 --
 -- Collapsing a book deletes every non-anchor tranche after snapshotting it. The

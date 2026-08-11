@@ -83,6 +83,21 @@ begin
     raise exception 'merge successor: every named tranche needs the balance it was seen holding'
       using errcode = 'check_violation';
   end if;
+  -- SAVINGS FIRST, then the books — the order open_successor_book takes, and
+  -- the order an ordinary recurring edit ends up in on its own (it holds its
+  -- saving row, then waits for the book through the link trigger). Locking the
+  -- book first here would invert the two and turn the pair into a deadlock that
+  -- Postgres resolves by killing one of them. These are the savings this merge
+  -- will move; one linked to a tranche that appears after this read is not
+  -- locked, but such a book fails the tranche check below anyway.
+  perform 1 from public.recurring_savings
+   where linked_deposit_tx_id in (
+     select transaction_id from public.investment_transactions
+      where deposit_group_id = p_source_book_id
+   )
+   order by saving_id
+   for update;
+
   -- Both books, locked in id order — the same order every other pairing write
   -- takes, so two of them cannot deadlock against each other.
   perform 1 from public.investment_transactions
@@ -174,6 +189,23 @@ begin
      and transaction_type = 'investment'
      and renewed_from_transaction_id is null
    order by transaction_id
+   for update;
+
+  -- And the withdrawals themselves, for the same reason one step further out.
+  -- Deleting an earlier partial withdrawal is refused once this merge's own
+  -- withdrawal exists — but a delete running concurrently cannot see that row
+  -- while it is uncommitted, so both would commit: the deleted principal comes
+  -- back to a source that is now dissolved, while the successor keeps the whole
+  -- payout. Holding these rows makes the delete wait for the answer instead of
+  -- deciding without it.
+  perform 1 from public.investment_transactions w
+   where w.transaction_type = 'withdrawal'
+     and w.parent_transaction_id in (
+       select t.transaction_id from public.investment_transactions t
+        where t.deposit_group_id = p_source_book_id
+          and t.transaction_type = 'investment'
+     )
+   order by w.transaction_id
    for update;
 
   -- What the book still holds, after any partial withdrawals it has taken.
@@ -703,6 +735,14 @@ security definer
 set search_path = ''
 as $$
 begin
+  -- The account going away takes all of this with it, and the cascade may
+  -- already have removed the goal these rows point at — so rewriting them now
+  -- fails the ownership check and makes an account that ever completed a merge
+  -- undeletable. There is nothing to preserve lineage for either.
+  if not exists (select 1 from auth.users u where u.id = old.user_id) then
+    return old;
+  end if;
+
   -- Not part of a book any more (a plain delete of the credited row, or a book
   -- already dissolved): nothing to move it onto, so the foreign key and the
   -- withdrawal guard refuse the delete — which is what should happen, since the
