@@ -340,6 +340,21 @@ begin
       using errcode = 'check_violation';
   end if;
 
+  -- Reclassifying the row is the quietest way to undo it: as an investment it
+  -- stops subtracting its principal from the source, while the successor keeps
+  -- the credit — and it slips out of both guards, whose WHEN clauses ask for a
+  -- withdrawal, so everything around it becomes editable afterwards too.
+  if new.transaction_type is distinct from old.transaction_type
+     and (old.consumed_by_inv_id is not null or exists (
+       select 1 from public.investment_transactions w
+        where w.parent_transaction_id = old.parent_transaction_id
+          and w.transaction_type = 'withdrawal'
+          and w.consumed_by_inv_id is not null
+     )) then
+    raise exception 'merge successor: this holding was folded into another deposit, so its withdrawals cannot be reclassified'
+      using errcode = 'check_violation';
+  end if;
+
   -- The FK's own cleanup: deleting a holding sets its withdrawals' parent to
   -- null rather than removing them. Nothing is restored by that — the holding
   -- itself is gone — so it is not this guard's business. Re-parenting to a
@@ -374,7 +389,7 @@ revoke all on function public.guard_merged_source_withdrawal_edited() from publi
 
 drop trigger if exists investment_transactions_merged_withdrawal_immutable on public.investment_transactions;
 create trigger investment_transactions_merged_withdrawal_immutable
-  before update of principal_withdrawn, amount_vnd, parent_transaction_id, consumed_by_inv_id
+  before update of principal_withdrawn, amount_vnd, parent_transaction_id, consumed_by_inv_id, transaction_type
   on public.investment_transactions
   for each row
   when (old.transaction_type = 'withdrawal' and old.parent_transaction_id is not null)

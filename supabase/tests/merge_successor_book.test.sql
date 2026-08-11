@@ -236,6 +236,16 @@ begin
   exception when sqlstate '23514' then null;
   end;
 
+  -- Nor reclassified: as an investment the row stops subtracting its principal
+  -- from the source while the successor keeps the credit — and it would slip out
+  -- of these guards entirely, since they ask for a withdrawal.
+  begin
+    update public.investment_transactions set transaction_type = 'investment'
+     where consumed_by_inv_id = v_new.transaction_id;
+    raise exception 'a consumed withdrawal must not be reclassified';
+  exception when sqlstate '23514' then null;
+  end;
+
   -- ── The settled book stops being a book ──────────────────────────────────
   -- Still self-grouped, it would remain a valid target for a backdated top-up
   -- that resurrects it after its payout has gone.

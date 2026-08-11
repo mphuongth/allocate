@@ -392,6 +392,11 @@ export function MaturityResolveBody({
   // principal plus the interest it accrued — which the user confirms or corrects
   // against the slip.
   const successorRecv = mergeRecvStr === '' ? Math.round(inv.value) : Number(mergeRecvStr)
+  // The sheet also opens in the week BEFORE maturity, as a reminder. The cash is
+  // not paid out until the day itself, and the merge refuses a source that has
+  // not matured — so offering the button then is offering a certain error.
+  const bookMatured = !!inv.expiryDate && inv.expiryDate <= todayIso()
+  const mergeReady = successorRecv > 0 && Number(mergeRate) > 0 && bookMatured
 
   async function handleMergeIntoSuccessor() {
     if (!(successorRecv > 0) || !(Number(mergeRate) > 0)) {
@@ -572,9 +577,16 @@ export function MaturityResolveBody({
                 onChange={(e) => setMergeDate(e.target.value)} style={dateInput} />
             </div>
           </div>
-          <button type="button" data-testid="merge-successor-submit" disabled={saving || !(successorRecv > 0) || !(Number(mergeRate) > 0)}
+          {!bookMatured && (
+            <p data-testid="merge-not-due" style={{ margin: 0, fontSize: 12, lineHeight: 1.45, color: 'var(--c-muted)' }}>
+              {isVi
+                ? 'Sổ chưa đến ngày đáo hạn — ngân hàng chưa trả tiền, nên chưa gộp được.'
+                : 'This book has not matured yet — the bank has not paid out, so there is nothing to move.'}
+            </p>
+          )}
+          <button type="button" data-testid="merge-successor-submit" disabled={saving || !mergeReady}
             onClick={handleMergeIntoSuccessor}
-            style={{ padding: '11px 0', borderRadius: 10, border: 'none', background: 'var(--c-btn-primary)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit', opacity: saving || !(successorRecv > 0) || !(Number(mergeRate) > 0) ? 0.6 : 1 }}>
+            style={{ padding: '11px 0', borderRadius: 10, border: 'none', background: 'var(--c-btn-primary)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit', opacity: saving || !mergeReady ? 0.6 : 1 }}>
             {isVi ? 'Gộp vào sổ kế nhiệm' : 'Merge into the successor'}
           </button>
         </div>

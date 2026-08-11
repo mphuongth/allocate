@@ -948,4 +948,39 @@ describe('MaturityResolveBody', () => {
     await waitFor(() => expect(screen.getByText(/has not matured yet/i)).toBeInTheDocument())
     expect(onRenewed).not.toHaveBeenCalled()
   })
+
+  // The sheet opens in the week before maturity too, as a reminder — and the
+  // merge refuses a source that has not matured, so the button would be a
+  // guaranteed error (#638).
+  it('waits for maturity before offering the merge', () => {
+    const notDue: InvRow = {
+      ...maturedDeposit,
+      expiryDate: daysFromNow(3),
+      depositGroupId: 'tx-bank-1',
+      successorDepositTxId: 'book-2',
+      tranches: [{ id: 'tr-1', date: daysFromNow(-300), amount: 35_000_000, rate: 4, value: 37_030_000 }],
+    }
+    render(
+      <MaturityResolveBody inv={notDue} isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
+    )
+
+    expect(screen.getByTestId('merge-not-due')).toBeInTheDocument()
+    expect(screen.getByTestId('merge-successor-submit')).toBeDisabled()
+  })
+
+  it('offers it on the maturity day itself, which the merge accepts', () => {
+    const dueToday: InvRow = {
+      ...maturedDeposit,
+      expiryDate: todayIso(),
+      depositGroupId: 'tx-bank-1',
+      successorDepositTxId: 'book-2',
+      tranches: [{ id: 'tr-1', date: daysFromNow(-300), amount: 35_000_000, rate: 4, value: 37_030_000 }],
+    }
+    render(
+      <MaturityResolveBody inv={dueToday} isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
+    )
+
+    expect(screen.queryByTestId('merge-not-due')).not.toBeInTheDocument()
+    expect(screen.getByTestId('merge-successor-submit')).toBeEnabled()
+  })
 })
