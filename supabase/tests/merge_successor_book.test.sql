@@ -276,6 +276,16 @@ begin
   exception when sqlstate '23514' then null;
   end;
 
+  -- The withdrawals cannot be moved out of the goal either: goal detail loads by
+  -- raw goal_id, so the source would be shown without the withdrawal that closed
+  -- it, and its paid-away principal would read as live.
+  begin
+    update public.investment_transactions set goal_id = v_other_goal
+     where consumed_by_inv_id = v_new.transaction_id;
+    raise exception 'a folded withdrawal must not be moved between goals';
+  exception when sqlstate '23514' then null;
+  end;
+
   -- A recurring saving cannot be attached to it afterwards either: nothing can
   -- be paid into a deposit whose balance has gone.
   begin

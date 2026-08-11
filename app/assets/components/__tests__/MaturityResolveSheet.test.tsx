@@ -1003,4 +1003,33 @@ describe('MaturityResolveBody', () => {
     // Enabled only once the server has said what the book holds.
     await waitFor(() => expect(screen.getByTestId('merge-successor-submit')).toBeEnabled())
   })
+
+  // A preview that fails silently leaves the merge button disabled with nothing
+  // said, and a matured book looks impossible to resolve (#638).
+  it('says so when the book cannot be read, and offers to try again', async () => {
+    let attempt = 0
+    global.fetch = vi.fn(async (url: string | URL | Request) => {
+      if (String(url).includes('/merge-successor')) {
+        attempt += 1
+        if (attempt === 1) return { ok: false, json: async () => ({}) } as Response
+        return { ok: true, json: async () => ({ tranches: [{ transaction_id: 'tr-1', effective_principal: 35_000_000 }] }) } as Response
+      }
+      return { ok: true, json: async () => ({ banks: [] }) } as Response
+    }) as unknown as typeof fetch
+
+    const book: InvRow = {
+      ...maturedDeposit, depositGroupId: 'tx-bank-1', successorDepositTxId: 'book-2',
+      tranches: [{ id: 'tr-1', date: daysFromNow(-300), amount: 35_000_000, rate: 4, value: 37_030_000 }],
+    }
+    render(
+      <MaturityResolveBody inv={book} isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
+    )
+
+    await waitFor(() => expect(screen.getByTestId('merge-preview-failed')).toBeInTheDocument())
+    expect(screen.getByTestId('merge-successor-submit')).toBeDisabled()
+
+    fireEvent.click(screen.getByTestId('merge-preview-retry'))
+    await waitFor(() => expect(screen.getByTestId('merge-successor-submit')).toBeEnabled())
+    expect(screen.queryByTestId('merge-preview-failed')).not.toBeInTheDocument()
+  })
 })

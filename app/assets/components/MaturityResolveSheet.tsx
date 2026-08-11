@@ -132,6 +132,8 @@ export function MaturityResolveBody({
   // goal hands this sheet a partial book — and a partial book can never satisfy
   // the merge's tranche check, however often it is reloaded.
   const [mergeTranches, setMergeTranches] = useState<{ transaction_id: string; effective_principal: number }[] | null>(null)
+  const [mergeLoadFailed, setMergeLoadFailed] = useState(false)
+  const [mergeReload, setMergeReload] = useState(0)
   const [done, setDone] = useState<null | { newPrincipal: number; newMaturity: string; sources: string[] }>(null)
   // Settle-with-hold success: the deposit was parked in the pool (no re-deposit).
   const [heldDone, setHeldDone] = useState<null | { anchorName: string }>(null)
@@ -405,12 +407,15 @@ export function MaturityResolveBody({
   useEffect(() => {
     if (!hasSuccessor) return
     let live = true
+    setMergeLoadFailed(false)
     fetch(`/api/v1/investment-transactions/${inv.id}/merge-successor`, { cache: 'no-store' })
-      .then((r) => r.ok ? r.json() : null)
-      .then((res) => { if (live && res?.tranches) setMergeTranches(res.tranches) })
-      .catch(() => {})
+      .then((r) => { if (!r.ok) throw new Error('preview failed'); return r.json() })
+      .then((res) => { if (live) setMergeTranches(res?.tranches ?? []) })
+      // Failing quietly here leaves the button disabled with nothing said, and a
+      // matured book looks impossible to resolve until the sheet is reopened.
+      .catch(() => { if (live) setMergeLoadFailed(true) })
     return () => { live = false }
-  }, [hasSuccessor, inv.id])
+  }, [hasSuccessor, inv.id, mergeReload])
 
   async function handleMergeIntoSuccessor() {
     if (!(successorRecv > 0) || !(Number(mergeRate) > 0)) {
@@ -591,6 +596,15 @@ export function MaturityResolveBody({
                 onChange={(e) => setMergeDate(e.target.value)} style={dateInput} />
             </div>
           </div>
+          {mergeLoadFailed && (
+            <div data-testid="merge-preview-failed" style={{ margin: 0, fontSize: 12, lineHeight: 1.45, color: 'var(--c-neg)' }}>
+              {isVi ? 'Không đọc được sổ này.' : "Could not read this book."}
+              <button type="button" data-testid="merge-preview-retry" onClick={() => setMergeReload((n) => n + 1)}
+                style={{ marginLeft: 6, padding: 0, border: 'none', background: 'none', color: 'var(--c-navy)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline' }}>
+                {isVi ? 'Thử lại' : 'Try again'}
+              </button>
+            </div>
+          )}
           {!bookMatured && (
             <p data-testid="merge-not-due" style={{ margin: 0, fontSize: 12, lineHeight: 1.45, color: 'var(--c-muted)' }}>
               {isVi

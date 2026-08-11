@@ -31,11 +31,17 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     throw e
   }
 
-  const { data: rows, error } = await supabase
+  // The book first, then only the withdrawals that belong to it. Asking for
+  // every parented row the user owns and filtering afterwards is bounded by the
+  // whole account rather than by this book — and anything the cap drops comes
+  // back as a permanent `book_changed` that reloading cannot fix.
+  const { data: trancheRows, error } = await supabase
     .from('investment_transactions')
-    .select('transaction_id, transaction_type, parent_transaction_id, amount_vnd, principal_withdrawn, interest_rate, investment_date, expiry_date, deposit_group_id, renewed_from_transaction_id')
+    .select('transaction_id, transaction_type, amount_vnd, interest_rate, investment_date, renewed_from_transaction_id')
     .eq('user_id', user.id)
-    .or(`deposit_group_id.eq.${bookId},parent_transaction_id.not.is.null`)
+    .eq('deposit_group_id', bookId)
+    .eq('transaction_type', 'investment')
+    .is('renewed_from_transaction_id', null)
     .limit(2000)
 
   if (error) {
@@ -43,13 +49,23 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: 'Failed to read the book' }, { status: 500 })
   }
 
-  const all = rows ?? []
-  const tranchesRows = all.filter((r) => r.deposit_group_id === bookId
-    && r.transaction_type === 'investment' && !r.renewed_from_transaction_id)
+  const tranchesRows = trancheRows ?? []
   const withdrawnBy = new Map<string, number>()
-  for (const r of all) {
-    if (r.transaction_type !== 'withdrawal' || !r.parent_transaction_id) continue
-    withdrawnBy.set(r.parent_transaction_id, (withdrawnBy.get(r.parent_transaction_id) ?? 0) + (r.principal_withdrawn ?? 0))
+  if (tranchesRows.length > 0) {
+    const { data: withdrawals, error: wErr } = await supabase
+      .from('investment_transactions')
+      .select('parent_transaction_id, principal_withdrawn')
+      .eq('user_id', user.id)
+      .eq('transaction_type', 'withdrawal')
+      .in('parent_transaction_id', tranchesRows.map((r) => r.transaction_id))
+    if (wErr) {
+      console.error('merge preview failed', wErr.message)
+      return NextResponse.json({ error: 'Failed to read the book' }, { status: 500 })
+    }
+    for (const w of withdrawals ?? []) {
+      if (!w.parent_transaction_id) continue
+      withdrawnBy.set(w.parent_transaction_id, (withdrawnBy.get(w.parent_transaction_id) ?? 0) + (w.principal_withdrawn ?? 0))
+    }
   }
 
   // Only what still holds something: a spent tranche is not the caller's to

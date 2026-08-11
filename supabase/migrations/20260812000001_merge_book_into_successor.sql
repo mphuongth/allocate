@@ -371,7 +371,12 @@ begin
      -- affects_progress decides whether the goal bar sees this withdrawal at
      -- all: turned off, valuation still closes the source while progress counts
      -- its principal again, beside the successor that now holds the cash.
-     and new.affects_progress is not distinct from old.affects_progress then
+     and new.affects_progress is not distinct from old.affects_progress
+     -- And moving it to another goal has the same effect by another route: goal
+     -- detail loads by raw goal_id, so the source is then shown without the
+     -- withdrawal that closed it. Held settlements keep their own rules.
+     and (new.goal_id is not distinct from old.goal_id
+          or coalesce(old.held_for_merge, false)) then
     return new;
   end if;
 
@@ -393,7 +398,7 @@ revoke all on function public.guard_merged_source_withdrawal_edited() from publi
 
 drop trigger if exists investment_transactions_merged_withdrawal_immutable on public.investment_transactions;
 create trigger investment_transactions_merged_withdrawal_immutable
-  before update of principal_withdrawn, amount_vnd, parent_transaction_id, consumed_by_inv_id, transaction_type, affects_progress
+  before update of principal_withdrawn, amount_vnd, parent_transaction_id, consumed_by_inv_id, transaction_type, affects_progress, goal_id
   on public.investment_transactions
   for each row
   when (old.transaction_type = 'withdrawal' and old.parent_transaction_id is not null)
