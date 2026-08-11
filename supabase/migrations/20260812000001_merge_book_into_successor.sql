@@ -78,6 +78,7 @@ declare
   v_last uuid;
   v_idx int;
   v_seen int := 0;
+  v_last_expiry date;
 begin
   if p_tranche_principals is null
      or array_length(p_tranche_principals, 1) is distinct from array_length(p_tranche_ids, 1) then
@@ -278,6 +279,24 @@ begin
             and w.transaction_type = 'withdrawal'), 0) > 0
   ) then
     raise exception 'merge successor: this book still holds a tranche that has not matured; it cannot be folded yet'
+      using errcode = 'check_violation';
+  end if;
+  -- ...and the date the cash arrived is bounded by the LAST of them, not by the
+  -- anchor. In the same split book, an anchor that matured in July says nothing
+  -- about a tranche that matured in August: dating the fold to July would record
+  -- that tranche's withdrawal, and start the successor's interest, before its
+  -- money existed.
+  select max(t.expiry_date) into v_last_expiry
+    from public.investment_transactions t
+   where t.deposit_group_id = p_source_book_id
+     and t.transaction_type = 'investment'
+     and t.renewed_from_transaction_id is null
+     and t.amount_vnd - coalesce((
+       select sum(w.principal_withdrawn) from public.investment_transactions w
+        where w.parent_transaction_id = t.transaction_id
+          and w.transaction_type = 'withdrawal'), 0) > 0;
+  if v_last_expiry is not null and p_merge_date < v_last_expiry then
+    raise exception 'merge successor: the cash is paid out at maturity (%), not before', v_last_expiry
       using errcode = 'check_violation';
   end if;
   -- And one re-keyed to a fund. buildWithdrawalMaps sends any withdrawal naming

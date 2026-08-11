@@ -224,6 +224,18 @@ begin
     raise exception 'a tranche that has not matured must block the merge';
   exception when sqlstate '23514' then null;
   end;
+  -- Split the other way: both matured, but this tranche later than the anchor.
+  -- Dating the fold to the anchor's maturity would record its withdrawal, and
+  -- start the successor's interest, before its cash existed.
+  begin
+    update public.investment_transactions set expiry_date = current_date - 1
+     where transaction_id = v_a2;
+    set constraints all immediate;
+    perform public.merge_book_into_successor(
+      v_a, v_received, 4.5, current_date - 3, v_ids, v_principals, v_b.transaction_id);
+    raise exception 'a merge dated before the last tranche matured must be refused';
+  exception when sqlstate '23514' then null;
+  end;
   update public.investment_transactions set expiry_date = current_date - 3
    where transaction_id = v_a2;
   set constraints all immediate;
