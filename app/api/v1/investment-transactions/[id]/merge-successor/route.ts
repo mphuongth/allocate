@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validateDate, validateRate, validateUUID } from '@/lib/validation'
 import { isFutureInvestmentDate } from '@/lib/dates'
 import { readJsonBody } from '@/lib/apiBody'
+import { buildCollapsePlan } from '@/lib/accumulating'
 
 // One ceiling for the preview and the write. Reaching it is reported rather than
 // silently truncated — a short preview can never satisfy the RPC, and the merge
@@ -64,10 +65,11 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   // whole account rather than by this book — and anything the cap drops comes
   // back as a permanent `book_changed` that reloading cannot fix.
   const tranchePages = await readAllPages<{
-    transaction_id: string; amount_vnd: number | null; interest_rate: number | null; investment_date: string
+    transaction_id: string; amount_vnd: number | null; interest_rate: number | null
+    investment_date: string; expiry_date: string | null
   }>((from, to) => supabase
     .from('investment_transactions')
-    .select('transaction_id, amount_vnd, interest_rate, investment_date')
+    .select('transaction_id, amount_vnd, interest_rate, investment_date, expiry_date')
     .eq('user_id', user.id)
     .eq('deposit_group_id', bookId)
     .eq('transaction_type', 'investment')
@@ -123,6 +125,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       transaction_id: r.transaction_id,
       investment_date: r.investment_date,
       interest_rate: r.interest_rate,
+      expiry_date: r.expiry_date,
       effective_principal: (r.amount_vnd ?? 0) - (withdrawnBy.get(r.transaction_id) ?? 0),
     }))
     .filter((t) => t.effective_principal > 0)
@@ -130,9 +133,23 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   if (tranches.length === 0) {
     return NextResponse.json({ error: 'Accumulating book not found.' }, { status: 404 })
   }
+  // What the bank pays out: the principal still held plus the interest it
+  // accrued, valued with the one formula the collapse route uses. The sheet's
+  // default came from the goal page's own valuation, which is computed from a
+  // capped list — on a large goal it understated the payout, and the RPC only
+  // bounds a payout from ABOVE, so submitting the default quietly credited the
+  // successor with too little.
+  const plan = buildCollapsePlan(tranches.map((t) => ({
+    id: t.transaction_id,
+    principal: t.effective_principal,
+    rate: t.interest_rate,
+    investmentDate: t.investment_date,
+    expiryDate: t.expiry_date,
+  })))
   return NextResponse.json({
     tranches,
-    effective_principal: tranches.reduce((sum, t) => sum + t.effective_principal, 0),
+    effective_principal: plan.totalPrincipal,
+    projected_value: plan.totalPrincipal + plan.totalInterest,
   })
 }
 

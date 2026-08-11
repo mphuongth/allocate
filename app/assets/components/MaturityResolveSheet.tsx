@@ -132,6 +132,11 @@ export function MaturityResolveBody({
   // goal hands this sheet a partial book — and a partial book can never satisfy
   // the merge's tranche check, however often it is reloaded.
   const [mergeTranches, setMergeTranches] = useState<{ transaction_id: string; effective_principal: number }[] | null>(null)
+  // The payout the server values from the WHOLE book. inv.value is computed from
+  // the goal page's capped list, so on a large goal it understates it — and the
+  // merge only bounds a payout from above, so the understated default would have
+  // gone through.
+  const [mergeValue, setMergeValue] = useState<number | null>(null)
   const [mergeLoadFailed, setMergeLoadFailed] = useState(false)
   const [mergeReload, setMergeReload] = useState(0)
   const [done, setDone] = useState<null | { newPrincipal: number; newMaturity: string; sources: string[] }>(null)
@@ -397,7 +402,7 @@ export function MaturityResolveBody({
   // The cash the bank actually paid out, defaulting to what the book is worth —
   // principal plus the interest it accrued — which the user confirms or corrects
   // against the slip.
-  const successorRecv = mergeRecvStr === '' ? Math.round(inv.value) : Number(mergeRecvStr)
+  const successorRecv = mergeRecvStr === '' ? Math.round(mergeValue ?? inv.value) : Number(mergeRecvStr)
   // The sheet also opens in the week BEFORE maturity, as a reminder. The cash is
   // not paid out until the day itself, and the merge refuses a source that has
   // not matured — so offering the button then is offering a certain error.
@@ -410,7 +415,11 @@ export function MaturityResolveBody({
     setMergeLoadFailed(false)
     fetch(`/api/v1/investment-transactions/${inv.id}/merge-successor`, { cache: 'no-store' })
       .then((r) => { if (!r.ok) throw new Error('preview failed'); return r.json() })
-      .then((res) => { if (live) setMergeTranches(res?.tranches ?? []) })
+      .then((res) => {
+        if (!live) return
+        setMergeTranches(res?.tranches ?? [])
+        setMergeValue(typeof res?.projected_value === 'number' ? res.projected_value : null)
+      })
       // Failing quietly here leaves the button disabled with nothing said, and a
       // matured book looks impossible to resolve until the sheet is reopened.
       .catch(() => { if (live) setMergeLoadFailed(true) })
@@ -585,7 +594,7 @@ export function MaturityResolveBody({
           <div>
             <label style={fieldLabel}>{isVi ? 'Tiền thực nhận (₫)' : 'Cash received (₫)'}</label>
             <input data-testid="merge-received" type="text" inputMode="numeric"
-              value={formatIntVN(mergeRecvStr === '' ? String(Math.round(inv.value)) : mergeRecvStr)}
+              value={formatIntVN(mergeRecvStr === '' ? String(Math.round(mergeValue ?? inv.value)) : mergeRecvStr)}
               onChange={(e) => setMergeRecvStr(parseIntVN(e.target.value))} style={moneyInput} />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>

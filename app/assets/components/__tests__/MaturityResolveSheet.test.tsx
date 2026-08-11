@@ -892,10 +892,15 @@ describe('MaturityResolveBody', () => {
       calls.push({ url: String(url), method: init?.method, body: init?.body ? JSON.parse(String(init.body)) : undefined })
       if (init?.method === 'POST') return { ok: true, json: async () => ({ transaction_id: 'new-1' }) } as Response
       if (String(url).includes('/merge-successor')) {
-        return { ok: true, json: async () => ({ tranches: [
-          { transaction_id: 'tr-1', effective_principal: 20_000_000 },
-          { transaction_id: 'tr-2', effective_principal: 15_000_000 },
-        ] }) } as Response
+        return { ok: true, json: async () => ({
+          tranches: [
+            { transaction_id: 'tr-1', effective_principal: 20_000_000 },
+            { transaction_id: 'tr-2', effective_principal: 15_000_000 },
+          ],
+          // Valued over the whole book, which the goal page's own number
+          // understates whenever the book is bigger than its page.
+          projected_value: 38_500_000,
+        }) } as Response
       }
       return { ok: true, json: async () => ({ banks: [] }) } as Response
     }) as unknown as typeof fetch
@@ -917,9 +922,10 @@ describe('MaturityResolveBody', () => {
     expect(screen.getByTestId('merge-successor-panel')).toBeInTheDocument()
     // The tranche set comes from the server, not from the goal page's capped list.
     await waitFor(() => expect(screen.getByTestId('merge-successor-submit')).toBeEnabled())
-    // Prefilled with the book's value — principal plus the interest it accrued —
-    // for the user to confirm against the bank's slip.
-    expect((screen.getByTestId('merge-received') as HTMLInputElement).value).toBe(formatIntVN(String(book.value)))
+    // Prefilled from the server's valuation of the whole book, not the goal
+    // page's — which is capped and would understate the payout.
+    await waitFor(() => expect((screen.getByTestId('merge-received') as HTMLInputElement).value)
+      .toBe(formatIntVN('38500000')))
 
     fireEvent.click(screen.getByTestId('merge-successor-submit'))
     await waitFor(() => expect(onRenewed).toHaveBeenCalled())
@@ -929,7 +935,7 @@ describe('MaturityResolveBody', () => {
     expect(post).toBeTruthy()
     // Every live tranche is named, so a top-up landing mid-confirmation is caught.
     expect(post.body).toMatchObject({
-      received_vnd: book.value,
+      received_vnd: 38_500_000,
       tranche_ids: ['tr-1', 'tr-2'],
       // ...and what each held, so a withdrawal landing mid-confirmation is caught too.
       tranche_principals: [20_000_000, 15_000_000],
