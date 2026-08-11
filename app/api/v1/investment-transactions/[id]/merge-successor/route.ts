@@ -8,6 +8,26 @@ import { readJsonBody } from '@/lib/apiBody'
 // silently truncated — a short preview can never satisfy the RPC, and the merge
 // would fail with book_changed forever.
 const MERGE_TRANCHE_LIMIT = 2000
+// PostgREST caps a response at config.toml's max_rows, so asking for more in one
+// request quietly returns fewer. Pages of this size, read until one comes back
+// short, are how the whole book is actually seen.
+const PAGE = 500
+
+async function readAllPages<T>(
+  run: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+  ceiling: number,
+): Promise<{ rows: T[]; error?: string; truncated?: boolean }> {
+  const rows: T[] = []
+  for (let from = 0; from <= ceiling; from += PAGE) {
+    const { data, error } = await run(from, from + PAGE - 1)
+    if (error) return { rows, error: error.message }
+    const page = data ?? []
+    rows.push(...page)
+    if (page.length < PAGE) return { rows }
+    if (rows.length > ceiling) return { rows, truncated: true }
+  }
+  return { rows, truncated: true }
+}
 
 // Keep the promise: fold a matured accumulating book into the successor it was
 // handed to (#638, Phase 3). `id` is the source book's anchor.
@@ -40,22 +60,25 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   // every parented row the user owns and filtering afterwards is bounded by the
   // whole account rather than by this book — and anything the cap drops comes
   // back as a permanent `book_changed` that reloading cannot fix.
-  const { data: trancheRows, error } = await supabase
+  const tranchePages = await readAllPages<{
+    transaction_id: string; amount_vnd: number | null; interest_rate: number | null; investment_date: string
+  }>((from, to) => supabase
     .from('investment_transactions')
-    .select('transaction_id, transaction_type, amount_vnd, interest_rate, investment_date, renewed_from_transaction_id')
+    .select('transaction_id, amount_vnd, interest_rate, investment_date')
     .eq('user_id', user.id)
     .eq('deposit_group_id', bookId)
     .eq('transaction_type', 'investment')
     .is('renewed_from_transaction_id', null)
-    .limit(MERGE_TRANCHE_LIMIT + 1)
+    .order('transaction_id')
+    .range(from, to), MERGE_TRANCHE_LIMIT)
 
-  if (error) {
-    console.error('merge preview failed', error.message)
+  if (tranchePages.error) {
+    console.error('merge preview failed', tranchePages.error)
     return NextResponse.json({ error: 'Failed to read the book' }, { status: 500 })
   }
 
-  const tranchesRows = trancheRows ?? []
-  if (tranchesRows.length > MERGE_TRANCHE_LIMIT) {
+  const tranchesRows = tranchePages.rows
+  if (tranchePages.truncated) {
     return NextResponse.json(
       { error: 'This book has more tranches than the merge can take at once.', code: 'book_too_large' },
       { status: 422 },
@@ -63,17 +86,28 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   }
   const withdrawnBy = new Map<string, number>()
   if (tranchesRows.length > 0) {
-    const { data: withdrawals, error: wErr } = await supabase
-      .from('investment_transactions')
-      .select('parent_transaction_id, principal_withdrawn')
-      .eq('user_id', user.id)
-      .eq('transaction_type', 'withdrawal')
-      .in('parent_transaction_id', tranchesRows.map((r) => r.transaction_id))
-    if (wErr) {
-      console.error('merge preview failed', wErr.message)
+    const ids = tranchesRows.map((r) => r.transaction_id)
+    // A book can carry more withdrawals than tranches, so this is paged too.
+    const wPages = await readAllPages<{ parent_transaction_id: string | null; principal_withdrawn: number | null }>(
+      (from, to) => supabase
+        .from('investment_transactions')
+        .select('parent_transaction_id, principal_withdrawn')
+        .eq('user_id', user.id)
+        .eq('transaction_type', 'withdrawal')
+        .in('parent_transaction_id', ids)
+        .order('transaction_id')
+        .range(from, to), MERGE_TRANCHE_LIMIT * 4)
+    if (wPages.error) {
+      console.error('merge preview failed', wPages.error)
       return NextResponse.json({ error: 'Failed to read the book' }, { status: 500 })
     }
-    for (const w of withdrawals ?? []) {
+    if (wPages.truncated) {
+      return NextResponse.json(
+        { error: 'This book has more history than the merge can take at once.', code: 'book_too_large' },
+        { status: 422 },
+      )
+    }
+    for (const w of wPages.rows) {
       if (!w.parent_transaction_id) continue
       withdrawnBy.set(w.parent_transaction_id, (withdrawnBy.get(w.parent_transaction_id) ?? 0) + (w.principal_withdrawn ?? 0))
     }

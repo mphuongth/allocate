@@ -1032,4 +1032,36 @@ describe('MaturityResolveBody', () => {
     await waitFor(() => expect(screen.getByTestId('merge-successor-submit')).toBeEnabled())
     expect(screen.queryByTestId('merge-preview-failed')).not.toBeInTheDocument()
   })
+
+  // A stale-book answer with the old figures left in place means every further
+  // press resubmits them and gets the same 409 (#638).
+  it('reads the book again when the merge says it changed', async () => {
+    let previews = 0
+    global.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        return { ok: false, status: 409, json: async () => ({ error: 'This book changed — please reload and try again.', code: 'book_changed' }) } as Response
+      }
+      if (String(url).includes('/merge-successor')) {
+        previews += 1
+        return { ok: true, json: async () => ({ tranches: [{ transaction_id: 'tr-1', effective_principal: 35_000_000 }] }) } as Response
+      }
+      return { ok: true, json: async () => ({ banks: [] }) } as Response
+    }) as unknown as typeof fetch
+
+    const book: InvRow = {
+      ...maturedDeposit, depositGroupId: 'tx-bank-1', successorDepositTxId: 'book-2',
+      tranches: [{ id: 'tr-1', date: daysFromNow(-300), amount: 35_000_000, rate: 4, value: 37_030_000 }],
+    }
+    render(
+      <MaturityResolveBody inv={book} isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
+    )
+
+    await waitFor(() => expect(screen.getByTestId('merge-successor-submit')).toBeEnabled())
+    expect(previews).toBe(1)
+
+    fireEvent.click(screen.getByTestId('merge-successor-submit'))
+    await waitFor(() => expect(screen.getByText(/please reload and try again/i)).toBeInTheDocument())
+    // The figures are re-read rather than left stale.
+    await waitFor(() => expect(previews).toBe(2))
+  })
 })

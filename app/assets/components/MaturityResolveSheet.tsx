@@ -441,6 +441,10 @@ export function MaturityResolveBody({
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
         setError(body.error ?? (isVi ? 'Không gộp được' : 'Could not merge'))
+        // The book moved under the confirmation. Showing the error alone leaves
+        // the stale figures in place, so every further press resubmits them and
+        // gets the same 409 — read the book again instead.
+        if (body.code === 'book_changed') setMergeReload((n) => n + 1)
         setSaving(false)
         return
       }

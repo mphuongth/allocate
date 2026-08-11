@@ -315,6 +315,28 @@ begin
   exception when sqlstate '23514' then null;
   end;
 
+  -- Nor re-keyed to a fund, which would measure it against that fund's bucket
+  -- instead of its parent and hand the source principal back.
+  begin
+    update public.investment_transactions set asset_type = 'fund'
+     where consumed_by_inv_id = v_new.transaction_id;
+    raise exception 'a folded withdrawal must not be re-keyed to a fund';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- Nor marked as a held settlement, which is how the holding-side guard tells
+  -- the two apart — flipping it turns that guard off.
+  begin
+    update public.investment_transactions set held_for_merge = true
+     where consumed_by_inv_id = v_new.transaction_id;
+    raise exception 'a folded withdrawal must not be relabelled as held';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- But deleting the goal must still work: the FK nulls goal_id on all of this,
+  -- and a goal that once completed a merge cannot be made undeletable by it.
+  delete from public.savings_goals where goal_id = v_other_goal;
+
   -- ── The settled book stops being a book ──────────────────────────────────
   -- Still self-grouped, it would remain a valid target for a backdated top-up
   -- that resurrects it after its payout has gone.

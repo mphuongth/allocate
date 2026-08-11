@@ -373,15 +373,30 @@ begin
   if new.principal_withdrawn is not distinct from old.principal_withdrawn
      and new.amount_vnd is not distinct from old.amount_vnd
      and new.parent_transaction_id is not distinct from old.parent_transaction_id
+     -- What the row claims and from whom: re-keyed to a fund, it is measured
+     -- against that fund's bucket instead of its parent, and the source
+     -- principal comes back while the successor keeps the payout.
+     and new.asset_type is not distinct from old.asset_type
+     and new.fund_id is not distinct from old.fund_id
+     and new.units_withdrawn is not distinct from old.units_withdrawn
+     -- held_for_merge is how the holding-side guard tells a successor merge from
+     -- a held settlement. Left editable, flipping it turns that guard off.
+     and new.held_for_merge is not distinct from old.held_for_merge
      -- affects_progress decides whether the goal bar sees this withdrawal at
      -- all: turned off, valuation still closes the source while progress counts
      -- its principal again, beside the successor that now holds the cash.
      and new.affects_progress is not distinct from old.affects_progress
      -- And moving it to another goal has the same effect by another route: goal
      -- detail loads by raw goal_id, so the source is then shown without the
-     -- withdrawal that closed it. Held settlements keep their own rules.
+     -- withdrawal that closed it. Held settlements keep their own rules — and a
+     -- goal being DELETED nulls this through the FK, which is not a move and
+     -- must not make a goal that once completed a merge undeletable. (The
+     -- holding-side guard has carried this carve-out since it was written; this
+     -- side went without it.)
      and (new.goal_id is not distinct from old.goal_id
-          or coalesce(old.held_for_merge, false)) then
+          or coalesce(old.held_for_merge, false)
+          or (new.goal_id is null
+              and not exists (select 1 from public.savings_goals g where g.goal_id = old.goal_id))) then
     return new;
   end if;
 
@@ -403,7 +418,9 @@ revoke all on function public.guard_merged_source_withdrawal_edited() from publi
 
 drop trigger if exists investment_transactions_merged_withdrawal_immutable on public.investment_transactions;
 create trigger investment_transactions_merged_withdrawal_immutable
-  before update of principal_withdrawn, amount_vnd, parent_transaction_id, consumed_by_inv_id, transaction_type, affects_progress, goal_id
+  before update of principal_withdrawn, amount_vnd, parent_transaction_id,
+    consumed_by_inv_id, transaction_type, affects_progress, goal_id,
+    asset_type, fund_id, units_withdrawn, held_for_merge
   on public.investment_transactions
   for each row
   when (old.transaction_type = 'withdrawal' and old.parent_transaction_id is not null)
