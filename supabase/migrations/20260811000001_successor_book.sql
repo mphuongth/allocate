@@ -696,8 +696,13 @@ $$;
 create or replace function public.enforce_successor_written_by_rpc()
 returns trigger language plpgsql set search_path = '' as $$
 begin
-  if (tg_op = 'INSERT' and new.successor_deposit_tx_id is not null
-      or tg_op = 'UPDATE' and old.successor_deposit_tx_id is distinct from new.successor_deposit_tx_id)
+  -- Only ARRANGING one is restricted. Clearing the link is cancelling, which is
+  -- the user's to do — and the FK's `on delete set null` does exactly that write
+  -- when the successor book is deleted, so refusing it here would take the
+  -- deletion down with it.
+  if new.successor_deposit_tx_id is not null
+     and (tg_op = 'INSERT'
+       or old.successor_deposit_tx_id is distinct from new.successor_deposit_tx_id)
      and auth.uid() is not null
      and coalesce(current_setting('app.successor_write', true), '') <> '1' then
     raise exception 'successor book: a handover is arranged through open_successor_book, not by writing the link'
@@ -715,3 +720,14 @@ create trigger investment_transactions_successor_rpc_only
 
 revoke insert (successor_deposit_tx_id), update (successor_deposit_tx_id)
   on public.investment_transactions from anon, authenticated;
+
+
+-- A SECURITY DEFINER function is executable by PUBLIC unless told otherwise, and
+-- these two treat a null auth.uid() as a trusted caller — which `anon` also has.
+-- Left open, anyone holding a book's UUID could arrange a handover inside
+-- someone else's account. The trust in a null uid is for the service role and
+-- for SQL; neither of them needs PUBLIC to hold EXECUTE.
+revoke all on function public.open_successor_book(uuid, bigint, numeric, date, date, integer, text, uuid, text, uuid) from public, anon;
+revoke all on function public.cancel_successor_book(uuid) from public, anon;
+grant execute on function public.open_successor_book(uuid, bigint, numeric, date, date, integer, text, uuid, text, uuid) to authenticated, service_role;
+grant execute on function public.cancel_successor_book(uuid) to authenticated, service_role;

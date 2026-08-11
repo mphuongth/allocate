@@ -528,10 +528,31 @@ begin
   perform set_config('request.jwt.claims', '', true);
   perform set_config('request.jwt.claim.sub', '', true);
 
-  -- Cancelling goes through its own function for the same reason.
-  perform public.cancel_successor_book(v_dated_book);
+  -- Neither RPC is PUBLIC's to call: they trust a null auth.uid(), which `anon`
+  -- also has, so an open EXECUTE would let anyone arrange a handover inside
+  -- someone else's account.
+  if has_function_privilege('anon',
+       'public.open_successor_book(uuid, bigint, numeric, date, date, integer, text, uuid, text, uuid)', 'EXECUTE')
+     or has_function_privilege('anon', 'public.cancel_successor_book(uuid)', 'EXECUTE') then
+    raise exception 'anon must not be able to execute the successor functions';
+  end if;
+  if not has_function_privilege('authenticated', 'public.cancel_successor_book(uuid)', 'EXECUTE') then
+    raise exception 'authenticated must keep the cancel function';
+  end if;
+
+  -- Deleting the successor drops the promise through the FK, and the boundary
+  -- must not take the deletion down with it.
+  delete from public.investment_transactions where transaction_id = v_tail2.transaction_id;
   select successor_deposit_tx_id into v_successor
     from public.investment_transactions where transaction_id = v_dated_book;
+  if v_successor is not null then
+    raise exception 'deleting the successor must drop the promise, found %', v_successor;
+  end if;
+
+  -- Cancelling goes through its own function for the same reason.
+  perform public.cancel_successor_book(v_short_book);
+  select successor_deposit_tx_id into v_successor
+    from public.investment_transactions where transaction_id = v_short_book;
   if v_successor is not null then
     raise exception 'cancel_successor_book must clear the link';
   end if;
