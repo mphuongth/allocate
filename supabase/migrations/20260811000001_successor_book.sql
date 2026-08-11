@@ -88,6 +88,20 @@ begin
   select * into v_source from public.investment_transactions where transaction_id = p_source_id;
   if not found or v_source.successor_deposit_tx_id is null then return; end if;
 
+  -- LOCK BOTH BOOKS, in id order, then re-read them. Two requests pairing the
+  -- same books in opposite directions touch different rows and write different
+  -- values, so nothing else would stop them: each would read the other's
+  -- pre-update version, see no cycle, and commit one. Ordering by id is what
+  -- keeps the two lockers from deadlocking on each other — and if they do
+  -- collide, one aborts, which beats committing a pair that promises itself.
+  perform 1 from public.investment_transactions
+   where transaction_id in (p_source_id, v_source.successor_deposit_tx_id)
+   order by transaction_id
+   for update;
+
+  select * into v_source from public.investment_transactions where transaction_id = p_source_id;
+  if not found or v_source.successor_deposit_tx_id is null then return; end if;
+
   select * into v_successor from public.investment_transactions
    where transaction_id = v_source.successor_deposit_tx_id and user_id = v_source.user_id;
   -- Ownership is the fk trigger's job; say nothing here about a row that is not
@@ -177,7 +191,7 @@ $$;
 -- ends in is the state the user asked for.
 create or replace function public.enforce_successor_book_pairing()
 returns trigger language plpgsql security definer set search_path = '' as $$
-declare v_id uuid;
+declare v_id uuid; v_dest_expiry date; v_dest_lock integer;
 begin
   -- A pair ages naturally, so "already mature" is not a standing invariant — but
   -- MOVING a successor's maturity into the past is an edit that strands every
@@ -208,6 +222,22 @@ begin
   then
     raise exception 'successor book: this book still accepts top-ups, so it has nothing to hand over yet'
       using errcode = 'check_violation';
+  end if;
+  -- ...and the destination has to be able to receive. The pairing rules compare
+  -- the two books to each other; being usable TODAY is a separate question, and
+  -- one open_successor_book asks. A link written straight to the column must
+  -- answer it too, or it lands the savings on a book that is already mature or
+  -- inside its own lock window.
+  if new.successor_deposit_tx_id is not null
+     and (tg_op = 'INSERT' or old.successor_deposit_tx_id is null) then
+    select expiry_date, top_up_lock_days into v_dest_expiry, v_dest_lock
+      from public.investment_transactions
+     where transaction_id = new.successor_deposit_tx_id and user_id = new.user_id;
+    if found and (v_dest_expiry is null
+      or v_dest_expiry - (now() at time zone 'Asia/Ho_Chi_Minh')::date <= coalesce(v_dest_lock, 0)) then
+      raise exception 'successor book: that book cannot take a contribution today, so it cannot be the successor'
+        using errcode = 'check_violation';
+    end if;
   end if;
 
   perform public.assert_successor_book_pairing(new.transaction_id);

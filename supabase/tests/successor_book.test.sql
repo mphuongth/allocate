@@ -384,6 +384,17 @@ begin
   exception when sqlstate '23514' then null;
   end;
 
+  -- A link written by hand must also land somewhere that can receive: v_b has
+  -- long since been given a maturity, but a book inside its own lock window is
+  -- no destination for the savings this would move.
+  begin
+    update public.investment_transactions set successor_deposit_tx_id = v_lockable
+     where transaction_id = v_dated_book;
+    set constraints all immediate;
+    raise exception 'a successor that cannot take money today must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
   -- ── A successor must be open for business, now and at the handover ──────
   -- 25 days out with a 30-day lock is a book already inside its own window: the
   -- savings moved onto it could never contribute, and the merge would be refused
