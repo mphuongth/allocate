@@ -77,6 +77,7 @@ declare
   v_share bigint;
   v_last uuid;
   v_idx int;
+  v_seen int := 0;
 begin
   if p_tranche_principals is null
      or array_length(p_tranche_principals, 1) is distinct from array_length(p_tranche_ids, 1) then
@@ -348,6 +349,7 @@ begin
     if p_tranche_principals[v_idx] is distinct from v_effective then
       raise exception 'merge successor: book changed since load, reload and retry';
     end if;
+    v_seen := v_seen + 1;
     if v_effective <= 0 then continue; end if;
 
     if v_tranche.transaction_id = v_last then
@@ -376,6 +378,15 @@ begin
       p_merge_date, v_share, v_effective, true, v_new_id
     );
   end loop;
+
+  -- The loop can only judge tranches it walks, so one the caller named that is
+  -- no longer there was simply never met — the book closed what survived while
+  -- the successor was credited with the payout of a book that included it. The
+  -- ×10 bound is far too loose to notice. Every named tranche has to have been
+  -- accounted for, not just every surviving one.
+  if v_seen is distinct from coalesce(array_length(p_tranche_ids, 1), 0) then
+    raise exception 'merge successor: book changed since load, reload and retry';
+  end if;
 
   -- Anything still funding the old book now funds the new one — the old one has
   -- nothing left to receive.
@@ -743,17 +754,36 @@ begin
     return old;
   end if;
 
-  -- Not part of a book any more (a plain delete of the credited row, or a book
-  -- already dissolved): nothing to move it onto, so the foreign key and the
-  -- withdrawal guard refuse the delete — which is what should happen, since the
-  -- cash would be left with nowhere to say it went.
-  if old.deposit_group_id is null or old.deposit_group_id = old.transaction_id then
+  -- Only a collapse in progress, recognised by the snapshot it has just written
+  -- for this book inside this very transaction. Moving the lineage for any other
+  -- delete would clear the foreign key that stands in the way and let an
+  -- ordinary DELETE take the successor's whole payout with it, while the source
+  -- it emptied stays closed for good.
+  if old.deposit_group_id is not null
+     and old.deposit_group_id <> old.transaction_id
+     and exists (
+       select 1 from public.investment_transactions s
+        where s.renewed_from_transaction_id = old.deposit_group_id
+          and s.user_id = old.user_id
+          and s.xmin = pg_current_xact_id()::xid
+     ) then
+    update public.investment_transactions
+       set consumed_by_inv_id = old.deposit_group_id, updated_at = now()
+     where consumed_by_inv_id = old.transaction_id;
     return old;
   end if;
 
-  update public.investment_transactions
-     set consumed_by_inv_id = old.deposit_group_id, updated_at = now()
-   where consumed_by_inv_id = old.transaction_id;
+  -- Anything else: refuse while this row still stands for cash another book
+  -- paid out. Said here rather than left to the foreign key, which would answer
+  -- with a constraint name instead of a reason.
+  if exists (
+    select 1 from public.investment_transactions w
+     where w.consumed_by_inv_id = old.transaction_id
+       and w.transaction_type = 'withdrawal'
+  ) then
+    raise exception 'merge successor: this deposit holds another book''s payout, so it cannot be deleted on its own'
+      using errcode = 'check_violation';
+  end if;
   return old;
 end;
 $$;

@@ -127,6 +127,19 @@ begin
     if sqlerrm not like '%book changed since load%' then raise; end if;
   end;
 
+  -- ── A named tranche that is no longer there ──────────────────────────────
+  -- The loop can only notice tranches it walks, so one deleted between the
+  -- preview and the lock was simply never met: the merge closed what survived
+  -- while crediting the successor with the whole book's payout.
+  begin
+    perform public.merge_book_into_successor(
+      v_a, v_received, 4.5, current_date,
+      v_ids || gen_random_uuid(), v_principals || 1000000::bigint, v_b.transaction_id);
+    raise exception 'a named tranche that no longer exists must be refused';
+  exception when sqlstate 'P0001' then
+    if sqlerrm not like '%book changed since load%' then raise; end if;
+  end;
+
   -- ── A payout too small to spread ─────────────────────────────────────────
   -- Each tranche's share is its proportion of the payout, floored. A payout far
   -- below what the book holds floors a share to nothing, and a withdrawal of
@@ -316,6 +329,15 @@ begin
     update public.investment_transactions set merged_from_book_id = null
      where transaction_id = v_new.transaction_id;
     raise exception 'the credited tranche must not be able to forget where it came from';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- Nor deleted outright. The lineage move that lets a collapse through also
+  -- clears the foreign key that used to block this, so on its own the delete
+  -- would take the successor's whole payout away while the source stays closed.
+  begin
+    delete from public.investment_transactions where transaction_id = v_new.transaction_id;
+    raise exception 'the credited tranche must not be deletable on its own';
   exception when sqlstate '23514' then null;
   end;
 
