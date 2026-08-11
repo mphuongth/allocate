@@ -22,6 +22,7 @@ declare
   v_tail public.investment_transactions;
   v_extra_saving uuid := gen_random_uuid();
   v_dated_book uuid := gen_random_uuid();
+  v_tail2 public.investment_transactions;
 begin
   insert into auth.users (id, email) values (v_user, 'successor-book@test.invalid');
   insert into public.savings_goals (user_id, goal_name) values (v_user, 'Successor') returning goal_id into v_goal;
@@ -375,6 +376,24 @@ begin
        set deposit_group_id = null, successor_deposit_tx_id = null
      where transaction_id = v_short_book;
     raise exception 'dissolving while dropping the link in one update must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- ── Nor by deleting the successor in the same statement ─────────────────
+  -- The guard protects the BOOK, so a two-row delete of anchor + successor must
+  -- not leave the anchor's tranches behind grouped under a row that is gone.
+  insert into public.investment_transactions (
+    user_id, goal_id, asset_type, transaction_type, investment_date,
+    expiry_date, amount_vnd, interest_rate, deposit_group_id
+  ) values (v_user, v_goal, 'bank', 'investment', current_date - 300,
+    current_date - 60, 1000000, 4, v_dated_book);
+  select * into v_tail2 from public.open_successor_book(
+    v_dated_book, 1000000, 4, current_date - 2, current_date + 400, 30, null, null, null, null);
+  begin
+    delete from public.investment_transactions
+     where transaction_id in (v_dated_book, v_tail2.transaction_id);
+    set constraints all immediate;
+    raise exception 'deleting a promised anchor beside its successor must be refused';
   exception when sqlstate '23514' then null;
   end;
 

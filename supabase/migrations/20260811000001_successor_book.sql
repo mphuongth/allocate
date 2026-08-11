@@ -279,6 +279,16 @@ declare
   v_new_id uuid := gen_random_uuid();
   v_today date := (now() at time zone 'Asia/Ho_Chi_Minh')::date;
 begin
+  -- SAVINGS FIRST, then the book. The other path through here — an ordinary
+  -- recurring edit — locks its own saving row and only then waits for the book,
+  -- via the link trigger. Taking them in the opposite order would invert the two
+  -- and turn a pair of concurrent edits into a deadlock that Postgres resolves
+  -- by killing one of them.
+  perform 1 from public.recurring_savings
+   where linked_deposit_tx_id = p_source_book_id
+   order by saving_id
+   for update;
+
   select * into v_source
     from public.investment_transactions
    where transaction_id = p_source_book_id
@@ -379,13 +389,8 @@ begin
   -- record the month at all. This runs whichever entry point opened the
   -- successor: the manual one names no saving, and would otherwise strand them.
   --
-  -- LOCK them while reading. The book lock says nothing about these rows, so
-  -- without it a relink landing between the read and the write would be
-  -- silently overwritten.
-  perform 1 from public.recurring_savings
-   where user_id = v_source.user_id and linked_deposit_tx_id = p_source_book_id
-   order by saving_id
-   for update;
+  -- They were locked at the top, before the book, so nothing can relink between
+  -- the read and the write below.
 
   -- Recurring-driven: the month is also contributed to B and marked fulfilled.
   -- A saving linked elsewhere is not this flow's to move.
@@ -478,6 +483,17 @@ begin
      where transaction_id = old.successor_deposit_tx_id
   ) then
     raise exception 'successor book: this book is promised to a successor, so cancel the handover before deleting it'
+      using errcode = 'check_violation';
+  end if;
+  -- Taking the successor along in the same statement is not a way around it
+  -- either: what the guard is really protecting is the book, so its tranches
+  -- must be gone too. An account cascade satisfies that; a two-row delete of
+  -- anchor + successor, leaving the tranches behind, does not.
+  if exists (
+    select 1 from public.investment_transactions
+     where deposit_group_id = old.transaction_id
+  ) then
+    raise exception 'successor book: this book still holds tranches, so it cannot be deleted out from under them'
       using errcode = 'check_violation';
   end if;
   return null;
