@@ -518,6 +518,77 @@ begin
 end;
 $$;
 
+-- ── The successor can still be renewed the ordinary way ─────────────────────
+--
+-- Collapsing a book deletes every non-anchor tranche after snapshotting it. The
+-- credited tranche is always one of those, and the source's withdrawals point at
+-- it — so without moving that lineage onto the snapshot, the delete hits the
+-- foreign key and a successor that ever received a merge can never be renewed
+-- again.
+do $$
+declare
+  v_user uuid := gen_random_uuid();
+  v_goal uuid;
+  v_a uuid := gen_random_uuid();
+  v_b public.investment_transactions;
+  v_new public.investment_transactions;
+begin
+  insert into auth.users (id, email) values (v_user, 'merge-collapse@test.invalid');
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Collapse') returning goal_id into v_goal;
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate, deposit_group_id, top_up_lock_days
+  ) values (
+    v_a, v_user, v_goal, 'bank', 'investment',
+    current_date - 300, current_date - 3, 8000000, 4, v_a, 30
+  );
+  -- No lock window on B, so its maturity can be brought forward below without
+  -- the merged tranche falling inside it.
+  select * into v_b from public.open_successor_book(
+    v_a, 2000000, 4.5, current_date - 5, current_date + 300, null, null, null, null, null);
+  select * into v_new from public.merge_book_into_successor(
+    v_a, 8300000, 4.5, current_date - 3, array[v_a], array[8000000::bigint], v_b.transaction_id);
+  set constraints all immediate;
+  perform set_config('cairn.collapse_b', v_b.transaction_id::text, false);
+  perform set_config('cairn.collapse_new', v_new.transaction_id::text, false);
+  perform set_config('cairn.collapse_user', v_user::text, false);
+end;
+$$;
+
+-- B reaches its own maturity.
+update public.investment_transactions set expiry_date = current_date
+ where deposit_group_id = current_setting('cairn.collapse_b')::uuid;
+
+do $$
+declare
+  v_b uuid := current_setting('cairn.collapse_b')::uuid;
+  v_new uuid := current_setting('cairn.collapse_new')::uuid;
+  v_target uuid;
+begin
+  perform public.collapse_accumulating_book(
+    v_b, 10600000, 5.0, current_date + 365, current_date,
+    array[v_b, v_new], array[100000::bigint, 200000::bigint]);
+
+  -- The lineage moved rather than vanished: the source's withdrawals now name
+  -- the book that carried their cash into its new cycle.
+  select consumed_by_inv_id into v_target from public.investment_transactions
+   where transaction_type = 'withdrawal' and consumed_by_inv_id is not null
+     and user_id = current_setting('cairn.collapse_user')::uuid
+   limit 1;
+  if v_target is null then
+    raise exception 'the folded withdrawal must still say where its cash went';
+  end if;
+  if v_target <> v_b then
+    raise exception 'the lineage must follow the tranche up to its book, found %', v_target;
+  end if;
+  if exists (select 1 from public.investment_transactions where transaction_id = v_new) then
+    raise exception 'the collapse must still delete the credited tranche';
+  end if;
+
+  raise notice 'merge successor book (successor still collapses): OK';
+end;
+$$;
+
 -- ── A successor that matured while the source sat unresolved ────────────────
 --
 -- The merge is dated when the bank paid the source out, and the successor's own

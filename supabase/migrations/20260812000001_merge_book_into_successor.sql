@@ -458,7 +458,16 @@ as $$
 declare v_folded boolean;
 begin
   if old.consumed_by_inv_id is not null
-     and new.consumed_by_inv_id is distinct from old.consumed_by_inv_id then
+     and new.consumed_by_inv_id is distinct from old.consumed_by_inv_id
+     -- Unless it is following the tranche it named up to that tranche's own
+     -- book: renewing the successor deletes the credited tranche, and the cash
+     -- carries on inside the anchor. Anything else pointed elsewhere is still a
+     -- rewrite of where the cash went.
+     and not exists (
+       select 1 from public.investment_transactions t
+        where t.transaction_id = old.consumed_by_inv_id
+          and t.deposit_group_id = new.consumed_by_inv_id
+     ) then
     raise exception 'merge successor: this withdrawal records where the cash went, so that cannot be unset'
       using errcode = 'check_violation';
   end if;
@@ -670,6 +679,53 @@ create trigger investment_transactions_credited_tranche_immutable
   for each row
   when (old.merged_from_book_id is not null)
   execute function public.guard_merge_credited_tranche_edited();
+
+-- (2c) ...and the successor must still be renewable afterwards.
+--
+-- Collapsing a book snapshots each tranche, re-parents that tranche's own
+-- withdrawals onto the snapshot, and deletes the tranche. The credited tranche
+-- is always a non-anchor tranche, but the SOURCE's withdrawals point at it
+-- through consumed_by_inv_id — a reference the collapse knows nothing about — so
+-- the delete hit the foreign key and a successor that had ever received a merge
+-- could never be renewed again.
+--
+-- The lineage moves up to the book rather than blocking the delete. The
+-- collapse's per-tranche snapshot is filed under the BOOK, not the tranche, so
+-- it cannot be matched to this row — but the anchor survives the collapse with
+-- its own id and now holds the renewed principal, this cash included. So "where
+-- did it go" becomes the book itself, which is the truthful answer and the one
+-- that stays true. Done here rather than inside collapse_accumulating_book so
+-- that function stays one definition in one migration.
+create or replace function public.move_merge_lineage_to_book()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  -- Not part of a book any more (a plain delete of the credited row, or a book
+  -- already dissolved): nothing to move it onto, so the foreign key and the
+  -- withdrawal guard refuse the delete — which is what should happen, since the
+  -- cash would be left with nowhere to say it went.
+  if old.deposit_group_id is null or old.deposit_group_id = old.transaction_id then
+    return old;
+  end if;
+
+  update public.investment_transactions
+     set consumed_by_inv_id = old.deposit_group_id, updated_at = now()
+   where consumed_by_inv_id = old.transaction_id;
+  return old;
+end;
+$$;
+
+revoke all on function public.move_merge_lineage_to_book() from public, anon, authenticated;
+
+drop trigger if exists investment_transactions_merge_lineage_follows on public.investment_transactions;
+create trigger investment_transactions_merge_lineage_follows
+  before delete on public.investment_transactions
+  for each row
+  when (old.merged_from_book_id is not null)
+  execute function public.move_merge_lineage_to_book();
 
 -- (3) A recurring link arriving while the merge runs waits on the anchor lock,
 -- then re-reads a source whose successor has just been cleared — and accepts,
