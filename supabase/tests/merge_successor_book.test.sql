@@ -127,6 +127,18 @@ begin
     if sqlerrm not like '%book changed since load%' then raise; end if;
   end;
 
+  -- ── A payout too small to spread ─────────────────────────────────────────
+  -- Each tranche's share is its proportion of the payout, floored. A payout far
+  -- below what the book holds floors a share to nothing, and a withdrawal of
+  -- zero is not a row this table will take — the merge died on a constraint and
+  -- the route answered with a fault, for an amount it had accepted as valid.
+  begin
+    perform public.merge_book_into_successor(v_a, 1, 4.5, current_date, v_ids, v_principals, v_b.transaction_id);
+    raise exception 'a payout too small to reach every tranche must be refused';
+  exception when sqlstate '23514' then
+    if sqlerrm not like '%merge successor:%' then raise; end if;
+  end;
+
   -- ── Nothing arrives from nowhere ─────────────────────────────────────────
   begin
     perform public.merge_book_into_successor(v_a, 0, 4.5, current_date, v_ids, v_principals, v_b.transaction_id);
@@ -404,6 +416,64 @@ begin
   end if;
 
   raise notice 'merge successor book: OK';
+end;
+$$;
+
+-- ── A successor that matured while the source sat unresolved ────────────────
+--
+-- The merge is dated when the bank paid the source out, and the successor's own
+-- door is judged against that date. An overdue book resolved weeks later can
+-- therefore be folded into a successor that has itself matured since: the money
+-- lands in a book that is already closed, and the recurring savings the merge
+-- redirects there have their next contribution refused.
+--
+-- No write can build this state — the pairing trigger refuses a successor that
+-- cannot take a contribution today — so only the calendar moving produces it,
+-- and only disabling that trigger reproduces it here.
+do $$
+declare
+  v_user uuid := gen_random_uuid();
+  v_goal uuid;
+  v_a uuid := gen_random_uuid();
+  v_b public.investment_transactions;
+begin
+  insert into auth.users (id, email) values (v_user, 'merge-late@test.invalid');
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Late') returning goal_id into v_goal;
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate, deposit_group_id, top_up_lock_days
+  ) values (
+    v_a, v_user, v_goal, 'bank', 'investment',
+    current_date - 300, current_date - 3, 8000000, 4, v_a, 30
+  );
+  -- No lock window on the successor: with one, the same check happens to refuse
+  -- this for an unrelated reason, and the hole stays hidden.
+  select * into v_b from public.open_successor_book(
+    v_a, 2000000, 4.5, current_date - 5, current_date + 300, null, null, null, null, null);
+  perform set_config('cairn.test_a', v_a::text, false);
+  perform set_config('cairn.test_b', v_b.transaction_id::text, false);
+  perform set_config('cairn.test_user', v_user::text, false);
+  set constraints all immediate;
+end;
+$$;
+
+-- The calendar moves past the successor's own maturity.
+alter table public.investment_transactions disable trigger investment_transactions_successor_pairing_upd;
+update public.investment_transactions set expiry_date = current_date - 1
+ where deposit_group_id = current_setting('cairn.test_b')::uuid;
+alter table public.investment_transactions enable trigger investment_transactions_successor_pairing_upd;
+
+do $$
+declare v_a uuid := current_setting('cairn.test_a')::uuid;
+begin
+  begin
+    perform public.merge_book_into_successor(
+      v_a, 8300000, 4.5, current_date - 3, array[v_a], array[8000000::bigint],
+      current_setting('cairn.test_b')::uuid);
+    raise exception 'a merge into a successor that has itself matured must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+  raise notice 'merge successor book (late resolution): OK';
 end;
 $$;
 

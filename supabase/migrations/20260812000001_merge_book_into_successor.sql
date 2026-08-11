@@ -109,6 +109,12 @@ begin
     raise exception 'merge successor: a pledged deposit cannot be merged while it is collateral'
       using errcode = 'check_violation';
   end if;
+  -- Can the successor still take money TODAY? The tranche below is dated when
+  -- the bank paid the source out, and the top-up guard judges by that date — so
+  -- an overdue book resolved weeks late would fold into a successor that has
+  -- itself matured in the meantime, landing the cash in a closed book and
+  -- redirecting the recurring savings to one that will refuse them.
+  perform public.assert_accumulating_book_topup_allowed(v_dest.transaction_id, v_dest.user_id, v_today);
 
   -- The merge is what maturity is for, so it does not happen before maturity —
   -- the money has not been paid out yet.
@@ -278,6 +284,14 @@ begin
       -- the bigint ceiling long before the division brings it back down.
       v_share := floor((p_received_vnd::numeric * v_effective) / v_total)::bigint;
       v_allocated := v_allocated + v_share;
+    end if;
+    -- A payout far below what the book holds floors somebody's share to
+    -- nothing, and a withdrawal of zero is not a row this table takes: the
+    -- merge died on a raw constraint and the route answered with a fault, for
+    -- an amount its own validation had accepted.
+    if v_share <= 0 then
+      raise exception 'merge successor: the received amount is too small to spread across every tranche of this book'
+        using errcode = 'check_violation';
     end if;
 
     insert into public.investment_transactions (
