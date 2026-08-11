@@ -142,12 +142,18 @@ begin
   -- merge INTO it is a contribution: if B is promised to C, then A's promised
   -- merge into B can never be carried out. One promise at a time, in both
   -- directions — settle the incoming one first (Phase 3), or cancel it.
-  if v_source.successor_deposit_tx_id is not null and exists (
+  -- Both directions, and on every pairing change rather than only on a fresh
+  -- link: repointing an existing promise skips the new-link guards entirely.
+  if exists (
     select 1 from public.investment_transactions
      where successor_deposit_tx_id = v_source.transaction_id
        and user_id = v_source.user_id
   ) then
     raise exception 'successor book: this book is itself promised a merge, so settle that before handing over again'
+      using errcode = 'check_violation';
+  end if;
+  if v_successor.successor_deposit_tx_id is not null then
+    raise exception 'successor book: that book has already handed over, so it cannot receive this one'
       using errcode = 'check_violation';
   end if;
   -- The merge happens when the SOURCE matures, so both books need a maturity at

@@ -434,6 +434,16 @@ begin
   exception when sqlstate '23514' then null;
   end;
 
+  -- Nor by repointing an existing promise onto a book that has handed over:
+  -- a repoint is not a "new link", so it must be judged here, not at creation.
+  begin
+    update public.investment_transactions set successor_deposit_tx_id = v_rec_book
+     where transaction_id = v_dated_book;
+    set constraints all immediate;
+    raise exception 'repointing onto a book that has handed over must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
   -- ── A successor cannot be edited into a maturity already behind us ──────
   -- The pair ages naturally, so this is about the EDIT: moving the successor's
   -- maturity into the past strands every saving transferred onto it.
