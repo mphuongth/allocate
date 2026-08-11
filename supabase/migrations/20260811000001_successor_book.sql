@@ -684,11 +684,15 @@ $$;
 -- their own writes; anything else arriving with a real session behind it is
 -- refused here.
 --
--- Not by privileges alone: a column-level revoke is undone by any later
--- `grant update on all tables`, which is a normal thing for a project to do, so
--- it stands as a second line rather than the boundary itself. auth.uid() is
--- null for the service role, for migrations and for SQL maintenance, which keep
--- their reach — the same convention the rest of this file uses.
+-- Not by privileges: the revoke below does not survive here at all. The stack
+-- grants `authenticated` its table privileges after migrations run, so the
+-- column is readable and writable again by the time anyone connects — CI proved
+-- it, an assertion on the privilege failing there while passing locally. It is
+-- left in as a statement of intent for anyone reading the schema, and as the
+-- thing that holds if the platform's grant order ever changes; the trigger is
+-- what actually refuses. auth.uid() is null for the service role, for
+-- migrations and for SQL maintenance, which keep their reach — the same
+-- convention the rest of this file uses.
 create or replace function public.enforce_successor_written_by_rpc()
 returns trigger language plpgsql set search_path = '' as $$
 begin

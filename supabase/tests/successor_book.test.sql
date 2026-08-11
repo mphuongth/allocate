@@ -508,14 +508,11 @@ begin
   -- Every hole in this feature had one shape: a client writing the link
   -- directly, skipping what gives a handover its meaning. The privilege is the
   -- boundary; the guards above are what the two functions answer to.
-  -- The privilege is revoked, and the trigger holds even if a later
-  -- `grant update on all tables` hands it back — so the test grants it back and
-  -- checks the boundary still refuses. The grant mirrors the deployed database;
-  -- the surrounding transaction rolls it away.
-  if has_column_privilege('authenticated', 'public.investment_transactions',
-                          'successor_deposit_tx_id', 'UPDATE') then
-    raise exception 'authenticated must not hold the privilege on successor_deposit_tx_id';
-  end if;
+  -- Deliberately NOT asserting the revoke: the stack re-grants `authenticated`
+  -- after migrations, so the privilege is back by the time anyone connects. The
+  -- boundary is the trigger, and this is the case that proves it — granted the
+  -- privilege outright, a direct write is still refused. The grant mirrors the
+  -- deployed database; the surrounding transaction rolls it away.
   grant select, update on public.investment_transactions to authenticated;
   perform set_config('request.jwt.claims', json_build_object('sub', v_user::text)::text, true);
   perform set_config('request.jwt.claim.sub', v_user::text, true);
