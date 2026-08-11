@@ -128,6 +128,10 @@ export function MaturityResolveBody({
   const [mergeRecvStr, setMergeRecvStr] = useState('')
   const [mergeRate, setMergeRate] = useState(inv.interestRate != null ? String(inv.interestRate) : '')
   const [mergeDate, setMergeDate] = useState(() => todayIso())
+  // The book as the server sees it. The goal page caps at 200 rows, so a large
+  // goal hands this sheet a partial book — and a partial book can never satisfy
+  // the merge's tranche check, however often it is reloaded.
+  const [mergeTranches, setMergeTranches] = useState<{ transaction_id: string; effective_principal: number }[] | null>(null)
   const [done, setDone] = useState<null | { newPrincipal: number; newMaturity: string; sources: string[] }>(null)
   // Settle-with-hold success: the deposit was parked in the pool (no re-deposit).
   const [heldDone, setHeldDone] = useState<null | { anchorName: string }>(null)
@@ -396,7 +400,17 @@ export function MaturityResolveBody({
   // not paid out until the day itself, and the merge refuses a source that has
   // not matured — so offering the button then is offering a certain error.
   const bookMatured = !!inv.expiryDate && inv.expiryDate <= todayIso()
-  const mergeReady = successorRecv > 0 && Number(mergeRate) > 0 && bookMatured
+  const mergeReady = successorRecv > 0 && Number(mergeRate) > 0 && bookMatured && !!mergeTranches?.length
+
+  useEffect(() => {
+    if (!hasSuccessor) return
+    let live = true
+    fetch(`/api/v1/investment-transactions/${inv.id}/merge-successor`, { cache: 'no-store' })
+      .then((r) => r.ok ? r.json() : null)
+      .then((res) => { if (live && res?.tranches) setMergeTranches(res.tranches) })
+      .catch(() => {})
+    return () => { live = false }
+  }, [hasSuccessor, inv.id])
 
   async function handleMergeIntoSuccessor() {
     if (!(successorRecv > 0) || !(Number(mergeRate) > 0)) {
@@ -415,8 +429,8 @@ export function MaturityResolveBody({
           // Naming what we saw, and what each held: a top-up or a withdrawal
           // landing while this was open means the cash being confirmed is not
           // the cash the book holds.
-          tranche_ids: (inv.tranches ?? []).map((t) => t.id),
-          tranche_principals: (inv.tranches ?? []).map((t) => Math.round(t.amount)),
+          tranche_ids: (mergeTranches ?? []).map((t) => t.transaction_id),
+          tranche_principals: (mergeTranches ?? []).map((t) => Math.round(t.effective_principal)),
         }),
       })
       if (!res.ok) {

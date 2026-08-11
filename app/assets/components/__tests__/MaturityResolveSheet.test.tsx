@@ -887,10 +887,16 @@ describe('MaturityResolveBody', () => {
   // Phase 3: a handed-over book is not renewed at maturity — it goes where it
   // was promised, carrying the cash the bank actually paid out (#638).
   it('offers the merge into the successor, prefilled with what the book is worth', async () => {
-    const calls: { url: string; body?: unknown }[] = []
+    const calls: { url: string; method?: string; body?: unknown }[] = []
     global.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
-      calls.push({ url: String(url), body: init?.body ? JSON.parse(String(init.body)) : undefined })
+      calls.push({ url: String(url), method: init?.method, body: init?.body ? JSON.parse(String(init.body)) : undefined })
       if (init?.method === 'POST') return { ok: true, json: async () => ({ transaction_id: 'new-1' }) } as Response
+      if (String(url).includes('/merge-successor')) {
+        return { ok: true, json: async () => ({ tranches: [
+          { transaction_id: 'tr-1', effective_principal: 20_000_000 },
+          { transaction_id: 'tr-2', effective_principal: 15_000_000 },
+        ] }) } as Response
+      }
       return { ok: true, json: async () => ({ banks: [] }) } as Response
     }) as unknown as typeof fetch
 
@@ -909,6 +915,8 @@ describe('MaturityResolveBody', () => {
     )
 
     expect(screen.getByTestId('merge-successor-panel')).toBeInTheDocument()
+    // The tranche set comes from the server, not from the goal page's capped list.
+    await waitFor(() => expect(screen.getByTestId('merge-successor-submit')).toBeEnabled())
     // Prefilled with the book's value — principal plus the interest it accrued —
     // for the user to confirm against the bank's slip.
     expect((screen.getByTestId('merge-received') as HTMLInputElement).value).toBe(formatIntVN(String(book.value)))
@@ -916,7 +924,8 @@ describe('MaturityResolveBody', () => {
     fireEvent.click(screen.getByTestId('merge-successor-submit'))
     await waitFor(() => expect(onRenewed).toHaveBeenCalled())
 
-    const post = calls.find(c => String(c.url).includes('/merge-successor'))!
+    // The GET preview shares the path, so match the write.
+    const post = calls.find(c => c.method === 'POST' && String(c.url).includes('/merge-successor'))!
     expect(post).toBeTruthy()
     // Every live tranche is named, so a top-up landing mid-confirmation is caught.
     expect(post.body).toMatchObject({
@@ -933,6 +942,9 @@ describe('MaturityResolveBody', () => {
       if (init?.method === 'POST') {
         return { ok: false, json: async () => ({ error: 'this book has not matured yet', code: 'merge_refused' }) } as Response
       }
+      if (String(_url).includes('/merge-successor')) {
+        return { ok: true, json: async () => ({ tranches: [{ transaction_id: 'tr-1', effective_principal: 35_000_000 }] }) } as Response
+      }
       return { ok: true, json: async () => ({ banks: [] }) } as Response
     }) as unknown as typeof fetch
 
@@ -944,6 +956,7 @@ describe('MaturityResolveBody', () => {
       <MaturityResolveBody inv={book} isVi={false} onClose={() => {}} onRenewed={onRenewed} onWithdraw={() => {}} />,
     )
 
+    await waitFor(() => expect(screen.getByTestId('merge-successor-submit')).toBeEnabled())
     fireEvent.click(screen.getByTestId('merge-successor-submit'))
     await waitFor(() => expect(screen.getByText(/has not matured yet/i)).toBeInTheDocument())
     expect(onRenewed).not.toHaveBeenCalled()
@@ -968,7 +981,13 @@ describe('MaturityResolveBody', () => {
     expect(screen.getByTestId('merge-successor-submit')).toBeDisabled()
   })
 
-  it('offers it on the maturity day itself, which the merge accepts', () => {
+  it('offers it on the maturity day itself, which the merge accepts', async () => {
+    global.fetch = vi.fn(async (url: string | URL | Request) => {
+      if (String(url).includes('/merge-successor')) {
+        return { ok: true, json: async () => ({ tranches: [{ transaction_id: 'tr-1', effective_principal: 35_000_000 }] }) } as Response
+      }
+      return { ok: true, json: async () => ({ banks: [] }) } as Response
+    }) as unknown as typeof fetch
     const dueToday: InvRow = {
       ...maturedDeposit,
       expiryDate: todayIso(),
@@ -981,6 +1000,7 @@ describe('MaturityResolveBody', () => {
     )
 
     expect(screen.queryByTestId('merge-not-due')).not.toBeInTheDocument()
-    expect(screen.getByTestId('merge-successor-submit')).toBeEnabled()
+    // Enabled only once the server has said what the book holds.
+    await waitFor(() => expect(screen.getByTestId('merge-successor-submit')).toBeEnabled())
   })
 })

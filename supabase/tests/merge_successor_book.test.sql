@@ -20,6 +20,7 @@ declare
   v_count int;
   v_stamped int;
   v_principals bigint[];
+  v_other_goal uuid;
 begin
   insert into auth.users (id, email) values (v_user, 'merge-successor@test.invalid');
   insert into public.savings_goals (user_id, goal_name) values (v_user, 'Merge') returning goal_id into v_goal;
@@ -262,6 +263,16 @@ begin
     update public.investment_transactions set amount_vnd = amount_vnd + 5000000
      where transaction_id = v_a2;
     raise exception 'a folded holding must not be able to grow';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- Nor moved to another goal, which would leave its withdrawals behind and let
+  -- the new goal show the paid-away principal as live.
+  begin
+    insert into public.savings_goals (user_id, goal_name) values (v_user, 'Elsewhere') returning goal_id into v_other_goal;
+    update public.investment_transactions set goal_id = v_other_goal
+     where transaction_id = v_a2;
+    raise exception 'a folded holding must not be moved between goals';
   exception when sqlstate '23514' then null;
   end;
 

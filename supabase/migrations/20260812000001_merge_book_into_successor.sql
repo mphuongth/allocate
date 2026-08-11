@@ -421,7 +421,30 @@ begin
      and new.units is not distinct from old.units
      and new.unit_price is not distinct from old.unit_price
      and new.transaction_type is not distinct from old.transaction_type
-     and new.affects_progress is not distinct from old.affects_progress then
+     and new.affects_progress is not distinct from old.affects_progress
+     -- Moving it to another goal splits it from its own withdrawals, which stay
+     -- behind: the new goal then sees a holding with nothing recorded against it
+     -- and shows the paid-away principal as live.
+     --
+     -- Only for a book folded by THIS merge. The held-settlement path allows the
+     -- same move on purpose (20260731000001, 11c): once its cash is consumed the
+     -- pool skips the row, and pinning the goal made any goal that had completed
+     -- a merge undeletable. The hazard is arguably shared, but that is a settled
+     -- decision with its own tests, and not this migration's to overturn.
+     and new.goal_id is not distinct from old.goal_id then
+    return new;
+  end if;
+
+  -- A goal being deleted nulls this column through the FK, and that is not a
+  -- move: nothing is left to move it away from. An unassign, where the goal is
+  -- still there, is — it would leave the withdrawals behind in it.
+  if new.goal_id is null and old.goal_id is not null
+     and new.amount_vnd is not distinct from old.amount_vnd
+     and new.units is not distinct from old.units
+     and new.unit_price is not distinct from old.unit_price
+     and new.transaction_type is not distinct from old.transaction_type
+     and new.affects_progress is not distinct from old.affects_progress
+     and not exists (select 1 from public.savings_goals g where g.goal_id = old.goal_id) then
     return new;
   end if;
 
@@ -430,6 +453,8 @@ begin
      where w.parent_transaction_id = old.transaction_id
        and w.transaction_type = 'withdrawal'
        and w.consumed_by_inv_id is not null
+       -- A held settlement's own consumption is the other path's business.
+       and coalesce(w.held_for_merge, false) = false
   ) then
     raise exception 'merge successor: this deposit was folded into another one, so what it holds cannot be rewritten'
       using errcode = 'check_violation';
@@ -442,7 +467,7 @@ revoke all on function public.guard_folded_holding_edited() from public, anon, a
 
 drop trigger if exists investment_transactions_folded_holding_immutable on public.investment_transactions;
 create trigger investment_transactions_folded_holding_immutable
-  before update of amount_vnd, units, unit_price, transaction_type, affects_progress
+  before update of amount_vnd, units, unit_price, transaction_type, affects_progress, goal_id
   on public.investment_transactions
   for each row
   when (old.transaction_type = 'investment')

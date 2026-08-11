@@ -13,6 +13,65 @@ import { readJsonBody } from '@/lib/apiBody'
 // one, and retiring the promise. The route validates, names the tranches it saw
 // so the RPC can refuse a book that changed underneath, and turns refusals into
 // answers.
+// What the book actually holds, straight from the source. The goal page caps at
+// 200 rows and backfills only missing anchors, so a large goal hands the sheet a
+// partial book — and a partial book can never satisfy the RPC's tranche check,
+// however many times it is reloaded. So the confirmation asks here instead.
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const supabase = await createSupabaseServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  let bookId: string
+  try {
+    bookId = validateUUID(id, 'id')
+  } catch (e) {
+    if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
+    throw e
+  }
+
+  const { data: rows, error } = await supabase
+    .from('investment_transactions')
+    .select('transaction_id, transaction_type, parent_transaction_id, amount_vnd, principal_withdrawn, interest_rate, investment_date, expiry_date, deposit_group_id, renewed_from_transaction_id')
+    .eq('user_id', user.id)
+    .or(`deposit_group_id.eq.${bookId},parent_transaction_id.not.is.null`)
+    .limit(2000)
+
+  if (error) {
+    console.error('merge preview failed', error.message)
+    return NextResponse.json({ error: 'Failed to read the book' }, { status: 500 })
+  }
+
+  const all = rows ?? []
+  const tranchesRows = all.filter((r) => r.deposit_group_id === bookId
+    && r.transaction_type === 'investment' && !r.renewed_from_transaction_id)
+  const withdrawnBy = new Map<string, number>()
+  for (const r of all) {
+    if (r.transaction_type !== 'withdrawal' || !r.parent_transaction_id) continue
+    withdrawnBy.set(r.parent_transaction_id, (withdrawnBy.get(r.parent_transaction_id) ?? 0) + (r.principal_withdrawn ?? 0))
+  }
+
+  // Only what still holds something: a spent tranche is not the caller's to
+  // account for, and the RPC skips it for the same reason.
+  const tranches = tranchesRows
+    .map((r) => ({
+      transaction_id: r.transaction_id,
+      investment_date: r.investment_date,
+      interest_rate: r.interest_rate,
+      effective_principal: (r.amount_vnd ?? 0) - (withdrawnBy.get(r.transaction_id) ?? 0),
+    }))
+    .filter((t) => t.effective_principal > 0)
+
+  if (tranches.length === 0) {
+    return NextResponse.json({ error: 'Accumulating book not found.' }, { status: 404 })
+  }
+  return NextResponse.json({
+    tranches,
+    effective_principal: tranches.reduce((sum, t) => sum + t.effective_principal, 0),
+  })
+}
+
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createSupabaseServerClient()
