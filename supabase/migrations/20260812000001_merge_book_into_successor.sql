@@ -250,6 +250,16 @@ begin
    where transaction_id = p_source_book_id;
   perform set_config('app.successor_write', '', true);
 
+  -- And it stops being a book at all. Settled but still self-grouped, it stays a
+  -- valid target for a top-up: a backdated one waiting on the anchor lock would
+  -- be accepted the moment this commits — after the tranche set was checked and
+  -- every tranche closed — resurrecting a book whose payout already sits in the
+  -- successor. The full-withdrawal close path clears the group for the same
+  -- reason (20260618000009); one statement, so the whole book leaves together.
+  update public.investment_transactions
+     set deposit_group_id = null, updated_at = now()
+   where deposit_group_id = p_source_book_id;
+
   return v_new;
 end;
 $$;
@@ -262,3 +272,48 @@ comment on function public.merge_book_into_successor(uuid, bigint, numeric, date
 -- `anon` has one too.
 revoke all on function public.merge_book_into_successor(uuid, bigint, numeric, date, uuid[], bigint[]) from public, anon;
 grant execute on function public.merge_book_into_successor(uuid, bigint, numeric, date, uuid[], bigint[]) to authenticated, service_role;
+
+
+-- Deleting a withdrawal gives its principal back to the holding it came from.
+-- That is ordinary — unless the holding has since been folded into another
+-- deposit, in which case the principal being restored was paid away and now
+-- lives somewhere else. Both halves matter: the withdrawal that DID the folding
+-- (deleting it re-opens the whole holding), and any earlier one beside it
+-- (deleting that restores the part the merge measured around).
+--
+-- Immediate, not deferred: a deferred trigger queues an event for every delete
+-- it watches, and pending events block ALTER TABLE on this table for the rest of
+-- the transaction — which is how the withdrawal-balance suite noticed.
+--
+-- Being immediate, it also refuses the cascade that would delete a folded
+-- holding along with its withdrawals. That is the rule, not a side effect: once
+-- a holding's balance has been paid into another deposit, its rows are what say
+-- so, and removing them would leave the destination holding cash from nowhere.
+create or replace function public.guard_merged_source_withdrawal_deleted()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if old.consumed_by_inv_id is not null or exists (
+    select 1 from public.investment_transactions w
+     where w.parent_transaction_id = old.parent_transaction_id
+       and w.transaction_type = 'withdrawal'
+       and w.consumed_by_inv_id is not null
+  ) then
+    raise exception 'merge successor: this holding was folded into another deposit, so its withdrawals cannot be removed'
+      using errcode = 'check_violation';
+  end if;
+  return old;
+end;
+$$;
+
+revoke all on function public.guard_merged_source_withdrawal_deleted() from public, anon, authenticated;
+
+drop trigger if exists investment_transactions_merged_withdrawal_kept on public.investment_transactions;
+create trigger investment_transactions_merged_withdrawal_kept
+  before delete on public.investment_transactions
+  for each row
+  when (old.transaction_type = 'withdrawal' and old.parent_transaction_id is not null)
+  execute function public.guard_merged_source_withdrawal_deleted();

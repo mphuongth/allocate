@@ -41,6 +41,17 @@ begin
     current_date - 200, current_date - 3, 4000000, 4.2, v_a
   );
 
+  -- An earlier partial withdrawal on a tranche the merge will fold: the merge
+  -- measures around it, and restoring it afterwards would hand back principal
+  -- whose payout is by then in the successor.
+  insert into public.investment_transactions (
+    user_id, goal_id, asset_type, transaction_type, parent_transaction_id,
+    investment_date, amount_vnd, principal_withdrawn, affects_progress
+  ) values (
+    v_user, v_goal, 'bank', 'withdrawal', v_a2,
+    current_date - 40, 1000000, 1000000, true
+  );
+
   -- A recurring saving still points at A; it must end on B.
   insert into public.recurring_savings (
     saving_id, user_id, goal_id, name, amount_vnd, linked_deposit_tx_id
@@ -71,7 +82,7 @@ begin
     v_saving, to_char(current_date - 5, 'YYYY-MM'), null);
 
   v_ids := array[v_a, v_a2];
-  v_principals := array[8000000::bigint, 4000000::bigint];
+  v_principals := array[8000000::bigint, 3000000::bigint];
 
   -- ── A book that is not yet due is not merged early ───────────────────────
   update public.investment_transactions set expiry_date = current_date + 5
@@ -90,7 +101,8 @@ begin
   begin
     perform public.merge_book_into_successor(v_a, v_received, 4.5, current_date, array[v_a], array[8000000::bigint]);
     raise exception 'a book that changed since load must be refused';
-  exception when others then null;
+  exception when sqlstate 'P0001' then
+    if sqlerrm not like '%book changed since load%' then raise; end if;
   end;
 
   -- ── Nothing arrives from nowhere ─────────────────────────────────────────
@@ -112,7 +124,8 @@ begin
     perform public.merge_book_into_successor(
       v_a, v_received, 4.5, current_date, v_ids, array[7000000::bigint, 4000000::bigint]);
     raise exception 'a tranche whose balance moved must be refused';
-  exception when others then null;
+  exception when sqlstate 'P0001' then
+    if sqlerrm not like '%book changed since load%' then raise; end if;
   end;
 
   -- ── The merge itself ─────────────────────────────────────────────────────
@@ -180,7 +193,7 @@ begin
   begin
     perform public.merge_book_into_successor(v_a, v_received, 4.6, current_date, v_ids, v_principals);
     raise exception 'a book with no successor must not be merged';
-  exception when others then null;
+  exception when sqlstate '23514' or no_data_found then null;
   end;
 
   -- ── The cash cannot be unpicked from B while it sits there ───────────────
@@ -188,8 +201,27 @@ begin
     delete from public.investment_transactions
      where consumed_by_inv_id = v_new.transaction_id;
     raise exception 'a consumed withdrawal must not be deletable';
-  exception when others then null;
+  exception when sqlstate '23514' then null;
   end;
+
+  -- Nor an earlier partial withdrawal beside it: deleting that would restore the
+  -- part the merge measured around, to a book whose payout is already elsewhere.
+  begin
+    delete from public.investment_transactions
+     where parent_transaction_id = v_a2 and transaction_type = 'withdrawal'
+       and consumed_by_inv_id is null;
+    raise exception 'a withdrawal on a folded holding must not be deletable';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- ── The settled book stops being a book ──────────────────────────────────
+  -- Still self-grouped, it would remain a valid target for a backdated top-up
+  -- that resurrects it after its payout has gone.
+  select count(*) into v_count from public.investment_transactions
+   where deposit_group_id = v_a;
+  if v_count <> 0 then
+    raise exception 'the settled book must be dissolved, % rows still grouped', v_count;
+  end if;
 
   raise notice 'merge successor book: OK';
 end;
