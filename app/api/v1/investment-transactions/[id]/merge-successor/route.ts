@@ -4,6 +4,11 @@ import { ValidationError, validateAmount, validateDate, validateRate, validateUU
 import { isFutureInvestmentDate } from '@/lib/dates'
 import { readJsonBody } from '@/lib/apiBody'
 
+// One ceiling for the preview and the write. Reaching it is reported rather than
+// silently truncated — a short preview can never satisfy the RPC, and the merge
+// would fail with book_changed forever.
+const MERGE_TRANCHE_LIMIT = 2000
+
 // Keep the promise: fold a matured accumulating book into the successor it was
 // handed to (#638, Phase 3). `id` is the source book's anchor.
 //
@@ -42,7 +47,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     .eq('deposit_group_id', bookId)
     .eq('transaction_type', 'investment')
     .is('renewed_from_transaction_id', null)
-    .limit(2000)
+    .limit(MERGE_TRANCHE_LIMIT + 1)
 
   if (error) {
     console.error('merge preview failed', error.message)
@@ -50,6 +55,12 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   }
 
   const tranchesRows = trancheRows ?? []
+  if (tranchesRows.length > MERGE_TRANCHE_LIMIT) {
+    return NextResponse.json(
+      { error: 'This book has more tranches than the merge can take at once.', code: 'book_too_large' },
+      { status: 422 },
+    )
+  }
   const withdrawnBy = new Map<string, number>()
   if (tranchesRows.length > 0) {
     const { data: withdrawals, error: wErr } = await supabase
@@ -116,7 +127,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!Array.isArray(tranche_ids) || tranche_ids.length === 0) {
       throw new ValidationError('tranche_ids is required')
     }
-    if (tranche_ids.length > 500) throw new ValidationError('tranche_ids is too long')
+    // Whatever the preview can return, this has to accept: the RPC requires
+    // every live tranche, so a book between the two limits could never merge.
+    if (tranche_ids.length > MERGE_TRANCHE_LIMIT) throw new ValidationError('tranche_ids is too long')
     cleanTrancheIds = tranche_ids.map((v, i) => validateUUID(v, `tranche_ids[${i}]`))
     // The balances the client saw, not just which rows it saw: a partial
     // withdrawal landing after the confirmation loaded leaves every id in place

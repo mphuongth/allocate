@@ -129,6 +129,26 @@ begin
     if sqlerrm not like '%book changed since load%' then raise; end if;
   end;
 
+  -- ── A submitted tranche that has since been emptied ──────────────────────
+  -- Skipping spent tranches before comparing would have hidden this: the others
+  -- still match, and the payout bound is loose enough to accept the old figure.
+  -- The withdrawal below lands after the caller read the book; the block's own
+  -- rollback undoes it once the case has been proved.
+  begin
+    insert into public.investment_transactions (
+      user_id, goal_id, asset_type, transaction_type, parent_transaction_id,
+      investment_date, amount_vnd, principal_withdrawn, affects_progress
+    ) values (
+      v_user, v_goal, 'bank', 'withdrawal', v_a2,
+      current_date - 1, 3000000, 3000000, true
+    );
+    perform public.merge_book_into_successor(
+      v_a, v_received, 4.5, current_date, v_ids, v_principals);
+    raise exception 'a submitted tranche emptied since the preview must be refused';
+  exception when sqlstate 'P0001' then
+    if sqlerrm not like '%book changed since load%' then raise; end if;
+  end;
+
   -- ── The merge itself ─────────────────────────────────────────────────────
   select * into v_new from public.merge_book_into_successor(
     v_a, v_received, 4.6, current_date, v_ids, v_principals);

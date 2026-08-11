@@ -194,24 +194,29 @@ begin
       select sum(w.principal_withdrawn) from public.investment_transactions w
        where w.parent_transaction_id = v_tranche.transaction_id
          and w.transaction_type = 'withdrawal'), 0);
-    -- A tranche with nothing left is not the caller's to account for: the book
-    -- as they see it does not contain it (buildInvRows drops a tranche once its
-    -- principal is gone), so demanding its id would make such a book unmergeable
-    -- however many times they reloaded.
-    if v_effective <= 0 then continue; end if;
-
-    -- One that DOES still hold something has to be one the caller saw, holding
-    -- what they saw it hold. Ids alone are not enough: a partial withdrawal
-    -- landing after the confirmation screen loaded leaves every id in place
-    -- while the payout being confirmed is no longer the payout this book can
-    -- make — the destination would be credited with cash the withdrawal already
-    -- took. Comparing balances is what catches that. Plain P0001, not
+    -- Membership FIRST, balance second. Skipping spent tranches before the
+    -- comparison hid the case where one the caller SUBMITTED has since been
+    -- withdrawn to nothing: the rest still matched, the loose payout bound
+    -- accepted the old figure, and the successor was credited with cash the
+    -- intervening withdrawal had already taken.
+    --
+    -- So: a tranche the caller named must still hold exactly what they saw, and
+    -- one they did not name must hold nothing — the preview omits spent
+    -- tranches, which is why demanding their ids would make such a book
+    -- unmergeable however often it was reloaded. Plain P0001, not
     -- serialization_failure: this is deterministic, and a pooler must not spin
     -- retrying it.
     v_idx := array_position(p_tranche_ids, v_tranche.transaction_id);
-    if v_idx is null or p_tranche_principals[v_idx] is distinct from v_effective then
+    if v_idx is null then
+      if v_effective > 0 then
+        raise exception 'merge successor: book changed since load, reload and retry';
+      end if;
+      continue;
+    end if;
+    if p_tranche_principals[v_idx] is distinct from v_effective then
       raise exception 'merge successor: book changed since load, reload and retry';
     end if;
+    if v_effective <= 0 then continue; end if;
 
     if v_tranche.transaction_id = v_last then
       v_share := p_received_vnd - v_allocated;
