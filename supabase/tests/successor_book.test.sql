@@ -373,6 +373,17 @@ begin
     current_date - 200, current_date + 20, 10000000, 4, v_lockable, 30
   );
 
+  -- ── A handover written straight to the column still needs a reason ──────
+  -- v_open_book takes contributions happily; naming a successor on it would
+  -- close its door without moving anything, stranding its savings.
+  begin
+    update public.investment_transactions set successor_deposit_tx_id = v_c.transaction_id
+     where transaction_id = v_open_book;
+    set constraints all immediate;
+    raise exception 'a handover from a book that still accepts top-ups must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
   -- ── A successor must be open for business, now and at the handover ──────
   -- 25 days out with a 30-day lock is a book already inside its own window: the
   -- savings moved onto it could never contribute, and the merge would be refused
@@ -392,6 +403,23 @@ begin
      where transaction_id = v_tail3.transaction_id;
     set constraints all immediate;
     raise exception 'tightening a successor lock past the source maturity must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- ── No chains: a book owed a merge cannot hand over in turn ─────────────
+  -- Reachable once the source has matured and its merge is still outstanding:
+  -- v_lockable matured 15 days ago, and v_tail3 is now closing in on its own
+  -- maturity. If v_tail3 could promise onward, the merge v_lockable is waiting
+  -- for would be refused by the very guard that a handover installs.
+  update public.investment_transactions set expiry_date = current_date - 15
+   where deposit_group_id = v_lockable;
+  update public.investment_transactions set expiry_date = current_date + 20
+   where deposit_group_id = v_tail3.transaction_id;
+  set constraints all immediate;
+  begin
+    perform public.open_successor_book(
+      v_tail3.transaction_id, 1000000, 4, current_date - 1, current_date + 500, 30, null, null, null, null);
+    raise exception 'a book already promised a merge must not hand over again';
   exception when sqlstate '23514' then null;
   end;
 

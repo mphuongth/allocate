@@ -124,6 +124,18 @@ begin
     raise exception 'successor book: two books cannot succeed each other'
       using errcode = 'check_violation';
   end if;
+  -- Nor a chain. A book that has handed over refuses contributions, and the
+  -- merge INTO it is a contribution: if B is promised to C, then A's promised
+  -- merge into B can never be carried out. One promise at a time, in both
+  -- directions — settle the incoming one first (Phase 3), or cancel it.
+  if v_source.successor_deposit_tx_id is not null and exists (
+    select 1 from public.investment_transactions
+     where successor_deposit_tx_id = v_source.transaction_id
+       and user_id = v_source.user_id
+  ) then
+    raise exception 'successor book: this book is itself promised a merge, so settle that before handing over again'
+      using errcode = 'check_violation';
+  end if;
   -- The merge happens when the SOURCE matures, so both books need a maturity at
   -- all — the edit route lets one be cleared — and the successor's has to come
   -- after. A successor maturing first is a plan that cannot be carried out.
@@ -180,6 +192,21 @@ begin
         where successor_deposit_tx_id = new.transaction_id
      ) then
     raise exception 'successor book: a successor cannot be given a maturity that has already passed'
+      using errcode = 'check_violation';
+  end if;
+
+  -- A link written straight to the column skips open_successor_book entirely —
+  -- and with it the reason for the handover and the transfer of the recurring
+  -- savings. The door has to be closed here too, or a book still taking money
+  -- would start refusing it with its savings left pointing at it.
+  if new.successor_deposit_tx_id is not null
+     and (tg_op = 'INSERT' or old.successor_deposit_tx_id is null)
+     and (new.expiry_date is null
+          or (new.expiry_date - (now() at time zone 'Asia/Ho_Chi_Minh')::date > 0
+              and (new.top_up_lock_days is null
+                   or new.expiry_date - (now() at time zone 'Asia/Ho_Chi_Minh')::date > new.top_up_lock_days)))
+  then
+    raise exception 'successor book: this book still accepts top-ups, so it has nothing to hand over yet'
       using errcode = 'check_violation';
   end if;
 
