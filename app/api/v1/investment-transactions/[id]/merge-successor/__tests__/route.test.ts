@@ -10,6 +10,7 @@ const BOOK = '11111111-1111-4111-8111-111111111111'
 const T1 = '22222222-2222-4222-8222-222222222222'
 const T2 = '33333333-3333-4333-8333-333333333333'
 const NEW_TRANCHE = '44444444-4444-4444-8444-444444444444'
+const SUCCESSOR = '55555555-5555-4555-8555-555555555555'
 
 const h = vi.hoisted(() => ({
   user: { id: 'user-1' } as { id: string } | null,
@@ -35,6 +36,7 @@ const BODY = {
   merge_date: '2026-08-01',
   tranche_ids: [T1, T2],
   tranche_principals: [8_000_000, 4_500_000],
+  expected_successor_id: SUCCESSOR,
 }
 
 const call = (body: Record<string, unknown> = BODY) =>
@@ -68,6 +70,10 @@ describe('POST /api/v1/investment-transactions/[id]/merge-successor (#638)', () 
         p_merge_date: '2026-08-01',
         p_tranche_ids: [T1, T2],
         p_tranche_principals: [8_000_000, 4_500_000],
+        // The destination the user was looking at. The promise is cancellable,
+        // so without this a replacement opened mid-confirmation would take the
+        // cash while passing every other check.
+        p_expected_successor_id: SUCCESSOR,
       },
     })
   })
@@ -83,6 +89,7 @@ describe('POST /api/v1/investment-transactions/[id]/merge-successor (#638)', () 
     ['a rate of nothing', { ...BODY, interest_rate: null }],
     ['nothing received', { ...BODY, received_vnd: 0 }],
     ['a merge dated in the future', { ...BODY, merge_date: '2099-01-01' }],
+    ['no destination named', { ...BODY, expected_successor_id: undefined }],
   ])('refuses %s before reaching the database', async (_label, body) => {
     const res = await call(body)
 

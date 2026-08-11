@@ -66,10 +66,10 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   // back as a permanent `book_changed` that reloading cannot fix.
   const tranchePages = await readAllPages<{
     transaction_id: string; amount_vnd: number | null; interest_rate: number | null
-    investment_date: string; expiry_date: string | null
+    investment_date: string; expiry_date: string | null; successor_deposit_tx_id: string | null
   }>((from, to) => supabase
     .from('investment_transactions')
-    .select('transaction_id, amount_vnd, interest_rate, investment_date, expiry_date')
+    .select('transaction_id, amount_vnd, interest_rate, investment_date, expiry_date, successor_deposit_tx_id')
     .eq('user_id', user.id)
     .eq('deposit_group_id', bookId)
     .eq('transaction_type', 'investment')
@@ -148,6 +148,10 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   })))
   return NextResponse.json({
     tranches,
+    // Which book this one is promised to right now. The confirmation submits it
+    // back, so a handover cancelled and re-made in the meantime is caught rather
+    // than silently paid out to the replacement.
+    successor_id: tranchesRows.find((r) => r.transaction_id === bookId)?.successor_deposit_tx_id ?? null,
     effective_principal: plan.totalPrincipal,
     projected_value: plan.totalPrincipal + plan.totalInterest,
   })
@@ -162,7 +166,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const parsed = await readJsonBody(request)
   if (!parsed.ok) return parsed.response
   const body = parsed.body
-  const { received_vnd, interest_rate, merge_date, tranche_ids, tranche_principals } = body
+  const { received_vnd, interest_rate, merge_date, tranche_ids, tranche_principals, expected_successor_id } = body
 
   let bookId: string
   let cleanReceived: number
@@ -170,8 +174,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   let cleanDate: string
   let cleanTrancheIds: string[]
   let cleanTranchePrincipals: number[]
+  let cleanExpectedSuccessor: string
   try {
     bookId = validateUUID(id, 'id')
+    // The destination the sheet showed. A handover can be cancelled and re-made
+    // while the confirmation is open, and the replacement satisfies every rule
+    // the pairing enforces — so the only thing that can catch it is the caller
+    // saying which book they were looking at.
+    cleanExpectedSuccessor = validateUUID(expected_successor_id, 'expected_successor_id')
     cleanReceived = validateAmount(received_vnd, 'received_vnd')
     if (cleanReceived <= 0) throw new ValidationError('received_vnd must be positive')
     if (interest_rate == null || interest_rate === '') throw new ValidationError('interest_rate is required')
@@ -209,6 +219,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       p_merge_date: cleanDate,
       p_tranche_ids: cleanTrancheIds,
       p_tranche_principals: cleanTranchePrincipals,
+      p_expected_successor_id: cleanExpectedSuccessor,
     })
     .single<{ transaction_id: string }>()
 

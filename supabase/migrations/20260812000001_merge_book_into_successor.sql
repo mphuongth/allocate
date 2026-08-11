@@ -12,13 +12,24 @@
 -- and retiring the promise are only correct together. Half of it committed is a
 -- book closed with its money nowhere, or money in two places at once.
 
+-- An earlier draft of this same migration took six arguments. Replacing it would
+-- leave both, and PostgREST cannot choose between two overloads — so the shape
+-- that no longer exists goes first. (This function has never reached production,
+-- so there is nothing here to drop there.)
+drop function if exists public.merge_book_into_successor(uuid, bigint, numeric, date, uuid[], bigint[]);
+
 create or replace function public.merge_book_into_successor(
   p_source_book_id uuid,
   p_received_vnd bigint,
   p_interest_rate numeric,
   p_merge_date date,
   p_tranche_ids uuid[],
-  p_tranche_principals bigint[]
+  p_tranche_principals bigint[],
+  -- The destination the caller was looking at when they confirmed. The promise
+  -- is cancellable, so between the preview and the press this book can be handed
+  -- to a different one — different bank, different terms — and every other check
+  -- here would still pass while the cash went somewhere the user never saw.
+  p_expected_successor_id uuid
 )
 returns public.investment_transactions
 language plpgsql
@@ -69,6 +80,13 @@ begin
   if v_source.successor_deposit_tx_id is null then
     raise exception 'merge successor: this book has no successor to merge into'
       using errcode = 'check_violation';
+  end if;
+  -- Same wording as a moved balance, and for the same reason: what the caller
+  -- confirmed is no longer what the book says. Reloading shows them the book it
+  -- is actually promised to now, and they decide again.
+  if p_expected_successor_id is distinct from v_source.successor_deposit_tx_id then
+    raise exception 'merge successor: book changed since load, reload and retry'
+      using errcode = 'raise_exception';
   end if;
 
   select * into v_dest from public.investment_transactions
@@ -304,14 +322,14 @@ begin
 end;
 $$;
 
-comment on function public.merge_book_into_successor(uuid, bigint, numeric, date, uuid[], bigint[]) is
+comment on function public.merge_book_into_successor(uuid, bigint, numeric, date, uuid[], bigint[], uuid) is
   'Fold a matured accumulating book into the successor it was handed to, closing it and retiring the promise (#638).';
 
 -- Executable by the people who own books, not by everyone: like the handover
 -- functions, this one trusts a null auth.uid() as the service role or SQL, and
 -- `anon` has one too.
-revoke all on function public.merge_book_into_successor(uuid, bigint, numeric, date, uuid[], bigint[]) from public, anon;
-grant execute on function public.merge_book_into_successor(uuid, bigint, numeric, date, uuid[], bigint[]) to authenticated, service_role;
+revoke all on function public.merge_book_into_successor(uuid, bigint, numeric, date, uuid[], bigint[], uuid) from public, anon;
+grant execute on function public.merge_book_into_successor(uuid, bigint, numeric, date, uuid[], bigint[], uuid) to authenticated, service_role;
 
 
 -- Deleting a withdrawal gives its principal back to the holding it came from.

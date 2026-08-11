@@ -91,7 +91,7 @@ begin
    where deposit_group_id = v_a;
   set constraints all immediate;
   begin
-    perform public.merge_book_into_successor(v_a, v_received, 4.5, current_date, v_ids, v_principals);
+    perform public.merge_book_into_successor(v_a, v_received, 4.5, current_date, v_ids, v_principals, v_b.transaction_id);
     raise exception 'merging a book before its maturity must be refused';
   exception when sqlstate '23514' then null;
   end;
@@ -101,20 +101,40 @@ begin
 
   -- ── A tranche the caller never saw aborts the whole thing ────────────────
   begin
-    perform public.merge_book_into_successor(v_a, v_received, 4.5, current_date, array[v_a], array[8000000::bigint]);
+    perform public.merge_book_into_successor(v_a, v_received, 4.5, current_date, array[v_a], array[8000000::bigint], v_b.transaction_id);
     raise exception 'a book that changed since load must be refused';
+  exception when sqlstate 'P0001' then
+    if sqlerrm not like '%book changed since load%' then raise; end if;
+  end;
+
+  -- ── A destination the caller never saw ───────────────────────────────────
+  -- The promise can be cancelled and re-made while the confirmation sits open,
+  -- and the replacement passes every same-goal/same-currency check the pairing
+  -- makes. Nothing else here would notice, so the cash would leave for a bank
+  -- the user never confirmed. What they saw is named, and has to still be true.
+  begin
+    perform public.merge_book_into_successor(
+      v_a, v_received, 4.5, current_date, v_ids, v_principals, gen_random_uuid());
+    raise exception 'a merge naming a successor that is no longer linked must be refused';
+  exception when sqlstate 'P0001' then
+    if sqlerrm not like '%book changed since load%' then raise; end if;
+  end;
+  begin
+    perform public.merge_book_into_successor(
+      v_a, v_received, 4.5, current_date, v_ids, v_principals, null);
+    raise exception 'a merge naming no successor at all must be refused';
   exception when sqlstate 'P0001' then
     if sqlerrm not like '%book changed since load%' then raise; end if;
   end;
 
   -- ── Nothing arrives from nowhere ─────────────────────────────────────────
   begin
-    perform public.merge_book_into_successor(v_a, 0, 4.5, current_date, v_ids, v_principals);
+    perform public.merge_book_into_successor(v_a, 0, 4.5, current_date, v_ids, v_principals, v_b.transaction_id);
     raise exception 'a merge of nothing must be refused';
   exception when sqlstate '23514' then null;
   end;
   begin
-    perform public.merge_book_into_successor(v_a, 999000000000, 4.5, current_date, v_ids, v_principals);
+    perform public.merge_book_into_successor(v_a, 999000000000, 4.5, current_date, v_ids, v_principals, v_b.transaction_id);
     raise exception 'a received amount unmoored from the book must be refused';
   exception when sqlstate '23514' then null;
   end;
@@ -124,7 +144,7 @@ begin
   -- exactly the case ids alone cannot see.
   begin
     perform public.merge_book_into_successor(
-      v_a, v_received, 4.5, current_date, v_ids, array[7000000::bigint, 4000000::bigint]);
+      v_a, v_received, 4.5, current_date, v_ids, array[7000000::bigint, 4000000::bigint], v_b.transaction_id);
     raise exception 'a tranche whose balance moved must be refused';
   exception when sqlstate 'P0001' then
     if sqlerrm not like '%book changed since load%' then raise; end if;
@@ -144,7 +164,7 @@ begin
       current_date - 1, 3000000, 3000000, true
     );
     perform public.merge_book_into_successor(
-      v_a, v_received, 4.5, current_date, v_ids, v_principals);
+      v_a, v_received, 4.5, current_date, v_ids, v_principals, v_b.transaction_id);
     raise exception 'a submitted tranche emptied since the preview must be refused';
   exception when sqlstate 'P0001' then
     if sqlerrm not like '%book changed since load%' then raise; end if;
@@ -155,7 +175,7 @@ begin
   begin
     update public.investment_transactions set affects_progress = false
      where parent_transaction_id = v_a2 and transaction_type = 'withdrawal';
-    perform public.merge_book_into_successor(v_a, v_received, 4.5, current_date, v_ids, v_principals);
+    perform public.merge_book_into_successor(v_a, v_received, 4.5, current_date, v_ids, v_principals, v_b.transaction_id);
     raise exception 'a withdrawal kept out of progress must block the merge';
   exception when sqlstate '23514' then null;
   end;
@@ -163,14 +183,14 @@ begin
     insert into public.savings_goals (user_id, goal_name) values (v_user, 'Sideways') returning goal_id into v_side_goal;
     update public.investment_transactions set goal_id = v_side_goal
      where parent_transaction_id = v_a2 and transaction_type = 'withdrawal';
-    perform public.merge_book_into_successor(v_a, v_received, 4.5, current_date, v_ids, v_principals);
+    perform public.merge_book_into_successor(v_a, v_received, 4.5, current_date, v_ids, v_principals, v_b.transaction_id);
     raise exception 'a withdrawal filed under another goal must block the merge';
   exception when sqlstate '23514' then null;
   end;
 
   -- ── The merge itself ─────────────────────────────────────────────────────
   select * into v_new from public.merge_book_into_successor(
-    v_a, v_received, 4.6, current_date, v_ids, v_principals);
+    v_a, v_received, 4.6, current_date, v_ids, v_principals, v_b.transaction_id);
 
   -- Exactly one tranche lands in B, holding the cash that was actually received.
   if v_new.deposit_group_id is distinct from v_b.transaction_id then
@@ -231,7 +251,7 @@ begin
 
   -- ── Once kept, it cannot be kept again ───────────────────────────────────
   begin
-    perform public.merge_book_into_successor(v_a, v_received, 4.6, current_date, v_ids, v_principals);
+    perform public.merge_book_into_successor(v_a, v_received, 4.6, current_date, v_ids, v_principals, v_b.transaction_id);
     raise exception 'a book with no successor must not be merged';
   exception when sqlstate '23514' or no_data_found then null;
   end;
