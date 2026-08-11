@@ -62,6 +62,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (error.message?.includes('nothing to withdraw') || error.message?.includes('more than the book balance')) {
       return NextResponse.json({ error: 'Withdrawal exceeds the book balance.' }, { status: 400 })
     }
+    // A book promised to a successor is not closed behind the promise's back
+    // (#638). That is a decision to undo, not a fault — say which one.
+    if (error.message?.startsWith('successor book: ')) {
+      return NextResponse.json(
+        { error: error.message.slice('successor book: '.length), code: 'successor_planned' },
+        { status: 409 },
+      )
+    }
     console.error('withdraw_accumulating_book failed', error.message)
     return NextResponse.json({ error: 'Failed to withdraw book' }, { status: 500 })
   }

@@ -851,4 +851,36 @@ describe('MaturityResolveBody', () => {
     await waitFor(() => expect(onWithdraw).toHaveBeenCalled())
     expect(writeCalls(fetchMock)).toHaveLength(0)
   })
+
+  // A book promised to a successor cannot be collapsed: the merge into that
+  // successor is what its maturity is for (#638). Until that merge exists, the
+  // refusal has to carry its own way out, or it is a dead end.
+  it('offers to cancel the handover when the collapse is refused for one', async () => {
+    const user = userEvent.setup()
+    const calls: { url: string; method?: string }[] = []
+    global.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const u = String(url)
+      calls.push({ url: u, method: init?.method })
+      if (init?.method === 'POST') {
+        return {
+          ok: false,
+          json: async () => ({ error: 'this book is promised to a successor, so cancel the handover before closing it', code: 'successor_planned' }),
+        } as Response
+      }
+      if (init?.method === 'DELETE') return { ok: true, json: async () => ({}) } as Response
+      return { ok: true, json: async () => ({ banks: [] }) } as Response
+    }) as unknown as typeof fetch
+
+    const book: InvRow = { ...maturedDeposit, depositGroupId: 'tx-bank-1', successorDepositTxId: 'book-2' }
+    render(
+      <MaturityResolveBody inv={book} isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /Xác nhận tái tục|Confirm renewal/i }))
+    await waitFor(() => expect(screen.getByTestId('cancel-handover-btn')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByTestId('cancel-handover-btn'))
+    await waitFor(() => expect(screen.queryByTestId('cancel-handover-btn')).not.toBeInTheDocument())
+    expect(calls.some(c => c.method === 'DELETE' && c.url.endsWith('/tx-bank-1/successor'))).toBe(true)
+  })
 })

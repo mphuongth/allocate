@@ -134,6 +134,9 @@ export interface InvRow {
   isPledged?: boolean | null
   /** Optional inclusive pre-maturity lock window for adding a new book tranche. */
   topUpLockDays?: number | null
+  // The book this one is planned to be folded into at maturity, once it stopped
+  // accepting top-ups and its contributions moved on (#638).
+  successorDepositTxId?: string | null
   // The book's tranches (top-ups), newest first, for the detail view. Each is one
   // underlying row; present only on an accumulating book row.
   tranches?: InvTranche[] | null

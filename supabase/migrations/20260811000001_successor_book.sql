@@ -1,0 +1,733 @@
+-- A book that stops accepting contributions hands them to a successor (#638).
+--
+-- Phase 1 taught the database when a bank refuses another tranche. That leaves
+-- the user holding a contribution the bank will not take: the real workflow is
+-- to open a NEW accumulating book and send the month there, then fold the old
+-- book into it when it matures (Phase 3).
+--
+-- The relationship is stored, not guessed. Matching two books later by bank,
+-- name and date would be a guess, and the whole point of the link is to steer
+-- money — the recurring saving's contributions now, the maturity action later.
+
+alter table public.investment_transactions
+  add column if not exists successor_deposit_tx_id uuid
+  references public.investment_transactions(transaction_id) on delete set null;
+
+-- Only a book anchor may name a successor, and never itself. `on delete set
+-- null` above handles a successor that is deleted outright: the plan is dropped
+-- and the user is asked to choose again, rather than the source row going with it.
+alter table public.investment_transactions
+  drop constraint if exists investment_transactions_successor_shape;
+alter table public.investment_transactions
+  add constraint investment_transactions_successor_shape check (
+    successor_deposit_tx_id is null
+    -- NULL-safe on purpose: `deposit_group_id = transaction_id` is NULL for a
+    -- dissolved row, and a CHECK passes on NULL, so the plain comparison would
+    -- let a row keep its successor after it stopped being a book.
+    or (deposit_group_id is not distinct from transaction_id
+        and successor_deposit_tx_id is distinct from transaction_id)
+  );
+
+-- Which makes the dissolve flows the constraint's problem: withdraw_book_close_group
+-- and collapse_accumulating_book both clear deposit_group_id across the group.
+--
+-- Clearing the link along with the book would be wrong, and quietly so. Collapse
+-- is what "handle maturity" runs today: it re-deposits the book's principal into
+-- a fresh term cycle. The money has NOT left — and that is precisely the moment
+-- the handover was made for, the merge into the successor that Phase 3 performs.
+-- Dropping the relationship there would lose the plan exactly when it comes due.
+--
+-- So a promised book is not dissolved by any route: the promise is cancelled
+-- first, deliberately, by whoever made it (DELETE on the successor endpoint).
+create or replace function public.enforce_successor_before_dissolve()
+returns trigger language plpgsql set search_path = '' as $$
+begin
+  -- Judged on the OLD link alone. Clearing deposit_group_id and the successor in
+  -- ONE update would otherwise walk straight past this: the promise would be
+  -- dropped by the same statement that dissolves the book, which is exactly the
+  -- silent loss the guard exists to prevent. Cancelling is its own decision.
+  if old.successor_deposit_tx_id is not null
+     and new.deposit_group_id is distinct from new.transaction_id then
+    raise exception 'successor book: this book is promised to a successor, so cancel the handover before closing it'
+      using errcode = 'check_violation';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists investment_transactions_successor_cleared_on_dissolve on public.investment_transactions;
+drop trigger if exists investment_transactions_successor_before_dissolve on public.investment_transactions;
+create trigger investment_transactions_successor_before_dissolve
+  before update of deposit_group_id on public.investment_transactions
+  for each row
+  when (old.successor_deposit_tx_id is not null)
+  execute function public.enforce_successor_before_dissolve();
+
+create unique index if not exists investment_transactions_successor_unique
+  on public.investment_transactions (successor_deposit_tx_id)
+  where successor_deposit_tx_id is not null;
+
+comment on column public.investment_transactions.successor_deposit_tx_id is
+  'The accumulating book this one is planned to be folded into at maturity (#638).';
+
+-- The reference is a user-scoped one like every other (20260728000001).
+drop trigger if exists investment_transactions_successor_fk_ownership on public.investment_transactions;
+create trigger investment_transactions_successor_fk_ownership
+  before insert or update of successor_deposit_tx_id, user_id on public.investment_transactions
+  for each row execute function public.enforce_user_scoped_fk_ownership(
+    'successor_deposit_tx_id', 'investment_transactions', 'transaction_id');
+
+-- What the link promises is that the two books CAN be merged later, so refuse a
+-- pairing that could never be: a successor must itself be a live accumulating
+-- book, in the same goal and currency, and it must not already point back at
+-- the source (a two-book cycle has no maturity order).
+create or replace function public.assert_successor_book_pairing(p_source_id uuid)
+returns void language plpgsql security definer set search_path = '' as $$
+declare v_source public.investment_transactions; v_successor public.investment_transactions;
+begin
+  select * into v_source from public.investment_transactions where transaction_id = p_source_id;
+  if not found or v_source.successor_deposit_tx_id is null then return; end if;
+
+  -- LOCK BOTH BOOKS, in id order, then re-read them. Two requests pairing the
+  -- same books in opposite directions touch different rows and write different
+  -- values, so nothing else would stop them: each would read the other's
+  -- pre-update version, see no cycle, and commit one. Ordering by id is what
+  -- keeps the two lockers from deadlocking on each other — and if they do
+  -- collide, one aborts, which beats committing a pair that promises itself.
+  perform 1 from public.investment_transactions
+   where transaction_id in (p_source_id, v_source.successor_deposit_tx_id)
+   order by transaction_id
+   for update;
+
+  select * into v_source from public.investment_transactions where transaction_id = p_source_id;
+  if not found or v_source.successor_deposit_tx_id is null then return; end if;
+
+  select * into v_successor from public.investment_transactions
+   where transaction_id = v_source.successor_deposit_tx_id and user_id = v_source.user_id;
+  -- Ownership is the fk trigger's job; say nothing here about a row that is not
+  -- the caller's, so a foreign book cannot be probed through these messages.
+  if not found then return; end if;
+
+  if v_successor.deposit_group_id is distinct from v_successor.transaction_id then
+    raise exception 'successor book: a successor must itself be an accumulating book'
+      using errcode = 'check_violation';
+  end if;
+  -- Either row can be turned into a withdrawal through an ordinary edit, which
+  -- takes it out of holdings entirely — a pair of which one half is not a live
+  -- investment promises a merge between something and nothing.
+  if v_source.transaction_type is distinct from 'investment'
+     or v_successor.transaction_type is distinct from 'investment' then
+    raise exception 'successor book: both books must stay live deposits'
+      using errcode = 'check_violation';
+  end if;
+  -- Either side pledged freezes the merge this link promises, and a pledge can
+  -- be applied long after the handover was arranged.
+  if v_source.is_pledged or v_successor.is_pledged then
+    raise exception 'successor book: a pledged deposit cannot be part of a handover'
+      using errcode = 'check_violation';
+  end if;
+  if v_successor.goal_id is distinct from v_source.goal_id then
+    raise exception 'successor book: both books must belong to the same goal'
+      using errcode = 'check_violation';
+  end if;
+  if coalesce(v_successor.currency, 'VND') is distinct from coalesce(v_source.currency, 'VND') then
+    raise exception 'successor book: both books must be in the same currency'
+      using errcode = 'check_violation';
+  end if;
+  if v_successor.successor_deposit_tx_id = v_source.transaction_id then
+    raise exception 'successor book: two books cannot succeed each other'
+      using errcode = 'check_violation';
+  end if;
+  -- Nor a chain. A book that has handed over refuses contributions, and the
+  -- merge INTO it is a contribution: if B is promised to C, then A's promised
+  -- merge into B can never be carried out. One promise at a time, in both
+  -- directions — settle the incoming one first (Phase 3), or cancel it.
+  -- Both directions, and on every pairing change rather than only on a fresh
+  -- link: repointing an existing promise skips the new-link guards entirely.
+  if exists (
+    select 1 from public.investment_transactions
+     where successor_deposit_tx_id = v_source.transaction_id
+       and user_id = v_source.user_id
+  ) then
+    raise exception 'successor book: this book is itself promised a merge, so settle that before handing over again'
+      using errcode = 'check_violation';
+  end if;
+  if v_successor.successor_deposit_tx_id is not null then
+    raise exception 'successor book: that book has already handed over, so it cannot receive this one'
+      using errcode = 'check_violation';
+  end if;
+  -- The merge happens when the SOURCE matures, so both books need a maturity at
+  -- all — the edit route lets one be cleared — and the successor's has to come
+  -- after. A successor maturing first is a plan that cannot be carried out.
+  if v_source.expiry_date is null or v_successor.expiry_date is null then
+    raise exception 'successor book: both books need a maturity while the handover stands'
+      using errcode = 'check_violation';
+  end if;
+  -- The successor holds real money and inherits the recurring link, and a
+  -- rateless deposit is not a valid target for one — the edit route can clear a
+  -- rate long after the book was opened.
+  if v_successor.interest_rate is null or v_successor.interest_rate <= 0 then
+    raise exception 'successor book: the successor needs a rate while the handover stands'
+      using errcode = 'check_violation';
+  end if;
+  if v_successor.expiry_date <= v_source.expiry_date then
+    raise exception 'successor book: the successor must mature after the book it takes over from (% is not after %)',
+      v_successor.expiry_date, v_source.expiry_date
+      using errcode = 'check_violation';
+  end if;
+  -- Far enough after it to still be open on the day: a successor inside its own
+  -- lock window when the source matures cannot receive the merge, and the lock
+  -- can be tightened long after the handover was arranged.
+  if v_successor.expiry_date - v_source.expiry_date <= coalesce(v_successor.top_up_lock_days, 0) then
+    raise exception 'successor book: the successor would be inside its own % day lock window when % matures',
+      v_successor.top_up_lock_days, v_source.expiry_date
+      using errcode = 'check_violation';
+  end if;
+end;
+$$;
+
+-- The pairing can be broken from EITHER end: by re-pointing the source, or by
+-- editing the successor out from under it — moving that book to another goal is
+-- an ordinary transaction edit, and it would leave the source promising a merge
+-- that can never happen. So the check runs from whichever row moved, and looks
+-- both ways.
+--
+-- Deferred, for the reason the top-up guard is (#638): update_deposit_book
+-- rewrites a book across several statements, and only the state the transaction
+-- ends in is the state the user asked for.
+create or replace function public.enforce_successor_book_pairing()
+returns trigger language plpgsql security definer set search_path = '' as $$
+declare v_id uuid; v_dest_expiry date; v_dest_lock integer;
+begin
+  -- A pair ages naturally, so "already mature" is not a standing invariant — but
+  -- MOVING a successor's maturity into the past is an edit that strands every
+  -- recurring saving transferred onto it, whose next contribution the book will
+  -- refuse. Only the edit is judged, and only for a row someone succeeds into.
+  if tg_op = 'UPDATE'
+     and (old.expiry_date is distinct from new.expiry_date
+       or old.top_up_lock_days is distinct from new.top_up_lock_days)
+     and new.expiry_date is not null
+     -- Inside its own window, not merely past: the pairing rules measure the
+     -- successor against the SOURCE's maturity, which says nothing about today
+     -- once that maturity is behind us. A book whose remaining term is shorter
+     -- than its own lock refuses the savings that were moved onto it.
+     and new.expiry_date - (now() at time zone 'Asia/Ho_Chi_Minh')::date
+         <= coalesce(new.top_up_lock_days, 0)
+     and exists (
+       select 1 from public.investment_transactions
+        where successor_deposit_tx_id = new.transaction_id
+     ) then
+    raise exception 'successor book: a successor cannot be given terms that leave it unable to take a contribution today'
+      using errcode = 'check_violation';
+  end if;
+
+  -- A link written straight to the column skips open_successor_book entirely —
+  -- and with it the reason for the handover and the transfer of the recurring
+  -- savings. The door has to be closed here too, or a book still taking money
+  -- would start refusing it with its savings left pointing at it.
+  if new.successor_deposit_tx_id is not null
+     and (tg_op = 'INSERT'
+       or old.successor_deposit_tx_id is distinct from new.successor_deposit_tx_id)
+     and (new.expiry_date is null
+          or (new.expiry_date - (now() at time zone 'Asia/Ho_Chi_Minh')::date > 0
+              and (new.top_up_lock_days is null
+                   or new.expiry_date - (now() at time zone 'Asia/Ho_Chi_Minh')::date > new.top_up_lock_days)))
+  then
+    raise exception 'successor book: this book still accepts top-ups, so it has nothing to hand over yet'
+      using errcode = 'check_violation';
+  end if;
+  -- ...and the destination has to be able to receive. The pairing rules compare
+  -- the two books to each other; being usable TODAY is a separate question, and
+  -- one open_successor_book asks. A link written straight to the column must
+  -- answer it too, or it lands the savings on a book that is already mature or
+  -- inside its own lock window.
+  -- On every change of the link, not only when one first appears: repointing a
+  -- promise onto a different book is the same decision made again, and the new
+  -- destination has to be able to receive just as the first one did.
+  if new.successor_deposit_tx_id is not null
+     and (tg_op = 'INSERT'
+       or old.successor_deposit_tx_id is distinct from new.successor_deposit_tx_id) then
+    select expiry_date, top_up_lock_days into v_dest_expiry, v_dest_lock
+      from public.investment_transactions
+     where transaction_id = new.successor_deposit_tx_id and user_id = new.user_id;
+    if found and (v_dest_expiry is null
+      or v_dest_expiry - (now() at time zone 'Asia/Ho_Chi_Minh')::date <= coalesce(v_dest_lock, 0)) then
+      raise exception 'successor book: that book cannot take a contribution today, so it cannot be the successor'
+        using errcode = 'check_violation';
+    end if;
+    -- And nothing may be left funding the book that just closed its door. The
+    -- RPC moves those savings before this deferred check runs; a link written
+    -- straight to the column moves nothing, and would strand them.
+    if exists (
+      select 1 from public.recurring_savings
+       where linked_deposit_tx_id = new.transaction_id and user_id = new.user_id
+    ) then
+      raise exception 'successor book: recurring savings still point at this book, so they would be left funding a book that refuses them'
+        using errcode = 'check_violation';
+    end if;
+  end if;
+
+  perform public.assert_successor_book_pairing(new.transaction_id);
+  for v_id in
+    select transaction_id from public.investment_transactions
+     where successor_deposit_tx_id = new.transaction_id
+  loop
+    perform public.assert_successor_book_pairing(v_id);
+  end loop;
+  return null;
+end;
+$$;
+
+drop trigger if exists investment_transactions_successor_pairing on public.investment_transactions;
+drop trigger if exists investment_transactions_successor_pairing_ins on public.investment_transactions;
+-- Two triggers rather than one, because the UPDATE side has to look at the row's
+-- OLD shape as well and OLD is not available to an INSERT trigger's WHEN.
+--
+-- Both stay narrow: a deferred event is queued until commit, and pending events
+-- block ALTER TABLE on this table, so every unrelated edit must not carry one.
+create constraint trigger investment_transactions_successor_pairing_ins
+  after insert on public.investment_transactions
+  deferrable initially deferred
+  for each row
+  when (new.successor_deposit_tx_id is not null)
+  execute function public.enforce_successor_book_pairing();
+
+drop trigger if exists investment_transactions_successor_pairing_upd on public.investment_transactions;
+create constraint trigger investment_transactions_successor_pairing_upd
+  after update of successor_deposit_tx_id, goal_id, currency, deposit_group_id, expiry_date, interest_rate, is_pledged, transaction_type, top_up_lock_days
+  on public.investment_transactions
+  deferrable initially deferred
+  for each row
+  -- A row that names a successor, a book anchor (the only kind that can BE one),
+  -- and a row that STOPPED being an anchor: a fully withdrawn successor has its
+  -- group cleared, and matching only on the new shape would let it slip away
+  -- from a source still promising to merge into it.
+  when (new.successor_deposit_tx_id is not null
+        or new.deposit_group_id = new.transaction_id
+        or old.deposit_group_id = old.transaction_id)
+  execute function public.enforce_successor_book_pairing();
+
+-- ── A book that has handed over is closed to new money ──────────────────────
+--
+-- The lock window does not cover this on its own: a contribution dated before
+-- the window still clears it, so a stale modal or a deliberately historical
+-- date could keep feeding the old book after its recurring link has moved —
+-- splitting one month's saving across two books. The handover is the same kind
+-- of fact as maturity, so it belongs in the same guard every writer passes.
+create or replace function public.assert_accumulating_book_topup_allowed(p_book_id uuid, p_owner_id uuid, p_top_up_date date)
+returns void language plpgsql security definer set search_path = '' as $$
+declare v_anchor public.investment_transactions; v_days_left integer;
+begin
+  select * into v_anchor from public.investment_transactions
+   where transaction_id = p_book_id and deposit_group_id = p_book_id and user_id = p_owner_id for update;
+  if not found then raise exception 'accumulating top-up: accumulating book not found' using errcode = 'no_data_found'; end if;
+  if v_anchor.successor_deposit_tx_id is not null then
+    raise exception 'accumulating top-up: this book has handed over to a successor, so contributions belong there'
+      using errcode = 'check_violation';
+  end if;
+  if v_anchor.expiry_date is null then return; end if;
+  v_days_left := v_anchor.expiry_date - p_top_up_date;
+  if v_days_left <= 0 then
+    raise exception 'accumulating top-up: cannot top up a deposit on or after its maturity date' using errcode = 'check_violation';
+  end if;
+  if v_anchor.top_up_lock_days is not null and v_days_left <= v_anchor.top_up_lock_days then
+    raise exception 'accumulating top-up: this deposit no longer accepts top-ups: % days remain before maturity (its lock window is % days)', v_days_left, v_anchor.top_up_lock_days using errcode = 'check_violation';
+  end if;
+end;
+$$;
+
+revoke all on function public.assert_accumulating_book_topup_allowed(uuid, uuid, date) from public, anon, authenticated;
+
+-- ── Opening the successor ───────────────────────────────────────────────────
+--
+-- One call, because the recurring-driven flow is four writes that are only
+-- correct together: create B, record the month's contribution in it, mark the
+-- month fulfilled so the plan does not ask for it twice, and move the recurring
+-- link off the book that can no longer receive it. Half of that, committed
+-- alone, is a plan that double-counts or a contribution filed nowhere.
+--
+-- B's opening tranche IS its anchor row: an accumulating book's anchor carries
+-- the first contribution, and every later top-up joins the group behind it.
+create or replace function public.open_successor_book(
+  p_source_book_id uuid,
+  p_amount_vnd bigint,
+  p_interest_rate numeric,
+  p_investment_date date,
+  p_expiry_date date,
+  p_top_up_lock_days integer,
+  p_notes text,
+  p_saving_id uuid default null,
+  p_ym text default null,
+  p_plan_id uuid default null
+)
+returns public.investment_transactions
+language plpgsql
+-- DEFINER, because `authenticated` no longer holds the privilege to write
+-- successor_deposit_tx_id at all (see the revoke below): this function is the
+-- only supported way to arrange a handover, so it is the one thing that may.
+-- Which means RLS no longer scopes what it reads — every row it touches is
+-- checked against the caller explicitly.
+security definer
+set search_path = ''
+as $$
+declare
+  v_source public.investment_transactions;
+  v_book public.investment_transactions;
+  v_new_id uuid := gen_random_uuid();
+  v_today date := (now() at time zone 'Asia/Ho_Chi_Minh')::date;
+  v_plan_ym text;
+begin
+  -- SAVINGS FIRST, then the book. The other path through here — an ordinary
+  -- recurring edit — locks its own saving row and only then waits for the book,
+  -- via the link trigger. Taking them in the opposite order would invert the two
+  -- and turn a pair of concurrent edits into a deadlock that Postgres resolves
+  -- by killing one of them.
+  perform 1 from public.recurring_savings
+   where linked_deposit_tx_id = p_source_book_id
+   order by saving_id
+   for update;
+
+  select * into v_source
+    from public.investment_transactions
+   where transaction_id = p_source_book_id
+     and deposit_group_id = p_source_book_id
+   for update;
+  if not found then
+    raise exception 'successor book: accumulating book not found'
+      using errcode = 'no_data_found';
+  end if;
+  -- RLS is not doing this for us any more. auth.uid() is null for the service
+  -- role and for SQL callers, which keep their reach.
+  if auth.uid() is not null and v_source.user_id is distinct from auth.uid() then
+    raise exception 'successor book: accumulating book not found'
+      using errcode = 'no_data_found';
+  end if;
+  if v_source.asset_type is distinct from 'bank' then
+    raise exception 'successor book: not a bank book' using errcode = 'check_violation';
+  end if;
+  if v_source.successor_deposit_tx_id is not null then
+    raise exception 'successor book: this book already has a successor'
+      using errcode = 'check_violation';
+  end if;
+  -- Pledged collateral is frozen: it cannot be settled or merged (the held
+  -- settlement refuses it outright), so promising to fold it into another book
+  -- would be a plan the merge itself would later reject.
+  if v_source.is_pledged then
+    raise exception 'successor book: a pledged deposit cannot be handed over while it is collateral'
+      using errcode = 'check_violation';
+  end if;
+  if p_amount_vnd is null or p_amount_vnd <= 0 then
+    raise exception 'successor book: amount must be positive' using errcode = 'check_violation';
+  end if;
+  -- A deposit with no rate earns nothing here and is not a valid target for a
+  -- recurring link either, and this book opens holding real money.
+  if p_interest_rate is null or p_interest_rate <= 0 then
+    raise exception 'successor book: the new book needs its own rate' using errcode = 'check_violation';
+  end if;
+  if p_expiry_date is null or p_investment_date is null or p_expiry_date <= p_investment_date then
+    raise exception 'successor book: the new maturity must come after the contribution'
+      using errcode = 'check_violation';
+  end if;
+  -- Business dates are Asia/Ho_Chi_Minh here as everywhere else (#591): between
+  -- 00:00 and 06:59 Vietnam time the session's current_date is still yesterday,
+  -- so a maturity of "today in Vietnam" would read as future to Postgres and
+  -- mature to the app.
+  -- No grace day. The route's own check is isFutureInvestmentDate with no grace,
+  -- and a direct PostgREST caller reaches this SECURITY INVOKER function without
+  -- passing through it — the grace only existed to absorb the UTC/Vietnam skew
+  -- that v_today now removes.
+  if p_investment_date > v_today then
+    raise exception 'successor book: contribution date cannot be in the future'
+      using errcode = 'check_violation';
+  end if;
+  -- A successor is the answer to a bank that WILL NOT take the money. If the old
+  -- book still accepts this contribution on this date, opening one would retire
+  -- a perfectly usable book and move its recurring link for nothing — and the
+  -- contribution date is editable in the sheet, so this is reachable from the UI.
+  -- The eligibility rule is spelled out rather than delegated: the shared
+  -- assertion is deliberately not executable by `authenticated`, and this is a
+  -- SECURITY INVOKER function.
+  if v_source.expiry_date is null
+     or (v_source.expiry_date - p_investment_date > 0
+         and (v_source.top_up_lock_days is null
+              or v_source.expiry_date - p_investment_date > v_source.top_up_lock_days)) then
+    raise exception 'successor book: this book still accepts a contribution dated %, so record it as a top-up', p_investment_date
+      using errcode = 'check_violation';
+  end if;
+  -- The new book has to be open for business: a contribution can be historical,
+  -- but a book that has already matured cannot take the next one — and every
+  -- recurring link is about to be moved onto it.
+  if p_expiry_date <= v_today then
+    raise exception 'successor book: the new book must mature in the future'
+      using errcode = 'check_violation';
+  end if;
+  -- And it has to outlive the book it takes over from, since the merge happens
+  -- when that one matures. Outliving it is not enough on its own: the successor
+  -- has its OWN lock window, and a term short enough to sit inside it is a book
+  -- that refuses the very contributions this handover is arranging — including
+  -- the merge itself, on the day the old book matures.
+  if p_expiry_date - v_today <= coalesce(p_top_up_lock_days, 0) then
+    raise exception 'successor book: the new book would already be inside its own % day lock window', coalesce(p_top_up_lock_days, 0)
+      using errcode = 'check_violation';
+  end if;
+  if v_source.expiry_date is not null then
+    if p_expiry_date <= v_source.expiry_date then
+      raise exception 'successor book: the new maturity must come after the old book''s (%)', v_source.expiry_date
+        using errcode = 'check_violation';
+    end if;
+    if p_expiry_date - v_source.expiry_date <= coalesce(p_top_up_lock_days, 0) then
+      raise exception 'successor book: the new book must still accept a top-up when the old one matures on %', v_source.expiry_date
+        using errcode = 'check_violation';
+    end if;
+  end if;
+
+  -- The successor inherits what identifies the money — owner, goal, bank,
+  -- currency — and takes the terms the user entered for the new book.
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type, amount_vnd,
+    investment_date, expiry_date, interest_rate, notes, bank_code, currency,
+    deposit_group_id, top_up_lock_days, plan_id, affects_progress
+  ) values (
+    v_new_id, v_source.user_id, v_source.goal_id, 'bank', 'investment', p_amount_vnd,
+    p_investment_date, p_expiry_date, p_interest_rate,
+    coalesce(nullif(btrim(coalesce(p_notes, '')), ''), v_source.notes),
+    v_source.bank_code, v_source.currency,
+    v_new_id, p_top_up_lock_days, p_plan_id, true
+  )
+  returning * into v_book;
+
+
+  -- The plan tags the tranche while the fulfillment is filed under p_ym, so a
+  -- plan from another month splits one contribution across two. The route says
+  -- this too, but the route is not the only way in here.
+  if p_plan_id is not null and p_ym is not null then
+    select to_char(make_date(year, month, 1), 'YYYY-MM') into v_plan_ym
+      from public.monthly_plans
+     where id = p_plan_id and user_id = v_source.user_id;
+    if not found then
+      raise exception 'successor book: plan not found' using errcode = 'no_data_found';
+    end if;
+    if v_plan_ym is distinct from p_ym then
+      raise exception 'successor book: the plan is for % but the contribution is for %', v_plan_ym, p_ym
+        using errcode = 'check_violation';
+    end if;
+  end if;
+
+  -- Recurring-driven: the month is also contributed to B and marked fulfilled.
+  -- A saving linked elsewhere is not this flow's to move.
+  if p_saving_id is not null then
+    if not exists (
+      select 1 from public.recurring_savings
+       where saving_id = p_saving_id
+         and user_id = v_source.user_id
+         and linked_deposit_tx_id = p_source_book_id
+    ) then
+      raise exception 'successor book: that recurring saving is not linked to this book'
+        using errcode = 'check_violation';
+    end if;
+    if p_ym is null then
+      raise exception 'successor book: a recurring contribution needs its month'
+        using errcode = 'check_violation';
+    end if;
+
+    insert into public.recurring_saving_fulfillments (
+      user_id, recurring_saving_id, ym, amount_vnd, source
+    ) values (
+      v_source.user_id, p_saving_id, p_ym, p_amount_vnd, 'recurring-topup'
+    )
+    on conflict (recurring_saving_id, ym) do update
+      set amount_vnd = excluded.amount_vnd,
+          source     = excluded.source,
+          updated_at = now();
+  end if;
+
+  -- SAVINGS BEFORE THE LINK. The moment the link lands, the old book refuses
+  -- contributions — so anything still pointing at it would be stranded, and the
+  -- guard that says so is entitled to run right there. Moving them first means
+  -- the book is never handed over while something still funds it, whether that
+  -- check is deferred to commit or forced earlier.
+  update public.recurring_savings
+     set linked_deposit_tx_id = v_new_id, updated_at = now()
+   where user_id = v_source.user_id
+     and linked_deposit_tx_id = p_source_book_id;
+
+  perform set_config('app.successor_write', '1', true);
+  update public.investment_transactions
+     set successor_deposit_tx_id = v_new_id, updated_at = now()
+   where transaction_id = p_source_book_id;
+  perform set_config('app.successor_write', '', true);
+
+  return v_book;
+end;
+$$;
+
+comment on function public.open_successor_book(uuid, bigint, numeric, date, date, integer, text, uuid, text, uuid) is
+  'Open the accumulating book that takes over from one that stopped accepting top-ups, moving the recurring link and the month with it (#638).';
+
+-- The API refuses a recurring link to a handed-over book, and so does the table:
+-- RLS lets `authenticated` write recurring_savings directly, and a link that can
+-- never be funded is worse than a refused one — the plan would keep asking for a
+-- month it has nowhere to put.
+create or replace function public.enforce_recurring_link_not_handed_over()
+returns trigger language plpgsql security definer set search_path = '' as $$
+declare v_successor uuid;
+begin
+  -- LOCK the book, THEN read its successor. Locking inside a predicate that
+  -- already tests the successor locks nothing while a handover is uncommitted:
+  -- the visible version still has a null link, so the row does not match and the
+  -- write sails past to commit against a book that, moments later, refuses it.
+  -- The lock has to be taken on the row itself, whatever it currently says.
+  select successor_deposit_tx_id into v_successor
+    from public.investment_transactions
+   where transaction_id = new.linked_deposit_tx_id
+     and user_id = new.user_id
+   for share;
+  if found and v_successor is not null then
+    raise exception 'successor book: that book has handed over to a successor, so link the successor instead'
+      using errcode = 'check_violation';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists recurring_savings_link_not_handed_over on public.recurring_savings;
+create trigger recurring_savings_link_not_handed_over
+  before insert or update of linked_deposit_tx_id on public.recurring_savings
+  for each row
+  when (new.linked_deposit_tx_id is not null)
+  execute function public.enforce_recurring_link_not_handed_over();
+
+-- Deleting the source is the other way to drop the promise silently: the row
+-- carrying the link goes, and with it the plan — while any remaining tranches
+-- are left grouped under an anchor that no longer exists. Same answer as
+-- closing it: cancel the handover first, on purpose.
+-- Deferred, and phrased as "did the successor survive?", because deleting the
+-- account cascades over this table in no guaranteed row order: refusing every
+-- promised source outright would abort account deletion depending on which row
+-- the cascade reached first. What actually matters is the state left behind — a
+-- promise pointing at a book that is still there, with nothing left to keep it.
+create or replace function public.enforce_successor_after_delete()
+returns trigger language plpgsql set search_path = '' as $$
+begin
+  if exists (
+    select 1 from public.investment_transactions
+     where transaction_id = old.successor_deposit_tx_id
+  ) then
+    raise exception 'successor book: this book is promised to a successor, so cancel the handover before deleting it'
+      using errcode = 'check_violation';
+  end if;
+  -- Taking the successor along in the same statement is not a way around it
+  -- either: what the guard is really protecting is the book, so its tranches
+  -- must be gone too. An account cascade satisfies that; a two-row delete of
+  -- anchor + successor, leaving the tranches behind, does not.
+  if exists (
+    select 1 from public.investment_transactions
+     where deposit_group_id = old.transaction_id
+  ) then
+    raise exception 'successor book: this book still holds tranches, so it cannot be deleted out from under them'
+      using errcode = 'check_violation';
+  end if;
+  return null;
+end;
+$$;
+
+drop trigger if exists investment_transactions_successor_before_delete on public.investment_transactions;
+drop trigger if exists investment_transactions_successor_after_delete on public.investment_transactions;
+create constraint trigger investment_transactions_successor_after_delete
+  after delete on public.investment_transactions
+  deferrable initially deferred
+  for each row
+  when (old.successor_deposit_tx_id is not null)
+  execute function public.enforce_successor_after_delete();
+
+
+-- Cancelling is the other write to the column, so it goes the same way: a
+-- function that may, called by a route that no longer can.
+create or replace function public.cancel_successor_book(p_source_book_id uuid)
+returns public.investment_transactions
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare v_row public.investment_transactions;
+begin
+  select * into v_row from public.investment_transactions
+   where transaction_id = p_source_book_id
+   for update;
+  if not found then
+    raise exception 'successor book: deposit not found' using errcode = 'no_data_found';
+  end if;
+  if auth.uid() is not null and v_row.user_id is distinct from auth.uid() then
+    raise exception 'successor book: deposit not found' using errcode = 'no_data_found';
+  end if;
+
+  perform set_config('app.successor_write', '1', true);
+  update public.investment_transactions
+     set successor_deposit_tx_id = null, updated_at = now()
+   where transaction_id = p_source_book_id
+  returning * into v_row;
+  perform set_config('app.successor_write', '', true);
+  return v_row;
+end;
+$$;
+
+-- ── The boundary ────────────────────────────────────────────────────────────
+--
+-- Every hole found in this feature that needed its own guard had the same
+-- shape: a client writing successor_deposit_tx_id directly, skipping the flow
+-- that gives the handover its meaning — the reason for it, the月 fulfillment,
+-- the recurring links that have to move with it. Guarding each path one at a
+-- time is endless, because the paths are however many ways there are to write
+-- a column.
+--
+-- So the column stops being a client's to write. The two functions above mark
+-- their own writes; anything else arriving with a real session behind it is
+-- refused here.
+--
+-- Not by privileges: the revoke below does not survive here at all. The stack
+-- grants `authenticated` its table privileges after migrations run, so the
+-- column is readable and writable again by the time anyone connects — CI proved
+-- it, an assertion on the privilege failing there while passing locally. It is
+-- left in as a statement of intent for anyone reading the schema, and as the
+-- thing that holds if the platform's grant order ever changes; the trigger is
+-- what actually refuses. auth.uid() is null for the service role, for
+-- migrations and for SQL maintenance, which keep their reach — the same
+-- convention the rest of this file uses.
+create or replace function public.enforce_successor_written_by_rpc()
+returns trigger language plpgsql set search_path = '' as $$
+begin
+  -- Only ARRANGING one is restricted. Clearing the link is cancelling, which is
+  -- the user's to do — and the FK's `on delete set null` does exactly that write
+  -- when the successor book is deleted, so refusing it here would take the
+  -- deletion down with it.
+  if new.successor_deposit_tx_id is not null
+     and (tg_op = 'INSERT'
+       or old.successor_deposit_tx_id is distinct from new.successor_deposit_tx_id)
+     and auth.uid() is not null
+     and coalesce(current_setting('app.successor_write', true), '') <> '1' then
+    raise exception 'successor book: a handover is arranged through open_successor_book, not by writing the link'
+      using errcode = 'check_violation';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists investment_transactions_successor_rpc_only on public.investment_transactions;
+create trigger investment_transactions_successor_rpc_only
+  before insert or update of successor_deposit_tx_id on public.investment_transactions
+  for each row
+  execute function public.enforce_successor_written_by_rpc();
+
+revoke insert (successor_deposit_tx_id), update (successor_deposit_tx_id)
+  on public.investment_transactions from anon, authenticated;
+
+
+-- A SECURITY DEFINER function is executable by PUBLIC unless told otherwise, and
+-- these two treat a null auth.uid() as a trusted caller — which `anon` also has.
+-- Left open, anyone holding a book's UUID could arrange a handover inside
+-- someone else's account. The trust in a null uid is for the service role and
+-- for SQL; neither of them needs PUBLIC to hold EXECUTE.
+revoke all on function public.open_successor_book(uuid, bigint, numeric, date, date, integer, text, uuid, text, uuid) from public, anon;
+revoke all on function public.cancel_successor_book(uuid) from public, anon;
+grant execute on function public.open_successor_book(uuid, bigint, numeric, date, date, integer, text, uuid, text, uuid) to authenticated, service_role;
+grant execute on function public.cancel_successor_book(uuid) to authenticated, service_role;

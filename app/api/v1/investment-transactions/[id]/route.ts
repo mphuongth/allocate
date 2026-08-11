@@ -194,6 +194,15 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           { status: 400 },
         )
       }
+      // An edit that breaks the handover — clearing a maturity, moving the
+      // source's past its successor's — is the user's to correct (#638), and
+      // the message says which rule it broke.
+      if (bookErr?.message?.startsWith('successor book: ')) {
+        return NextResponse.json(
+          { error: bookErr.message.slice('successor book: '.length), code: 'successor_pairing' },
+          { status: 409 },
+        )
+      }
       console.error('update_deposit_book: atomic book edit failed', bookErr?.message)
       return NextResponse.json({ error: 'Failed to update deposit book' }, { status: 500 })
     }
@@ -381,6 +390,15 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
           error: 'A withdrawal is recorded against this holding. Remove it before deleting the holding.',
           code: 'withdrawal_invariant',
         },
+        { status: 409 },
+      )
+    }
+    // A book promised to a successor is deliberately undeletable (#638): losing
+    // the plan is the failure the link exists to prevent. Say what to do about
+    // it rather than reporting a server fault.
+    if (error.message?.startsWith('successor book: ')) {
+      return NextResponse.json(
+        { error: error.message.slice('successor book: '.length), code: 'successor_planned' },
         { status: 409 },
       )
     }

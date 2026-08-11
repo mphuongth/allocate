@@ -171,6 +171,7 @@ export function buildInvRows(
       currency: anchor.currency ?? null,
       isPledged: anchor.is_pledged ?? false,
       topUpLockDays: anchor.top_up_lock_days ?? null,
+      successorDepositTxId: anchor.successor_deposit_tx_id ?? null,
       tranches,
     }
   }).filter((row): row is InvRow => row !== null)

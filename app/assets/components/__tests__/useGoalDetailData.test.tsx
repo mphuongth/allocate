@@ -31,6 +31,91 @@ describe('useGoalDetailData (#467)', () => {
     expect(result.current.txError).toBe(false)
   })
 
+  // A book's terms live on its anchor, and the page only holds the newest 200
+  // rows — so an old book with recent tranches would otherwise be read off a
+  // tranche and appear to still take top-ups after it handed over (#638).
+  it('fetches a book anchor that fell outside the page', async () => {
+    const urls: string[] = []
+    mockFetch((url) => {
+      urls.push(url)
+      if (url.includes('ids=anchor-1')) {
+        return { ok: true, body: { transactions: [{ transaction_id: 'anchor-1', deposit_group_id: 'anchor-1', investment_date: '2025-01-01', successor_deposit_tx_id: 'book-2' }] } }
+      }
+      if (url.includes('/investment-transactions?')) {
+        return { ok: true, body: { transactions: [{ transaction_id: 't9', deposit_group_id: 'anchor-1', investment_date: '2026-05-01' }] } }
+      }
+      if (url.includes('/recurring-contributions')) return { ok: true, body: { contributions: [] } }
+      return { ok: true, body: {} }
+    })
+
+    const { result } = renderHook(() => useGoalDetailData({ goalId: 'g1', enabled: true, refreshKey: 0, txReload: 0 }))
+    await waitFor(() => expect(result.current.transactions).toHaveLength(2))
+
+    const anchor = result.current.transactions.find(t => t.transaction_id === 'anchor-1')
+    expect(anchor?.successor_deposit_tx_id).toBe('book-2')
+    // One request for the whole set, not one per anchor.
+    expect(urls.filter(u => u.includes('ids=')).length).toBe(1)
+  })
+
+  it('asks for every missing anchor, in batches', async () => {
+    const urls: string[] = []
+    const anchorIds = Array.from({ length: 150 }, (_, i) => `anchor-${i}`)
+    mockFetch((url) => {
+      urls.push(url)
+      if (url.includes('ids=')) {
+        const ids = new URL(url, 'https://app.test').searchParams.get('ids')!.split(',')
+        return { ok: true, body: { transactions: ids.map(id => ({ transaction_id: id, deposit_group_id: id, investment_date: '2025-01-01' })) } }
+      }
+      if (url.includes('/investment-transactions?')) {
+        return { ok: true, body: { transactions: anchorIds.map((id, i) => ({ transaction_id: `t${i}`, deposit_group_id: id, investment_date: '2026-05-01' })) } }
+      }
+      if (url.includes('/recurring-contributions')) return { ok: true, body: { contributions: [] } }
+      return { ok: true, body: {} }
+    })
+
+    const { result } = renderHook(() => useGoalDetailData({ goalId: 'g1', enabled: true, refreshKey: 0, txReload: 0 }))
+    await waitFor(() => expect(result.current.transactions).toHaveLength(300))
+
+    // 150 anchors over a 100-id cap: two requests, none of them dropped.
+    expect(urls.filter(u => u.includes('ids=')).length).toBe(2)
+    expect(result.current.transactions.filter(t => t.transaction_id.startsWith('anchor-'))).toHaveLength(150)
+  })
+
+  it('fails the load when an anchor batch fails, rather than rendering a book without its terms', async () => {
+    mockFetch((url) => {
+      if (url.includes('ids=')) return { ok: false }
+      if (url.includes('/investment-transactions?')) {
+        return { ok: true, body: { transactions: [{ transaction_id: 't9', deposit_group_id: 'anchor-1', investment_date: '2026-05-01' }] } }
+      }
+      if (url.includes('/recurring-contributions')) return { ok: true, body: { contributions: [] } }
+      return { ok: true, body: {} }
+    })
+
+    const { result } = renderHook(() => useGoalDetailData({ goalId: 'g1', enabled: true, refreshKey: 0, txReload: 0 }))
+    await waitFor(() => expect(result.current.txError).toBe(true))
+    expect(result.current.transactions).toEqual([])
+  })
+
+  it('does not ask for anchors the page already has', async () => {
+    const urls: string[] = []
+    mockFetch((url) => {
+      urls.push(url)
+      if (url.includes('/investment-transactions?')) {
+        return { ok: true, body: { transactions: [
+          { transaction_id: 'anchor-1', deposit_group_id: 'anchor-1', investment_date: '2026-01-01' },
+          { transaction_id: 't9', deposit_group_id: 'anchor-1', investment_date: '2026-05-01' },
+        ] } }
+      }
+      if (url.includes('/recurring-contributions')) return { ok: true, body: { contributions: [] } }
+      return { ok: true, body: {} }
+    })
+
+    const { result } = renderHook(() => useGoalDetailData({ goalId: 'g1', enabled: true, refreshKey: 0, txReload: 0 }))
+    await waitFor(() => expect(result.current.txLoading).toBe(false))
+
+    expect(urls.some(u => u.includes('ids='))).toBe(false)
+  })
+
   it('does not fetch while disabled', async () => {
     const fetchSpy = vi.fn()
     global.fetch = fetchSpy as unknown as typeof fetch

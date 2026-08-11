@@ -26,6 +26,10 @@ export interface InvestmentTx {
   held_for_merge?: boolean | null
   consumed_by_inv_id?: string | null
   top_up_lock_days?: number | null
+  successor_deposit_tx_id?: string | null
+  // Set on every row of an accumulating book; equals transaction_id on the
+  // anchor, which is the row that carries the book's terms.
+  deposit_group_id?: string | null
 }
 
 export interface UseGoalDetailData {
@@ -87,8 +91,34 @@ export function useGoalDetailData(opts: {
         .then((r) => r.ok ? r.json() : { contributions: [] })
         .catch(() => ({ contributions: [] })),
     ])
-      .then(([txRes, recRes]) => {
-        const merged: InvestmentTx[] = [...(txRes.transactions ?? []), ...(recRes.contributions ?? [])]
+      .then(async ([txRes, recRes]) => {
+        const rows: InvestmentTx[] = txRes.transactions ?? []
+        // A book's terms — maturity, bank, lock window, whether it has handed
+        // over to a successor — live on its ANCHOR, and this page holds only the
+        // newest 200 rows. An old book with recent tranches would otherwise be
+        // read off a tranche, which knows none of that, and would look like it
+        // still takes top-ups (#638). Ask for the few anchors that fell out.
+        const present = new Set(rows.map((r) => r.transaction_id))
+        const missingAnchors = [...new Set(
+          rows.map((r) => r.deposit_group_id).filter((id): id is string => !!id && !present.has(id)),
+        )]
+        // Batched, because a goal holding many older books would otherwise open
+        // one connection per anchor before the page could render — and chunked
+        // rather than capped, so no book is quietly left reading a tranche.
+        const CHUNK = 100
+        const chunks: string[][] = []
+        for (let i = 0; i < missingAnchors.length; i += CHUNK) chunks.push(missingAnchors.slice(i, i + CHUNK))
+        // A failed anchor batch fails the load. These are not supplementary like
+        // the recurring contributions: without an anchor a book renders off a
+        // tranche, which does not know the book has handed over — so it would
+        // offer actions the database then refuses. A retry beats a wrong page.
+        const anchors: InvestmentTx[] = (await Promise.all(chunks.map((chunk) =>
+          fetch(`/api/v1/investment-transactions?ids=${chunk.join(',')}&include_history=true&limit=${CHUNK}`, { cache: 'no-store' })
+            .then((r) => { if (!r.ok) throw new Error('anchor load failed'); return r.json() })
+            .then((res) => (res?.transactions ?? []) as InvestmentTx[]),
+        ))).flat()
+
+        const merged: InvestmentTx[] = [...rows, ...anchors, ...(recRes.contributions ?? [])]
         merged.sort((a, b) => (a.investment_date < b.investment_date ? 1 : a.investment_date > b.investment_date ? -1 : 0))
         setTransactions(merged)
       })
