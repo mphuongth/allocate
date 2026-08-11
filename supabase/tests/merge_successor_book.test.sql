@@ -21,6 +21,7 @@ declare
   v_stamped int;
   v_principals bigint[];
   v_other_goal uuid;
+  v_side_goal uuid;
 begin
   insert into auth.users (id, email) values (v_user, 'merge-successor@test.invalid');
   insert into public.savings_goals (user_id, goal_name) values (v_user, 'Merge') returning goal_id into v_goal;
@@ -147,6 +148,24 @@ begin
     raise exception 'a submitted tranche emptied since the preview must be refused';
   exception when sqlstate 'P0001' then
     if sqlerrm not like '%book changed since load%' then raise; end if;
+  end;
+
+  -- ── Shapes the merge refuses rather than folds ───────────────────────────
+  -- Both are correctable now and not afterwards, once the rows are immutable.
+  begin
+    update public.investment_transactions set affects_progress = false
+     where parent_transaction_id = v_a2 and transaction_type = 'withdrawal';
+    perform public.merge_book_into_successor(v_a, v_received, 4.5, current_date, v_ids, v_principals);
+    raise exception 'a withdrawal kept out of progress must block the merge';
+  exception when sqlstate '23514' then null;
+  end;
+  begin
+    insert into public.savings_goals (user_id, goal_name) values (v_user, 'Sideways') returning goal_id into v_side_goal;
+    update public.investment_transactions set goal_id = v_side_goal
+     where parent_transaction_id = v_a2 and transaction_type = 'withdrawal';
+    perform public.merge_book_into_successor(v_a, v_received, 4.5, current_date, v_ids, v_principals);
+    raise exception 'a withdrawal filed under another goal must block the merge';
+  exception when sqlstate '23514' then null;
   end;
 
   -- ── The merge itself ─────────────────────────────────────────────────────

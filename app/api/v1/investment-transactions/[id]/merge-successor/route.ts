@@ -23,8 +23,11 @@ async function readAllPages<T>(
     if (error) return { rows, error: error.message }
     const page = data ?? []
     rows.push(...page)
-    if (page.length < PAGE) return { rows }
+    // Ceiling first: a short page that arrives ALREADY over the limit was
+    // returning as a complete read, so the preview handed back more than the
+    // write would accept and the book could never be merged.
     if (rows.length > ceiling) return { rows, truncated: true }
+    if (page.length < PAGE) return { rows }
   }
   return { rows, truncated: true }
 }

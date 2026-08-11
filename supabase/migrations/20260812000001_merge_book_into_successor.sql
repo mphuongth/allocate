@@ -141,6 +141,41 @@ begin
     raise exception 'merge successor: this book is already fully withdrawn'
       using errcode = 'check_violation';
   end if;
+  -- ── Shapes this merge cannot represent honestly ─────────────────────────
+  -- Both of these are fixable BEFORE the fold and not after, since the rows
+  -- become immutable once the cash has moved. So they are refused here, with
+  -- the reason, rather than folded into a picture that cannot be corrected.
+  --
+  -- A withdrawal kept out of progress leaves its principal counted toward the
+  -- goal on purpose. Folding around it puts the successor's payout beside a
+  -- portion the bar is still counting, and nothing afterwards can reconcile the
+  -- two.
+  if exists (
+    select 1 from public.investment_transactions w
+     join public.investment_transactions t on t.transaction_id = w.parent_transaction_id
+     where t.deposit_group_id = p_source_book_id
+       and t.transaction_type = 'investment'
+       and w.transaction_type = 'withdrawal'
+       and coalesce(w.affects_progress, true) = false
+  ) then
+    raise exception 'merge successor: this book has a withdrawal kept out of goal progress; put it back before merging'
+      using errcode = 'check_violation';
+  end if;
+  -- And one sitting in a different goal from the tranche it came out of: goal
+  -- detail reads by goal, so that goal would show the tranche and the closing
+  -- withdrawal but not this one, and its principal would read as live.
+  if exists (
+    select 1 from public.investment_transactions w
+     join public.investment_transactions t on t.transaction_id = w.parent_transaction_id
+     where t.deposit_group_id = p_source_book_id
+       and t.transaction_type = 'investment'
+       and w.transaction_type = 'withdrawal'
+       and w.goal_id is distinct from t.goal_id
+  ) then
+    raise exception 'merge successor: this book has a withdrawal filed under another goal; move it back before merging'
+      using errcode = 'check_violation';
+  end if;
+
   -- The received cash is the client's number — a settled deposit pays out its
   -- principal plus interest, never a multiple of it. The same bound the renewal
   -- merge applies (20260620000006): loose enough for any real payout, tight
