@@ -68,6 +68,43 @@ describe('resolveRecurringSavings', () => {
     const [r] = resolveRecurringSavings([saving({ unlinked_at: '2026-08-12T03:00:00Z', linked_deposit_tx_id: 'tx-9' })], [])
     expect(r.linkLost).toBe(false)
   })
+
+  // The plan page can be paged back through past months. A deposit deleted in
+  // August was still linked all through July, so July's plan must not be told
+  // otherwise — the badge would be describing a state that month never had.
+  it('does not flag months that ended before the deposit was deleted', () => {
+    const [r] = resolveRecurringSavings([saving({ unlinked_at: '2026-08-12T03:00:00Z' })], [], '2026-07')
+    expect(r.linkLost).toBe(false)
+  })
+
+  it('flags the month the deletion happened in', () => {
+    const [r] = resolveRecurringSavings([saving({ unlinked_at: '2026-08-12T03:00:00Z' })], [], '2026-08')
+    expect(r.linkLost).toBe(true)
+  })
+
+  it('flags every month after it', () => {
+    const [r] = resolveRecurringSavings([saving({ unlinked_at: '2026-08-12T03:00:00Z' })], [], '2026-09')
+    expect(r.linkLost).toBe(true)
+  })
+
+  // 01:00 UTC on the 1st is already the 1st in Vietnam, but 18:00 UTC on the
+  // 31st of July is the 1st of August there — the month the stamp belongs to is
+  // the business month, not the UTC one.
+  it('files the stamp under the business month, not the UTC one', () => {
+    const [r] = resolveRecurringSavings([saving({ unlinked_at: '2026-07-31T18:00:00Z' })], [], '2026-08')
+    expect(r.linkLost).toBe(true)
+    const [july] = resolveRecurringSavings([saving({ unlinked_at: '2026-07-31T18:00:00Z' })], [], '2026-07')
+    expect(july.linkLost).toBe(false)
+  })
+
+  // Which kind of link was lost decides which sentence is true (#655): a book
+  // anchor really was taking the monthly contribution; a term deposit never did.
+  it('carries whether the lost link was a book', () => {
+    const [book] = resolveRecurringSavings([saving({ unlinked_at: '2026-08-12T03:00:00Z', unlinked_from_book: true })], [])
+    expect(book.linkLostFromBook).toBe(true)
+    const [term] = resolveRecurringSavings([saving({ unlinked_at: '2026-08-12T03:00:00Z', unlinked_from_book: false })], [])
+    expect(term.linkLostFromBook).toBe(false)
+  })
 })
 
 describe('recurringSavingsTotal', () => {

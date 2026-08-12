@@ -28,9 +28,17 @@ export function LinkLostBadge({ item, isVI }: { item: GoalItem; isVI: boolean })
 
   const key = item.recurringId ?? generatedId
   const detailId = `plan-link-lost-detail-${key}`
-  const detail = isVI
-    ? 'Sổ tiết kiệm khoản này nạp vào đã bị xoá. Tiền hàng tháng giờ được ghi thành khoản gửi riêng — mở "Sửa kế hoạch định kỳ" để chọn sổ khác.'
-    : 'The deposit this saving fed was deleted. Monthly contributions now record a standalone deposit — use "Edit recurring plan" to point it at another book.'
+  // Only a book was taking the monthly contribution. A link to a single term
+  // deposit just told the maturity-combine picker which saving belonged to it,
+  // and that contribution was already recorded as a standalone deposit — so
+  // saying it "now" is one tells that user about a change that never happened.
+  const detail = item.linkLostFromBook
+    ? (isVI
+      ? 'Sổ tích luỹ khoản này nạp vào đã bị xoá. Tiền hàng tháng giờ được ghi thành khoản gửi riêng — mở "Sửa kế hoạch định kỳ" để chọn sổ khác.'
+      : 'The accumulating book this saving fed was deleted. Monthly contributions now record a standalone deposit — use "Edit recurring plan" to point it at another book.')
+    : (isVI
+      ? 'Sổ tiết kiệm liên kết với khoản này đã bị xoá, nên khoản này giờ không còn gắn với sổ nào — mở "Sửa kế hoạch định kỳ" để chọn sổ khác.'
+      : 'The deposit this saving was linked to was deleted, so the saving is no longer linked to any deposit — use "Edit recurring plan" to point it at another.')
 
   return (
     <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3, minWidth: 0 }}>

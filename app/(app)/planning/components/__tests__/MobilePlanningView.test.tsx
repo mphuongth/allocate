@@ -469,7 +469,7 @@ describe('MobilePlanningView — recurring savings in By goal', () => {
   // The mobile row is its own component, so the #655 warning has to be wired
   // there too — the desktop test proves nothing about this markup.
   it('warns when the deposit this saving funded was deleted', async () => {
-    const orphaned = [{ ...recurringSavings[0], linked_deposit_tx_id: null, unlinked_at: '2026-08-12T03:00:00Z' }]
+    const orphaned = [{ ...recurringSavings[0], linked_deposit_tx_id: null, unlinked_at: '2026-05-12T03:00:00Z' }]
     render(<MobilePlanningView {...defaultProps} plan={basePlan} recurringSavings={orphaned} />)
     await userEvent.click(screen.getByText('Retirement'))
     expect(screen.getByTestId('plan-link-lost-rs1')).toBeInTheDocument()

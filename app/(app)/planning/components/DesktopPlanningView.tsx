@@ -120,6 +120,7 @@ export default function DesktopPlanningView({
   } = usePlanningDerivations({
     plan, investments, savings, fixedExpenses, insuranceMembers, otherExpenses,
     recurringSavings, recurringSavingOverrides, recurringFulfillments, dcaSkips, funds, goals, isVI,
+    ym: `${year}-${String(month).padStart(2, '0')}`,
   })
   const savedPct = (plan && savedPercent(totalGoalAmount, plan.salary_vnd)) ?? 0
 

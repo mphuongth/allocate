@@ -74,6 +74,9 @@ export interface RecurringSaving {
   linked_deposit_tx_id?: string | null
   // When the linked deposit was deleted out from under this saving (#655).
   unlinked_at?: string | null
+  // Whether that deposit was an accumulating book anchor rather than a single
+  // term deposit — it decides which consequence the warning may claim.
+  unlinked_from_book?: boolean | null
   savings_goals: { goal_name: string } | null
 }
 

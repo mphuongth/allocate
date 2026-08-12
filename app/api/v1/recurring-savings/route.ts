@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from('recurring_savings')
-    .select('saving_id, name, goal_id, amount_vnd, effective_from, effective_to, linked_deposit_tx_id, unlinked_at, savings_goals(goal_name)')
+    .select('saving_id, name, goal_id, amount_vnd, effective_from, effective_to, linked_deposit_tx_id, unlinked_at, unlinked_from_book, savings_goals(goal_name)')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
 

@@ -32,8 +32,21 @@
 alter table public.recurring_savings
   add column if not exists unlinked_at timestamptz;
 
+-- A link may target either an accumulating book's anchor — where the monthly
+-- contribution really was going into that book — or a single term deposit, where
+-- the link only tells the maturity-combine picker which saving belongs to it and
+-- the contribution was already recorded as a standalone deposit. Losing the two
+-- has different consequences, and the plan must not tell a term-deposit user
+-- that their routing changed when it never did. The kind is knowable only here,
+-- while the row being deleted still exists.
+alter table public.recurring_savings
+  add column if not exists unlinked_from_book boolean;
+
 comment on column public.recurring_savings.unlinked_at is
   'When this saving''s linked deposit was deleted out from under it (#655). Null once the saving is linked again, or if it was never linked. Advisory only — no money depends on it.';
+
+comment on column public.recurring_savings.unlinked_from_book is
+  'Whether the deposit deleted in #655 was an accumulating book anchor (the contribution was being paid into it) rather than a single term deposit. Advisory: it only decides which sentence the plan shows.';
 
 create or replace function public.mark_saving_link_lost()
 returns trigger
@@ -49,6 +62,10 @@ begin
   -- it: the owner still existing is what makes the mark worth writing.
   update public.recurring_savings
      set unlinked_at = now(),
+         -- An anchor is a book: deposit_group_id pointing at its own row. A
+         -- plain term deposit has no group at all, and the link validator
+         -- accepts nothing in between.
+         unlinked_from_book = (old.deposit_group_id is not distinct from old.transaction_id),
          updated_at = now()
    where linked_deposit_tx_id = old.transaction_id
      and user_id = old.user_id
@@ -76,6 +93,7 @@ language plpgsql
 as $$
 begin
   new.unlinked_at := null;
+  new.unlinked_from_book := null;
   return new;
 end;
 $$;

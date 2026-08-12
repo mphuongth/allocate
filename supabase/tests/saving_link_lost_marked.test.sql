@@ -28,7 +28,9 @@ declare
   v_other_s  uuid;
   v_osav     uuid;
   v_link     uuid;
+  v_book     uuid;
   v_at       timestamptz;
+  v_from_book boolean;
   v_at_count int;
 begin
   insert into auth.users (id, email) values (gen_random_uuid(), 'unlink-mark@test.invalid') returning id into v_user;
@@ -72,6 +74,16 @@ begin
     raise exception 'deleting the deposit must stamp unlinked_at';
   end if;
 
+  -- 1b) A plain term deposit is not a book. A link to one never routed the
+  --     monthly contribution anywhere — it only told the maturity-combine picker
+  --     which saving belonged to that deposit — so the plan must not claim the
+  --     routing changed. The kind is only knowable here, while the deleted row
+  --     still exists.
+  select unlinked_from_book into v_from_book from public.recurring_savings where saving_id = v_saving;
+  if v_from_book is not false then
+    raise exception 'a term-deposit link must not be marked as a book, got %', v_from_book;
+  end if;
+
   -- 2) The sibling and the other user are untouched.
   select linked_deposit_tx_id, unlinked_at into v_link, v_at
     from public.recurring_savings where saving_id = v_other_s;
@@ -97,6 +109,23 @@ begin
   select unlinked_at into v_at from public.recurring_savings where saving_id = v_saving;
   if v_at is not null then
     raise exception 'clearing the link by hand must not mark it, got %', v_at;
+  end if;
+
+  -- 4b) A book anchor IS the case the warning was written for: the monthly
+  --     contribution really was going into that book and now records a plain
+  --     deposit instead. Same shape as the link validator accepts — the anchor,
+  --     whose deposit_group_id is its own id.
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, interest_rate, expiry_date)
+  values (v_user, v_goal, 'bank', 'investment', '2026-03-01', 40000000, 5.5, '2027-03-01') returning transaction_id into v_book;
+  update public.investment_transactions set deposit_group_id = v_book where transaction_id = v_book;
+
+  update public.recurring_savings set linked_deposit_tx_id = v_book where saving_id = v_saving;
+  delete from public.investment_transactions where transaction_id = v_book;
+
+  select unlinked_at, unlinked_from_book into v_at, v_from_book
+    from public.recurring_savings where saving_id = v_saving;
+  if v_at is null or v_from_book is not true then
+    raise exception 'deleting a book anchor must mark the loss as a book, mark % book %', v_at, v_from_book;
   end if;
 
   -- 5) Deleting the account must still work. Both tables cascade, so the saving

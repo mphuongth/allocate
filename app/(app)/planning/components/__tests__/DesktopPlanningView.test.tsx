@@ -95,10 +95,20 @@ describe('DesktopPlanningView — goal header "+" log contribution', () => {
 // stamp is the only thing separating this from the many savings that were never
 // linked, so the warning has to key on it, not on the absent link.
 describe('DesktopPlanningView — a saving whose deposit was deleted', () => {
+  // basePlan is May 2026, so the loss has to fall in that month to be this
+  // month's news.
   it('warns on the plan line when the linked deposit is gone', () => {
-    const orphaned: RecurringSaving[] = [{ ...recurringSavings[0], linked_deposit_tx_id: null, unlinked_at: '2026-08-12T03:00:00Z' }]
+    const orphaned: RecurringSaving[] = [{ ...recurringSavings[0], linked_deposit_tx_id: null, unlinked_at: '2026-05-12T03:00:00Z' }]
     render(<DesktopPlanningView {...defaultProps} plan={basePlan} recurringSavings={orphaned} />)
     expect(screen.getByTestId('plan-link-lost-rs1')).toBeInTheDocument()
+  })
+
+  // The month on screen reaches the resolver — a link lost in August was intact
+  // all through May, and May's plan must not say otherwise.
+  it('says nothing in a month that ended before the deletion', () => {
+    const orphaned: RecurringSaving[] = [{ ...recurringSavings[0], linked_deposit_tx_id: null, unlinked_at: '2026-08-12T03:00:00Z' }]
+    render(<DesktopPlanningView {...defaultProps} plan={basePlan} recurringSavings={orphaned} />)
+    expect(screen.queryByTestId('plan-link-lost-rs1')).not.toBeInTheDocument()
   })
 
   it('says nothing about a saving that was never linked', () => {
@@ -107,7 +117,7 @@ describe('DesktopPlanningView — a saving whose deposit was deleted', () => {
   })
 
   it('says nothing once the saving points at a deposit again', () => {
-    const relinked: RecurringSaving[] = [{ ...recurringSavings[0], linked_deposit_tx_id: 'tx-9', unlinked_at: '2026-08-12T03:00:00Z' }]
+    const relinked: RecurringSaving[] = [{ ...recurringSavings[0], linked_deposit_tx_id: 'tx-9', unlinked_at: '2026-05-12T03:00:00Z' }]
     render(<DesktopPlanningView {...defaultProps} plan={basePlan} recurringSavings={relinked} />)
     expect(screen.queryByTestId('plan-link-lost-rs1')).not.toBeInTheDocument()
   })

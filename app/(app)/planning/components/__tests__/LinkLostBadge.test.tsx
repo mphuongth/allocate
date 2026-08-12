@@ -10,7 +10,7 @@ import type { GoalItem } from '@/lib/planning'
 // problem and withheld the answer.
 const lost: GoalItem = {
   name: 'VCB Savings', type: 'bank', amount: 2_000_000,
-  isRecurring: true, recurringId: 'rs1', linkLost: true,
+  isRecurring: true, recurringId: 'rs1', linkLost: true, linkLostFromBook: true,
 }
 
 describe('LinkLostBadge', () => {
@@ -40,6 +40,20 @@ describe('LinkLostBadge', () => {
 
     expect(badge).toHaveAttribute('aria-expanded', 'false')
     expect(screen.queryByTestId('plan-link-lost-detail-rs1')).toBeNull()
+  })
+
+  // A link to a plain term deposit never routed the monthly contribution
+  // anywhere — it only told the maturity picker which saving belonged to that
+  // deposit. Telling that user their contributions "now" record a standalone
+  // deposit describes a change that did not happen.
+  it('does not claim the routing changed when the link was a term deposit', async () => {
+    render(<LinkLostBadge item={{ ...lost, linkLostFromBook: false }} isVI={false} />)
+    await userEvent.click(screen.getByTestId('plan-link-lost-rs1'))
+
+    const detail = screen.getByTestId('plan-link-lost-detail-rs1')
+    expect(detail.textContent).not.toMatch(/standalone deposit/i)
+    expect(detail.textContent).toMatch(/no longer linked/i)
+    expect(detail.textContent).toMatch(/Edit recurring plan/i)  // still actionable
   })
 
   it('carries the Vietnamese copy too', async () => {

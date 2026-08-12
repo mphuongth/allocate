@@ -41,6 +41,10 @@ export interface PlanningDerivationsInput {
   funds: Fund[]
   goals: Goal[]
   isVI: boolean
+  // The month on screen, "YYYY-MM". The plan pages backwards, and a link lost in
+  // August was still intact in July — the warning must not reach months that
+  // predate it (#655).
+  ym?: string
 }
 
 // The single source of truth for the planning page's derived model: the by-goal
@@ -50,14 +54,14 @@ export interface PlanningDerivationsInput {
 export function usePlanningDerivations(input: PlanningDerivationsInput) {
   const {
     plan, investments, savings, fixedExpenses, insuranceMembers, otherExpenses,
-    recurringSavings, recurringSavingOverrides, recurringFulfillments, dcaSkips, funds, goals, isVI,
+    recurringSavings, recurringSavingOverrides, recurringFulfillments, dcaSkips, funds, goals, isVI, ym,
   } = input
 
   const goalsById = useMemo(() => new Map(goals.map(g => [g.goal_id, g.goal_name])), [goals])
 
   const resolvedRecurring = useMemo(
-    () => resolveRecurringSavings(recurringSavings, recurringSavingOverrides),
-    [recurringSavings, recurringSavingOverrides],
+    () => resolveRecurringSavings(recurringSavings, recurringSavingOverrides, ym),
+    [recurringSavings, recurringSavingOverrides, ym],
   )
 
   // Skipped DCA funds are no longer seeded as rows, so synthesize struck-through
