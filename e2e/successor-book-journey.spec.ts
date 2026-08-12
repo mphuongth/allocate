@@ -52,7 +52,7 @@ test('a locked book hands over to a successor, which absorbs it at maturity', as
     },
   })).json()
   expect(bookA.deposit_group_id).toBe(bookA.transaction_id)
-  cleanup.add(() => api.deleteBookCascade(bookA.transaction_id))
+  // Teardown for the merged pair is registered together, after the handover — see there.
 
   // The monthly contribution the bank will refuse, aimed at A.
   const saving = await api.createRecurringSaving({
@@ -93,7 +93,21 @@ test('a locked book hands over to a successor, which absorbs it at maturity', as
   ])
   expect(openRes.status()).toBe(201)
   const bookB = await openRes.json()
-  cleanup.add(() => api.deleteBookCascade(bookB.transaction_id))
+
+  // A merged pair cannot be torn down one book at a time. B's credited tranche is
+  // referenced by A's closing withdrawal through `consumed_by_inv_id`, and
+  // `move_merge_lineage_to_book` refuses to delete it while that reference stands
+  // — deliberately, so an ordinary delete cannot take the successor's payout with
+  // it. `deleteBookCascade` swallows the resulting error, so the whole merged
+  // fixture would survive into the rest of the run.
+  //
+  // Registered last so the stack runs it FIRST, and it does both books in one
+  // order: A's cascade removes the withdrawals (children by parent) and with them
+  // the reference, which is what lets B's tranche go.
+  cleanup.add(async () => {
+    await api.deleteBookCascade(bookA.transaction_id)
+    await api.deleteBookCascade(bookB.transaction_id)
+  })
 
   // ── 2. The month landed in B, and the plan says so ─────────────────────────
   await expect(line).toHaveAttribute('data-recorded', 'true', { timeout: 15_000 })
@@ -134,10 +148,14 @@ test('a locked book hands over to a successor, which absorbs it at maturity', as
   const panel = page.getByTestId('desktop-goal-detail')
   await expect(panel).toBeVisible({ timeout: 10_000 })
 
-  // Both books sit in this goal, so scope to the row that carries the source's
-  // name AND its own Options button — the innermost such div is the row itself.
+  // Both books are in this goal and they share a NAME: open_successor_book copies
+  // the source's notes when the caller supplies none, and the sheet supplies
+  // none. So the rows are told apart by their amounts, which this test chose to
+  // be an order of magnitude apart (50M source, 2M successor).
+  const options = panel.getByRole('button', { name: 'Options', exact: true })
+  await expect(options).toHaveCount(2)
   const rowA = panel.locator('div')
-    .filter({ hasText: `E2E Successor Source ${stamp}` })
+    .filter({ hasText: /5\d[.,]\dM/ })
     .filter({ has: page.getByRole('button', { name: 'Options', exact: true }) })
     .last()
   await rowA.getByRole('button', { name: 'Options', exact: true }).click()
@@ -168,14 +186,16 @@ test('a locked book hands over to a successor, which absorbs it at maturity', as
     renewed_from_transaction_id: string | null
   }>
 
-  const sourceTranches = rows.filter((r) => r.deposit_group_id === bookA.transaction_id && r.transaction_type === 'investment' && !r.renewed_from_transaction_id)
-  const leftInA = sourceTranches.reduce((s, t) => {
-    const drawn = rows
-      .filter((w) => w.transaction_type === 'withdrawal' && (w as { parent_transaction_id?: string }).parent_transaction_id === t.transaction_id)
-      .reduce((x, w) => x + (w.principal_withdrawn ?? 0), 0)
-    return s + (t.amount_vnd - drawn)
-  }, 0)
-  expect(leftInA).toBe(0)
+  // By id, not by group: the merge DISSOLVES the source book, so a filter on
+  // `deposit_group_id === bookA` matches nothing afterwards and would report a
+  // closed book whether or not the merge did anything at all.
+  const anchorA = rows.find((r) => r.transaction_id === bookA.transaction_id)
+  expect(anchorA).toBeTruthy()
+  const drawnFromA = rows
+    .filter((w) => w.transaction_type === 'withdrawal' && (w as { parent_transaction_id?: string }).parent_transaction_id === bookA.transaction_id)
+    .reduce((x, w) => x + (w.principal_withdrawn ?? 0), 0)
+  expect(anchorA!.amount_vnd - drawnFromA).toBe(0)
+  expect(drawnFromA).toBe(BOOK_PRINCIPAL)
 
   const inB = rows.filter((r) => r.deposit_group_id === bookB.transaction_id && r.transaction_type === 'investment' && !r.renewed_from_transaction_id)
   expect(inB).toHaveLength(2) // B's own opening tranche + the one the merge added
@@ -195,7 +215,10 @@ test('a locked book hands over to a successor, which absorbs it at maturity', as
   expect(Math.abs(after.netWorth.totalAssets - before.netWorth.totalAssets)).toBeLessThan(slack)
 
   // And the source is gone from the goal's live holdings rather than lingering
-  // beside the book that now holds its cash.
+  // beside the book that now holds its cash. Counted, not named: the successor
+  // inherited the source's notes, so "the label disappeared" would be false even
+  // on a perfect merge — and it would pass anyway on an empty panel that had not
+  // finished loading.
   await page.goto('/settings')
   await page.evaluate(() => {
     Object.keys(localStorage).filter((k) => k.startsWith('dashboardOverviewCache')).forEach((k) => localStorage.removeItem(k))
@@ -206,5 +229,10 @@ test('a locked book hands over to a successor, which absorbs it at maturity', as
   ])
   await page.getByText(`E2E Successor Goal ${stamp}`).first().click()
   await expect(panel).toBeVisible({ timeout: 10_000 })
-  await expect(panel.getByText(`E2E Successor Source ${stamp}`)).toHaveCount(0)
+  await expect(panel.getByRole('button', { name: 'Options', exact: true })).toHaveCount(1)
+
+  // The one left is the book that absorbed the other: its top-up history carries
+  // the provenance line Phase 4 added, which only a merged tranche renders.
+  await panel.getByRole('button', { name: 'Options', exact: true }).click()
+  await expect(page.getByTestId('tranche-merged-from')).toBeVisible({ timeout: 10_000 })
 })
