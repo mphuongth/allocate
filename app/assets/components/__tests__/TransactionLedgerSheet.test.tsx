@@ -113,7 +113,10 @@ describe('TransactionLedgerSheet — a refused delete says why', () => {
 
     const del = await screen.findByTestId('tx-ledger-delete')
     del.click()
+    // Delete is held until the unlink lookup settles (#655), so a click fired
+    // the instant the dialog appears lands on a disabled button.
     const confirm = await screen.findByTestId('tx-ledger-delete-confirm')
+    await vi.waitFor(() => expect(confirm).toBeEnabled())
     confirm.click()
 
     await vi.waitFor(() => expect(toastError).toHaveBeenCalledWith(code))
@@ -125,7 +128,10 @@ describe('TransactionLedgerSheet — a refused delete says why', () => {
 
     const del = await screen.findByTestId('tx-ledger-delete')
     del.click()
+    // Delete is held until the unlink lookup settles (#655), so a click fired
+    // the instant the dialog appears lands on a disabled button.
     const confirm = await screen.findByTestId('tx-ledger-delete-confirm')
+    await vi.waitFor(() => expect(confirm).toBeEnabled())
     confirm.click()
 
     await vi.waitFor(() => expect(global.fetch).toHaveBeenCalled())
@@ -165,7 +171,10 @@ describe('TransactionLedgerSheet — a not_found delete reconciles the list', ()
 
     const del = await screen.findByTestId('tx-ledger-delete')
     del.click()
+    // Delete is held until the unlink lookup settles (#655), so a click fired
+    // the instant the dialog appears lands on a disabled button.
     const confirm = await screen.findByTestId('tx-ledger-delete-confirm')
+    await vi.waitFor(() => expect(confirm).toBeEnabled())
     confirm.click()
 
     await vi.waitFor(() => expect(onChanged).toHaveBeenCalled())
