@@ -393,6 +393,7 @@
     "unitsDefault": "Đơn vị",
     "deleteTitle": "Xoá giao dịch?",
     "deleteMessage": "Bạn có chắc muốn xóa giao dịch đầu tư này?",
+    "deleteUnlinksSavings": "Các khoản tiết kiệm định kỳ đang nạp vào sổ này sẽ bị bỏ liên kết: {names}. Tiền hàng tháng sẽ được ghi thành khoản gửi riêng.",
     "amountRequired": "Số tiền phải lớn hơn 0.",
     "dateRequired": "Ngày đầu tư là bắt buộc."
   },

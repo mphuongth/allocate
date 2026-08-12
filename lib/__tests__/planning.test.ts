@@ -48,6 +48,26 @@ describe('resolveRecurringSavings', () => {
     const [r] = resolveRecurringSavings([saving()], [ov])
     expect(r.overridden).toBe(false)
   })
+
+  // The deposit a saving fed was deleted (#655). Most unlinked savings were
+  // never linked at all, so only the stamp tells the two apart — without it the
+  // plan can either nag everyone or warn nobody.
+  it('flags a saving whose linked deposit was deleted', () => {
+    const [r] = resolveRecurringSavings([saving({ unlinked_at: '2026-08-12T03:00:00Z', linked_deposit_tx_id: null })], [])
+    expect(r.linkLost).toBe(true)
+  })
+
+  it('does not flag a saving that was never linked', () => {
+    const [r] = resolveRecurringSavings([saving()], [])
+    expect(r.linkLost).toBe(false)
+  })
+
+  // A stamp left over from an earlier loss says nothing about a saving that now
+  // points at a deposit again — the warning has been answered.
+  it('does not flag a saving that is linked again', () => {
+    const [r] = resolveRecurringSavings([saving({ unlinked_at: '2026-08-12T03:00:00Z', linked_deposit_tx_id: 'tx-9' })], [])
+    expect(r.linkLost).toBe(false)
+  })
 })
 
 describe('recurringSavingsTotal', () => {
@@ -89,6 +109,18 @@ describe('buildByGoal — planned vs contributed', () => {
     expect(row.contributed).toBe(5_000_000)    // recorded DCA buy
     expect(row.items.map(i => i.type)).toEqual(['fund', 'bank'])
     expect(row.items[0].recorded).toBe(true)
+  })
+
+  // The plan page is where the user looks month after month, so the lost link
+  // has to reach the line item — a warning only the resolver knows about warns
+  // nobody (#655).
+  it('carries a lost deposit link onto the goal line item', () => {
+    const recurring = resolveRecurringSavings(
+      [saving({ goal_id: 'g-1', unlinked_at: '2026-08-12T03:00:00Z', linked_deposit_tx_id: null })],
+      [],
+    )
+    const [row] = buildByGoal([], [], recurring, goalsById)
+    expect(row.items[0].linkLost).toBe(true)
   })
 
   it('a pending DCA row is planned but not yet contributed', () => {

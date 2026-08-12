@@ -72,6 +72,8 @@ export interface RecurringSaving {
   effective_from: string | null
   effective_to: string | null
   linked_deposit_tx_id?: string | null
+  // When the linked deposit was deleted out from under this saving (#655).
+  unlinked_at?: string | null
   savings_goals: { goal_name: string } | null
 }
 

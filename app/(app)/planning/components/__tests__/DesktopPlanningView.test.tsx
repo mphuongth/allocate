@@ -90,6 +90,29 @@ describe('DesktopPlanningView — goal header "+" log contribution', () => {
   })
 })
 
+// Deleting the deposit a saving funds unlinks it silently (#655) — the monthly
+// line goes on looking healthy while the money stops reaching the book. The
+// stamp is the only thing separating this from the many savings that were never
+// linked, so the warning has to key on it, not on the absent link.
+describe('DesktopPlanningView — a saving whose deposit was deleted', () => {
+  it('warns on the plan line when the linked deposit is gone', () => {
+    const orphaned: RecurringSaving[] = [{ ...recurringSavings[0], linked_deposit_tx_id: null, unlinked_at: '2026-08-12T03:00:00Z' }]
+    render(<DesktopPlanningView {...defaultProps} plan={basePlan} recurringSavings={orphaned} />)
+    expect(screen.getByTestId('plan-link-lost-rs1')).toBeInTheDocument()
+  })
+
+  it('says nothing about a saving that was never linked', () => {
+    render(<DesktopPlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} />)
+    expect(screen.queryByTestId('plan-link-lost-rs1')).not.toBeInTheDocument()
+  })
+
+  it('says nothing once the saving points at a deposit again', () => {
+    const relinked: RecurringSaving[] = [{ ...recurringSavings[0], linked_deposit_tx_id: 'tx-9', unlinked_at: '2026-08-12T03:00:00Z' }]
+    render(<DesktopPlanningView {...defaultProps} plan={basePlan} recurringSavings={relinked} />)
+    expect(screen.queryByTestId('plan-link-lost-rs1')).not.toBeInTheDocument()
+  })
+})
+
 describe('DesktopPlanningView — recurring deep-link edit', () => {
   it('"Edit recurring plan" opens the manager straight on that item’s edit form', async () => {
     const fetchMock = vi.fn((url: string) => {

@@ -155,6 +155,30 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [confirmTx, setConfirmTx] = useState<LedgerTransaction | null>(null)
+  // Recurring savings this deposit is funding (#655). Deleting it unlinks them
+  // — legal, silent, and the reason the plan quietly stops routing money — so
+  // the confirm dialog names them while the user can still back out. Looked up
+  // when the dialog opens rather than with the ledger: it is one small request
+  // on a rare, deliberate action, not a cost every ledger open pays.
+  const [unlinkedByDelete, setUnlinkedByDelete] = useState<string[]>([])
+
+  const askDelete = useCallback(async (tx: LedgerTransaction) => {
+    setConfirmTx(tx)
+    setUnlinkedByDelete([])
+    try {
+      const res = await fetch('/api/v1/recurring-savings')
+      if (!res.ok) return
+      const { savings } = await res.json()
+      setUnlinkedByDelete(
+        (savings ?? [])
+          .filter((s: { linked_deposit_tx_id?: string | null }) => s.linked_deposit_tx_id === tx.transaction_id)
+          .map((s: { name: string }) => s.name),
+      )
+    } catch {
+      // Advisory only. A failed lookup must not stand between the user and a
+      // delete they asked for — it costs a sentence, not the action.
+    }
+  }, [])
 
   const [showImport, setShowImport] = useState(false)
   const [importFundId, setImportFundId] = useState('')
@@ -406,7 +430,7 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
       {!isWithdrawal(tx) && (
         <button onClick={() => (tx.asset_type === 'stock' ? openEdit(tx) : setEditExisting(tx))} className="cn-btn ghost" style={{ ...iconHit }} aria-label={tc('edit')}><Edit2 size={14} color="var(--c-muted)" /></button>
       )}
-      <button data-testid="tx-ledger-delete" onClick={() => setConfirmTx(tx)} className="cn-btn ghost" style={{ ...iconHit }} aria-label={tc('delete')}><Trash size={14} color="var(--c-neg)" /></button>
+      <button data-testid="tx-ledger-delete" onClick={() => askDelete(tx)} className="cn-btn ghost" style={{ ...iconHit }} aria-label={tc('delete')}><Trash size={14} color="var(--c-neg)" /></button>
     </span>
   )
 
@@ -749,6 +773,14 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
             <div style={{ fontSize: 13, color: 'var(--c-muted)', lineHeight: 1.5 }}>
               {dirMeta(confirmTx).label} · {txPrimaryName(confirmTx, assetLabelOf(confirmTx.asset_type))} — <span className="tabular">{fmtCompact(confirmTx.amount_vnd)}</span>
             </div>
+            {unlinkedByDelete.length > 0 && (
+              <div
+                data-testid="tx-delete-unlinks-savings"
+                style={{ fontSize: 12, lineHeight: 1.5, padding: '8px 10px', borderRadius: 8, background: 'var(--c-warn-tint)', color: 'var(--c-warn)' }}
+              >
+                {t('deleteUnlinksSavings', { names: unlinkedByDelete.join(', ') })}
+              </div>
+            )}
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => setConfirmTx(null)} className="cn-btn" style={{ flex: 1, justifyContent: 'center' }}>{tc('cancel')}</button>
               <button

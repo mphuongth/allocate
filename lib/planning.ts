@@ -30,6 +30,9 @@ export interface RecurringSaving {
   goal_id: string | null
   amount_vnd: number
   linked_deposit_tx_id?: string | null
+  // Stamped when the linked deposit was deleted out from under this saving
+  // (#655). Not the same as "unlinked": most savings never had a link.
+  unlinked_at?: string | null
   savings_goals?: { goal_name: string } | null
 }
 
@@ -48,6 +51,10 @@ export interface ResolvedSaving {
   skipped: boolean
   overridden: boolean
   linkedDepositTxId: string | null // an explicitly linked deposit/book, if any
+  // The deposit this saving fed was deleted and nothing replaced it (#655), so
+  // the monthly contribution no longer reaches the book the user aimed it at.
+  // Both halves matter: a stamp on a saving that is linked again is answered.
+  linkLost: boolean
 }
 
 // Apply per-month overrides to the active recurring savings. An override of 0
@@ -71,6 +78,7 @@ export function resolveRecurringSavings(
       skipped,
       overridden: hasOv && ov! > 0 && ov !== s.amount_vnd,
       linkedDepositTxId: s.linked_deposit_tx_id ?? null,
+      linkLost: s.unlinked_at != null && s.linked_deposit_tx_id == null,
     }
   })
 }
@@ -116,6 +124,8 @@ export interface GoalItem {
   // An accumulating book this recurring is linked to (its anchor id), if any —
   // the "Saved" pill tops up that book instead of logging a standalone deposit.
   linkedDepositTxId?: string | null
+  // That book was deleted and this saving now feeds nothing in particular (#655).
+  linkLost?: boolean
 }
 
 export interface GoalRow {
@@ -240,6 +250,7 @@ export function buildByGoal(
       overridden: r.overridden,
       recorded,
       linkedDepositTxId: r.linkedDepositTxId,
+      linkLost: r.linkLost,
     })
   }
 

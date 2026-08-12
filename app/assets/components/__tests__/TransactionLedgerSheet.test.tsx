@@ -2,8 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import TransactionLedgerSheet from '../TransactionLedgerSheet'
 
+// Keys pass through, but interpolated values come with them — a message whose
+// whole job is to name something (the savings a delete would unlink, #655) is
+// untestable if the mock throws the params away.
 vi.mock('next-intl', () => ({
-  useTranslations: () => (k: string) => k,
+  useTranslations: () => (k: string, params?: Record<string, unknown>) =>
+    params ? `${k}:${JSON.stringify(params)}` : k,
 }))
 // Nested sheets fetch/render on their own; stub them so this test only exercises
 // the ledger rows.
@@ -167,6 +171,67 @@ describe('TransactionLedgerSheet — a not_found delete reconciles the list', ()
     await vi.waitFor(() => expect(onChanged).toHaveBeenCalled())
     expect(listCalls).toBeGreaterThan(1)
     await vi.waitFor(() => expect(screen.queryByTestId('tx-ledger-delete')).toBeNull())
+  })
+})
+
+// Deleting a deposit a recurring saving feeds unlinks that saving on the way out
+// (ON DELETE SET NULL) and says nothing (#655). The plan then stops routing
+// money into a book while its monthly line still reads healthy. The delete stays
+// allowed — it is the user's deposit — but the confirm dialog is the last moment
+// they can decide knowing that, so it names the savings at stake.
+describe('TransactionLedgerSheet — deleting a deposit a recurring saving feeds', () => {
+  const tx = {
+    transaction_id: 'd1', asset_type: 'bank', investment_date: '2026-06-01',
+    amount_vnd: 10_000_000, transaction_type: 'investment',
+    savings_goals: { goal_name: 'House' },
+  }
+
+  const mockWithSavings = (savings: unknown[]) => {
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('recurring-savings')) return Promise.resolve({ ok: true, json: async () => ({ savings }) })
+      if (url.includes('savings-goals')) return Promise.resolve({ ok: true, json: async () => ({ goals: [] }) })
+      if (url.includes('/api/funds')) return Promise.resolve({ ok: true, json: async () => ({ funds: [] }) })
+      if (url.includes('investment-transactions')) return Promise.resolve({ ok: true, json: async () => ({ transactions: [tx], total: 1 }) })
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+  }
+
+  it('names the saving that would lose its link', async () => {
+    mockWithSavings([{ saving_id: 'rs1', name: 'VCB Savings', linked_deposit_tx_id: 'd1' }])
+    render(<TransactionLedgerSheet open desktop locale="en" onClose={() => {}} />)
+
+    const del = await screen.findByTestId('tx-ledger-delete')
+    del.click()
+    const warning = await screen.findByTestId('tx-delete-unlinks-savings')
+    expect(warning.textContent).toContain('VCB Savings')
+  })
+
+  it('stays quiet when the savings point at other deposits', async () => {
+    mockWithSavings([{ saving_id: 'rs1', name: 'VCB Savings', linked_deposit_tx_id: 'other-tx' }])
+    render(<TransactionLedgerSheet open desktop locale="en" onClose={() => {}} />)
+
+    const del = await screen.findByTestId('tx-ledger-delete')
+    del.click()
+    await screen.findByTestId('tx-ledger-delete-confirm')
+    expect(screen.queryByTestId('tx-delete-unlinks-savings')).toBeNull()
+  })
+
+  // The warning is advisory: if the lookup fails there is still a delete to
+  // perform, and blocking it would turn a missing sentence into a dead button.
+  it('still offers the delete when the lookup fails', async () => {
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('recurring-savings')) return Promise.reject(new Error('offline'))
+      if (url.includes('savings-goals')) return Promise.resolve({ ok: true, json: async () => ({ goals: [] }) })
+      if (url.includes('/api/funds')) return Promise.resolve({ ok: true, json: async () => ({ funds: [] }) })
+      if (url.includes('investment-transactions')) return Promise.resolve({ ok: true, json: async () => ({ transactions: [tx], total: 1 }) })
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+    render(<TransactionLedgerSheet open desktop locale="en" onClose={() => {}} />)
+
+    const del = await screen.findByTestId('tx-ledger-delete')
+    del.click()
+    expect(await screen.findByTestId('tx-ledger-delete-confirm')).toBeInTheDocument()
+    expect(screen.queryByTestId('tx-delete-unlinks-savings')).toBeNull()
   })
 })
 

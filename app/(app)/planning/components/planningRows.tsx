@@ -11,6 +11,7 @@ import { type GoalRow, type GoalItem } from '@/lib/planning'
 import { useCloseOnScroll } from '@/components/ui/useDialogA11y'
 import { goalItemSublabel, goalProgress } from '@/features/planning/planModel'
 import { EditIcon } from './planningIcons'
+import { LinkLostBadge } from './LinkLostBadge'
 
 export function GoalAllocationRow({ entry, isVI, onRecSkip, onRecRestore, onRecOverride, onRecEdit, onRecordBuy, onRecordDeposit, onLogContribution, onDcaSkip, onDcaRestore }: {
   entry: GoalRow; isVI: boolean
@@ -139,6 +140,7 @@ function GoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit, onReco
           {item.isDCA && (
             <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 4, background: 'var(--c-navy-tint)', color: 'var(--c-navy)', fontWeight: 600 }}>DCA</span>
           )}
+          <LinkLostBadge item={item} isVI={isVI} />
         </div>
       </div>
       <span style={{ fontSize: 12, fontWeight: 500, fontVariantNumeric: 'tabular-nums', color: 'var(--c-muted)', textDecoration: skipped ? 'line-through' : 'none' }}>
