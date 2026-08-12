@@ -10,7 +10,7 @@ import { formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
 import { fmtCompact, fmtNav, fmtUnits } from '@/lib/formatters'
 import { parseExcelPaste, type ParsedRow } from '@/lib/parseExcelPaste'
 import AddTransactionSheet from './AddTransactionSheet'
-import { ASSET_TYPES, type AssetType, type LedgerTransaction, isWithdrawal, txKind, txPrimaryName, fmtTxDate } from './transactionUtils'
+import { ASSET_TYPES, type AssetType, type LedgerTransaction, isWithdrawal, mayCarryRecurringLink, txKind, txPrimaryName, fmtTxDate } from './transactionUtils'
 import { toast } from 'sonner'
 import { deleteTransaction } from './deleteTransaction'
 import { useDialogMount } from '@/components/ui/useDialogMount'
@@ -188,6 +188,13 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
     const seq = ++lookupSeq.current
     setConfirmTx(tx)
     setUnlinkedByDelete([])
+    // Nothing can be linked to a fund, gold, stock or withdrawal row, so there
+    // is no question to ask — and since Delete waits on the answer, asking would
+    // charge every unrelated deletion for a warning that can never apply.
+    if (!mayCarryRecurringLink(tx)) {
+      setLookupPending(false)
+      return
+    }
     setLookupPending(true)
     try {
       // Bounded, because the button waits on this: a request that never answers

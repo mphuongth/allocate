@@ -243,6 +243,48 @@ describe('TransactionLedgerSheet — deleting a deposit a recurring saving feeds
     expect(screen.queryByTestId('tx-delete-unlinks-savings')).toBeNull()
   })
 
+  // Only a bank deposit can carry a recurring link at all — the link validator
+  // accepts nothing else. Asking about a fund, gold or a withdrawal buys a
+  // guaranteed-empty answer and, now that Delete waits for it, a delay on every
+  // unrelated deletion.
+  it('does not ask about a holding that could never carry a link', async () => {
+    const fund = { ...tx, transaction_id: 'f1', asset_type: 'fund' }
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('savings-goals')) return Promise.resolve({ ok: true, json: async () => ({ goals: [] }) })
+      if (url.includes('/api/funds')) return Promise.resolve({ ok: true, json: async () => ({ funds: [] }) })
+      if (url.includes('investment-transactions')) return Promise.resolve({ ok: true, json: async () => ({ transactions: [fund], total: 1 }) })
+      if (url.includes('recurring-savings')) return new Promise(() => {})  // never answers
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+    render(<TransactionLedgerSheet open desktop locale="en" onClose={() => {}} />)
+
+    const del = await screen.findByTestId('tx-ledger-delete')
+    del.click()
+
+    // Enabled straight away: a hung lookup cannot be what it is waiting on,
+    // because it was never started.
+    expect(await screen.findByTestId('tx-ledger-delete-confirm')).toBeEnabled()
+    const asked = (global.fetch as ReturnType<typeof vi.fn>).mock.calls
+      .some((c) => String(c[0]).includes('recurring-savings'))
+    expect(asked).toBe(false)
+  })
+
+  it('skips a bank withdrawal too, which no link can point at', async () => {
+    const withdrawal = { ...tx, transaction_id: 'w1', transaction_type: 'withdrawal' }
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('savings-goals')) return Promise.resolve({ ok: true, json: async () => ({ goals: [] }) })
+      if (url.includes('/api/funds')) return Promise.resolve({ ok: true, json: async () => ({ funds: [] }) })
+      if (url.includes('investment-transactions')) return Promise.resolve({ ok: true, json: async () => ({ transactions: [withdrawal], total: 1 }) })
+      if (url.includes('recurring-savings')) return new Promise(() => {})
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+    render(<TransactionLedgerSheet open desktop locale="en" onClose={() => {}} />)
+
+    const del = await screen.findByTestId('tx-ledger-delete')
+    del.click()
+    expect(await screen.findByTestId('tx-ledger-delete-confirm')).toBeEnabled()
+  })
+
   // A warning that arrives after the user has confirmed is not a warning. The
   // dialog opens the instant the button is pressed, so on a slow lookup the
   // Delete button would be live with nothing shown next to it — the exact
