@@ -127,24 +127,40 @@ export function useGoalDetailData(opts: {
         // one connection per anchor before the page could render — and chunked
         // rather than capped, so no book is quietly left reading a tranche.
         const CHUNK = 100
-        const chunks: string[][] = []
-        // One set of requests for both, so a page needing an anchor and a name
-        // does not open two rounds of connections; the results part ways after.
-        const wanted = [...missingAnchors, ...nameOnly]
-        for (let i = 0; i < wanted.length; i += CHUNK) chunks.push(wanted.slice(i, i + CHUNK))
-        // A failed anchor batch fails the load. These are not supplementary like
-        // the recurring contributions: without an anchor a book renders off a
+        // A failed batch fails the load. These are not supplementary like the
+        // recurring contributions: without an anchor a book renders off a
         // tranche, which does not know the book has handed over — so it would
         // offer actions the database then refuses. A retry beats a wrong page.
-        const anchors: InvestmentTx[] = (await Promise.all(chunks.map((chunk) =>
-          fetch(`/api/v1/investment-transactions?ids=${chunk.join(',')}&include_history=true&limit=${CHUNK}`, { cache: 'no-store' })
-            .then((r) => { if (!r.ok) throw new Error('anchor load failed'); return r.json() })
-            .then((res) => (res?.transactions ?? []) as InvestmentTx[]),
-        ))).flat()
+        const fetchByIds = async (ids: string[]): Promise<InvestmentTx[]> => {
+          const chunks: string[][] = []
+          for (let i = 0; i < ids.length; i += CHUNK) chunks.push(ids.slice(i, i + CHUNK))
+          return (await Promise.all(chunks.map((chunk) =>
+            fetch(`/api/v1/investment-transactions?ids=${chunk.join(',')}&include_history=true&limit=${CHUNK}`, { cache: 'no-store' })
+              .then((r) => { if (!r.ok) throw new Error('anchor load failed'); return r.json() })
+              .then((res) => (res?.transactions ?? []) as InvestmentTx[]),
+          ))).flat()
+        }
 
-        const nameOnlySet = new Set(nameOnly)
+        // One round for both, so a page needing an anchor and a name does not
+        // open two sets of connections; the results part ways after.
+        const anchors = await fetchByIds([...missingAnchors, ...nameOnly])
+
+        // A promise is recorded on the ANCHOR, so a book whose anchor fell off
+        // the page only reveals its successor once that anchor is back. One
+        // more round for those, and only when there are any: computing this
+        // from the first page alone left the promise reading as the anonymous
+        // "successor book" on exactly the goals big enough to need the backfill.
+        const known = new Set([...present, ...anchors.map((a) => a.transaction_id)])
+        const secondPass = [...new Set(
+          anchors.flatMap((a) => [a.merged_from_book_id, a.successor_deposit_tx_id])
+            .filter((id): id is string => !!id && !known.has(id)),
+        )]
+        const namedOnly = secondPass.length > 0 ? await fetchByIds(secondPass) : []
+
+        // Every one of these was fetched to be named, not to be held.
+        const nameOnlySet = new Set([...nameOnly, ...secondPass])
         const names: Record<string, string> = {}
-        for (const a of anchors) {
+        for (const a of [...anchors, ...namedOnly]) {
           const n = a.notes?.trim()
           if (n) names[a.transaction_id] = n
         }

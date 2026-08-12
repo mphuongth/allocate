@@ -53,8 +53,13 @@ describe('useGoalDetailData (#467)', () => {
 
     const anchor = result.current.transactions.find(t => t.transaction_id === 'anchor-1')
     expect(anchor?.successor_deposit_tx_id).toBe('book-2')
-    // One request for the whole set, not one per anchor.
-    expect(urls.filter(u => u.includes('ids=')).length).toBe(1)
+    // One request for the whole set of anchors, not one per anchor.
+    const byIds = urls.filter(u => u.includes('ids='))
+    expect(byIds.filter(u => u.includes('anchor-1'))).toHaveLength(1)
+    // The anchor names a successor that is off the page too, so exactly one
+    // more round follows to learn its name — never one request per reference.
+    expect(byIds).toHaveLength(2)
+    expect(byIds[1]).toContain('book-2')
   })
 
   // #638 Phase 4. The books a page has to NAME are not only the ones it groups
@@ -99,6 +104,46 @@ describe('useGoalDetailData (#467)', () => {
     expect(result.current.bookNames.B).toBe('PVcomBank B')
     expect(result.current.transactions.map(t => t.transaction_id)).not.toContain('A')
     expect(result.current.transactions.map(t => t.transaction_id)).not.toContain('B')
+  })
+
+  // A promised book's successor is named on its ANCHOR. When the anchor itself
+  // fell off the page, the successor's id only appears once that anchor has been
+  // fetched — so a single pass over the first page never asks for it, and the
+  // promise reads as the anonymous "successor book" again (#638 Phase 4).
+  it('follows a successor named by an anchor that was itself backfilled', async () => {
+    const asked: string[][] = []
+    mockFetch((url) => {
+      if (url.includes('ids=')) {
+        const ids = decodeURIComponent(url.split('ids=')[1].split('&')[0]).split(',')
+        asked.push(ids)
+        if (ids.includes('A')) {
+          // A fell off the page, and it is the row that names the successor.
+          return { ok: true, body: { transactions: [
+            { transaction_id: 'A', deposit_group_id: 'A', investment_date: '2025-01-01', notes: 'PVcomBank A', successor_deposit_tx_id: 'B' },
+          ] } }
+        }
+        return { ok: true, body: { transactions: [
+          { transaction_id: 'B', deposit_group_id: 'B', investment_date: '2025-06-01', notes: 'PVcomBank B' },
+        ] } }
+      }
+      if (url.includes('/investment-transactions?')) {
+        return { ok: true, body: { transactions: [
+          { transaction_id: 'tr', deposit_group_id: 'A', investment_date: '2026-08-01' },
+        ] } }
+      }
+      if (url.includes('/recurring-contributions')) return { ok: true, body: { contributions: [] } }
+      return { ok: true, body: {} }
+    })
+
+    const { result } = renderHook(() => useGoalDetailData({ goalId: 'g1', enabled: true, refreshKey: 0, txReload: 0 }))
+    await waitFor(() => expect(result.current.txLoading).toBe(false))
+
+    expect(asked.flat()).toContain('B')
+    expect(result.current.bookNames.B).toBe('PVcomBank B')
+    // ...and B is still only a name here, not a holding this page counts.
+    expect(result.current.transactions.map(t => t.transaction_id)).not.toContain('B')
+    // A is a real anchor of a book on this page, so it stays a holding.
+    expect(result.current.transactions.map(t => t.transaction_id)).toContain('A')
   })
 
   it('asks for every missing anchor, in batches', async () => {
