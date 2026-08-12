@@ -52,7 +52,27 @@ test('a locked book hands over to a successor, which absorbs it at maturity', as
     },
   })).json()
   expect(bookA.deposit_group_id).toBe(bookA.transaction_id)
-  // Teardown for the merged pair is registered together, after the handover — see there.
+
+  // Registered HERE, not after the handover: everything between this line and the
+  // successor POST can fail — and the run that matters most, a genuine regression
+  // in the handover, is exactly the one that would leave the source book behind.
+  // A deleted goal does not take it with it (the goal FK is ON DELETE SET NULL),
+  // so it would drift into Unallocated and into every later spec's view of the
+  // dashboard, including this test's own CI retry.
+  //
+  // One cleanup for the pair, because a merged pair cannot be torn down a book at
+  // a time: B's credited tranche is referenced by A's closing withdrawal through
+  // `consumed_by_inv_id`, and `move_merge_lineage_to_book` refuses to delete it
+  // while that reference stands — deliberately, so an ordinary delete cannot walk
+  // off with the successor's payout. `deleteBookCascade` swallows that error, so
+  // the order is load-bearing: A's cascade removes the withdrawals, and with them
+  // the reference that was blocking B. `bookB` is read at teardown time, so this
+  // covers both the early failures and the completed journey.
+  let bookB: { transaction_id: string; deposit_group_id: string; amount_vnd: number } | null = null
+  cleanup.add(async () => {
+    await api.deleteBookCascade(bookA.transaction_id)
+    if (bookB) await api.deleteBookCascade(bookB.transaction_id)
+  })
 
   // The monthly contribution the bank will refuse, aimed at A.
   const saving = await api.createRecurringSaving({
@@ -92,31 +112,16 @@ test('a locked book hands over to a successor, which absorbs it at maturity', as
     sheet.getByTestId('successor-submit').click(),
   ])
   expect(openRes.status()).toBe(201)
-  const bookB = await openRes.json()
-
-  // A merged pair cannot be torn down one book at a time. B's credited tranche is
-  // referenced by A's closing withdrawal through `consumed_by_inv_id`, and
-  // `move_merge_lineage_to_book` refuses to delete it while that reference stands
-  // — deliberately, so an ordinary delete cannot take the successor's payout with
-  // it. `deleteBookCascade` swallows the resulting error, so the whole merged
-  // fixture would survive into the rest of the run.
-  //
-  // Registered last so the stack runs it FIRST, and it does both books in one
-  // order: A's cascade removes the withdrawals (children by parent) and with them
-  // the reference, which is what lets B's tranche go.
-  cleanup.add(async () => {
-    await api.deleteBookCascade(bookA.transaction_id)
-    await api.deleteBookCascade(bookB.transaction_id)
-  })
+  bookB = await openRes.json()
 
   // ── 2. The month landed in B, and the plan says so ─────────────────────────
   await expect(line).toHaveAttribute('data-recorded', 'true', { timeout: 15_000 })
-  expect(bookB.deposit_group_id).toBe(bookB.transaction_id)
-  expect(bookB.amount_vnd).toBe(MONTHLY)
+  expect(bookB!.deposit_group_id).toBe(bookB!.transaction_id)
+  expect(bookB!.amount_vnd).toBe(MONTHLY)
 
   // ── 3. The recurring link followed the money ───────────────────────────────
   const linked = await api.getRecurringSaving(saving.saving_id)
-  expect(linked!.linked_deposit_tx_id).toBe(bookB.transaction_id)
+  expect(linked!.linked_deposit_tx_id).toBe(bookB!.transaction_id)
 
   // ── 4. A matures, and goal detail offers the merge it was promised ─────────
   const matured = await page.request.put(`/api/v1/investment-transactions/${bookA.transaction_id}`, {
@@ -197,7 +202,7 @@ test('a locked book hands over to a successor, which absorbs it at maturity', as
   expect(anchorA!.amount_vnd - drawnFromA).toBe(0)
   expect(drawnFromA).toBe(BOOK_PRINCIPAL)
 
-  const inB = rows.filter((r) => r.deposit_group_id === bookB.transaction_id && r.transaction_type === 'investment' && !r.renewed_from_transaction_id)
+  const inB = rows.filter((r) => r.deposit_group_id === bookB!.transaction_id && r.transaction_type === 'investment' && !r.renewed_from_transaction_id)
   expect(inB).toHaveLength(2) // B's own opening tranche + the one the merge added
   expect(inB.reduce((s, t) => s + t.amount_vnd, 0)).toBe(MONTHLY + received)
 
