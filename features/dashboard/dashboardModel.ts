@@ -107,11 +107,11 @@ export function maturingDeposits(
 
 /**
  * Goals whose deposits fall close together, so the card can offer a one-tap
- * "gộp lại". Fed from ALL the goal's bank deposits with an `actionable` flag:
- * the anchor must be due now — that's what the card opens on — but a
- * close-maturing sibling counts even if it isn't due yet, exactly matching what
- * the sheet preselects. Reuses the eligibility rules so the banner can't
- * over-promise.
+ * "gộp lại". Fed from ALL the goal's bank deposits with an `actionable` flag,
+ * which the detector uses to keep the banner to deposits the card lists: a
+ * not-yet-due sibling can still be merged from inside the sheet, but it must not
+ * inflate a count the user can only see half of (#651). Reuses the eligibility
+ * rules so the banner can't over-promise.
  */
 export function mergeClusterSummaries(
   tagged: TaggedTranche<NonFundUnallocatedItem>[],

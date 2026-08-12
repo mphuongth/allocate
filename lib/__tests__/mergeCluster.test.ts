@@ -89,15 +89,13 @@ describe('detectMergeClusters', () => {
     expect([...clusters[0].siblingIds].sort()).toEqual(['a', 'b'])
   })
 
-  it('anchors on an actionable deposit and folds a not-yet-actionable close sibling', () => {
-    // A is due now; B matures a few days later (not actionable) but within the
-    // window — it can settle early and fold in, so the banner still fires.
+  it('forms no cluster when the only close sibling is not on the card yet (#651)', () => {
+    // A is due now; B matures a few days later and is NOT actionable, so the
+    // card never lists it. Counting it made the banner promise "2 sổ" over a
+    // single visible row — and kept promising it after the other one was handled.
     const a = mk({ id: 'a', expiryDate: '2026-07-01', actionable: true })
     const b = mk({ id: 'b', expiryDate: '2026-07-05', actionable: false }) // gap 4, not due
-    const clusters = detectMergeClusters([a, b], 7)
-    expect(clusters).toHaveLength(1)
-    expect(clusters[0]).toMatchObject({ anchorId: 'a', size: 2 })
-    expect(clusters[0].siblingIds).toEqual(['b'])
+    expect(detectMergeClusters([a, b], 7)).toHaveLength(0)
   })
 
   it('forms no cluster when nothing in the goal is actionable yet', () => {
@@ -106,15 +104,16 @@ describe('detectMergeClusters', () => {
     expect(detectMergeClusters([a, b], 7)).toHaveLength(0)
   })
 
-  it('anchors on the latest ACTIONABLE deposit, not a later not-yet-due one', () => {
+  it('anchors on the latest ACTIONABLE deposit and counts only actionable ones', () => {
     const a = mk({ id: 'a', expiryDate: '2026-07-01', actionable: true })
     const b = mk({ id: 'b', expiryDate: '2026-07-03', actionable: true }) // latest actionable
     const c = mk({ id: 'c', expiryDate: '2026-07-05', actionable: false }) // later, not due
     const clusters = detectMergeClusters([a, b, c], 7)
     expect(clusters).toHaveLength(1)
     expect(clusters[0].anchorId).toBe('b')
-    expect(clusters[0].size).toBe(3)
-    expect([...clusters[0].siblingIds].sort()).toEqual(['a', 'c'])
+    // c is close to b but isn't on the card, so it is not part of the promise.
+    expect(clusters[0].size).toBe(2)
+    expect(clusters[0].siblingIds).toEqual(['a'])
   })
 
   it('treats an unspecified actionable flag as actionable (lib default)', () => {
