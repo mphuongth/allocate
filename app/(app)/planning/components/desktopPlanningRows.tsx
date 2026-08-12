@@ -11,6 +11,7 @@ import { type GoalItem } from '@/lib/planning'
 import { useCloseOnScroll } from '@/components/ui/useDialogA11y'
 import { goalItemSublabel } from '@/features/planning/planModel'
 import { EditIcon } from './planningIcons'
+import { LinkLostBadge } from './LinkLostBadge'
 
 function MenuBtn({ icon, label, onClick, danger, noBorder }: {
   icon: React.ReactNode; label: string; onClick: () => void; danger?: boolean; noBorder?: boolean
@@ -121,6 +122,7 @@ export function DGoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit
         <div style={{ fontSize: 10, color: item.overridden ? 'var(--c-navy)' : recorded ? 'var(--c-pos)' : 'var(--c-muted)', marginTop: 1 }}>
           {sublabel}
           {item.isDCA && <span style={{ marginLeft: 6, padding: '1px 5px', borderRadius: 4, background: 'var(--c-navy-tint)', color: 'var(--c-navy)', fontSize: 9, fontWeight: 700 }}>DCA</span>}
+          {item.linkLost && <span style={{ marginLeft: 6 }}><LinkLostBadge item={item} isVI={isVI} /></span>}
         </div>
       </td>
       <td style={{ padding: '9px 12px', textAlign: 'right', verticalAlign: 'middle' }}>

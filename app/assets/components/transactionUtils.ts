@@ -43,6 +43,20 @@ export function isWithdrawal(tx: LedgerTransaction): boolean {
   return tx.transaction_type === 'withdrawal'
 }
 
+// Could a recurring saving be pointing at this row (#655)? Only a bank
+// investment can: `validateLinkedDeposit` refuses every other asset type and
+// refuses withdrawals outright. Deleting a fund, gold, stock or withdrawal
+// therefore cannot unlink anything, and asking about it buys a
+// guaranteed-empty answer that the delete now waits on.
+//
+// Deliberately looser than that validator, which also requires a rate and a
+// maturity: an edit can clear either after the link was made, and a link that
+// outlived the check is exactly the case the warning exists for. This screens
+// out only what no edit could turn back into a linkable deposit.
+export function mayCarryRecurringLink(tx: LedgerTransaction): boolean {
+  return tx.asset_type === 'bank' && !isWithdrawal(tx)
+}
+
 // The display semantics of a row, beyond plain investment/withdrawal. A held-for-
 // merge settlement is a withdrawal whose cash was PARKED for a future merge, not
 // spent — so it must read NEUTRALLY (no red "−" loss) everywhere it appears

@@ -48,6 +48,63 @@ describe('resolveRecurringSavings', () => {
     const [r] = resolveRecurringSavings([saving()], [ov])
     expect(r.overridden).toBe(false)
   })
+
+  // The deposit a saving fed was deleted (#655). Most unlinked savings were
+  // never linked at all, so only the stamp tells the two apart — without it the
+  // plan can either nag everyone or warn nobody.
+  it('flags a saving whose linked deposit was deleted', () => {
+    const [r] = resolveRecurringSavings([saving({ unlinked_at: '2026-08-12T03:00:00Z', linked_deposit_tx_id: null })], [])
+    expect(r.linkLost).toBe(true)
+  })
+
+  it('does not flag a saving that was never linked', () => {
+    const [r] = resolveRecurringSavings([saving()], [])
+    expect(r.linkLost).toBe(false)
+  })
+
+  // A stamp left over from an earlier loss says nothing about a saving that now
+  // points at a deposit again — the warning has been answered.
+  it('does not flag a saving that is linked again', () => {
+    const [r] = resolveRecurringSavings([saving({ unlinked_at: '2026-08-12T03:00:00Z', linked_deposit_tx_id: 'tx-9' })], [])
+    expect(r.linkLost).toBe(false)
+  })
+
+  // The plan page can be paged back through past months. A deposit deleted in
+  // August was still linked all through July, so July's plan must not be told
+  // otherwise — the badge would be describing a state that month never had.
+  it('does not flag months that ended before the deposit was deleted', () => {
+    const [r] = resolveRecurringSavings([saving({ unlinked_at: '2026-08-12T03:00:00Z' })], [], '2026-07')
+    expect(r.linkLost).toBe(false)
+  })
+
+  it('flags the month the deletion happened in', () => {
+    const [r] = resolveRecurringSavings([saving({ unlinked_at: '2026-08-12T03:00:00Z' })], [], '2026-08')
+    expect(r.linkLost).toBe(true)
+  })
+
+  it('flags every month after it', () => {
+    const [r] = resolveRecurringSavings([saving({ unlinked_at: '2026-08-12T03:00:00Z' })], [], '2026-09')
+    expect(r.linkLost).toBe(true)
+  })
+
+  // 01:00 UTC on the 1st is already the 1st in Vietnam, but 18:00 UTC on the
+  // 31st of July is the 1st of August there — the month the stamp belongs to is
+  // the business month, not the UTC one.
+  it('files the stamp under the business month, not the UTC one', () => {
+    const [r] = resolveRecurringSavings([saving({ unlinked_at: '2026-07-31T18:00:00Z' })], [], '2026-08')
+    expect(r.linkLost).toBe(true)
+    const [july] = resolveRecurringSavings([saving({ unlinked_at: '2026-07-31T18:00:00Z' })], [], '2026-07')
+    expect(july.linkLost).toBe(false)
+  })
+
+  // Which kind of link was lost decides which sentence is true (#655): a book
+  // anchor really was taking the monthly contribution; a term deposit never did.
+  it('carries whether the lost link was a book', () => {
+    const [book] = resolveRecurringSavings([saving({ unlinked_at: '2026-08-12T03:00:00Z', unlinked_from_book: true })], [])
+    expect(book.linkLostFromBook).toBe(true)
+    const [term] = resolveRecurringSavings([saving({ unlinked_at: '2026-08-12T03:00:00Z', unlinked_from_book: false })], [])
+    expect(term.linkLostFromBook).toBe(false)
+  })
 })
 
 describe('recurringSavingsTotal', () => {
@@ -89,6 +146,18 @@ describe('buildByGoal — planned vs contributed', () => {
     expect(row.contributed).toBe(5_000_000)    // recorded DCA buy
     expect(row.items.map(i => i.type)).toEqual(['fund', 'bank'])
     expect(row.items[0].recorded).toBe(true)
+  })
+
+  // The plan page is where the user looks month after month, so the lost link
+  // has to reach the line item — a warning only the resolver knows about warns
+  // nobody (#655).
+  it('carries a lost deposit link onto the goal line item', () => {
+    const recurring = resolveRecurringSavings(
+      [saving({ goal_id: 'g-1', unlinked_at: '2026-08-12T03:00:00Z', linked_deposit_tx_id: null })],
+      [],
+    )
+    const [row] = buildByGoal([], [], recurring, goalsById)
+    expect(row.items[0].linkLost).toBe(true)
   })
 
   it('a pending DCA row is planned but not yet contributed', () => {

@@ -10,7 +10,7 @@ import { formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
 import { fmtCompact, fmtNav, fmtUnits } from '@/lib/formatters'
 import { parseExcelPaste, type ParsedRow } from '@/lib/parseExcelPaste'
 import AddTransactionSheet from './AddTransactionSheet'
-import { ASSET_TYPES, type AssetType, type LedgerTransaction, isWithdrawal, txKind, txPrimaryName, fmtTxDate } from './transactionUtils'
+import { ASSET_TYPES, type AssetType, type LedgerTransaction, isWithdrawal, mayCarryRecurringLink, txKind, txPrimaryName, fmtTxDate } from './transactionUtils'
 import { toast } from 'sonner'
 import { deleteTransaction } from './deleteTransaction'
 import { useDialogMount } from '@/components/ui/useDialogMount'
@@ -25,6 +25,11 @@ const ASSET_BADGE: Record<AssetType, string> = {
   stock: '#7c3aed',
   gold: '#b45309',
 }
+
+// How long the delete confirmation waits for the "which savings does this fund?"
+// lookup (#655) before giving up on it. Short: the answer is one sentence, and
+// the user has already said what they want to do.
+const LOOKUP_TIMEOUT_MS = 5_000
 
 const labelStyle: React.CSSProperties = {
   display: 'block', fontSize: 10, fontWeight: 600,
@@ -155,6 +160,63 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [confirmTx, setConfirmTx] = useState<LedgerTransaction | null>(null)
+  // Recurring savings this deposit is funding (#655). Deleting it unlinks them
+  // — legal, silent, and the reason the plan quietly stops routing money — so
+  // the confirm dialog names them while the user can still back out. Looked up
+  // when the dialog opens rather than with the ledger: it is one small request
+  // on a rare, deliberate action, not a cost every ledger open pays.
+  const [unlinkedByDelete, setUnlinkedByDelete] = useState<string[]>([])
+  // The dialog opens the instant the button is pressed, so on a slow lookup the
+  // Delete button would be live with nothing beside it — and a warning that
+  // arrives after the confirmation is not a warning at all. Delete waits for the
+  // lookup to settle; a failed or empty one settles just the same and the delete
+  // goes ahead.
+  const [lookupPending, setLookupPending] = useState(false)
+  // Which lookup the dialog is currently showing. Cancel one dialog, open
+  // another, and the first answer can land late — without this it would name the
+  // first deposit's savings inside the second one's dialog.
+  const lookupSeq = useRef(0)
+
+  const closeConfirm = useCallback(() => {
+    lookupSeq.current += 1
+    setConfirmTx(null)
+    setUnlinkedByDelete([])
+    setLookupPending(false)
+  }, [])
+
+  const askDelete = useCallback(async (tx: LedgerTransaction) => {
+    const seq = ++lookupSeq.current
+    setConfirmTx(tx)
+    setUnlinkedByDelete([])
+    // Nothing can be linked to a fund, gold, stock or withdrawal row, so there
+    // is no question to ask — and since Delete waits on the answer, asking would
+    // charge every unrelated deletion for a warning that can never apply.
+    if (!mayCarryRecurringLink(tx)) {
+      setLookupPending(false)
+      return
+    }
+    setLookupPending(true)
+    try {
+      // Bounded, because the button waits on this: a request that never answers
+      // would otherwise leave the delete permanently unclickable, which is a
+      // worse failure than the missing sentence.
+      const res = await fetch('/api/v1/recurring-savings', { signal: AbortSignal.timeout(LOOKUP_TIMEOUT_MS) })
+      if (seq !== lookupSeq.current) return
+      if (!res.ok) return
+      const { savings } = await res.json()
+      if (seq !== lookupSeq.current) return
+      setUnlinkedByDelete(
+        (savings ?? [])
+          .filter((s: { linked_deposit_tx_id?: string | null }) => s.linked_deposit_tx_id === tx.transaction_id)
+          .map((s: { name: string }) => s.name),
+      )
+    } catch {
+      // Advisory only. A failed lookup must not stand between the user and a
+      // delete they asked for — it costs a sentence, not the action.
+    } finally {
+      if (seq === lookupSeq.current) setLookupPending(false)
+    }
+  }, [])
 
   const [showImport, setShowImport] = useState(false)
   const [importFundId, setImportFundId] = useState('')
@@ -333,14 +395,14 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
     setDeletingId(tx.transaction_id)
     const result = await deleteTransaction(tx.transaction_id)
     if (result.ok) {
-      setConfirmTx(null)
+      closeConfirm()
       await fetchTransactions()
       notifyChanged()
     } else {
       // Close the dialog and let the toast carry the explanation. Leaving it
       // open would sit there unchanged with no indication of what happened —
       // which is what it did before, for every refusal (#550).
-      setConfirmTx(null)
+      closeConfirm()
       toast.error(td(result.code))
       // not_found isn't a refusal: the row really is gone (a stale tab, or
       // another surface removed it). Keeping it on screen would leave the user
@@ -406,7 +468,7 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
       {!isWithdrawal(tx) && (
         <button onClick={() => (tx.asset_type === 'stock' ? openEdit(tx) : setEditExisting(tx))} className="cn-btn ghost" style={{ ...iconHit }} aria-label={tc('edit')}><Edit2 size={14} color="var(--c-muted)" /></button>
       )}
-      <button data-testid="tx-ledger-delete" onClick={() => setConfirmTx(tx)} className="cn-btn ghost" style={{ ...iconHit }} aria-label={tc('delete')}><Trash size={14} color="var(--c-neg)" /></button>
+      <button data-testid="tx-ledger-delete" onClick={() => askDelete(tx)} className="cn-btn ghost" style={{ ...iconHit }} aria-label={tc('delete')}><Trash size={14} color="var(--c-neg)" /></button>
     </span>
   )
 
@@ -743,21 +805,29 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
       />
 
       {/* Delete confirm — token-styled Shell so it stacks above the ledger. */}
-      <Shell open={!!confirmTx} onClose={() => setConfirmTx(null)} title={t('deleteTitle')} desktop={desktop} width={380}>
+      <Shell open={!!confirmTx} onClose={closeConfirm} title={t('deleteTitle')} desktop={desktop} width={380}>
         {confirmTx && (
           <div style={{ display: 'grid', gap: 16 }}>
             <div style={{ fontSize: 13, color: 'var(--c-muted)', lineHeight: 1.5 }}>
               {dirMeta(confirmTx).label} · {txPrimaryName(confirmTx, assetLabelOf(confirmTx.asset_type))} — <span className="tabular">{fmtCompact(confirmTx.amount_vnd)}</span>
             </div>
+            {unlinkedByDelete.length > 0 && (
+              <div
+                data-testid="tx-delete-unlinks-savings"
+                style={{ fontSize: 12, lineHeight: 1.5, padding: '8px 10px', borderRadius: 8, background: 'var(--c-warn-tint)', color: 'var(--c-warn)' }}
+              >
+                {t('deleteUnlinksSavings', { names: unlinkedByDelete.join(', ') })}
+              </div>
+            )}
             <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={() => setConfirmTx(null)} className="cn-btn" style={{ flex: 1, justifyContent: 'center' }}>{tc('cancel')}</button>
+              <button onClick={closeConfirm} className="cn-btn" style={{ flex: 1, justifyContent: 'center' }}>{tc('cancel')}</button>
               <button
                 data-testid="tx-ledger-delete-confirm"
                 onClick={() => handleDelete(confirmTx)}
-                disabled={deletingId === confirmTx.transaction_id}
-                style={{ flex: 2, padding: '10px 14px', background: 'var(--c-neg)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, opacity: deletingId === confirmTx.transaction_id ? 0.7 : 1 }}
+                disabled={deletingId === confirmTx.transaction_id || lookupPending}
+                style={{ flex: 2, padding: '10px 14px', background: 'var(--c-neg)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, opacity: deletingId === confirmTx.transaction_id || lookupPending ? 0.7 : 1 }}
               >
-                <Trash size={14} />{deletingId === confirmTx.transaction_id ? tc('loading') : tc('delete')}
+                <Trash size={14} />{deletingId === confirmTx.transaction_id || lookupPending ? tc('loading') : tc('delete')}
               </button>
             </div>
           </div>

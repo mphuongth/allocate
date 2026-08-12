@@ -393,6 +393,7 @@
     "unitsDefault": "Units",
     "deleteTitle": "Delete transaction?",
     "deleteMessage": "Are you sure you want to delete this investment transaction?",
+    "deleteUnlinksSavings": "Recurring savings linked to this deposit will be unlinked: {names}. The plan will say so on their monthly lines.",
     "amountRequired": "Amount must be greater than 0.",
     "dateRequired": "Investment date is required."
   },

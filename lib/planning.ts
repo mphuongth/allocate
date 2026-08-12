@@ -7,6 +7,8 @@
 // to those active in the selected month; this module resolves overrides, groups
 // by goal, and keeps the Unallocated group (null goal) last.
 
+import { businessYearMonth } from './dates'
+
 const UNALLOCATED = '__unallocated__'
 
 // A recurring recorded this month via a fulfillment row, and whether that path
@@ -30,6 +32,13 @@ export interface RecurringSaving {
   goal_id: string | null
   amount_vnd: number
   linked_deposit_tx_id?: string | null
+  // Stamped when the linked deposit was deleted out from under this saving
+  // (#655). Not the same as "unlinked": most savings never had a link.
+  unlinked_at?: string | null
+  // Whether that deposit was an accumulating book's anchor. A book really was
+  // taking the monthly contribution; a plain term deposit never was, so the two
+  // losses cannot be described by the same sentence.
+  unlinked_from_book?: boolean | null
   savings_goals?: { goal_name: string } | null
 }
 
@@ -48,13 +57,35 @@ export interface ResolvedSaving {
   skipped: boolean
   overridden: boolean
   linkedDepositTxId: string | null // an explicitly linked deposit/book, if any
+  // The deposit this saving fed was deleted and nothing replaced it (#655), so
+  // the monthly contribution no longer reaches the book the user aimed it at.
+  // Both halves matter: a stamp on a saving that is linked again is answered.
+  linkLost: boolean
+  // …and it was a book taking the contribution, not a term deposit the link
+  // merely identified. Decides which consequence the warning may claim.
+  linkLostFromBook: boolean
+}
+
+// Was the link already gone by the month being viewed? The plan pages back
+// through past months, and a deposit deleted in August was still linked all
+// through July — showing July the badge describes a state that month never had.
+// The stamp is an instant, so the month it belongs to is the BUSINESS month:
+// 18:00 UTC on 31 July is already August in Ho Chi Minh City.
+function lostByMonth(unlinkedAt: string | null | undefined, ym?: string): boolean {
+  if (unlinkedAt == null) return false
+  if (!ym) return true
+  const { year, month } = businessYearMonth(new Date(unlinkedAt))
+  return `${year}-${String(month).padStart(2, '0')}` <= ym
 }
 
 // Apply per-month overrides to the active recurring savings. An override of 0
 // means "skip this month"; any other positive value replaces the base amount.
+// `ym` ("YYYY-MM") is the month being viewed — omit it and a lost link is
+// reported regardless of when it was lost.
 export function resolveRecurringSavings(
   savings: RecurringSaving[],
   overrides: RecurringSavingOverride[],
+  ym?: string,
 ): ResolvedSaving[] {
   const ovMap = new Map(overrides.map(o => [o.recurring_saving_id, o.monthly_amount_override_vnd]))
   return savings.map(s => {
@@ -71,6 +102,8 @@ export function resolveRecurringSavings(
       skipped,
       overridden: hasOv && ov! > 0 && ov !== s.amount_vnd,
       linkedDepositTxId: s.linked_deposit_tx_id ?? null,
+      linkLost: s.linked_deposit_tx_id == null && lostByMonth(s.unlinked_at, ym),
+      linkLostFromBook: s.unlinked_from_book === true,
     }
   })
 }
@@ -116,6 +149,10 @@ export interface GoalItem {
   // An accumulating book this recurring is linked to (its anchor id), if any —
   // the "Saved" pill tops up that book instead of logging a standalone deposit.
   linkedDepositTxId?: string | null
+  // That book was deleted and this saving now feeds nothing in particular (#655).
+  linkLost?: boolean
+  // …and it was a book, so the contribution really has stopped going somewhere.
+  linkLostFromBook?: boolean
 }
 
 export interface GoalRow {
@@ -240,6 +277,8 @@ export function buildByGoal(
       overridden: r.overridden,
       recorded,
       linkedDepositTxId: r.linkedDepositTxId,
+      linkLost: r.linkLost,
+      linkLostFromBook: r.linkLostFromBook,
     })
   }
 

@@ -2,8 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import TransactionLedgerSheet from '../TransactionLedgerSheet'
 
+// Keys pass through, but interpolated values come with them — a message whose
+// whole job is to name something (the savings a delete would unlink, #655) is
+// untestable if the mock throws the params away.
 vi.mock('next-intl', () => ({
-  useTranslations: () => (k: string) => k,
+  useTranslations: () => (k: string, params?: Record<string, unknown>) =>
+    params ? `${k}:${JSON.stringify(params)}` : k,
 }))
 // Nested sheets fetch/render on their own; stub them so this test only exercises
 // the ledger rows.
@@ -109,7 +113,10 @@ describe('TransactionLedgerSheet — a refused delete says why', () => {
 
     const del = await screen.findByTestId('tx-ledger-delete')
     del.click()
+    // Delete is held until the unlink lookup settles (#655), so a click fired
+    // the instant the dialog appears lands on a disabled button.
     const confirm = await screen.findByTestId('tx-ledger-delete-confirm')
+    await vi.waitFor(() => expect(confirm).toBeEnabled())
     confirm.click()
 
     await vi.waitFor(() => expect(toastError).toHaveBeenCalledWith(code))
@@ -121,7 +128,10 @@ describe('TransactionLedgerSheet — a refused delete says why', () => {
 
     const del = await screen.findByTestId('tx-ledger-delete')
     del.click()
+    // Delete is held until the unlink lookup settles (#655), so a click fired
+    // the instant the dialog appears lands on a disabled button.
     const confirm = await screen.findByTestId('tx-ledger-delete-confirm')
+    await vi.waitFor(() => expect(confirm).toBeEnabled())
     confirm.click()
 
     await vi.waitFor(() => expect(global.fetch).toHaveBeenCalled())
@@ -161,12 +171,183 @@ describe('TransactionLedgerSheet — a not_found delete reconciles the list', ()
 
     const del = await screen.findByTestId('tx-ledger-delete')
     del.click()
+    // Delete is held until the unlink lookup settles (#655), so a click fired
+    // the instant the dialog appears lands on a disabled button.
     const confirm = await screen.findByTestId('tx-ledger-delete-confirm')
+    await vi.waitFor(() => expect(confirm).toBeEnabled())
     confirm.click()
 
     await vi.waitFor(() => expect(onChanged).toHaveBeenCalled())
     expect(listCalls).toBeGreaterThan(1)
     await vi.waitFor(() => expect(screen.queryByTestId('tx-ledger-delete')).toBeNull())
+  })
+})
+
+// Deleting a deposit a recurring saving feeds unlinks that saving on the way out
+// (ON DELETE SET NULL) and says nothing (#655). The plan then stops routing
+// money into a book while its monthly line still reads healthy. The delete stays
+// allowed — it is the user's deposit — but the confirm dialog is the last moment
+// they can decide knowing that, so it names the savings at stake.
+describe('TransactionLedgerSheet — deleting a deposit a recurring saving feeds', () => {
+  const tx = {
+    transaction_id: 'd1', asset_type: 'bank', investment_date: '2026-06-01',
+    amount_vnd: 10_000_000, transaction_type: 'investment',
+    savings_goals: { goal_name: 'House' },
+  }
+
+  const mockWithSavings = (savings: unknown[]) => {
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('recurring-savings')) return Promise.resolve({ ok: true, json: async () => ({ savings }) })
+      if (url.includes('savings-goals')) return Promise.resolve({ ok: true, json: async () => ({ goals: [] }) })
+      if (url.includes('/api/funds')) return Promise.resolve({ ok: true, json: async () => ({ funds: [] }) })
+      if (url.includes('investment-transactions')) return Promise.resolve({ ok: true, json: async () => ({ transactions: [tx], total: 1 }) })
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+  }
+
+  it('names the saving that would lose its link', async () => {
+    mockWithSavings([{ saving_id: 'rs1', name: 'VCB Savings', linked_deposit_tx_id: 'd1' }])
+    render(<TransactionLedgerSheet open desktop locale="en" onClose={() => {}} />)
+
+    const del = await screen.findByTestId('tx-ledger-delete')
+    del.click()
+    const warning = await screen.findByTestId('tx-delete-unlinks-savings')
+    expect(warning.textContent).toContain('VCB Savings')
+  })
+
+  it('stays quiet when the savings point at other deposits', async () => {
+    mockWithSavings([{ saving_id: 'rs1', name: 'VCB Savings', linked_deposit_tx_id: 'other-tx' }])
+    render(<TransactionLedgerSheet open desktop locale="en" onClose={() => {}} />)
+
+    const del = await screen.findByTestId('tx-ledger-delete')
+    del.click()
+    await screen.findByTestId('tx-ledger-delete-confirm')
+    expect(screen.queryByTestId('tx-delete-unlinks-savings')).toBeNull()
+  })
+
+  // The warning is advisory: if the lookup fails there is still a delete to
+  // perform, and blocking it would turn a missing sentence into a dead button.
+  it('still offers the delete when the lookup fails', async () => {
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('recurring-savings')) return Promise.reject(new Error('offline'))
+      if (url.includes('savings-goals')) return Promise.resolve({ ok: true, json: async () => ({ goals: [] }) })
+      if (url.includes('/api/funds')) return Promise.resolve({ ok: true, json: async () => ({ funds: [] }) })
+      if (url.includes('investment-transactions')) return Promise.resolve({ ok: true, json: async () => ({ transactions: [tx], total: 1 }) })
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+    render(<TransactionLedgerSheet open desktop locale="en" onClose={() => {}} />)
+
+    const del = await screen.findByTestId('tx-ledger-delete')
+    del.click()
+    expect(await screen.findByTestId('tx-ledger-delete-confirm')).toBeInTheDocument()
+    expect(screen.queryByTestId('tx-delete-unlinks-savings')).toBeNull()
+  })
+
+  // Only a bank deposit can carry a recurring link at all — the link validator
+  // accepts nothing else. Asking about a fund, gold or a withdrawal buys a
+  // guaranteed-empty answer and, now that Delete waits for it, a delay on every
+  // unrelated deletion.
+  it('does not ask about a holding that could never carry a link', async () => {
+    const fund = { ...tx, transaction_id: 'f1', asset_type: 'fund' }
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('savings-goals')) return Promise.resolve({ ok: true, json: async () => ({ goals: [] }) })
+      if (url.includes('/api/funds')) return Promise.resolve({ ok: true, json: async () => ({ funds: [] }) })
+      if (url.includes('investment-transactions')) return Promise.resolve({ ok: true, json: async () => ({ transactions: [fund], total: 1 }) })
+      if (url.includes('recurring-savings')) return new Promise(() => {})  // never answers
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+    render(<TransactionLedgerSheet open desktop locale="en" onClose={() => {}} />)
+
+    const del = await screen.findByTestId('tx-ledger-delete')
+    del.click()
+
+    // Enabled straight away: a hung lookup cannot be what it is waiting on,
+    // because it was never started.
+    expect(await screen.findByTestId('tx-ledger-delete-confirm')).toBeEnabled()
+    const asked = (global.fetch as ReturnType<typeof vi.fn>).mock.calls
+      .some((c) => String(c[0]).includes('recurring-savings'))
+    expect(asked).toBe(false)
+  })
+
+  it('skips a bank withdrawal too, which no link can point at', async () => {
+    const withdrawal = { ...tx, transaction_id: 'w1', transaction_type: 'withdrawal' }
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('savings-goals')) return Promise.resolve({ ok: true, json: async () => ({ goals: [] }) })
+      if (url.includes('/api/funds')) return Promise.resolve({ ok: true, json: async () => ({ funds: [] }) })
+      if (url.includes('investment-transactions')) return Promise.resolve({ ok: true, json: async () => ({ transactions: [withdrawal], total: 1 }) })
+      if (url.includes('recurring-savings')) return new Promise(() => {})
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+    render(<TransactionLedgerSheet open desktop locale="en" onClose={() => {}} />)
+
+    const del = await screen.findByTestId('tx-ledger-delete')
+    del.click()
+    expect(await screen.findByTestId('tx-ledger-delete-confirm')).toBeEnabled()
+  })
+
+  // A warning that arrives after the user has confirmed is not a warning. The
+  // dialog opens the instant the button is pressed, so on a slow lookup the
+  // Delete button would be live with nothing shown next to it — the exact
+  // outcome this change exists to prevent.
+  it('does not accept a confirmation until the lookup has settled', async () => {
+    let release: (v: unknown) => void = () => {}
+    const pending = new Promise((resolve) => { release = resolve })
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('recurring-savings')) return pending
+      if (url.includes('savings-goals')) return Promise.resolve({ ok: true, json: async () => ({ goals: [] }) })
+      if (url.includes('/api/funds')) return Promise.resolve({ ok: true, json: async () => ({ funds: [] }) })
+      if (url.includes('investment-transactions')) return Promise.resolve({ ok: true, json: async () => ({ transactions: [tx], total: 1 }) })
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+    render(<TransactionLedgerSheet open desktop locale="en" onClose={() => {}} />)
+
+    const del = await screen.findByTestId('tx-ledger-delete')
+    del.click()
+    const confirm = await screen.findByTestId('tx-ledger-delete-confirm')
+    expect(confirm).toBeDisabled()
+
+    release({ ok: true, json: async () => ({ savings: [{ saving_id: 'rs1', name: 'VCB Savings', linked_deposit_tx_id: 'd1' }] }) })
+    await screen.findByTestId('tx-delete-unlinks-savings')
+    await vi.waitFor(() => expect(screen.getByTestId('tx-ledger-delete-confirm')).toBeEnabled())
+  })
+
+  // Cancel one dialog, open another, and the first lookup lands late: without a
+  // check that it still describes the transaction on screen, the second deposit
+  // gets told it funds savings that belong to the first.
+  it('drops a lookup that no longer describes the open dialog', async () => {
+    const second = { ...tx, transaction_id: 'd2' }
+    let release: (v: unknown) => void = () => {}
+    const pending = new Promise((resolve) => { release = resolve })
+    let lookups = 0
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('recurring-savings')) {
+        lookups += 1
+        return lookups === 1 ? pending : Promise.resolve({ ok: true, json: async () => ({ savings: [] }) })
+      }
+      if (url.includes('savings-goals')) return Promise.resolve({ ok: true, json: async () => ({ goals: [] }) })
+      if (url.includes('/api/funds')) return Promise.resolve({ ok: true, json: async () => ({ funds: [] }) })
+      if (url.includes('investment-transactions')) return Promise.resolve({ ok: true, json: async () => ({ transactions: [tx, second], total: 2 }) })
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+    render(<TransactionLedgerSheet open desktop locale="en" onClose={() => {}} />)
+
+    const rows = await screen.findAllByTestId('tx-ledger-delete')
+    rows[0].click()                                   // d1 — lookup hangs
+    await screen.findByTestId('tx-ledger-delete-confirm')
+    screen.getByText('cancel').click()
+    await vi.waitFor(() => expect(screen.queryByTestId('tx-ledger-delete-confirm')).toBeNull())
+
+    rows[1].click()                                   // d2 — lookup answers empty
+    await vi.waitFor(() => expect(screen.getByTestId('tx-ledger-delete-confirm')).toBeEnabled())
+
+    // d1's answer arrives now, naming a saving that has nothing to do with d2.
+    // Awaiting the very promise the component is suspended on hands its
+    // continuation to the microtask queue before the assertion runs — the test
+    // above proves a late answer does reach the dialog, so a silent one here is
+    // the guard working rather than nothing having happened yet.
+    release({ ok: true, json: async () => ({ savings: [{ saving_id: 'rs1', name: 'VCB Savings', linked_deposit_tx_id: 'd1' }] }) })
+    for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 0))
+    expect(screen.queryByTestId('tx-delete-unlinks-savings')).toBeNull()
   })
 })
 
