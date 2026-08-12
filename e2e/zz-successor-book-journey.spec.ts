@@ -19,6 +19,11 @@ import { makeCleanupStack } from './helpers/cleanup'
 //
 // Deliberately NOT tagged @smoke: this is a five-round-trip journey and the smoke
 // lane has a three-minute budget for the whole suite.
+//
+// The `zz-` prefix is load-bearing, not cosmetic. A completed merge cannot be
+// taken apart again — the database refuses it from both sides, by design — so
+// this spec leaves a book behind that only the run-level teardown can remove.
+// Sorting last means it does that after every other spec has already run.
 
 test.use({ viewport: { width: 1280, height: 800 } })
 
@@ -58,16 +63,22 @@ test('a locked book hands over to a successor, which absorbs it at maturity', as
   // in the handover, is exactly the one that would leave the source book behind.
   // A deleted goal does not take it with it (the goal FK is ON DELETE SET NULL),
   // so it would drift into Unallocated and into every later spec's view of the
-  // dashboard, including this test's own CI retry.
+  // dashboard, including this test's own CI retry. Measured: with a forced failure
+  // here, this teardown leaves nothing but the fixture the global setup creates.
   //
-  // One cleanup for the pair, because a merged pair cannot be torn down a book at
-  // a time: B's credited tranche is referenced by A's closing withdrawal through
-  // `consumed_by_inv_id`, and `move_merge_lineage_to_book` refuses to delete it
-  // while that reference stands — deliberately, so an ordinary delete cannot walk
-  // off with the successor's payout. `deleteBookCascade` swallows that error, so
-  // the order is load-bearing: A's cascade removes the withdrawals, and with them
-  // the reference that was blocking B. `bookB` is read at teardown time, so this
-  // covers both the early failures and the completed journey.
+  // A COMPLETED merge is a different matter, and this cleanup cannot undo one.
+  // The database refuses to unpick a merge row by row, in both directions and on
+  // purpose: `guard_merged_source_withdrawal_deleted` refuses to delete the
+  // source's closing withdrawal while it carries `consumed_by_inv_id`, and
+  // `move_merge_lineage_to_book` refuses to delete the tranche that withdrawal
+  // points at. There is no order out of that, and no supported route either —
+  // the only mechanism the guards permit is deleting the account, which both of
+  // them early-return for, and which the global teardown does at the end of every
+  // run. `deleteBookCascade` swallows the refusals, so this stays best-effort.
+  //
+  // That is why the file is named to sort LAST: the fixture it cannot remove then
+  // exists only after every other spec has finished, instead of sitting in the
+  // shared user's dashboard for the rest of the run.
   let bookB: { transaction_id: string; deposit_group_id: string; amount_vnd: number } | null = null
   cleanup.add(async () => {
     await api.deleteBookCascade(bookA.transaction_id)
