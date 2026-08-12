@@ -62,7 +62,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
   const [unassignedIds, setUnassignedIds] = useState<string[]>([])
   // Transactions + gold price load (shared with DesktopGoalDetail, #467). The
   // sheet only loads while open; each load clears the optimistic unassign filter.
-  const { transactions, txLoading, txError, goldPricePerChi } = useGoalDetailData({
+  const { transactions, bookNames, txLoading, txError, goldPricePerChi } = useGoalDetailData({
     goalId: goal?.goalId,
     enabled: open && !!goal,
     refreshKey,
@@ -173,7 +173,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
 
   // Build typed investment rows for the Investments tab, then drop any
   // optimistically-unassigned ones.
-  const invRows: InvRow[] = buildInvRows(transactions, goal.funds, goldPricePerChi, isVI)
+  const invRows: InvRow[] = buildInvRows(transactions, goal.funds, goldPricePerChi, isVI, bookNames)
     .filter((row) => !unassignedIds.includes(row.id))
 
   // Calculator (shared projection math — #467). `monthly` is parsed here (the

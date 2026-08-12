@@ -137,6 +137,9 @@ export interface InvRow {
   // The book this one is planned to be folded into at maturity, once it stopped
   // accepting top-ups and its contributions moved on (#638).
   successorDepositTxId?: string | null
+  // ...and what that book is called, so the promise can be stated in the user's
+  // own words rather than as an anonymous "a successor book".
+  successorName?: string | null
   // The book's tranches (top-ups), newest first, for the detail view. Each is one
   // underlying row; present only on an accumulating book row.
   tranches?: InvTranche[] | null
@@ -155,6 +158,11 @@ export interface InvTranche {
   amount: number
   rate: number | null
   value: number
+  // The name of the book this tranche's cash was folded in from, when it was
+  // credited by a merge (#638). The source is dissolved by then and gone from
+  // the holdings list, so without this the new book simply grows by an
+  // unexplained amount on a date nothing else marks.
+  mergedFrom?: string | null
 }
 
 // What a sell/withdraw sheet is handed: the holding being closed, plus the

@@ -106,6 +106,58 @@ describe('buildInvRows', () => {
     expect(rows[0].bankCode).toBe('MB')
   })
 
+  // #638 Phase 4. After a book is folded into its successor, the successor holds
+  // a tranche that came from somewhere else entirely, and the source is gone from
+  // the holdings list — dissolved. Without saying where that money came from, the
+  // new book just grows by an unexplained amount on a date nothing else marks.
+  it('names the book a credited tranche was folded in from', () => {
+    const rows = buildInvRows(
+      [
+        baseTx({ transaction_id: 'B', asset_type: 'bank', amount_vnd: 2_000_000, interest_rate: 5, deposit_group_id: 'B', notes: 'PVcomBank B', investment_date: daysFromNow(-60) }),
+        baseTx({ transaction_id: 'credited', asset_type: 'bank', amount_vnd: 8_300_000, interest_rate: 5, deposit_group_id: 'B', investment_date: daysFromNow(-1), merged_from_book_id: 'A' }),
+        // A's anchor still exists — closed and dissolved, so it is no longer a
+        // holding, but it is what carries the name the user knew it by.
+        baseTx({ transaction_id: 'A', asset_type: 'bank', amount_vnd: 8_000_000, interest_rate: 4, notes: 'PVcomBank A', investment_date: daysFromNow(-300), principal_withdrawn: null }),
+        baseTx({ transaction_id: 'w', transaction_type: 'withdrawal', asset_type: 'bank', parent_transaction_id: 'A', amount_vnd: 8_300_000, principal_withdrawn: 8_000_000, investment_date: daysFromNow(-1) }),
+      ],
+      [], null, false,
+    )
+    const book = rows.find((r) => r.depositGroupId === 'B')!
+    const credited = book.tranches!.find((t) => t.id === 'credited')!
+    expect(credited.mergedFrom).toBe('PVcomBank A')
+    // The ordinary tranche says nothing.
+    expect(book.tranches!.find((t) => t.id === 'B')!.mergedFrom).toBeFalsy()
+  })
+
+  // On a goal past the 200-row page the source is fetched for its name alone and
+  // deliberately kept out of the holdings input — it is a closed row whose own
+  // closing withdrawal may be off the page, and counting it here would show the
+  // money twice. The name still has to arrive.
+  it('names a source that was fetched for its name alone', () => {
+    const rows = buildInvRows(
+      [
+        baseTx({ transaction_id: 'B', asset_type: 'bank', amount_vnd: 2_000_000, interest_rate: 5, deposit_group_id: 'B', notes: 'PVcomBank B', investment_date: daysFromNow(-60) }),
+        baseTx({ transaction_id: 'credited', asset_type: 'bank', amount_vnd: 8_300_000, interest_rate: 5, deposit_group_id: 'B', investment_date: daysFromNow(-1), merged_from_book_id: 'A' }),
+      ],
+      [], null, false, { A: 'PVcomBank A' },
+    )
+    const book = rows.find((r) => r.depositGroupId === 'B')!
+    expect(book.tranches!.find((t) => t.id === 'credited')!.mergedFrom).toBe('PVcomBank A')
+    // ...and the source is not a holding of its own.
+    expect(rows.some((r) => r.id === 'A')).toBe(false)
+  })
+
+  it('names the successor a promised book is waiting to be folded into', () => {
+    const rows = buildInvRows(
+      [
+        baseTx({ transaction_id: 'A', asset_type: 'bank', amount_vnd: 8_000_000, interest_rate: 4, deposit_group_id: 'A', notes: 'PVcomBank A', investment_date: daysFromNow(-300), successor_deposit_tx_id: 'B' }),
+        baseTx({ transaction_id: 'B', asset_type: 'bank', amount_vnd: 2_000_000, interest_rate: 5, deposit_group_id: 'B', notes: 'PVcomBank B', investment_date: daysFromNow(-60) }),
+      ],
+      [], null, false,
+    )
+    expect(rows.find((r) => r.depositGroupId === 'A')!.successorName).toBe('PVcomBank B')
+  })
+
   it('caps a matured deposit at its term interest (frozen, simple interest)', () => {
     // Term 2025-01-01 → 2025-07-01 (181 days). Interest is capped at maturity, so
     // the value is deterministic regardless of when the test runs (today is past

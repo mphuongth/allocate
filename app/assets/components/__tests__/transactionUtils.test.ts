@@ -35,6 +35,22 @@ describe('txKind / txDir — held-for-merge labeling', () => {
     expect(txKind({ transaction_type: 'withdrawal', held_for_merge: false })).toBe('withdrawal')
   })
 
+  // #638 Phase 4. Folding a book into its successor closes every tranche with a
+  // withdrawal whose cash goes straight into the new book — it never left. Those
+  // rows carry consumed_by_inv_id but not held_for_merge, so they read as red
+  // spending: a merged book looked like the account had been emptied. What makes
+  // a row neutral is where the cash went, not which path parked it.
+  it('a withdrawal folded into another deposit is neutral, held or not', () => {
+    const tx = { transaction_type: 'withdrawal', held_for_merge: false, consumed_by_inv_id: 'new-tranche' }
+    expect(txKind(tx)).toBe('consumed')
+    expect(txDir(tx)).toMatchObject({ kind: 'consumed', tone: 'muted', sign: '' })
+  })
+
+  it('...and the same when held_for_merge was never set at all', () => {
+    const tx = { transaction_type: 'withdrawal', consumed_by_inv_id: 'new-tranche' }
+    expect(txDir(tx)).toMatchObject({ kind: 'consumed', tone: 'muted', sign: '' })
+  })
+
   it('a missing transaction_type defaults to investment (no held flags)', () => {
     expect(txKind({})).toBe('investment')
   })

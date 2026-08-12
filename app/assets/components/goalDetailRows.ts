@@ -53,6 +53,11 @@ export function buildInvRows(
   funds: FundBreakdownItem[],
   goldPricePerChi: number | null,
   isVi: boolean,
+  // Names of deposits this page must be able to name but must NOT hold — a
+  // merged source, a successor that fell off the page (#638). They are kept out
+  // of `transactions` on purpose: a closed row whose own closing withdrawal is
+  // off the page would read here as a live deposit at full value.
+  bookNames: Record<string, string> = {},
 ): InvRow[] {
   // Aggregate withdrawals onto their parent holding. Bank/gold withdrawals are
   // stored as separate `withdrawal` rows linked via parent_transaction_id, so
@@ -68,6 +73,16 @@ export function buildInvRows(
       e.units += tx.units_withdrawn ?? 0
       wdByParent.set(tx.parent_transaction_id, e)
     }
+  }
+
+  // What each deposit is called, by id — including rows that are no longer
+  // holdings. A merge dissolves the source book and closes it, so the only place
+  // its name survives is its own (now closed) anchor row; the same lookup names
+  // a successor that has not been folded into yet (#638 Phase 4).
+  const nameById = new Map<string, string>(Object.entries(bookNames))
+  for (const tx of transactions) {
+    const n = tx.notes?.trim()
+    if (n) nameById.set(tx.transaction_id, n)
   }
 
   // Exclude withdrawals and renewal history snapshots — only live investment
@@ -147,7 +162,11 @@ export function buildInvRows(
       const interest = tx.interest_rate
         ? calcProjectedInterest(effPrincipal, tx.interest_rate, tx.investment_date, tx.expiry_date)
         : 0
-      tranches.push({ id: tx.transaction_id, date: tx.investment_date, amount: effPrincipal, rate: tx.interest_rate ?? null, value: Math.round(effPrincipal + interest) })
+      tranches.push({
+        id: tx.transaction_id, date: tx.investment_date, amount: effPrincipal,
+        rate: tx.interest_rate ?? null, value: Math.round(effPrincipal + interest),
+        mergedFrom: tx.merged_from_book_id ? (nameById.get(tx.merged_from_book_id) ?? null) : null,
+      })
     }
     if (tranches.length === 0) return null // whole book withdrawn
     tranches.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)) // newest first
@@ -172,6 +191,7 @@ export function buildInvRows(
       isPledged: anchor.is_pledged ?? false,
       topUpLockDays: anchor.top_up_lock_days ?? null,
       successorDepositTxId: anchor.successor_deposit_tx_id ?? null,
+      successorName: anchor.successor_deposit_tx_id ? (nameById.get(anchor.successor_deposit_tx_id) ?? null) : null,
       tranches,
     }
   }).filter((row): row is InvRow => row !== null)
