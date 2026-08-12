@@ -48,6 +48,17 @@ comment on column public.recurring_savings.unlinked_at is
 comment on column public.recurring_savings.unlinked_from_book is
   'Whether the deposit deleted in #655 was an accumulating book anchor (the contribution was being paid into it) rather than a single term deposit. Advisory: it only decides which sentence the plan shows.';
 
+-- Both this trigger and the foreign key's own ON DELETE SET NULL look up
+-- recurring savings by linked_deposit_tx_id on EVERY delete from
+-- investment_transactions — including fund rows and bulk DCA cleanup that could
+-- never carry a link. Postgres does not index a referencing column for you, so
+-- until now each deleted row scanned the whole table and a bulk delete paid for
+-- that once per row. Partial, because the column is null for most savings and
+-- only the linked ones are ever searched for.
+create index if not exists recurring_savings_linked_deposit_idx
+  on public.recurring_savings (linked_deposit_tx_id)
+  where linked_deposit_tx_id is not null;
+
 create or replace function public.mark_saving_link_lost()
 returns trigger
 language plpgsql

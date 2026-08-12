@@ -15,6 +15,24 @@
 
 begin;
 
+-- The trigger runs on EVERY delete from investment_transactions, matching
+-- recurring savings by linked_deposit_tx_id — and so does the foreign key's own
+-- ON DELETE SET NULL, which Postgres does not index for you. Without an index
+-- both scan the whole table, once per deleted row, so a bulk delete degrades
+-- quadratically. Asserted here so a later migration cannot quietly drop it.
+do $$
+declare
+  v_idx int;
+begin
+  select count(*) into v_idx
+  from pg_indexes
+  where schemaname = 'public' and tablename = 'recurring_savings'
+    and indexdef like '%linked_deposit_tx_id%';
+  if v_idx = 0 then
+    raise exception 'recurring_savings needs an index on linked_deposit_tx_id';
+  end if;
+end $$;
+
 do $$
 declare
   v_user     uuid;
