@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 import * as api from './helpers/api'
 import { makeCleanupStack } from './helpers/cleanup'
+import { addDaysIso, businessYearMonth, todayIso } from '../lib/dates'
 
 // The one E2E #638 asks for: the whole successor-book journey, end to end.
 //
@@ -30,11 +31,15 @@ test.use({ viewport: { width: 1280, height: 800 } })
 const cleanup = makeCleanupStack()
 test.afterEach(() => cleanup.run())
 
-const iso = (d: number) => new Date(Date.now() + d * 86_400_000).toISOString().slice(0, 10)
+// The app has one calendar — Asia/Ho_Chi_Minh — and the plan page opens the
+// business month, so the fixture has to be filed under the same one. Derived from
+// the runtime's local month, a run between 17:00 UTC and midnight on the last UTC
+// day of a month would seed the plan into the month the page has already left,
+// and the recurring line would simply never appear. Same reason the offsets count
+// days from the business date rather than from a UTC instant (#591).
+const iso = (d: number) => addDaysIso(todayIso(), d)
 
-const today = new Date()
-const MONTH = today.getMonth() + 1
-const YEAR = today.getFullYear()
+const { month: MONTH, year: YEAR } = businessYearMonth()
 
 const BOOK_PRINCIPAL = 50_000_000
 const MONTHLY = 2_000_000
