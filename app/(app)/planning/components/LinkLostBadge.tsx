@@ -1,5 +1,6 @@
 'use client'
 
+import { useId, useState } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import type { GoalItem } from '@/lib/planning'
 
@@ -12,26 +13,60 @@ import type { GoalItem } from '@/lib/planning'
 // moves the link onto the new book, so deleting that book is one click away
 // from an unlinked plan.
 //
+// The badge is a button, not a `title`. The detail — what happens to the money
+// now, and how to put it back — is the half worth reading, and a hover tooltip
+// hides exactly that half from a phone, which is where this app is mostly used.
+// Tapping it opens the sentence inline; hovering still shows it, for a mouse.
+//
 // One component for both layouts, because the two row files have drifted before
 // (#603) and a warning that shows on the desktop table but not on a phone is
 // worse than none — it is a warning the user has learned to expect.
 export function LinkLostBadge({ item, isVI }: { item: GoalItem; isVI: boolean }) {
+  const [open, setOpen] = useState(false)
+  const generatedId = useId()
   if (!item.linkLost) return null
+
+  const key = item.recurringId ?? generatedId
+  const detailId = `plan-link-lost-detail-${key}`
+  const detail = isVI
+    ? 'Sổ tiết kiệm khoản này nạp vào đã bị xoá. Tiền hàng tháng giờ được ghi thành khoản gửi riêng — mở "Sửa kế hoạch định kỳ" để chọn sổ khác.'
+    : 'The deposit this saving fed was deleted. Monthly contributions now record a standalone deposit — use "Edit recurring plan" to point it at another book.'
+
   return (
-    <span
-      data-testid={item.recurringId ? `plan-link-lost-${item.recurringId}` : 'plan-link-lost'}
-      title={isVI
-        ? 'Sổ tiết kiệm khoản này nạp vào đã bị xoá. Tiền hàng tháng giờ được ghi thành khoản gửi riêng — sửa kế hoạch định kỳ để chọn sổ khác.'
-        : 'The deposit this saving fed was deleted. The monthly contribution now records a standalone deposit — edit the recurring plan to point it at another book.'}
-      style={{
-        display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0,
-        padding: '1px 5px', borderRadius: 4,
-        background: 'var(--c-warn-tint)', color: 'var(--c-warn)',
-        fontSize: 9, fontWeight: 700, whiteSpace: 'nowrap',
-      }}
-    >
-      <AlertTriangle size={9} strokeWidth={2.6} />
-      {isVI ? 'Sổ đã bị xoá' : 'Deposit deleted'}
+    <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3, minWidth: 0 }}>
+      <button
+        type="button"
+        data-testid={item.recurringId ? `plan-link-lost-${item.recurringId}` : 'plan-link-lost'}
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-controls={detailId}
+        title={detail}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0,
+          // Vertical padding pulled back out as margin: the pill keeps its size
+          // in the row while the thumb gets roughly twice the height to hit. It
+          // is short of the 44px the row's menu button gets — this is a
+          // disclosure next to that menu, not a primary action, and buying the
+          // full target would push every plan line taller for a badge most rows
+          // never show.
+          padding: '7px 6px', margin: '-5px 0', borderRadius: 4, border: 'none',
+          background: 'var(--c-warn-tint)', color: 'var(--c-warn)',
+          fontSize: 9, fontWeight: 700, whiteSpace: 'nowrap',
+          fontFamily: 'inherit', cursor: 'pointer',
+        }}
+      >
+        <AlertTriangle size={9} strokeWidth={2.6} />
+        {isVI ? 'Sổ đã bị xoá' : 'Deposit deleted'}
+      </button>
+      {open && (
+        <span
+          id={detailId}
+          data-testid={detailId}
+          style={{ fontSize: 10, lineHeight: 1.45, color: 'var(--c-warn)', whiteSpace: 'normal' }}
+        >
+          {detail}
+        </span>
+      )}
     </span>
   )
 }
