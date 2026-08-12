@@ -121,6 +121,31 @@ export function MaturityResolveBody({
   // that successor is what its maturity is for. Until that merge exists, the way
   // out has to be reachable from here, or the refusal is a dead end.
   const [handoverBlocked, setHandoverBlocked] = useState(false)
+  // Phase 3: a book that was handed over has one thing left to do at maturity —
+  // go where it was promised. That is offered here instead of a renewal, since
+  // renewing it is the one thing the handover said would not happen.
+  // Cancelling the promise here hands the book back to the ordinary maturity
+  // decisions, without waiting for the page prop to be refetched.
+  const [handoverCancelled, setHandoverCancelled] = useState(false)
+  const hasSuccessor = !!inv.successorDepositTxId && !handoverCancelled
+  const [mergeRecvStr, setMergeRecvStr] = useState('')
+  const [mergeRate, setMergeRate] = useState(inv.interestRate != null ? String(inv.interestRate) : '')
+  const [mergeDate, setMergeDate] = useState(() => todayIso())
+  // The book as the server sees it. The goal page caps at 200 rows, so a large
+  // goal hands this sheet a partial book — and a partial book can never satisfy
+  // the merge's tranche check, however often it is reloaded.
+  const [mergeTranches, setMergeTranches] = useState<{ transaction_id: string; effective_principal: number }[] | null>(null)
+  // The payout the server values from the WHOLE book. inv.value is computed from
+  // the goal page's capped list, so on a large goal it understates it — and the
+  // merge only bounds a payout from above, so the understated default would have
+  // gone through.
+  const [mergeValue, setMergeValue] = useState<number | null>(null)
+  // Which book the server says this one is promised to, as of the last read. The
+  // confirmation submits it back so a handover cancelled and re-made underneath
+  // is refused instead of quietly paying out to a book nobody confirmed.
+  const [mergeSuccessorId, setMergeSuccessorId] = useState<string | null>(null)
+  const [mergeLoadFailed, setMergeLoadFailed] = useState(false)
+  const [mergeReload, setMergeReload] = useState(0)
   const [done, setDone] = useState<null | { newPrincipal: number; newMaturity: string; sources: string[] }>(null)
   // Settle-with-hold success: the deposit was parked in the pool (no re-deposit).
   const [heldDone, setHeldDone] = useState<null | { anchorName: string }>(null)
@@ -381,6 +406,74 @@ export function MaturityResolveBody({
     }
   }
 
+  // The cash the bank actually paid out, defaulting to what the book is worth —
+  // principal plus the interest it accrued — which the user confirms or corrects
+  // against the slip.
+  const successorRecv = mergeRecvStr === '' ? Math.round(mergeValue ?? inv.value) : Number(mergeRecvStr)
+  // The sheet also opens in the week BEFORE maturity, as a reminder. The cash is
+  // not paid out until the day itself, and the merge refuses a source that has
+  // not matured — so offering the button then is offering a certain error.
+  const bookMatured = !!inv.expiryDate && inv.expiryDate <= todayIso()
+  const mergeReady = successorRecv > 0 && Number(mergeRate) > 0 && bookMatured && !!mergeTranches?.length
+
+  useEffect(() => {
+    if (!hasSuccessor) return
+    let live = true
+    setMergeLoadFailed(false)
+    fetch(`/api/v1/investment-transactions/${inv.id}/merge-successor`, { cache: 'no-store' })
+      .then((r) => { if (!r.ok) throw new Error('preview failed'); return r.json() })
+      .then((res) => {
+        if (!live) return
+        setMergeTranches(res?.tranches ?? [])
+        setMergeValue(typeof res?.projected_value === 'number' ? res.projected_value : null)
+        setMergeSuccessorId(typeof res?.successor_id === 'string' ? res.successor_id : null)
+      })
+      // Failing quietly here leaves the button disabled with nothing said, and a
+      // matured book looks impossible to resolve until the sheet is reopened.
+      .catch(() => { if (live) setMergeLoadFailed(true) })
+    return () => { live = false }
+  }, [hasSuccessor, inv.id, mergeReload])
+
+  async function handleMergeIntoSuccessor() {
+    if (!(successorRecv > 0) || !(Number(mergeRate) > 0)) {
+      setError(isVi ? 'Cần nhập số tiền và lãi suất' : 'Amount and rate are required')
+      return
+    }
+    setSaving(true); setError('')
+    try {
+      const res = await fetch(`/api/v1/investment-transactions/${inv.id}/merge-successor`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          received_vnd: Math.round(successorRecv),
+          interest_rate: Number(mergeRate),
+          merge_date: mergeDate,
+          // Naming what we saw, and what each held: a top-up or a withdrawal
+          // landing while this was open means the cash being confirmed is not
+          // the cash the book holds.
+          tranche_ids: (mergeTranches ?? []).map((t) => t.transaction_id),
+          tranche_principals: (mergeTranches ?? []).map((t) => Math.round(t.effective_principal)),
+          // And which book we were told it goes to. Preferring the server's own
+          // read over the page prop matters after a book_changed reload, when
+          // the prop is the stale one and the preview is not.
+          expected_successor_id: mergeSuccessorId ?? inv.successorDepositTxId,
+        }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        setError(body.error ?? (isVi ? 'Không gộp được' : 'Could not merge'))
+        // The book moved under the confirmation. Showing the error alone leaves
+        // the stale figures in place, so every further press resubmits them and
+        // gets the same 409 — read the book again instead.
+        if (body.code === 'book_changed') setMergeReload((n) => n + 1)
+        setSaving(false)
+        return
+      }
+      onRenewed()
+      onClose()
+    } catch { setError(isVi ? 'Lỗi kết nối' : 'Connection error') } finally { setSaving(false) }
+  }
+
   async function handleConfirm() {
     if (mode === 'withdraw') {
       // The hold fork only exists when there's an eligible anchor; default is hold.
@@ -498,10 +591,64 @@ export function MaturityResolveBody({
         <p style={{ margin: 0, fontSize: 12.5, color: 'var(--c-warn)', lineHeight: 1.5 }}>{t.why}</p>
       </div>
 
+      {/* The promise, come due. A handed-over book is not renewed — it goes where
+          it was promised, carrying the cash the bank actually paid out (#638). */}
+      {hasSuccessor && (
+        <div data-testid="merge-successor-panel" style={{ display: 'grid', gap: 10, padding: '13px 14px', border: '1px solid var(--c-line)', borderRadius: 12, background: 'var(--c-card)' }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700 }}>{isVi ? 'Gộp vào sổ kế nhiệm' : 'Merge into the successor book'}</div>
+            <p style={{ margin: '4px 0 0', fontSize: 12, lineHeight: 1.5, color: 'var(--c-muted)' }}>
+              {isVi
+                ? 'Sổ này đã được hẹn gộp vào sổ kế nhiệm khi đáo hạn. Xác nhận số tiền ngân hàng thực trả để ghi vào sổ mới.'
+                : 'This book was promised to its successor at maturity. Confirm what the bank actually paid out, and it lands there.'}
+            </p>
+          </div>
+          <div>
+            <label style={fieldLabel}>{isVi ? 'Tiền thực nhận (₫)' : 'Cash received (₫)'}</label>
+            <input data-testid="merge-received" type="text" inputMode="numeric"
+              value={formatIntVN(mergeRecvStr === '' ? String(Math.round(mergeValue ?? inv.value)) : mergeRecvStr)}
+              onChange={(e) => setMergeRecvStr(parseIntVN(e.target.value))} style={moneyInput} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>
+              <label style={fieldLabel}>{isVi ? 'Lãi suất phần gộp' : 'Rate for this tranche'}</label>
+              <input data-testid="merge-rate" type="text" inputMode="decimal" value={mergeRate}
+                onChange={(e) => setMergeRate(e.target.value.replace(/[^0-9.,]/g, '').replace(',', '.'))} style={moneyInput} />
+            </div>
+            <div>
+              <label style={fieldLabel}>{isVi ? 'Ngày gộp' : 'Merge date'}</label>
+              <input data-testid="merge-date" type="date" value={mergeDate}
+                onChange={(e) => setMergeDate(e.target.value)} style={dateInput} />
+            </div>
+          </div>
+          {mergeLoadFailed && (
+            <div data-testid="merge-preview-failed" style={{ margin: 0, fontSize: 12, lineHeight: 1.45, color: 'var(--c-neg)' }}>
+              {isVi ? 'Không đọc được sổ này.' : "Could not read this book."}
+              <button type="button" data-testid="merge-preview-retry" onClick={() => setMergeReload((n) => n + 1)}
+                style={{ marginLeft: 6, padding: 0, border: 'none', background: 'none', color: 'var(--c-navy)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline' }}>
+                {isVi ? 'Thử lại' : 'Try again'}
+              </button>
+            </div>
+          )}
+          {!bookMatured && (
+            <p data-testid="merge-not-due" style={{ margin: 0, fontSize: 12, lineHeight: 1.45, color: 'var(--c-muted)' }}>
+              {isVi
+                ? 'Sổ chưa đến ngày đáo hạn — ngân hàng chưa trả tiền, nên chưa gộp được.'
+                : 'This book has not matured yet — the bank has not paid out, so there is nothing to move.'}
+            </p>
+          )}
+          <button type="button" data-testid="merge-successor-submit" disabled={saving || !mergeReady}
+            onClick={handleMergeIntoSuccessor}
+            style={{ padding: '11px 0', borderRadius: 10, border: 'none', background: 'var(--c-btn-primary)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit', opacity: saving || !mergeReady ? 0.6 : 1 }}>
+            {isVi ? 'Gộp vào sổ kế nhiệm' : 'Merge into the successor'}
+          </button>
+        </div>
+      )}
+
       {/* Discoverability nudge: a later-maturing sibling in this goal makes this
           deposit a hold-for-merge candidate. Surfaced up top so the option isn't
           buried; the actual commit lives in the withdraw fork below. */}
-      {canHold && holdAnchor && (
+      {canHold && holdAnchor && !hasSuccessor && (
         <div data-testid="maturity-hold-nudge" style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '11px 13px', background: 'var(--c-card-2)', borderRadius: 10 }}>
           <PiggyBank size={15} color="var(--c-navy)" strokeWidth={2.2} style={{ flexShrink: 0, marginTop: 1 }} />
           <p style={{ margin: 0, fontSize: 12.5, color: 'var(--c-ink)', lineHeight: 1.5 }}>
@@ -510,7 +657,12 @@ export function MaturityResolveBody({
         </div>
       )}
 
-      {/* Decision picker */}
+      {/* Decision picker. A promised book has exactly one thing it may do at
+          maturity — go where it was promised — and renewing, combining or
+          settling it are all refused by the database while the promise stands.
+          Offering them would be offering certain errors, so the merge panel
+          above replaces this whole flow until the handover is cancelled. */}
+      {!hasSuccessor && (
       <div>
         <div style={fieldLabel}>{t.prompt}</div>
         <div style={{ display: 'grid', gap: 8 }}>
@@ -541,9 +693,10 @@ export function MaturityResolveBody({
           })}
         </div>
       </div>
+      )}
 
       {/* Combine — settle & re-deposit, folding in this month's recurring saving */}
-      {mode === 'combine' && (
+      {!hasSuccessor && mode === 'combine' && (
         <div data-testid="maturity-combine" style={{ display: 'grid', gap: 12 }}>
           <RecurringRedepositSection
             combineLink={combineLink} pickedCand={pickedCand} setPickedSavingId={setPickedSavingId}
@@ -601,7 +754,7 @@ export function MaturityResolveBody({
       )}
 
       {/* Inputs per mode */}
-      {mode !== 'withdraw' && mode !== 'combine' && (
+      {!hasSuccessor && mode !== 'withdraw' && mode !== 'combine' && (
         <div style={{ display: 'grid', gap: 12 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             {mode === 'change'
@@ -680,7 +833,7 @@ export function MaturityResolveBody({
         </div>
       )}
 
-      {mode === 'withdraw' && (
+      {!hasSuccessor && mode === 'withdraw' && (
         <WithdrawSection
           t={{
             holdForkPrompt: t.holdForkPrompt, holdCardTitle: t.holdCardTitle, holdCardSub: t.holdCardSub,
@@ -695,18 +848,20 @@ export function MaturityResolveBody({
       )}
 
       {error && <p style={{ margin: 0, fontSize: 13, color: 'var(--c-neg)' }}>{error}</p>}
-      {handoverBlocked && (
+      {(handoverBlocked || hasSuccessor) && (
         <button type="button" data-testid="cancel-handover-btn" disabled={saving}
           onClick={async () => {
             setSaving(true)
             try {
               const res = await fetch(`/api/v1/investment-transactions/${inv.id}/successor`, { method: 'DELETE' })
-              if (res.ok) { setHandoverBlocked(false); setError('') }
+              if (res.ok) { setHandoverBlocked(false); setHandoverCancelled(true); setError('') }
               else setError(isVi ? 'Không huỷ được bàn giao' : 'Could not cancel the handover')
             } catch { setError(isVi ? 'Lỗi kết nối' : 'Connection error') } finally { setSaving(false) }
           }}
           style={{ alignSelf: 'flex-start', padding: 0, border: 'none', background: 'none', color: 'var(--c-navy)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline' }}>
-          {isVi ? 'Huỷ bàn giao rồi thử lại' : 'Cancel the handover and try again'}
+          {handoverBlocked
+            ? (isVi ? 'Huỷ bàn giao rồi thử lại' : 'Cancel the handover and try again')
+            : (isVi ? 'Huỷ bàn giao để xử lý theo cách khác' : 'Cancel the handover to resolve this another way')}
         </button>
       )}
 
@@ -714,7 +869,7 @@ export function MaturityResolveBody({
           deposit moving to another bank is the ordinary case, and it used to be
           reachable only after picking a sibling to merge (#640). A book collapses
           through a route that takes no bank, so it keeps its own. */}
-      {mode !== 'withdraw' && !isBook && banks.length > 0 && (
+      {!hasSuccessor && mode !== 'withdraw' && !isBook && banks.length > 0 && (
         <DestinationBankField
           banks={banks} value={destBank} onChange={setDestBank}
           label={t.destBankLabel} noneLabel={t.destBankNone}
@@ -723,7 +878,7 @@ export function MaturityResolveBody({
       )}
 
       {/* Actions */}
-      {tooEarlyToRenew && mode !== 'withdraw' && (
+      {!hasSuccessor && tooEarlyToRenew && mode !== 'withdraw' && (
         <p data-testid="maturity-too-early-hint" style={{ margin: 0, fontSize: 12.5, lineHeight: 1.45, color: 'var(--c-muted)' }}>
           {isVi
             ? `Sổ chưa tới hạn (còn ${daysLeft} ngày) — ghi nhận tái tục khi đáo hạn. Bạn vẫn có thể rút trước hạn.`
@@ -732,7 +887,10 @@ export function MaturityResolveBody({
       )}
       <div style={{ display: 'flex', gap: 8 }}>
         <button type="button" onClick={onClose} className="cn-btn ghost" style={{ flex: 1, justifyContent: 'center', border: '1px solid var(--c-line)' }}>{t.cancel}</button>
-        {(() => {
+        {/* A promised book confirms from the merge panel; this button drives the
+            flow that was hidden above, so leaving it would be a button whose
+            every outcome is a refusal. */}
+        {!hasSuccessor && (() => {
           // Holding posts instead of withdrawing — navy CTA + piggy icon, never the
           // red withdraw button (the money is staying in the goal).
           const holding = mode === 'withdraw' && canHold && holdChoice === 'hold'
