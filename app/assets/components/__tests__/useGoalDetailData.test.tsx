@@ -57,6 +57,44 @@ describe('useGoalDetailData (#467)', () => {
     expect(urls.filter(u => u.includes('ids=')).length).toBe(1)
   })
 
+  // #638 Phase 4. The books a page has to NAME are not only the ones it groups
+  // by: a merged source is dissolved, so it carries no deposit_group_id anyone
+  // still points at — only merged_from_book_id on the tranche it paid for. Left
+  // out of the backfill, a large goal drops the source off the page and the
+  // "Merged from …" line silently disappears. Same for a successor that fell out.
+  it('fetches the books a page only needs in order to name them', async () => {
+    const asked: string[] = []
+    mockFetch((url) => {
+      if (url.includes('ids=')) {
+        asked.push(url)
+        return { ok: true, body: { transactions: [
+          { transaction_id: 'A', investment_date: '2025-01-01', notes: 'PVcomBank A' },
+          { transaction_id: 'B', deposit_group_id: 'B', investment_date: '2026-02-01', notes: 'PVcomBank B' },
+        ] } }
+      }
+      if (url.includes('/investment-transactions?')) {
+        return { ok: true, body: { transactions: [
+          // The credited tranche names a source that is off the page...
+          { transaction_id: 'credited', deposit_group_id: 'C', investment_date: '2026-08-01', merged_from_book_id: 'A' },
+          { transaction_id: 'C', deposit_group_id: 'C', investment_date: '2026-07-01' },
+          // ...and a promised book names a successor that is off it too.
+          { transaction_id: 'D', deposit_group_id: 'D', investment_date: '2026-06-01', successor_deposit_tx_id: 'B' },
+        ] } }
+      }
+      if (url.includes('/recurring-contributions')) return { ok: true, body: { contributions: [] } }
+      return { ok: true, body: {} }
+    })
+
+    const { result } = renderHook(() => useGoalDetailData({ goalId: 'g1', enabled: true, refreshKey: 0, txReload: 0 }))
+    await waitFor(() => expect(result.current.txLoading).toBe(false))
+
+    expect(asked).toHaveLength(1)
+    expect(asked[0]).toContain('A')
+    expect(asked[0]).toContain('B')
+    expect(result.current.transactions.find(t => t.transaction_id === 'A')?.notes).toBe('PVcomBank A')
+    expect(result.current.transactions.find(t => t.transaction_id === 'B')?.notes).toBe('PVcomBank B')
+  })
+
   it('asks for every missing anchor, in batches', async () => {
     const urls: string[] = []
     const anchorIds = Array.from({ length: 150 }, (_, i) => `anchor-${i}`)

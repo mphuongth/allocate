@@ -101,8 +101,15 @@ export function useGoalDetailData(opts: {
         // read off a tranche, which knows none of that, and would look like it
         // still takes top-ups (#638). Ask for the few anchors that fell out.
         const present = new Set(rows.map((r) => r.transaction_id))
+        // Every book this page has to read or NAME. Not only the ones it groups
+        // by: a merged source is dissolved, so nothing points at it through
+        // deposit_group_id any more — only merged_from_book_id, on the tranche
+        // it paid for. Leaving those out dropped the "Merged from …" line on any
+        // goal big enough to push the source off the page, and did it silently
+        // (#638 Phase 4). A promised successor can fall off the same edge.
         const missingAnchors = [...new Set(
-          rows.map((r) => r.deposit_group_id).filter((id): id is string => !!id && !present.has(id)),
+          rows.flatMap((r) => [r.deposit_group_id, r.merged_from_book_id, r.successor_deposit_tx_id])
+            .filter((id): id is string => !!id && !present.has(id)),
         )]
         // Batched, because a goal holding many older books would otherwise open
         // one connection per anchor before the page could render — and chunked
