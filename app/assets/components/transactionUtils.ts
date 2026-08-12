@@ -61,7 +61,13 @@ export interface TxKindFields {
 
 export function txKind(tx: TxKindFields): TxKind {
   if (tx.transaction_type !== 'withdrawal') return 'investment'
-  if (tx.held_for_merge === true) return tx.consumed_by_inv_id != null ? 'consumed' : 'held'
+  // Where the cash went decides the tone, not which path parked it. A book
+  // folded into its successor (#638) closes every tranche with a withdrawal that
+  // carries consumed_by_inv_id and no held_for_merge — the money went straight
+  // into the new book, but the row read as red spending, so a merged book looked
+  // like the account had been emptied.
+  if (tx.consumed_by_inv_id != null) return 'consumed'
+  if (tx.held_for_merge === true) return 'held'
   return 'withdrawal'
 }
 

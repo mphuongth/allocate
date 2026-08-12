@@ -27,6 +27,8 @@ export interface InvestmentTx {
   consumed_by_inv_id?: string | null
   top_up_lock_days?: number | null
   successor_deposit_tx_id?: string | null
+  // On the tranche a completed merge credited: the book its cash came from.
+  merged_from_book_id?: string | null
   // Set on every row of an accumulating book; equals transaction_id on the
   // anchor, which is the row that carries the book's terms.
   deposit_group_id?: string | null

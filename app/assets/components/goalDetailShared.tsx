@@ -230,6 +230,9 @@ export interface GoalDetailTx {
   top_up_lock_days?: number | null
   // The book this one is planned to be folded into at maturity (#638).
   successor_deposit_tx_id?: string | null
+  // ...and, on the tranche a completed merge credited, the book its cash came
+  // from. Historical fact: the source is dissolved by then.
+  merged_from_book_id?: string | null
   // Set on the rows the recurring-contributions endpoint synthesizes for a
   // goal's recurring savings. They have no investment_transactions row behind
   // them — `transaction_id` is a `recurring:<savingId>:<date>` label, not an id
@@ -294,7 +297,16 @@ export function BankInfoStrip({ inv, isVi }: { inv: InvRow; isVi: boolean }) {
           <div style={{ display: 'grid', gap: 6 }}>
             {acc.map((tr) => (
               <div key={tr.id} data-testid="tranche-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, padding: '6px 10px', background: 'var(--c-card-2)', borderRadius: 8 }}>
-                <span style={{ color: 'var(--c-muted)' }}>{fmtTxDate(tr.date, isVi ? 'vi' : 'en')}</span>
+                <span style={{ color: 'var(--c-muted)', display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
+                  {fmtTxDate(tr.date, isVi ? 'vi' : 'en')}
+                  {/* Where an unexplained jump came from: the source book is
+                      dissolved by now, so this line is the only trace of it. */}
+                  {tr.mergedFrom && (
+                    <span data-testid="tranche-merged-from" style={{ fontSize: 10, color: 'var(--c-navy)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {isVi ? `Gộp từ ${tr.mergedFrom}` : `Merged from ${tr.mergedFrom}`}
+                    </span>
+                  )}
+                </span>
                 <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{fmtCompact(tr.amount)}</span>
                   {tr.rate != null && <span style={{ fontSize: 10, color: 'var(--c-muted)' }}>{tr.rate}%/{isVi ? 'năm' : 'yr'}</span>}
@@ -330,7 +342,9 @@ export function TopUpControl({ inv, isVi, onDone }: { inv: InvRow; isVi: boolean
     // withdrawable on purpose, or the deposit could never be closed at all.
     return (
       <div data-testid="successor-planned" style={{ margin: '0 0 4px', padding: '9px 10px', borderRadius: 10, background: 'var(--c-canvas,#faf9f7)', border: '1px solid var(--c-line)', color: 'var(--c-muted)', fontSize: 12, lineHeight: 1.45 }}>
-        {isVi ? 'Sẽ gộp vào sổ kế nhiệm khi đáo hạn.' : 'Will merge into its successor book at maturity.'}
+        {inv.successorName
+          ? (isVi ? `Sẽ gộp vào “${inv.successorName}” khi đáo hạn.` : `Will merge into “${inv.successorName}” at maturity.`)
+          : (isVi ? 'Sẽ gộp vào sổ kế nhiệm khi đáo hạn.' : 'Will merge into its successor book at maturity.')}
         <button type="button" data-testid="cancel-successor-btn" disabled={saving}
           onClick={async () => {
             setSaving(true)

@@ -91,4 +91,19 @@ describe('TopUpControl', () => {
     expect(screen.getByTestId('successor-planned')).toBeInTheDocument()
     expect(screen.queryByTestId('top-up-btn')).not.toBeInTheDocument()
   })
+
+  // #638 Phase 4. "Its successor book" is not something the user can act on:
+  // with several deposits in a goal there is no telling which one was promised,
+  // and cancelling is the only alternative offered.
+  it('names the successor it is promised to, when the name is known', () => {
+    render(<TopUpControl inv={{ ...lockedBook, successorDepositTxId: 'book-2', successorName: 'PVcomBank B' }} isVi={false} onDone={() => {}} />)
+
+    expect(screen.getByTestId('successor-planned')).toHaveTextContent('PVcomBank B')
+  })
+
+  it('...and stays sensible when it is not', () => {
+    render(<TopUpControl inv={{ ...lockedBook, successorDepositTxId: 'book-2' }} isVi={false} onDone={() => {}} />)
+
+    expect(screen.getByTestId('successor-planned')).toHaveTextContent(/successor book/i)
+  })
 })
