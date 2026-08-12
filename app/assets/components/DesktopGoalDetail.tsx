@@ -72,7 +72,7 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
   // Transactions + gold price load (shared with GoalDetailSheet, #467). The
   // panel is always mounted, so it always loads; each load clears the optimistic
   // unassign filter.
-  const { transactions, txLoading, txError, goldPricePerChi } = useGoalDetailData({
+  const { transactions, bookNames, txLoading, txError, goldPricePerChi } = useGoalDetailData({
     goalId: goal.goalId,
     enabled: true,
     refreshKey,
@@ -117,7 +117,7 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
   const creditedWithdrawn = progressCredit(goal.currentValue, goal.progressValue)
 
   // Build investment rows (shared with the mobile sheet's valuation logic).
-  const invRows: InvRow[] = buildInvRows(transactions, goal.funds, goldPricePerChi, isVi)
+  const invRows: InvRow[] = buildInvRows(transactions, goal.funds, goldPricePerChi, isVi, bookNames)
 
   // Composition segments — held-for-merge cash is folded back in (see helper) so the
   // bar reconciles with the headline instead of summing short.

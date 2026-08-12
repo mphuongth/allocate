@@ -91,8 +91,14 @@ describe('useGoalDetailData (#467)', () => {
     expect(asked).toHaveLength(1)
     expect(asked[0]).toContain('A')
     expect(asked[0]).toContain('B')
-    expect(result.current.transactions.find(t => t.transaction_id === 'A')?.notes).toBe('PVcomBank A')
-    expect(result.current.transactions.find(t => t.transaction_id === 'B')?.notes).toBe('PVcomBank B')
+    // Names, yes — holdings, no. A merged source is a closed row whose OWN
+    // closing withdrawal may sit outside the page; fed into the holdings input
+    // it reads as a live deposit at full value and the goal counts that money
+    // twice, once here and once in the book it was folded into.
+    expect(result.current.bookNames.A).toBe('PVcomBank A')
+    expect(result.current.bookNames.B).toBe('PVcomBank B')
+    expect(result.current.transactions.map(t => t.transaction_id)).not.toContain('A')
+    expect(result.current.transactions.map(t => t.transaction_id)).not.toContain('B')
   })
 
   it('asks for every missing anchor, in batches', async () => {

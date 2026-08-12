@@ -129,6 +129,24 @@ describe('buildInvRows', () => {
     expect(book.tranches!.find((t) => t.id === 'B')!.mergedFrom).toBeFalsy()
   })
 
+  // On a goal past the 200-row page the source is fetched for its name alone and
+  // deliberately kept out of the holdings input — it is a closed row whose own
+  // closing withdrawal may be off the page, and counting it here would show the
+  // money twice. The name still has to arrive.
+  it('names a source that was fetched for its name alone', () => {
+    const rows = buildInvRows(
+      [
+        baseTx({ transaction_id: 'B', asset_type: 'bank', amount_vnd: 2_000_000, interest_rate: 5, deposit_group_id: 'B', notes: 'PVcomBank B', investment_date: daysFromNow(-60) }),
+        baseTx({ transaction_id: 'credited', asset_type: 'bank', amount_vnd: 8_300_000, interest_rate: 5, deposit_group_id: 'B', investment_date: daysFromNow(-1), merged_from_book_id: 'A' }),
+      ],
+      [], null, false, { A: 'PVcomBank A' },
+    )
+    const book = rows.find((r) => r.depositGroupId === 'B')!
+    expect(book.tranches!.find((t) => t.id === 'credited')!.mergedFrom).toBe('PVcomBank A')
+    // ...and the source is not a holding of its own.
+    expect(rows.some((r) => r.id === 'A')).toBe(false)
+  })
+
   it('names the successor a promised book is waiting to be folded into', () => {
     const rows = buildInvRows(
       [

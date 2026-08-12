@@ -36,6 +36,9 @@ export interface InvestmentTx {
 
 export interface UseGoalDetailData {
   transactions: InvestmentTx[]
+  // Deposits this page must be able to NAME but must not treat as holdings —
+  // a merged source, a successor that fell off the page. Keyed by id (#638).
+  bookNames: Record<string, string>
   txLoading: boolean
   txError: boolean
   goldPricePerChi: number | null
@@ -57,6 +60,7 @@ export function useGoalDetailData(opts: {
 }): UseGoalDetailData {
   const { goalId, enabled, refreshKey, txReload } = opts
   const [transactions, setTransactions] = useState<InvestmentTx[]>([])
+  const [bookNames, setBookNames] = useState<Record<string, string>>({})
   const [goldPricePerChi, setGoldPricePerChi] = useState<number | null>(null)
   const [txLoading, setTxLoading] = useState(false)
   const [txError, setTxError] = useState(false)
@@ -101,22 +105,33 @@ export function useGoalDetailData(opts: {
         // read off a tranche, which knows none of that, and would look like it
         // still takes top-ups (#638). Ask for the few anchors that fell out.
         const present = new Set(rows.map((r) => r.transaction_id))
-        // Every book this page has to read or NAME. Not only the ones it groups
-        // by: a merged source is dissolved, so nothing points at it through
-        // deposit_group_id any more — only merged_from_book_id, on the tranche
-        // it paid for. Leaving those out dropped the "Merged from …" line on any
-        // goal big enough to push the source off the page, and did it silently
-        // (#638 Phase 4). A promised successor can fall off the same edge.
         const missingAnchors = [...new Set(
-          rows.flatMap((r) => [r.deposit_group_id, r.merged_from_book_id, r.successor_deposit_tx_id])
-            .filter((id): id is string => !!id && !present.has(id)),
+          rows.map((r) => r.deposit_group_id).filter((id): id is string => !!id && !present.has(id)),
+        )]
+        // Books this page only has to NAME, which is a different thing from a
+        // book it has to read. A merged source is dissolved, so nothing points
+        // at it through deposit_group_id any more — only merged_from_book_id, on
+        // the tranche it paid for — and on a goal past the page it fell out and
+        // the "Merged from …" line silently vanished (#638 Phase 4).
+        //
+        // Fetched apart from the anchors above and kept OUT of `transactions`.
+        // That source is a closed row whose own closing withdrawal may sit
+        // outside the page too; handed to the holdings build it reads as a live
+        // deposit at full value, and the goal counts that money twice — here and
+        // in the book it was folded into.
+        const nameOnly = [...new Set(
+          rows.flatMap((r) => [r.merged_from_book_id, r.successor_deposit_tx_id])
+            .filter((id): id is string => !!id && !present.has(id) && !missingAnchors.includes(id)),
         )]
         // Batched, because a goal holding many older books would otherwise open
         // one connection per anchor before the page could render — and chunked
         // rather than capped, so no book is quietly left reading a tranche.
         const CHUNK = 100
         const chunks: string[][] = []
-        for (let i = 0; i < missingAnchors.length; i += CHUNK) chunks.push(missingAnchors.slice(i, i + CHUNK))
+        // One set of requests for both, so a page needing an anchor and a name
+        // does not open two rounds of connections; the results part ways after.
+        const wanted = [...missingAnchors, ...nameOnly]
+        for (let i = 0; i < wanted.length; i += CHUNK) chunks.push(wanted.slice(i, i + CHUNK))
         // A failed anchor batch fails the load. These are not supplementary like
         // the recurring contributions: without an anchor a book renders off a
         // tranche, which does not know the book has handed over — so it would
@@ -127,7 +142,19 @@ export function useGoalDetailData(opts: {
             .then((res) => (res?.transactions ?? []) as InvestmentTx[]),
         ))).flat()
 
-        const merged: InvestmentTx[] = [...rows, ...anchors, ...(recRes.contributions ?? [])]
+        const nameOnlySet = new Set(nameOnly)
+        const names: Record<string, string> = {}
+        for (const a of anchors) {
+          const n = a.notes?.trim()
+          if (n) names[a.transaction_id] = n
+        }
+        setBookNames(names)
+
+        const merged: InvestmentTx[] = [
+          ...rows,
+          ...anchors.filter((a) => !nameOnlySet.has(a.transaction_id)),
+          ...(recRes.contributions ?? []),
+        ]
         merged.sort((a, b) => (a.investment_date < b.investment_date ? 1 : a.investment_date > b.investment_date ? -1 : 0))
         setTransactions(merged)
       })
@@ -141,5 +168,5 @@ export function useGoalDetailData(opts: {
       .catch(() => setGoldPricePerChi(null))
   }, [enabled, goalId, refreshKey, txReload])
 
-  return { transactions, txLoading, txError, goldPricePerChi }
+  return { transactions, bookNames, txLoading, txError, goldPricePerChi }
 }

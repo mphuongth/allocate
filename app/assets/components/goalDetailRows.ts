@@ -53,6 +53,11 @@ export function buildInvRows(
   funds: FundBreakdownItem[],
   goldPricePerChi: number | null,
   isVi: boolean,
+  // Names of deposits this page must be able to name but must NOT hold — a
+  // merged source, a successor that fell off the page (#638). They are kept out
+  // of `transactions` on purpose: a closed row whose own closing withdrawal is
+  // off the page would read here as a live deposit at full value.
+  bookNames: Record<string, string> = {},
 ): InvRow[] {
   // Aggregate withdrawals onto their parent holding. Bank/gold withdrawals are
   // stored as separate `withdrawal` rows linked via parent_transaction_id, so
@@ -74,7 +79,7 @@ export function buildInvRows(
   // holdings. A merge dissolves the source book and closes it, so the only place
   // its name survives is its own (now closed) anchor row; the same lookup names
   // a successor that has not been folded into yet (#638 Phase 4).
-  const nameById = new Map<string, string>()
+  const nameById = new Map<string, string>(Object.entries(bookNames))
   for (const tx of transactions) {
     const n = tx.notes?.trim()
     if (n) nameById.set(tx.transaction_id, n)
