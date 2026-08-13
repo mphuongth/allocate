@@ -90,6 +90,37 @@ describe('GET (blockers)', () => {
     })
   })
 
+  it('prices each holding from the dashboard valuation, not from its cost basis', async () => {
+    // The sheet prefills the payout from this. A holding older than the goal
+    // page's 200-row window has no other source of "what is it worth today".
+    h.holdings = { data: [
+      { key: 'fund:f1', kind: 'fund', asset_type: 'fund', principal: 5_000_000, units: 250, name: 'VESAF' },
+      { key: 'tx:d1', kind: 'single', asset_type: 'bank', principal: 10_000_000, units: null, name: 'ACB' },
+      { key: 'tx:x9', kind: 'single', asset_type: 'bank', principal: 500_000, units: null, name: 'Không định giá được' },
+    ], error: null }
+    h.overview = { ok: true, data: { goals: [{
+      goalId: GOAL_ID, currentValue: 1, progressValue: 1,
+      funds: [{ fundId: 'f1', currentValue: 6_200_000, quantity: 250 }],
+      nonFunds: [{ transactionId: 'd1', currentValue: 10_400_000, units: null }],
+    }] } }
+
+    const body = await (await get()).json()
+    expect(body.holdings).toEqual([
+      { key: 'fund:f1', kind: 'fund', asset_type: 'fund', principal: 5_000_000, units: 250, name: 'VESAF', value: 6_200_000 },
+      { key: 'tx:d1', kind: 'single', asset_type: 'bank', principal: 10_000_000, units: null, name: 'ACB', value: 10_400_000 },
+      // Nothing valued it — left null rather than guessed, so the sheet falls
+      // back to the cost basis and the user can correct it.
+      { key: 'tx:x9', kind: 'single', asset_type: 'bank', principal: 500_000, units: null, name: 'Không định giá được', value: null },
+    ])
+  })
+
+  it('still lists the holdings when the valuation itself fails', async () => {
+    h.holdings = { data: [{ key: 'tx:d1', kind: 'single', asset_type: 'bank', principal: 10_000_000, units: null, name: 'ACB' }], error: null }
+    h.overview = { ok: false }
+    const body = await (await get()).json()
+    expect(body.holdings[0]).toMatchObject({ key: 'tx:d1', value: null })
+  })
+
   it('404s a goal that is not the caller\'s', async () => {
     h.goal = null
     expect((await get()).status).toBe(404)

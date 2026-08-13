@@ -4,6 +4,7 @@ import { ValidationError, validateAmount, validateUUID } from '@/lib/validation'
 import { readJsonBody } from '@/lib/apiBody'
 import { todayIso } from '@/lib/dates'
 import { buildDashboardOverview } from '@/lib/dashboardOverview'
+import { valuationByKey } from '@/lib/finishGoal'
 
 // Finish a goal (#650): liquidate every live holding and archive it at 100%.
 //
@@ -17,6 +18,7 @@ type Blocker = { code: string; label: string }
 type ServerHolding = {
   key: string; kind: string; asset_type: string | null
   principal: number | null; units: number | null; name: string | null
+  value?: number | null
 }
 
 async function loadGoal(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>, goalId: string, userId: string) {
@@ -59,9 +61,31 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Failed to check the goal' }, { status: 500 })
   }
 
+  // Priced by the dashboard valuation — the ONE valuation. The enumeration knows
+  // what each holding still HOLDS (principal, units); what it is WORTH is a fund
+  // at today's NAV, gold at the day's price, a deposit with its accrued interest.
+  // The sheet prefills the payout from this, and a prefill is the figure most
+  // users accept unchanged, so cost basis would quietly record fabricated
+  // proceeds for anything that has moved since it was bought.
+  //
+  // The overview reads the whole ledger, so it prices the older holdings the
+  // goal-detail page never loaded — which are exactly the ones that need it.
+  const overview = await buildDashboardOverview(supabase, user.id)
+  const valuation = overview.ok
+    ? valuationByKey(overview.data.goals.find((g) => g.goalId === goalId) ?? {})
+    : {}
+
+  const holdings = ((holdingsRes.data ?? []) as ServerHolding[]).map((h) => ({
+    ...h,
+    // Absent rather than guessed when the valuation has nothing to say: the
+    // fallback then uses the remaining principal and the field is still editable.
+    value: valuation[h.key]?.value ?? null,
+    units: valuation[h.key]?.units ?? h.units,
+  }))
+
   return NextResponse.json({
     blockers: (blockersRes.data ?? []) as Blocker[],
-    holdings: (holdingsRes.data ?? []) as ServerHolding[],
+    holdings,
     completed: goal.completed_at != null,
   })
 }

@@ -78,6 +78,39 @@ export interface ServerHolding {
   principal: number | null
   units: number | null
   name: string | null
+  /** What it is worth today, from the dashboard valuation. Absent = unknown. */
+  value?: number | null
+}
+
+/**
+ * What each of a goal's holdings is worth today, keyed the way the finish keys
+ * them.
+ *
+ * Built from the dashboard payload — the ONE valuation — rather than recomputed:
+ * a fund is units × NAV, gold is units × the day's price, a deposit is principal
+ * plus accrued interest, and none of that belongs in a second implementation.
+ * The overview reads the whole ledger, so unlike the goal-detail page it knows
+ * about holdings older than its newest 200 rows.
+ */
+export function valuationByKey(goal: {
+  funds?: Array<{ fundId: string; currentValue: number; quantity: number }>
+  nonFunds?: Array<{ transactionId: string; currentValue: number; units: number | null; depositGroupId?: string | null }>
+}): Record<string, { value: number; units: number | null }> {
+  const out: Record<string, { value: number; units: number | null }> = {}
+  for (const f of goal.funds ?? []) {
+    out[`fund:${f.fundId}`] = { value: f.currentValue, units: f.quantity }
+  }
+  for (const nf of goal.nonFunds ?? []) {
+    // A book is worth the sum of its tranches, the way the holdings tab rolls
+    // them up; everything else is its own row.
+    const key = nf.depositGroupId ? `book:${nf.depositGroupId}` : `tx:${nf.transactionId}`
+    const prev = out[key]
+    out[key] = {
+      value: (prev?.value ?? 0) + nf.currentValue,
+      units: nf.units == null ? prev?.units ?? null : (prev?.units ?? 0) + nf.units,
+    }
+  }
+  return out
 }
 
 function holdingFromRow(row: InvRow): FinishHolding {
@@ -120,19 +153,21 @@ export function buildFinishHoldings(rows: InvRow[], server?: ServerHolding[]): F
   return server.map((h) => {
     const row = byKey.get(h.key)
     if (row) return holdingFromRow(row)
-    // Never loaded by this page. Everything shown comes from the ledger: its
-    // remaining principal stands in for "worth today", which is exactly right
-    // for a deposit and an honest starting point for anything else.
+    // Never loaded by this page, so it is priced by the server's valuation —
+    // the same one the dashboard uses. Cost basis is the LAST resort: for a fund
+    // or gold it is not what the holding is worth, and the prefill is the figure
+    // most users accept unchanged, so an unvalued fallback would quietly record
+    // fabricated proceeds.
     const units = h.asset_type === 'gold' && h.units ? Number(h.units) : null
-    const principal = Number(h.principal ?? 0)
+    const value = Math.round(h.value ?? Number(h.principal ?? 0))
     return {
       key: h.key,
       name: h.name ?? h.asset_type ?? h.kind,
       type: h.asset_type ?? 'bank',
-      value: principal,
+      value,
       units,
       input: units ? 'unitPrice' : 'received',
-      suggested: units ? Math.round(principal / units) : principal,
+      suggested: units ? Math.round(value / units) : value,
     }
   })
 }

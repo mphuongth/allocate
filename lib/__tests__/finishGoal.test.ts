@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   goalCompletion,
+  valuationByKey,
   buildFinishHoldings,
   finishHoldingKey,
   realizedFor,
@@ -21,6 +22,34 @@ const fund = (over: Partial<InvRow>): InvRow => row({
   id: 'fund-row', type: 'fund', name: 'VESAF', units: 250,
   fund: { fundId: 'f1', fundName: 'VESAF', quantity: 250, currentValue: 5_000_000 } as InvRow['fund'],
   ...over,
+})
+
+describe('valuationByKey', () => {
+  it('keys a fund position by its fund, at today\'s value', () => {
+    expect(valuationByKey({ funds: [{ fundId: 'f1', currentValue: 5_500_000, quantity: 250 }] }))
+      .toEqual({ 'fund:f1': { value: 5_500_000, units: 250 } })
+  })
+
+  it('rolls a book\'s tranches up into one value, the way the holdings tab does', () => {
+    expect(valuationByKey({ nonFunds: [
+      { transactionId: 't1', currentValue: 3_100_000, units: null, depositGroupId: 'book-1' },
+      { transactionId: 't2', currentValue: 2_050_000, units: null, depositGroupId: 'book-1' },
+    ] })).toEqual({ 'book:book-1': { value: 5_150_000, units: null } })
+  })
+
+  it('keys a single deposit or gold row by its transaction', () => {
+    expect(valuationByKey({ nonFunds: [
+      { transactionId: 'tx-1', currentValue: 10_400_000, units: null },
+      { transactionId: 'g-1', currentValue: 9_400_000, units: 2 },
+    ] })).toEqual({
+      'tx:tx-1': { value: 10_400_000, units: null },
+      'tx:g-1': { value: 9_400_000, units: 2 },
+    })
+  })
+
+  it('says nothing about a goal it has no data for', () => {
+    expect(valuationByKey({})).toEqual({})
+  })
 })
 
 describe('goalCompletion', () => {
@@ -89,18 +118,28 @@ describe('buildFinishHoldings', () => {
     expect(holdings.map((h) => h.key)).toEqual(['tx:tx-1', 'tx:old'])
   })
 
-  it('prices an unloaded holding from what the ledger says it holds', () => {
+  it('prices an unloaded holding at what the server says it is WORTH', () => {
+    // Not its cost basis: the prefill is the figure most users accept
+    // unchanged, so a deposit priced at principal would record a payout with no
+    // interest, and an old fund position would record its purchase price.
     const [h] = buildFinishHoldings([], [
-      { key: 'tx:old', kind: 'single', asset_type: 'bank', principal: 3_000_000, units: null, name: 'Sổ cũ' },
+      { key: 'tx:old', kind: 'single', asset_type: 'bank', principal: 3_000_000, units: null, name: 'Sổ cũ', value: 3_150_000 },
     ])
-    expect(h).toMatchObject({ name: 'Sổ cũ', type: 'bank', value: 3_000_000, input: 'received', suggested: 3_000_000 })
+    expect(h).toMatchObject({ name: 'Sổ cũ', type: 'bank', value: 3_150_000, input: 'received', suggested: 3_150_000 })
   })
 
-  it('asks for a unit price on unloaded gold, derived from the ledger', () => {
+  it('falls back to the cost basis only when nothing valued it', () => {
     const [h] = buildFinishHoldings([], [
-      { key: 'tx:g', kind: 'single', asset_type: 'gold', principal: 8_000_000, units: 2, name: 'Vàng' },
+      { key: 'tx:old', kind: 'single', asset_type: 'bank', principal: 3_000_000, units: null, name: 'Sổ cũ', value: null },
     ])
-    expect(h).toMatchObject({ input: 'unitPrice', units: 2, suggested: 4_000_000 })
+    expect(h.suggested).toBe(3_000_000)
+  })
+
+  it('derives an unloaded gold price from the market value, not the purchase cost', () => {
+    const [h] = buildFinishHoldings([], [
+      { key: 'tx:g', kind: 'single', asset_type: 'gold', principal: 8_000_000, units: 2, name: 'Vàng', value: 9_400_000 },
+    ])
+    expect(h).toMatchObject({ input: 'unitPrice', units: 2, suggested: 4_700_000 })
   })
 
   it('still prefers this page for a holding it HAS loaded — that is where today\'s price is', () => {
