@@ -21,12 +21,19 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { data: goal } = await supabase
+  // The error is kept, not folded into the same branch as "no row": a database
+  // blip answered as "Goal not found" sends the user looking for something that
+  // is right there, and hides a condition a retry would clear (#532).
+  const { data: goal, error: goalError } = await supabase
     .from('savings_goals')
     .select('goal_id, completed_at')
     .eq('goal_id', goalId)
     .eq('user_id', user.id)
     .maybeSingle()
+  if (goalError) {
+    console.error('reopen: goal lookup failed', goalError.message)
+    return NextResponse.json({ error: 'Failed to load the goal' }, { status: 500 })
+  }
   if (!goal) return NextResponse.json({ error: 'Goal not found' }, { status: 404 })
   if (!goal.completed_at) {
     return NextResponse.json(

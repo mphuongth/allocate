@@ -143,6 +143,43 @@ describe('FinishGoalSheet', () => {
     expect(screen.getByText('₫ 18.400.000')).toBeInTheDocument()
   })
 
+  it('does not let a stale success timer reach into the next goal', async () => {
+    // The success screen dismisses itself after ~1.8s. Unmanaged, that timer
+    // survives the user closing the sheet and opening another goal — and on
+    // mobile onFinished closes the goal detail, so it would dismiss the goal
+    // they had just opened.
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      const onFinished = vi.fn()
+      const { unmount } = mountSheet({ onFinished })
+      await waitFor(() => expect(screen.getByTestId('finish-goal-confirm')).toBeEnabled())
+      await user.click(screen.getByTestId('finish-goal-confirm'))
+      await waitFor(() => expect(screen.getByTestId('finish-goal-success')).toBeInTheDocument())
+
+      unmount()
+      onFinished.mockClear()
+      vi.advanceTimersByTime(5000)
+      expect(onFinished).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('finalizes immediately when the success screen is dismissed early', async () => {
+    // The finish already happened — the dashboard has to hear about it whether
+    // or not the user waited for the timer.
+    const user = userEvent.setup()
+    const onFinished = vi.fn()
+    mountSheet({ onFinished })
+    await waitFor(() => expect(screen.getByTestId('finish-goal-confirm')).toBeEnabled())
+    await user.click(screen.getByTestId('finish-goal-confirm'))
+    await waitFor(() => expect(screen.getByTestId('finish-goal-success')).toBeInTheDocument())
+
+    await user.click(screen.getByLabelText('Close'))
+    expect(onFinished).toHaveBeenCalledTimes(1)
+  })
+
   it('will not present the goal as ready when the blocker check failed', async () => {
     // A 500 read as "no blockers" is the worst of both: the sheet enables a
     // submit on a prerequisite that never ran.

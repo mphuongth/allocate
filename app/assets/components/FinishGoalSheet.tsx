@@ -17,6 +17,7 @@ import { fmt } from '@/lib/formatters'
 import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
 import { CairnLoader } from '@/components/ui/CairnLoader'
 import { useDialogMount, useResetOnOpen } from '@/components/ui/useDialogMount'
+import { useManagedTimeout } from '@/components/ui/useManagedTimeout'
 import { TypeIcon } from './goalDetailShared'
 import type { InvRow } from '@/features/dashboard/contracts'
 import {
@@ -82,6 +83,15 @@ export function FinishGoalSheet({ open, goalId, goalName, rows, onClose, onFinis
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState<number | null>(null)
+  const schedule = useManagedTimeout()
+
+  // Closing the success screen early finalizes there and then, instead of
+  // waiting for a timer that unmounting is about to cancel — the finish has
+  // already happened, and the dashboard has to hear about it either way.
+  function handleClose() {
+    if (done !== null) onFinished()
+    onClose()
+  }
 
   const holdings = useMemo(
     () => (server ? buildFinishHoldings(rows, server) : []),
@@ -171,7 +181,11 @@ export function FinishGoalSheet({ open, goalId, goalName, rows, onClose, onFinis
       const body = await res.json()
       setDone(body.realized ?? total)
       setSaving(false)
-      setTimeout(() => { onFinished(); onClose() }, 1800)
+      // Managed, so it is cleared when this sheet unmounts. A bare setTimeout
+      // survives the user closing the success screen and opening another goal —
+      // and on mobile onFinished closes the goal detail, so the timer would
+      // dismiss the goal they had just opened (#650).
+      schedule(() => { onFinished(); onClose() }, 1800)
     } catch {
       setError(isVI ? 'Đã xảy ra lỗi. Vui lòng thử lại.' : 'An error occurred. Please try again.')
       setSaving(false)
@@ -205,7 +219,7 @@ export function FinishGoalSheet({ open, goalId, goalName, rows, onClose, onFinis
   return (
     <div
       data-testid="finish-goal-sheet"
-      onClick={onClose}
+      onClick={handleClose}
       style={{
         position: 'fixed', inset: 0,
         background: desktop ? 'rgba(15, 23, 42, 0.4)' : 'rgba(15, 23, 42, 0.2)',
@@ -239,7 +253,7 @@ export function FinishGoalSheet({ open, goalId, goalName, rows, onClose, onFinis
             <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>{t.title}</h3>
             <div style={{ fontSize: 12, color: 'var(--c-muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{goalName}</div>
           </div>
-          <button onClick={onClose} aria-label="Close" style={{ ...iconHit, border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', color: 'var(--c-muted)' }}>
+          <button onClick={handleClose} aria-label="Close" style={{ ...iconHit, border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', color: 'var(--c-muted)' }}>
             <X size={18} />
           </button>
         </div>

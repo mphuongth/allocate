@@ -13,6 +13,7 @@ declare
   v_book2 uuid := gen_random_uuid();
   v_book3 uuid := gen_random_uuid();
   v_other_fund uuid;
+  v_other_goal uuid;
   v_result jsonb;
   v_fp text;
   v_goal_row public.savings_goals;
@@ -128,6 +129,23 @@ begin
     raise exception 'an ended recurring saving must still block the finish';
   end if;
   delete from public.recurring_savings where user_id = v_user;
+
+  -- ── A saving that feeds this goal's BOOK blocks, whatever goal it is under ─
+  --
+  -- Nothing makes recurring_savings.goal_id agree with the goal of the deposit
+  -- it is linked to, and the full close clears every recurring link targeting
+  -- the book it settles — so without this the finish would silently end a plan
+  -- belonging to another goal.
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Mục tiêu khác')
+    returning goal_id into v_other_goal;
+  insert into public.recurring_savings (user_id, goal_id, name, amount_vnd, linked_deposit_tx_id)
+    values (v_user, v_other_goal, 'Gửi góp vào sổ chung', 1000000, v_book);
+  if not exists (select 1 from public.savings_goal_finish_blockers(v_goal)
+                  where code = 'recurring_saving' and label = 'Gửi góp vào sổ chung') then
+    raise exception 'a saving linked to this goal''s book must block the finish';
+  end if;
+  delete from public.recurring_savings where user_id = v_user;
+  delete from public.savings_goals where goal_id = v_other_goal;
 
   -- ── A holding that realizes nothing is refused, not half-written ─────────
   --

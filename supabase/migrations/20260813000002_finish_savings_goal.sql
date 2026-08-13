@@ -130,6 +130,24 @@ as $$
     from public.recurring_savings r
    where r.goal_id = p_goal_id
   union all
+  -- ...and a saving that feeds a BOOK held by this goal, whatever goal it is
+  -- itself filed under. Nothing makes those two agree — the ownership trigger
+  -- checks whose rows they are, not which goal — so a direct write can point a
+  -- saving at this goal's book while its own goal_id says elsewhere.
+  --
+  -- It matters because the full close inside withdraw_accumulating_book clears
+  -- EVERY recurring link targeting the book it settles, regardless of goal. The
+  -- finish would therefore reach in and end a plan belonging to another goal,
+  -- silently — the exact thing this list exists to prevent.
+  select 'recurring_saving'::text, r.name
+    from public.recurring_savings r
+    join public.investment_transactions t
+      on t.transaction_id = r.linked_deposit_tx_id
+   where r.linked_deposit_tx_id is not null
+     and t.goal_id = p_goal_id
+     and t.deposit_group_id is not null
+     and r.goal_id is distinct from p_goal_id
+  union all
   select 'dca_plan'::text, f.name
     from public.funds f
    where f.dca_goal_id = p_goal_id
