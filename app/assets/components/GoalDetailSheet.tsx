@@ -329,7 +329,10 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
 
           {/* Add to this goal — opens the Add-transaction flow prefilled, so the
               sheet is a place you can fund the goal from, not just inspect it. */}
-          {onAddToGoal && (
+          {/* ...but not on an archive (#650): a completed goal is absent from the
+              sheet's own goal list and the server refuses money into one, so the
+              button could only ever lead to a 409. */}
+          {onAddToGoal && !completion && (
             <button
               data-testid="goal-add-to-goal"
               onClick={onAddToGoal}

@@ -89,6 +89,15 @@ describe('GoalDetailSheet — add-to-goal CTA', () => {
     await userEvent.click(await screen.findByTestId('goal-add-to-goal'))
     expect(onAddToGoal).toHaveBeenCalledTimes(1)
   })
+
+  it('withholds the CTA on a finished goal (#650)', async () => {
+    render(<GoalDetailSheet
+      {...baseProps}
+      goal={{ ...mockGoal, completedAt: '2026-08-13T02:00:00Z', completionValue: 121_900_000, completionPercentage: 100 }}
+      onAddToGoal={vi.fn()}
+    />)
+    expect(screen.queryByTestId('goal-add-to-goal')).not.toBeInTheDocument()
+  })
 })
 
 describe('GoalDetailSheet — delete failure feedback', () => {

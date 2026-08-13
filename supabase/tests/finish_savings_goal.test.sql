@@ -273,6 +273,16 @@ begin
   exception when sqlstate '23514' then null;
   end;
 
+  -- ...nor may a settled holding be moved OUT of the archive. A fund bucket is
+  -- keyed by (goal, fund), so unassigning the purchase while its sell stays with
+  -- the archived goal makes the whole position reappear under Unallocated.
+  begin
+    update public.investment_transactions set goal_id = null
+     where user_id = v_user and fund_id = v_fund and transaction_type = 'investment';
+    raise exception 'a completed goal must not give up its holdings';
+  exception when sqlstate '23514' then null;
+  end;
+
   -- Frozen means the MONEY. A completed goal is still history to read and tidy.
   update public.investment_transactions set notes = 'ACB 12 tháng (đã tất toán)'
    where transaction_id = v_deposit;
@@ -345,6 +355,7 @@ declare
   v_deposit uuid := gen_random_uuid();
   v_book uuid := gen_random_uuid();
   v_successor public.investment_transactions;
+  v_before text;
 begin
   insert into auth.users (id, email) values (v_user, 'finish-goal-blockers@test.invalid');
   insert into public.savings_goals (user_id, goal_name) values (v_user, 'Blocked') returning goal_id into v_goal;
@@ -370,6 +381,27 @@ begin
     raise exception 'parked merge cash must block the finish';
   end if;
   delete from public.investment_transactions where user_id = v_user and held_for_merge;
+
+  -- ── The fingerprint sees a withdrawal that draws on the goal by PARENT ────
+  --
+  -- A bank/gold withdrawal is keyed by its parent, not by a goal, and the sell
+  -- sheet legitimately posts goal_id = NULL from the unallocated context. It
+  -- still lowers the very holding a finish is about to liquidate, so a
+  -- fingerprint that only counted goal_id matches would call the ledger
+  -- unchanged and archive the pre-withdrawal value.
+  v_before := public.savings_goal_ledger_fingerprint(v_goal);
+  insert into public.investment_transactions (
+    user_id, goal_id, asset_type, transaction_type, parent_transaction_id,
+    investment_date, amount_vnd, principal_withdrawn
+  ) values (
+    v_user, null, 'bank', 'withdrawal', v_deposit,
+    current_date, 1000000, 1000000
+  );
+  if public.savings_goal_ledger_fingerprint(v_goal) = v_before then
+    raise exception 'the fingerprint must notice a withdrawal parented to the goal''s holding';
+  end if;
+  delete from public.investment_transactions
+   where user_id = v_user and transaction_type = 'withdrawal' and goal_id is null;
 
   -- A book promised to a successor cannot be dissolved at all.
   insert into public.investment_transactions (

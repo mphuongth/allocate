@@ -255,7 +255,12 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
 
         {/* Add to this goal — turns the detail panel from a dead end into a place
             you can fund the goal from. Opens the Add-transaction flow prefilled. */}
-        {onAddToGoal && (
+        {/* ...but not on an archive (#650). A completed goal is deliberately
+            absent from the add-transaction sheet's own goal list, and the
+            completed-goal guard refuses the submit — so the button would only
+            ever lead to a 409. Decided here rather than at the call site, so
+            every surface that mounts this panel gets it right. */}
+        {onAddToGoal && !completion && (
           <button
             data-testid="goal-add-to-goal"
             onClick={onAddToGoal}

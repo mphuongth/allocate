@@ -297,7 +297,23 @@ set search_path = ''
 as $$
   select count(*)::text || ':' || coalesce(max(greatest(t.created_at, t.updated_at))::text, '-')
     from public.investment_transactions t
-   where t.goal_id = p_goal_id;
+   where t.goal_id = p_goal_id
+      -- ...and the withdrawals that draw on this goal WITHOUT carrying its id. A
+      -- bank/gold withdrawal is keyed by its parent, not by a goal, and the sell
+      -- sheet legitimately posts goal_id = NULL from the unallocated context. Such
+      -- a row lowers exactly the holding this finish is about to liquidate — the
+      -- RPC's parent_wd CTE counts it — so leaving it out of the fingerprint let
+      -- the reduced remainder be liquidated against the pre-withdrawal value.
+      --
+      -- Fund sells are deliberately NOT pulled in the same way: they are keyed by
+      -- (goal, fund), so one carrying goal_id = NULL draws on the Unallocated
+      -- bucket and not on this goal at all. Same balance-key rules as the
+      -- valuation and as check_withdrawal_balance.
+      or (t.transaction_type = 'withdrawal'
+          and not coalesce(t.asset_type = 'fund' and t.fund_id is not null, false)
+          and t.parent_transaction_id in (
+            select p.transaction_id from public.investment_transactions p
+             where p.goal_id = p_goal_id));
 $$;
 
 comment on function public.savings_goal_ledger_fingerprint(uuid) is
@@ -611,34 +627,51 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_goal uuid;
   v_completed timestamptz;
 begin
-  if tg_op = 'DELETE' then
-    v_goal := old.goal_id;
-  else
-    -- Either end: moving a settled row OUT of a completed goal while changing
-    -- its money is the same escape as changing it in place.
-    v_goal := coalesce(old.goal_id, new.goal_id);
-    if new.amount_vnd is not distinct from old.amount_vnd
-       and new.units is not distinct from old.units
-       and new.principal_withdrawn is not distinct from old.principal_withdrawn
-       and new.units_withdrawn is not distinct from old.units_withdrawn then
-      return new;
-    end if;
-  end if;
-  if v_goal is null then
-    if tg_op = 'DELETE' then return old; else return new; end if;
+  if tg_op = 'UPDATE'
+     and new.goal_id is not distinct from old.goal_id
+     and new.amount_vnd is not distinct from old.amount_vnd
+     and new.units is not distinct from old.units
+     and new.principal_withdrawn is not distinct from old.principal_withdrawn
+     and new.units_withdrawn is not distinct from old.units_withdrawn then
+    return new;
   end if;
 
+  -- The OLD goal, not just the new one. Moving a settled row OUT of a completed
+  -- goal is the same escape as changing its money in place, and the reference
+  -- guard cannot see it: that one measures where a row is GOING, and going to
+  -- NULL or to another active goal is exactly what it lets through.
+  --
+  -- The sharpest case is a fund. Its bucket is keyed by (goal, fund), so
+  -- unassigning a finished goal's purchase moves it to Unallocated while the
+  -- sell that emptied it stays keyed to the archived goal — the whole position
+  -- reappears with nothing offsetting it, and net worth gains money that was
+  -- spent. Deleting the GOAL is not this case: by the time ON DELETE SET NULL
+  -- fires, the goal row is gone and the lookup below finds nothing, so an
+  -- archived goal can still be deleted outright.
   select g.completed_at into v_completed
     from public.savings_goals g
-   where g.goal_id = v_goal
+   where g.goal_id = case when tg_op = 'DELETE' then old.goal_id
+                          else coalesce(old.goal_id, new.goal_id) end
      for share;
   if v_completed is not null then
     raise exception 'completed goal: this goal has been finished, so its transactions are settled — reopen it to change them'
       using errcode = 'check_violation';
   end if;
+
+  -- ...and the destination, when this is a move between goals. The reference
+  -- guard covers that too; checking here keeps the rule readable in one place
+  -- when both ends are archived.
+  if tg_op = 'UPDATE' and new.goal_id is distinct from old.goal_id and new.goal_id is not null then
+    select g.completed_at into v_completed
+      from public.savings_goals g where g.goal_id = new.goal_id for share;
+    if v_completed is not null then
+      raise exception 'completed goal: this goal has been finished, so it takes no new money — reopen it first'
+        using errcode = 'check_violation';
+    end if;
+  end if;
+
   if tg_op = 'DELETE' then return old; else return new; end if;
 end;
 $$;
@@ -648,7 +681,7 @@ comment on function public.enforce_completed_goal_ledger_frozen() is
 
 drop trigger if exists investment_transactions_completed_goal_frozen on public.investment_transactions;
 create trigger investment_transactions_completed_goal_frozen
-  before delete or update of amount_vnd, units, principal_withdrawn, units_withdrawn
+  before delete or update of goal_id, amount_vnd, units, principal_withdrawn, units_withdrawn
     on public.investment_transactions
   for each row execute function public.enforce_completed_goal_ledger_frozen();
 
