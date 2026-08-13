@@ -114,11 +114,13 @@ describe('GET (blockers)', () => {
     ])
   })
 
-  it('still lists the holdings when the valuation itself fails', async () => {
+  it('refuses to hand out an unvalued liquidation form', async () => {
+    // Unvalued, the sheet prefills from cost basis — and a prefill is the figure
+    // most users accept unchanged. A retry beats a form priced at what things
+    // cost years ago.
     h.holdings = { data: [{ key: 'tx:d1', kind: 'single', asset_type: 'bank', principal: 10_000_000, units: null, name: 'ACB' }], error: null }
     h.overview = { ok: false }
-    const body = await (await get()).json()
-    expect(body.holdings[0]).toMatchObject({ key: 'tx:d1', value: null })
+    expect((await get()).status).toBe(500)
   })
 
   it('404s a goal that is not the caller\'s', async () => {

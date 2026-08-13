@@ -142,14 +142,25 @@ describe('buildFinishHoldings', () => {
     expect(h).toMatchObject({ input: 'unitPrice', units: 2, suggested: 4_700_000 })
   })
 
-  it('still prefers this page for a holding it HAS loaded — that is where today\'s price is', () => {
-    // The ledger knows the cost basis; only the page knows what gold is worth
-    // this morning.
+  it('takes the money from the server even for a holding this page HAS loaded', () => {
+    // Both price gold at the day's rate, but only the server priced the WHOLE
+    // holding — see the book case below, which is the one that bites.
     const [h] = buildFinishHoldings(
       [row({ id: 'g', type: 'gold', units: 2, value: 9_000_000 })],
-      [{ key: 'tx:g', kind: 'single', asset_type: 'gold', principal: 8_000_000, units: 2, name: 'Vàng' }],
+      [{ key: 'tx:g', kind: 'single', asset_type: 'gold', principal: 8_000_000, units: 2, name: 'Vàng', value: 9_400_000 }],
     )
-    expect(h.suggested).toBe(4_500_000)
+    expect(h.suggested).toBe(4_700_000)
+  })
+
+  it('values a partially loaded book whole, not by the tranches on this page', () => {
+    // buildInvRows rolls a book up from the tranches it holds, and this page
+    // holds the newest 200 rows. The finish closes the WHOLE book, so prefilling
+    // from the local roll-up would record proceeds for part of it.
+    const [h] = buildFinishHoldings(
+      [row({ id: 'book-1', name: 'Tích luỹ', depositGroupId: 'book-1', value: 4_000_000 })],
+      [{ key: 'book:book-1', kind: 'book', asset_type: 'bank', principal: 11_000_000, units: null, name: 'Tích luỹ', value: 11_600_000 }],
+    )
+    expect(h).toMatchObject({ name: 'Tích luỹ', value: 11_600_000, suggested: 11_600_000 })
   })
 
   it('keeps every real holding, one entry each', () => {

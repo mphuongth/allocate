@@ -151,19 +151,28 @@ export function buildFinishHoldings(rows: InvRow[], server?: ServerHolding[]): F
   if (!server) return rows.filter((r) => !r.isRecurring).map(holdingFromRow)
 
   return server.map((h) => {
+    // The page supplies how a holding READS — its name, and the asset kind that
+    // decides whether the field asks for cash or a unit price.
     const row = byKey.get(h.key)
-    if (row) return holdingFromRow(row)
-    // Never loaded by this page, so it is priced by the server's valuation —
-    // the same one the dashboard uses. Cost basis is the LAST resort: for a fund
-    // or gold it is not what the holding is worth, and the prefill is the figure
-    // most users accept unchanged, so an unvalued fallback would quietly record
-    // fabricated proceeds.
-    const units = h.asset_type === 'gold' && h.units ? Number(h.units) : null
-    const value = Math.round(h.value ?? Number(h.principal ?? 0))
+    const type = row?.type ?? h.asset_type ?? 'bank'
+    const name = row?.name ?? h.name ?? h.asset_type ?? h.kind
+
+    // ...but the MONEY is the server's, for every holding and not only for the
+    // ones this page never loaded. An accumulating book is rolled up here from
+    // the tranches the page happens to hold, so a book with more history than
+    // the 200-row window renders short — while the finish liquidates the whole
+    // book. Taking the local figure because the key happened to be present
+    // would prefill proceeds for the visible tranches only.
+    //
+    // Cost basis is the last resort, for a holding the valuation had nothing to
+    // say about; it is not what a fund or gold is worth.
+    const value = Math.round(h.value ?? row?.value ?? Number(h.principal ?? 0))
+    const held = h.units != null ? Number(h.units) : row?.units ?? null
+    const units = type === 'gold' && held ? held : null
     return {
       key: h.key,
-      name: h.name ?? h.asset_type ?? h.kind,
-      type: h.asset_type ?? 'bank',
+      name,
+      type,
       value,
       units,
       input: units ? 'unitPrice' : 'received',

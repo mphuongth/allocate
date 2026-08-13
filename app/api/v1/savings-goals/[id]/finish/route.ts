@@ -71,9 +71,14 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   // The overview reads the whole ledger, so it prices the older holdings the
   // goal-detail page never loaded — which are exactly the ones that need it.
   const overview = await buildDashboardOverview(supabase, user.id)
-  const valuation = overview.ok
-    ? valuationByKey(overview.data.goals.find((g) => g.goalId === goalId) ?? {})
-    : {}
+  // An unvalued form is not a usable one: the fields would prefill from cost
+  // basis, and a prefill is the figure most users accept unchanged. Fail and let
+  // the sheet offer a retry, rather than present a liquidation priced at what
+  // things cost years ago.
+  if (!overview.ok) {
+    return NextResponse.json({ error: 'Failed to value the goal' }, { status: 500 })
+  }
+  const valuation = valuationByKey(overview.data.goals.find((g) => g.goalId === goalId) ?? {})
 
   const holdings = ((holdingsRes.data ?? []) as ServerHolding[]).map((h) => ({
     ...h,
