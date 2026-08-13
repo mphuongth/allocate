@@ -580,4 +580,64 @@ begin
   raise notice 'finish_savings_goal snapshot guard: all assertions passed';
 end $$;
 
+-- ── A finished goal can still be deleted outright ───────────────────────────
+--
+-- Deleting a goal first clears merge_target_goal_id on its CONSUMED held
+-- settlements: that reference has no foreign key, so the delete would leave it
+-- dangling and the #525 ownership trigger would refuse the very update the
+-- deletion depends on. Once a merge has consumed a settlement the target is dead
+-- metadata (lib/heldForMerge skips the row), so the freeze must not read that
+-- cleanup as a change of value — counting it made a finished goal undeletable,
+-- and the route's ignored error surfaced it as a bare 404.
+do $$
+declare
+  v_user uuid := gen_random_uuid();
+  v_goal uuid;
+  v_dep uuid := gen_random_uuid();
+  v_dest uuid := gen_random_uuid();
+  v_held uuid := gen_random_uuid();
+begin
+  insert into auth.users (id, email) values (v_user, 'finish-goal-consumed@test.invalid');
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Merged') returning goal_id into v_goal;
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, amount_vnd, interest_rate, notes
+  ) values (v_dep, v_user, v_goal, 'bank', 'investment', current_date - 50, 5000000, 5, 'Sổ nguồn');
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, amount_vnd, interest_rate, notes
+  ) values (v_dest, v_user, v_goal, 'bank', 'investment', current_date - 1, 5100000, 5, 'Sổ đích');
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type, parent_transaction_id,
+    investment_date, amount_vnd, principal_withdrawn, held_for_merge,
+    merge_target_goal_id, consumed_by_inv_id, notes
+  ) values (
+    v_held, v_user, v_goal, 'bank', 'withdrawal', v_dep,
+    current_date - 2, 5100000, 5000000, true, v_goal, v_dest, 'Đã gộp'
+  );
+
+  perform public.finish_savings_goal(v_goal, jsonb_build_array(
+    jsonb_build_object('key', 'tx:' || v_dest, 'received', 5200000)
+  ), current_date, 5200000, public.savings_goal_ledger_fingerprint(v_goal));
+
+  -- Metadata-only, on a row that contributes nothing: allowed.
+  update public.investment_transactions set merge_target_goal_id = null
+   where transaction_id = v_held;
+
+  -- ...while the settlement's MONEY is still settled.
+  begin
+    update public.investment_transactions set principal_withdrawn = 1
+     where transaction_id = v_held;
+    raise exception 'a consumed settlement must not be re-priced under an archive';
+  exception when sqlstate '23514' then null;
+  end;
+
+  delete from public.savings_goals where goal_id = v_goal;
+  if exists (select 1 from public.savings_goals where goal_id = v_goal) then
+    raise exception 'a finished goal must still be deletable';
+  end if;
+
+  raise notice 'finish_savings_goal consumed-settlement cleanup: all assertions passed';
+end $$;
+
 rollback;

@@ -360,7 +360,14 @@ as $$
     || '|' || coalesce(t.affects_progress::text, '')
     || '|' || coalesce(t.held_for_merge::text, '')
     || '|' || coalesce(t.consumed_by_inv_id::text, '')
-    || '|' || coalesce(t.merge_target_goal_id::text, '');
+    -- Only while the settlement is still PARKED. Once a merge has consumed it,
+    -- the cash lives in the destination deposit, lib/heldForMerge skips the row,
+    -- and the target is dead metadata — which deleting the goal has to clear
+    -- before the delete can land (the reference has no FK, so it would otherwise
+    -- dangle). Counting it here made that cleanup a "value change", the freeze
+    -- refused it on a completed goal, and the goal could not be deleted at all.
+    || '|' || case when t.consumed_by_inv_id is null
+                   then coalesce(t.merge_target_goal_id::text, '') else '' end;
 $$;
 
 -- What the goal's ledger looks like right now, as one comparable value.
