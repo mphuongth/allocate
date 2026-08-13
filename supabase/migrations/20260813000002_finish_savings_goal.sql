@@ -431,6 +431,124 @@ comment on function public.savings_goal_ledger_fingerprint(uuid) is
 -- hold, is refused rather than half-applied — it means the user is looking at a
 -- stale page, and finishing off a stale page is how a holding survives the finish
 -- and keeps a "completed" goal alive.
+-- Every live holding of a goal, exactly as the finish will liquidate it.
+--
+-- Extracted from finish_savings_goal so the SHEET can build its plan from the
+-- same enumeration the RPC validates it against. The goal-detail page loads the
+-- newest 200 transactions; on a goal with more history than that, older holdings
+-- fell off the page, the plan the sheet built was missing their keys, and the
+-- finish was refused as incomplete — a long-lived goal simply could not be
+-- finished. The client's view of what a goal holds is not authoritative, and
+-- with this it no longer has to be.
+create or replace function public.savings_goal_live_holdings(p_goal_id uuid)
+returns table (
+  key text, kind text, fund_id uuid, tx_id uuid, asset_type text,
+  principal bigint, units numeric, name text
+)
+language sql
+security invoker
+stable
+set search_path = ''
+as $$
+    with parent_wd as (
+      select w.parent_transaction_id as pid,
+             sum(coalesce(w.principal_withdrawn, 0)) as principal,
+             sum(coalesce(w.units_withdrawn, 0)) as units
+        from public.investment_transactions w
+       where w.user_id = (select g.user_id from public.savings_goals g where g.goal_id = p_goal_id)
+         and w.transaction_type = 'withdrawal'
+         and w.parent_transaction_id is not null
+         -- A row keyed by a fund draws on that bucket, not on its parent — the
+         -- same precedence check_withdrawal_balance applies.
+         and not coalesce(w.asset_type = 'fund' and w.fund_id is not null, false)
+       group by 1
+    ),
+    fund_wd as (
+      select w.fund_id,
+             sum(coalesce(w.principal_withdrawn, 0)) as principal,
+             sum(coalesce(w.units_withdrawn, 0)) as units
+        from public.investment_transactions w
+       where w.user_id = (select g.user_id from public.savings_goals g where g.goal_id = p_goal_id)
+         and w.transaction_type = 'withdrawal'
+         and w.asset_type = 'fund'
+         and w.fund_id is not null
+         and w.goal_id is not distinct from p_goal_id
+       group by 1
+    ),
+    -- The bucket's OTHER kind of claim (#606). A withdrawal PARENTED to one of
+    -- its purchases and not itself fund-keyed draws on the bucket too, at its
+    -- recorded units or the capped pro-rata share of the purchase it names.
+    -- Such rows can no longer be written, but the ones already in the ledger are
+    -- still claims and check_withdrawal_balance measures every new sale against
+    -- them — so a goal holding one could not be finished at all: this function
+    -- computed the gross bucket and the table refused the oversized sale.
+    -- Derivation copied from 20260803000005 so the two cannot disagree.
+    fund_parent_wd as (
+      select p.fund_id,
+             sum(case when coalesce(w.units_withdrawn, 0) > 0 then w.units_withdrawn
+                      else least(p.units, p.units * coalesce(w.principal_withdrawn, 0) / p.amount_vnd)
+                 end) as units,
+             sum(coalesce(w.principal_withdrawn, 0)) as principal
+        from public.investment_transactions w
+        join public.investment_transactions p
+          on p.transaction_id = w.parent_transaction_id
+       where w.user_id = (select g.user_id from public.savings_goals g where g.goal_id = p_goal_id)
+         and w.transaction_type = 'withdrawal'
+         and (w.asset_type is distinct from 'fund' or w.fund_id is null)
+         and p.transaction_type = 'investment'
+         and p.asset_type = 'fund'
+         and p.goal_id is not distinct from p_goal_id
+         -- A purchase with no units is no bucket: its withdrawal sits on the
+         -- parent axis and is measured there instead.
+         and coalesce(p.units, 0) > 0
+         and coalesce(p.amount_vnd, 0) > 0
+       group by p.fund_id
+    ),
+    live as (
+      select t.*,
+             t.amount_vnd - coalesce(pw.principal, 0) as eff_principal,
+             coalesce(t.units, 0) - coalesce(pw.units, 0) as eff_units
+        from public.investment_transactions t
+        left join parent_wd pw on pw.pid = t.transaction_id
+       where t.user_id = (select g.user_id from public.savings_goals g where g.goal_id = p_goal_id)
+         and t.goal_id = p_goal_id
+         and t.transaction_type = 'investment'
+         and t.renewed_from_transaction_id is null
+         and not coalesce(t.held_for_merge, false)
+    )
+    select 'fund:' || l.fund_id as key, 'fund'::text as kind, l.fund_id,
+           null::uuid as tx_id, 'fund'::text as asset_type,
+           (sum(l.amount_vnd) - coalesce(max(fw.principal), 0) - coalesce(max(fpw.principal), 0))::bigint as principal,
+           (sum(l.units) - coalesce(max(fw.units), 0) - coalesce(max(fpw.units), 0))::numeric as units
+           , max(f.name) as name
+      from live l
+      left join public.funds f on f.id = l.fund_id
+      left join fund_wd fw on fw.fund_id = l.fund_id
+      left join fund_parent_wd fpw on fpw.fund_id = l.fund_id
+     where l.fund_id is not null and l.asset_type = 'fund' and l.units is not null
+     group by l.fund_id
+    having sum(l.units) - coalesce(max(fw.units), 0) - coalesce(max(fpw.units), 0) > 0
+    union all
+    select 'book:' || l.deposit_group_id, 'book', null, l.deposit_group_id, 'bank',
+           sum(l.eff_principal)::bigint, null::numeric,
+           max(case when l.transaction_id = l.deposit_group_id then l.notes end)
+      from live l
+     where l.fund_id is null and l.deposit_group_id is not null
+       and l.eff_principal > 0
+     group by l.deposit_group_id
+    union all
+    select 'tx:' || l.transaction_id, 'single', null, l.transaction_id, l.asset_type,
+           l.eff_principal::bigint,
+           case when l.asset_type = 'gold' then l.eff_units::numeric else null end,
+           l.notes
+      from live l
+     where l.fund_id is null and l.deposit_group_id is null
+       and (case when l.asset_type = 'gold' then l.eff_units > 0 else l.eff_principal > 0 end)
+$$;
+
+comment on function public.savings_goal_live_holdings(uuid) is
+  'The holdings a finish would liquidate, by the same balance keys the ledger uses (#650). One enumeration for the sheet and the RPC.';
+
 -- Both earlier shapes are dropped first. The four-argument one would otherwise
 -- make a four-argument call ambiguous rather than overloaded ("function is not
 -- unique"), and Postgres refuses to remove a parameter default through CREATE OR
@@ -538,97 +656,7 @@ begin
   -- Every live holding of this goal, valued at what it still holds. Mirrors
   -- buildInvRows: funds dedup per fund, tranches roll up into their book, and a
   -- holding drawn down to nothing is not a holding.
-  for v_h in
-    with parent_wd as (
-      select w.parent_transaction_id as pid,
-             sum(coalesce(w.principal_withdrawn, 0)) as principal,
-             sum(coalesce(w.units_withdrawn, 0)) as units
-        from public.investment_transactions w
-       where w.user_id = v_goal.user_id
-         and w.transaction_type = 'withdrawal'
-         and w.parent_transaction_id is not null
-         -- A row keyed by a fund draws on that bucket, not on its parent — the
-         -- same precedence check_withdrawal_balance applies.
-         and not coalesce(w.asset_type = 'fund' and w.fund_id is not null, false)
-       group by 1
-    ),
-    fund_wd as (
-      select w.fund_id,
-             sum(coalesce(w.principal_withdrawn, 0)) as principal,
-             sum(coalesce(w.units_withdrawn, 0)) as units
-        from public.investment_transactions w
-       where w.user_id = v_goal.user_id
-         and w.transaction_type = 'withdrawal'
-         and w.asset_type = 'fund'
-         and w.fund_id is not null
-         and w.goal_id is not distinct from p_goal_id
-       group by 1
-    ),
-    -- The bucket's OTHER kind of claim (#606). A withdrawal PARENTED to one of
-    -- its purchases and not itself fund-keyed draws on the bucket too, at its
-    -- recorded units or the capped pro-rata share of the purchase it names.
-    -- Such rows can no longer be written, but the ones already in the ledger are
-    -- still claims and check_withdrawal_balance measures every new sale against
-    -- them — so a goal holding one could not be finished at all: this function
-    -- computed the gross bucket and the table refused the oversized sale.
-    -- Derivation copied from 20260803000005 so the two cannot disagree.
-    fund_parent_wd as (
-      select p.fund_id,
-             sum(case when coalesce(w.units_withdrawn, 0) > 0 then w.units_withdrawn
-                      else least(p.units, p.units * coalesce(w.principal_withdrawn, 0) / p.amount_vnd)
-                 end) as units,
-             sum(coalesce(w.principal_withdrawn, 0)) as principal
-        from public.investment_transactions w
-        join public.investment_transactions p
-          on p.transaction_id = w.parent_transaction_id
-       where w.user_id = v_goal.user_id
-         and w.transaction_type = 'withdrawal'
-         and (w.asset_type is distinct from 'fund' or w.fund_id is null)
-         and p.transaction_type = 'investment'
-         and p.asset_type = 'fund'
-         and p.goal_id is not distinct from p_goal_id
-         -- A purchase with no units is no bucket: its withdrawal sits on the
-         -- parent axis and is measured there instead.
-         and coalesce(p.units, 0) > 0
-         and coalesce(p.amount_vnd, 0) > 0
-       group by p.fund_id
-    ),
-    live as (
-      select t.*,
-             t.amount_vnd - coalesce(pw.principal, 0) as eff_principal,
-             coalesce(t.units, 0) - coalesce(pw.units, 0) as eff_units
-        from public.investment_transactions t
-        left join parent_wd pw on pw.pid = t.transaction_id
-       where t.user_id = v_goal.user_id
-         and t.goal_id = p_goal_id
-         and t.transaction_type = 'investment'
-         and t.renewed_from_transaction_id is null
-         and not coalesce(t.held_for_merge, false)
-    )
-    select 'fund:' || l.fund_id as key, 'fund'::text as kind, l.fund_id,
-           null::uuid as tx_id, null::text as asset_type,
-           (sum(l.amount_vnd) - coalesce(max(fw.principal), 0) - coalesce(max(fpw.principal), 0))::bigint as principal,
-           (sum(l.units) - coalesce(max(fw.units), 0) - coalesce(max(fpw.units), 0))::numeric as units
-      from live l
-      left join fund_wd fw on fw.fund_id = l.fund_id
-      left join fund_parent_wd fpw on fpw.fund_id = l.fund_id
-     where l.fund_id is not null and l.asset_type = 'fund' and l.units is not null
-     group by l.fund_id
-    having sum(l.units) - coalesce(max(fw.units), 0) - coalesce(max(fpw.units), 0) > 0
-    union all
-    select 'book:' || l.deposit_group_id, 'book', null, l.deposit_group_id, 'bank',
-           sum(l.eff_principal)::bigint, null::numeric
-      from live l
-     where l.fund_id is null and l.deposit_group_id is not null
-       and l.eff_principal > 0
-     group by l.deposit_group_id
-    union all
-    select 'tx:' || l.transaction_id, 'single', null, l.transaction_id, l.asset_type,
-           l.eff_principal::bigint,
-           case when l.asset_type = 'gold' then l.eff_units::numeric else null end
-      from live l
-     where l.fund_id is null and l.deposit_group_id is null
-       and (case when l.asset_type = 'gold' then l.eff_units > 0 else l.eff_principal > 0 end)
+  for v_h in select * from public.savings_goal_live_holdings(p_goal_id)
   loop
     v_live_keys := v_live_keys || v_h.key;
     select (e->>'received')::bigint into v_received

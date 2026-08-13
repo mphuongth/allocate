@@ -78,6 +78,41 @@ describe('buildFinishHoldings', () => {
     expect(buildFinishHoldings([row({ id: 'recurring:s1', isRecurring: true })])).toEqual([])
   })
 
+  it('takes the SERVER list as the set of holdings, not this page', () => {
+    // The goal-detail page loads the newest 200 transactions. On a long-lived
+    // goal an older holding is simply absent from `rows`; a plan built from
+    // them would miss its key and the finish would be refused as incomplete.
+    const holdings = buildFinishHoldings([row({ id: 'tx-1' })], [
+      { key: 'tx:tx-1', kind: 'single', asset_type: 'bank', principal: 1_000_000, units: null, name: 'Loaded' },
+      { key: 'tx:old', kind: 'single', asset_type: 'bank', principal: 3_000_000, units: null, name: 'Sổ cũ' },
+    ])
+    expect(holdings.map((h) => h.key)).toEqual(['tx:tx-1', 'tx:old'])
+  })
+
+  it('prices an unloaded holding from what the ledger says it holds', () => {
+    const [h] = buildFinishHoldings([], [
+      { key: 'tx:old', kind: 'single', asset_type: 'bank', principal: 3_000_000, units: null, name: 'Sổ cũ' },
+    ])
+    expect(h).toMatchObject({ name: 'Sổ cũ', type: 'bank', value: 3_000_000, input: 'received', suggested: 3_000_000 })
+  })
+
+  it('asks for a unit price on unloaded gold, derived from the ledger', () => {
+    const [h] = buildFinishHoldings([], [
+      { key: 'tx:g', kind: 'single', asset_type: 'gold', principal: 8_000_000, units: 2, name: 'Vàng' },
+    ])
+    expect(h).toMatchObject({ input: 'unitPrice', units: 2, suggested: 4_000_000 })
+  })
+
+  it('still prefers this page for a holding it HAS loaded — that is where today\'s price is', () => {
+    // The ledger knows the cost basis; only the page knows what gold is worth
+    // this morning.
+    const [h] = buildFinishHoldings(
+      [row({ id: 'g', type: 'gold', units: 2, value: 9_000_000 })],
+      [{ key: 'tx:g', kind: 'single', asset_type: 'gold', principal: 8_000_000, units: 2, name: 'Vàng' }],
+    )
+    expect(h.suggested).toBe(4_500_000)
+  })
+
   it('keeps every real holding, one entry each', () => {
     const holdings = buildFinishHoldings([
       row({ id: 'tx-1' }),

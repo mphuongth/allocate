@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { ValidationError, validateUUID } from '@/lib/validation'
+import { ValidationError, validateAmount, validateUUID } from '@/lib/validation'
 import { readJsonBody } from '@/lib/apiBody'
 import { todayIso } from '@/lib/dates'
 import { buildDashboardOverview } from '@/lib/dashboardOverview'
@@ -14,6 +14,10 @@ import { buildDashboardOverview } from '@/lib/dashboardOverview'
 //        the completion value, and translates the database's refusals.
 
 type Blocker = { code: string; label: string }
+type ServerHolding = {
+  key: string; kind: string; asset_type: string | null
+  principal: number | null; units: number | null; name: string | null
+}
 
 async function loadGoal(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>, goalId: string, userId: string) {
   return supabase
@@ -42,14 +46,22 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const { data: goal } = await loadGoal(supabase, goalId, user.id)
   if (!goal) return NextResponse.json({ error: 'Goal not found' }, { status: 404 })
 
-  const { data, error } = await supabase.rpc('savings_goal_finish_blockers', { p_goal_id: goalId })
-  if (error) {
-    console.error('savings_goal_finish_blockers failed', error.message)
+  // Both from the database, and the holdings from the very enumeration the
+  // finish validates the plan against. The goal-detail page holds the newest 200
+  // transactions; on a longer-lived goal the older holdings are simply not there,
+  // and a plan built from that page would be refused as incomplete for good.
+  const [blockersRes, holdingsRes] = await Promise.all([
+    supabase.rpc('savings_goal_finish_blockers', { p_goal_id: goalId }),
+    supabase.rpc('savings_goal_live_holdings', { p_goal_id: goalId }),
+  ])
+  if (blockersRes.error || holdingsRes.error) {
+    console.error('finish precheck failed', blockersRes.error?.message ?? holdingsRes.error?.message)
     return NextResponse.json({ error: 'Failed to check the goal' }, { status: 500 })
   }
 
   return NextResponse.json({
-    blockers: (data ?? []) as Blocker[],
+    blockers: (blockersRes.data ?? []) as Blocker[],
+    holdings: (holdingsRes.data ?? []) as ServerHolding[],
     completed: goal.completed_at != null,
   })
 }
@@ -74,8 +86,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       // Positive, not merely non-negative: a withdrawal's amount_vnd must be
       // positive, so a zero would be refused by the table and roll the whole
       // finish back behind a generic error.
-      const received = Number(entry.received)
-      if (!Number.isFinite(received) || received < 1) {
+      //
+      // Bounded by the shared validateAmount, which caps at MAX_SAFE_INTEGER —
+      // the column is a BIGINT, and 1e30 is a finite number that rounds happily
+      // here and then overflows the cast inside the transaction, turning a bad
+      // request into a 500.
+      const received = validateAmount(entry.received, `plan[${i}].received`, { positive: true })
+      if (received < 1) {
         throw new ValidationError(`plan[${i}].received must be a positive amount`)
       }
       return { key: entry.key, received: Math.round(received) }

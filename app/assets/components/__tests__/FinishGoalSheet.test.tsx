@@ -20,6 +20,13 @@ const row = (over: Partial<InvRow>): InvRow => ({
 
 const ROWS = [row({}), row({ id: 'gold-1', name: 'Gold', type: 'gold', units: 2, value: 8_000_000 })]
 
+// What the server says the goal holds. The sheet builds its plan from THIS, not
+// from the page's newest-200 window — see the truncation test below.
+const SERVER_HOLDINGS = [
+  { key: 'tx:tx-1', kind: 'single', asset_type: 'bank', principal: 10_000_000, units: null, name: 'ACB deposit' },
+  { key: 'tx:gold-1', kind: 'single', asset_type: 'gold', principal: 8_000_000, units: 2, name: 'Gold' },
+]
+
 let fetchMock: ReturnType<typeof vi.fn>
 
 function mountSheet(props: Partial<Parameters<typeof FinishGoalSheet>[0]> = {}) {
@@ -39,7 +46,7 @@ function mountSheet(props: Partial<Parameters<typeof FinishGoalSheet>[0]> = {}) 
 beforeEach(() => {
   fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     if (!init || init.method !== 'POST') {
-      return { ok: true, json: async () => ({ blockers: [], completed: false }) }
+      return { ok: true, json: async () => ({ blockers: [], holdings: SERVER_HOLDINGS, completed: false }) }
     }
     return { ok: true, json: async () => ({ realized: 18_400_000, holdings: 2, completionPercentage: 100 }) }
   })
@@ -88,7 +95,7 @@ describe('FinishGoalSheet', () => {
   it('names what still feeds the goal instead of offering a doomed form', async () => {
     fetchMock.mockImplementation(async () => ({
       ok: true,
-      json: async () => ({ blockers: [{ code: 'dca_plan', label: 'VESAF' }], completed: false }),
+      json: async () => ({ blockers: [{ code: 'dca_plan', label: 'VESAF' }], holdings: SERVER_HOLDINGS, completed: false }),
     }))
     mountSheet()
     await waitFor(() => expect(screen.getByTestId('finish-goal-blockers')).toBeInTheDocument())
@@ -102,7 +109,7 @@ describe('FinishGoalSheet', () => {
     fetchMock.mockImplementation(async (_url: string, init?: RequestInit) => (
       init?.method === 'POST'
         ? { ok: false, status: 409, json: async () => ({ error: 'Something still feeds this goal.', code: 'blocked_recurring_saving' }) }
-        : { ok: true, json: async () => ({ blockers: [], completed: false }) }
+        : { ok: true, json: async () => ({ blockers: [], holdings: SERVER_HOLDINGS, completed: false }) }
     ))
     mountSheet()
     await waitFor(() => expect(screen.getByTestId('finish-goal-confirm')).toBeEnabled())
@@ -117,7 +124,7 @@ describe('FinishGoalSheet', () => {
     fetchMock.mockImplementation(async (_url: string, init?: RequestInit) => (
       init?.method === 'POST'
         ? { ok: false, status: 409, json: async () => ({ error: 'the liquidation plan leaves holding tx:x unrealized', code: 'stale_plan' }) }
-        : { ok: true, json: async () => ({ blockers: [], completed: false }) }
+        : { ok: true, json: async () => ({ blockers: [], holdings: SERVER_HOLDINGS, completed: false }) }
     ))
     mountSheet({ onFinished })
     await waitFor(() => expect(screen.getByTestId('finish-goal-confirm')).toBeEnabled())
@@ -155,16 +162,69 @@ describe('FinishGoalSheet', () => {
     expect(screen.getByTestId('finish-goal-confirm')).toBeDisabled()
   })
 
+  it('offers a holding this page never loaded, priced from the ledger', async () => {
+    // A goal with more than 200 transactions loads only the newest page, so an
+    // older holding is absent from `rows`. It must still appear, or the plan
+    // misses its key and the finish is refused as incomplete — permanently.
+    const user = userEvent.setup()
+    fetchMock.mockImplementation(async (_url: string, init?: RequestInit) => (
+      init?.method === 'POST'
+        ? { ok: true, json: async () => ({ realized: 21_000_000, holdings: 3 }) }
+        : {
+          ok: true,
+          json: async () => ({
+            blockers: [],
+            holdings: [
+              ...SERVER_HOLDINGS,
+              { key: 'tx:old-1', kind: 'single', asset_type: 'bank', principal: 3_000_000, units: null, name: 'Sổ cũ' },
+            ],
+            completed: false,
+          }),
+        }
+    ))
+    mountSheet()
+    await waitFor(() => expect(screen.getByTestId('finish-input-tx:old-1')).toBeInTheDocument())
+    expect(screen.getByText('Sổ cũ')).toBeInTheDocument()
+    // Prefilled from what the ledger says it still holds.
+    expect(screen.getByTestId('finish-goal-total')).toHaveTextContent('21.000.000')
+
+    await user.click(screen.getByTestId('finish-goal-confirm'))
+    const post = fetchMock.mock.calls.find((c) => c[1]?.method === 'POST')
+    expect(JSON.parse(post![1].body as string).plan).toEqual([
+      { key: 'tx:tx-1', received: 10_000_000 },
+      { key: 'tx:gold-1', received: 8_000_000 },
+      { key: 'tx:old-1', received: 3_000_000 },
+    ])
+  })
+
+  it('does not render the form before the server has said what the goal holds', async () => {
+    let release: (v: unknown) => void = () => {}
+    const pending = new Promise((r) => { release = r })
+    fetchMock.mockImplementation(async () => { await pending; return { ok: true, json: async () => ({ blockers: [], holdings: SERVER_HOLDINGS, completed: false }) } })
+    mountSheet()
+    expect(screen.queryByTestId('finish-goal-confirm')).not.toBeInTheDocument()
+    release(null)
+    await waitFor(() => expect(screen.getByTestId('finish-goal-confirm')).toBeInTheDocument())
+  })
+
   it('lets a goal with nothing left be archived', async () => {
     // The user withdrew everything by hand; finishing is now purely the archive.
+    fetchMock.mockImplementation(async (_url: string, init?: RequestInit) => (
+      init?.method === 'POST'
+        ? { ok: true, json: async () => ({ realized: 0, holdings: 0 }) }
+        : { ok: true, json: async () => ({ blockers: [], holdings: [], completed: false }) }
+    ))
     mountSheet({ rows: [] })
     await waitFor(() => expect(screen.getByTestId('finish-goal-confirm')).toBeEnabled())
     expect(screen.getByText(/holds nothing left/)).toBeInTheDocument()
   })
 
   it('leaves a recurring saving out of the liquidation list', async () => {
-    // It is a plan definition with no transaction to sell — the blocker check is
-    // what stops the finish, not a row the user is asked to price.
+    // It is a plan definition with no transaction to sell — the server does not
+    // enumerate it, and the blocker check is what stops the finish.
+    fetchMock.mockImplementation(async () => ({
+      ok: true, json: async () => ({ blockers: [], holdings: [], completed: false }),
+    }))
     mountSheet({ rows: [row({ id: 'recurring:s1', name: 'Monthly transfer', isRecurring: true })] })
     await waitFor(() => expect(screen.getByTestId('finish-goal-confirm')).toBeInTheDocument())
     expect(screen.queryByText('Monthly transfer')).not.toBeInTheDocument()

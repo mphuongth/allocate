@@ -9,7 +9,7 @@
 // out — plus refusing to submit until every holding has a figure, and naming
 // whatever still feeds the goal instead of letting the user fill in a form that
 // was always going to be refused.
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocale } from 'next-intl'
 import { AlertTriangle, Check, X } from 'lucide-react'
 import { iconHit } from './iconHit'
@@ -21,7 +21,7 @@ import { TypeIcon } from './goalDetailShared'
 import type { InvRow } from '@/features/dashboard/contracts'
 import {
   buildFinishHoldings, finishPlanFrom, isFinishPlanComplete, realizedFor, totalRealized,
-  type FinishHolding, type FinishInput,
+  type FinishHolding, type FinishInput, type ServerHolding,
 } from '@/lib/finishGoal'
 
 export interface Blocker { code: string; label: string }
@@ -68,22 +68,34 @@ export function FinishGoalSheet({ open, goalId, goalName, rows, onClose, onFinis
   const isVI = useLocale() === 'vi'
   const mounted = useDialogMount(open)
 
-  // Seeded lazily as well as on the open transition below: this sheet is
-  // rendered by `{finishOpen && …}`, so it MOUNTS already open and
-  // useResetOnOpen — which fires on a transition — never runs for it. Without
-  // the lazy seed every field would start blank and the submit would be dead.
-  const [inputs, setInputs] = useState<FinishInput>(
-    () => Object.fromEntries(buildFinishHoldings(rows).map((h) => [h.key, String(h.suggested)])),
-  )
+  const [inputs, setInputs] = useState<FinishInput>({})
   // `blockers === null` means the prerequisite check has not produced an answer
   // — either still running (`checking`) or failed. Neither may render the form.
   const [blockers, setBlockers] = useState<Blocker[] | null>(null)
+  // The SERVER's list of what this goal still holds, and the only thing allowed
+  // to decide WHICH holdings exist. This page loads the newest 200 transactions,
+  // so on a long-lived goal the older holdings are simply not in `rows` — a plan
+  // built from them would omit those keys and be refused as incomplete, for
+  // good. Null until the list arrives; the form waits.
+  const [server, setServer] = useState<ServerHolding[] | null>(null)
   const [checking, setChecking] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState<number | null>(null)
 
-  const holdings = buildFinishHoldings(rows)
+  const holdings = useMemo(
+    () => (server ? buildFinishHoldings(rows, server) : []),
+    [rows, server],
+  )
+
+  // What each field actually holds: the user's edit if there is one, otherwise
+  // the suggestion. Derived rather than seeded — a seeding step would have to
+  // re-run whenever the holdings change identity, and that is the shape that
+  // turns into a fetch loop. Untouched fields simply read as the suggestion.
+  const values = useMemo(
+    () => Object.fromEntries(holdings.map((h) => [h.key, inputs[h.key] ?? String(h.suggested)])),
+    [holdings, inputs],
+  )
 
   // Prefill every field from today's valuation the moment the sheet opens, and
   // ask the server what still feeds the goal. Preselected-and-prefilled is the
@@ -99,8 +111,10 @@ export function FinishGoalSheet({ open, goalId, goalName, rows, onClose, onFinis
       // ready and enable a submit on a prerequisite that never ran.
       if (!res.ok) throw new Error('blocker check failed')
       const body = await res.json()
+      setServer(body.holdings ?? [])
       setBlockers(body.blockers ?? [])
     } catch {
+      setServer(null)
       setBlockers(null)
       setError(isVI ? 'Không kiểm tra được mục tiêu. Thử lại.' : 'Could not check the goal. Try again.')
     }
@@ -110,7 +124,8 @@ export function FinishGoalSheet({ open, goalId, goalName, rows, onClose, onFinis
   // State only — useResetOnOpen runs during render, so the load lives in the
   // effect below (which also covers a sheet that mounts already open).
   useResetOnOpen(open, () => {
-    setInputs(Object.fromEntries(buildFinishHoldings(rows).map((h) => [h.key, String(h.suggested)])))
+    setInputs({})
+    setServer(null)
     setBlockers(null)
     setChecking(true)
     setSaving(false)
@@ -126,8 +141,8 @@ export function FinishGoalSheet({ open, goalId, goalName, rows, onClose, onFinis
     void load()
   }, [open, load])
 
-  const complete = isFinishPlanComplete(holdings, inputs)
-  const total = totalRealized(holdings, inputs)
+  const complete = isFinishPlanComplete(holdings, values)
+  const total = totalRealized(holdings, values)
   const blocked = (blockers?.length ?? 0) > 0
 
   async function handleConfirm() {
@@ -138,7 +153,7 @@ export function FinishGoalSheet({ open, goalId, goalName, rows, onClose, onFinis
       const res = await fetch(`/api/v1/savings-goals/${goalId}/finish`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan: finishPlanFrom(holdings, inputs) }),
+        body: JSON.stringify({ plan: finishPlanFrom(holdings, values) }),
       })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
@@ -237,7 +252,7 @@ export function FinishGoalSheet({ open, goalId, goalName, rows, onClose, onFinis
               <div style={{ fontSize: 13, color: 'var(--c-muted)', marginTop: 4 }}>{goalName}</div>
               <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--c-pos)', marginTop: 12, letterSpacing: '-0.02em' }}>{fmt(done)}</div>
             </div>
-          ) : blockers === null ? (
+          ) : blockers === null || server === null ? (
             // No answer from the prerequisite check yet — running, or failed.
             // Neither state may show a form whose submit would be a guess.
             checking ? (
@@ -284,7 +299,7 @@ export function FinishGoalSheet({ open, goalId, goalName, rows, onClose, onFinis
                 <HoldingRow
                   key={h.key}
                   holding={h}
-                  value={inputs[h.key] ?? ''}
+                  value={values[h.key] ?? ''}
                   onChange={(v) => setInputs((prev) => ({ ...prev, [h.key]: v }))}
                   isVI={isVI}
                   labels={t}

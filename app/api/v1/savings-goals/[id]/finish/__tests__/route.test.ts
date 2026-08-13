@@ -15,6 +15,7 @@ const h = vi.hoisted(() => ({
   rpc: [] as Array<{ fn: string; args: Record<string, unknown> }>,
   rpcResult: { data: {} as unknown, error: null as { message: string } | null },
   blockers: { data: [] as unknown[], error: null as { message: string } | null },
+  holdings: { data: [] as unknown[], error: null as { message: string } | null },
   fingerprint: { data: '4:2026-08-13 02:00:00+00' as unknown, error: null as { message: string } | null },
   overview: { ok: true, data: { goals: [] as Array<Record<string, unknown>> } } as unknown,
 }))
@@ -33,6 +34,7 @@ vi.mock('@/lib/supabase-server', () => ({
     rpc: async (fn: string, args: Record<string, unknown>) => {
       h.rpc.push({ fn, args })
       if (fn === 'savings_goal_finish_blockers') return h.blockers
+      if (fn === 'savings_goal_live_holdings') return h.holdings
       if (fn === 'savings_goal_ledger_fingerprint') return h.fingerprint
       return h.rpcResult
     },
@@ -69,6 +71,7 @@ beforeEach(() => {
   h.rpc = []
   h.rpcResult = { data: { realized: 30_000_000, holdings: 4, completion_value: 26_000_000 }, error: null }
   h.blockers = { data: [], error: null }
+  h.holdings = { data: [], error: null }
   h.fingerprint = { data: '4:2026-08-13 02:00:00+00', error: null }
   h.overview = { ok: true, data: { goals: [{ goalId: GOAL_ID, currentValue: 25_000_000, progressValue: 26_000_000 }] } }
 })
@@ -80,6 +83,9 @@ describe('GET (blockers)', () => {
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({
       blockers: [{ code: 'recurring_saving', label: 'Gửi góp hàng tháng' }],
+      // The authoritative holdings ride along, so the sheet never builds its
+      // plan from the page's newest-200 window.
+      holdings: [],
       completed: false,
     })
   })
@@ -137,6 +143,13 @@ describe('POST', () => {
 
   it('rejects a plan that is not an array', async () => {
     const res = await post({ plan: 'everything' })
+    expect(res.status).toBe(400)
+    expect(h.rpc).toHaveLength(0)
+  })
+
+  it('rejects an amount too large for the BIGINT column instead of 500ing on the cast', async () => {
+    // 1e30 is finite, rounds happily, and then overflows inside the transaction.
+    const res = await post({ plan: [{ key: 'tx:abc', received: 1e30 }] })
     expect(res.status).toBe(400)
     expect(h.rpc).toHaveLength(0)
   })

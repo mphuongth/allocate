@@ -70,26 +70,69 @@ export function finishHoldingKey(row: InvRow): string {
   return `tx:${row.id}`
 }
 
+/** One row of the server's own enumeration of what a goal still holds. */
+export interface ServerHolding {
+  key: string
+  kind: string
+  asset_type: string | null
+  principal: number | null
+  units: number | null
+  name: string | null
+}
+
+function holdingFromRow(row: InvRow): FinishHolding {
+  const byUnit = row.type === 'gold' && !!row.units && row.units > 0
+  return {
+    key: finishHoldingKey(row),
+    name: row.name,
+    type: row.type,
+    value: row.value,
+    units: byUnit ? row.units : null,
+    input: byUnit ? 'unitPrice' : 'received',
+    // The price the tab's own valuation used, so an untouched field records
+    // today's market rather than an invented number.
+    suggested: byUnit ? Math.round(row.value / (row.units as number)) : Math.round(row.value),
+  }
+}
+
 /**
- * The holdings a finish has to liquidate, from the goal-detail rows.
+ * The holdings a finish has to liquidate.
  *
- * Recurring savings are dropped: they are a plan definition, not a transaction —
- * there is nothing to sell, and the synthesized id is a 400 from the withdrawal
- * API (#640). They block the finish instead, named by the blockers endpoint.
+ * THE SERVER'S LIST DECIDES which holdings exist. The goal-detail page loads the
+ * newest 200 transactions, so on a long-lived goal the older holdings are simply
+ * not in `rows` — a plan built from that page would miss their keys and the
+ * finish would be refused as incomplete, permanently. The client's view is used
+ * only to DISPLAY a holding it happens to have loaded (its name, what it is worth
+ * today, the gold price to prefill); a holding the page never saw still appears,
+ * priced from what the ledger says it holds.
+ *
+ * Recurring savings never reach here: they are a plan definition with no
+ * transaction to sell (#640), so the server does not enumerate them and they
+ * block the finish instead.
  */
-export function buildFinishHoldings(rows: InvRow[]): FinishHolding[] {
-  return rows.filter((r) => !r.isRecurring).map((row) => {
-    const byUnit = row.type === 'gold' && !!row.units && row.units > 0
+export function buildFinishHoldings(rows: InvRow[], server?: ServerHolding[]): FinishHolding[] {
+  const byKey = new Map<string, InvRow>()
+  for (const row of rows) {
+    if (!row.isRecurring) byKey.set(finishHoldingKey(row), row)
+  }
+  if (!server) return rows.filter((r) => !r.isRecurring).map(holdingFromRow)
+
+  return server.map((h) => {
+    const row = byKey.get(h.key)
+    if (row) return holdingFromRow(row)
+    // Never loaded by this page. Everything shown comes from the ledger: its
+    // remaining principal stands in for "worth today", which is exactly right
+    // for a deposit and an honest starting point for anything else.
+    const units = h.asset_type === 'gold' && h.units ? Number(h.units) : null
+    const principal = Number(h.principal ?? 0)
     return {
-      key: finishHoldingKey(row),
-      name: row.name,
-      type: row.type,
-      value: row.value,
-      units: byUnit ? row.units : null,
-      input: byUnit ? 'unitPrice' : 'received',
-      // The price the tab's own valuation used, so an untouched field records
-      // today's market rather than an invented number.
-      suggested: byUnit ? Math.round(row.value / (row.units as number)) : Math.round(row.value),
+      key: h.key,
+      name: h.name ?? h.asset_type ?? h.kind,
+      type: h.asset_type ?? 'bank',
+      value: principal,
+      units,
+      input: units ? 'unitPrice' : 'received',
+      suggested: units ? Math.round(principal / units) : principal,
     }
   })
 }
