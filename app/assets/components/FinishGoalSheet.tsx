@@ -93,7 +93,9 @@ export function FinishGoalSheet({ open, goalId, goalName, rows, onClose, onFinis
   // re-run whenever the holdings change identity, and that is the shape that
   // turns into a fetch loop. Untouched fields simply read as the suggestion.
   const values = useMemo(
-    () => Object.fromEntries(holdings.map((h) => [h.key, inputs[h.key] ?? String(h.suggested)])),
+    // An unpriced holding starts EMPTY: there is no honest suggestion to make,
+    // and the submit stays disabled until the user states the cash.
+    () => Object.fromEntries(holdings.map((h) => [h.key, inputs[h.key] ?? (h.unpriced ? '' : String(h.suggested))])),
     [holdings, inputs],
   )
 
@@ -359,7 +361,9 @@ function HoldingRow({ holding, value, onChange, isVI, labels }: {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{holding.name}</div>
           <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 2 }}>
-            {isVI ? 'Giá trị hiện tại' : 'Worth today'}: {fmt(holding.value)}
+            {holding.unpriced
+              ? (isVI ? 'Chưa có giá vàng — nhập giá bán thực tế' : 'No gold price set — enter what you sold at')
+              : `${isVI ? 'Giá trị hiện tại' : 'Worth today'}: ${fmt(holding.value)}`}
             {holding.units != null && ` · ${holding.units} ${isVI ? 'chỉ' : 'chỉ'}`}
           </div>
         </div>

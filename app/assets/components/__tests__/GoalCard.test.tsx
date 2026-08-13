@@ -111,6 +111,12 @@ describe('GoalCard — a finished goal (#650)', () => {
     expect(screen.getByText('₫ 121.900.000')).toBeInTheDocument()
   })
 
+  it('withholds the live P&L and transaction count', () => {
+    render(<GoalCard {...finishedProps} profitLoss={0} profitLossPercentage={0} transactionCount={0} />)
+    expect(screen.queryByText(/0\.00%/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/^transactions/)).not.toBeInTheDocument()
+  })
+
   it('leaves an active goal chip alone', () => {
     render(<GoalCard {...baseProps} />)
     expect(screen.queryByTestId('goal-completed-badge')).not.toBeInTheDocument()

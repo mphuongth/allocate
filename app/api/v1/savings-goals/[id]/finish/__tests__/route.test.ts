@@ -16,6 +16,7 @@ const h = vi.hoisted(() => ({
   rpcResult: { data: {} as unknown, error: null as { message: string } | null },
   blockers: { data: [] as unknown[], error: null as { message: string } | null },
   holdings: { data: [] as unknown[], error: null as { message: string } | null },
+  goldPrice: { data: { price_per_chi: 4_700_000 } as { price_per_chi: number } | null, error: null as { message: string } | null },
   fingerprint: { data: '4:2026-08-13 02:00:00+00' as unknown, error: null as { message: string } | null },
   overview: { ok: true, data: { goals: [] as Array<Record<string, unknown>> } } as unknown,
 }))
@@ -23,11 +24,11 @@ const h = vi.hoisted(() => ({
 vi.mock('@/lib/supabase-server', () => ({
   createSupabaseServerClient: async () => ({
     auth: { getUser: async () => ({ data: { user: h.user } }) },
-    from: () => {
+    from: (table: string) => {
       const chain: Record<string, unknown> = {
         select: () => chain,
         eq: () => chain,
-        maybeSingle: async () => ({ data: h.goal, error: null }),
+        maybeSingle: async () => (table === 'gold_price_settings' ? h.goldPrice : { data: h.goal, error: null }),
       }
       return chain
     },
@@ -72,6 +73,7 @@ beforeEach(() => {
   h.rpcResult = { data: { realized: 30_000_000, holdings: 4, completion_value: 26_000_000 }, error: null }
   h.blockers = { data: [], error: null }
   h.holdings = { data: [], error: null }
+  h.goldPrice = { data: { price_per_chi: 4_700_000 }, error: null }
   h.fingerprint = { data: '4:2026-08-13 02:00:00+00', error: null }
   h.overview = { ok: true, data: { goals: [{ goalId: GOAL_ID, currentValue: 25_000_000, progressValue: 26_000_000 }] } }
 })
@@ -112,6 +114,19 @@ describe('GET (blockers)', () => {
       // back to the cost basis and the user can correct it.
       { key: 'tx:x9', kind: 'single', asset_type: 'bank', principal: 500_000, units: null, name: 'Không định giá được', value: null },
     ])
+  })
+
+  it('hands gold over unvalued when no gold price is configured', async () => {
+    // The overview values gold at its purchase cost when no price is set, which
+    // reads here as a perfectly good valuation — so ask the source directly.
+    h.goldPrice = { data: null, error: null }
+    h.holdings = { data: [{ key: 'tx:g', kind: 'single', asset_type: 'gold', principal: 8_000_000, units: 2, name: 'Vàng' }], error: null }
+    h.overview = { ok: true, data: { goals: [{
+      goalId: GOAL_ID, currentValue: 8_000_000, progressValue: 8_000_000,
+      funds: [], nonFunds: [{ transactionId: 'g', currentValue: 8_000_000, units: 2 }],
+    }] } }
+    const body = await (await get()).json()
+    expect(body.holdings[0]).toMatchObject({ key: 'tx:g', value: null })
   })
 
   it('refuses to hand out an unvalued liquidation form', async () => {

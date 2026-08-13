@@ -23,8 +23,8 @@ const ROWS = [row({}), row({ id: 'gold-1', name: 'Gold', type: 'gold', units: 2,
 // What the server says the goal holds. The sheet builds its plan from THIS, not
 // from the page's newest-200 window — see the truncation test below.
 const SERVER_HOLDINGS = [
-  { key: 'tx:tx-1', kind: 'single', asset_type: 'bank', principal: 10_000_000, units: null, name: 'ACB deposit' },
-  { key: 'tx:gold-1', kind: 'single', asset_type: 'gold', principal: 8_000_000, units: 2, name: 'Gold' },
+  { key: 'tx:tx-1', kind: 'single', asset_type: 'bank', principal: 10_000_000, units: null, name: 'ACB deposit', value: 10_000_000 },
+  { key: 'tx:gold-1', kind: 'single', asset_type: 'gold', principal: 8_000_000, units: 2, name: 'Gold', value: 8_000_000 },
 ]
 
 let fetchMock: ReturnType<typeof vi.fn>
@@ -176,7 +176,7 @@ describe('FinishGoalSheet', () => {
             blockers: [],
             holdings: [
               ...SERVER_HOLDINGS,
-              { key: 'tx:old-1', kind: 'single', asset_type: 'bank', principal: 3_000_000, units: null, name: 'Sổ cũ' },
+              { key: 'tx:old-1', kind: 'single', asset_type: 'bank', principal: 3_000_000, units: null, name: 'Sổ cũ', value: 3_000_000 },
             ],
             completed: false,
           }),
@@ -195,6 +195,32 @@ describe('FinishGoalSheet', () => {
       { key: 'tx:gold-1', received: 8_000_000 },
       { key: 'tx:old-1', received: 3_000_000 },
     ])
+  })
+
+  it('leaves gold with no price empty, and will not submit until it is stated', async () => {
+    const user = userEvent.setup()
+    fetchMock.mockImplementation(async (_url: string, init?: RequestInit) => (
+      init?.method === 'POST'
+        ? { ok: true, json: async () => ({ realized: 9_000_000, holdings: 1 }) }
+        : {
+          ok: true,
+          json: async () => ({
+            blockers: [],
+            holdings: [{ key: 'tx:gold-1', kind: 'single', asset_type: 'gold', principal: 8_000_000, units: 2, name: 'Gold', value: null }],
+            completed: false,
+          }),
+        }
+    ))
+    mountSheet()
+    await waitFor(() => expect(screen.getByTestId('finish-input-tx:gold-1')).toHaveValue(''))
+    expect(screen.getByText(/No gold price set/)).toBeInTheDocument()
+    expect(screen.getByTestId('finish-goal-confirm')).toBeDisabled()
+
+    await user.type(screen.getByTestId('finish-input-tx:gold-1'), '4500000')
+    expect(screen.getByTestId('finish-goal-confirm')).toBeEnabled()
+    await user.click(screen.getByTestId('finish-goal-confirm'))
+    const post = fetchMock.mock.calls.find((c) => c[1]?.method === 'POST')
+    expect(JSON.parse(post![1].body as string).plan).toEqual([{ key: 'tx:gold-1', received: 9_000_000 }])
   })
 
   it('does not render the form before the server has said what the goal holds', async () => {

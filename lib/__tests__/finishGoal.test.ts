@@ -152,6 +152,23 @@ describe('buildFinishHoldings', () => {
     expect(h.suggested).toBe(4_700_000)
   })
 
+  it('asks for the price when gold has none — never offers what it cost', () => {
+    // With no gold price configured the overview values gold at its purchase
+    // cost. Offering that as the sale price is how a purchase price ends up
+    // recorded as the day's proceeds.
+    const [h] = buildFinishHoldings([], [
+      { key: 'tx:g', kind: 'single', asset_type: 'gold', principal: 8_000_000, units: 2, name: 'Vàng', value: null },
+    ])
+    expect(h.unpriced).toBe(true)
+  })
+
+  it('does not flag gold the server DID price', () => {
+    const [h] = buildFinishHoldings([], [
+      { key: 'tx:g', kind: 'single', asset_type: 'gold', principal: 8_000_000, units: 2, name: 'Vàng', value: 9_400_000 },
+    ])
+    expect(h.unpriced).toBeUndefined()
+  })
+
   it('values a partially loaded book whole, not by the tranches on this page', () => {
     // buildInvRows rolls a book up from the tranches it holds, and this page
     // holds the newest 200 rows. The finish closes the WHOLE book, so prefilling

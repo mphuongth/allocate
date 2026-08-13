@@ -56,6 +56,15 @@ describe('DesktopGoalCard — a finished goal (#650)', () => {
     expect(screen.getByText('₫ 121.900.000')).toBeInTheDocument()
   })
 
+  it('withholds the live P&L and transaction count', () => {
+    // Every one of them describes holdings the goal no longer has, so the
+    // overview recomputes them to zero — "+0 ₫ · 0.00%" under a goal with
+    // years of profitable history says something false.
+    render(<DesktopGoalCard {...baseProps} goal={{ ...finished, profitLoss: 0, profitLossPercentage: 0, transactionCount: 0 }} />)
+    expect(screen.queryByText(/0\.00%/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/transaction/)).not.toBeInTheDocument()
+  })
+
   it('leaves an active goal chip alone', () => {
     render(<DesktopGoalCard {...baseProps} />)
     expect(screen.queryByTestId('goal-completed-badge')).not.toBeInTheDocument()

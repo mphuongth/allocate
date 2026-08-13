@@ -309,7 +309,11 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
               <ProgressCreditNote amount={creditedWithdrawn} isVi={isVI} style={{ marginTop: 8 }} />
             )}
 
-            {/* P/L strip — grid with separator lines */}
+            {/* P/L strip — grid with separator lines. Withheld on a finished
+                goal: invested, P&L and return all describe LIVE holdings, and a
+                completed goal has none, so the overview recomputes them to zero
+                (#650). The snapshot above is what it achieved. */}
+            {!completion && (
             <div style={{
               display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1,
               marginTop: 16, background: 'var(--c-line)', borderRadius: 8, overflow: 'hidden',
@@ -325,6 +329,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
                 </div>
               ))}
             </div>
+            )}
           </div>
 
           {/* Add to this goal — opens the Add-transaction flow prefilled, so the

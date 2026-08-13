@@ -54,6 +54,13 @@ export interface FinishHolding {
   input: 'received' | 'unitPrice'
   /** Prefill for that field, from today's valuation. */
   suggested: number
+  /**
+   * Nothing could say what this is worth today, so there is no prefill to
+   * offer and the user has to state the cash themselves. Gold with no price
+   * configured: the valuation falls back to what it COST, and a prefill is the
+   * figure most users accept unchanged.
+   */
+  unpriced?: boolean
 }
 
 /**
@@ -169,6 +176,11 @@ export function buildFinishHoldings(rows: InvRow[], server?: ServerHolding[]): F
     const value = Math.round(h.value ?? row?.value ?? Number(h.principal ?? 0))
     const held = h.units != null ? Number(h.units) : row?.units ?? null
     const units = type === 'gold' && held ? held : null
+    // Gold with no price configured is valued at what it COST — the overview
+    // falls through to the principal branch. Offering that as the sale price is
+    // how a purchase price ends up recorded as the day's proceeds, so gold says
+    // "I don't know" instead and the user reads the figure off their receipt.
+    const unpriced = type === 'gold' && h.value == null
     return {
       key: h.key,
       name,
@@ -177,6 +189,7 @@ export function buildFinishHoldings(rows: InvRow[], server?: ServerHolding[]): F
       units,
       input: units ? 'unitPrice' : 'received',
       suggested: units ? Math.round(value / units) : value,
+      ...(unpriced ? { unpriced: true } : {}),
     }
   })
 }

@@ -238,7 +238,9 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
             <ProgressCreditNote amount={creditedWithdrawn} isVi={isVi} style={{ marginTop: 8 }} />
           )}
 
-          {/* P/L grid */}
+          {/* P/L grid. Withheld on a finished goal: all three describe LIVE
+              holdings, which it no longer has, so they recompute to zero (#650). */}
+          {!completion && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 1, marginTop: 12, background: 'var(--c-line)', borderRadius: 8, overflow: 'hidden' }}>
             {[
               { l: isVi ? 'Đã đầu tư' : 'Invested', v: fmtCompact(goal.totalInvested), c: 'var(--c-ink)' },
@@ -251,6 +253,7 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
               </div>
             ))}
           </div>
+          )}
         </div>
 
         {/* Add to this goal — turns the detail panel from a dead end into a place

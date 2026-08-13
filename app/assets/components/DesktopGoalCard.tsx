@@ -82,15 +82,19 @@ export default function DesktopGoalCard({ goal, locale, onClick }: Props) {
         <ProgressCreditNote amount={creditedWithdrawn} isVi={isVi} style={{ marginTop: 6 }} />
       )}
 
-      {/* P&L row + transaction count */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, fontSize: 11, color: 'var(--c-muted)' }}>
-        <span style={{ color: isPos ? 'var(--c-pos)' : 'var(--c-neg)', fontWeight: 500 }}>
-          {isPos ? '+' : ''}{fmtCompact(goal.profitLoss)} · {fmtPct(goal.profitLossPercentage)}
-        </span>
-        {goal.transactionCount > 0 && (
-          <span>{goal.transactionCount} {isVi ? 'giao dịch' : goal.transactionCount === 1 ? 'transaction' : 'transactions'}</span>
-        )}
-      </div>
+      {/* P&L row + transaction count. Withheld once the goal is finished: these
+          describe LIVE holdings, which a completed goal has none of, so the
+          overview recomputes them to zero (#650). */}
+      {!completion && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, fontSize: 11, color: 'var(--c-muted)' }}>
+          <span style={{ color: isPos ? 'var(--c-pos)' : 'var(--c-neg)', fontWeight: 500 }}>
+            {isPos ? '+' : ''}{fmtCompact(goal.profitLoss)} · {fmtPct(goal.profitLossPercentage)}
+          </span>
+          {goal.transactionCount > 0 && (
+            <span>{goal.transactionCount} {isVi ? 'giao dịch' : goal.transactionCount === 1 ? 'transaction' : 'transactions'}</span>
+          )}
+        </div>
+      )}
     </button>
   )
 }

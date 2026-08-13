@@ -80,11 +80,23 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   }
   const valuation = valuationByKey(overview.data.goals.find((g) => g.goalId === goalId) ?? {})
 
+  // Gold with no price configured is NOT valued by the overview — it falls
+  // through to the principal branch and reports what the gold cost. That reads
+  // as a perfectly good valuation here, so ask the source directly: with no
+  // price, gold is handed over unvalued and the sheet asks the user for the
+  // figure instead of prefilling a purchase price as the day's proceeds. A
+  // missing row is the documented shape (PGRST116), not a failure.
+  const { data: goldPrice } = await supabase
+    .from('gold_price_settings')
+    .select('price_per_chi')
+    .maybeSingle()
+  const goldPriced = (goldPrice?.price_per_chi ?? null) != null
+
   const holdings = ((holdingsRes.data ?? []) as ServerHolding[]).map((h) => ({
     ...h,
     // Absent rather than guessed when the valuation has nothing to say: the
     // fallback then uses the remaining principal and the field is still editable.
-    value: valuation[h.key]?.value ?? null,
+    value: h.asset_type === 'gold' && !goldPriced ? null : valuation[h.key]?.value ?? null,
     units: valuation[h.key]?.units ?? h.units,
   }))
 

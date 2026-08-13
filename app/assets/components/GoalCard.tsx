@@ -113,7 +113,12 @@ export default function GoalCard({
         </div>
       )}
 
-      {/* Footer: P&L */}
+      {/* Footer: P&L. Withheld once the goal is finished — every one of these
+          numbers describes LIVE holdings, and a completed goal has none, so the
+          overview recomputes them to zero. "+0 ₫ · 0.00% · 0 transactions" under
+          a goal with years of profitable history is worse than saying nothing
+          (#650). What the goal achieved is the snapshot above. */}
+      {!completion && (
       <div style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         marginTop: 10, fontSize: 11, color: 'var(--c-muted)',
@@ -126,6 +131,7 @@ export default function GoalCard({
         </span>
         <span>{t('transactions', { count: transactionCount })}</span>
       </div>
+      )}
     </button>
   )
 }
