@@ -53,6 +53,52 @@ alter table public.savings_goals add constraint savings_goals_completion_snapsho
 create index if not exists savings_goals_active_idx
   on public.savings_goals (user_id) where completed_at is null;
 
+-- ── the snapshot is written by the finish, not by anyone with a goal id ──────
+--
+-- The savings_goals UPDATE policy is row-scoped, not column-scoped, so a direct
+-- Supabase client could stamp completed_at with any figures it liked while the
+-- holdings stayed live. The goal would move to Completed showing a fabricated
+-- result, and the freeze triggers would then lock that inconsistent ledger in
+-- place — the worst of both.
+--
+-- Same shape as the successor-link guard (20260811000001): a transaction-local
+-- flag the RPCs set, checked only for a real end user. auth.uid() is null for
+-- the service role, for migrations and for SQL maintenance, which keep their
+-- reach — the convention the rest of the schema uses.
+create or replace function public.enforce_completion_written_by_rpc()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if (new.completed_at is distinct from old.completed_at
+      or new.completion_value is distinct from old.completion_value
+      or new.completion_percentage is distinct from old.completion_percentage)
+     and auth.uid() is not null
+     and coalesce(current_setting('app.goal_completion_write', true), '') <> '1' then
+    raise exception 'completed goal: a goal is finished through finish_savings_goal, not by writing the snapshot'
+      using errcode = 'check_violation';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists savings_goals_completion_rpc_only on public.savings_goals;
+create trigger savings_goals_completion_rpc_only
+  -- INSERT too: a goal created already "completed" is the same fabrication by a
+  -- shorter route. On an INSERT, OLD is null, so the comparisons below read as
+  -- "the new row states a snapshot", which is exactly the question.
+  before insert or update of completed_at, completion_value, completion_percentage
+    on public.savings_goals
+  for each row execute function public.enforce_completion_written_by_rpc();
+
+-- Stated as a grant as well as enforced by the trigger. The trigger is what
+-- actually refuses (a column grant does not survive every platform default), but
+-- the revoke says the intent plainly to anyone reading the schema.
+revoke insert (completed_at, completion_value, completion_percentage),
+       update (completed_at, completion_value, completion_percentage)
+  on public.savings_goals from anon, authenticated;
+
 -- ── blockers ─────────────────────────────────────────────────────────────────
 --
 -- Finish must not silently alter what happens NEXT month. A recurring saving, a
@@ -295,7 +341,38 @@ security invoker
 stable
 set search_path = ''
 as $$
-  select count(*)::text || ':' || coalesce(max(greatest(t.created_at, t.updated_at))::text, '-')
+  -- Hashed over the FIELDS THAT CARRY VALUE, not over count + updated_at.
+  -- updated_at is an ordinary client-writable column: a PostgREST update can
+  -- change amount_vnd or units without touching it, and the count is unchanged
+  -- by any edit at all — so the two together would have called the ledger
+  -- unmoved for exactly the writes this check exists to catch.
+  --
+  -- Fund NAV and the gold price are deliberately absent. They move on their own
+  -- all day; a valuation is a point in time and refusing a finish because the
+  -- market ticked would make the button unpressable. What must not change under
+  -- the valuation is the LEDGER.
+  select md5(coalesce(string_agg(
+      t.transaction_id::text
+        || '|' || t.transaction_type
+        || '|' || coalesce(t.asset_type, '')
+        || '|' || coalesce(t.goal_id::text, '')
+        || '|' || coalesce(t.fund_id::text, '')
+        || '|' || coalesce(t.parent_transaction_id::text, '')
+        || '|' || coalesce(t.deposit_group_id::text, '')
+        || '|' || coalesce(t.renewed_from_transaction_id::text, '')
+        || '|' || t.amount_vnd::text
+        || '|' || coalesce(t.units::text, '')
+        || '|' || coalesce(t.unit_price::text, '')
+        || '|' || coalesce(t.interest_rate::text, '')
+        || '|' || t.investment_date::text
+        || '|' || coalesce(t.expiry_date::text, '')
+        || '|' || coalesce(t.principal_withdrawn::text, '')
+        || '|' || coalesce(t.units_withdrawn::text, '')
+        || '|' || coalesce(t.affects_progress::text, '')
+        || '|' || coalesce(t.held_for_merge::text, '')
+        || '|' || coalesce(t.consumed_by_inv_id::text, '')
+        || '|' || coalesce(t.merge_target_goal_id::text, ''),
+      ',' order by t.transaction_id), ''))
     from public.investment_transactions t
    where t.goal_id = p_goal_id
       -- ...and the withdrawals that draw on this goal WITHOUT carrying its id. A
@@ -532,12 +609,16 @@ begin
       array_to_string(v_extra, ', ') using errcode = 'check_violation';
   end if;
 
+  -- Transaction-local, so it is gone the moment this statement's transaction
+  -- ends and cannot leak the privilege to anything else the session does.
+  perform set_config('app.goal_completion_write', '1', true);
   update public.savings_goals
      set completed_at = now(),
          completion_value = p_completion_value,
          completion_percentage = 100,
          updated_at = now()
    where goal_id = p_goal_id;
+  perform set_config('app.goal_completion_write', '', true);
 
   return jsonb_build_object(
     'realized', v_realized,
@@ -666,8 +747,15 @@ declare
   v_goal uuid;
   v_completed timestamptz;
 begin
+  -- Every field that decides WHICH balance this row belongs to or HOW MUCH it
+  -- moves. fund_id and asset_type are identity, not decoration: a fund bucket is
+  -- keyed by (goal, fund), so re-pointing a settled purchase from fund A to
+  -- fund B leaves the sell that emptied it in A's bucket and stands the whole
+  -- purchase up as a live B position — no amount changed, nothing else noticed.
   if tg_op = 'UPDATE'
      and new.goal_id is not distinct from old.goal_id
+     and new.fund_id is not distinct from old.fund_id
+     and new.asset_type is not distinct from old.asset_type
      and new.parent_transaction_id is not distinct from old.parent_transaction_id
      and new.amount_vnd is not distinct from old.amount_vnd
      and new.units is not distinct from old.units
@@ -722,8 +810,8 @@ comment on function public.enforce_completed_goal_ledger_frozen() is
 
 drop trigger if exists investment_transactions_completed_goal_frozen on public.investment_transactions;
 create trigger investment_transactions_completed_goal_frozen
-  before delete or update of goal_id, parent_transaction_id, amount_vnd, units,
-                             principal_withdrawn, units_withdrawn
+  before delete or update of goal_id, fund_id, asset_type, parent_transaction_id,
+                             amount_vnd, units, principal_withdrawn, units_withdrawn
     on public.investment_transactions
   for each row execute function public.enforce_completed_goal_ledger_frozen();
 
@@ -766,6 +854,7 @@ set search_path = ''
 as $$
 declare v_goal public.savings_goals;
 begin
+  perform set_config('app.goal_completion_write', '1', true);
   update public.savings_goals
      set completed_at = null,
          completion_value = null,
@@ -774,10 +863,13 @@ begin
    where goal_id = p_goal_id
      and completed_at is not null
   returning * into v_goal;
+  -- Checked BEFORE the flag is cleared: a successful PERFORM sets FOUND, so
+  -- clearing first would report every reopen as having found a goal.
   if not found then
     raise exception 'reopen goal: no completed goal to reopen'
       using errcode = 'no_data_found';
   end if;
+  perform set_config('app.goal_completion_write', '', true);
   return v_goal;
 end;
 $$;

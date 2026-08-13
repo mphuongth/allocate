@@ -12,7 +12,9 @@ declare
   v_book uuid := gen_random_uuid();
   v_book2 uuid := gen_random_uuid();
   v_book3 uuid := gen_random_uuid();
+  v_other_fund uuid;
   v_result jsonb;
+  v_fp text;
   v_goal_row public.savings_goals;
   v_live bigint;
   v_tx_count int;
@@ -144,6 +146,22 @@ begin
   select count(*) into v_tx_count from public.investment_transactions
    where user_id = v_user and transaction_type = 'withdrawal';
   if v_tx_count <> 0 then raise exception 'a refused zero must write no withdrawals'; end if;
+
+  -- ── The fingerprint tracks VALUE, not a client-writable timestamp ─────────
+  --
+  -- updated_at is an ordinary column a PostgREST client can leave alone while
+  -- changing the money; the row count does not move on an edit at all.
+  v_fp := public.savings_goal_ledger_fingerprint(v_goal);
+  update public.investment_transactions set amount_vnd = amount_vnd + 1
+   where transaction_id = v_deposit;
+  if public.savings_goal_ledger_fingerprint(v_goal) = v_fp then
+    raise exception 'the fingerprint must notice an amount changed without updated_at';
+  end if;
+  update public.investment_transactions set amount_vnd = amount_vnd - 1
+   where transaction_id = v_deposit;
+  if public.savings_goal_ledger_fingerprint(v_goal) <> v_fp then
+    raise exception 'the fingerprint must return to itself once the edit is undone';
+  end if;
 
   -- ── A stale valuation is refused, not archived ────────────────────────────
   --
@@ -280,6 +298,19 @@ begin
     update public.investment_transactions set goal_id = null
      where user_id = v_user and fund_id = v_fund and transaction_type = 'investment';
     raise exception 'a completed goal must not give up its holdings';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- ...nor may a settled fund purchase be re-pointed at a DIFFERENT fund. The
+  -- bucket is keyed by (goal, fund), so the sell that emptied it would stay in
+  -- the old fund's bucket while the purchase stands up as a live position in the
+  -- new one — no amount changed, so only identity gives it away.
+  insert into public.funds (user_id, name, code, fund_type, nav)
+    values (v_user, 'DCDS', 'DCDS', 'equity', 30000) returning id into v_other_fund;
+  begin
+    update public.investment_transactions set fund_id = v_other_fund
+     where user_id = v_user and fund_id = v_fund and transaction_type = 'investment';
+    raise exception 'a settled fund purchase must not change fund';
   exception when sqlstate '23514' then null;
   end;
 
@@ -485,6 +516,68 @@ begin
   delete from public.investment_transactions where transaction_id = v_early;
 
   raise notice 'finish_savings_goal parent-keyed withdrawals: all assertions passed';
+end $$;
+
+-- ── The completion snapshot is written by the finish, not by a client ────────
+--
+-- The savings_goals UPDATE policy is row-scoped, not column-scoped, so without a
+-- guard a signed-in client could stamp a goal completed at any figure it liked
+-- while the holdings stayed live — and the freeze triggers would then lock that
+-- fiction in place.
+do $$
+declare
+  v_user uuid := gen_random_uuid();
+  v_goal uuid;
+  v_deposit uuid := gen_random_uuid();
+begin
+  insert into auth.users (id, email) values (v_user, 'finish-goal-snapshot@test.invalid');
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Fabricated') returning goal_id into v_goal;
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, amount_vnd, interest_rate
+  ) values (
+    v_deposit, v_user, v_goal, 'bank', 'investment', current_date - 5, 5000000, 5
+  );
+
+  -- Speak as that signed-in user: auth.uid() resolves, so the guard applies.
+  perform set_config('request.jwt.claims', json_build_object('sub', v_user::text)::text, true);
+  begin
+    update public.savings_goals
+       set completed_at = now(), completion_value = 999000000, completion_percentage = 100
+     where goal_id = v_goal;
+    raise exception 'a client must not be able to stamp the completion snapshot';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- ...nor by creating a goal that claims to be finished already.
+  begin
+    insert into public.savings_goals (user_id, goal_name, completed_at, completion_value, completion_percentage)
+      values (v_user, 'Born finished', now(), 999000000, 100);
+    raise exception 'a goal must not be created already completed';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- Editing the goal's ordinary fields is untouched by the guard.
+  update public.savings_goals set goal_name = 'Fabricated (renamed)' where goal_id = v_goal;
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'An ordinary new goal');
+
+  -- The RPC is the way, and it liquidates as it goes.
+  perform public.finish_savings_goal(v_goal, jsonb_build_array(
+    jsonb_build_object('key', 'tx:' || v_deposit, 'received', 5100000)
+  ), current_date, 5100000, public.savings_goal_ledger_fingerprint(v_goal));
+  if (select completion_percentage from public.savings_goals where goal_id = v_goal) <> 100 then
+    raise exception 'the RPC must still be able to write the snapshot';
+  end if;
+
+  -- And the privilege it takes does not outlive that statement.
+  begin
+    update public.savings_goals set completion_value = 1 where goal_id = v_goal;
+    raise exception 'the completion-write flag must not survive the RPC';
+  exception when sqlstate '23514' then null;
+  end;
+
+  perform set_config('request.jwt.claims', '', true);
+  raise notice 'finish_savings_goal snapshot guard: all assertions passed';
 end $$;
 
 rollback;
