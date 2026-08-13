@@ -6,16 +6,19 @@
 // exactly what the resolve sheet will preselect — no over-promising.
 //
 // A cluster is goal-scoped: it needs ≥2 liquidatable bank deposits in the same
-// goal, with at least one sibling that is eligible (in-window, same currency, not
-// pledged) against the ANCHOR — the latest-maturing ACTIONABLE deposit. Opening
-// the sheet on that anchor lets the rest settle early and roll into it.
+// goal that are ACTIONABLE (matured / within the reminder window), with at least
+// one sibling that is eligible (in-window, same currency, not pledged) against
+// the ANCHOR — the latest-maturing one. Opening the sheet on that anchor lets
+// the rest settle early and roll into it.
 //
-// The anchor must be actionable (matured / within the reminder window) for two
-// reasons: the maturity card only surfaces actionable deposits, and the resolve
-// flow opens on one. A SIBLING need not be actionable, though — a deposit that
-// matures a few days later can still settle early and fold in. So the banner
-// surfaces exactly when the sheet would preselect: as soon as there is something
-// to act on now plus a close-maturing partner, even if the partner isn't due yet.
+// Every member must be actionable because the banner sits on the "Cần xử lý"
+// card and speaks about its rows: its count must equal what the user can see and
+// act on. Counting a not-yet-due close sibling (the pre-#651 rule) made the
+// banner promise "2 sổ đáo hạn sát nhau" above a single row, and left it standing
+// after the user handled the deposit they could see — indistinguishable from a
+// stale banner. A not-yet-due deposit can still be folded in from inside the
+// resolve sheet, which classifies sources itself (lib/mergeEligibility); it just
+// no longer raises a banner of its own.
 
 import { classifyMergeSource, type MergeEligInput } from './mergeEligibility'
 
@@ -60,6 +63,12 @@ export function detectMergeClusters(
   const byGoal = new Map<string, MergeClusterInput[]>()
   for (const d of deposits) {
     if (d.goalId == null || !liquidatable(d)) continue
+    // Only deposits the card actually lists can be part of the promise (#651).
+    // A not-yet-due deposit can still be folded in from inside the sheet, but
+    // counting it here made the banner claim "2 sổ đáo hạn sát nhau" over a
+    // single visible row — and keep claiming it after the user had handled the
+    // one they could see, which reads as a stale banner.
+    if (!(d.actionable ?? true)) continue
     const arr = byGoal.get(d.goalId) ?? []
     arr.push(d)
     byGoal.set(d.goalId, arr)
@@ -68,12 +77,9 @@ export function detectMergeClusters(
   const clusters: MergeCluster[] = []
   for (const [goalId, group] of byGoal) {
     if (group.length < 2) continue
-    // Anchor = latest-maturity ACTIONABLE deposit (tie-break by id). A goal with
-    // nothing actionable has nothing to act on now → no banner, even if two
-    // future deposits would otherwise pair up.
-    const actionables = group.filter((d) => d.actionable ?? true)
-    if (actionables.length === 0) continue
-    const anchor = [...actionables].sort(
+    // Anchor = latest-maturity deposit of the group (tie-break by id) — every
+    // member is actionable by now, so this is also the one the card lists last.
+    const anchor = [...group].sort(
       (a, b) => (b.expiryDate ?? '').localeCompare(a.expiryDate ?? '') || a.id.localeCompare(b.id),
     )[0]
     // Count siblings the sheet would actually preselect — same eligibility

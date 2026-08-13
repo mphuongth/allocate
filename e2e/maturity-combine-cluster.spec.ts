@@ -68,11 +68,16 @@ test.describe('Maturity card — merge-cluster auto-detection', () => {
 
       // Complete the merge and assert the sibling left the goal's holdings (folded
       // in, not duplicated).
-      await Promise.all([
-        page.waitForRequest((r) => r.url().endsWith(`/${D.transaction_id}/renew`) && r.method() === 'POST'),
+      const [res] = await Promise.all([
+        page.waitForResponse((r) => r.url().endsWith(`/${D.transaction_id}/renew`) && r.request().method() === 'POST'),
         page.getByRole('button', { name: /Save new deposit|Lưu sổ mới/i }).click(),
       ])
-      await expect(page.getByTestId('maturity-renewed')).toBeVisible({ timeout: 20_000 })
+      expect(res.ok()).toBeTruthy()
+      // NOT the `maturity-renewed` flash: it shows for SUCCESS_FLASH_MS and then the
+      // sheet closes itself, so racing it made this test fail ~1 run in 3 (on main
+      // too). The durable outcomes — the sheet closing, and the sibling leaving the
+      // goal's holdings — are what the merge actually promises.
+      await expect(page.getByRole('button', { name: /Save new deposit|Lưu sổ mới/i })).toBeHidden({ timeout: 20_000 })
 
       await gotoFreshDashboard(page)
       const after = await goalHoldingIds(page, goal.goal_id)
@@ -84,22 +89,19 @@ test.describe('Maturity card — merge-cluster auto-detection', () => {
     }
   })
 
-  test('surfaces the banner even when the close sibling is not itself due yet', async ({ page }) => {
+  test('shows no banner when the close sibling is not itself due yet (#651)', async ({ page }) => {
     test.slow()
     const goal = await api.createGoal({ goal_name: 'E2E NotDue Goal', target_amount: 200_000_000 })
-    // Two windows are in play and they are both 7 days, which is what the original
-    // fixture missed:
+    // Two windows are in play and they are both 7 days:
     //   • actionable  — MATURITY_REMINDER_DAYS from TODAY (lib/maturity.ts)
     //   • merge window — 7 days between the sibling's and the ANCHOR's maturity
-    // The original dates (D at -1, B at +4) made B 4 days out, i.e. inside the reminder
-    // window, so B was actionable too and the Handle count was always 2 — this test could
-    // never have passed. A matured anchor makes the case impossible: any sibling within 7
-    // days of it is also within 7 days of today. So the anchor is actionable-but-not-yet-
-    // matured instead, which pushes the sibling past the reminder window while keeping it
-    // inside the merge window.
+    // A matured anchor can't separate them (any sibling within 7 days of it is also
+    // within 7 days of today), so the anchor is actionable-but-not-yet-matured, which
+    // pushes the sibling past the reminder window while keeping it inside the merge one.
     //
-    // D at +6: actionable ('maturing'), the only Handle row → the anchor.
-    // B at +12: 12 > 7 so NOT actionable on its own, yet 6 days from D → cluster sibling.
+    // D at +6: actionable ('maturing'), the only Handle row.
+    // B at +12: 12 > 7 so NOT actionable — the card never lists it, so it must not be
+    // counted in a banner either (#651); it stays mergeable from inside the sheet.
     const D = await api.createTransaction({
       asset_type: 'bank', amount_vnd: 20_000_000, investment_date: iso(-380),
       interest_rate: 6, expiry_date: iso(6), goal_id: goal.goal_id, notes: 'E2E NotDue D',
@@ -114,13 +116,12 @@ test.describe('Maturity card — merge-cluster auto-detection', () => {
       await expect(card).toBeVisible({ timeout: 10_000 })
       // Only D is actionable → the card lists a single Handle row…
       await expect(page.getByTestId('maturity-action-count')).toHaveText('1')
-      // …yet the banner advertises the 2-deposit cluster anchored on D.
-      const banner = page.getByTestId(`merge-cluster-banner-${D.transaction_id}`)
-      await expect(banner).toBeVisible()
-      await expect(banner).toContainText('2')
+      // …and with nothing else on the card, no banner may claim a 2-deposit cluster.
+      await expect(page.getByTestId(`merge-cluster-banner-${D.transaction_id}`)).toHaveCount(0)
 
-      // Opening it preselects B even though B isn't due on its own.
-      await banner.getByRole('button').click()
+      // B is still foldable in from inside the sheet — the banner is what's gone,
+      // not the merge itself: handle D and B is preselected as a source.
+      await card.getByRole('button', { name: /Handle|Xử lý/i }).click()
       await page.getByRole('button', { name: /Settle & re-deposit|Tất toán & gửi lại/i }).click()
       await expect(page.getByTestId(`merge-received-${B.transaction_id}`)).toBeVisible()
     } finally {

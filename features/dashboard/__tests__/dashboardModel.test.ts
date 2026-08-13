@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { addDaysIso, todayIso } from '@/lib/dates'
 import type { DashboardData, GoalData, NonFundUnallocatedItem, FundBreakdownItem } from '../contracts'
 import {
   isDashboardEmpty,
@@ -185,6 +186,20 @@ describe('mergeClusterSummaries', () => {
     const clusters = mergeClusterSummaries(tagNonFunds(d))
     expect(clusters.length).toBeGreaterThan(0)
     expect(clusters[0].size).toBeGreaterThanOrEqual(2)
+  })
+
+  it('reports nothing when only ONE deposit is on the card (#651)', () => {
+    // The card lists the due deposit alone; the other one matures well outside
+    // the reminder window, so a "2 sổ đáo hạn sát nhau" banner would be a promise
+    // the user cannot see the other half of.
+    const soon = addDaysIso(todayIso(), 3) // inside the reminder window → on the card
+    const later = addDaysIso(todayIso(), 9) // outside it, but 6 days from `soon`
+    const d = dash({ goals: [goal({ goalId: 'g1', nonFunds: [
+      nonFund({ transactionId: 'due', expiryDate: soon }),
+      nonFund({ transactionId: 'not-yet', expiryDate: later }),
+    ] })] })
+    expect(maturingDeposits(tagNonFunds(d), false)).toHaveLength(1)
+    expect(mergeClusterSummaries(tagNonFunds(d))).toEqual([])
   })
 
   it('reports nothing when no deposit is actionable yet', () => {
