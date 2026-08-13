@@ -683,16 +683,29 @@ begin
         using errcode = 'check_violation';
     end if;
 
+    -- affects_progress = TRUE, and the reasoning is worth stating: these
+    -- withdrawals are ordinary, and the SNAPSHOT owns the percentage.
+    --
+    -- affects_progress = false exists for a partial spend on a goal that is still
+    -- running — it holds the bar steady while net worth falls. A finish is not
+    -- that: completion is declared, and every surface reads the archived 100%
+    -- from completed_at / completion_percentage rather than recomputing it.
+    --
+    -- Written false, they would go on propping the bar up after the goal is
+    -- REOPENED — the snapshot is cleared, the balance is zero, and the goal would
+    -- come back reading its pre-finish progress with new contributions stacking
+    -- on top of a value that no longer exists. Reopening a goal has to show it as
+    -- the (probably empty) goal it now is.
     if v_h.kind = 'book' then
       perform public.withdraw_accumulating_book(
-        v_h.tx_id, v_h.principal, v_received, p_date, false);
+        v_h.tx_id, v_h.principal, v_received, p_date, true);
     elsif v_h.kind = 'fund' then
       insert into public.investment_transactions (
         user_id, goal_id, fund_id, asset_type, transaction_type, investment_date,
         amount_vnd, principal_withdrawn, units_withdrawn, affects_progress
       ) values (
         v_goal.user_id, p_goal_id, v_h.fund_id, 'fund', 'withdrawal', p_date,
-        v_received, v_h.principal, v_h.units, false
+        v_received, v_h.principal, v_h.units, true
       );
     else
       insert into public.investment_transactions (
@@ -700,7 +713,7 @@ begin
         investment_date, amount_vnd, principal_withdrawn, units_withdrawn, affects_progress
       ) values (
         v_goal.user_id, p_goal_id, v_h.asset_type, 'withdrawal', v_h.tx_id,
-        p_date, v_received, v_h.principal, v_h.units, false
+        p_date, v_received, v_h.principal, v_h.units, true
       );
     end if;
 

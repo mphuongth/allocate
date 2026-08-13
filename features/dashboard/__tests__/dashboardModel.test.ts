@@ -90,6 +90,17 @@ describe('sortGoals', () => {
     expect(sortGoals(goals, 'alpha').map((g) => g.goalName)).toEqual(['Du lịch', 'Nhà', 'Xe'])
   })
 
+  it('sorts a finished goal by the percentage it was archived at (#650)', () => {
+    // Its holdings were liquidated, so progressPercentage reads ~0. The cards
+    // render the snapshot; the ordering has to agree with them.
+    const finished = goal({
+      goalId: 'done', goalName: 'Bếp', progressPercentage: 0,
+      completedAt: '2026-08-13T02:00:00Z', completionValue: 50_000_000, completionPercentage: 100,
+    })
+    expect(sortGoals([...goals, finished], 'progressDesc').map((g) => g.goalId))
+      .toEqual(['done', 'a', 'b', 'c'])
+  })
+
   it('does not mutate the input', () => {
     const input = [...goals]
     sortGoals(input, 'alpha')

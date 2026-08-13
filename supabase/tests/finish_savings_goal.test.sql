@@ -246,9 +246,14 @@ begin
               where user_id = v_user and goal_id is distinct from v_goal) then
     raise exception 'finishing must not unlink a single transaction from the goal';
   end if;
+  -- The withdrawals are ORDINARY: the archived 100% comes from the snapshot, not
+  -- from propping the bar up. Written affects_progress = false they would go on
+  -- propping it after a REOPEN — snapshot cleared, balance zero, and the goal
+  -- back on the active list still reading its pre-finish progress.
   if exists (select 1 from public.investment_transactions
-              where user_id = v_user and transaction_type = 'withdrawal' and affects_progress) then
-    raise exception 'a finish withdrawal must not lower the progress it completes';
+              where user_id = v_user and transaction_type = 'withdrawal'
+                and not affects_progress) then
+    raise exception 'a finish withdrawal must count against progress once reopened';
   end if;
 
   -- ── An archive takes no new money ─────────────────────────────────────────

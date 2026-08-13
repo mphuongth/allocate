@@ -11,6 +11,7 @@
 // lands, and every one of them has a defined answer for "not loaded yet".
 
 import { isActionableTermDeposit } from '@/lib/maturity'
+import { goalCompletion } from '@/lib/finishGoal'
 import { detectMergeClusters } from '@/lib/mergeCluster'
 import { actionableBooks, type TaggedTranche } from './maturityCardItems'
 import type {
@@ -53,11 +54,16 @@ export function isDashboardEmpty(data: DashboardData | null): boolean {
     && data.insurance.length === 0
 }
 
+// A finished goal's percentage is the one it was archived at, not the one its
+// (now empty) holdings compute to — the same rule the cards render by (#650).
+const sortPercent = (g: GoalData): number =>
+  goalCompletion(g)?.percentage ?? g.progressPercentage ?? 0
+
 /** The goal list in the user's chosen order. Never mutates the input. */
 export function sortGoals(goals: GoalData[], sort: SortValue): GoalData[] {
   const out = [...goals]
-  if (sort === 'progressDesc') out.sort((a, b) => (b.progressPercentage ?? 0) - (a.progressPercentage ?? 0))
-  else if (sort === 'progressAsc') out.sort((a, b) => (a.progressPercentage ?? 0) - (b.progressPercentage ?? 0))
+  if (sort === 'progressDesc') out.sort((a, b) => sortPercent(b) - sortPercent(a))
+  else if (sort === 'progressAsc') out.sort((a, b) => sortPercent(a) - sortPercent(b))
   else if (sort === 'alpha') out.sort((a, b) => a.goalName.localeCompare(b.goalName))
   return out
 }
