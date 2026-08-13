@@ -58,25 +58,39 @@ export async function validateLinkedDeposit(
   // but funds the whole group, and a partial withdrawal can empty that one
   // tranche while the book carries on. Reading the anchor alone would refuse a
   // link to a book that is still live.
+  //
+  // A read that FAILS says nothing about the balance, so it must not be counted
+  // as one. Normalising either query to an empty result would report a live book
+  // as closed — a 400 on a request that was perfectly valid, during a blip a
+  // retry would clear. The table refuses a genuinely closed target either way
+  // (that guard is the authoritative one), so the honest move when this cannot
+  // be judged is to say nothing and let the write be judged there.
   const isBookAnchor = data.deposit_group_id === txId
-  const group = isBookAnchor
-    ? (await supabase
-        .from('investment_transactions')
-        .select('transaction_id, amount_vnd')
-        .eq('user_id', userId)
-        .eq('deposit_group_id', txId)
-        .eq('transaction_type', 'investment')
-        .is('renewed_from_transaction_id', null)).data ?? []
-    : [{ transaction_id: txId, amount_vnd: data.amount_vnd }]
+  let group: Array<{ transaction_id: string; amount_vnd: number }>
+  if (isBookAnchor) {
+    const { data: tranches, error: groupError } = await supabase
+      .from('investment_transactions')
+      .select('transaction_id, amount_vnd')
+      .eq('user_id', userId)
+      .eq('deposit_group_id', txId)
+      .eq('transaction_type', 'investment')
+      .is('renewed_from_transaction_id', null)
+    if (groupError) return null
+    group = tranches ?? []
+  } else {
+    group = [{ transaction_id: txId, amount_vnd: data.amount_vnd }]
+  }
+
   const ids = group.map((t) => t.transaction_id)
-  const { data: withdrawals } = ids.length
-    ? await supabase
-        .from('investment_transactions')
-        .select('principal_withdrawn')
-        .eq('user_id', userId)
-        .in('parent_transaction_id', ids)
-        .eq('transaction_type', 'withdrawal')
-    : { data: [] }
+  if (!ids.length) return null
+  const { data: withdrawals, error: withdrawalError } = await supabase
+    .from('investment_transactions')
+    .select('principal_withdrawn')
+    .eq('user_id', userId)
+    .in('parent_transaction_id', ids)
+    .eq('transaction_type', 'withdrawal')
+  if (withdrawalError) return null
+
   const held = group.reduce((sum, t) => sum + (t.amount_vnd ?? 0), 0)
   const withdrawn = (withdrawals ?? []).reduce((sum, w) => sum + (w.principal_withdrawn ?? 0), 0)
   if (held - withdrawn <= 0) {

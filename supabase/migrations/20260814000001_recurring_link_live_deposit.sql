@@ -63,6 +63,24 @@ begin
 
   if v_target.deposit_group_id = v_target.transaction_id then
     -- A live accumulating book: what the GROUP still holds.
+    --
+    -- LOCK every live tranche before measuring them, not just the anchor. The
+    -- withdrawal invariant (check_withdrawal_balance, 20260730000002) locks only
+    -- the row a withdrawal names as its parent, so a close of the book's last
+    -- non-anchor tranche never touches the anchor and never waits here: this
+    -- query would miss that uncommitted withdrawal, accept the link, and leave it
+    -- pointing at a book both transactions have just emptied.
+    --
+    -- Ordered by transaction_id, the same order check_withdrawal_balance takes
+    -- its locks in, so the two cannot deadlock.
+    perform 1
+      from public.investment_transactions t
+     where t.deposit_group_id = v_target.transaction_id
+       and t.transaction_type = 'investment'
+       and t.renewed_from_transaction_id is null
+     order by t.transaction_id
+       for share;
+
     select coalesce(sum(
              t.amount_vnd - coalesce((
                select sum(w.principal_withdrawn) from public.investment_transactions w
