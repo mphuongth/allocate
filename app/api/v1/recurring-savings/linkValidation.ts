@@ -18,7 +18,7 @@ export async function validateLinkedDeposit(
 ): Promise<string | null> {
   const { data, error } = await supabase
     .from('investment_transactions')
-    .select('asset_type, interest_rate, expiry_date, goal_id, transaction_type, deposit_group_id, successor_deposit_tx_id')
+    .select('asset_type, interest_rate, expiry_date, goal_id, transaction_type, deposit_group_id, successor_deposit_tx_id, amount_vnd')
     .eq('transaction_id', txId)
     .eq('user_id', userId)
     .single()
@@ -47,6 +47,21 @@ export async function validateLinkedDeposit(
   }
   if ((data.goal_id ?? null) !== (recurringGoalId ?? null)) {
     return 'Linked deposit must belong to the same goal as the recurring saving.'
+  }
+  // A deposit that has been fully withdrawn — a closed term deposit, or a book
+  // settled whole (which also clears deposit_group_id, so the anchor check above
+  // waves it through) — can never take another đồng. The plan would keep asking
+  // for a month it has nowhere to put, and the top-up fails with "accumulating
+  // book not found". The table refuses this too (#650); this is the readable half.
+  const { data: withdrawals } = await supabase
+    .from('investment_transactions')
+    .select('principal_withdrawn')
+    .eq('user_id', userId)
+    .eq('parent_transaction_id', txId)
+    .eq('transaction_type', 'withdrawal')
+  const withdrawn = (withdrawals ?? []).reduce((sum, w) => sum + (w.principal_withdrawn ?? 0), 0)
+  if (data.amount_vnd - withdrawn <= 0) {
+    return 'That deposit has been closed — link a live deposit instead.'
   }
   return null
 }

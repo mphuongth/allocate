@@ -993,6 +993,62 @@ create trigger funds_dca_goal_not_completed
   before insert or update of dca_goal_id on public.funds
   for each row execute function public.enforce_goal_not_completed('dca_goal_id');
 
+-- ── a link to a closed deposit could never be funded ─────────────────────────
+--
+-- enforce_recurring_link_not_handed_over (#638) locks the target and then asks
+-- ONE question: has it handed over to a successor? It never asks whether the
+-- target is still there to fund. So a recurring saving can be linked to a book
+-- that has been fully closed — its deposit_group_id cleared, its balance zero —
+-- and the monthly top-up then fails with "accumulating book not found" while the
+-- plan goes on showing a link.
+--
+-- Reachable without any finish at all: close a book through the ordinary sheet
+-- and link a saving to the dead anchor. The finish adds a sharper version,
+-- because the writer waits on the lock this function takes and is let through
+-- the moment the liquidation commits — after the blocker list has been read and
+-- after the links have been cleaned up.
+--
+-- The guard the function already carries says why this belongs to it: "a link
+-- that can never be funded is worse than a refused one — the plan would keep
+-- asking for a month it has nowhere to put." A closed deposit is that, exactly.
+create or replace function public.enforce_recurring_link_not_handed_over()
+returns trigger language plpgsql security definer set search_path = '' as $$
+declare
+  v_target public.investment_transactions;
+  v_left bigint;
+begin
+  -- LOCK the book, THEN read it. Locking inside a predicate that already tests
+  -- the successor locks nothing while a handover is uncommitted: the visible
+  -- version still has a null link, so the row does not match and the write sails
+  -- past to commit against a book that, moments later, refuses it. The lock has
+  -- to be taken on the row itself, whatever it currently says — and the same
+  -- reasoning covers a liquidation committing underneath this write.
+  select * into v_target
+    from public.investment_transactions
+   where transaction_id = new.linked_deposit_tx_id
+     and user_id = new.user_id
+   for share;
+  if not found then return new; end if;
+
+  if v_target.successor_deposit_tx_id is not null then
+    raise exception 'successor book: that book has handed over to a successor, so link the successor instead'
+      using errcode = 'check_violation';
+  end if;
+
+  select v_target.amount_vnd - coalesce(sum(w.principal_withdrawn), 0)
+    into v_left
+    from public.investment_transactions w
+   where w.parent_transaction_id = v_target.transaction_id
+     and w.transaction_type = 'withdrawal';
+  if coalesce(v_left, v_target.amount_vnd) <= 0 then
+    raise exception 'closed deposit: that deposit has been closed, so a link to it could never be funded'
+      using errcode = 'check_violation';
+  end if;
+
+  return new;
+end;
+$$;
+
 -- ── reopening ────────────────────────────────────────────────────────────────
 --
 -- Correcting an archive, not undoing a liquidation. The withdrawals stay: the

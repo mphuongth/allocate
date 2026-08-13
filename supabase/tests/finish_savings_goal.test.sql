@@ -672,6 +672,63 @@ begin
   raise notice 'finish_savings_goal split book: all assertions passed';
 end $$;
 
+-- ── A recurring link to a closed deposit is refused ─────────────────────────
+--
+-- The link guard (#638) asked only whether the target had handed over, never
+-- whether it was still there to fund. So a saving could be linked to a book that
+-- had been settled whole — deposit_group_id cleared, balance zero — and the
+-- monthly top-up then failed with "accumulating book not found" while the plan
+-- went on showing a link. Reachable through the ordinary close, and the finish
+-- adds a sharper version: the writer waits on this function's lock and is let
+-- through the moment the liquidation commits.
+do $$
+declare
+  v_user uuid := gen_random_uuid();
+  v_goal uuid;
+  v_book uuid := gen_random_uuid();
+  v_live uuid := gen_random_uuid();
+  v_saving uuid := gen_random_uuid();
+begin
+  insert into auth.users (id, email) values (v_user, 'finish-goal-dead-link@test.invalid');
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Links') returning goal_id into v_goal;
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate, deposit_group_id, notes
+  ) values (
+    v_book, v_user, v_goal, 'bank', 'investment',
+    current_date - 90, current_date + 275, 3000000, 4, v_book, 'Tích luỹ'
+  );
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate, deposit_group_id, notes
+  ) values (
+    v_live, v_user, v_goal, 'bank', 'investment',
+    current_date - 5, current_date + 360, 2000000, 4, v_live, 'Sổ còn sống'
+  );
+
+  -- A link to a live book is unaffected.
+  insert into public.recurring_savings (saving_id, user_id, goal_id, name, amount_vnd, linked_deposit_tx_id)
+    values (v_saving, v_user, v_goal, 'Gửi góp', 1000000, v_live);
+
+  perform public.withdraw_accumulating_book(v_book, 3000000, 3100000, current_date, true);
+
+  begin
+    insert into public.recurring_savings (user_id, goal_id, name, amount_vnd, linked_deposit_tx_id)
+      values (v_user, v_goal, 'Gửi góp vào sổ đã đóng', 1000000, v_book);
+    raise exception 'a link to a closed book must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- ...and the same on an UPDATE that re-points a live link at the dead book.
+  begin
+    update public.recurring_savings set linked_deposit_tx_id = v_book where saving_id = v_saving;
+    raise exception 'a link must not be re-pointed at a closed book';
+  exception when sqlstate '23514' then null;
+  end;
+
+  raise notice 'finish_savings_goal dead links: all assertions passed';
+end $$;
+
 -- ── A finished goal can still be deleted outright ───────────────────────────
 --
 -- Deleting a goal first clears merge_target_goal_id on its CONSUMED held
