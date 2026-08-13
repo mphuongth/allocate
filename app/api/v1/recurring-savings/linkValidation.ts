@@ -18,7 +18,7 @@ export async function validateLinkedDeposit(
 ): Promise<string | null> {
   const { data, error } = await supabase
     .from('investment_transactions')
-    .select('asset_type, interest_rate, expiry_date, goal_id, transaction_type, deposit_group_id, successor_deposit_tx_id')
+    .select('asset_type, interest_rate, expiry_date, goal_id, transaction_type, deposit_group_id, successor_deposit_tx_id, amount_vnd')
     .eq('transaction_id', txId)
     .eq('user_id', userId)
     .single()
@@ -47,6 +47,40 @@ export async function validateLinkedDeposit(
   }
   if ((data.goal_id ?? null) !== (recurringGoalId ?? null)) {
     return 'Linked deposit must belong to the same goal as the recurring saving.'
+  }
+  // A deposit that has been fully withdrawn — a closed term deposit, or a book
+  // settled whole (which also clears deposit_group_id, so the anchor check above
+  // waves it through) — can never take another đồng. The plan would keep asking
+  // for a month it has nowhere to put, and the top-up fails with "accumulating
+  // book not found". The table refuses this too (#650); this is the readable half.
+  //
+  // Asked of the BOOK when the target is a book anchor: a link names the anchor
+  // but funds the whole group, and a partial withdrawal can empty that one
+  // tranche while the book carries on. Reading the anchor alone would refuse a
+  // link to a book that is still live.
+  const isBookAnchor = data.deposit_group_id === txId
+  const group = isBookAnchor
+    ? (await supabase
+        .from('investment_transactions')
+        .select('transaction_id, amount_vnd')
+        .eq('user_id', userId)
+        .eq('deposit_group_id', txId)
+        .eq('transaction_type', 'investment')
+        .is('renewed_from_transaction_id', null)).data ?? []
+    : [{ transaction_id: txId, amount_vnd: data.amount_vnd }]
+  const ids = group.map((t) => t.transaction_id)
+  const { data: withdrawals } = ids.length
+    ? await supabase
+        .from('investment_transactions')
+        .select('principal_withdrawn')
+        .eq('user_id', userId)
+        .in('parent_transaction_id', ids)
+        .eq('transaction_type', 'withdrawal')
+    : { data: [] }
+  const held = group.reduce((sum, t) => sum + (t.amount_vnd ?? 0), 0)
+  const withdrawn = (withdrawals ?? []).reduce((sum, w) => sum + (w.principal_withdrawn ?? 0), 0)
+  if (held - withdrawn <= 0) {
+    return 'That deposit has been closed — link a live deposit instead.'
   }
   return null
 }

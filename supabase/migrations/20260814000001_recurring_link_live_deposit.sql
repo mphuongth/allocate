@@ -1,0 +1,101 @@
+-- A recurring saving may not be linked to a deposit that is closed.
+--
+-- enforce_recurring_link_not_handed_over (#638, last redefined in
+-- 20260812000001) locks the target and asks two questions: has it handed over to
+-- a successor, and has it been folded into another deposit? It never asks the
+-- plainest one — is it still there to fund?
+--
+-- So a saving can be linked to a book that has been settled whole. The close
+-- clears deposit_group_id on every row, which also slips past the API's "link a
+-- book via its anchor" check, and record_recurring_book_topup then fails every
+-- month with "accumulating book not found" while the plan goes on showing a
+-- link. Reproduced with nothing exotic: close a book through the ordinary
+-- withdraw sheet, link a saving to the dead anchor, accepted.
+--
+-- The guard already carries the rule it was missing, in its own comment: "a link
+-- that can never be funded is worse than a refused one — the plan would keep
+-- asking for a month it has nowhere to put." A closed deposit is that, exactly.
+--
+-- ─── Asked of the BOOK, not of the anchor ────────────────────────────────────
+--
+-- A link names a book's anchor but funds the GROUP, and the anchor is only one
+-- tranche. A partial withdrawal can empty it — by rounding, or taken against
+-- that tranche directly — while the book carries on with the rest. Reading the
+-- anchor's own balance would refuse a link to a book that is very much alive, so
+-- a live book is measured across its live tranches. A book settled whole has had
+-- deposit_group_id cleared everywhere, so its anchor is measured on its own and
+-- reads zero — which is the case this guard exists for.
+create or replace function public.enforce_recurring_link_not_handed_over()
+returns trigger language plpgsql security definer set search_path = '' as $$
+declare
+  v_target public.investment_transactions;
+  v_folded boolean;
+  v_left bigint;
+begin
+  -- LOCK the target, THEN read it. Locking inside a predicate that already tests
+  -- the successor locks nothing while a handover is uncommitted: the visible
+  -- version still has a null link, so the row does not match and the write sails
+  -- past to commit against a book that, moments later, refuses it. The lock has
+  -- to be taken on the row itself, whatever it currently says — and the same
+  -- reasoning covers a liquidation committing underneath this write.
+  select * into v_target
+    from public.investment_transactions
+   where transaction_id = new.linked_deposit_tx_id
+     and user_id = new.user_id
+   for share;
+  if not found then return new; end if;
+
+  if v_target.successor_deposit_tx_id is not null then
+    raise exception 'successor book: that book has handed over to a successor, so link the successor instead'
+      using errcode = 'check_violation';
+  end if;
+
+  select exists (
+    select 1 from public.investment_transactions w
+     where w.parent_transaction_id = v_target.transaction_id
+       and w.transaction_type = 'withdrawal'
+       and w.consumed_by_inv_id is not null
+  ) into v_folded;
+  if v_folded then
+    raise exception 'successor book: that deposit has been folded into another one, so link that one instead'
+      using errcode = 'check_violation';
+  end if;
+
+  if v_target.deposit_group_id = v_target.transaction_id then
+    -- A live accumulating book: what the GROUP still holds.
+    select coalesce(sum(
+             t.amount_vnd - coalesce((
+               select sum(w.principal_withdrawn) from public.investment_transactions w
+                where w.parent_transaction_id = t.transaction_id
+                  and w.transaction_type = 'withdrawal'
+             ), 0)
+           ), 0)
+      into v_left
+      from public.investment_transactions t
+     where t.deposit_group_id = v_target.transaction_id
+       and t.transaction_type = 'investment'
+       and t.renewed_from_transaction_id is null;
+  else
+    select v_target.amount_vnd - coalesce(sum(w.principal_withdrawn), 0)
+      into v_left
+      from public.investment_transactions w
+     where w.parent_transaction_id = v_target.transaction_id
+       and w.transaction_type = 'withdrawal';
+    v_left := coalesce(v_left, v_target.amount_vnd);
+  end if;
+
+  if v_left <= 0 then
+    raise exception 'closed deposit: that deposit has been closed, so a link to it could never be funded'
+      using errcode = 'check_violation';
+  end if;
+
+  return new;
+end;
+$$;
+
+comment on function public.enforce_recurring_link_not_handed_over() is
+  'Refuses a recurring link to a deposit that cannot be funded: handed over, folded into another, or closed.';
+
+-- SECURITY DEFINER, so it is executable by PUBLIC unless told otherwise. It is
+-- the trigger''s helper and nothing else''s (mirrors 20260812000001).
+revoke all on function public.enforce_recurring_link_not_handed_over() from public, anon, authenticated;
