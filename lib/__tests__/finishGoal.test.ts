@@ -114,8 +114,15 @@ describe('realizedFor', () => {
     expect(realizedFor(deposit, '-1')).toBeNull()
   })
 
-  it('accepts zero — a holding really can pay out nothing', () => {
-    expect(realizedFor(deposit, '0')).toBe(0)
+  it('refuses zero — a withdrawal of no cash is a row the ledger will not take', () => {
+    // amount_vnd must be positive, so posting zero would roll the whole finish
+    // back. Better a disabled button than a failed submit.
+    expect(realizedFor(deposit, '0')).toBeNull()
+  })
+
+  it('refuses a gold price that rounds the proceeds away to nothing', () => {
+    const dust = buildFinishHoldings([row({ id: 'd', type: 'gold', units: 0.0001, value: 1 })])[0]
+    expect(realizedFor(dust, '0.4')).toBeNull()
   })
 })
 

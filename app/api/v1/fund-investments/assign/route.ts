@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateUUID } from '@/lib/validation'
 import { readJsonBody } from '@/lib/apiBody'
+import { archivedGoalError } from '@/lib/assertOwned'
 
 // Move every fund-investment of one fund from one goal bucket to another.
 //
@@ -84,6 +85,9 @@ export async function POST(request: NextRequest) {
       .eq('user_id', user.id)
       .single()
     if (!goal) return NextResponse.json({ error: "You don't have permission to access this goal." }, { status: 403 })
+    // A finished goal is an archive — a fund bucket is not moved into one (#650).
+    const doneErr = await archivedGoalError(supabase, toGoalId, user.id)
+    if (doneErr) return doneErr
   }
 
   // The source scope, the fund, the caller's own rows, and the exclusion of

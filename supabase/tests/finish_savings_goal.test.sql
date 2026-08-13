@@ -116,12 +116,34 @@ begin
   end if;
   update public.funds set dca_goal_id = null where id = v_fund;
 
-  -- An ended recurring saving is history and blocks nothing.
+  -- An ENDED recurring saving blocks too: the dashboard keeps synthesizing its
+  -- realized months into the goal's value forever, and no withdrawal can remove
+  -- them (there is no transaction to withdraw).
   insert into public.recurring_savings (user_id, goal_id, name, amount_vnd, effective_to)
     values (v_user, v_goal, 'Đã dừng', 1000000, current_date - 1);
-  if exists (select 1 from public.savings_goal_finish_blockers(v_goal) where code = 'recurring_saving') then
-    raise exception 'an ended recurring saving must not block the finish';
+  if not exists (select 1 from public.savings_goal_finish_blockers(v_goal)
+                  where code = 'recurring_saving' and label = 'Đã dừng') then
+    raise exception 'an ended recurring saving must still block the finish';
   end if;
+  delete from public.recurring_savings where user_id = v_user;
+
+  -- ── A holding that realizes nothing is refused, not half-written ─────────
+  --
+  -- investment_transactions requires amount_vnd > 0, so a zero would be rejected
+  -- three statements later and roll the whole finish back behind a generic error.
+  begin
+    perform public.finish_savings_goal(v_goal, jsonb_build_array(
+      jsonb_build_object('key', 'tx:' || v_deposit, 'received', 0),
+      jsonb_build_object('key', 'tx:' || v_gold, 'received', 9000000),
+      jsonb_build_object('key', 'fund:' || v_fund, 'received', 5500000),
+      jsonb_build_object('key', 'book:' || v_book, 'received', 5100000)
+    ), current_date, 26000000);
+    raise exception 'a zero realization must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+  select count(*) into v_tx_count from public.investment_transactions
+   where user_id = v_user and transaction_type = 'withdrawal';
+  if v_tx_count <> 0 then raise exception 'a refused zero must write no withdrawals'; end if;
 
   -- ── The finish itself ─────────────────────────────────────────────────────
   select public.finish_savings_goal(v_goal, jsonb_build_array(
@@ -176,6 +198,33 @@ begin
               where user_id = v_user and transaction_type = 'withdrawal' and affects_progress) then
     raise exception 'a finish withdrawal must not lower the progress it completes';
   end if;
+
+  -- ── An archive takes no new money ─────────────────────────────────────────
+  --
+  -- The pickers hide a completed goal, but a stale tab or a direct API client
+  -- can still name one. Hiding is presentation; this is the invariant.
+  begin
+    insert into public.investment_transactions (
+      user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd
+    ) values (v_user, v_goal, 'stock', 'investment', current_date, 1000000);
+    raise exception 'a completed goal must not take a new holding';
+  exception when sqlstate '23514' then null;
+  end;
+  begin
+    insert into public.recurring_savings (user_id, goal_id, name, amount_vnd)
+      values (v_user, v_goal, 'Gửi góp mới', 1000000);
+    raise exception 'a completed goal must not take a new recurring saving';
+  exception when sqlstate '23514' then null;
+  end;
+  begin
+    update public.funds set dca_goal_id = v_goal where id = v_fund;
+    raise exception 'a completed goal must not take a DCA plan';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- Its PAST is not frozen, only its future: history stays editable.
+  update public.investment_transactions set notes = 'ACB 12 tháng (đã tất toán)'
+   where transaction_id = v_deposit;
 
   -- ── A finished goal is not finishable twice ───────────────────────────────
   begin

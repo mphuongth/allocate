@@ -19,6 +19,44 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 //
 // The lookup is scoped by user_id, so a genuinely foreign row reads as "not
 // found" and the 403 leaks nothing about whether that id exists.
+/**
+ * Guard the OTHER half of a goal reference: the goal is the caller's, but has it
+ * been finished (#650)?
+ *
+ * A completed goal is an archive. New money must not land in one — it would sit
+ * under a frozen 100% and never appear on the card. The database refuses it
+ * (enforce_goal_not_completed), and that trigger is the authoritative guard; this
+ * is the front half, so the caller reads "reopen it first" instead of a 500 from
+ * a write that was already doomed.
+ *
+ * Returns null when the goal is active OR not visible to this user — a foreign
+ * goal is the ownership check's refusal to make, and it runs first.
+ */
+export async function archivedGoalError(
+  supabase: SupabaseClient,
+  goalId: string,
+  userId: string,
+): Promise<NextResponse | null> {
+  const { data, error } = await supabase
+    .from('savings_goals')
+    .select('completed_at')
+    .eq('goal_id', goalId)
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  if (error) {
+    console.error('completed-goal check failed', error.message)
+    return NextResponse.json({ error: 'Failed to verify permissions' }, { status: 500 })
+  }
+  if (data?.completed_at) {
+    return NextResponse.json(
+      { error: 'This goal has been finished, so it takes no new money. Reopen it first.', code: 'goal_completed' },
+      { status: 409 },
+    )
+  }
+  return null
+}
+
 export async function ownershipError(
   supabase: SupabaseClient,
   table: string,

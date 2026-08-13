@@ -98,13 +98,19 @@ export function buildFinishHoldings(rows: InvRow[]): FinishHolding[] {
  * What a holding realizes for the figure typed into its field, or null while that
  * figure is missing or unusable. Null is "not filled in yet", never "zero" — a
  * blank field must not archive the goal on a guess.
+ *
+ * Zero is unusable too, and deliberately so: a withdrawal's amount_vnd must be
+ * positive, so a zero-cash liquidation is refused by the table and rolls the
+ * whole finish back. Blocking it here means the user reads that from a disabled
+ * button instead of from a failed submit.
  */
 export function realizedFor(holding: FinishHolding, raw: string): number | null {
   const trimmed = (raw ?? '').trim()
   if (trimmed === '') return null
   const n = Number(trimmed)
-  if (!Number.isFinite(n) || n < 0) return null
-  return holding.input === 'unitPrice' ? Math.round(n * (holding.units ?? 0)) : Math.round(n)
+  if (!Number.isFinite(n) || n <= 0) return null
+  const realized = holding.input === 'unitPrice' ? Math.round(n * (holding.units ?? 0)) : Math.round(n)
+  return realized > 0 ? realized : null
 }
 
 /** Every holding realized. A goal with nothing left to sell is already complete. */

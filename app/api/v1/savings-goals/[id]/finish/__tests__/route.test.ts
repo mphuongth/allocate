@@ -120,10 +120,15 @@ describe('POST', () => {
     expect(h.rpc).toHaveLength(0)
   })
 
-  it('rejects a negative realization', async () => {
-    const res = await post({ plan: [{ key: 'tx:abc', received: -1 }] })
-    expect(res.status).toBe(400)
-    expect((await res.json()).error).toContain('non-negative')
+  it('rejects a realization the ledger cannot record', async () => {
+    // amount_vnd must be positive — a zero or negative would be refused by the
+    // table mid-finish and roll everything back behind a generic error.
+    for (const received of [-1, 0]) {
+      const res = await post({ plan: [{ key: 'tx:abc', received }] })
+      expect(res.status).toBe(400)
+      expect((await res.json()).error).toContain('positive')
+    }
+    expect(h.rpc).toHaveLength(0)
   })
 
   it('refuses to finish an already-completed goal', async () => {

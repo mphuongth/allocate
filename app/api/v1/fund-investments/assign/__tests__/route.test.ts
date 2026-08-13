@@ -35,6 +35,8 @@ vi.mock('@/lib/supabase-server', () => {
       select: () => c,
       eq: () => c,
       single: async () => h.goal,
+      // The archived-goal guard (#650) reads the same row through maybeSingle.
+      maybeSingle: async () => h.goal,
     }
     h.tables.push(table)
     return c

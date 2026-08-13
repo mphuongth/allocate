@@ -71,9 +71,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       if (typeof entry?.key !== 'string' || entry.key === '') {
         throw new ValidationError(`plan[${i}].key must be a holding key`)
       }
+      // Positive, not merely non-negative: a withdrawal's amount_vnd must be
+      // positive, so a zero would be refused by the table and roll the whole
+      // finish back behind a generic error.
       const received = Number(entry.received)
-      if (!Number.isFinite(received) || received < 0) {
-        throw new ValidationError(`plan[${i}].received must be a non-negative amount`)
+      if (!Number.isFinite(received) || received < 1) {
+        throw new ValidationError(`plan[${i}].received must be a positive amount`)
       }
       return { key: entry.key, received: Math.round(received) }
     })

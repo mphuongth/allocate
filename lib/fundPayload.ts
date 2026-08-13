@@ -154,13 +154,22 @@ export async function dcaGoalOwnershipError(
 ): Promise<NextResponse | null> {
   const { data: goal } = await supabase
     .from('savings_goals')
-    .select('goal_id')
+    .select('goal_id, completed_at')
     .eq('goal_id', goalId)
     .eq('user_id', userId)
     .single()
 
   if (!goal) {
     return NextResponse.json({ error: "You don't have permission to access this goal." }, { status: 403 })
+  }
+  // A DCA plan buys into its goal every month, so pointing one at an archived
+  // goal is money flowing into a result already declared final (#650). The
+  // database refuses it too; this is the readable half.
+  if (goal.completed_at) {
+    return NextResponse.json(
+      { error: 'This goal has been finished, so it takes no new money. Reopen it first.', code: 'goal_completed' },
+      { status: 409 },
+    )
   }
   return null
 }

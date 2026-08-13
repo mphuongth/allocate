@@ -72,11 +72,17 @@ security invoker
 stable
 set search_path = ''
 as $$
-  -- A recurring saving that has already ended is history and feeds nothing.
+  -- EVERY recurring saving pointed at this goal, not only the ones still
+  -- running. An ended one keeps contributing: the dashboard synthesizes a
+  -- contribution for every realized plan month inside its window (there is no
+  -- investment_transactions row — that is what #640 is about), and it adds them
+  -- to the goal's value and to net worth forever. The finish RPC withdraws
+  -- transactions, so it cannot liquidate that balance; archiving the goal on top
+  -- of it would leave money permanently counted in a goal declared spent.
+  -- Blocking is the honest answer: unassign or delete the saving first.
   select 'recurring_saving'::text, r.name
     from public.recurring_savings r
    where r.goal_id = p_goal_id
-     and (r.effective_to is null or r.effective_to >= current_date)
   union all
   select 'dca_plan'::text, f.name
     from public.funds f
@@ -386,8 +392,13 @@ begin
       raise exception 'finish goal: the liquidation plan leaves holding % unrealized', v_h.key
         using errcode = 'check_violation';
     end if;
-    if v_received < 0 then
-      raise exception 'finish goal: holding % cannot realize a negative amount', v_h.key
+    -- Zero is refused, not silently accepted: investment_transactions requires
+    -- amount_vnd > 0, so a zero-cash liquidation would be rejected by the table
+    -- three statements later and the whole finish would roll back behind a
+    -- generic error. A holding that truly paid out nothing has no withdrawal
+    -- shape in this ledger — write it off by deleting the holding instead.
+    if v_received <= 0 then
+      raise exception 'finish goal: holding % must realize a positive amount', v_h.key
         using errcode = 'check_violation';
     end if;
 
@@ -443,6 +454,75 @@ $$;
 
 comment on function public.finish_savings_goal(uuid, jsonb, date, bigint) is
   'Liquidates every live holding of a goal and archives it at 100%, atomically (#650). All-or-nothing: any refused withdrawal rolls back the whole finish.';
+
+-- ── an archive takes no new money ────────────────────────────────────────────
+--
+-- Keeping completed goals out of the pickers is presentation, and presentation is
+-- not an invariant: a tab left open before the finish, a retried request, or any
+-- direct API client can still point a new holding — or a recurring saving, or a
+-- DCA plan — at a goal that has been archived. The holding then sits under a
+-- frozen 100% and is invisible on the card, which is the exact "money hiding
+-- behind a number" this feature exists to prevent.
+--
+-- So it is a table invariant, for the same reason the withdrawal balance is one
+-- (20260730000002): the goal reference has many writers already, and the next one
+-- is written by whoever forgets.
+--
+-- Only a CHANGE to the reference is measured. Editing the notes on a transaction
+-- that was part of the goal's history must keep working — a completed goal's past
+-- is not frozen, only its future.
+create or replace function public.enforce_goal_not_completed()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_col text := tg_argv[0];
+  v_new uuid;
+  v_old uuid;
+begin
+  execute format('select ($1).%I', v_col) into v_new using new;
+  if v_new is null then return new; end if;
+  if tg_op = 'UPDATE' then
+    execute format('select ($1).%I', v_col) into v_old using old;
+    if v_old is not distinct from v_new then return new; end if;
+  end if;
+  if exists (
+    select 1 from public.savings_goals g
+     where g.goal_id = v_new and g.completed_at is not null
+  ) then
+    raise exception 'completed goal: this goal has been finished, so it takes no new money — reopen it first'
+      using errcode = 'check_violation';
+  end if;
+  return new;
+end;
+$$;
+
+comment on function public.enforce_goal_not_completed() is
+  'Refuses to point a new holding, recurring saving or DCA plan at an archived goal (#650). The reference column is tg_argv[0].';
+
+-- The finish itself is safe under these: it writes every withdrawal BEFORE it
+-- stamps the snapshot, so the goal is still active while they land.
+drop trigger if exists investment_transactions_goal_not_completed on public.investment_transactions;
+create trigger investment_transactions_goal_not_completed
+  before insert or update of goal_id on public.investment_transactions
+  for each row execute function public.enforce_goal_not_completed('goal_id');
+
+drop trigger if exists investment_transactions_merge_goal_not_completed on public.investment_transactions;
+create trigger investment_transactions_merge_goal_not_completed
+  before insert or update of merge_target_goal_id on public.investment_transactions
+  for each row execute function public.enforce_goal_not_completed('merge_target_goal_id');
+
+drop trigger if exists recurring_savings_goal_not_completed on public.recurring_savings;
+create trigger recurring_savings_goal_not_completed
+  before insert or update of goal_id on public.recurring_savings
+  for each row execute function public.enforce_goal_not_completed('goal_id');
+
+drop trigger if exists funds_dca_goal_not_completed on public.funds;
+create trigger funds_dca_goal_not_completed
+  before insert or update of dca_goal_id on public.funds
+  for each row execute function public.enforce_goal_not_completed('dca_goal_id');
 
 -- ── reopening ────────────────────────────────────────────────────────────────
 --

@@ -136,6 +136,25 @@ describe('FinishGoalSheet', () => {
     expect(screen.getByText('₫ 18.400.000')).toBeInTheDocument()
   })
 
+  it('will not present the goal as ready when the blocker check failed', async () => {
+    // A 500 read as "no blockers" is the worst of both: the sheet enables a
+    // submit on a prerequisite that never ran.
+    fetchMock.mockImplementation(async () => ({ ok: false, status: 500, json: async () => ({}) }))
+    mountSheet()
+    await waitFor(() => expect(screen.getByTestId('finish-goal-check-failed')).toBeInTheDocument())
+    expect(screen.queryByTestId('finish-goal-confirm')).not.toBeInTheDocument()
+  })
+
+  it('will not submit a holding that realizes nothing', async () => {
+    // amount_vnd must be positive, so a zero would roll the whole finish back.
+    const user = userEvent.setup()
+    mountSheet()
+    await waitFor(() => expect(screen.getByTestId('finish-goal-confirm')).toBeEnabled())
+    await user.clear(screen.getByTestId('finish-input-tx:tx-1'))
+    await user.type(screen.getByTestId('finish-input-tx:tx-1'), '0')
+    expect(screen.getByTestId('finish-goal-confirm')).toBeDisabled()
+  })
+
   it('lets a goal with nothing left be archived', async () => {
     // The user withdrew everything by hand; finishing is now purely the archive.
     mountSheet({ rows: [] })

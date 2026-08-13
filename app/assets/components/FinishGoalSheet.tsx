@@ -75,8 +75,10 @@ export function FinishGoalSheet({ open, goalId, goalName, rows, onClose, onFinis
   const [inputs, setInputs] = useState<FinishInput>(
     () => Object.fromEntries(buildFinishHoldings(rows).map((h) => [h.key, String(h.suggested)])),
   )
+  // `blockers === null` means the prerequisite check has not produced an answer
+  // — either still running (`checking`) or failed. Neither may render the form.
   const [blockers, setBlockers] = useState<Blocker[] | null>(null)
-  const [checking, setChecking] = useState(false)
+  const [checking, setChecking] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState<number | null>(null)
@@ -92,11 +94,13 @@ export function FinishGoalSheet({ open, goalId, goalName, rows, onClose, onFinis
     setError('')
     try {
       const res = await fetch(`/api/v1/savings-goals/${goalId}/finish`, { cache: 'no-store' })
-      const body = res.ok ? await res.json() : { blockers: [] }
+      // A failed check is not a clean bill of health. Reading a non-2xx as "no
+      // blockers" is the worst of both: the sheet would present the goal as
+      // ready and enable a submit on a prerequisite that never ran.
+      if (!res.ok) throw new Error('blocker check failed')
+      const body = await res.json()
       setBlockers(body.blockers ?? [])
     } catch {
-      // A failed check is not a clean bill of health — say so rather than
-      // offering a submit that the server would refuse anyway.
       setBlockers(null)
       setError(isVI ? 'Không kiểm tra được mục tiêu. Thử lại.' : 'Could not check the goal. Try again.')
     }
@@ -108,6 +112,7 @@ export function FinishGoalSheet({ open, goalId, goalName, rows, onClose, onFinis
   useResetOnOpen(open, () => {
     setInputs(Object.fromEntries(buildFinishHoldings(rows).map((h) => [h.key, String(h.suggested)])))
     setBlockers(null)
+    setChecking(true)
     setSaving(false)
     setError('')
     setDone(null)
@@ -118,7 +123,6 @@ export function FinishGoalSheet({ open, goalId, goalName, rows, onClose, onFinis
     // Asks the server what blocks this finish. The flags `load` sets mark a
     // request about to be issued, not state derived from render, so there is
     // nothing here to move to render time.
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- data load; see above
     void load()
   }, [open, load])
 
@@ -233,8 +237,26 @@ export function FinishGoalSheet({ open, goalId, goalName, rows, onClose, onFinis
               <div style={{ fontSize: 13, color: 'var(--c-muted)', marginTop: 4 }}>{goalName}</div>
               <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--c-pos)', marginTop: 12, letterSpacing: '-0.02em' }}>{fmt(done)}</div>
             </div>
-          ) : checking && blockers === null ? (
-            <div style={{ padding: '40px 0', display: 'flex', justifyContent: 'center' }}><CairnLoader /></div>
+          ) : blockers === null ? (
+            // No answer from the prerequisite check yet — running, or failed.
+            // Neither state may show a form whose submit would be a guess.
+            checking ? (
+              <div style={{ padding: '40px 0', display: 'flex', justifyContent: 'center' }}><CairnLoader /></div>
+            ) : (
+              <div data-testid="finish-goal-check-failed" style={{ display: 'grid', gap: 12, paddingTop: 20, textAlign: 'center' }}>
+                <div style={{ fontSize: 12, color: 'var(--c-neg)' }}>{error}</div>
+                <button
+                  onClick={() => { void load() }}
+                  style={{
+                    justifySelf: 'center', padding: '10px 18px', borderRadius: 10,
+                    border: '1px solid var(--c-line)', background: 'var(--c-card)',
+                    color: 'var(--c-ink)', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer',
+                  }}
+                >
+                  {isVI ? 'Thử lại' : 'Try again'}
+                </button>
+              </div>
+            )
           ) : blocked ? (
             // ── Blocked ──────────────────────────────────────────────────────
             <div data-testid="finish-goal-blockers" style={{ display: 'grid', gap: 10, paddingTop: 14 }}>
@@ -298,11 +320,6 @@ export function FinishGoalSheet({ open, goalId, goalName, rows, onClose, onFinis
                 {t.confirm}
               </button>
             </div>
-          )}
-
-          {/* A failed blocker check must not read as "nothing blocks it". */}
-          {error && blockers === null && !checking && done === null && (
-            <div style={{ fontSize: 12, color: 'var(--c-neg)', paddingTop: 14 }}>{error}</div>
           )}
         </div>
       </div>
