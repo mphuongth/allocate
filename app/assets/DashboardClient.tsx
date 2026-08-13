@@ -448,7 +448,10 @@ export default function DashboardClient({ userId }: { userId: string }) {
                   <DesktopInsuranceList
                     insurance={data.insurance}
                     locale={locale}
-                    goalCount={data.goals.length}
+                    // Active goals only: an archived goal is not a goal left
+                    // unprotected, and with every goal finished this counted them
+                    // all as needing cover (#650).
+                    goalCount={sortedGoals.length}
                     onOpen={(ins) => { setSelectedGoalId(null); setSelectedInsuranceId(selectedInsuranceId === ins.insuranceId ? null : ins.insuranceId) }}
                     onAdd={() => setShowAddInsurance(true)}
                   />
@@ -666,7 +669,10 @@ export default function DashboardClient({ userId }: { userId: string }) {
                   </div>
                 ) : (
                   <InsuranceEmpty
-                    goalCount={data.goals.length}
+                    // Active goals only: an archived goal is not a goal left
+                    // unprotected, and with every goal finished this counted them
+                    // all as needing cover (#650).
+                    goalCount={sortedGoals.length}
                     locale={locale}
                     onAdd={() => setShowAddInsurance(true)}
                   />
@@ -821,7 +827,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
           netWorth: data.netWorth.netWorth,
           currentValue: data.netWorth.currentValue,
           totalPL: data.netWorth.overallProfitLoss,
-          goalCount: data.goals.length,
+          goalCount: sortedGoals.length,
         } : null}
         onExport={handleGenerateReport}
         desktop={isDesktop}

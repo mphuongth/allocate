@@ -130,22 +130,25 @@ as $$
     from public.recurring_savings r
    where r.goal_id = p_goal_id
   union all
-  -- ...and a saving that feeds a BOOK held by this goal, whatever goal it is
+  -- ...and a saving that feeds a DEPOSIT held by this goal, whatever goal it is
   -- itself filed under. Nothing makes those two agree — the ownership trigger
-  -- checks whose rows they are, not which goal — so a direct write can point a
-  -- saving at this goal's book while its own goal_id says elsewhere.
+  -- checks whose rows they are, not which goal — so a direct write, or a deposit
+  -- reassigned to this goal afterwards, leaves a saving pointing here while its
+  -- own goal_id says elsewhere.
   --
-  -- It matters because the full close inside withdraw_accumulating_book clears
-  -- EVERY recurring link targeting the book it settles, regardless of goal. The
-  -- finish would therefore reach in and end a plan belonging to another goal,
-  -- silently — the exact thing this list exists to prevent.
+  -- Both shapes of link break, differently. A BOOK: the full close inside
+  -- withdraw_accumulating_book clears every recurring link targeting the book it
+  -- settles, regardless of goal, so the finish ends another goal's plan outright.
+  -- A single term DEPOSIT: the link survives the liquidation, and now points at
+  -- an empty deposit that has dropped out of the maturity flow — the saving can
+  -- never be folded into the deposit it was promised to, while still showing as
+  -- linked. Either way the finish has quietly changed what happens next month.
   select 'recurring_saving'::text, r.name
     from public.recurring_savings r
     join public.investment_transactions t
       on t.transaction_id = r.linked_deposit_tx_id
    where r.linked_deposit_tx_id is not null
      and t.goal_id = p_goal_id
-     and t.deposit_group_id is not null
      and r.goal_id is distinct from p_goal_id
   union all
   select 'dca_plan'::text, f.name

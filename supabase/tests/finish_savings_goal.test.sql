@@ -145,6 +145,18 @@ begin
     raise exception 'a saving linked to this goal''s book must block the finish';
   end if;
   delete from public.recurring_savings where user_id = v_user;
+
+  -- A single term deposit breaks differently but just as quietly: the link
+  -- SURVIVES the liquidation and then points at an empty deposit that has
+  -- dropped out of the maturity flow, so the saving can never be folded into
+  -- the deposit it was promised to while still reading as linked.
+  insert into public.recurring_savings (user_id, goal_id, name, amount_vnd, linked_deposit_tx_id)
+    values (v_user, v_other_goal, 'Gộp vào sổ kỳ hạn', 1000000, v_deposit);
+  if not exists (select 1 from public.savings_goal_finish_blockers(v_goal)
+                  where code = 'recurring_saving' and label = 'Gộp vào sổ kỳ hạn') then
+    raise exception 'a saving linked to this goal''s term deposit must block the finish';
+  end if;
+  delete from public.recurring_savings where user_id = v_user;
   delete from public.savings_goals where goal_id = v_other_goal;
 
   -- ── A holding that realizes nothing is refused, not half-written ─────────
