@@ -53,14 +53,33 @@ export async function validateLinkedDeposit(
   // waves it through) — can never take another đồng. The plan would keep asking
   // for a month it has nowhere to put, and the top-up fails with "accumulating
   // book not found". The table refuses this too (#650); this is the readable half.
-  const { data: withdrawals } = await supabase
-    .from('investment_transactions')
-    .select('principal_withdrawn')
-    .eq('user_id', userId)
-    .eq('parent_transaction_id', txId)
-    .eq('transaction_type', 'withdrawal')
+  //
+  // Asked of the BOOK when the target is a book anchor: a link names the anchor
+  // but funds the whole group, and a partial withdrawal can empty that one
+  // tranche while the book carries on. Reading the anchor alone would refuse a
+  // link to a book that is still live.
+  const isBookAnchor = data.deposit_group_id === txId
+  const group = isBookAnchor
+    ? (await supabase
+        .from('investment_transactions')
+        .select('transaction_id, amount_vnd')
+        .eq('user_id', userId)
+        .eq('deposit_group_id', txId)
+        .eq('transaction_type', 'investment')
+        .is('renewed_from_transaction_id', null)).data ?? []
+    : [{ transaction_id: txId, amount_vnd: data.amount_vnd }]
+  const ids = group.map((t) => t.transaction_id)
+  const { data: withdrawals } = ids.length
+    ? await supabase
+        .from('investment_transactions')
+        .select('principal_withdrawn')
+        .eq('user_id', userId)
+        .in('parent_transaction_id', ids)
+        .eq('transaction_type', 'withdrawal')
+    : { data: [] }
+  const held = group.reduce((sum, t) => sum + (t.amount_vnd ?? 0), 0)
   const withdrawn = (withdrawals ?? []).reduce((sum, w) => sum + (w.principal_withdrawn ?? 0), 0)
-  if (data.amount_vnd - withdrawn <= 0) {
+  if (held - withdrawn <= 0) {
     return 'That deposit has been closed — link a live deposit instead.'
   }
   return null

@@ -688,6 +688,7 @@ declare
   v_book uuid := gen_random_uuid();
   v_live uuid := gen_random_uuid();
   v_saving uuid := gen_random_uuid();
+  v_left bigint;
 begin
   insert into auth.users (id, email) values (v_user, 'finish-goal-dead-link@test.invalid');
   insert into public.savings_goals (user_id, goal_name) values (v_user, 'Links') returning goal_id into v_goal;
@@ -710,7 +711,31 @@ begin
   insert into public.recurring_savings (saving_id, user_id, goal_id, name, amount_vnd, linked_deposit_tx_id)
     values (v_saving, v_user, v_goal, 'Gửi góp', 1000000, v_live);
 
-  perform public.withdraw_accumulating_book(v_book, 3000000, 3100000, current_date, true);
+  -- ...and so is a book whose ANCHOR tranche is empty while the book is not. A
+  -- link names the anchor but funds the group: a partial withdrawal can exhaust
+  -- that one tranche — by rounding, or taken against it directly — and the book
+  -- carries on. Reading the anchor alone refused a perfectly fundable book.
+  insert into public.investment_transactions (
+    user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate, deposit_group_id
+  ) values (
+    v_user, v_goal, 'bank', 'investment',
+    current_date - 20, current_date + 275, 9000000, 4, v_book
+  );
+  insert into public.investment_transactions (
+    user_id, goal_id, asset_type, transaction_type, parent_transaction_id,
+    investment_date, amount_vnd, principal_withdrawn
+  ) values (
+    v_user, v_goal, 'bank', 'withdrawal', v_book,
+    current_date, 3050000, 3000000
+  );
+  insert into public.recurring_savings (user_id, goal_id, name, amount_vnd, linked_deposit_tx_id)
+    values (v_user, v_goal, 'Gửi góp vào sổ còn sống', 1000000, v_book);
+  delete from public.recurring_savings where name = 'Gửi góp vào sổ còn sống';
+
+  -- Now settle what is actually left of the book, so it really is closed.
+  select coalesce(sum(eff), 0) into v_left from public.book_live_tranches(v_book);
+  perform public.withdraw_accumulating_book(v_book, v_left, v_left + 100000, current_date, true);
 
   begin
     insert into public.recurring_savings (user_id, goal_id, name, amount_vnd, linked_deposit_tx_id)

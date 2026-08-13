@@ -1035,12 +1035,26 @@ begin
       using errcode = 'check_violation';
   end if;
 
-  select v_target.amount_vnd - coalesce(sum(w.principal_withdrawn), 0)
-    into v_left
-    from public.investment_transactions w
-   where w.parent_transaction_id = v_target.transaction_id
-     and w.transaction_type = 'withdrawal';
-  if coalesce(v_left, v_target.amount_vnd) <= 0 then
+  -- What is left to fund, asked of the RIGHT thing. A link to a book names its
+  -- anchor but funds the BOOK, and the anchor is just one tranche: a partial
+  -- withdrawal can exhaust it — by rounding, or by a withdrawal taken against
+  -- that tranche directly — while the book carries on with the rest. Reading the
+  -- anchor alone refuses a link to a book that is very much alive.
+  --
+  -- A book settled whole clears deposit_group_id on every row, so a dead book's
+  -- anchor falls to the single-deposit branch and reads zero, which is right.
+  if v_target.deposit_group_id = v_target.transaction_id then
+    select coalesce(sum(eff), 0) into v_left
+      from public.book_live_tranches(v_target.transaction_id);
+  else
+    select v_target.amount_vnd - coalesce(sum(w.principal_withdrawn), 0)
+      into v_left
+      from public.investment_transactions w
+     where w.parent_transaction_id = v_target.transaction_id
+       and w.transaction_type = 'withdrawal';
+    v_left := coalesce(v_left, v_target.amount_vnd);
+  end if;
+  if v_left <= 0 then
     raise exception 'closed deposit: that deposit has been closed, so a link to it could never be funded'
       using errcode = 'check_violation';
   end if;
