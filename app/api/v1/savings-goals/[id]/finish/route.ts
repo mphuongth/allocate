@@ -45,7 +45,15 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { data: goal } = await loadGoal(supabase, goalId, user.id)
+  // The error is kept, not dropped into the same branch as "no row". A failed
+  // lookup is not a missing goal — reporting an outage as "Goal not found" tells
+  // the user to go looking for something that is right there, and hides a
+  // condition a retry would clear. Same reasoning as lib/assertOwned (#532).
+  const { data: goal, error: goalError } = await loadGoal(supabase, goalId, user.id)
+  if (goalError) {
+    console.error('finish: goal lookup failed', goalError.message)
+    return NextResponse.json({ error: 'Failed to load the goal' }, { status: 500 })
+  }
   if (!goal) return NextResponse.json({ error: 'Goal not found' }, { status: 404 })
 
   // Both from the database, and the holdings from the very enumeration the
@@ -147,7 +155,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { data: goal } = await loadGoal(supabase, goalId, user.id)
+  // The error is kept, not dropped into the same branch as "no row". A failed
+  // lookup is not a missing goal — reporting an outage as "Goal not found" tells
+  // the user to go looking for something that is right there, and hides a
+  // condition a retry would clear. Same reasoning as lib/assertOwned (#532).
+  const { data: goal, error: goalError } = await loadGoal(supabase, goalId, user.id)
+  if (goalError) {
+    console.error('finish: goal lookup failed', goalError.message)
+    return NextResponse.json({ error: 'Failed to load the goal' }, { status: 500 })
+  }
   if (!goal) return NextResponse.json({ error: 'Goal not found' }, { status: 404 })
   if (goal.completed_at) {
     return NextResponse.json(

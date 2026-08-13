@@ -16,6 +16,7 @@ const h = vi.hoisted(() => ({
   rpcResult: { data: {} as unknown, error: null as { message: string } | null },
   blockers: { data: [] as unknown[], error: null as { message: string } | null },
   holdings: { data: [] as unknown[], error: null as { message: string } | null },
+  goalError: null as { message: string } | null,
   goldPrice: { data: { price_per_chi: 4_700_000 } as { price_per_chi: number } | null, error: null as { message: string } | null },
   fingerprint: { data: '4:2026-08-13 02:00:00+00' as unknown, error: null as { message: string } | null },
   overview: { ok: true, data: { goals: [] as Array<Record<string, unknown>> } } as unknown,
@@ -28,7 +29,7 @@ vi.mock('@/lib/supabase-server', () => ({
       const chain: Record<string, unknown> = {
         select: () => chain,
         eq: () => chain,
-        maybeSingle: async () => (table === 'gold_price_settings' ? h.goldPrice : { data: h.goal, error: null }),
+        maybeSingle: async () => (table === 'gold_price_settings' ? h.goldPrice : { data: h.goalError ? null : h.goal, error: h.goalError }),
       }
       return chain
     },
@@ -73,6 +74,7 @@ beforeEach(() => {
   h.rpcResult = { data: { realized: 30_000_000, holdings: 4, completion_value: 26_000_000 }, error: null }
   h.blockers = { data: [], error: null }
   h.holdings = { data: [], error: null }
+  h.goalError = null
   h.goldPrice = { data: { price_per_chi: 4_700_000 }, error: null }
   h.fingerprint = { data: '4:2026-08-13 02:00:00+00', error: null }
   h.overview = { ok: true, data: { goals: [{ goalId: GOAL_ID, currentValue: 25_000_000, progressValue: 26_000_000 }] } }
@@ -141,6 +143,15 @@ describe('GET (blockers)', () => {
   it('404s a goal that is not the caller\'s', async () => {
     h.goal = null
     expect((await get()).status).toBe(404)
+  })
+
+  it('does not report a failed lookup as a missing goal', async () => {
+    // "Goal not found" during a database blip sends the user looking for
+    // something that is right there, and hides a condition a retry would clear.
+    h.goalError = { message: 'connection reset' }
+    expect((await get()).status).toBe(500)
+    expect((await post({ plan: PLAN })).status).toBe(500)
+    expect(h.rpc.some((c) => c.fn === 'finish_savings_goal')).toBe(false)
   })
 })
 
