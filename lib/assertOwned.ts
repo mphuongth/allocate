@@ -57,6 +57,27 @@ export async function archivedGoalError(
   return null
 }
 
+/**
+ * The BACK half: the database's own refusal, turned into an answer (#650).
+ *
+ * Every completed-goal guard raises with this prefix, and the routes that reach
+ * the ledger without asking first would otherwise report it as whatever their
+ * catch-all says — "Failed to create investment" (a 500, for a valid request) or,
+ * worse, "Transaction not found" (a 404, about a row sitting right there). The
+ * refusal is correct; only the story told about it was wrong.
+ *
+ * Returns null for any other error, so a caller can chain it ahead of its own
+ * handling without swallowing anything.
+ */
+export function completedGoalError(error: { message?: string } | null | undefined): NextResponse | null {
+  const message = error?.message ?? ''
+  if (!message.startsWith('completed goal: ')) return null
+  return NextResponse.json(
+    { error: message.slice('completed goal: '.length), code: 'goal_completed' },
+    { status: 409 },
+  )
+}
+
 export async function ownershipError(
   supabase: SupabaseClient,
   table: string,
