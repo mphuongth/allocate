@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ChevronLeft, X, MoreHorizontal, Edit2, Trash2, ChevronRight, ArrowDownRight, Target, CalendarDays, RefreshCw, PiggyBank, Plus } from 'lucide-react'
+import { ChevronLeft, X, MoreHorizontal, Edit2, Trash2, ChevronRight, ArrowDownRight, Target, CalendarDays, RefreshCw, PiggyBank, Plus, CheckCircle2, RotateCcw } from 'lucide-react'
 import { iconHit } from './iconHit'
 import { toast } from 'sonner'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
@@ -16,7 +16,9 @@ import { fmtTxDate } from './transactionUtils'
 import { TxRowsSkeleton } from './Skeletons'
 import LoadError from './LoadError'
 import { useGoalDetailData } from './useGoalDetailData'
-import { deleteGoal, unholdTransaction, unassignInvestment, updateGoal } from './goalActions'
+import { deleteGoal, reopenGoal, unholdTransaction, unassignInvestment, updateGoal } from './goalActions'
+import { FinishGoalSheet } from './FinishGoalSheet'
+import { goalCompletion } from '@/lib/finishGoal'
 import { SellWithdrawSheet } from './SellWithdrawSheet'
 import { invToSellItem } from './invToSellItem'
 import { useTranslations } from 'next-intl'
@@ -57,6 +59,7 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
   const [actionsOpen, setActionsOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [finishOpen, setFinishOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [calcAmount, setCalcAmount] = useState('')
 
@@ -97,6 +100,16 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
     onDataChanged()
   }
 
+  async function handleReopen() {
+    const ok = await reopenGoal(goal.goalId)
+    if (!ok) {
+      toast.error(isVi ? 'Không thể mở lại mục tiêu' : "Couldn't reopen goal")
+      return
+    }
+    setActionsOpen(false)
+    onDataChanged()
+  }
+
   async function handleUnassign() {
     if (!actionInv) return
     setUnassigning(true)
@@ -110,8 +123,11 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
   }
 
   const isPos = goal.profitLoss >= 0
-  const isComplete = (goal.progressPercentage ?? 0) >= 100
-  const progress = Math.min(goal.progressPercentage ?? 0, 100)
+  // A finished goal reads off its snapshot (#650): its holdings are gone, so
+  // recomputing the percentage here would report the achievement as zero.
+  const completion = goalCompletion(goal)
+  const isComplete = completion !== null || (goal.progressPercentage ?? 0) >= 100
+  const progress = completion ? completion.percentage : Math.min(goal.progressPercentage ?? 0, 100)
   // Bar (progress) vs the big value (net worth) diverge by any affects_progress=false
   // withdrawal added back to progress — surfaced as a reconciling caption.
   const creditedWithdrawn = progressCredit(goal.currentValue, goal.progressValue)
@@ -177,13 +193,13 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-              {goal.progressPercentage !== null && (
+              {(goal.progressPercentage !== null || completion) && (
                 <span data-testid="desktop-goal-detail-progress" style={{
                   fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 999,
                   background: isComplete ? 'var(--c-pos-tint)' : 'var(--c-navy-tint)',
                   color: isComplete ? 'var(--c-pos)' : 'var(--c-navy)',
                 }}>
-                  {Math.round(progress)}%
+                  {completion ? `${isVi ? 'Hoàn thành' : 'Completed'} · ` : ''}{Math.round(progress)}%
                 </span>
               )}
               <button
@@ -198,7 +214,7 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
           </div>
 
           <div data-testid="desktop-goal-detail-value" style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.025em', lineHeight: 1, overflowWrap: 'break-word', wordBreak: 'break-word' }}>
-            {fmt(goal.currentValue)}
+            {fmt(completion ? completion.value : goal.currentValue)}
           </div>
 
           {goal.targetAmount && (
@@ -545,7 +561,23 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
           onClose={() => setActionsOpen(false)}
           onEdit={() => { setActionsOpen(false); setTimeout(() => setEditOpen(true), 80) }}
           onDelete={() => { setActionsOpen(false); setTimeout(() => setDeleteOpen(true), 80) }}
+          onFinish={() => { setActionsOpen(false); setTimeout(() => setFinishOpen(true), 80) }}
+          onReopen={handleReopen}
+          isCompleted={completion !== null}
           isVi={isVi}
+        />
+      )}
+
+      {/* Liquidate & finish (#650) */}
+      {finishOpen && (
+        <FinishGoalSheet
+          open={finishOpen}
+          goalId={goal.goalId}
+          goalName={goal.goalName}
+          rows={invRows}
+          onClose={() => setFinishOpen(false)}
+          onFinished={onDataChanged}
+          desktop
         />
       )}
 
@@ -820,18 +852,23 @@ function DModal({ onClose, title, width = 380, children }: {
   )
 }
 
-function GoalOptionsModal({ onClose, onEdit, onDelete, isVi }: {
-  onClose: () => void; onEdit: () => void; onDelete: () => void; isVi: boolean
+function GoalOptionsModal({ onClose, onEdit, onDelete, onFinish, onReopen, isCompleted, isVi }: {
+  onClose: () => void; onEdit: () => void; onDelete: () => void
+  onFinish: () => void; onReopen: () => void; isCompleted: boolean; isVi: boolean
 }) {
   const actions = [
-    { icon: <Edit2 size={18} color="var(--c-navy)" />, bg: 'var(--c-navy-tint)', label: isVi ? 'Chỉnh sửa mục tiêu' : 'Edit goal', sub: isVi ? 'Thay đổi tên, số tiền hoặc ngày' : 'Change name, target or date', labelColor: 'var(--c-ink)', onClick: onEdit },
-    { icon: <Trash2 size={18} color="var(--c-neg)" />, bg: 'var(--c-neg-tint)', label: isVi ? 'Xoá mục tiêu' : 'Delete goal', sub: isVi ? 'Xoá và huỷ liên kết tất cả khoản' : 'Remove and unlink all investments', labelColor: 'var(--c-neg)', onClick: onDelete },
+    { icon: <Edit2 size={18} color="var(--c-navy)" />, bg: 'var(--c-navy-tint)', label: isVi ? 'Chỉnh sửa mục tiêu' : 'Edit goal', sub: isVi ? 'Thay đổi tên, số tiền hoặc ngày' : 'Change name, target or date', labelColor: 'var(--c-ink)', onClick: onEdit, testid: 'goal-edit-action' },
+    // Finish is not delete: the goal and every goal_id link survive it (#650).
+    isCompleted
+      ? { icon: <RotateCcw size={18} color="var(--c-navy)" />, bg: 'var(--c-navy-tint)', label: isVi ? 'Mở lại mục tiêu' : 'Reopen goal', sub: isVi ? 'Đưa mục tiêu trở lại danh sách đang theo dõi' : 'Put the goal back on the active list', labelColor: 'var(--c-ink)', onClick: onReopen, testid: 'goal-reopen-action' }
+      : { icon: <CheckCircle2 size={18} color="var(--c-pos)" />, bg: 'var(--c-pos-tint)', label: isVi ? 'Tất toán & hoàn thành' : 'Liquidate & finish', sub: isVi ? 'Bán/rút toàn bộ khoản còn lại và lưu trữ ở 100%' : 'Sell or withdraw everything left and archive at 100%', labelColor: 'var(--c-ink)', onClick: onFinish, testid: 'goal-finish-action' },
+    { icon: <Trash2 size={18} color="var(--c-neg)" />, bg: 'var(--c-neg-tint)', label: isVi ? 'Xoá mục tiêu' : 'Delete goal', sub: isVi ? 'Xoá và huỷ liên kết tất cả khoản' : 'Remove and unlink all investments', labelColor: 'var(--c-neg)', onClick: onDelete, testid: 'goal-delete-action' },
   ]
   return (
     <DModal onClose={onClose} title={isVi ? 'Tùy chọn mục tiêu' : 'Goal options'}>
       <div style={{ display: 'grid', gap: 10 }}>
         {actions.map((a, i) => (
-          <button key={i} onClick={a.onClick} style={{ width: '100%', textAlign: 'left', padding: '13px 16px', background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 14, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 14, transition: 'background 120ms' }}
+          <button key={i} data-testid={a.testid} onClick={a.onClick} style={{ width: '100%', textAlign: 'left', padding: '13px 16px', background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 14, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 14, transition: 'background 120ms' }}
             onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--c-card-2)')}
             onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--c-card)')}
           >

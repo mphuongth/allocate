@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslations } from 'next-intl'
 import { Plus, Download, Edit2, Trash, ChevronLeft, ChevronRight, X, Calendar, ArrowUpRight, ArrowDownRight, PiggyBank, GitMerge } from 'lucide-react'
 import { iconHit } from './iconHit'
@@ -15,7 +15,7 @@ import { toast } from 'sonner'
 import { deleteTransaction } from './deleteTransaction'
 import { useDialogMount } from '@/components/ui/useDialogMount'
 
-interface Goal { goal_id: string; goal_name: string }
+interface Goal { goal_id: string; goal_name: string; completed_at?: string | null }
 interface Fund { id: string; name: string; code: string; nav: number }
 
 // Asset-type pill colors — match RecentActivityCard.
@@ -141,6 +141,9 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
 
   const [transactions, setTransactions] = useState<LedgerTransaction[]>([])
   const [goals, setGoals] = useState<Goal[]>([])
+  // Where a transaction can be MOVED to, which is not the same list as the one
+  // you can filter history by: a completed goal is an archive (#650).
+  const activeGoals = useMemo(() => goals.filter((g) => !g.completed_at), [goals])
   const [funds, setFunds] = useState<Fund[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -229,8 +232,11 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
     return t(`asset${a.charAt(0).toUpperCase() + a.slice(1)}` as 'assetFund' | 'assetBank' | 'assetStock' | 'assetGold')
   }, [t])
 
+  // `all`, not the default: the ledger is history, and filtering by a goal that
+  // has since been finished must keep working (#650). The edit form narrows this
+  // list to the active goals below — an archive is not somewhere to move money to.
   const fetchGoals = useCallback(async () => {
-    const res = await fetch('/api/v1/savings-goals')
+    const res = await fetch('/api/v1/savings-goals?status=all')
     const { goals: g } = res.ok ? await res.json() : { goals: [] }
     setGoals(g ?? [])
   }, [])
@@ -680,7 +686,7 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
             <Field label={t('colGoal')}>
               <select value={txForm.goal_id} onChange={(e) => setTxForm((f) => ({ ...f, goal_id: e.target.value }))} className="cn-input" style={{ cursor: 'pointer' }}>
                 <option value="">{t('noGoal')}</option>
-                {goals.map((g) => <option key={g.goal_id} value={g.goal_id}>{g.goal_name}</option>)}
+                {activeGoals.map((g) => <option key={g.goal_id} value={g.goal_id}>{g.goal_name}</option>)}
               </select>
             </Field>
           </div>

@@ -2,6 +2,7 @@
 
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import { ProgressCreditNote, progressCredit } from './goalDetailShared'
+import { goalCompletion } from '@/lib/finishGoal'
 import type { GoalData } from '@/features/dashboard/contracts'
 
 interface Props {
@@ -12,7 +13,11 @@ interface Props {
 
 export default function DesktopGoalCard({ goal, locale, onClick }: Props) {
   const isPos = goal.profitLoss >= 0
-  const progress = goal.progressPercentage ?? 0
+  // A finished goal shows what it finished AT (#650). Its live balance is zero —
+  // the money bought the thing the goal was for — so the card must read the
+  // snapshot, not recompute from holdings that no longer exist.
+  const completion = goalCompletion(goal)
+  const progress = completion ? completion.percentage : (goal.progressPercentage ?? 0)
   const isComplete = progress >= 100
   const isVi = locale === 'vi'
   const creditedWithdrawn = progressCredit(goal.currentValue, goal.progressValue)
@@ -42,26 +47,26 @@ export default function DesktopGoalCard({ goal, locale, onClick }: Props) {
             </div>
           )}
         </div>
-        {goal.progressPercentage !== null && (
-          <span style={{
+        {(goal.progressPercentage !== null || completion) && (
+          <span data-testid={completion ? 'goal-completed-badge' : undefined} style={{
             display: 'inline-flex',
             padding: '3px 8px', borderRadius: 999,
             fontSize: 11, fontWeight: 700, flexShrink: 0,
             background: isComplete ? 'var(--c-pos-tint)' : 'var(--c-navy-tint)',
             color: isComplete ? 'var(--c-pos)' : 'var(--c-navy)',
           }}>
-            {Math.min(progress, 100).toFixed(0)}%
+            {completion ? `${isVi ? 'Hoàn thành' : 'Completed'} · ` : ''}{Math.min(progress, 100).toFixed(0)}%
           </span>
         )}
       </div>
 
       {/* Current value — full precision like mobile */}
       <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.025em', lineHeight: 1.1, marginTop: 10, marginBottom: 10, overflowWrap: 'break-word', wordBreak: 'break-word' }}>
-        {fmt(goal.currentValue)}
+        {fmt(completion ? completion.value : goal.currentValue)}
       </div>
 
       {/* Progress bar */}
-      {goal.progressPercentage !== null && (
+      {(goal.progressPercentage !== null || completion) && (
         <div style={{ height: 5, borderRadius: 999, background: 'var(--c-line)', overflow: 'hidden', marginTop: 10 }}>
           <div style={{
             height: '100%',

@@ -6,7 +6,7 @@
 // down. The edit-goal write goes through goalActions.updateGoal.
 import { useState } from 'react'
 import { useLocale } from 'next-intl'
-import { ChevronRight, RefreshCw, Trash2, Edit2, Download, Calendar, ArrowDownRight } from 'lucide-react'
+import { ChevronRight, RefreshCw, Trash2, Edit2, Download, Calendar, ArrowDownRight, CheckCircle2, RotateCcw } from 'lucide-react'
 import { fmtCompact, fmtPct } from '@/lib/formatters'
 import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
 import type { GoalData } from '@/features/dashboard/contracts'
@@ -21,12 +21,22 @@ export function GoalActionsSheet({
   onClose,
   onEdit,
   onDelete,
+  onFinish,
+  onReopen,
+  isCompleted,
+  isReopening,
   isDeleting,
 }: {
   open: boolean
   onClose: () => void
   onEdit: () => void
   onDelete: () => void
+  // Finishing a goal (#650). Omitted by callers that don't offer it yet, so the
+  // entry simply isn't rendered rather than appearing as a dead button.
+  onFinish?: () => void
+  onReopen?: () => void
+  isCompleted?: boolean
+  isReopening?: boolean
   isDeleting: boolean
 }) {
   const isVI = useLocale() === 'vi'
@@ -39,6 +49,10 @@ export function GoalActionsSheet({
     editSub: 'Thay đổi tên, số tiền hoặc ngày mục tiêu',
     delete: 'Xoá mục tiêu',
     deleteSub: 'Xoá mục tiêu và huỷ liên kết tất cả khoản đầu tư',
+    finish: 'Tất toán & hoàn thành',
+    finishSub: 'Bán/rút toàn bộ khoản còn lại và lưu trữ mục tiêu ở mức 100%',
+    reopen: 'Mở lại mục tiêu',
+    reopenSub: 'Đưa mục tiêu trở lại danh sách đang theo dõi; lịch sử giữ nguyên',
     cancel: 'Hủy',
   } : {
     title: 'Goal options',
@@ -46,6 +60,10 @@ export function GoalActionsSheet({
     editSub: 'Change name, target amount or date',
     delete: 'Delete goal',
     deleteSub: 'Remove goal and unlink all investments',
+    finish: 'Liquidate & finish',
+    finishSub: 'Sell or withdraw everything left and archive the goal at 100%',
+    reopen: 'Reopen goal',
+    reopenSub: 'Put the goal back on the active list; history is untouched',
     cancel: 'Cancel',
   }
 
@@ -91,6 +109,55 @@ export function GoalActionsSheet({
             </div>
             <ChevronRight size={16} color="var(--c-muted)" />
           </button>
+
+          {/* Finish / reopen (#650). Finish is NOT delete: the goal and every
+              goal_id link stay, so the history and the ledger keep working. */}
+          {!isCompleted && onFinish && (
+            <button
+              data-testid="goal-finish-action"
+              onClick={onFinish}
+              style={{
+                width: '100%', textAlign: 'left', padding: '14px 16px',
+                background: 'var(--c-card)', border: '1px solid var(--c-line)',
+                borderRadius: 14, cursor: 'pointer', fontFamily: 'inherit',
+                display: 'flex', alignItems: 'center', gap: 14,
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--c-card-2)')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--c-card)')}
+            >
+              <div style={{ width: 42, height: 42, borderRadius: 12, background: 'var(--c-pos-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <CheckCircle2 size={20} color="var(--c-pos)" />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-ink)' }}>{t.finish}</div>
+                <div style={{ fontSize: 12, color: 'var(--c-muted)', marginTop: 2 }}>{t.finishSub}</div>
+              </div>
+              <ChevronRight size={16} color="var(--c-muted)" />
+            </button>
+          )}
+
+          {isCompleted && onReopen && (
+            <button
+              data-testid="goal-reopen-action"
+              onClick={onReopen}
+              disabled={isReopening}
+              style={{
+                width: '100%', textAlign: 'left', padding: '14px 16px',
+                background: 'var(--c-card)', border: '1px solid var(--c-line)',
+                borderRadius: 14, cursor: isReopening ? 'default' : 'pointer', fontFamily: 'inherit',
+                display: 'flex', alignItems: 'center', gap: 14, opacity: isReopening ? 0.5 : 1,
+              }}
+            >
+              <div style={{ width: 42, height: 42, borderRadius: 12, background: 'var(--c-navy-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <RotateCcw size={20} color="var(--c-navy)" />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-ink)' }}>{t.reopen}</div>
+                <div style={{ fontSize: 12, color: 'var(--c-muted)', marginTop: 2 }}>{t.reopenSub}</div>
+              </div>
+              <ChevronRight size={16} color="var(--c-muted)" />
+            </button>
+          )}
 
           {/* Delete — opens a confirm step (does not delete on this tap) */}
           <button

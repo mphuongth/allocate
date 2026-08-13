@@ -21,7 +21,9 @@ import { fmtTxDate } from './transactionUtils'
 import { TxRowsSkeleton } from './Skeletons'
 import LoadError from './LoadError'
 import { useGoalDetailData } from './useGoalDetailData'
-import { deleteGoal, unholdTransaction, unassignInvestment } from './goalActions'
+import { deleteGoal, reopenGoal, unholdTransaction, unassignInvestment } from './goalActions'
+import { FinishGoalSheet } from './FinishGoalSheet'
+import { goalCompletion } from '@/lib/finishGoal'
 import { invToSellItem } from './invToSellItem'
 import { GoalActionsSheet, DeleteGoalConfirmSheet, EditGoalSheet, InvestmentActionSheet, UnassignConfirmSheet } from './goalDetailDialogs'
 
@@ -50,6 +52,8 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
   // Bumped by the retry button to re-run the transactions fetch.
   const [txReload, setTxReload] = useState(0)
   const [actionsOpen, setActionsOpen] = useState(false)
+  const [finishOpen, setFinishOpen] = useState(false)
+  const [isReopening, setIsReopening] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -85,6 +89,19 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
       return () => clearTimeout(t)
     }
   }, [open])
+
+  async function handleReopen() {
+    if (!goal) return
+    setIsReopening(true)
+    const ok = await reopenGoal(goal.goalId)
+    setIsReopening(false)
+    if (!ok) {
+      toast.error(isVI ? 'Không thể mở lại mục tiêu' : "Couldn't reopen goal")
+      return
+    }
+    setActionsOpen(false)
+    onDataChanged()
+  }
 
   async function handleDelete() {
     if (!goal) return
@@ -160,8 +177,11 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
 
   if (!mounted || !goal) return null
 
-  const progress = Math.min(goal.progressPercentage ?? 0, 100)
-  const exceededTarget = goal.progressPercentage !== null && goal.progressPercentage >= 100
+  // A finished goal reads off its snapshot, not off holdings that are now zero
+  // (#650) — the whole point of declaring completion rather than deriving it.
+  const completion = goalCompletion(goal)
+  const progress = completion ? completion.percentage : Math.min(goal.progressPercentage ?? 0, 100)
+  const exceededTarget = completion !== null || (goal.progressPercentage !== null && goal.progressPercentage >= 100)
   const isPositive = goal.profitLoss >= 0
   // The bar runs off progressValue (affects_progress=false withdrawals added
   // back), so the fraction beside it uses the same numerator to stay coherent;
@@ -241,11 +261,24 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
             background: 'var(--c-card)', borderRadius: 16, padding: 18,
             boxShadow: '0 1px 3px rgba(0,0,0,0.06)', marginBottom: 16,
           }}>
+            {/* A completed goal shows what it FINISHED at. Its live balance is
+                zero — the money bought the thing — so reading the holdings here
+                would report the achievement as nothing (#650). */}
+            {completion && (
+              <div data-testid="goal-completed-badge" style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 8,
+                padding: '3px 10px', borderRadius: 999,
+                background: 'var(--c-pos-tint)', color: 'var(--c-pos)',
+                fontSize: 11, fontWeight: 700,
+              }}>
+                {isVI ? 'Hoàn thành' : 'Completed'} · {Math.round(completion.percentage)}%
+              </div>
+            )}
             <p style={{ fontSize: 12, color: 'var(--c-muted)', marginBottom: 4 }}>
-              {isVI ? 'Giá trị hiện tại' : 'Current value'}
+              {completion ? (isVI ? 'Giá trị khi hoàn thành' : 'Value at completion') : (isVI ? 'Giá trị hiện tại' : 'Current value')}
             </p>
             <p style={{ fontSize: 22, fontWeight: 800, color: 'var(--c-ink)', marginBottom: 2, fontVariantNumeric: 'tabular-nums', lineHeight: 1.2 }}>
-              {fmt(goal.currentValue)}
+              {fmt(completion ? completion.value : goal.currentValue)}
             </p>
             {goal.targetAmount && (
               <p style={{ fontSize: 12, color: 'var(--c-muted)', marginBottom: 12, fontVariantNumeric: 'tabular-nums' }}>
@@ -687,8 +720,23 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
         onClose={() => setActionsOpen(false)}
         onEdit={() => { setActionsOpen(false); setTimeout(() => setEditOpen(true), 60) }}
         onDelete={() => { setActionsOpen(false); setTimeout(() => setConfirmDeleteOpen(true), 60) }}
+        onFinish={() => { setActionsOpen(false); setTimeout(() => setFinishOpen(true), 60) }}
+        onReopen={handleReopen}
+        isCompleted={completion !== null}
+        isReopening={isReopening}
         isDeleting={isDeleting}
       />
+
+      {finishOpen && goal && (
+        <FinishGoalSheet
+          open={finishOpen}
+          goalId={goal.goalId}
+          goalName={goal.goalName}
+          rows={invRows}
+          onClose={() => setFinishOpen(false)}
+          onFinished={() => { onDataChanged(); onClose() }}
+        />
+      )}
 
       <DeleteGoalConfirmSheet
         open={confirmDeleteOpen}

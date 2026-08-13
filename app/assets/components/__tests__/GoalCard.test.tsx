@@ -87,3 +87,32 @@ describe('GoalCard', () => {
     expect(screen.queryByTestId('progress-credit-note')).not.toBeInTheDocument()
   })
 })
+
+describe('GoalCard — a finished goal (#650)', () => {
+  // Finishing liquidates every holding, so currentValue is 0 from then on. The
+  // card must read the completion snapshot or it reports the goal at 0%.
+  const finishedProps = {
+    ...baseProps,
+    currentValue: 0,
+    progressValue: 0,
+    progressPercentage: 0,
+    completedAt: '2026-08-13T02:00:00Z',
+    completionValue: 121_900_000,
+    completionPercentage: 100,
+  }
+
+  it('reads Completed · 100% off the snapshot, not off the empty balance', () => {
+    render(<GoalCard {...finishedProps} />)
+    expect(screen.getByTestId('goal-completed-badge')).toHaveTextContent('Completed · 100%')
+  })
+
+  it('shows what the goal finished at', () => {
+    render(<GoalCard {...finishedProps} />)
+    expect(screen.getByText('₫ 121.900.000')).toBeInTheDocument()
+  })
+
+  it('leaves an active goal chip alone', () => {
+    render(<GoalCard {...baseProps} />)
+    expect(screen.queryByTestId('goal-completed-badge')).not.toBeInTheDocument()
+  })
+})

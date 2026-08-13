@@ -199,7 +199,13 @@ export default function DashboardClient({ userId }: { userId: string }) {
 
   const isVi = locale === 'vi'
   const isEmpty = isDashboardEmpty(data)
-  const sortedGoals = data ? sortGoals(data.goals, goalSort) : []
+  // Completed goals leave the tracked list (#650): they are archives, not
+  // something to fund, and leaving them in the grid makes "3 goals tracked" a
+  // lie. They keep their own section below — and every transaction they ever
+  // held stays linked, so the ledger and reports are unchanged.
+  const allSortedGoals = data ? sortGoals(data.goals, goalSort) : []
+  const sortedGoals = allSortedGoals.filter((g) => !g.completedAt)
+  const completedGoals = allSortedGoals.filter((g) => g.completedAt)
 
   // Asset-allocation buckets for the allocation bar. fundTotal sums all fund
   // types (incl. unexpected ones) so nothing drops out of the bar (#3).
@@ -395,6 +401,25 @@ export default function DashboardClient({ userId }: { userId: string }) {
                   </section>
                 )}
 
+                {/* Completed goals — kept on the page, out of the tracked grid */}
+                {completedGoals.length > 0 && (
+                  <section data-testid="completed-goals-section" style={{ marginBottom: 24 }}>
+                    <h2 style={{ margin: '0 0 14px', fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em' }}>
+                      {isVi ? 'Mục tiêu đã hoàn thành' : 'Completed goals'}
+                    </h2>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+                      {completedGoals.map((goal) => (
+                        <DesktopGoalCard
+                          key={goal.goalId}
+                          goal={goal}
+                          locale={locale}
+                          onClick={() => { setSelectedGoalId(goal.goalId); setSelectedInsuranceId(null) }}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                )}
+
                 {/* Unallocated */}
                 {(data.unallocated.funds.length > 0 || data.unallocated.nonFunds.length > 0) && (
                   <div style={{ marginBottom: 24 }}>
@@ -555,6 +580,25 @@ export default function DashboardClient({ userId }: { userId: string }) {
                   </div>
                   <div style={{ display: 'grid', gap: 10 }}>
                     {sortedGoals.map((goal) => (
+                      <GoalCard
+                        key={goal.goalId}
+                        {...goal}
+                        locale={locale}
+                        onClick={() => { setSelectedGoalId(goal.goalId); setGoalDetailOpen(true) }}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* Completed goals — kept on the page, out of the tracked list */}
+              {completedGoals.length > 0 && (
+                <section data-testid="completed-goals-section" style={{ marginBottom: 20 }}>
+                  <h2 style={{ margin: '0 0 10px', fontSize: 15, fontWeight: 700, letterSpacing: '-0.01em' }}>
+                    {isVi ? 'Mục tiêu đã hoàn thành' : 'Completed goals'}
+                  </h2>
+                  <div style={{ display: 'grid', gap: 10 }}>
+                    {completedGoals.map((goal) => (
                       <GoalCard
                         key={goal.goalId}
                         {...goal}
