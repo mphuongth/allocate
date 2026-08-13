@@ -67,7 +67,7 @@ begin
   begin
     perform public.finish_savings_goal(v_goal, jsonb_build_array(
       jsonb_build_object('key', 'tx:' || v_deposit, 'received', 10400000)
-    ), current_date, 26000000);
+    ), current_date, 26000000, public.savings_goal_ledger_fingerprint(v_goal));
     raise exception 'a plan missing a live holding must be refused';
   exception when sqlstate '23514' then null;
   end;
@@ -80,7 +80,7 @@ begin
       jsonb_build_object('key', 'fund:' || v_fund, 'received', 5500000),
       jsonb_build_object('key', 'book:' || v_book, 'received', 5100000),
       jsonb_build_object('key', 'tx:' || gen_random_uuid(), 'received', 1)
-    ), current_date, 26000000);
+    ), current_date, 26000000, public.savings_goal_ledger_fingerprint(v_goal));
     raise exception 'a plan naming an unheld holding must be refused';
   exception when sqlstate '23514' then null;
   end;
@@ -101,7 +101,7 @@ begin
       jsonb_build_object('key', 'tx:' || v_gold, 'received', 9000000),
       jsonb_build_object('key', 'fund:' || v_fund, 'received', 5500000),
       jsonb_build_object('key', 'book:' || v_book, 'received', 5100000)
-    ), current_date, 26000000);
+    ), current_date, 26000000, public.savings_goal_ledger_fingerprint(v_goal));
     raise exception 'a goal a recurring saving still feeds must not be finishable';
   exception when sqlstate '23514' then null;
   end;
@@ -139,7 +139,7 @@ begin
       jsonb_build_object('key', 'tx:' || v_gold, 'received', 9000000),
       jsonb_build_object('key', 'fund:' || v_fund, 'received', 5500000),
       jsonb_build_object('key', 'book:' || v_book, 'received', 5100000)
-    ), current_date, 26000000);
+    ), current_date, 26000000, public.savings_goal_ledger_fingerprint(v_goal));
     raise exception 'a zero realization must be refused';
   exception when sqlstate '23514' then null;
   end;
@@ -203,7 +203,7 @@ begin
     jsonb_build_object('key', 'tx:' || v_gold, 'received', 9000000),
     jsonb_build_object('key', 'fund:' || v_fund, 'received', 5500000),
     jsonb_build_object('key', 'book:' || v_book, 'received', 5100000)
-  ), current_date, 30000000) into v_result;
+  ), current_date, 30000000, public.savings_goal_ledger_fingerprint(v_goal)) into v_result;
 
   if (v_result->>'realized')::bigint <> 30000000 then
     raise exception 'the realized total must be the cash the user recorded, got %', v_result->>'realized';
@@ -325,7 +325,7 @@ begin
 
   -- ── A finished goal is not finishable twice ───────────────────────────────
   begin
-    perform public.finish_savings_goal(v_goal, '[]'::jsonb, current_date, 1);
+    perform public.finish_savings_goal(v_goal, '[]'::jsonb, current_date, 1, public.savings_goal_ledger_fingerprint(v_goal));
     raise exception 'a completed goal must not be finished again';
   exception when sqlstate '23514' then null;
   end;
@@ -370,7 +370,7 @@ begin
     select jsonb_agg(jsonb_build_object('key', 'book:' || t.transaction_id, 'received', t.amount_vnd))
       from public.investment_transactions t
      where t.user_id = v_user and t.deposit_group_id = t.transaction_id
-  ), current_date, 10000000) into v_result;
+  ), current_date, 10000000, public.savings_goal_ledger_fingerprint(v_goal)) into v_result;
   if (v_result->>'holdings')::int <> 2 then
     raise exception 'both books must close in one finish, got %', v_result->>'holdings';
   end if;

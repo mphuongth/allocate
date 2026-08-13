@@ -323,6 +323,46 @@ begin
 end;
 $$;
 
+-- Everything about one ledger row that can change what a goal is worth, as one
+-- comparable string.
+--
+-- ONE list, two readers: the fingerprint below hashes it, and the completed-goal
+-- freeze compares it across an edit. Keeping them apart is what produced three
+-- separate findings in a row — transaction_type, fund_id, asset_type — each a
+-- column one guard listed and the other did not. A field added here is watched by
+-- both from that moment on, and neither can be "forgotten" again.
+--
+-- Fund NAV and the gold price are deliberately NOT here. They move on their own
+-- all day; a valuation is a point in time, and treating a market tick as a ledger
+-- change would make the finish button unpressable and freeze nothing usefully.
+create or replace function public.ledger_row_value_key(t public.investment_transactions)
+returns text
+language sql
+immutable
+set search_path = ''
+as $$
+  select t.transaction_id::text
+    || '|' || t.transaction_type
+    || '|' || coalesce(t.asset_type, '')
+    || '|' || coalesce(t.goal_id::text, '')
+    || '|' || coalesce(t.fund_id::text, '')
+    || '|' || coalesce(t.parent_transaction_id::text, '')
+    || '|' || coalesce(t.deposit_group_id::text, '')
+    || '|' || coalesce(t.renewed_from_transaction_id::text, '')
+    || '|' || t.amount_vnd::text
+    || '|' || coalesce(t.units::text, '')
+    || '|' || coalesce(t.unit_price::text, '')
+    || '|' || coalesce(t.interest_rate::text, '')
+    || '|' || t.investment_date::text
+    || '|' || coalesce(t.expiry_date::text, '')
+    || '|' || coalesce(t.principal_withdrawn::text, '')
+    || '|' || coalesce(t.units_withdrawn::text, '')
+    || '|' || coalesce(t.affects_progress::text, '')
+    || '|' || coalesce(t.held_for_merge::text, '')
+    || '|' || coalesce(t.consumed_by_inv_id::text, '')
+    || '|' || coalesce(t.merge_target_goal_id::text, '');
+$$;
+
 -- What the goal's ledger looks like right now, as one comparable value.
 --
 -- The completion snapshot is the goal's progress value, and computing that means
@@ -351,28 +391,7 @@ as $$
   -- all day; a valuation is a point in time and refusing a finish because the
   -- market ticked would make the button unpressable. What must not change under
   -- the valuation is the LEDGER.
-  select md5(coalesce(string_agg(
-      t.transaction_id::text
-        || '|' || t.transaction_type
-        || '|' || coalesce(t.asset_type, '')
-        || '|' || coalesce(t.goal_id::text, '')
-        || '|' || coalesce(t.fund_id::text, '')
-        || '|' || coalesce(t.parent_transaction_id::text, '')
-        || '|' || coalesce(t.deposit_group_id::text, '')
-        || '|' || coalesce(t.renewed_from_transaction_id::text, '')
-        || '|' || t.amount_vnd::text
-        || '|' || coalesce(t.units::text, '')
-        || '|' || coalesce(t.unit_price::text, '')
-        || '|' || coalesce(t.interest_rate::text, '')
-        || '|' || t.investment_date::text
-        || '|' || coalesce(t.expiry_date::text, '')
-        || '|' || coalesce(t.principal_withdrawn::text, '')
-        || '|' || coalesce(t.units_withdrawn::text, '')
-        || '|' || coalesce(t.affects_progress::text, '')
-        || '|' || coalesce(t.held_for_merge::text, '')
-        || '|' || coalesce(t.consumed_by_inv_id::text, '')
-        || '|' || coalesce(t.merge_target_goal_id::text, ''),
-      ',' order by t.transaction_id), ''))
+  select md5(coalesce(string_agg(public.ledger_row_value_key(t), ',' order by t.transaction_id), ''))
     from public.investment_transactions t
    where t.goal_id = p_goal_id
       -- ...and the withdrawals that draw on this goal WITHOUT carrying its id. A
@@ -412,10 +431,13 @@ comment on function public.savings_goal_ledger_fingerprint(uuid) is
 -- hold, is refused rather than half-applied — it means the user is looking at a
 -- stale page, and finishing off a stale page is how a holding survives the finish
 -- and keeps a "completed" goal alive.
--- The fingerprint argument has a default, so leaving the earlier four-argument
--- signature in place would make a four-argument call ambiguous rather than
--- overloaded ("function is not unique"). Only ever created by this migration.
+-- Both earlier shapes are dropped first. The four-argument one would otherwise
+-- make a four-argument call ambiguous rather than overloaded ("function is not
+-- unique"), and Postgres refuses to remove a parameter default through CREATE OR
+-- REPLACE — the fingerprint was optional for one revision and is now required.
+-- Only ever created by this migration.
 drop function if exists public.finish_savings_goal(uuid, jsonb, date, bigint);
+drop function if exists public.finish_savings_goal(uuid, jsonb, date, bigint, text);
 
 create or replace function public.finish_savings_goal(
   p_goal_id uuid,
@@ -423,9 +445,8 @@ create or replace function public.finish_savings_goal(
   p_date date,
   p_completion_value bigint,
   -- The ledger the completion value was computed against
-  -- (savings_goal_ledger_fingerprint, read before the valuation). Null skips the
-  -- check, for a caller that has no valuation to defend.
-  p_ledger_fingerprint text default null
+  -- (savings_goal_ledger_fingerprint, read before the valuation). Required.
+  p_ledger_fingerprint text
 )
 returns jsonb
 language plpgsql
@@ -464,13 +485,35 @@ begin
       using errcode = 'check_violation';
   end if;
 
-  -- Read under the goal's lock, so anything that landed between the caller's
-  -- valuation and this moment is caught. The plan check further down catches a
-  -- changed SET of holdings; this catches a changed AMOUNT, which leaves the keys
-  -- identical and would otherwise archive a snapshot the ledger no longer
-  -- supports — liquidating the new balances while recording the old value.
-  if p_ledger_fingerprint is not null
-     and p_ledger_fingerprint is distinct from public.savings_goal_ledger_fingerprint(p_goal_id) then
+  -- Lock the goal's ledger BEFORE reading the fingerprint, or the comparison
+  -- proves nothing about what happens next.
+  --
+  -- The goal's own FOR UPDATE does not cover a withdrawal written against one of
+  -- its holdings with goal_id = NULL: that insert touches the parent row and the
+  -- goal row never, so it could commit between the comparison and the
+  -- holdings query, and the finish would liquidate the reduced remainder while
+  -- archiving the pre-withdrawal value. Holding these rows closes it, because
+  -- check_withdrawal_balance locks the source it measures — a bank/gold
+  -- withdrawal locks its parent, a fund sell locks the bucket's purchases — and
+  -- both are in here. Same order (transaction_id) as that function takes them in,
+  -- so the two cannot deadlock.
+  perform 1 from public.investment_transactions t
+   where t.user_id = v_goal.user_id
+     and t.goal_id = p_goal_id
+   order by t.transaction_id
+     for update;
+
+  -- The plan check further down catches a changed SET of holdings; this catches a
+  -- changed AMOUNT, which leaves the keys identical and would otherwise archive a
+  -- snapshot the ledger no longer supports.
+  --
+  -- Required, not optional: a caller reaching this function directly could
+  -- otherwise skip the staleness check by passing NULL.
+  if p_ledger_fingerprint is null then
+    raise exception 'finish goal: the ledger fingerprint the valuation was taken against is required'
+      using errcode = 'check_violation';
+  end if;
+  if p_ledger_fingerprint is distinct from public.savings_goal_ledger_fingerprint(p_goal_id) then
     raise exception 'finish goal: this goal changed while it was being valued — reload it and try again'
       using errcode = 'check_violation';
   end if;
@@ -521,6 +564,35 @@ begin
          and w.goal_id is not distinct from p_goal_id
        group by 1
     ),
+    -- The bucket's OTHER kind of claim (#606). A withdrawal PARENTED to one of
+    -- its purchases and not itself fund-keyed draws on the bucket too, at its
+    -- recorded units or the capped pro-rata share of the purchase it names.
+    -- Such rows can no longer be written, but the ones already in the ledger are
+    -- still claims and check_withdrawal_balance measures every new sale against
+    -- them — so a goal holding one could not be finished at all: this function
+    -- computed the gross bucket and the table refused the oversized sale.
+    -- Derivation copied from 20260803000005 so the two cannot disagree.
+    fund_parent_wd as (
+      select p.fund_id,
+             sum(case when coalesce(w.units_withdrawn, 0) > 0 then w.units_withdrawn
+                      else least(p.units, p.units * coalesce(w.principal_withdrawn, 0) / p.amount_vnd)
+                 end) as units,
+             sum(coalesce(w.principal_withdrawn, 0)) as principal
+        from public.investment_transactions w
+        join public.investment_transactions p
+          on p.transaction_id = w.parent_transaction_id
+       where w.user_id = v_goal.user_id
+         and w.transaction_type = 'withdrawal'
+         and (w.asset_type is distinct from 'fund' or w.fund_id is null)
+         and p.transaction_type = 'investment'
+         and p.asset_type = 'fund'
+         and p.goal_id is not distinct from p_goal_id
+         -- A purchase with no units is no bucket: its withdrawal sits on the
+         -- parent axis and is measured there instead.
+         and coalesce(p.units, 0) > 0
+         and coalesce(p.amount_vnd, 0) > 0
+       group by p.fund_id
+    ),
     live as (
       select t.*,
              t.amount_vnd - coalesce(pw.principal, 0) as eff_principal,
@@ -535,13 +607,14 @@ begin
     )
     select 'fund:' || l.fund_id as key, 'fund'::text as kind, l.fund_id,
            null::uuid as tx_id, null::text as asset_type,
-           (sum(l.amount_vnd) - coalesce(max(fw.principal), 0))::bigint as principal,
-           (sum(l.units) - coalesce(max(fw.units), 0))::numeric as units
+           (sum(l.amount_vnd) - coalesce(max(fw.principal), 0) - coalesce(max(fpw.principal), 0))::bigint as principal,
+           (sum(l.units) - coalesce(max(fw.units), 0) - coalesce(max(fpw.units), 0))::numeric as units
       from live l
       left join fund_wd fw on fw.fund_id = l.fund_id
+      left join fund_parent_wd fpw on fpw.fund_id = l.fund_id
      where l.fund_id is not null and l.asset_type = 'fund' and l.units is not null
      group by l.fund_id
-    having sum(l.units) - coalesce(max(fw.units), 0) > 0
+    having sum(l.units) - coalesce(max(fw.units), 0) - coalesce(max(fpw.units), 0) > 0
     union all
     select 'book:' || l.deposit_group_id, 'book', null, l.deposit_group_id, 'bank',
            sum(l.eff_principal)::bigint, null::numeric
@@ -747,20 +820,15 @@ declare
   v_goal uuid;
   v_completed timestamptz;
 begin
-  -- Every field that decides WHICH balance this row belongs to or HOW MUCH it
-  -- moves. fund_id and asset_type are identity, not decoration: a fund bucket is
-  -- keyed by (goal, fund), so re-pointing a settled purchase from fund A to
-  -- fund B leaves the sell that emptied it in A's bucket and stands the whole
-  -- purchase up as a live B position — no amount changed, nothing else noticed.
+  -- One question, asked of the shared value key rather than of a hand-kept column
+  -- list: did anything change that alters what this row is worth to a goal?
+  -- Enumerating the columns here is what let transaction_type, fund_id and
+  -- asset_type through in turn — each is identity, not decoration. Flipping a
+  -- finish-created withdrawal to an investment stops it offsetting its parent and
+  -- makes it a holding of its own; re-pointing a settled purchase at another fund
+  -- leaves the sell in the old bucket. Neither changes an amount.
   if tg_op = 'UPDATE'
-     and new.goal_id is not distinct from old.goal_id
-     and new.fund_id is not distinct from old.fund_id
-     and new.asset_type is not distinct from old.asset_type
-     and new.parent_transaction_id is not distinct from old.parent_transaction_id
-     and new.amount_vnd is not distinct from old.amount_vnd
-     and new.units is not distinct from old.units
-     and new.principal_withdrawn is not distinct from old.principal_withdrawn
-     and new.units_withdrawn is not distinct from old.units_withdrawn then
+     and public.ledger_row_value_key(old) = public.ledger_row_value_key(new) then
     return new;
   end if;
 
@@ -810,9 +878,10 @@ comment on function public.enforce_completed_goal_ledger_frozen() is
 
 drop trigger if exists investment_transactions_completed_goal_frozen on public.investment_transactions;
 create trigger investment_transactions_completed_goal_frozen
-  before delete or update of goal_id, fund_id, asset_type, parent_transaction_id,
-                             amount_vnd, units, principal_withdrawn, units_withdrawn
-    on public.investment_transactions
+  -- No column list. A list is a promise to remember, and this guard has already
+  -- been escaped three times by a column nobody thought of; the function asks the
+  -- shared value key instead and returns immediately when nothing moved.
+  before delete or update on public.investment_transactions
   for each row execute function public.enforce_completed_goal_ledger_frozen();
 
 comment on function public.enforce_goal_not_completed() is
