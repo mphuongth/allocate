@@ -192,6 +192,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         { status: 409 },
       )
     }
+    // A book shared between two goals. Not a stale page and not a fault — a
+    // decision to undo, and the message says which book and what to do.
+    if (message.startsWith('split book: ')) {
+      return NextResponse.json(
+        { error: message.slice('split book: '.length), code: 'book_split' },
+        { status: 409 },
+      )
+    }
     if (message.startsWith('successor book: ')) {
       return NextResponse.json(
         { error: message.slice('successor book: '.length), code: 'successor_planned' },

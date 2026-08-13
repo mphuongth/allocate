@@ -585,6 +585,75 @@ begin
   raise notice 'finish_savings_goal snapshot guard: all assertions passed';
 end $$;
 
+-- ── A book shared between two goals is not closed by finishing one ──────────
+--
+-- withdraw_accumulating_book spreads its amount across EVERY live tranche. Given
+-- only this goal's share it took the difference out of the other goal's tranche,
+-- left part of this goal's own balance live, and archived at 100% anyway.
+do $$
+declare
+  v_user uuid := gen_random_uuid();
+  v_goal_a uuid;
+  v_goal_b uuid;
+  v_book uuid := gen_random_uuid();
+  v_tranche uuid := gen_random_uuid();
+  v_left_b bigint;
+begin
+  insert into auth.users (id, email) values (v_user, 'finish-goal-split-book@test.invalid');
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'A') returning goal_id into v_goal_a;
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'B') returning goal_id into v_goal_b;
+
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate, deposit_group_id, notes
+  ) values (
+    v_book, v_user, v_goal_a, 'bank', 'investment',
+    current_date - 90, current_date + 275, 3000000, 4, v_book, 'Tích luỹ chung'
+  );
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate, deposit_group_id
+  ) values (
+    v_tranche, v_user, v_goal_a, 'bank', 'investment',
+    current_date - 30, current_date + 275, 2000000, 4, v_book
+  );
+  -- The app moves a book as one group; a direct write can still split it.
+  update public.investment_transactions set goal_id = v_goal_b where transaction_id = v_tranche;
+
+  begin
+    perform public.finish_savings_goal(v_goal_a, jsonb_build_array(
+      jsonb_build_object('key', 'book:' || v_book, 'received', 3100000)
+    ), current_date, 3100000, public.savings_goal_ledger_fingerprint(v_goal_a));
+    raise exception 'a book shared with another goal must not be closed by this finish';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- The other goal's tranche is untouched, and neither goal is archived.
+  select t.amount_vnd - coalesce((
+      select sum(w.principal_withdrawn) from public.investment_transactions w
+       where w.parent_transaction_id = t.transaction_id and w.transaction_type = 'withdrawal'), 0)
+    into v_left_b
+    from public.investment_transactions t where t.transaction_id = v_tranche;
+  if v_left_b <> 2000000 then
+    raise exception 'the other goal''s tranche must be untouched, % left', v_left_b;
+  end if;
+  if exists (select 1 from public.savings_goals
+              where user_id = v_user and completed_at is not null) then
+    raise exception 'a refused finish must archive nothing';
+  end if;
+
+  -- Put the book back in one goal and it finishes normally.
+  update public.investment_transactions set goal_id = v_goal_a where transaction_id = v_tranche;
+  perform public.finish_savings_goal(v_goal_a, jsonb_build_array(
+    jsonb_build_object('key', 'book:' || v_book, 'received', 5200000)
+  ), current_date, 5200000, public.savings_goal_ledger_fingerprint(v_goal_a));
+  if exists (select 1 from public.investment_transactions where deposit_group_id = v_book) then
+    raise exception 'the whole book must close once it belongs to one goal';
+  end if;
+
+  raise notice 'finish_savings_goal split book: all assertions passed';
+end $$;
+
 -- ── A finished goal can still be deleted outright ───────────────────────────
 --
 -- Deleting a goal first clears merge_target_goal_id on its CONSUMED held

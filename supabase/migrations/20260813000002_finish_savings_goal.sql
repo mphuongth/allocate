@@ -697,6 +697,24 @@ begin
     -- on top of a value that no longer exists. Reopening a goal has to show it as
     -- the (probably empty) goal it now is.
     if v_h.kind = 'book' then
+      -- A book is closed as a WHOLE: withdraw_accumulating_book spreads the
+      -- amount across every live tranche it has. This function only counted the
+      -- tranches belonging to THIS goal, so on a book shared between two goals
+      -- it handed over one goal's share and had it spread across both — taking
+      -- money out of the other goal's tranche, leaving part of this goal's own
+      -- balance live, and archiving at 100% regardless.
+      --
+      -- The app moves a book between goals as one group, but a direct write can
+      -- split it and nothing refuses that today. Refusing here is the honest
+      -- answer: closing half a book is not a shape the dissolve logic has, and
+      -- silently taking the other goal's money is not one either.
+      if exists (
+        select 1 from public.book_live_tranches(v_h.tx_id) t
+         where t.goal_id is distinct from p_goal_id
+      ) then
+        raise exception 'split book: % has tranches in another goal, so it cannot be closed by finishing this one — move the whole book into one goal first',
+          coalesce(v_h.name, 'this book') using errcode = 'check_violation';
+      end if;
       perform public.withdraw_accumulating_book(
         v_h.tx_id, v_h.principal, v_received, p_date, true);
     elsif v_h.kind = 'fund' then

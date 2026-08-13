@@ -231,6 +231,15 @@ describe('POST', () => {
     expect(body.error).toContain('nothing was changed')
   })
 
+  it('names a book shared with another goal, and does not call it a stale page', async () => {
+    h.rpcResult = { data: null, error: { message: 'split book: Tích luỹ chung has tranches in another goal, so it cannot be closed by finishing this one — move the whole book into one goal first' } }
+    const res = await post({ plan: PLAN })
+    expect(res.status).toBe(409)
+    const body = await res.json()
+    expect(body.code).toBe('book_split')
+    expect(body.error).toMatch(/^Tích luỹ chung has tranches in another goal/)
+  })
+
   it('names a promised handover rather than reporting a server fault', async () => {
     h.rpcResult = { data: null, error: { message: 'successor book: this book is promised to a successor, so cancel the handover before closing it' } }
     const res = await post({ plan: PLAN })
