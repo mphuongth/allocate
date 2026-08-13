@@ -15,16 +15,35 @@ import { readJsonBody } from '@/lib/apiBody'
 //   2. Either path could half-succeed. The list shows one row per fund, so a
 //      fund split between two goals is a state the user cannot see or repair.
 //
-// One UPDATE statement fixes both: Postgres runs it in its own transaction, so
-// it is all-or-nothing, and the WHERE clause carries the source scope the client
-// could only approximate. Under concurrency the statement re-checks its qual
-// after taking each row lock, so rows a competing assign/unassign already moved
-// out of the source bucket are skipped rather than dragged along.
+// One statement fixes both: Postgres runs it in its own transaction, so it is
+// all-or-nothing, and its WHERE clause carries the source scope the client could
+// only approximate.
+//
+// That statement now lives in assign_fund_bucket (#610) rather than here. It has
+// to: the move must take the row locks a concurrent SELL of the same bucket takes,
+// and a lock is held for the length of a transaction — so the lock and the move
+// belong to one call, not to two round trips from this route. Without it the sell
+// and the assign did not wait for each other, and the assign lost: a sale that
+// committed after the UPDATE's snapshot stayed behind while its purchases moved
+// away, splitting the bucket across two goals (#587 refuses that split, which made
+// a legitimate assign fail instead of wait). See the migration for why those locks
+// and not an advisory one.
 //
 // The buckets are addressed by goal id, with null meaning Unallocated:
 //   assign   from_goal_id: null    → to_goal_id: goal
 //   unassign from_goal_id: goal    → to_goal_id: null
 //   move     from_goal_id: goalA   → to_goal_id: goalB
+
+// Contention, not failure: two writers reached the same bucket and Postgres broke
+// the tie by aborting one of them. Nothing is wrong with the request and nothing
+// was written, so the answer is "try again" — a 500 reads as a bug and gives the
+// client no reason to retry. supabase-js surfaces the SQLSTATE as error.code, so
+// this is a discriminated map rather than a match on the message text.
+//   40P01 deadlock_detected      — an edit of a row in the bucket crossed the move
+//   55P03 lock_not_available     — a NOWAIT/timeout writer got there first
+//   40001 serialization_failure  — check_fund_bucket_solvent's own retry signal
+const RETRYABLE_SQLSTATES = new Set(['40P01', '55P03', '40001'])
+
 export async function POST(request: NextRequest) {
   const supabase = await createSupabaseServerClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -67,30 +86,30 @@ export async function POST(request: NextRequest) {
     if (!goal) return NextResponse.json({ error: "You don't have permission to access this goal." }, { status: 403 })
   }
 
-  let query = supabase
-    .from('investment_transactions')
-    .update({ goal_id: toGoalId, updated_at: new Date().toISOString() })
-    .eq('user_id', user.id)
-    .eq('fund_id', cleanFundId)
-    .eq('asset_type', 'fund')
-    // Pending DCA seeds (seeded with no units yet) are plan placeholders, not
-    // holdings: GET /fund-investments hides them and the dashboard never values
-    // them, so the old client path never moved them either. Same filter keeps
-    // planning's rows out of an assign.
-    .or('is_dca_seeded.eq.false,units.not.is.null')
-
-  query = fromGoalId === null
-    ? query.is('goal_id', null)
-    : query.eq('goal_id', fromGoalId)
-
-  const { data, error } = await query.select('transaction_id')
+  // The source scope, the fund, the caller's own rows, and the exclusion of
+  // pending DCA seeds all live in the function now — see the migration. Passing
+  // null as the source is the Unallocated bucket, matched with IS NOT DISTINCT
+  // FROM there rather than with an IS NULL filter built here.
+  const { data, error } = await supabase.rpc('assign_fund_bucket', {
+    p_fund_id: cleanFundId,
+    p_from_goal_id: fromGoalId,
+    p_to_goal_id: toGoalId,
+  })
 
   if (error) {
+    if (RETRYABLE_SQLSTATES.has(error.code ?? '')) {
+      console.warn('fund assign: bucket contended', error.code)
+      return NextResponse.json({
+        error: 'This fund was being changed at the same time. Try again.',
+        code: 'bucket_busy',
+      }, { status: 409 })
+    }
     console.error('fund assign: update failed', error.message)
     return NextResponse.json({ error: 'Failed to assign fund' }, { status: 500 })
   }
 
-  const moved = data?.length ?? 0
+  const movedIds = (data ?? []) as string[]
+  const moved = movedIds.length
   if (moved === 0) {
     // The caller acted on a row it could see, so rows were expected. Zero means
     // something else moved them first (another tab, or a stale dashboard) — the
@@ -101,5 +120,5 @@ export async function POST(request: NextRequest) {
     }, { status: 409 })
   }
 
-  return NextResponse.json({ moved, transaction_ids: data!.map((r) => r.transaction_id) })
+  return NextResponse.json({ moved, transaction_ids: movedIds })
 }

@@ -7,21 +7,25 @@ import { NextRequest } from 'next/server'
 // row also dragged rows that belonged to another goal, and a partial failure left
 // the fund split across goals with no row in the UI to repair it from.
 //
-// This route is the replacement primitive: one UPDATE statement — hence one
-// transaction, all-or-nothing — that moves the fund's rows from ONE goal bucket
-// to another. `from_goal_id: null` is the Unallocated bucket, which is what the
-// assign flow uses; `to_goal_id: null` unassigns, which is what goal detail uses.
+// This route is the replacement primitive: one statement — hence one transaction,
+// all-or-nothing — that moves the fund's rows from ONE goal bucket to another.
+// `from_goal_id: null` is the Unallocated bucket, which is what the assign flow
+// uses; `to_goal_id: null` unassigns, which is what goal detail uses.
 //
-// What the filter chain contains is the whole fix, so the mock records it.
-
-type Filter = { table: string; kind: string; args: unknown[] }
+// That statement is now assign_fund_bucket (#610), because the move has to hold
+// the row locks a concurrent sell of the bucket takes and a lock lives as long as
+// its transaction — so it cannot be split across two round trips from here. What
+// this route still owns, and what these tests cover: the shape of the request, the
+// bucket the RPC is asked to move, the 403 on a goal the caller does not own, and
+// the answer it gives when the database says the bucket was contended. The scoping
+// of the move itself is the function's, and is covered in
+// supabase/tests/fund_bucket_assign.test.sql.
 
 const h = vi.hoisted(() => ({
   user: { id: 'user-1' } as { id: string } | null,
   goal: { data: null as unknown, error: null as unknown },
-  updated: { data: [] as unknown[] | null, error: null as unknown },
-  update: null as unknown,
-  filters: [] as Filter[],
+  moved: { data: [] as unknown, error: null as { code?: string; message: string } | null },
+  rpc: [] as { fn: string; args: Record<string, unknown> }[],
   tables: [] as string[],
 }))
 
@@ -29,14 +33,8 @@ vi.mock('@/lib/supabase-server', () => {
   const chain = (table: string) => {
     const c: Record<string, unknown> = {
       select: () => c,
-      update: (payload: unknown) => { h.update = payload; return c },
-      eq: (...args: unknown[]) => { h.filters.push({ table, kind: 'eq', args }); return c },
-      is: (...args: unknown[]) => { h.filters.push({ table, kind: 'is', args }); return c },
-      or: (...args: unknown[]) => { h.filters.push({ table, kind: 'or', args }); return c },
+      eq: () => c,
       single: async () => h.goal,
-      // `.update(...).select()` is awaited directly — it resolves to the rows the
-      // statement actually touched, which is how the route counts the move.
-      then: (resolve: (v: unknown) => void) => resolve(h.updated),
     }
     h.tables.push(table)
     return c
@@ -45,6 +43,10 @@ vi.mock('@/lib/supabase-server', () => {
     createSupabaseServerClient: async () => ({
       auth: { getUser: async () => ({ data: { user: h.user } }) },
       from: (table: string) => chain(table),
+      rpc: async (fn: string, args: Record<string, unknown>) => {
+        h.rpc.push({ fn, args })
+        return h.moved
+      },
     }),
   }
 })
@@ -63,22 +65,17 @@ const call = (body: unknown) =>
     body: JSON.stringify(body),
   }))
 
-// Only the UPDATE's own filters — the goal ownership lookup filters by goal_id too.
-const filter = (kind: string, col: string) => {
-  const found = h.filters.find((f) =>
-    f.table === 'investment_transactions' && f.kind === kind && f.args[0] === col)
-  return found ? { kind: found.kind, args: found.args } : undefined
-}
+const move = () => h.rpc.find((r) => r.fn === 'assign_fund_bucket')
 
 describe('POST /api/v1/fund-investments/assign', () => {
   beforeEach(() => {
     h.user = { id: 'user-1' }
     h.goal = { data: { goal_id: GOAL_A }, error: null }
-    h.updated = { data: [{ transaction_id: TX_1 }, { transaction_id: TX_2 }], error: null }
-    h.update = null
-    h.filters = []
+    h.moved = { data: [TX_1, TX_2], error: null }
+    h.rpc = []
     h.tables = []
     vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
   })
 
   afterEach(() => vi.restoreAllMocks())
@@ -87,49 +84,35 @@ describe('POST /api/v1/fund-investments/assign', () => {
     const res = await call({ fund_id: FUND, from_goal_id: null, to_goal_id: GOAL_A })
 
     expect(res.status).toBe(200)
-    await expect(res.json()).resolves.toMatchObject({ moved: 2 })
-    expect(h.update).toMatchObject({ goal_id: GOAL_A })
+    await expect(res.json()).resolves.toMatchObject({
+      moved: 2,
+      transaction_ids: [TX_1, TX_2],
+    })
   })
 
-  // The #589 bug: without this the UPDATE spans every goal's rows for the fund.
-  it('scopes the move to the source bucket — Unallocated means goal_id IS NULL', async () => {
+  // The #589 bug: without a source bucket the move spans every goal's rows for
+  // the fund. Unallocated is null, and the function matches it with IS NOT
+  // DISTINCT FROM — so null is a scope here, never "no filter".
+  it('scopes the move to the source bucket — Unallocated is a null source', async () => {
     await call({ fund_id: FUND, from_goal_id: null, to_goal_id: GOAL_A })
 
-    expect(filter('is', 'goal_id')).toEqual({ kind: 'is', args: ['goal_id', null] })
-    // No eq on goal_id as well — that would contradict the IS NULL scope.
-    expect(filter('eq', 'goal_id')).toBeUndefined()
+    expect(move()!.args).toEqual({
+      p_fund_id: FUND,
+      p_from_goal_id: null,
+      p_to_goal_id: GOAL_A,
+    })
   })
 
   it('scopes an unassign to the goal it is leaving', async () => {
     await call({ fund_id: FUND, from_goal_id: GOAL_A, to_goal_id: null })
 
-    expect(filter('eq', 'goal_id')).toEqual({ kind: 'eq', args: ['goal_id', GOAL_A] })
-    expect(filter('is', 'goal_id')).toBeUndefined()
-    expect(h.update).toMatchObject({ goal_id: null })
+    expect(move()!.args).toMatchObject({ p_from_goal_id: GOAL_A, p_to_goal_id: null })
   })
 
   it('scopes a goal-to-goal move to the source goal', async () => {
     await call({ fund_id: FUND, from_goal_id: GOAL_A, to_goal_id: GOAL_B })
 
-    expect(filter('eq', 'goal_id')).toEqual({ kind: 'eq', args: ['goal_id', GOAL_A] })
-    expect(h.update).toMatchObject({ goal_id: GOAL_B })
-  })
-
-  it('restricts the move to the caller, the fund, and fund rows', async () => {
-    await call({ fund_id: FUND, from_goal_id: null, to_goal_id: GOAL_A })
-
-    expect(filter('eq', 'user_id')).toEqual({ kind: 'eq', args: ['user_id', 'user-1'] })
-    expect(filter('eq', 'fund_id')).toEqual({ kind: 'eq', args: ['fund_id', FUND] })
-    expect(filter('eq', 'asset_type')).toEqual({ kind: 'eq', args: ['asset_type', 'fund'] })
-  })
-
-  // Pending DCA seeds (is_dca_seeded with no units) are not holdings: the fund
-  // list excludes them and the dashboard never values them, so the old client
-  // path never moved them. Same filter here keeps that behaviour.
-  it('leaves pending DCA seed rows where they are', async () => {
-    await call({ fund_id: FUND, from_goal_id: null, to_goal_id: GOAL_A })
-
-    expect(filter('or', 'is_dca_seeded.eq.false,units.not.is.null')).toBeTruthy()
+    expect(move()!.args).toMatchObject({ p_from_goal_id: GOAL_A, p_to_goal_id: GOAL_B })
   })
 
   it('rejects a goal the caller does not own', async () => {
@@ -139,20 +122,20 @@ describe('POST /api/v1/fund-investments/assign', () => {
 
     expect(res.status).toBe(403)
     // Nothing was written.
-    expect(h.update).toBeNull()
+    expect(move()).toBeUndefined()
   })
 
   it('does not need a goal lookup when unassigning', async () => {
     await call({ fund_id: FUND, from_goal_id: GOAL_A, to_goal_id: null })
 
-    expect(h.tables).toEqual(['investment_transactions'])
+    expect(h.tables).toEqual([])
   })
 
   // The row is on screen, so rows were expected. Zero moved means something else
   // moved them first — the caller has to be told rather than shown a success it
   // can't see the result of.
   it('reports a conflict when nothing was left to move', async () => {
-    h.updated = { data: [], error: null }
+    h.moved = { data: [], error: null }
 
     const res = await call({ fund_id: FUND, from_goal_id: null, to_goal_id: GOAL_A })
 
@@ -164,25 +147,41 @@ describe('POST /api/v1/fund-investments/assign', () => {
     const res = await call({ fund_id: FUND, from_goal_id: GOAL_A, to_goal_id: GOAL_A })
 
     expect(res.status).toBe(400)
-    expect(h.update).toBeNull()
+    expect(move()).toBeUndefined()
   })
 
   it('rejects a missing or malformed fund id', async () => {
     expect((await call({ to_goal_id: GOAL_A })).status).toBe(400)
     expect((await call({ fund_id: 'not-a-uuid', to_goal_id: GOAL_A })).status).toBe(400)
     expect((await call({ fund_id: FUND, from_goal_id: 'not-a-uuid', to_goal_id: null })).status).toBe(400)
-    expect(h.update).toBeNull()
+    expect(move()).toBeUndefined()
   })
 
   it('requires a session', async () => {
     h.user = null
 
     expect((await call({ fund_id: FUND, from_goal_id: null, to_goal_id: GOAL_A })).status).toBe(401)
-    expect(h.update).toBeNull()
+    expect(move()).toBeUndefined()
   })
 
-  it('reports a failed update instead of a silent success', async () => {
-    h.updated = { data: null, error: { message: 'deadlock detected' } }
+  // Contention is not a failure: two writers reached the same bucket, Postgres
+  // aborted one, nothing was written and nothing is wrong with the request. A 500
+  // reads as a bug and tells the client nothing it can act on (#610).
+  it.each([
+    ['40P01', 'deadlock detected'],
+    ['55P03', 'could not obtain lock on row'],
+    ['40001', 'could not serialize access'],
+  ])('answers %s with a retryable conflict', async (code, message) => {
+    h.moved = { data: null, error: { code, message } }
+
+    const res = await call({ fund_id: FUND, from_goal_id: null, to_goal_id: GOAL_A })
+
+    expect(res.status).toBe(409)
+    await expect(res.json()).resolves.toMatchObject({ code: 'bucket_busy' })
+  })
+
+  it('reports a genuine failure instead of a silent success', async () => {
+    h.moved = { data: null, error: { code: '23514', message: 'withdrawal invariant' } }
 
     const res = await call({ fund_id: FUND, from_goal_id: null, to_goal_id: GOAL_A })
 
