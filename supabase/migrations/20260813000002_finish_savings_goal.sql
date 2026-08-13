@@ -136,6 +136,42 @@ as $$
          ), 0) > 0;
 $$;
 
+-- How a book close is split across its live tranches: each takes its share of the
+-- principal and of the cash, by running totals so the rounding cannot drift and
+-- the parts always sum to the whole.
+--
+-- Extracted so the close can CHECK the split before writing it. The cash share is
+-- rounded, and rounding a small payout across several tranches can land on zero
+-- for one of them (a two-tranche book paid 1 đồng gives 1 and 0) — while its
+-- principal share is still positive, so the row is written and refused by
+-- amount_vnd > 0. That surfaced as a rolled-back finish behind a generic error,
+-- for a plan the UI and the route had both accepted.
+create or replace function public.book_payout_allocation(
+  p_book_id uuid,
+  p_withdraw_principal bigint,
+  p_total_received bigint,
+  p_total_principal bigint
+)
+returns table (transaction_id uuid, user_id uuid, goal_id uuid, principal_out bigint, cash_out bigint)
+language sql
+security invoker
+stable
+set search_path = ''
+as $$
+  with ranked as (
+    select t.transaction_id, t.user_id, t.goal_id, t.eff,
+           sum(t.eff) over (order by t.investment_date, t.transaction_id
+                            rows between unbounded preceding and current row) as cum
+      from public.book_live_tranches(p_book_id) t
+  )
+  select transaction_id, user_id, goal_id,
+         (round(p_withdraw_principal::numeric * cum / p_total_principal)
+           - round(p_withdraw_principal::numeric * (cum - eff) / p_total_principal))::bigint,
+         (round(p_total_received::numeric * cum / p_total_principal)
+           - round(p_total_received::numeric * (cum - eff) / p_total_principal))::bigint
+    from ranked;
+$$;
+
 -- ── withdraw_accumulating_book, without the temp table ───────────────────────
 --
 -- Body unchanged from 20260618000009 except that `_book_live` is now a CTE.
@@ -196,22 +232,20 @@ begin
       using errcode = 'check_violation';
   end if;
 
-  with live as (
-    select * from public.book_live_tranches(p_book_id)
-  ),
-  ranked as (
-    select transaction_id, user_id, goal_id, eff,
-           sum(eff) over (order by investment_date, transaction_id
-                          rows between unbounded preceding and current row) as cum
-      from live
-  ),
-  alloc as (
-    select transaction_id, user_id, goal_id,
-           round(p_withdraw_principal::numeric * cum / v_total_principal)
-             - round(p_withdraw_principal::numeric * (cum - eff) / v_total_principal) as principal_out,
-           round(p_total_received::numeric * cum / v_total_principal)
-             - round(p_total_received::numeric * (cum - eff) / v_total_principal) as cash_out
-      from ranked
+  -- Refuse a split the ledger cannot record, rather than writing part of it and
+  -- being refused by amount_vnd > 0 half way through (see book_payout_allocation).
+  if exists (
+    select 1 from public.book_payout_allocation(
+      p_book_id, p_withdraw_principal, p_total_received, v_total_principal)
+     where principal_out > 0 and cash_out <= 0
+  ) then
+    raise exception 'withdraw_accumulating_book: a payout of % is too small to record on every tranche of this book',
+      p_total_received using errcode = 'check_violation';
+  end if;
+
+  with alloc as (
+    select * from public.book_payout_allocation(
+      p_book_id, p_withdraw_principal, p_total_received, v_total_principal)
   )
   insert into public.investment_transactions (
     user_id, goal_id, asset_type, transaction_type, parent_transaction_id,
@@ -243,6 +277,32 @@ begin
 end;
 $$;
 
+-- What the goal's ledger looks like right now, as one comparable value.
+--
+-- The completion snapshot is the goal's progress value, and computing that means
+-- the whole dashboard valuation — which lives in TypeScript and is not going to be
+-- rewritten in SQL for this (two copies of a valuation is exactly the drift #532
+-- removed from the read endpoints). So the route computes it, and then has to
+-- prove it is still true: a deposit or a withdrawal landing between the valuation
+-- and the lock would archive a figure the ledger no longer supports.
+--
+-- Both sides read this same function, so the comparison is between two database
+-- reads and never involves the application's clock.
+create or replace function public.savings_goal_ledger_fingerprint(p_goal_id uuid)
+returns text
+language sql
+security invoker
+stable
+set search_path = ''
+as $$
+  select count(*)::text || ':' || coalesce(max(greatest(t.created_at, t.updated_at))::text, '-')
+    from public.investment_transactions t
+   where t.goal_id = p_goal_id;
+$$;
+
+comment on function public.savings_goal_ledger_fingerprint(uuid) is
+  'A goal ledger''s current shape, for the finish''s optimistic check that its valuation is still true (#650).';
+
 -- ── the finish itself ────────────────────────────────────────────────────────
 --
 -- p_plan is the realized cash per holding: [{"key": "...", "received": 123}, …],
@@ -259,11 +319,20 @@ $$;
 -- hold, is refused rather than half-applied — it means the user is looking at a
 -- stale page, and finishing off a stale page is how a holding survives the finish
 -- and keeps a "completed" goal alive.
+-- The fingerprint argument has a default, so leaving the earlier four-argument
+-- signature in place would make a four-argument call ambiguous rather than
+-- overloaded ("function is not unique"). Only ever created by this migration.
+drop function if exists public.finish_savings_goal(uuid, jsonb, date, bigint);
+
 create or replace function public.finish_savings_goal(
   p_goal_id uuid,
   p_plan jsonb,
   p_date date,
-  p_completion_value bigint
+  p_completion_value bigint,
+  -- The ledger the completion value was computed against
+  -- (savings_goal_ledger_fingerprint, read before the valuation). Null skips the
+  -- check, for a caller that has no valuation to defend.
+  p_ledger_fingerprint text default null
 )
 returns jsonb
 language plpgsql
@@ -299,6 +368,17 @@ begin
   end if;
   if jsonb_typeof(p_plan) is distinct from 'array' then
     raise exception 'finish goal: the liquidation plan must be an array'
+      using errcode = 'check_violation';
+  end if;
+
+  -- Read under the goal's lock, so anything that landed between the caller's
+  -- valuation and this moment is caught. The plan check further down catches a
+  -- changed SET of holdings; this catches a changed AMOUNT, which leaves the keys
+  -- identical and would otherwise archive a snapshot the ledger no longer
+  -- supports — liquidating the new balances while recording the old value.
+  if p_ledger_fingerprint is not null
+     and p_ledger_fingerprint is distinct from public.savings_goal_ledger_fingerprint(p_goal_id) then
+    raise exception 'finish goal: this goal changed while it was being valued — reload it and try again'
       using errcode = 'check_violation';
   end if;
 
@@ -452,7 +532,7 @@ begin
 end;
 $$;
 
-comment on function public.finish_savings_goal(uuid, jsonb, date, bigint) is
+comment on function public.finish_savings_goal(uuid, jsonb, date, bigint, text) is
   'Liquidates every live holding of a goal and archives it at 100%, atomically (#650). All-or-nothing: any refused withdrawal rolls back the whole finish.';
 
 -- ── an archive takes no new money ────────────────────────────────────────────
@@ -468,9 +548,9 @@ comment on function public.finish_savings_goal(uuid, jsonb, date, bigint) is
 -- (20260730000002): the goal reference has many writers already, and the next one
 -- is written by whoever forgets.
 --
--- Only a CHANGE to the reference is measured. Editing the notes on a transaction
--- that was part of the goal's history must keep working — a completed goal's past
--- is not frozen, only its future.
+-- Only a CHANGE to the reference is measured, so an ordinary edit to a row that
+-- already belongs to the goal is unaffected. What that row is allowed to change
+-- is the next trigger's business.
 create or replace function public.enforce_goal_not_completed()
 returns trigger
 language plpgsql
@@ -481,6 +561,7 @@ declare
   v_col text := tg_argv[0];
   v_new uuid;
   v_old uuid;
+  v_completed timestamptz;
 begin
   execute format('select ($1).%I', v_col) into v_new using new;
   if v_new is null then return new; end if;
@@ -488,16 +569,88 @@ begin
     execute format('select ($1).%I', v_col) into v_old using old;
     if v_old is not distinct from v_new then return new; end if;
   end if;
-  if exists (
-    select 1 from public.savings_goals g
-     where g.goal_id = v_new and g.completed_at is not null
-  ) then
+  -- FOR SHARE, not a plain read. finish_savings_goal holds FOR UPDATE on the
+  -- goal for the whole liquidation, and a plain EXISTS does not participate in
+  -- that lock: the trigger would read the goal as still active on its own
+  -- snapshot, the row's FOREIGN KEY check (which runs AFTER this trigger) would
+  -- then wait for the finish to commit, and the insert would land under a goal
+  -- that is completed by the time it does — money surviving the archive, which
+  -- is precisely what this trigger exists to stop.
+  --
+  -- FOR SHARE conflicts with that FOR UPDATE, so the write waits here instead,
+  -- and the row it reads once the lock is granted is the post-finish version.
+  select g.completed_at into v_completed
+    from public.savings_goals g
+   where g.goal_id = v_new
+     for share;
+  if v_completed is not null then
     raise exception 'completed goal: this goal has been finished, so it takes no new money — reopen it first'
       using errcode = 'check_violation';
   end if;
   return new;
 end;
 $$;
+
+-- A completed goal's LEDGER is frozen too, not only its future.
+--
+-- Without this, deleting one of the liquidation withdrawals from the transaction
+-- ledger brings the original holding back to life — worth its full principal
+-- again — under a goal still archived at 100%. An accumulating book comes back
+-- worse: its close cleared deposit_group_id, so the tranches reappear as separate
+-- loose deposits. Raising an original investment's amount does the same without
+-- ever touching goal_id, so the reference trigger above cannot see it.
+--
+-- Frozen means the MONEY. Renaming a deposit, correcting its notes or its bank —
+-- anything that does not change what the goal holds — stays editable, because a
+-- completed goal is still history the user reads and tidies. Changing the money
+-- means reopening the goal first, which is one click and states the intent.
+create or replace function public.enforce_completed_goal_ledger_frozen()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_goal uuid;
+  v_completed timestamptz;
+begin
+  if tg_op = 'DELETE' then
+    v_goal := old.goal_id;
+  else
+    -- Either end: moving a settled row OUT of a completed goal while changing
+    -- its money is the same escape as changing it in place.
+    v_goal := coalesce(old.goal_id, new.goal_id);
+    if new.amount_vnd is not distinct from old.amount_vnd
+       and new.units is not distinct from old.units
+       and new.principal_withdrawn is not distinct from old.principal_withdrawn
+       and new.units_withdrawn is not distinct from old.units_withdrawn then
+      return new;
+    end if;
+  end if;
+  if v_goal is null then
+    if tg_op = 'DELETE' then return old; else return new; end if;
+  end if;
+
+  select g.completed_at into v_completed
+    from public.savings_goals g
+   where g.goal_id = v_goal
+     for share;
+  if v_completed is not null then
+    raise exception 'completed goal: this goal has been finished, so its transactions are settled — reopen it to change them'
+      using errcode = 'check_violation';
+  end if;
+  if tg_op = 'DELETE' then return old; else return new; end if;
+end;
+$$;
+
+comment on function public.enforce_completed_goal_ledger_frozen() is
+  'Refuses to delete, or to change the money on, a transaction belonging to a finished goal — that would resurrect holdings under a frozen 100% (#650).';
+
+drop trigger if exists investment_transactions_completed_goal_frozen on public.investment_transactions;
+create trigger investment_transactions_completed_goal_frozen
+  before delete or update of amount_vnd, units, principal_withdrawn, units_withdrawn
+    on public.investment_transactions
+  for each row execute function public.enforce_completed_goal_ledger_frozen();
 
 comment on function public.enforce_goal_not_completed() is
   'Refuses to point a new holding, recurring saving or DCA plan at an archived goal (#650). The reference column is tg_argv[0].';

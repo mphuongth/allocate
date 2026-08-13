@@ -145,6 +145,40 @@ begin
    where user_id = v_user and transaction_type = 'withdrawal';
   if v_tx_count <> 0 then raise exception 'a refused zero must write no withdrawals'; end if;
 
+  -- ── A stale valuation is refused, not archived ────────────────────────────
+  --
+  -- The completion value is computed by the caller before the RPC takes the
+  -- goal's lock. A fingerprint read on the way in proves the ledger it was
+  -- computed against is still the one being liquidated.
+  begin
+    perform public.finish_savings_goal(v_goal, jsonb_build_array(
+      jsonb_build_object('key', 'tx:' || v_deposit, 'received', 10400000),
+      jsonb_build_object('key', 'tx:' || v_gold, 'received', 9000000),
+      jsonb_build_object('key', 'fund:' || v_fund, 'received', 5500000),
+      jsonb_build_object('key', 'book:' || v_book, 'received', 5100000)
+    ), current_date, 30000000, 'not-the-ledger-you-valued');
+    raise exception 'a finish carrying a stale valuation must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- ── A payout too small to spread over a book is refused up front ──────────
+  --
+  -- The two-tranche book paid 1 đồng rounds one tranche's cash share to zero,
+  -- and amount_vnd > 0 would refuse that row half way through the finish.
+  begin
+    perform public.finish_savings_goal(v_goal, jsonb_build_array(
+      jsonb_build_object('key', 'tx:' || v_deposit, 'received', 10400000),
+      jsonb_build_object('key', 'tx:' || v_gold, 'received', 9000000),
+      jsonb_build_object('key', 'fund:' || v_fund, 'received', 5500000),
+      jsonb_build_object('key', 'book:' || v_book, 'received', 1)
+    ), current_date, 30000000, public.savings_goal_ledger_fingerprint(v_goal));
+    raise exception 'a payout that cannot reach every tranche must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+  select count(*) into v_tx_count from public.investment_transactions
+   where user_id = v_user and transaction_type = 'withdrawal';
+  if v_tx_count <> 0 then raise exception 'a refused book payout must write no withdrawals'; end if;
+
   -- ── The finish itself ─────────────────────────────────────────────────────
   select public.finish_savings_goal(v_goal, jsonb_build_array(
     jsonb_build_object('key', 'tx:' || v_deposit, 'received', 10400000),
@@ -222,9 +256,31 @@ begin
   exception when sqlstate '23514' then null;
   end;
 
-  -- Its PAST is not frozen, only its future: history stays editable.
+  -- Its LEDGER is settled too. Deleting a liquidation withdrawal would bring the
+  -- original deposit back to life at full value under a goal still at 100%.
+  begin
+    delete from public.investment_transactions
+     where user_id = v_user and transaction_type = 'withdrawal' and parent_transaction_id = v_deposit;
+    raise exception 'a completed goal must not give up its liquidation withdrawals';
+  exception when sqlstate '23514' then null;
+  end;
+  -- ...and neither may the original holding simply grow again, which never
+  -- touches goal_id and so is invisible to the reference guard.
+  begin
+    update public.investment_transactions set amount_vnd = amount_vnd + 1000000
+     where transaction_id = v_deposit;
+    raise exception 'a completed goal must not have its holdings topped up';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- Frozen means the MONEY. A completed goal is still history to read and tidy.
   update public.investment_transactions set notes = 'ACB 12 tháng (đã tất toán)'
    where transaction_id = v_deposit;
+
+  -- ── The snapshot may not be archived against a ledger that moved ──────────
+  if public.savings_goal_ledger_fingerprint(v_goal) is null then
+    raise exception 'the ledger fingerprint must be readable';
+  end if;
 
   -- ── A finished goal is not finishable twice ───────────────────────────────
   begin

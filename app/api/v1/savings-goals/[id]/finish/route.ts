@@ -98,6 +98,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     )
   }
 
+  // Read BEFORE the valuation below, and re-read by the RPC under the goal's
+  // lock. Anything that lands in this goal's ledger from here on invalidates the
+  // figure we are about to compute, and the finish refuses rather than archiving
+  // a result the ledger no longer supports. Taking it first makes the check
+  // over-strict rather than under-strict, which is the safe direction.
+  const { data: fingerprint, error: fpError } = await supabase
+    .rpc('savings_goal_ledger_fingerprint', { p_goal_id: goalId })
+  if (fpError) {
+    console.error('savings_goal_ledger_fingerprint failed', fpError.message)
+    return NextResponse.json({ error: 'Failed to value the goal' }, { status: 500 })
+  }
+
   // The snapshot records what the goal ACHIEVED, and that is its progress value —
   // the same number the goal card shows, which already counts contributions the
   // user has spent on the goal's purpose (affects_progress=false withdrawals).
@@ -116,6 +128,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     p_plan: plan,
     p_date: todayIso(),
     p_completion_value: completionValue,
+    p_ledger_fingerprint: fingerprint,
   })
 
   if (error) {

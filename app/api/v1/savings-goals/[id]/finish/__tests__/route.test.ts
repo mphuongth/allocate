@@ -15,6 +15,7 @@ const h = vi.hoisted(() => ({
   rpc: [] as Array<{ fn: string; args: Record<string, unknown> }>,
   rpcResult: { data: {} as unknown, error: null as { message: string } | null },
   blockers: { data: [] as unknown[], error: null as { message: string } | null },
+  fingerprint: { data: '4:2026-08-13 02:00:00+00' as unknown, error: null as { message: string } | null },
   overview: { ok: true, data: { goals: [] as Array<Record<string, unknown>> } } as unknown,
 }))
 
@@ -31,7 +32,9 @@ vi.mock('@/lib/supabase-server', () => ({
     },
     rpc: async (fn: string, args: Record<string, unknown>) => {
       h.rpc.push({ fn, args })
-      return fn === 'savings_goal_finish_blockers' ? h.blockers : h.rpcResult
+      if (fn === 'savings_goal_finish_blockers') return h.blockers
+      if (fn === 'savings_goal_ledger_fingerprint') return h.fingerprint
+      return h.rpcResult
     },
   }),
 }))
@@ -66,6 +69,7 @@ beforeEach(() => {
   h.rpc = []
   h.rpcResult = { data: { realized: 30_000_000, holdings: 4, completion_value: 26_000_000 }, error: null }
   h.blockers = { data: [], error: null }
+  h.fingerprint = { data: '4:2026-08-13 02:00:00+00', error: null }
   h.overview = { ok: true, data: { goals: [{ goalId: GOAL_ID, currentValue: 25_000_000, progressValue: 26_000_000 }] } }
 })
 
@@ -97,15 +101,32 @@ describe('POST', () => {
     expect(await res.json()).toMatchObject({ realized: 30_000_000, holdings: 4, completionPercentage: 100 })
   })
 
+  it('reads the ledger fingerprint BEFORE valuing the goal, and hands it to the finish', async () => {
+    // Anything landing in the ledger after this read invalidates the value about
+    // to be computed, and the RPC re-reads it under the goal's lock. Taken first
+    // so the check is over-strict rather than under-strict.
+    await post({ plan: PLAN })
+    expect(h.rpc.map((c) => c.fn)).toEqual(['savings_goal_ledger_fingerprint', 'finish_savings_goal'])
+    expect(h.rpc[1].args.p_ledger_fingerprint).toBe('4:2026-08-13 02:00:00+00')
+  })
+
+  it('does not archive a snapshot it could not anchor to a ledger', async () => {
+    h.fingerprint = { data: null, error: { message: 'boom' } }
+    const res = await post({ plan: PLAN })
+    expect(res.status).toBe(500)
+    expect(h.rpc.some((c) => c.fn === 'finish_savings_goal')).toBe(false)
+  })
+
   it('falls back to the current value when the goal has no progress figure', async () => {
     h.overview = { ok: true, data: { goals: [{ goalId: GOAL_ID, currentValue: 25_000_000 }] } }
     await post({ plan: PLAN })
-    expect(h.rpc[0].args.p_completion_value).toBe(25_000_000)
+    expect(h.rpc.find((c) => c.fn === 'finish_savings_goal')?.args.p_completion_value).toBe(25_000_000)
   })
 
   it('passes the plan through as sent, rounded to the đồng', async () => {
     await post({ plan: [{ key: 'tx:abc', received: 1_000_000.6 }] })
-    expect(h.rpc[0].args.p_plan).toEqual([{ key: 'tx:abc', received: 1_000_001 }])
+    expect(h.rpc.find((c) => c.fn === 'finish_savings_goal')?.args.p_plan)
+      .toEqual([{ key: 'tx:abc', received: 1_000_001 }])
   })
 
   it('rejects an unauthenticated caller before touching the ledger', async () => {
