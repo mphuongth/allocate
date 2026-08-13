@@ -422,4 +422,69 @@ begin
   raise notice 'finish_savings_goal blockers: all assertions passed';
 end $$;
 
+-- ── A withdrawal that belongs to the goal only through its PARENT ────────────
+--
+-- The sell sheet posts goal_id = NULL from the unallocated context, and that row
+-- still draws on the goal's deposit — check_withdrawal_balance measures it
+-- against the parent, and so does the valuation. After the finish it is as
+-- settled as any other: deleting it would hand the deposit back the principal it
+-- had taken (the finish only closed what was left) and stand it up as a live
+-- holding under an archived goal.
+do $$
+declare
+  v_user uuid := gen_random_uuid();
+  v_goal uuid;
+  v_deposit uuid := gen_random_uuid();
+  v_early uuid := gen_random_uuid();
+  v_live bigint;
+begin
+  insert into auth.users (id, email) values (v_user, 'finish-goal-parent-wd@test.invalid');
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Parent-keyed') returning goal_id into v_goal;
+
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate, notes
+  ) values (
+    v_deposit, v_user, v_goal, 'bank', 'investment',
+    current_date - 100, current_date + 265, 10000000, 5, 'Sổ ACB'
+  );
+  -- Written before the finish, from a surface that had no goal in hand.
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type, parent_transaction_id,
+    investment_date, amount_vnd, principal_withdrawn
+  ) values (
+    v_early, v_user, null, 'bank', 'withdrawal', v_deposit,
+    current_date - 10, 1020000, 1000000
+  );
+
+  perform public.finish_savings_goal(v_goal, jsonb_build_array(
+    jsonb_build_object('key', 'tx:' || v_deposit, 'received', 9200000)
+  ), current_date, 10200000, public.savings_goal_ledger_fingerprint(v_goal));
+
+  select t.amount_vnd - coalesce((
+      select sum(w.principal_withdrawn) from public.investment_transactions w
+       where w.parent_transaction_id = t.transaction_id and w.transaction_type = 'withdrawal'), 0)
+    into v_live
+    from public.investment_transactions t where t.transaction_id = v_deposit;
+  if v_live <> 0 then raise exception 'the finish must close the remaining balance, % left', v_live; end if;
+
+  begin
+    delete from public.investment_transactions where transaction_id = v_early;
+    raise exception 'a withdrawal that drew on the archived goal must not be deletable';
+  exception when sqlstate '23514' then null;
+  end;
+  begin
+    update public.investment_transactions set principal_withdrawn = 500000
+     where transaction_id = v_early;
+    raise exception 'a withdrawal that drew on the archived goal must not be re-priced';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- Reopening is the way out, and then it behaves like any other row.
+  perform public.reopen_savings_goal(v_goal);
+  delete from public.investment_transactions where transaction_id = v_early;
+
+  raise notice 'finish_savings_goal parent-keyed withdrawals: all assertions passed';
+end $$;
+
 rollback;

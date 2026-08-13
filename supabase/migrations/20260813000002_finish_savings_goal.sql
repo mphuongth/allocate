@@ -620,6 +620,41 @@ $$;
 -- anything that does not change what the goal holds — stays editable, because a
 -- completed goal is still history the user reads and tidies. Changing the money
 -- means reopening the goal first, which is one click and states the intent.
+-- Which goals a ledger row's money belongs to — by the same balance keys the
+-- valuation and check_withdrawal_balance use, not by goal_id alone.
+--
+-- A bank/gold withdrawal draws on its PARENT, and carries whatever goal_id the
+-- sheet that wrote it happened to set: the sell sheet posts NULL from the
+-- unallocated context, which is legitimate and common. Such a row belongs to the
+-- parent's goal however it is labelled. A fund sell is the opposite — it is keyed
+-- by (goal, fund) and draws on that bucket, so its own goal_id IS the answer and
+-- its parent, if any, is not consulted.
+create or replace function public.ledger_row_goals(t public.investment_transactions)
+returns uuid[]
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select array_remove(array[
+    t.goal_id,
+    case
+      when t.transaction_type = 'withdrawal'
+       and not coalesce(t.asset_type = 'fund' and t.fund_id is not null, false)
+       and t.parent_transaction_id is not null
+      then (select p.goal_id from public.investment_transactions p
+             where p.transaction_id = t.parent_transaction_id)
+    end
+  ], null);
+$$;
+
+-- SECURITY DEFINER and therefore an oracle if left open: called with a hand-built
+-- row it reports which goal a stranger's transaction belongs to, RLS bypassed.
+-- The trigger calls it as the definer and needs no grant (same reasoning as
+-- check_withdrawal_balance, 20260730000002).
+revoke all on function public.ledger_row_goals(public.investment_transactions) from public;
+revoke all on function public.ledger_row_goals(public.investment_transactions) from anon, authenticated;
+
 create or replace function public.enforce_completed_goal_ledger_frozen()
 returns trigger
 language plpgsql
@@ -627,10 +662,13 @@ security definer
 set search_path = ''
 as $$
 declare
+  v_goals uuid[];
+  v_goal uuid;
   v_completed timestamptz;
 begin
   if tg_op = 'UPDATE'
      and new.goal_id is not distinct from old.goal_id
+     and new.parent_transaction_id is not distinct from old.parent_transaction_id
      and new.amount_vnd is not distinct from old.amount_vnd
      and new.units is not distinct from old.units
      and new.principal_withdrawn is not distinct from old.principal_withdrawn
@@ -638,39 +676,42 @@ begin
     return new;
   end if;
 
-  -- The OLD goal, not just the new one. Moving a settled row OUT of a completed
-  -- goal is the same escape as changing its money in place, and the reference
-  -- guard cannot see it: that one measures where a row is GOING, and going to
-  -- NULL or to another active goal is exactly what it lets through.
+  -- BOTH ends of the change, and for each end every goal the row's money touches.
   --
-  -- The sharpest case is a fund. Its bucket is keyed by (goal, fund), so
-  -- unassigning a finished goal's purchase moves it to Unallocated while the
-  -- sell that emptied it stays keyed to the archived goal — the whole position
-  -- reappears with nothing offsetting it, and net worth gains money that was
-  -- spent. Deleting the GOAL is not this case: by the time ON DELETE SET NULL
-  -- fires, the goal row is gone and the lookup below finds nothing, so an
-  -- archived goal can still be deleted outright.
-  select g.completed_at into v_completed
-    from public.savings_goals g
-   where g.goal_id = case when tg_op = 'DELETE' then old.goal_id
-                          else coalesce(old.goal_id, new.goal_id) end
-     for share;
-  if v_completed is not null then
-    raise exception 'completed goal: this goal has been finished, so its transactions are settled — reopen it to change them'
-      using errcode = 'check_violation';
+  -- The OLD end, because moving a settled row OUT of a completed goal is the same
+  -- escape as changing its money in place — and the reference guard cannot see
+  -- that one: it measures where a row is GOING, and going to NULL or to another
+  -- active goal is exactly what it lets through. The sharpest case is a fund,
+  -- whose bucket is keyed by (goal, fund): unassigning a finished goal's purchase
+  -- moves it to Unallocated while the sell that emptied it stays with the
+  -- archive, so the whole position reappears with nothing offsetting it.
+  --
+  -- And by BALANCE KEY rather than by goal_id, because a bank/gold withdrawal
+  -- belongs to its parent's goal whatever its own label says. A pre-finish
+  -- partial withdrawal written from the unallocated context carries goal_id =
+  -- NULL; deleting it after the finish gives the deposit back the principal that
+  -- withdrawal had taken — the finish only closed the balance that was left —
+  -- and it stands as a live holding under an archived goal.
+  --
+  -- Deleting the GOAL is not any of this: by the time ON DELETE SET NULL fires,
+  -- the goal row is gone and the lookups below find nothing, so an archived goal
+  -- can still be deleted outright.
+  if tg_op = 'DELETE' then
+    v_goals := public.ledger_row_goals(old);
+  else
+    v_goals := public.ledger_row_goals(old) || public.ledger_row_goals(new);
   end if;
 
-  -- ...and the destination, when this is a move between goals. The reference
-  -- guard covers that too; checking here keeps the rule readable in one place
-  -- when both ends are archived.
-  if tg_op = 'UPDATE' and new.goal_id is distinct from old.goal_id and new.goal_id is not null then
+  foreach v_goal in array coalesce(v_goals, '{}'::uuid[]) loop
     select g.completed_at into v_completed
-      from public.savings_goals g where g.goal_id = new.goal_id for share;
+      from public.savings_goals g
+     where g.goal_id = v_goal
+       for share;
     if v_completed is not null then
-      raise exception 'completed goal: this goal has been finished, so it takes no new money — reopen it first'
+      raise exception 'completed goal: this goal has been finished, so its transactions are settled — reopen it to change them'
         using errcode = 'check_violation';
     end if;
-  end if;
+  end loop;
 
   if tg_op = 'DELETE' then return old; else return new; end if;
 end;
@@ -681,7 +722,8 @@ comment on function public.enforce_completed_goal_ledger_frozen() is
 
 drop trigger if exists investment_transactions_completed_goal_frozen on public.investment_transactions;
 create trigger investment_transactions_completed_goal_frozen
-  before delete or update of goal_id, amount_vnd, units, principal_withdrawn, units_withdrawn
+  before delete or update of goal_id, parent_transaction_id, amount_vnd, units,
+                             principal_withdrawn, units_withdrawn
     on public.investment_transactions
   for each row execute function public.enforce_completed_goal_ledger_frozen();
 
