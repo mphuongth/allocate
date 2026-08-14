@@ -1,0 +1,445 @@
+-- The replay audit has to decide what the screening audit cannot (#613).
+--
+-- public.withdrawal_ledger_audit (#609 / #611) reads the ledger as it STANDS. The
+-- invariant it audits is stateful, so whole families of illegal ledgers reach a
+-- final state that a legal one could also have reached, and that view is silent on
+-- every one of them — deliberately, and its own header says so.
+--
+-- public.withdrawal_ledger_replay orders each balance key's rows by created_at and
+-- re-runs the invariant's transition rules over them. This file's job is to prove
+-- the two halves of that claim:
+--
+--   • it CATCHES the sequences the screening audit provably cannot. Each such
+--     fixture asserts BOTH — the replay names it, and withdrawal_ledger_audit does
+--     not — so the test fails if the replay ever silently becomes a restatement of
+--     the view it exists to go beyond.
+--   • it stays SILENT on ledgers the invariant itself vouched for. Those are
+--     planted with the triggers ON, so the invariant accepted every write, and the
+--     replay has no licence to complain about any of them.
+--
+-- Every fixture sets created_at and updated_at by hand, and has to: now() is fixed
+-- for the whole transaction, so rows inserted here would otherwise all share one
+-- timestamp and there would be no order to replay. Setting created_at without
+-- updated_at would also make every row look EDITED (updated_at defaults to now(),
+-- which is later than a backdated created_at) and drop every finding to 'review'.
+--
+-- Runs against the local stack in a rolled-back transaction. Run via
+-- `npm run test:db`.
+
+begin;
+
+do $$
+declare
+  v_user       uuid;
+  v_goal       uuid;
+  v_fund       uuid;
+  v_fund_ok    uuid;
+  v_fund_late  uuid;
+  -- the clean half
+  v_ok_bank    uuid;
+  v_ok_gold    uuid;
+  v_ok_buy     uuid;
+  v_tiny_gold  uuid;
+  -- planted sequences
+  v_cancel     uuid; v_cancel_a uuid; v_cancel_b uuid;
+  v_early      uuid;
+  v_edited     uuid; v_edited_a uuid;
+  v_bank_over  uuid; v_bank_w2  uuid;
+  v_found      text;
+  v_count      int;
+  v_audit      int;
+begin
+  insert into auth.users (id, email) values (gen_random_uuid(), 'wd-replay@test.invalid') returning id into v_user;
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'House') returning goal_id into v_goal;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Replay Fund', 'RPLF', 'equity', 20000) returning id into v_fund;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Clean Fund', 'RCLN', 'equity', 20000) returning id into v_fund_ok;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Late Fund', 'RLAT', 'equity', 20000) returning id into v_fund_late;
+
+  -- ═══ the clean half, written with the invariant WATCHING ═══════════════════
+  -- Each write below passed check_withdrawal_balance against the balance the
+  -- earlier writes left, which is the very sequence the replay reconstructs. A
+  -- finding on any of them is a false positive by construction.
+
+  -- bank: principal-only, drawn down to nothing in two withdrawals
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, created_at, updated_at)
+  values (v_user, v_goal, 'bank', 'investment', '2026-01-01', 100000000, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+  returning transaction_id into v_ok_bank;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 40000000, v_ok_bank, 40000000,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z');
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'bank', 'withdrawal', '2026-03-01', 60000000, v_ok_bank, 60000000,
+          '2026-03-01T00:00:00Z', '2026-03-01T00:00:00Z');
+
+  -- gold: quantity-valued, a partial slice and then the closer
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'investment', '2026-01-01', 40000000, 4, 10000000,
+          '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+  returning transaction_id into v_ok_gold;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-02-01', 11000000, v_ok_gold, 10000000, 1,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z');
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-03-01', 31000000, v_ok_gold, 30000000, 3,
+          '2026-03-01T00:00:00Z', '2026-03-01T00:00:00Z');
+
+  -- a gold holding so small every slice's proportional share rounds to nothing —
+  -- three đồng legally leave a one đồng holding, every write accepted (the
+  -- invariant separately demands a positive principal). The replay must reach the
+  -- same verdict the invariant did, one sale at a time.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'investment', '2026-01-01', 1, 5, 1, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+  returning transaction_id into v_tiny_gold;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-02-01', 1, v_tiny_gold, 1, 1, '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z'),
+         (v_user, v_goal, 'gold', 'withdrawal', '2026-03-01', 1, v_tiny_gold, 1, 1, '2026-03-01T00:00:00Z', '2026-03-01T00:00:00Z'),
+         (v_user, v_goal, 'gold', 'withdrawal', '2026-04-01', 1, v_tiny_gold, 1, 1, '2026-04-01T00:00:00Z', '2026-04-01T00:00:00Z');
+
+  -- a fund bucket with a purchase arriving BETWEEN two sells: the second sell's
+  -- share is computed from the basis as it stood then, which is exactly the drift
+  -- the screening audit can only call 'review'. The replay knows the order, so it
+  -- must be silent.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'investment', '2026-01-01', 100000000, 100, 1000000, v_fund_ok,
+          '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+  returning transaction_id into v_ok_buy;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, fund_id,
+     principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'withdrawal', '2026-02-01', 55000000, v_fund_ok, 50000000, 50,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z');
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'investment', '2026-03-01', 60000000, 50, 1200000, v_fund_ok,
+          '2026-03-01T00:00:00Z', '2026-03-01T00:00:00Z');
+  -- 50 of the 100 units now in the bucket, against a 110,000,000 basis → 55,000,000
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, fund_id,
+     principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'withdrawal', '2026-04-01', 60000000, v_fund_ok, 55000000, 50,
+          '2026-04-01T00:00:00Z', '2026-04-01T00:00:00Z');
+
+  select count(*) into v_count from public.withdrawal_ledger_replay r where r.user_id = v_user;
+  if v_count <> 0 then
+    select string_agg(format('%s/%s: %s', r.check_name, r.severity, r.detail), E'\n')
+      into v_found from public.withdrawal_ledger_replay r where r.user_id = v_user;
+    raise exception 'the replay complained about a ledger the invariant itself accepted:%s%s', E'\n', v_found;
+  end if;
+
+  -- ═══ the sequences only a replay can decide ════════════════════════════════
+  -- Planted with the triggers off: every one of these is a shape the invariant
+  -- refuses to write, which is the whole reason they can only be found afterwards.
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted immediate;
+  alter table public.investment_transactions disable trigger user;
+
+  -- ── the headline case from #613 ────────────────────────────────────────────
+  -- 1000 đồng over 100 units, two sales of 50 units taking 497 and 503. The totals
+  -- are exactly proportional and each per-sale deviation is inside what a legal
+  -- two-sale ledger shows elsewhere, so no predicate over the final state can
+  -- separate it — the screening audit is silent, and a test there pins that
+  -- silence. Neither sale can be written first (50 of 100 units must take 500) and
+  -- neither can follow the other, so no ordering makes it legal.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'investment', '2026-01-01', 1000, 100, 10, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+  returning transaction_id into v_cancel;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-02-01', 497, v_cancel, 497, 50,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
+  returning transaction_id into v_cancel_a;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-03-01', 503, v_cancel, 503, 50,
+          '2026-03-01T00:00:00Z', '2026-03-01T00:00:00Z')
+  returning transaction_id into v_cancel_b;
+
+  -- ── a fund sell that outran the purchases it now looks backed by ───────────
+  -- 50 units bought, 100 sold, 50 more bought afterwards. The bucket's totals
+  -- balance perfectly, so the screening audit sees nothing; at the moment the sell
+  -- was written only half its units existed.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'investment', '2026-01-01', 50000000, 50, 1000000, v_fund_late,
+          '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, fund_id,
+     principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'withdrawal', '2026-02-01', 110000000, v_fund_late, 100000000, 100,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
+  returning transaction_id into v_early;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'investment', '2026-03-01', 50000000, 50, 1000000, v_fund_late,
+          '2026-03-01T00:00:00Z', '2026-03-01T00:00:00Z');
+
+  -- ── the same impossible pair, on a holding that was EDITED afterwards ──────
+  -- A replay reconstructs history from rows as they are NOW, so a row touched
+  -- after it was written is measured against a balance that may never have
+  -- existed. That is the premise, and where it does not hold the finding drops to
+  -- 'review' rather than claiming proof it cannot have.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'investment', '2026-01-01', 1000, 100, 10, '2026-01-01T00:00:00Z', '2026-06-01T00:00:00Z')
+  returning transaction_id into v_edited;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-02-01', 497, v_edited, 497, 50,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
+  returning transaction_id into v_edited_a;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-03-01', 503, v_edited, 503, 50,
+          '2026-03-01T00:00:00Z', '2026-03-01T00:00:00Z');
+
+  -- ── a bank holding drawn past zero by its second withdrawal ────────────────
+  -- The screening audit reports this holding too; what the replay adds is WHICH
+  -- row broke it and the balance it was measured against.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, created_at, updated_at)
+  values (v_user, v_goal, 'bank', 'investment', '2026-01-01', 100000000, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+  returning transaction_id into v_bank_over;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 80000000, v_bank_over, 80000000,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z');
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'bank', 'withdrawal', '2026-03-01', 80000000, v_bank_over, 80000000,
+          '2026-03-01T00:00:00Z', '2026-03-01T00:00:00Z')
+  returning transaction_id into v_bank_w2;
+
+  alter table public.investment_transactions enable trigger user;
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted deferred;
+
+  -- ═══ what the replay must say ══════════════════════════════════════════════
+
+  -- the headline case: named, as a violation, on the FIRST of the two sales, and
+  -- invisible to the screening audit
+  select r.check_name || '/' || r.severity into v_found
+    from public.withdrawal_ledger_replay r
+   where r.transaction_id = v_cancel_a;
+  if v_found is distinct from 'sale_took_the_wrong_basis/violation' then
+    raise exception 'the 497/503 pair should be a proven violation on its first sale, got %', coalesce(v_found, '(silence)');
+  end if;
+  if exists (select 1 from public.withdrawal_ledger_replay r where r.transaction_id = v_cancel_b) then
+    raise exception 'only the FIRST row that could not have been written should be reported, not every later one';
+  end if;
+  select count(*) into v_audit from public.withdrawal_ledger_audit a
+   where a.parent_transaction_id = v_cancel or a.transaction_id in (v_cancel_a, v_cancel_b);
+  if v_audit <> 0 then
+    raise exception 'the screening audit was supposed to be silent here — this fixture no longer proves the replay adds anything';
+  end if;
+
+  -- the detail has to carry the state the row was measured against, which is what
+  -- makes a finding repairable rather than merely alarming
+  select r.detail into v_found from public.withdrawal_ledger_replay r where r.transaction_id = v_cancel_a;
+  if v_found not like '%1000%' or v_found not like '%100 units%' or v_found not like '%500%' then
+    raise exception 'the detail should report the balance at that turn and the basis owed, got %', v_found;
+  end if;
+
+  -- the fund sell that outran its purchases
+  select r.check_name || '/' || r.severity into v_found
+    from public.withdrawal_ledger_replay r where r.transaction_id = v_early;
+  if v_found is distinct from 'sale_exceeded_the_units_left/violation' then
+    raise exception 'a sell of 100 units against a 50-unit bucket should be a proven violation, got %', coalesce(v_found, '(silence)');
+  end if;
+  select count(*) into v_audit from public.withdrawal_ledger_audit a where a.fund_id = v_fund_late;
+  if v_audit <> 0 then
+    raise exception 'the screening audit was supposed to be silent on the late-purchase bucket';
+  end if;
+
+  -- the edited holding: same impossible pair, but the premise no longer holds
+  select r.severity into v_found
+    from public.withdrawal_ledger_replay r where r.transaction_id = v_edited_a;
+  if v_found is distinct from 'review' then
+    raise exception 'a finding on a holding edited after its sales must not claim proof, got %', coalesce(v_found, '(silence)');
+  end if;
+
+  -- the bank overdraw: the replay names the row, where the screening audit names
+  -- only the holding
+  select r.check_name || '/' || r.severity into v_found
+    from public.withdrawal_ledger_replay r where r.transaction_id = v_bank_w2;
+  if v_found is distinct from 'withdrawal_exceeded_the_balance/violation' then
+    raise exception 'the second bank withdrawal should be named as the row that broke the holding, got %', coalesce(v_found, '(silence)');
+  end if;
+  -- and placed in the holding's history, not merely in the list of failures: this
+  -- is the SECOND of two withdrawals, and an operator opening the ledger needs
+  -- that number to be the one they can count to.
+  select r.detail into v_found from public.withdrawal_ledger_replay r where r.transaction_id = v_bank_w2;
+  if v_found not like '%20000000 đồng left, 2 of 2 withdrawal(s)%' then
+    raise exception 'the detail should place the row at its turn in the holding''s history, got %', v_found;
+  end if;
+
+  -- and nothing beyond the four holdings planted above
+  select count(*) into v_count from public.withdrawal_ledger_replay r where r.user_id = v_user;
+  if v_count <> 4 then
+    select string_agg(format('%s/%s: %s', r.check_name, r.severity, r.detail), E'\n')
+      into v_found from public.withdrawal_ledger_replay r where r.user_id = v_user;
+    raise exception 'expected exactly the 4 planted sequences, got %:%s%s', v_count, E'\n', v_found;
+  end if;
+
+  raise notice 'withdrawal_ledger_replay: ok';
+end $$;
+
+-- ═══ the false-positive half, at scale ══════════════════════════════════════
+-- The fixtures above prove the replay CATCHES. This proves it does not cry wolf,
+-- which is the property that decides whether anyone ever reads its output.
+--
+-- Legal ledgers are not asserted to be legal here — they are BUILT with the
+-- invariant watching, one write at a time, in the order the replay will read them.
+-- Every insert below therefore has check_withdrawal_balance's own signature on it,
+-- and a single finding is a false positive by construction. The generator pushes
+-- each sale to the edge of what the rule allows (the đồng of rounding slack, the
+-- full-sale shortcut, slices small enough that their share rounds to nothing),
+-- because the middle of the range was never where the disagreements were.
+--
+-- Seeded, so a failure here is reproducible rather than a coin flip in CI.
+do $$
+declare
+  v_user    uuid;
+  v_goal    uuid;
+  v_fund    uuid;
+  v_src     uuid;
+  v_basis   bigint;
+  v_units   numeric;
+  v_left    bigint;
+  v_left_u  numeric;
+  v_take_u  numeric;
+  v_take_p  bigint;
+  v_when    timestamptz;
+  v_sales   int;
+  v_found   text;
+  i         int;
+  j         int;
+begin
+  perform setseed(0.613);
+  insert into auth.users (id, email) values (gen_random_uuid(), 'wd-replay-fuzz@test.invalid') returning id into v_user;
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Fuzz') returning goal_id into v_goal;
+
+  -- ── gold: one source, sales drawn down in sequence ────────────────────────
+  for i in 1..120 loop
+    -- Four magnitudes of basis and units, so the tiny holdings where every share
+    -- rounds to zero get the same exercise as the ordinary ones.
+    v_basis := (1 + floor(random() * 1000))::bigint * (10 ^ (floor(random() * 4)))::bigint;
+    v_units := round((0.5 + random() * 100)::numeric, 4);
+    v_when  := timestamptz '2026-01-01T00:00:00Z' + (i * interval '1 day');
+    insert into public.investment_transactions
+      (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, created_at, updated_at)
+    values (v_user, v_goal, 'gold', 'investment', '2026-01-01', v_basis, v_units, 1, v_when, v_when)
+    returning transaction_id into v_src;
+
+    v_left := v_basis; v_left_u := v_units;
+    v_sales := 1 + floor(random() * 5);
+    for j in 1..v_sales loop
+      exit when v_left_u <= 0;
+      -- Sometimes close the holding outright, which is the branch that takes the
+      -- whole remaining basis rather than a share of it.
+      if random() < 0.3 or j = v_sales then
+        v_take_u := v_left_u;
+        v_take_p := v_left;
+      else
+        v_take_u := round((v_left_u * (0.05 + random() * 0.8))::numeric, 4);
+        exit when v_take_u <= 0;
+        v_take_p := round(v_take_u * v_left / v_left_u);
+        -- Spend the đồng of slack the rule allows, in whichever direction.
+        v_take_p := v_take_p + (floor(random() * 3) - 1)::bigint;
+      end if;
+      -- A parent-backed withdrawal must also record a positive principal, which is
+      -- what lets three đồng legally leave a one đồng holding.
+      if v_take_p < 1 then v_take_p := 1; end if;
+      v_when := v_when + interval '1 hour';
+      insert into public.investment_transactions
+        (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+         parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+      values (v_user, v_goal, 'gold', 'withdrawal', '2026-06-01', v_take_p, v_src, v_take_p, v_take_u, v_when, v_when);
+      v_left := v_left - v_take_p; v_left_u := v_left_u - v_take_u;
+    end loop;
+  end loop;
+
+  -- ── fund buckets: purchases INTERLEAVED with sells ────────────────────────
+  -- The case the parent axis cannot produce, and the one the screening audit can
+  -- only call 'review': a purchase landing between two sells moves the ratio the
+  -- second sell is measured against.
+  for i in 1..80 loop
+    insert into public.funds (user_id, name, code, fund_type, nav)
+    values (v_user, 'Fuzz ' || i, 'FZ' || lpad(i::text, 3, '0'), 'equity', 20000)
+    returning id into v_fund;
+    v_when := timestamptz '2026-01-01T00:00:00Z' + (i * interval '1 day');
+    v_left := 0; v_left_u := 0;
+    for j in 1..(2 + floor(random() * 5)) loop
+      if j = 1 or random() < 0.4 then
+        v_basis := (1 + floor(random() * 1000))::bigint * (10 ^ (floor(random() * 4)))::bigint;
+        v_units := round((0.5 + random() * 100)::numeric, 4);
+        v_when := v_when + interval '1 hour';
+        insert into public.investment_transactions
+          (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id, created_at, updated_at)
+        values (v_user, v_goal, 'fund', 'investment', '2026-01-01', v_basis, v_units, 1, v_fund, v_when, v_when);
+        v_left := v_left + v_basis; v_left_u := v_left_u + v_units;
+      else
+        exit when v_left_u <= 0;
+        if random() < 0.3 then
+          v_take_u := v_left_u; v_take_p := v_left;
+        else
+          v_take_u := round((v_left_u * (0.05 + random() * 0.8))::numeric, 4);
+          exit when v_take_u <= 0;
+          v_take_p := round(v_take_u * v_left / v_left_u) + (floor(random() * 3) - 1)::bigint;
+          -- A fund sell may legitimately take nothing: unlike the parent axis it
+          -- has no positive-principal rule, only the proportional one.
+          if v_take_p < 0 then v_take_p := 0; end if;
+        end if;
+        v_when := v_when + interval '1 hour';
+        insert into public.investment_transactions
+          (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, fund_id,
+           principal_withdrawn, units_withdrawn, created_at, updated_at)
+        -- amount_vnd is the row's own cash figure and must be positive; the
+        -- principal the replay measures is principal_withdrawn beside it.
+        values (v_user, v_goal, 'fund', 'withdrawal', '2026-06-01', greatest(v_take_p, 1), v_fund, v_take_p, v_take_u, v_when, v_when);
+        v_left := v_left - v_take_p; v_left_u := v_left_u - v_take_u;
+      end if;
+    end loop;
+  end loop;
+
+  select string_agg(format('%s/%s: %s', r.check_name, r.severity, r.detail), E'\n')
+    into v_found from public.withdrawal_ledger_replay r where r.user_id = v_user;
+  if v_found is not null then
+    raise exception 'the replay flagged ledgers the invariant itself wrote:%s%s', E'\n', v_found;
+  end if;
+
+  raise notice 'withdrawal_ledger_replay fuzz: ok';
+end $$;
+
+-- An operator tool, like the screen it extends: no screen reads it, and granting
+-- it would add a PostgREST surface for nothing.
+do $$
+begin
+  if has_table_privilege('authenticated', 'public.withdrawal_ledger_replay', 'select')
+     or has_table_privilege('anon', 'public.withdrawal_ledger_replay', 'select') then
+    raise exception 'withdrawal_ledger_replay should not be reachable from the API roles';
+  end if;
+end $$;
+
+rollback;
