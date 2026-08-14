@@ -261,6 +261,31 @@ begin
     from public.investment_transactions t
    where t.transaction_id = v_deposit;
 
+  -- SERIALISE ON THE BOOK before measuring it. check_withdrawal_balance locks
+  -- only the row a withdrawal names as its parent (20260730000002), so two closes
+  -- against DIFFERENT tranches of one book never meet: each would measure the
+  -- group on its own snapshot, see the other tranche''s principal as still there,
+  -- and leave the link alone — and both commit, on a book with nothing in it.
+  --
+  -- The anchor, exclusively, and nothing else. FOR SHARE would let both sessions
+  -- hold it at once and prove nothing. Locking the tranches instead would put two
+  -- plain withdrawals in a cycle (each already holds the one it is drawing from),
+  -- while the anchor is a single row neither of them holds beforehand: one waits
+  -- for the other to commit and then measures a book that is genuinely empty.
+  --
+  -- The one cycle this leaves is against withdraw_accumulating_book, which holds
+  -- the anchor and then locks each tranche in turn — the reverse order — so a full
+  -- book close running at the same time as a manual withdrawal from one of its
+  -- tranches can deadlock. That is a loud, retryable 40P01 that writes nothing,
+  -- traded for a silent wrong state that persists; and the BEFORE trigger owns the
+  -- tranche lock, so there is no order this trigger could take that would agree
+  -- with both callers.
+  if v_group is not null then
+    perform 1 from public.investment_transactions t
+      where t.transaction_id = v_group
+        for update;
+  end if;
+
   update public.recurring_savings s
      set linked_deposit_tx_id = null,
          unlinked_at = now(),
@@ -293,11 +318,16 @@ revoke all on function public.clear_recurring_link_on_close() from public, anon,
 -- Every accepted edit that can empty a deposit, not just the obvious one.
 -- Inserting a withdrawal is the common way in; raising principal_withdrawn on an
 -- existing one does the same; re-parenting a withdrawal empties whatever it now
--- names; and moving a sale off its fund key (asset_type / fund_id) hands its
--- principal back to the parent, which the balance above then charges there.
+-- names; moving a sale off its fund key (asset_type / fund_id) hands its
+-- principal back to the parent, which the balance above then charges there; and
+-- transaction_type ACTIVATES a row staged as an investment carrying a parent and
+-- a principal_withdrawn — which draws nothing down, so nothing measures it — in a
+-- one-column update. check_withdrawal_balance names that last path in its own
+-- trigger comment and watches the column for exactly this reason.
 drop trigger if exists investment_transactions_close_clears_link on public.investment_transactions;
 create trigger investment_transactions_close_clears_link
-  after insert or update of principal_withdrawn, parent_transaction_id, asset_type, fund_id
+  after insert or update of
+    transaction_type, principal_withdrawn, parent_transaction_id, asset_type, fund_id
   on public.investment_transactions
   for each row
   when (new.transaction_type = 'withdrawal'

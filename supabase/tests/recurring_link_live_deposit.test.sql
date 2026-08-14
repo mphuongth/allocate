@@ -382,4 +382,53 @@ begin
   raise notice 'recurring_link_live_deposit shrink: all assertions passed';
 end $$;
 
+-- ─── A row that BECOMES a withdrawal ─────────────────────────────────────────
+--
+-- A direct writer can stage parent_transaction_id and principal_withdrawn on an
+-- investment row — which draws nothing down, so nothing measures it — and then
+-- activate it with a one-column update of transaction_type.
+-- check_withdrawal_balance names that path in its own trigger comment and watches
+-- the column for exactly this reason; the unlinker has to watch it too, or the
+-- deposit closes with its link intact.
+do $$
+declare
+  v_user uuid := gen_random_uuid();
+  v_goal uuid;
+  v_dep uuid := gen_random_uuid();
+  v_staged uuid := gen_random_uuid();
+  v_saving uuid := gen_random_uuid();
+  v_link uuid;
+  v_reason text;
+begin
+  insert into auth.users (id, email) values (v_user, 'recurring-link-activate@test.invalid');
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Kích hoạt') returning goal_id into v_goal;
+
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate
+  ) values (v_dep, v_user, v_goal, 'bank', 'investment', current_date - 30, current_date + 300, 4000000, 5);
+  insert into public.recurring_savings (saving_id, user_id, goal_id, name, amount_vnd, linked_deposit_tx_id)
+    values (v_saving, v_user, v_goal, 'Gộp khi đáo hạn', 1000000, v_dep);
+
+  -- Staged as an investment: it takes nothing yet.
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type, parent_transaction_id,
+    investment_date, amount_vnd, principal_withdrawn
+  ) values (v_staged, v_user, v_goal, 'bank', 'investment', v_dep, current_date, 4100000, 4000000);
+
+  select linked_deposit_tx_id into v_link from public.recurring_savings where saving_id = v_saving;
+  if v_link is null then raise exception 'a staged row must not unlink anything on its own'; end if;
+
+  -- ...and now it is a withdrawal, taking the whole deposit.
+  update public.investment_transactions set transaction_type = 'withdrawal'
+   where transaction_id = v_staged;
+
+  select linked_deposit_tx_id, unlinked_reason into v_link, v_reason
+    from public.recurring_savings where saving_id = v_saving;
+  if v_link is not null then raise exception 'activating the withdrawal must clear the link'; end if;
+  if v_reason is distinct from 'closed' then raise exception 'the mark must say closed, read %', v_reason; end if;
+
+  raise notice 'recurring_link_live_deposit activation: all assertions passed';
+end $$;
+
 rollback;
