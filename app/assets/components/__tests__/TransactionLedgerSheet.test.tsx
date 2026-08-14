@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import TransactionLedgerSheet from '../TransactionLedgerSheet'
 
 // Keys pass through, but interpolated values come with them — a message whose
@@ -348,6 +348,54 @@ describe('TransactionLedgerSheet — deleting a deposit a recurring saving feeds
     release({ ok: true, json: async () => ({ savings: [{ saving_id: 'rs1', name: 'VCB Savings', linked_deposit_tx_id: 'd1' }] }) })
     for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 0))
     expect(screen.queryByTestId('tx-delete-unlinks-savings')).toBeNull()
+  })
+})
+
+// A transaction that belongs to a finished goal stays editable for its notes
+// (#650) — but the goal picker only lists ACTIVE goals, so the row's own goal
+// had no option to select and the controlled select fell back to showing
+// "No goal". The form still held the completed id and would send it back on
+// save, so the screen contradicted what was stored. The row's own goal must be
+// shown (and locked), while other finished goals stay out as targets.
+describe('TransactionLedgerSheet — editing a transaction under a finished goal', () => {
+  const goals = [
+    { goal_id: 'g-active', goal_name: 'Emergency', completed_at: null },
+    { goal_id: 'g-done', goal_name: 'House', completed_at: '2026-08-01T00:00:00Z' },
+    { goal_id: 'g-other-done', goal_name: 'Car', completed_at: '2026-07-01T00:00:00Z' },
+  ]
+  // Stock is the asset type the ledger edits in its OWN inline form; every other
+  // type is handed to AddTransactionSheet (which has its own picker, tested there).
+  const tx = {
+    transaction_id: 't1', asset_type: 'stock', investment_date: '2026-06-01',
+    amount_vnd: 10_000_000, transaction_type: 'deposit', goal_id: 'g-done',
+    savings_goals: { goal_name: 'House' },
+  }
+
+  beforeEach(() => {
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('savings-goals')) return Promise.resolve({ ok: true, json: async () => ({ goals }) })
+      if (url.includes('/api/funds')) return Promise.resolve({ ok: true, json: async () => ({ funds: [] }) })
+      if (url.includes('investment-transactions')) return Promise.resolve({ ok: true, json: async () => ({ transactions: [tx], total: 1 }) })
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+  })
+
+  it('shows the finished goal it is filed under instead of "No goal"', async () => {
+    render(<TransactionLedgerSheet open desktop locale="en" onClose={() => {}} />)
+    ;(await screen.findByRole('button', { name: 'edit' })).click()
+
+    const select = await screen.findByTestId('ledger-goal-select')
+    expect((select as HTMLSelectElement).value).toBe('g-done')
+    expect(within(select).getByRole('option', { name: 'House' })).toBeDisabled()
+  })
+
+  it('still refuses every other finished goal as a destination', async () => {
+    render(<TransactionLedgerSheet open desktop locale="en" onClose={() => {}} />)
+    ;(await screen.findByRole('button', { name: 'edit' })).click()
+
+    const select = await screen.findByTestId('ledger-goal-select')
+    expect(within(select).getByRole('option', { name: 'Emergency' })).toBeEnabled()
+    expect(within(select).queryByRole('option', { name: 'Car' })).toBeNull()
   })
 })
 

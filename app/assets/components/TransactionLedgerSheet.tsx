@@ -141,9 +141,6 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
 
   const [transactions, setTransactions] = useState<LedgerTransaction[]>([])
   const [goals, setGoals] = useState<Goal[]>([])
-  // Where a transaction can be MOVED to, which is not the same list as the one
-  // you can filter history by: a completed goal is an archive (#650).
-  const activeGoals = useMemo(() => goals.filter((g) => !g.completed_at), [goals])
   const [funds, setFunds] = useState<Fund[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -161,6 +158,18 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
   const [formMode, setFormMode] = useState<'edit' | null>(null)
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
+  // Where a transaction can be MOVED to, which is not the same list as the one
+  // you can filter history by: a completed goal is an archive (#650). The one
+  // exception is the goal this very transaction is already filed under — a
+  // finished goal's rows stay editable for their notes, and dropping its option
+  // left the controlled select showing "No goal" while the form still held (and
+  // would re-send) the completed id. It is listed so the screen tells the truth,
+  // and disabled so it is a label rather than a destination.
+  const goalOptions = useMemo(() => {
+    const active = goals.filter((g) => !g.completed_at)
+    const own = goals.find((g) => g.goal_id === txForm.goal_id && g.completed_at)
+    return own ? [own, ...active] : active
+  }, [goals, txForm.goal_id])
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [confirmTx, setConfirmTx] = useState<LedgerTransaction | null>(null)
   // Recurring savings this deposit is funding (#655). Deleting it unlinks them
@@ -684,9 +693,9 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
               </Field>
             ) : <div />}
             <Field label={t('colGoal')}>
-              <select value={txForm.goal_id} onChange={(e) => setTxForm((f) => ({ ...f, goal_id: e.target.value }))} className="cn-input" style={{ cursor: 'pointer' }}>
+              <select data-testid="ledger-goal-select" value={txForm.goal_id} onChange={(e) => setTxForm((f) => ({ ...f, goal_id: e.target.value }))} className="cn-input" style={{ cursor: 'pointer' }}>
                 <option value="">{t('noGoal')}</option>
-                {activeGoals.map((g) => <option key={g.goal_id} value={g.goal_id}>{g.goal_name}</option>)}
+                {goalOptions.map((g) => <option key={g.goal_id} value={g.goal_id} disabled={!!g.completed_at}>{g.goal_name}</option>)}
               </select>
             </Field>
           </div>
