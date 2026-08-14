@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validatePlanMonthFilter, validateText, validateUUID, validateYearMonth, type PlanMonthFilter } from '@/lib/validation'
 import { validateLinkedDeposit } from './linkValidation'
-import { ownershipError } from '@/lib/assertOwned'
+import { archivedGoalError, ownershipError } from '@/lib/assertOwned'
 import { readJsonBody } from '@/lib/apiBody'
 
 function toDateCol(ym: string | undefined | null): string | null {
@@ -109,6 +109,10 @@ export async function POST(request: NextRequest) {
   if (cleanGoalId) {
     const ownErr = await ownershipError(supabase, 'savings_goals', 'goal_id', cleanGoalId, user.id, 'goal')
     if (ownErr) return ownErr
+    // A finished goal takes no new money (#650) — and a recurring saving is the
+    // clearest case of it: this one would feed the goal every month from now on.
+    const doneErr = await archivedGoalError(supabase, cleanGoalId, user.id)
+    if (doneErr) return doneErr
   }
 
   if (cleanLinkedTxId) {

@@ -105,7 +105,7 @@ export async function buildDashboardOverview(
     supabase.from('monthly_plans').select('id, month, year').eq('user_id', userId),
     supabase
       .from('savings_goals')
-      .select('goal_id, goal_name, target_amount, target_date')
+      .select('goal_id, goal_name, target_amount, target_date, completed_at, completion_value, completion_percentage')
       .eq('user_id', userId),
     supabase
       // Snapshot-free view — renewal history rows can't reach the net-worth /
@@ -243,6 +243,11 @@ export async function buildDashboardOverview(
     goalName: string
     targetAmount: number | null
     targetDate: string | null
+    // The completion snapshot (#650) — carried through untouched, so a finished
+    // goal keeps reading 100% however its live holdings are valued afterwards.
+    completedAt: string | null
+    completionValue: number | null
+    completionPercentage: number | null
     currentValue: number
     // Progress numerator — equals currentValue except that affects_progress=false
     // withdrawals are added back, so the bar holds steady while net worth falls.
@@ -278,6 +283,9 @@ export async function buildDashboardOverview(
       goalName: goal.goal_name,
       targetAmount: goal.target_amount ?? null,
       targetDate: goal.target_date ?? null,
+      completedAt: goal.completed_at ?? null,
+      completionValue: goal.completion_value ?? null,
+      completionPercentage: goal.completion_percentage ?? null,
       currentValue: 0,
       progressValue: 0,
       totalInvested: 0,
@@ -532,6 +540,9 @@ export async function buildDashboardOverview(
       goalName: g.goalName,
       targetAmount: g.targetAmount,
       targetDate: g.targetDate,
+      completedAt: g.completedAt,
+      completionValue: g.completionValue,
+      completionPercentage: g.completionPercentage,
       currentValue: g.currentValue,
       // Surfaced so the goal card/hero can reconcile the bar (progress) against
       // net worth (currentValue) when an affects_progress=false withdrawal makes

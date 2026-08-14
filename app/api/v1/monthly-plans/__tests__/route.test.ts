@@ -48,6 +48,9 @@ vi.mock('@/lib/supabase-server', () => {
       select: () => chain,
       eq: (col: string, val: unknown) => { filters[col] = val; return chain },
       or: () => chain,
+      // The goals query narrows to the ACTIVE ones (#650) — a finished goal is
+      // not a destination next month's savings can be planned into.
+      is: () => chain,
       order: () => chain,
       in: () => chain,
       maybeSingle: async () => ({ data: h.plan, error: h.planError }),

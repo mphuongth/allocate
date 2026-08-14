@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validateBankCode, validateDate, validateEnum, validateNotes, validateRate, validateUUID } from '@/lib/validation'
 import { readJsonBody } from '@/lib/apiBody'
+import { completedGoalError } from '@/lib/assertOwned'
 import { isFutureInvestmentDate } from '@/lib/dates'
 import { subtypeResetFields } from '@/lib/assetTypeFields'
 
@@ -286,6 +287,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     )
   }
 
+  // A settled transaction of a finished goal is refused by the ledger freeze —
+  // not missing, which is what the catch-all below would claim (#650).
+  const doneErr = completedGoalError(error)
+  if (doneErr) return doneErr
   if (error || !transaction) return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
 
   // (Accumulating books took the atomic update_deposit_book path above; only
@@ -402,6 +407,8 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
         { status: 409 },
       )
     }
+    const doneErr = completedGoalError(error)
+    if (doneErr) return doneErr
     console.error('investment-transactions delete: statement failed', error.message)
     return NextResponse.json({ error: 'Failed to delete transaction', code: 'delete_failed' }, { status: 500 })
   }

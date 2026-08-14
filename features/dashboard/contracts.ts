@@ -46,6 +46,13 @@ export interface GoalData {
   // a "đang chờ gộp" chip (with unhold) and preselected in the anchor's merge sheet.
   // transactionId is the held WITHDRAWAL row. Optional for cached payloads.
   heldForMerge?: Array<{ transactionId: string; amount: number; anchorInvId: string | null; name: string | null }>
+  // The completion snapshot (#650). Set once the goal has been finished, and
+  // frozen from then on: a completed goal reads "Completed · 100%" from these
+  // three, never from its (now zero) live balance. Optional for back-compat with
+  // cached overview payloads predating the field.
+  completedAt?: string | null
+  completionValue?: number | null
+  completionPercentage?: number | null
 }
 
 export interface InsuranceData {

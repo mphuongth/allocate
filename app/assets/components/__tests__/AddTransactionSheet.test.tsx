@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import AddTransactionSheet from '../AddTransactionSheet'
 
 let mockLocale = 'en'
@@ -573,5 +573,53 @@ describe('AddTransactionSheet — asset type / direction matrix', () => {
     render(<AddTransactionSheet open onClose={onClose} />)
     fireEvent.click(screen.getByRole('button', { name: 'cancel' }))
     expect(onClose).toHaveBeenCalled()
+  })
+})
+
+// /api/v1/savings-goals now returns only ACTIVE goals unless asked otherwise
+// (#650). This sheet is the edit form for every bank / gold / fund holding, so a
+// holding filed under a finished goal arrived with a goal_id that had no option
+// to match: the select showed "No goal" while the form still held — and would
+// re-send — the finished goal's id. It must ask for the archived goals too, show
+// the one this holding belongs to, and keep it unpickable as a destination.
+describe('AddTransactionSheet — a holding filed under a finished goal', () => {
+  const goals = [
+    { goal_id: 'g-active', goal_name: 'Emergency', completed_at: null },
+    { goal_id: 'g-done', goal_name: 'House', completed_at: '2026-08-01T00:00:00Z' },
+    { goal_id: 'g-other-done', goal_name: 'Car', completed_at: '2026-07-01T00:00:00Z' },
+  ]
+  const existing = {
+    transaction_id: 't1', asset_type: 'bank', investment_date: '2026-06-01',
+    amount_vnd: 10_000_000, unit_price: null, units: null, interest_rate: 5,
+    expiry_date: null, notes: null, fund_id: null, goal_id: 'g-done',
+  }
+
+  // The active-only answer is what the server really gives an unqualified GET,
+  // so a sheet that forgets ?status=all fails here rather than passing on a mock.
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn((url: string) => {
+      if (typeof url === 'string' && url.includes('savings-goals')) {
+        const all = url.includes('status=all')
+        return Promise.resolve({ json: () => Promise.resolve({ goals: all ? goals : goals.filter((g) => !g.completed_at) }) })
+      }
+      return Promise.resolve({ json: () => Promise.resolve([]) })
+    }))
+  })
+
+  it('shows the finished goal the holding belongs to, locked', async () => {
+    render(<AddTransactionSheet open onClose={vi.fn()} existing={existing} />)
+
+    const select = await screen.findByTestId('addtx-goal-select')
+    await waitFor(() => expect(within(select).getByRole('option', { name: 'House' })).toBeInTheDocument())
+    expect((select as HTMLSelectElement).value).toBe('g-done')
+    expect(within(select).getByRole('option', { name: 'House' })).toBeDisabled()
+  })
+
+  it('leaves every other finished goal out of the picker', async () => {
+    render(<AddTransactionSheet open onClose={vi.fn()} existing={existing} />)
+
+    const select = await screen.findByTestId('addtx-goal-select')
+    await waitFor(() => expect(within(select).getByRole('option', { name: 'Emergency' })).toBeEnabled())
+    expect(within(select).queryByRole('option', { name: 'Car' })).toBeNull()
   })
 })

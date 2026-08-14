@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validateText, validateUUID, validateYearMonth } from '@/lib/validation'
 import { validateLinkedDeposit } from '../linkValidation'
-import { ownershipError } from '@/lib/assertOwned'
+import { archivedGoalError, ownershipError } from '@/lib/assertOwned'
 import { readJsonBody } from '@/lib/apiBody'
 
 function toDateCol(ym: string | undefined | null): string | null {
@@ -67,6 +67,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   if (updates.goal_id) {
     const ownErr = await ownershipError(supabase, 'savings_goals', 'goal_id', updates.goal_id as string, user.id, 'goal')
     if (ownErr) return ownErr
+    const doneErr = await archivedGoalError(supabase, updates.goal_id as string, user.id)
+    if (doneErr) return doneErr
   }
 
   // Keep the deposit link consistent with the (possibly changed) goal. Only

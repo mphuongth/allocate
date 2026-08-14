@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateUUID } from '@/lib/validation'
 import { readJsonBody } from '@/lib/apiBody'
+import { archivedGoalError } from '@/lib/assertOwned'
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -34,6 +35,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       .eq('user_id', user.id)
       .single()
     if (!goal) return NextResponse.json({ error: "You don't have permission to access this goal." }, { status: 403 })
+    // A finished goal is an archive — nothing new is assigned into one (#650).
+    const doneErr = await archivedGoalError(supabase, cleanGoalId, user.id)
+    if (doneErr) return doneErr
   }
 
   // An accumulating book shares one goal across all tranches. Assigning a book

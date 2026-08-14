@@ -39,6 +39,17 @@ export async function updateGoal(
   }
 }
 
+// Reopen an archived goal (#650). Correcting the archive only — the liquidation
+// withdrawals stay, because the money really did leave.
+export async function reopenGoal(goalId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/v1/savings-goals/${goalId}/reopen`, { method: 'POST' })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
 export async function deleteGoal(goalId: string): Promise<boolean> {
   try {
     const res = await fetch(`/api/v1/savings-goals/${goalId}`, { method: 'DELETE' })

@@ -83,8 +83,14 @@ export async function GET(request: NextRequest) {
         .from('plan_insurance_member_overrides')
         .select('member_id, monthly_amount_override_vnd').eq('plan_id', plan.id),
       supabase
+        // Destinations for next month's savings, so a finished goal is not one:
+        // it is an archive, and planning money into it would reopen a settled
+        // result (#650). Rows already pointing at one still render their name
+        // from their own `savings_goals(goal_name)` embed.
         .from('savings_goals')
-        .select('goal_id, goal_name').eq('user_id', user.id).order('created_at', { ascending: false }),
+        .select('goal_id, goal_name').eq('user_id', user.id)
+        .is('completed_at', null)
+        .order('created_at', { ascending: false }),
       supabase
         .from('funds')
         .select('id, name, nav, is_dca, dca_monthly_amount_vnd, dca_goal_id').eq('user_id', user.id).order('name', { ascending: true }),

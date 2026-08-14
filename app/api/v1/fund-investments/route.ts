@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validateDate, validateUUID } from '@/lib/validation'
 import { readJsonBody } from '@/lib/apiBody'
+import { completedGoalError } from '@/lib/assertOwned'
 import { todayIso } from '@/lib/dates'
 
 export async function GET(request: NextRequest) {
@@ -125,6 +126,10 @@ export async function POST(request: NextRequest) {
     .select('transaction_id, fund_id, goal_id, amount_vnd, units, unit_price, investment_date, created_at, funds(id, name, nav), savings_goals(goal_name)')
     .single()
 
+  // A finished goal takes no new money (#650). The database refuses it; say so
+  // rather than reporting a valid request as a server fault.
+  const doneErr = completedGoalError(error)
+  if (doneErr) return doneErr
   if (error) return NextResponse.json({ error: 'Failed to create investment' }, { status: 500 })
 
   const mapped = {
