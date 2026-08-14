@@ -39,6 +39,11 @@ export interface RecurringSaving {
   // taking the monthly contribution; a plain term deposit never was, so the two
   // losses cannot be described by the same sentence.
   unlinked_from_book?: boolean | null
+  // Why the link went: 'deleted' (#655) or 'closed' (#650). A deposit that was
+  // fully withdrawn is still on the ledger, so the plan must not call it deleted.
+  // Absent on rows stamped before the column existed — all of which were
+  // deletions, the only thing that wrote a stamp then.
+  unlinked_reason?: string | null
   savings_goals?: { goal_name: string } | null
 }
 
@@ -63,7 +68,8 @@ export interface ResolvedSaving {
   linkLost: boolean
   // …and it was a book taking the contribution, not a term deposit the link
   // merely identified. Decides which consequence the warning may claim.
-  linkLostFromBook: boolean
+  linkLostFromBook: boolean | undefined
+  linkLostReason: 'deleted' | 'closed'
 }
 
 // Was the link already gone by the month being viewed? The plan pages back
@@ -103,7 +109,11 @@ export function resolveRecurringSavings(
       overridden: hasOv && ov! > 0 && ov !== s.amount_vnd,
       linkedDepositTxId: s.linked_deposit_tx_id ?? null,
       linkLost: s.linked_deposit_tx_id == null && lostByMonth(s.unlinked_at, ym),
-      linkLostFromBook: s.unlinked_from_book === true,
+      // undefined, not false: the repair of a legacy closed book cannot recover
+      // whether the target was a book (the group was cleared before it ran), and
+      // "not a book" is a claim, not an absence of one.
+      linkLostFromBook: s.unlinked_from_book ?? undefined,
+      linkLostReason: s.unlinked_reason === 'closed' ? 'closed' : 'deleted',
     }
   })
 }
@@ -152,7 +162,11 @@ export interface GoalItem {
   // That book was deleted and this saving now feeds nothing in particular (#655).
   linkLost?: boolean
   // …and it was a book, so the contribution really has stopped going somewhere.
+  // Undefined when that cannot be known (see resolveRecurringSavings).
   linkLostFromBook?: boolean
+  // Deleted out from under the saving (#655), or closed by a full withdrawal
+  // (#650). Two different things to be told.
+  linkLostReason?: 'deleted' | 'closed'
 }
 
 export interface GoalRow {
@@ -279,6 +293,7 @@ export function buildByGoal(
       linkedDepositTxId: r.linkedDepositTxId,
       linkLost: r.linkLost,
       linkLostFromBook: r.linkLostFromBook,
+      linkLostReason: r.linkLostReason,
     })
   }
 

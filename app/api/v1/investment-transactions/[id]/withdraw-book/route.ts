@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validateDate, validateUUID } from '@/lib/validation'
 import { isFutureInvestmentDate } from '@/lib/dates'
 import { readJsonBody } from '@/lib/apiBody'
+import { contentionError } from '@/lib/contention'
 
 // Withdraw from an accumulating ("Loại 2") book. `id` is the book anchor
 // (= deposit_group_id). One atomic RPC spreads `withdraw_principal` across the live
@@ -70,6 +71,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         { status: 409 },
       )
     }
+    // A close locks the anchor and then each tranche; an ordinary withdrawal from
+    // one of those tranches holds it and then waits for the anchor (#650). Two at
+    // once can deadlock — nothing written, nothing wrong with the request.
+    const busy = contentionError(
+      error,
+      'This book was being changed at the same time. Nothing was withdrawn — try again.',
+      'book_busy',
+    )
+    if (busy) return busy
     console.error('withdraw_accumulating_book failed', error.message)
     return NextResponse.json({ error: 'Failed to withdraw book' }, { status: 500 })
   }

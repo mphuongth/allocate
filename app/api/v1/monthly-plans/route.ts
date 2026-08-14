@@ -99,7 +99,7 @@ export async function GET(request: NextRequest) {
         .select('id, description, amount_vnd, created_at').eq('plan_id', plan.id).order('created_at', { ascending: true }),
       supabase
         .from('recurring_savings')
-        .select('saving_id, name, goal_id, amount_vnd, effective_from, effective_to, linked_deposit_tx_id, unlinked_at, unlinked_from_book, savings_goals(goal_name)')
+        .select('saving_id, name, goal_id, amount_vnd, effective_from, effective_to, linked_deposit_tx_id, unlinked_at, unlinked_from_book, unlinked_reason, savings_goals(goal_name)')
         .eq('user_id', user.id)
         .or(`effective_from.is.null,effective_from.lte.${planDateForActive}`)
         .or(`effective_to.is.null,effective_to.gte.${planDateForActive}`),

@@ -32,13 +32,29 @@ export function LinkLostBadge({ item, isVI }: { item: GoalItem; isVI: boolean })
   // deposit just told the maturity-combine picker which saving belonged to it,
   // and that contribution was already recorded as a standalone deposit — so
   // saying it "now" is one tells that user about a change that never happened.
-  const detail = item.linkLostFromBook
-    ? (isVI
-      ? 'Sổ tích luỹ khoản này nạp vào đã bị xoá. Tiền hàng tháng giờ được ghi thành khoản gửi riêng — mở "Sửa kế hoạch định kỳ" để chọn sổ khác.'
-      : 'The accumulating book this saving fed was deleted. Monthly contributions now record a standalone deposit — use "Edit recurring plan" to point it at another book.')
-    : (isVI
-      ? 'Sổ tiết kiệm liên kết với khoản này đã bị xoá, nên khoản này giờ không còn gắn với sổ nào — mở "Sửa kế hoạch định kỳ" để chọn sổ khác.'
-      : 'The deposit this saving was linked to was deleted, so the saving is no longer linked to any deposit — use "Edit recurring plan" to point it at another.')
+  //
+  // Closed is not deleted (#650). A deposit that was withdrawn to nothing is
+  // still on the ledger and still in the history — sending its owner to look for
+  // something that "was deleted" is a wild goose chase, and reusing the deletion
+  // copy for it would do exactly that. The kind can also be unknown: the repair
+  // of a book closed before any of this existed cannot recover whether the
+  // target was a book, so it says the true half and stops.
+  const closed = item.linkLostReason === 'closed'
+  const detail = closed
+    ? (item.linkLostFromBook
+      ? (isVI
+        ? 'Sổ tích luỹ khoản này nạp vào đã tất toán. Tiền hàng tháng giờ được ghi thành khoản gửi riêng — mở "Sửa kế hoạch định kỳ" để chọn sổ khác.'
+        : 'The accumulating book this saving fed has been closed. Monthly contributions now record a standalone deposit — use "Edit recurring plan" to point it at another book.')
+      : (isVI
+        ? 'Sổ tiết kiệm liên kết với khoản này đã tất toán, nên khoản này giờ không còn gắn với sổ nào — mở "Sửa kế hoạch định kỳ" để chọn sổ khác.'
+        : 'The deposit this saving was linked to has been closed, so the saving is no longer linked to any deposit — use "Edit recurring plan" to point it at another.'))
+    : (item.linkLostFromBook
+      ? (isVI
+        ? 'Sổ tích luỹ khoản này nạp vào đã bị xoá. Tiền hàng tháng giờ được ghi thành khoản gửi riêng — mở "Sửa kế hoạch định kỳ" để chọn sổ khác.'
+        : 'The accumulating book this saving fed was deleted. Monthly contributions now record a standalone deposit — use "Edit recurring plan" to point it at another book.')
+      : (isVI
+        ? 'Sổ tiết kiệm liên kết với khoản này đã bị xoá, nên khoản này giờ không còn gắn với sổ nào — mở "Sửa kế hoạch định kỳ" để chọn sổ khác.'
+        : 'The deposit this saving was linked to was deleted, so the saving is no longer linked to any deposit — use "Edit recurring plan" to point it at another.'))
 
   return (
     <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3, minWidth: 0 }}>
@@ -64,7 +80,9 @@ export function LinkLostBadge({ item, isVI }: { item: GoalItem; isVI: boolean })
         }}
       >
         <AlertTriangle size={9} strokeWidth={2.6} />
-        {isVI ? 'Sổ đã bị xoá' : 'Deposit deleted'}
+        {closed
+          ? (isVI ? 'Sổ đã tất toán' : 'Deposit closed')
+          : (isVI ? 'Sổ đã bị xoá' : 'Deposit deleted')}
       </button>
       {open && (
         <span

@@ -105,6 +105,24 @@ describe('resolveRecurringSavings', () => {
     const [term] = resolveRecurringSavings([saving({ unlinked_at: '2026-08-12T03:00:00Z', unlinked_from_book: false })], [])
     expect(term.linkLostFromBook).toBe(false)
   })
+
+  // A deposit that was fully withdrawn still exists; one that was deleted does
+  // not, and the plan says so in as many words (#650). Rows stamped before the
+  // reason column existed were all deletions, which is the only thing that wrote
+  // a stamp back then.
+  it('carries why the link went, defaulting to a deletion', () => {
+    const [closed] = resolveRecurringSavings([saving({ unlinked_at: '2026-08-12T03:00:00Z', unlinked_reason: 'closed' })], [])
+    expect(closed.linkLostReason).toBe('closed')
+    const [legacy] = resolveRecurringSavings([saving({ unlinked_at: '2026-08-12T03:00:00Z' })], [])
+    expect(legacy.linkLostReason).toBe('deleted')
+  })
+
+  // Unknown is not false: the repair of a legacy closed book cannot recover
+  // whether the target was a book, and null must not read as "term deposit".
+  it('leaves an unknown link kind undefined rather than false', () => {
+    const [unknown] = resolveRecurringSavings([saving({ unlinked_at: '2026-08-12T03:00:00Z', unlinked_from_book: null })], [])
+    expect(unknown.linkLostFromBook).toBeUndefined()
+  })
 })
 
 describe('recurringSavingsTotal', () => {
