@@ -396,27 +396,43 @@ events as (
 --
 -- That order is what the replay REPORTS against. It is not what it proves from —
 -- see the ordering search below, which assumes no order at all.
+-- A debit the invariant would have refused OUTRIGHT contributes NOTHING here: not
+-- a verdict, and not a delta either. The row could not have been written, so no
+-- legal history of this holding contains it, and the balances its neighbours have
+-- to answer for are the ones the holding would show without it.
+--
+-- Leaving the delta in was wrong in both directions. It invented balances that
+-- convicted innocent rows — a 40,000,000 / 4 unit gold holding with a no-principal
+-- 1-unit claim replayed the perfectly ordinary 1-unit / 10,000,000 sale after it
+-- against 40,000,000 / 3. And because these deltas are SIGNED, it also hid real
+-- ones: a 100 đồng holding with a -100 withdrawal and then a 150 withdrawal
+-- replayed the 150 against 200 and said nothing, while the screen's aggregate came
+-- to 50 and said nothing either. That overdraw was reported by no view at all,
+-- which is the exact silence this family exists to break.
+--
+-- The key is still marked, because the row is still there and an operator reading
+-- a finding on this holding needs to know a broken row sits beside it — see the
+-- sentence appended in the detail below.
 state as (
   select e.*,
-         coalesce(sum(e.d_basis) over w_prev, 0) as rem_basis,
-         coalesce(sum(e.d_units) over w_prev, 0) as rem_units,
+         coalesce(sum(case when e.is_debit and not e.shape_ok then 0 else e.d_basis end)
+                  over w_prev, 0) as rem_basis,
+         coalesce(sum(case when e.is_debit and not e.shape_ok then 0 else e.d_units end)
+                  over w_prev, 0) as rem_units,
          bool_or(e.touched)      over w_key      as key_touched,
          count(*) filter (where e.is_debit) over w_key as claims_on_key,
          -- Where this claim sits in the holding's history, which is the number an
          -- operator needs to find it in the ledger. Counted over the claims alone,
-         -- so an interleaved fund purchase does not shift it.
+         -- so an interleaved fund purchase does not shift it — and over ALL of
+         -- them, including the refused ones, because the operator is counting rows
+         -- in a ledger, not events in this view's model of it.
          count(*) filter (where e.is_debit) over w_upto as claim_ordinal,
          -- The events that have to be permuted to decide the key: everything but
-         -- the source, which opens the balance rather than happening in it.
-         count(*) filter (where e.ord_at > '-infinity') over w_key as movable,
-         -- A debit the invariant would have refused OUTRIGHT is not judged (the
-         -- screen owns it), but its deltas are still in the running balance and in
-         -- the search's states — so every other row on the key is measured against
-         -- a balance that could never have existed. A 40,000,000 / 4 unit gold
-         -- holding with a no-principal 1-unit claim in it replays the perfectly
-         -- ordinary 1-unit / 10,000,000 sale after it against 40,000,000 / 3, and
-         -- calls the innocent sale wrong. The key is therefore quarantined: its
-         -- findings stay, and they stop claiming to be proof.
+         -- the source, which opens the balance rather than happening in it, and
+         -- everything the invariant would have refused, which is not part of any
+         -- history there is to order.
+         count(*) filter (where e.ord_at > '-infinity'
+                            and not (e.is_debit and not e.shape_ok)) over w_key as movable,
          bool_or(e.is_debit and not e.shape_ok) over w_key as key_contaminated
     from events e
   window
@@ -507,6 +523,10 @@ movable as (
                              order by s.ord_at, s.ord_kind, s.ord_id) - 1)::int as idx
     from state s
    where s.ord_at > '-infinity'
+     -- Out of the search for the same reason it is out of the running balance:
+     -- a row the invariant would have refused is not part of any history there is
+     -- to order, so it neither takes a position nor carries a delta into one.
+     and not (s.is_debit and not s.shape_ok)
      and exists (select 1 from fails f
                   where f.user_id = s.user_id and f.balance_key = s.balance_key)
 ),
@@ -620,14 +640,14 @@ select distinct on (f.user_id, f.balance_key)
        -- Provable only where the replay's premise holds: nothing on this key was
        -- touched after it was written, so these rows ARE what was measured; the key
        -- was small enough to search; and THIS ROW had no legal position in it.
-       -- Contamination is deliberately NOT a severity clause here, though it looks
-       -- like one. A shape-invalid row is unjudged and therefore freely placeable,
-       -- so every subset WITHOUT it is reachable — and those are exactly the states
-       -- of the ledger as it would stand once that row is gone. A judged row that
-       -- survives none of them fails in the clean ledger too, so it is genuinely
-       -- proven, and downgrading it because something else on the holding is broken
-       -- would throw away a true proof. What contamination earns is the sentence in
-       -- the detail, not a change of verdict.
+       -- Contamination is deliberately NOT a clause here, though it looks like one.
+       -- A row the invariant would have refused is out of the balances and out of
+       -- the search entirely, so what remains on the key IS the legal ledger and a
+       -- finding against it is as sound as any other. Downgrading it because
+       -- something else on the holding is broken would throw away a true proof —
+       -- and it was a real one: the 150 đồng overdraw hiding behind a -100 đồng row
+       -- is only reported because this stays 'violation'. What contamination earns
+       -- is the sentence in the detail, not a change of verdict.
        case when f.key_touched
               or f.movable > 14
               or exists (select 1 from row_rescued x
@@ -675,12 +695,11 @@ select distinct on (f.user_id, f.balance_key)
                                and x.row_id = f.row_id)
                  then '. No ordering of this holding''s claims is legal, so at least one of them is wrong — but this row is not provably the one, since it would have been accepted had it been written earlier'
                else '' end
-       -- Why a contaminated key's findings are only ever 'review', said where the
-       -- operator meets them: the balance below such a row is not one the invariant
-       -- would have allowed, so nothing measured against it can be trusted, and the
-       -- row to fix is the one the screen already names.
+       -- Said where the operator meets it, because the balances above will not
+       -- reconcile against the rows they can see otherwise: one of those rows is
+       -- deliberately not in them.
        || case when f.key_contaminated
-                 then '. This holding also carries a row check_withdrawal_balance would have refused outright — withdrawal_ledger_audit names it — so the balances here are not ones the invariant ever allowed, and this finding may belong to that row rather than to this one'
+                 then '. This holding also carries a row check_withdrawal_balance would have refused outright — withdrawal_ledger_audit names it — and it is left out of the balances above, since no legal history of this holding contains it'
                else '' end as detail
   from fails f
  order by f.user_id, f.balance_key, f.ord_at, f.ord_kind, f.ord_id;

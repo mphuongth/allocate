@@ -62,6 +62,7 @@ declare
   v_neg        uuid; v_neg_w    uuid; v_negf uuid; v_negf_buy uuid; v_negf_sell uuid;
   v_pfund      uuid; v_pf_p2    uuid; v_pf_sell uuid;
   v_dirt       uuid; v_dirt_bad uuid; v_dirt_ok uuid;
+  v_mask       uuid; v_mask_neg uuid; v_mask_over uuid;
   v_other      uuid; v_other_g  uuid; v_foreign uuid; v_foreign_w uuid;
   v_pair       uuid; v_pair_a   uuid; v_pair_b  uuid;
   v_xfund      uuid; v_x_mine   uuid; v_x_theirs uuid; v_x_claim uuid; v_x_sell uuid;
@@ -493,6 +494,31 @@ begin
           '2026-03-01T00:00:00Z', '2026-03-01T00:00:00Z')
   returning transaction_id into v_dirt_ok;
 
+  -- ── a refused row that HIDES one, which is the other direction ─────────────
+  -- The deltas of a refused row are signed, so leaving them in does not merely
+  -- convict the innocent — it acquits the guilty. 100 đồng, a -100 withdrawal,
+  -- then a 150 withdrawal: the 150 replayed against 200 and produced nothing,
+  -- while the screen's aggregate came to 50 and produced nothing either. An
+  -- overdraw reported by no view at all is the exact silence this family exists
+  -- to break, so this fixture is the one that decides the design: the refused row
+  -- leaves the balance entirely, rather than merely losing its verdict.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, created_at, updated_at)
+  values (v_user, v_goal, 'bank', 'investment', '2026-01-01', 100, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+  returning transaction_id into v_mask;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 1, v_mask, -100,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
+  returning transaction_id into v_mask_neg;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'bank', 'withdrawal', '2026-03-01', 150, v_mask, 150,
+          '2026-03-01T00:00:00Z', '2026-03-01T00:00:00Z')
+  returning transaction_id into v_mask_over;
+
   -- ── the one order the ledger DOES record ───────────────────────────────────
   -- A claim parented to a purchase cannot have been written before that purchase
   -- existed — the foreign key would have refused it. That is a fact about the
@@ -809,22 +835,34 @@ begin
       coalesce(v_found, '(silence)');
   end if;
 
-  -- a key contaminated by a shape-invalid row: the innocent sale beside it is
-  -- still reported, never proven, and the sentence names where to look
-  select r.check_name || '/' || r.severity into v_found
-    from public.withdrawal_ledger_replay r where r.transaction_id = v_dirt_ok;
-  if v_found is distinct from 'sale_took_the_wrong_basis/review' then
-    raise exception 'a row measured against a balance the invariant never allowed must not be proof, got %',
-      coalesce(v_found, '(silence)');
-  end if;
-  select r.detail into v_found
-    from public.withdrawal_ledger_replay r where r.transaction_id = v_dirt_ok;
-  if v_found not like '%would have refused outright%' then
-    raise exception 'the contaminated key has to say so where the operator meets it, got %', v_found;
+  -- a key carrying a shape-invalid row: the innocent sale beside it is SILENT.
+  -- The refused row is out of the balances, so the sale is measured against the
+  -- 40,000,000 / 4 units the holding legally shows and owes exactly what it took.
+  if exists (select 1 from public.withdrawal_ledger_replay r where r.transaction_id = v_dirt_ok) then
+    select r.check_name || ': ' || r.detail into v_found
+      from public.withdrawal_ledger_replay r where r.transaction_id = v_dirt_ok;
+    raise exception 'a refused row is in no legal history, so the sale beside it owes the clean balance and is not a finding: %', v_found;
   end if;
   if not exists (select 1 from public.withdrawal_ledger_audit a
                   where a.transaction_id = v_dirt_bad and a.severity = 'violation') then
-    raise exception 'the sentence points at the screening view for the real row — it has to be there';
+    raise exception 'the screening view owns the refused row — without it this holding goes unreported by both';
+  end if;
+
+  -- and the mirror of it, which is why the deltas had to go rather than just the
+  -- verdict: a NEGATIVE refused row credits the balance and hides a real overdraw.
+  -- 100 đồng, a -100 withdrawal, then a 150 withdrawal. Left in, the 150 replayed
+  -- against 200 and said nothing, while the screen's aggregate came to 50 and said
+  -- nothing either — an overdraw reported by no view at all.
+  select r.check_name || '/' || r.severity into v_found
+    from public.withdrawal_ledger_replay r where r.transaction_id = v_mask_over;
+  if v_found is distinct from 'withdrawal_exceeded_the_balance/violation' then
+    raise exception 'a real overdraw must not be masked by a row the invariant would have refused, got %',
+      coalesce(v_found, '(silence)');
+  end if;
+  select r.detail into v_found
+    from public.withdrawal_ledger_replay r where r.transaction_id = v_mask_over;
+  if v_found not like '%100 đồng left%' or v_found not like '%left out of the balances%' then
+    raise exception 'the balance is the one the holding legally shows, and the omission has to be stated, got %', v_found;
   end if;
 
   -- the claim-to-purchase dependency: the sale is proven, because the only reading
