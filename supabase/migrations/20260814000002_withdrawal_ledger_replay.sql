@@ -75,6 +75,13 @@
 -- the order they arrived in. A key with a legal reading is 'review' however
 -- damning the created_at order looks, and the finding is reported either way.
 --
+-- One ordering fact IS honoured, because the ledger genuinely records it: a claim
+-- parented to a purchase cannot have been written before that purchase existed —
+-- the foreign key would have refused it. That is a fact about the schema, not a
+-- guess about clocks, and without it the search invents histories in which a
+-- bucket's claim precedes its own source. It is the difference between 'review'
+-- and 'violation' on a real shape; see the fixture in the test suite.
+--
 -- The price is real and worth stating plainly: a fund bucket whose purchases could
 -- be reordered ahead of its sells is rarely provable, because "all the purchases
 -- first" is usually a legal reading. Those report 'review'. What stays provable is
@@ -171,7 +178,8 @@ events as (
          coalesce(p.units, 0)::numeric         as d_units,
          null::numeric                         as took_principal,
          null::numeric                         as took_units,
-         (p.updated_at > p.created_at)         as touched
+         (p.updated_at > p.created_at)         as touched,
+         null::uuid                            as depends_on
     from public.investment_transactions p
    where p.transaction_type = 'investment'
      and exists (select 1 from wd w
@@ -183,7 +191,7 @@ events as (
          w.created_at, 1, w.transaction_id, true, true, w.transaction_id,
          -coalesce(w.principal_withdrawn, 0), -coalesce(w.units_withdrawn, 0),
          coalesce(w.principal_withdrawn, 0), coalesce(w.units_withdrawn, 0),
-         (w.updated_at > w.created_at)
+         (w.updated_at > w.created_at), null::uuid
     from wd w
     join public.investment_transactions pa on pa.transaction_id = w.parent_transaction_id
    where not w.fund_keyed
@@ -215,7 +223,13 @@ events as (
          -case when coalesce(w.units_withdrawn, 0) > 0 then w.units_withdrawn
                else least(p.units, p.units * coalesce(w.principal_withdrawn, 0) / p.amount_vnd) end,
          null, null,
-         (w.updated_at > w.created_at)
+         (w.updated_at > w.created_at),
+         -- The one order the ledger DOES record. A claim parented to a purchase
+         -- cannot have been written before that purchase existed: the foreign key
+         -- would have refused it, and the invariant finds the claim by joining to
+         -- it. Unlike created_at, that is a fact about the schema rather than a
+         -- guess about clocks, so the search must honour it.
+         p.transaction_id
     from wd w
     join public.investment_transactions p on p.transaction_id = w.parent_transaction_id
    where not w.fund_keyed
@@ -235,7 +249,7 @@ events as (
          null, t.fund_id, t.goal_id, true,
          t.created_at, 0, t.transaction_id, false, false, t.transaction_id,
          coalesce(t.amount_vnd, 0), coalesce(t.units, 0), null, null,
-         (t.updated_at > t.created_at)
+         (t.updated_at > t.created_at), null::uuid
     from public.investment_transactions t
    where t.transaction_type = 'investment'
      and t.asset_type = 'fund'
@@ -250,7 +264,7 @@ events as (
          w.created_at, 1, w.transaction_id, true, true, w.transaction_id,
          -coalesce(w.principal_withdrawn, 0), -coalesce(w.units_withdrawn, 0),
          coalesce(w.principal_withdrawn, 0), coalesce(w.units_withdrawn, 0),
-         (w.updated_at > w.created_at)
+         (w.updated_at > w.created_at), null::uuid
     from wd w
    where w.fund_keyed
 ),
@@ -360,14 +374,27 @@ fails as (
 -- and only keys that already produced a finding are searched at all — a clean
 -- ledger does no work here.
 movable as (
-  select s.user_id, s.balance_key, s.is_debit, s.judge_here, s.quantity_valued,
-         s.d_basis, s.d_units, s.took_principal, s.took_units,
+  select s.user_id, s.balance_key, s.row_id, s.is_debit, s.judge_here, s.quantity_valued,
+         s.d_basis, s.d_units, s.took_principal, s.took_units, s.depends_on,
          (row_number() over (partition by s.user_id, s.balance_key
                              order by s.ord_at, s.ord_kind, s.ord_id) - 1)::int as idx
     from state s
    where s.ord_at > '-infinity'
      and exists (select 1 from fails f
                   where f.user_id = s.user_id and f.balance_key = s.balance_key)
+),
+-- The claim-to-purchase dependency, resolved to the bit that purchase occupies.
+-- Null when the purchase is not an event on this key at all — a renewal snapshot,
+-- say, which the invariant still counts the claim against but which is no part of
+-- the bucket — and the claim is then unconstrained, which is the cautious way to
+-- be wrong.
+movable_dep as (
+  select m.*, buy.idx as dep_idx
+    from movable m
+    left join movable buy
+      on buy.user_id = m.user_id
+     and buy.balance_key = m.balance_key
+     and buy.row_id = m.depends_on
 ),
 opening as (
   select s.user_id, s.balance_key,
@@ -390,9 +417,13 @@ reach as (
   select r.user_id, r.balance_key, r.mask | (1::bigint << m.idx),
          r.rem_basis + m.d_basis, r.rem_units + m.d_units
     from reach r
-    join movable m
+    join movable_dep m
       on m.user_id = r.user_id and m.balance_key = r.balance_key
      and (r.mask >> m.idx) & 1 = 0
+     -- The purchase a claim names has to have happened already. This is the ONE
+     -- ordering fact the ledger actually records: the foreign key would have
+     -- refused the claim otherwise.
+     and (m.dep_idx is null or (r.mask >> m.dep_idx) & 1 = 1)
    where not m.is_debit
       -- A purchase claims nothing, and a claim the invariant does not measure here
       -- (a bucket's parent-backed claim) is only counted, never judged — so both

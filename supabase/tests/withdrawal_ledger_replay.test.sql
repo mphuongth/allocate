@@ -57,6 +57,7 @@ declare
   v_tie        uuid; v_tie_a    uuid; v_tie_b       uuid;
   v_inst       uuid; v_inst_a   uuid; v_inst_b      uuid;
   v_big        uuid;
+  v_fund_dep   uuid; v_dep_buy  uuid; v_dep_sell    uuid;
   i            int;
   v_found      text;
   v_count      int;
@@ -70,6 +71,8 @@ begin
   values (v_user, 'Clean Fund', 'RCLN', 'equity', 20000) returning id into v_fund_ok;
   insert into public.funds (user_id, name, code, fund_type, nav)
   values (v_user, 'Late Fund', 'RLAT', 'equity', 20000) returning id into v_fund_late;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Dep Fund', 'RDEP', 'equity', 20000) returning id into v_fund_dep;
 
   -- ═══ the clean half, written with the invariant WATCHING ═══════════════════
   -- Each write below passed check_withdrawal_balance against the balance the
@@ -278,6 +281,42 @@ begin
           '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
   returning transaction_id into v_inst_b;
 
+  -- ── the one order the ledger DOES record ───────────────────────────────────
+  -- A claim parented to a purchase cannot have been written before that purchase
+  -- existed — the foreign key would have refused it. That is a fact about the
+  -- schema rather than a guess about clocks, and it is the only ordering fact this
+  -- view is entitled to use.
+  --
+  -- This ledger turns on it. Purchases of 1000/100 and 1000/10, a 500/5 claim on
+  -- the SECOND, and a sale of 50 units taking 263. Every reading that puts the
+  -- claimed purchase before its claim refuses the sale — the balances it could
+  -- have met are 1000/100 (owes 500), 2000/110 (owes 909), 1500/105 (owes 714),
+  -- 500/5 and 1000/10 (both short of 50 units). Exactly one subset makes 263
+  -- correct: 1000/100 with the claim already taken and its own purchase still to
+  -- come, which is the one history that could not have happened. Without the
+  -- dependency the search finds that reading and downgrades a provably impossible
+  -- ledger to 'review'.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'investment', '2026-01-01', 1000, 100, 10, v_fund_dep,
+          '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'investment', '2026-02-01', 1000, 10, 100, v_fund_dep,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
+  returning transaction_id into v_dep_buy;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'bank', 'withdrawal', '2026-03-01', 500, v_dep_buy, 500, 5,
+          '2026-03-01T00:00:00Z', '2026-03-01T00:00:00Z');
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, fund_id,
+     principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'withdrawal', '2026-04-01', 263, v_fund_dep, 263, 50,
+          '2026-04-01T00:00:00Z', '2026-04-01T00:00:00Z')
+  returning transaction_id into v_dep_sell;
+
   -- ── past the search's reach ────────────────────────────────────────────────
   -- The ordering search is capped at 14 movable events per key, and the cap is a
   -- resource bound rather than a tolerance — beyond it the answer is unknown, not
@@ -473,6 +512,15 @@ begin
       coalesce(v_found, '(silence)');
   end if;
 
+  -- the claim-to-purchase dependency: the sale is proven, because the only reading
+  -- that excuses it puts a claim before the purchase it names
+  select r.check_name || '/' || r.severity into v_found
+    from public.withdrawal_ledger_replay r where r.transaction_id = v_dep_sell;
+  if v_found is distinct from 'sale_took_the_wrong_basis/violation' then
+    raise exception 'a ledger whose only legal reading predates a claim''s own purchase should stay proven, got %',
+      coalesce(v_found, '(silence)');
+  end if;
+
   -- past the search's reach: reported, and honest that it is not proof
   select r.severity into v_found
     from public.withdrawal_ledger_replay r where r.parent_transaction_id = v_big;
@@ -486,10 +534,10 @@ begin
   -- tie-break, and it is the only fixture here that may do either.
   select count(*) into v_count from public.withdrawal_ledger_replay r
    where r.user_id = v_user and r.parent_transaction_id is distinct from v_tie;
-  if v_count <> 7 then
+  if v_count <> 8 then
     select string_agg(format('%s/%s: %s', r.check_name, r.severity, r.detail), E'\n')
       into v_found from public.withdrawal_ledger_replay r where r.user_id = v_user;
-    raise exception 'expected exactly the 7 planted sequences, got %:%s%s', v_count, E'\n', v_found;
+    raise exception 'expected exactly the 8 planted sequences, got %:%s%s', v_count, E'\n', v_found;
   end if;
 
   raise notice 'withdrawal_ledger_replay: ok';
