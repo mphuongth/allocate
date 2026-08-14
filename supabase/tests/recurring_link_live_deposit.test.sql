@@ -268,4 +268,99 @@ begin
   raise notice 'recurring_link_live_deposit repair: all assertions passed';
 end $$;
 
+-- ─── A fund sale is not a withdrawal from the deposit it names ───────────────
+--
+-- A withdrawal keyed by a fund draws on that (goal, fund) bucket; the parent it
+-- names is ignored, which is the precedence check_withdrawal_balance applies
+-- (#606). The POST route accepts the shape and older rows carry it. Charged to
+-- the deposit instead, a big enough sale makes a live deposit read as closed —
+-- and then the unlinker cuts a good link and the guard refuses a good one.
+do $$
+declare
+  v_user uuid := gen_random_uuid();
+  v_goal uuid;
+  v_fund uuid;
+  v_dep uuid := gen_random_uuid();
+  v_saving uuid := gen_random_uuid();
+  v_link uuid;
+  v_left bigint;
+begin
+  insert into auth.users (id, email) values (v_user, 'recurring-link-fundkey@test.invalid');
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Quỹ và sổ') returning goal_id into v_goal;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+    values (v_user, 'Quỹ', 'LNK', 'equity', 50000) returning id into v_fund;
+
+  insert into public.investment_transactions (
+    user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, fund_id, units, unit_price
+  ) values (v_user, v_goal, 'fund', 'investment', current_date - 30, 5000000, v_fund, 100, 50000);
+
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate
+  ) values (v_dep, v_user, v_goal, 'bank', 'investment', current_date - 30, current_date + 300, 4000000, 5);
+
+  insert into public.recurring_savings (saving_id, user_id, goal_id, name, amount_vnd, linked_deposit_tx_id)
+    values (v_saving, v_user, v_goal, 'Gộp khi đáo hạn', 1000000, v_dep);
+
+  -- A fund sale larger than the deposit, naming the deposit as its parent.
+  insert into public.investment_transactions (
+    user_id, goal_id, asset_type, transaction_type, investment_date,
+    amount_vnd, fund_id, units_withdrawn, principal_withdrawn, parent_transaction_id
+  ) values (v_user, v_goal, 'fund', 'withdrawal', current_date, 5100000, v_fund, 100, 5000000, v_dep);
+
+  v_left := public.deposit_link_fundable_principal(v_dep);
+  if v_left <> 4000000 then
+    raise exception 'a fund sale must not be charged to the deposit it names: read %', v_left;
+  end if;
+
+  select linked_deposit_tx_id into v_link from public.recurring_savings where saving_id = v_saving;
+  if v_link is null then raise exception 'a fund sale must not unlink a live deposit'; end if;
+
+  raise notice 'recurring_link_live_deposit fund key: all assertions passed';
+end $$;
+
+-- ─── Closing a deposit without writing a withdrawal ──────────────────────────
+--
+-- amount_vnd can be edited down to exactly what has already been withdrawn — the
+-- balance invariant permits equality — and nothing about the withdrawal changes,
+-- so a trigger watching only withdrawals never fires while the deposit is just
+-- as closed.
+do $$
+declare
+  v_user uuid := gen_random_uuid();
+  v_goal uuid;
+  v_dep uuid := gen_random_uuid();
+  v_saving uuid := gen_random_uuid();
+  v_link uuid;
+  v_mark timestamptz;
+begin
+  insert into auth.users (id, email) values (v_user, 'recurring-link-shrink@test.invalid');
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Sửa gốc') returning goal_id into v_goal;
+
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate
+  ) values (v_dep, v_user, v_goal, 'bank', 'investment', current_date - 30, current_date + 300, 4000000, 5);
+  insert into public.recurring_savings (saving_id, user_id, goal_id, name, amount_vnd, linked_deposit_tx_id)
+    values (v_saving, v_user, v_goal, 'Gộp khi đáo hạn', 1000000, v_dep);
+
+  insert into public.investment_transactions (
+    user_id, goal_id, asset_type, transaction_type, parent_transaction_id,
+    investment_date, amount_vnd, principal_withdrawn
+  ) values (v_user, v_goal, 'bank', 'withdrawal', v_dep, current_date, 3050000, 3000000);
+
+  select linked_deposit_tx_id into v_link from public.recurring_savings where saving_id = v_saving;
+  if v_link is null then raise exception 'a partial withdrawal must not unlink the saving'; end if;
+
+  -- The deposit was never 4,000,000 — correct it down to what is left over.
+  update public.investment_transactions set amount_vnd = 3000000 where transaction_id = v_dep;
+
+  select linked_deposit_tx_id, unlinked_at into v_link, v_mark
+    from public.recurring_savings where saving_id = v_saving;
+  if v_link is not null then raise exception 'shrinking the deposit to nothing must clear the link'; end if;
+  if v_mark is null then raise exception 'shrinking the deposit to nothing must mark the saving'; end if;
+
+  raise notice 'recurring_link_live_deposit shrink: all assertions passed';
+end $$;
+
 rollback;

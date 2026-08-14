@@ -85,14 +85,20 @@ export async function validateLinkedDeposit(
   if (!ids.length) return null
   const { data: withdrawals, error: withdrawalError } = await supabase
     .from('investment_transactions')
-    .select('principal_withdrawn')
+    .select('principal_withdrawn, asset_type, fund_id')
     .eq('user_id', userId)
     .in('parent_transaction_id', ids)
     .eq('transaction_type', 'withdrawal')
   if (withdrawalError) return null
 
   const held = group.reduce((sum, t) => sum + (t.amount_vnd ?? 0), 0)
-  const withdrawn = (withdrawals ?? []).reduce((sum, w) => sum + (w.principal_withdrawn ?? 0), 0)
+  // A row keyed by a fund draws on that (goal, fund) bucket, not on the deposit
+  // it names as parent — the precedence check_withdrawal_balance applies (#606).
+  // Counted here, a fund sale big enough would report a live deposit as closed
+  // and refuse a link that the table would have accepted.
+  const withdrawn = (withdrawals ?? [])
+    .filter((w) => !(w.asset_type === 'fund' && w.fund_id != null))
+    .reduce((sum, w) => sum + (w.principal_withdrawn ?? 0), 0)
   if (held - withdrawn <= 0) {
     return 'That deposit has been closed — link a live deposit instead.'
   }

@@ -31,6 +31,13 @@
 -- A book is measured across its live tranches; anything else on its own row.
 -- Null when the deposit is gone — a deleted target is the delete trigger's
 -- business (#655), not this one's.
+--
+-- A withdrawal keyed by a fund draws on that (goal, fund) bucket and NOT on the
+-- deposit it happens to name as parent — the precedence check_withdrawal_balance
+-- applies (#606), for a shape the POST route accepts and old rows carry.
+-- Counting it here charged a fund sale to a bank deposit: a big enough sale made
+-- a live deposit read as closed, which would have had the trigger below cut a
+-- perfectly good link and the API refuse a perfectly good one.
 create or replace function public.deposit_link_fundable_principal(p_tx_id uuid)
 returns bigint
 language sql
@@ -45,6 +52,7 @@ as $$
                  select sum(w.principal_withdrawn) from public.investment_transactions w
                   where w.parent_transaction_id = x.transaction_id
                     and w.transaction_type = 'withdrawal'
+                    and not coalesce(w.asset_type = 'fund' and w.fund_id is not null, false)
                ), 0)
              ), 0)
         from public.investment_transactions x
@@ -55,6 +63,7 @@ as $$
       select sum(w.principal_withdrawn) from public.investment_transactions w
        where w.parent_transaction_id = t.transaction_id
          and w.transaction_type = 'withdrawal'
+         and not coalesce(w.asset_type = 'fund' and w.fund_id is not null, false)
     ), 0)
   end
     from public.investment_transactions t
@@ -166,13 +175,23 @@ security definer
 set search_path = ''
 as $$
 declare
+  -- The deposit whose balance may have just moved. A withdrawal moves the one it
+  -- names; an investment moves its own — amount_vnd can be edited down to exactly
+  -- what has been withdrawn (the balance invariant permits equality), which closes
+  -- the deposit without any withdrawal being written at all.
+  v_deposit uuid := case
+    when new.transaction_type = 'withdrawal' then new.parent_transaction_id
+    else new.transaction_id
+  end;
   v_group uuid;
 begin
-  -- The link names the book''s ANCHOR while the withdrawal names a tranche, so a
-  -- close reached through any tranche has to look at the whole group.
+  if v_deposit is null then return null; end if;
+
+  -- The link names the book''s ANCHOR while a withdrawal (or an edit) names a
+  -- tranche, so a close reached through any tranche has to look at the whole group.
   select t.deposit_group_id into v_group
     from public.investment_transactions t
-   where t.transaction_id = new.parent_transaction_id;
+   where t.transaction_id = v_deposit;
 
   update public.recurring_savings s
      set linked_deposit_tx_id = null,
@@ -185,7 +204,7 @@ begin
          updated_at = now()
    where s.user_id = new.user_id
      and (
-       s.linked_deposit_tx_id = new.parent_transaction_id
+       s.linked_deposit_tx_id = v_deposit
        or (v_group is not null and s.linked_deposit_tx_id in (
              select x.transaction_id from public.investment_transactions x
               where x.deposit_group_id = v_group))
@@ -202,15 +221,31 @@ comment on function public.clear_recurring_link_on_close() is
 
 revoke all on function public.clear_recurring_link_on_close() from public, anon, authenticated;
 
--- Also on UPDATE: raising principal_withdrawn on an existing withdrawal closes
--- the deposit just as surely as inserting one.
+-- Every accepted edit that can empty a deposit, not just the obvious one.
+-- Inserting a withdrawal is the common way in; raising principal_withdrawn on an
+-- existing one does the same; re-parenting a withdrawal empties whatever it now
+-- names; and moving a sale off its fund key (asset_type / fund_id) hands its
+-- principal back to the parent, which the balance above then charges there.
 drop trigger if exists investment_transactions_close_clears_link on public.investment_transactions;
 create trigger investment_transactions_close_clears_link
-  after insert or update of principal_withdrawn on public.investment_transactions
+  after insert or update of principal_withdrawn, parent_transaction_id, asset_type, fund_id
+  on public.investment_transactions
   for each row
   when (new.transaction_type = 'withdrawal'
         and new.parent_transaction_id is not null
         and not coalesce(new.held_for_merge, false))
+  execute function public.clear_recurring_link_on_close();
+
+-- ...and from the source''s own side. Editing a deposit down to exactly what has
+-- been withdrawn closes it with no withdrawal written at all — the balance
+-- invariant permits equality — and the trigger above would never see it.
+-- deposit_group_id too: leaving the group makes a tranche a deposit measured on
+-- its own, which may be nothing.
+drop trigger if exists investment_transactions_shrink_clears_link on public.investment_transactions;
+create trigger investment_transactions_shrink_clears_link
+  after update of amount_vnd, deposit_group_id on public.investment_transactions
+  for each row
+  when (new.transaction_type = 'investment')
   execute function public.clear_recurring_link_on_close();
 
 -- ─── ...and the links that are already wrong ─────────────────────────────────
