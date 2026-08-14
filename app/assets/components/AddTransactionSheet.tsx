@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { X, TrendingUp, Building2, Coins, ArrowUpRight, ArrowDownRight } from 'lucide-react'
 import { iconHit } from './iconHit'
 import { useLocale, useTranslations } from 'next-intl'
@@ -10,7 +10,7 @@ import { computeFundPricing, computeSellPreview, buildBuyPayload, buildEditPaylo
 import { BuyFundFields, BuyBankFields, BuyGoldFields, SellForm } from './addTransactionForms'
 
 export interface Fund { id: string; name: string; nav: number; code: string | null; fund_type?: string }
-interface Goal { goal_id: string; goal_name: string }
+interface Goal { goal_id: string; goal_name: string; completed_at?: string | null }
 export interface Bank { code: string; name: string; logo_url?: string | null }
 
 // A sellable position, collected from the dashboard overview. Funds live in
@@ -156,6 +156,15 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
   const [assetType, setAssetType] = useState<AssetType>('fund')
   const [dir, setDir] = useState<'buy' | 'sell'>('buy')
   const [goalId, setGoalId] = useState('')
+  // A finished goal is an archive, so it is never a destination — except for the
+  // one this very holding is already filed under, which is listed (disabled) so
+  // the select states where the money sits instead of silently reading
+  // "No goal" (#650).
+  const goalOptions = useMemo(() => {
+    const active = goals.filter((g) => !g.completed_at)
+    const own = goals.find((g) => g.goal_id === goalId && g.completed_at)
+    return own ? [own, ...active] : active
+  }, [goals, goalId])
   const [date, setDate] = useState(todayIso())
   const [note, setNote] = useState('')
 
@@ -205,7 +214,11 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
       // Fetch funds + goals in parallel
       Promise.all([
         fetch('/api/funds').then(r => r.json()),
-        fetch('/api/v1/savings-goals').then(r => r.json()),
+        // Archived goals come along (#650): a holding filed under a finished goal
+        // still opens in this sheet, and without its goal in the list the select
+        // would show "No goal" over a form that still holds the finished id.
+        // goalOptions decides which of them can actually be chosen.
+        fetch('/api/v1/savings-goals?status=all').then(r => r.json()),
         fetch('/api/v1/banks').then(r => r.json()).catch(() => []),
       ]).then(([fundsData, goalsData, banksData]) => {
         // Canonical funds-list contract: GET /api/funds → { funds: [...] } (#470).
@@ -510,8 +523,8 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
                 style={{ ...inputStyle }}
               >
                 <option value="">{t('noGoal')}</option>
-                {goals.map(g => (
-                  <option key={g.goal_id} value={g.goal_id}>{g.goal_name}</option>
+                {goalOptions.map(g => (
+                  <option key={g.goal_id} value={g.goal_id} disabled={!!g.completed_at}>{g.goal_name}</option>
                 ))}
               </select>
             </div>

@@ -11,6 +11,7 @@
 // lands, and every one of them has a defined answer for "not loaded yet".
 
 import { isActionableTermDeposit } from '@/lib/maturity'
+import { goalCompletion } from '@/lib/finishGoal'
 import { detectMergeClusters } from '@/lib/mergeCluster'
 import { actionableBooks, type TaggedTranche } from './maturityCardItems'
 import type {
@@ -53,11 +54,38 @@ export function isDashboardEmpty(data: DashboardData | null): boolean {
     && data.insurance.length === 0
 }
 
+// A finished goal's percentage is the one it was archived at, not the one its
+// (now empty) holdings compute to — the same rule the cards render by (#650).
+const sortPercent = (g: GoalData): number =>
+  goalCompletion(g)?.percentage ?? g.progressPercentage ?? 0
+
+/**
+ * What the "Download report" sheet previews before the export runs.
+ *
+ * The count is EVERY goal, completed ones included, because that is what the
+ * PDF contains: PortfolioReport iterates the whole list and renders a finished
+ * goal as its completion snapshot (#650). Counting only the active ones told a
+ * portfolio whose goals are all finished that it had "0 Goals", one tap before
+ * handing it a report full of them. The active-only count belongs to the
+ * insurance summaries, where an archived goal genuinely has nothing to protect.
+ */
+export function reportPreviewStats(
+  netWorth: { netWorth: number; currentValue: number; overallProfitLoss: number },
+  goals: GoalData[],
+): { netWorth: number; currentValue: number; totalPL: number; goalCount: number } {
+  return {
+    netWorth: netWorth.netWorth,
+    currentValue: netWorth.currentValue,
+    totalPL: netWorth.overallProfitLoss,
+    goalCount: goals.length,
+  }
+}
+
 /** The goal list in the user's chosen order. Never mutates the input. */
 export function sortGoals(goals: GoalData[], sort: SortValue): GoalData[] {
   const out = [...goals]
-  if (sort === 'progressDesc') out.sort((a, b) => (b.progressPercentage ?? 0) - (a.progressPercentage ?? 0))
-  else if (sort === 'progressAsc') out.sort((a, b) => (a.progressPercentage ?? 0) - (b.progressPercentage ?? 0))
+  if (sort === 'progressDesc') out.sort((a, b) => sortPercent(b) - sortPercent(a))
+  else if (sort === 'progressAsc') out.sort((a, b) => sortPercent(a) - sortPercent(b))
   else if (sort === 'alpha') out.sort((a, b) => a.goalName.localeCompare(b.goalName))
   return out
 }

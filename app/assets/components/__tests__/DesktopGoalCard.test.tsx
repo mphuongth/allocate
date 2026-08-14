@@ -32,3 +32,42 @@ describe('DesktopGoalCard — progress credit note', () => {
     expect(screen.queryByTestId('progress-credit-note')).not.toBeInTheDocument()
   })
 })
+
+describe('DesktopGoalCard — a finished goal (#650)', () => {
+  // Its holdings were liquidated to pay for the thing it was for, so the live
+  // balance is zero. Reading that would report the achievement as nothing.
+  const finished: GoalData = {
+    ...mockGoal,
+    currentValue: 0,
+    progressValue: 0,
+    progressPercentage: 0,
+    completedAt: '2026-08-13T02:00:00Z',
+    completionValue: 121_900_000,
+    completionPercentage: 100,
+  }
+
+  it('reads Completed · 100% off the snapshot, not off the empty balance', () => {
+    render(<DesktopGoalCard {...baseProps} goal={finished} />)
+    expect(screen.getByTestId('goal-completed-badge')).toHaveTextContent('Completed · 100%')
+  })
+
+  it('shows what the goal finished at, not its zero balance', () => {
+    render(<DesktopGoalCard {...baseProps} goal={finished} />)
+    expect(screen.getByText('₫ 121.900.000')).toBeInTheDocument()
+  })
+
+  it('withholds the live P&L and transaction count', () => {
+    // Every one of them describes holdings the goal no longer has, so the
+    // overview recomputes them to zero — "+0 ₫ · 0.00%" under a goal with
+    // years of profitable history says something false.
+    render(<DesktopGoalCard {...baseProps} goal={{ ...finished, profitLoss: 0, profitLossPercentage: 0, transactionCount: 0 }} />)
+    expect(screen.queryByText(/0\.00%/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/transaction/)).not.toBeInTheDocument()
+  })
+
+  it('leaves an active goal chip alone', () => {
+    render(<DesktopGoalCard {...baseProps} />)
+    expect(screen.queryByTestId('goal-completed-badge')).not.toBeInTheDocument()
+    expect(screen.getByText('50%')).toBeInTheDocument()
+  })
+})

@@ -13,12 +13,24 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url)
   const withStats = searchParams.get('stats') === 'true'
+  // Completed goals are archives (#650): they are not somewhere new money can be
+  // put, so every picker that asks "which goal?" must not offer them. That is the
+  // default, and it is the default rather than an opt-in because forgetting the
+  // parameter in a new picker should fail SAFE. History surfaces — the ledger's
+  // goal filter, reports — ask for `all` and get the goal's whole life back.
+  const status = searchParams.get('status') ?? 'active'
+  if (!['active', 'completed', 'all'].includes(status)) {
+    return NextResponse.json({ error: 'status must be active, completed or all' }, { status: 400 })
+  }
 
-  const { data: goals, error } = await supabase
+  let query = supabase
     .from('savings_goals')
     .select('*')
     .eq('user_id', user.id)
-    .order('created_at', { ascending: false })
+  if (status === 'active') query = query.is('completed_at', null)
+  if (status === 'completed') query = query.not('completed_at', 'is', null)
+
+  const { data: goals, error } = await query.order('created_at', { ascending: false })
 
   if (error) return NextResponse.json({ error: 'Failed to fetch goals' }, { status: 500 })
 

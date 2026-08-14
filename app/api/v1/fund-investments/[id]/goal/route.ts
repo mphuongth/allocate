@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateUUID } from '@/lib/validation'
 import { readJsonBody } from '@/lib/apiBody'
+import { completedGoalError } from '@/lib/assertOwned'
 
 // Re-bucket ONE fund transaction. The bulk move the dashboard uses is
 // POST /fund-investments/assign (#589); this stays as a compatibility path for
@@ -108,6 +109,10 @@ export async function PATCH(
     .select()
     .single()
 
+  // ...before the catch-all, which would answer 'Not found' about a
+  // transaction that is sitting right there (#650).
+  const doneErr = completedGoalError(error)
+  if (doneErr) return doneErr
   if (error || !data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   return NextResponse.json(data)
 }

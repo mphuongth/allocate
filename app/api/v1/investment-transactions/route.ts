@@ -6,6 +6,7 @@ import { isFutureInvestmentDate } from '@/lib/dates'
 import { classifyAccumulatingTopUp } from '@/lib/accumulatingTopUp'
 import { readJsonBody } from '@/lib/apiBody'
 import { contentionError } from '@/lib/contention'
+import { archivedGoalError } from '@/lib/assertOwned'
 
 const ASSET_TYPES = ['fund', 'bank', 'stock', 'gold'] as const
 
@@ -172,6 +173,11 @@ export async function POST(request: NextRequest) {
       .eq('user_id', user.id)
       .single()
     if (!goal) return NextResponse.json({ error: "You don't have permission to access this goal." }, { status: 403 })
+    // ...and that it is still an active goal. A completed one is an archive:
+    // money landing in it would sit under a frozen 100% and never show on the
+    // card (#650). The database refuses it; this makes the refusal readable.
+    const doneErr = await archivedGoalError(supabase, cleanGoalId, user.id)
+    if (doneErr) return doneErr
   }
 
   // Verify fund ownership if provided — a valid UUID isn't proof of ownership,

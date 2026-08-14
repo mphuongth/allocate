@@ -3,6 +3,7 @@
 import { useTranslations } from 'next-intl'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import { ProgressCreditNote, progressCredit } from './goalDetailShared'
+import { goalCompletion } from '@/lib/finishGoal'
 
 interface Props {
   goalName: string
@@ -14,19 +15,27 @@ interface Props {
   profitLossPercentage: number
   progressPercentage: number | null
   transactionCount: number
+  // The completion snapshot (#650) — spread in from GoalData by the dashboard.
+  completedAt?: string | null
+  completionValue?: number | null
+  completionPercentage?: number | null
   onClick: () => void
 }
 
 export default function GoalCard({
   goalName, targetAmount, currentValue, progressValue, locale,
   profitLoss, profitLossPercentage, progressPercentage, transactionCount,
+  completedAt, completionValue, completionPercentage,
   onClick,
 }: Props) {
   const t = useTranslations('dashboard')
   const creditedWithdrawn = progressCredit(currentValue, progressValue)
   const plPositive = profitLoss >= 0
-  const progress = Math.min(progressPercentage ?? 0, 100)
-  const isComplete = progressPercentage !== null && progressPercentage >= 100
+  // A finished goal reads its snapshot: the holdings it is "worth" are gone, so
+  // deriving the bar from them would show a completed goal at 0%.
+  const completion = goalCompletion({ completedAt, completionValue, completionPercentage })
+  const progress = Math.min(completion ? completion.percentage : (progressPercentage ?? 0), 100)
+  const isComplete = completion !== null || (progressPercentage !== null && progressPercentage >= 100)
 
   return (
     <button
@@ -61,8 +70,8 @@ export default function GoalCard({
             </div>
           )}
         </div>
-        {progressPercentage !== null && (
-          <span style={{
+        {(progressPercentage !== null || completion) && (
+          <span data-testid={completion ? 'goal-completed-badge' : undefined} style={{
             display: 'inline-flex', alignItems: 'center',
             fontSize: 11, fontWeight: 500, padding: '3px 8px', borderRadius: 999,
             background: isComplete ? 'var(--c-pos-tint)' : 'var(--c-navy-tint)',
@@ -70,7 +79,7 @@ export default function GoalCard({
             flexShrink: 0,
             fontVariantNumeric: 'tabular-nums',
           }}>
-            {Math.round(progress)}%
+            {completion ? `${locale === 'vi' ? 'Hoàn thành' : 'Completed'} · ` : ''}{Math.round(progress)}%
           </span>
         )}
       </div>
@@ -81,11 +90,11 @@ export default function GoalCard({
         marginTop: 10, fontVariantNumeric: 'tabular-nums',
         overflowWrap: 'break-word', wordBreak: 'break-word', lineHeight: 1.2,
       }}>
-        {fmt(currentValue)}
+        {fmt(completion ? completion.value : currentValue)}
       </div>
 
       {/* Progress bar */}
-      {targetAmount != null && (
+      {(targetAmount != null || completion) && (
         <div style={{ marginTop: 10 }}>
           <div style={{
             width: '100%', height: 6,
@@ -104,7 +113,12 @@ export default function GoalCard({
         </div>
       )}
 
-      {/* Footer: P&L */}
+      {/* Footer: P&L. Withheld once the goal is finished — every one of these
+          numbers describes LIVE holdings, and a completed goal has none, so the
+          overview recomputes them to zero. "+0 ₫ · 0.00% · 0 transactions" under
+          a goal with years of profitable history is worse than saying nothing
+          (#650). What the goal achieved is the snapshot above. */}
+      {!completion && (
       <div style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         marginTop: 10, fontSize: 11, color: 'var(--c-muted)',
@@ -117,6 +131,7 @@ export default function GoalCard({
         </span>
         <span>{t('transactions', { count: transactionCount })}</span>
       </div>
+      )}
     </button>
   )
 }

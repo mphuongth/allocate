@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validateBankCode, validateDate, validateEnum, validateNotes, validateRate, validateUUID } from '@/lib/validation'
 import { readJsonBody } from '@/lib/apiBody'
+import { completedGoalError } from '@/lib/assertOwned'
 import { isFutureInvestmentDate } from '@/lib/dates'
 import { subtypeResetFields } from '@/lib/assetTypeFields'
 import { contentionError } from '@/lib/contention'
@@ -287,10 +288,15 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     )
   }
 
-  // Contention is not a missing row. Raising principal_withdrawn on a tranche
-  // makes the unlinker wait for the book's anchor, which a concurrent close
-  // holds (#650) — reported as 404 it would read as "that transaction is gone",
-  // for a row sitting right there on screen.
+  // A settled transaction of a finished goal is refused by the ledger freeze —
+  // not missing, which is what the catch-all below would claim (#650).
+  const doneErr = completedGoalError(error)
+  if (doneErr) return doneErr
+
+  // Contention is not a missing row either. Raising principal_withdrawn on a
+  // tranche makes the unlinker wait for the book's anchor, which a concurrent
+  // close holds (#650) — reported as 404 it would read as "that transaction is
+  // gone", for a row sitting right there on screen.
   const busy = contentionError(error, 'This holding was being changed at the same time. Nothing was saved — try again.', 'holding_busy')
   if (busy) return busy
 
@@ -410,6 +416,8 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
         { status: 409 },
       )
     }
+    const doneErr = completedGoalError(error)
+    if (doneErr) return doneErr
     console.error('investment-transactions delete: statement failed', error.message)
     return NextResponse.json({ error: 'Failed to delete transaction', code: 'delete_failed' }, { status: 500 })
   }

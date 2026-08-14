@@ -45,6 +45,17 @@ describe('DesktopGoalDetail — add-to-goal CTA', () => {
     await userEvent.click(await screen.findByTestId('goal-add-to-goal'))
     expect(onAddToGoal).toHaveBeenCalledTimes(1)
   })
+
+  it('withholds the CTA on a finished goal (#650)', async () => {
+    // A completed goal is absent from the add-transaction sheet's own goal list
+    // and the server refuses money into one, so the button could only 409.
+    render(<DesktopGoalDetail
+      {...baseProps}
+      goal={{ ...mockGoal, completedAt: '2026-08-13T02:00:00Z', completionValue: 121_900_000, completionPercentage: 100 }}
+      onAddToGoal={vi.fn()}
+    />)
+    expect(screen.queryByTestId('goal-add-to-goal')).not.toBeInTheDocument()
+  })
 })
 
 describe('DesktopGoalDetail — delete failure feedback', () => {
