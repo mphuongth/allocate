@@ -771,4 +771,66 @@ begin
   raise notice 'finish_savings_goal consumed-settlement cleanup: all assertions passed';
 end $$;
 
+-- ─── A fund sale is not a withdrawal from the tranche it names ───────────────
+--
+-- A withdrawal keyed by a fund draws on that (goal, fund) bucket and not on the
+-- deposit it names as parent — the precedence check_withdrawal_balance applies
+-- (#606), for a shape the POST route accepts and older rows carry.
+-- savings_goal_live_holdings already excludes those rows, so the finish plan
+-- carries the book's full principal; book_live_tranches did not, so the close
+-- measured a smaller book and refused the plan as an overdraw. The two readers
+-- have to agree, or the goal cannot be finished at all.
+do $$
+declare
+  v_user uuid := gen_random_uuid();
+  v_goal uuid;
+  v_fund uuid;
+  v_book uuid := gen_random_uuid();
+  v_total bigint;
+  v_completed timestamptz;
+begin
+  insert into auth.users (id, email) values (v_user, 'finish-fundkey@test.invalid');
+  insert into public.savings_goals (user_id, goal_name, target_amount)
+    values (v_user, 'Quỹ và sổ', 10000000) returning goal_id into v_goal;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+    values (v_user, 'VESAF', 'FKB', 'equity', 50000) returning id into v_fund;
+
+  insert into public.investment_transactions (
+    user_id, goal_id, asset_type, transaction_type, investment_date,
+    amount_vnd, fund_id, units, unit_price
+  ) values (v_user, v_goal, 'fund', 'investment', current_date - 30, 5000000, v_fund, 100, 50000);
+
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate, deposit_group_id, notes
+  ) values (
+    v_book, v_user, v_goal, 'bank', 'investment',
+    current_date - 60, current_date + 300, 4000000, 4, v_book, 'Tích luỹ'
+  );
+
+  -- The whole fund position, sold, naming the book's anchor as its parent.
+  insert into public.investment_transactions (
+    user_id, goal_id, asset_type, transaction_type, investment_date,
+    amount_vnd, fund_id, units_withdrawn, principal_withdrawn, parent_transaction_id
+  ) values (
+    v_user, v_goal, 'fund', 'withdrawal', current_date,
+    5500000, v_fund, 100, 5000000, v_book
+  );
+
+  select coalesce(sum(eff), 0) into v_total from public.book_live_tranches(v_book);
+  if v_total <> 4000000 then
+    raise exception 'a fund sale must not be charged to the book it names: read %', v_total;
+  end if;
+
+  -- And the finish itself goes through, which is what the user actually meets.
+  perform public.finish_savings_goal(v_goal, jsonb_build_array(
+    jsonb_build_object('key', 'book:' || v_book, 'received', 4100000)
+  ), current_date, 4100000, public.savings_goal_ledger_fingerprint(v_goal));
+
+  select completed_at into v_completed from public.savings_goals where goal_id = v_goal;
+  if v_completed is null then raise exception 'the goal must be finished'; end if;
+
+  raise notice 'finish_savings_goal fund key: all assertions passed';
+end $$;
+
 rollback;

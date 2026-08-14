@@ -194,6 +194,14 @@ comment on function public.savings_goal_finish_blockers(uuid) is
 -- withdraw_accumulating_book so the function can be called twice in one
 -- transaction (see below) and so the finish RPC measures a book exactly the way
 -- the close does.
+--
+-- A withdrawal keyed by a fund draws on that (goal, fund) bucket, not on the
+-- tranche it names as parent — the precedence check_withdrawal_balance applies
+-- (#606), for a shape the POST route accepts and older rows carry.
+-- savings_goal_live_holdings already excludes those rows, so the plan the user
+-- confirms carries the book's full principal; counted here the close measured a
+-- smaller book and refused that plan as an overdraw. A goal holding one of these
+-- rows could not be finished at all.
 create or replace function public.book_live_tranches(p_book_id uuid)
 returns table (transaction_id uuid, user_id uuid, goal_id uuid, investment_date date, eff bigint)
 language sql
@@ -205,6 +213,7 @@ as $$
          t.amount_vnd - coalesce((
            select sum(w.principal_withdrawn) from public.investment_transactions w
             where w.parent_transaction_id = t.transaction_id and w.transaction_type = 'withdrawal'
+              and not coalesce(w.asset_type = 'fund' and w.fund_id is not null, false)
          ), 0) as eff
     from public.investment_transactions t
    where t.deposit_group_id = p_book_id
@@ -213,6 +222,7 @@ as $$
      and t.amount_vnd - coalesce((
            select sum(w.principal_withdrawn) from public.investment_transactions w
             where w.parent_transaction_id = t.transaction_id and w.transaction_type = 'withdrawal'
+              and not coalesce(w.asset_type = 'fund' and w.fund_id is not null, false)
          ), 0) > 0;
 $$;
 
