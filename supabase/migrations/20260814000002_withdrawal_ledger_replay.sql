@@ -340,12 +340,20 @@ select distinct on (f.user_id, f.balance_key)
        f.goal_id,
        case f.failure
          when 'sale_exceeded_the_units_left' then
-           format('a sale of %s units when the holding had %s units left (%s đồng of basis), %s of %s sale(s) into its history',
+           -- "claim(s)", not "sale(s)": on a fund bucket this count includes the
+           -- withdrawals parented to its purchases (#606), which are claims on the
+           -- bucket without being sales of it. Counting them is the point — a
+           -- legacy claim is often the reason the sale that follows does not fit,
+           -- and an operator who cannot see it in the tally goes looking for a
+           -- second sale that is not there.
+           format('a sale of %s units when the holding had %s units left (%s đồng of basis), %s of %s claim(s) into its history',
                   f.took_units, f.rem_units, f.rem_basis, f.claim_ordinal, f.claims_on_key)
          when 'sale_took_the_wrong_basis' then
            format('a sale of %s units out of the %s units then left, against a %s đồng basis: it should have taken %s đồng, it took %s',
                   f.took_units, f.rem_units, f.rem_basis, f.owed, f.took_principal)
          else
+           -- This branch is the parent axis alone, where every claim IS a
+           -- withdrawal of the holding and the word can be the exact one.
            format('a withdrawal of %s đồng when the holding had %s đồng left, %s of %s withdrawal(s) into its history',
                   f.took_principal, f.rem_basis, f.claim_ordinal, f.claims_on_key)
        end
