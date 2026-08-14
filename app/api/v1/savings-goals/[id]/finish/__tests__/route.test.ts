@@ -13,7 +13,7 @@ const h = vi.hoisted(() => ({
   user: { id: 'user-1' } as { id: string } | null,
   goal: { goal_id: '', goal_name: 'New kitchen', completed_at: null as string | null } as Record<string, unknown> | null,
   rpc: [] as Array<{ fn: string; args: Record<string, unknown> }>,
-  rpcResult: { data: {} as unknown, error: null as { message: string } | null },
+  rpcResult: { data: {} as unknown, error: null as { message: string; code?: string } | null },
   blockers: { data: [] as unknown[], error: null as { message: string } | null },
   holdings: { data: [] as unknown[], error: null as { message: string } | null },
   goalError: null as { message: string } | null,
@@ -257,6 +257,26 @@ describe('POST', () => {
     const body = await res.json()
     expect(body.code).toBe('liquidation_refused')
     expect(body.error).toContain('nothing was changed')
+  })
+
+  it('offers a retry when the finish lost a lock race, rather than reporting a fault', async () => {
+    // The finish locks the goal then its rows; an edit locks its row then the
+    // goal, through the freeze trigger. Neither can give its lock up, so the two
+    // can cross and Postgres aborts one — having written nothing.
+    for (const code of ['40P01', '55P03', '40001']) {
+      h.rpc = []
+      h.rpcResult = { data: null, error: { message: 'deadlock detected', code } as { message: string; code?: string } }
+      const res = await post({ plan: PLAN })
+      expect(res.status).toBe(409)
+      const body = await res.json()
+      expect(body.code).toBe('goal_busy')
+      expect(body.error).toMatch(/Nothing was finished/)
+    }
+  })
+
+  it('still reports an unrecognised database fault as one', async () => {
+    h.rpcResult = { data: null, error: { message: 'something else entirely', code: '42P01' } as { message: string; code?: string } }
+    expect((await post({ plan: PLAN })).status).toBe(500)
   })
 
   it('names a book shared with another goal, and does not call it a stale page', async () => {

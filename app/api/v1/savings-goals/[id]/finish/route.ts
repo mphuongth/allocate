@@ -14,6 +14,23 @@ import { valuationByKey } from '@/lib/finishGoal'
 //        in a single transaction; this route validates the request shape, decides
 //        the completion value, and translates the database's refusals.
 
+// Contention, not failure. The finish locks the goal and then its ledger rows;
+// an ordinary transaction edit locks its row first and only then reaches the
+// goal, through the completed-ledger trigger's FOR SHARE. That order is inverted
+// by construction and neither side can give its lock up — the goal lock is what
+// serializes two finishes and makes the archive check see the committed state,
+// and the trigger's lock is what stops an edit landing under a finish. So when
+// the two cross, Postgres breaks the tie and one of them is aborted having
+// written nothing.
+//
+// Nothing is wrong with the request, so the answer is "try again": a 500 reads
+// as a bug and gives the client no reason to retry. Same map, and the same
+// reasoning, as POST /api/v1/fund-investments/assign.
+//   40P01 deadlock_detected     — an edit of one of this goal's rows crossed it
+//   55P03 lock_not_available    — a NOWAIT/timeout writer got there first
+//   40001 serialization_failure — a retry signal from a stricter isolation level
+const RETRYABLE_SQLSTATES = new Set(['40P01', '55P03', '40001'])
+
 type Blocker = { code: string; label: string }
 type ServerHolding = {
   key: string; kind: string; asset_type: string | null
@@ -252,6 +269,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         { error: 'A holding could not be liquidated, so nothing was changed. Reload the goal and try again.', code: 'liquidation_refused' },
         { status: 400 },
       )
+    }
+    if (RETRYABLE_SQLSTATES.has(error.code ?? '')) {
+      console.warn('finish: goal contended', error.code)
+      return NextResponse.json({
+        error: 'This goal was being changed at the same time. Nothing was finished — try again.',
+        code: 'goal_busy',
+      }, { status: 409 })
     }
     console.error('finish_savings_goal failed', message)
     return NextResponse.json({ error: 'Failed to finish the goal' }, { status: 500 })
