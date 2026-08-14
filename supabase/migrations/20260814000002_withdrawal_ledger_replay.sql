@@ -295,10 +295,22 @@ events as (
      and p.fund_id is not null
      and coalesce(p.units, 0) > 0
      and coalesce(p.amount_vnd, 0) > 0
-     -- Same-owner, as on the parent axis. A fund belongs to one user, so the
-     -- invariant's own query reaches this implicitly through the bucket; stating it
-     -- keeps the two branches reading alike rather than relying on that.
-     and p.user_id = w.user_id
+     -- NO same-owner test on the purchase, deliberately, and NOT for symmetry with
+     -- the parent axis above. 20260803000005's query constrains the claim's owner
+     -- (`w.user_id = wd.user_id`) and never the purchase's — it reaches the purchase
+     -- through `p.fund_id = wd.fund_id`. The ownership trigger (#474 / 20260722000004)
+     -- stops new rows from carrying another user's fund, but legacy rows are the
+     -- whole reason this view exists, and on one of those the two halves diverge:
+     -- the BASIS sum does require `t.user_id = wd.user_id`, so a cross-owner
+     -- purchase is left out of what the bucket holds while a claim parented to it is
+     -- still charged against the bucket. Probed — a 100-unit bucket carrying a
+     -- 10-unit claim on such a purchase refuses a 95-unit sale at "the remaining
+     -- balance of 90 units". Adding the owner test here dropped that claim and the
+     -- sale replayed clean.
+     --
+     -- Whether that asymmetry is right is a question for the invariant, not for its
+     -- audit. This view's contract is to report what the database actually enforces,
+     -- and a predicate it does not have belongs nowhere in it.
 
   union all
   -- A fund bucket's purchases DO interleave: the invariant sums whatever is in the

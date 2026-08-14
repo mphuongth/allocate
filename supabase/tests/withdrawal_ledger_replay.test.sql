@@ -61,6 +61,7 @@ declare
   v_shape      uuid; v_shape_w  uuid;
   v_other      uuid; v_other_g  uuid; v_foreign uuid; v_foreign_w uuid;
   v_pair       uuid; v_pair_a   uuid; v_pair_b  uuid;
+  v_xfund      uuid; v_x_mine   uuid; v_x_theirs uuid; v_x_claim uuid; v_x_sell uuid;
   i            int;
   v_found      text;
   v_count      int;
@@ -340,6 +341,45 @@ begin
           '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
   returning transaction_id into v_foreign_w;
 
+  -- ── a cross-owner purchase inside a bucket ─────────────────────────────────
+  -- The mirror of the parent-axis case above, and it goes the OTHER way, which is
+  -- why both are here. 20260803000005's bucket query constrains the CLAIM's owner
+  -- (`w.user_id = wd.user_id`) and never the purchase's — it reaches the purchase
+  -- through `p.fund_id = wd.fund_id`. Its basis sum does require the owner to
+  -- match. So on a legacy row carrying another user's fund, the two halves
+  -- diverge: the cross-owner purchase is left out of what the bucket HOLDS, while
+  -- a claim parented to it is still charged against the bucket.
+  --
+  -- 100 units of my own, a 10-unit claim on their purchase, and a 95-unit sale:
+  -- the invariant refuses it at "the remaining balance of 90 units". An owner test
+  -- on the purchase here — which the parent axis genuinely needs — drops that claim
+  -- and the sale replays clean. This view reports what the database enforces;
+  -- whether that asymmetry is right is a question for the invariant.
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Cross Fund', 'RXFD', 'equity', 20000) returning id into v_xfund;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'investment', '2026-01-01', 100000000, 100, 1000000, v_xfund,
+          '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+  returning transaction_id into v_x_mine;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id, created_at, updated_at)
+  values (v_other, v_goal, 'fund', 'investment', '2026-01-05', 50000000, 50, 1000000, v_xfund,
+          '2026-01-05T00:00:00Z', '2026-01-05T00:00:00Z')
+  returning transaction_id into v_x_theirs;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 10000000, v_x_theirs, 10000000, 10,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
+  returning transaction_id into v_x_claim;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, fund_id,
+     principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'withdrawal', '2026-03-01', 95000000, v_xfund, 95000000, 95,
+          '2026-03-01T00:00:00Z', '2026-03-01T00:00:00Z')
+  returning transaction_id into v_x_sell;
+
   -- ── a shape the screening view already owns ────────────────────────────────
   -- A gold sale with units and no principal. The invariant refuses it before the
   -- allocation rule is ever reached ("must record a positive principal_withdrawn")
@@ -616,6 +656,20 @@ begin
     raise exception 'the holding-level proof is real and has to reach the operator in the sentence, got %', v_found;
   end if;
 
+  -- the cross-owner purchase in a bucket: the claim on it still counts, and the
+  -- balance the replay reports is the one the invariant names in its own refusal
+  select r.check_name into v_found
+    from public.withdrawal_ledger_replay r where r.transaction_id = v_x_sell;
+  if v_found is distinct from 'sale_exceeded_the_units_left' then
+    raise exception 'a claim parented to a cross-owner purchase is still charged to the bucket by the invariant, so the replay must count it too, got %',
+      coalesce(v_found, '(silence)');
+  end if;
+  select r.detail into v_found
+    from public.withdrawal_ledger_replay r where r.transaction_id = v_x_sell;
+  if v_found not like '%90 units left%' then
+    raise exception 'the invariant refuses this at "the remaining balance of 90 units" — the replay has to agree, got %', v_found;
+  end if;
+
   -- the claim on another user's holding: silent, and silent for BOTH users — the
   -- holding's owner must not see an overdraw of a holding nobody touched either
   if exists (select 1 from public.withdrawal_ledger_replay r
@@ -660,10 +714,10 @@ begin
   -- tie-break, and it is the only fixture here that may do either.
   select count(*) into v_count from public.withdrawal_ledger_replay r
    where r.user_id = v_user and r.parent_transaction_id is distinct from v_tie;
-  if v_count <> 9 then
+  if v_count <> 10 then
     select string_agg(format('%s/%s: %s', r.check_name, r.severity, r.detail), E'\n')
       into v_found from public.withdrawal_ledger_replay r where r.user_id = v_user;
-    raise exception 'expected exactly the 9 planted sequences, got %:%s%s', v_count, E'\n', v_found;
+    raise exception 'expected exactly the 10 planted sequences, got %:%s%s', v_count, E'\n', v_found;
   end if;
 
   raise notice 'withdrawal_ledger_replay: ok';
