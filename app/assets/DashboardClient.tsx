@@ -27,6 +27,7 @@ import { useOverviewData } from '@/features/dashboard/useOverviewData'
 import { useFundPurchaseHistory } from '@/features/dashboard/useFundPurchaseHistory'
 import {
   isDashboardEmpty,
+  reportPreviewStats,
   sortGoals,
   tagNonFunds,
   maturingCount,
@@ -823,12 +824,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
       <DownloadReportSheet
         open={showReportSheet}
         onClose={() => setShowReportSheet(false)}
-        data={data ? {
-          netWorth: data.netWorth.netWorth,
-          currentValue: data.netWorth.currentValue,
-          totalPL: data.netWorth.overallProfitLoss,
-          goalCount: sortedGoals.length,
-        } : null}
+        data={data ? reportPreviewStats(data.netWorth, allSortedGoals) : null}
         onExport={handleGenerateReport}
         desktop={isDesktop}
       />

@@ -59,6 +59,28 @@ export function isDashboardEmpty(data: DashboardData | null): boolean {
 const sortPercent = (g: GoalData): number =>
   goalCompletion(g)?.percentage ?? g.progressPercentage ?? 0
 
+/**
+ * What the "Download report" sheet previews before the export runs.
+ *
+ * The count is EVERY goal, completed ones included, because that is what the
+ * PDF contains: PortfolioReport iterates the whole list and renders a finished
+ * goal as its completion snapshot (#650). Counting only the active ones told a
+ * portfolio whose goals are all finished that it had "0 Goals", one tap before
+ * handing it a report full of them. The active-only count belongs to the
+ * insurance summaries, where an archived goal genuinely has nothing to protect.
+ */
+export function reportPreviewStats(
+  netWorth: { netWorth: number; currentValue: number; overallProfitLoss: number },
+  goals: GoalData[],
+): { netWorth: number; currentValue: number; totalPL: number; goalCount: number } {
+  return {
+    netWorth: netWorth.netWorth,
+    currentValue: netWorth.currentValue,
+    totalPL: netWorth.overallProfitLoss,
+    goalCount: goals.length,
+  }
+}
+
 /** The goal list in the user's chosen order. Never mutates the input. */
 export function sortGoals(goals: GoalData[], sort: SortValue): GoalData[] {
   const out = [...goals]

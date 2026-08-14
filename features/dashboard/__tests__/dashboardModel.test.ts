@@ -14,6 +14,7 @@ import {
   nonFundToInvRow,
   sellItemForFund,
   sellItemForMaturingDeposit,
+  reportPreviewStats,
 } from '../dashboardModel'
 
 // The dashboard's derived view model, lifted out of DashboardClient (#602).
@@ -309,6 +310,27 @@ describe('sellItemForMaturingDeposit', () => {
     expect(item).toMatchObject({
       type: 'bank', transactionId: 'book', depositGroupId: 'book',
       currentValue: 3_000_000, purchasePrice: 2_800_000,
+    })
+  })
+})
+
+// The PDF renders every goal, a finished one as its completion snapshot (#650).
+// A preview that counts only the active ones tells a portfolio of finished goals
+// it has none, one tap before handing it a report full of them.
+describe('reportPreviewStats', () => {
+  const net = { netWorth: 50_000_000, currentValue: 40_000_000, overallProfitLoss: 2_000_000 }
+
+  it('counts finished goals, because the report contains them', () => {
+    const stats = reportPreviewStats(net, [
+      goal({ goalId: 'done', completedAt: '2026-08-01T00:00:00Z', completionValue: 9_000_000, completionPercentage: 100 }),
+    ])
+    expect(stats.goalCount).toBe(1)
+  })
+
+  it('carries the net-worth figures through unchanged', () => {
+    const stats = reportPreviewStats(net, [goal(), goal({ goalId: 'g2' })])
+    expect(stats).toEqual({
+      netWorth: 50_000_000, currentValue: 40_000_000, totalPL: 2_000_000, goalCount: 2,
     })
   })
 })

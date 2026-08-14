@@ -112,12 +112,15 @@ begin
   end if;
   delete from public.recurring_savings where user_id = v_user;
 
-  update public.funds set dca_goal_id = v_goal where id = v_fund;
+  -- A LIVE plan: pointed, switched on, with an amount — what seeding requires.
+  update public.funds set dca_goal_id = v_goal, is_dca = true, dca_monthly_amount_vnd = 1000000
+   where id = v_fund;
   if not exists (select 1 from public.savings_goal_finish_blockers(v_goal)
                   where code = 'dca_plan' and label = 'VESAF') then
     raise exception 'the DCA plan must be named as a blocker';
   end if;
-  update public.funds set dca_goal_id = null where id = v_fund;
+  update public.funds set dca_goal_id = null, is_dca = false, dca_monthly_amount_vnd = null
+   where id = v_fund;
 
   -- An ENDED recurring saving blocks too: the dashboard keeps synthesizing its
   -- realized months into the goal's value forever, and no withdrawal can remove
@@ -331,7 +334,12 @@ begin
   exception when sqlstate '23514' then null;
   end;
   begin
-    update public.funds set dca_goal_id = v_goal where id = v_fund;
+    -- A LIVE plan — the guard and the blocker ask the same question, so what
+    -- would have stopped the finish is what is refused afterwards. (Parking a
+    -- switched-off fund on an archived goal is allowed and harmless; switching it
+    -- on is what the recheck refuses, asserted in its own block below.)
+    update public.funds set dca_goal_id = v_goal, is_dca = true, dca_monthly_amount_vnd = 1000000
+     where id = v_fund;
     raise exception 'a completed goal must not take a DCA plan';
   exception when sqlstate '23514' then null;
   end;
@@ -831,6 +839,65 @@ begin
   if v_completed is null then raise exception 'the goal must be finished'; end if;
 
   raise notice 'finish_savings_goal fund key: all assertions passed';
+end $$;
+
+-- ─── A DCA plan that is switched off is not feeding anything ────────────────
+--
+-- is_dca = false with dca_goal_id still set is a state the table allows and old
+-- rows carry (disable_fund_dca, 20260722000002, clears both together — but only
+-- from the day it landed). Seeding requires f.is_dca and an amount, so such a
+-- fund puts nothing into the goal, while the blocker refused the finish forever
+-- and named a fund whose DCA the user had already turned off.
+--
+-- Narrowing the blocker widens the guard: re-enabling a fund still pointed at a
+-- goal that has since been finished would seed into an archive, and enabling
+-- touches is_dca and the amount, not dca_goal_id.
+do $$
+declare
+  v_user uuid := gen_random_uuid();
+  v_goal uuid;
+  v_fund uuid;
+  v_deposit uuid := gen_random_uuid();
+begin
+  insert into auth.users (id, email) values (v_user, 'finish-dca-off@test.invalid');
+  insert into public.savings_goals (user_id, goal_name, target_amount)
+    values (v_user, 'DCA tắt', 10000000) returning goal_id into v_goal;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+    values (v_user, 'VESAF', 'DCF', 'equity', 50000) returning id into v_fund;
+
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate
+  ) values (v_deposit, v_user, v_goal, 'bank', 'investment', current_date - 30, current_date + 300, 4000000, 5);
+
+  -- Pointed at the goal, switched off, no amount: it seeds nothing.
+  update public.funds set dca_goal_id = v_goal, is_dca = false, dca_monthly_amount_vnd = null
+   where id = v_fund;
+
+  if exists (select 1 from public.savings_goal_finish_blockers(v_goal) where code = 'dca_plan') then
+    raise exception 'a switched-off DCA plan must not block the finish';
+  end if;
+
+  -- ...and an ENABLED one still does, so the assertion above is not vacuous.
+  update public.funds set is_dca = true, dca_monthly_amount_vnd = 1000000 where id = v_fund;
+  if not exists (select 1 from public.savings_goal_finish_blockers(v_goal) where code = 'dca_plan') then
+    raise exception 'a live DCA plan must still block the finish';
+  end if;
+  update public.funds set is_dca = false, dca_monthly_amount_vnd = null where id = v_fund;
+
+  perform public.finish_savings_goal(v_goal, jsonb_build_array(
+    jsonb_build_object('key', 'tx:' || v_deposit, 'received', 4100000)
+  ), current_date, 4100000, public.savings_goal_ledger_fingerprint(v_goal));
+
+  -- Switching it back on would put next month's money into an archive. The
+  -- update names is_dca and the amount; dca_goal_id never changes.
+  begin
+    update public.funds set is_dca = true, dca_monthly_amount_vnd = 1000000 where id = v_fund;
+    raise exception 'a DCA plan must not be switched on toward a finished goal';
+  exception when sqlstate '23514' then null;
+  end;
+
+  raise notice 'finish_savings_goal disabled DCA: all assertions passed';
 end $$;
 
 rollback;

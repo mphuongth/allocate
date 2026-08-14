@@ -151,9 +151,17 @@ as $$
      and t.goal_id = p_goal_id
      and r.goal_id is distinct from p_goal_id
   union all
+  -- The same predicate seed_and_sync_plan_dca uses (20260722000001). A fund can
+  -- keep dca_goal_id with is_dca off — disable_fund_dca clears both together, but
+  -- only since 20260722000002, and the table takes the pair in any combination.
+  -- Nothing is seeded from it, so nothing feeds the goal; blocking on it trapped
+  -- the goal forever and named a fund whose DCA the user had already turned off.
+  -- funds_dca_goal_not_completed is what stops it being switched back on later.
   select 'dca_plan'::text, f.name
     from public.funds f
    where f.dca_goal_id = p_goal_id
+     and f.is_dca
+     and f.dca_monthly_amount_vnd is not null
   union all
   -- A contribution dated in the FUTURE. POST /api/v1/investment-transactions
   -- allows one when it carries a plan_id — that is how next month's planned
@@ -861,7 +869,12 @@ declare
 begin
   execute format('select ($1).%I', v_col) into v_new using new;
   if v_new is null then return new; end if;
-  if tg_op = 'UPDATE' then
+  -- An unchanged reference is nothing new to check — EXCEPT where the trigger is
+  -- armed as 'recheck', which is how a fund asks about a goal it has pointed at
+  -- all along. Switching DCA back on writes is_dca and the amount and leaves
+  -- dca_goal_id exactly as it was, so short-circuiting on it would wave through
+  -- a plan aimed at an archive.
+  if tg_op = 'UPDATE' and coalesce(tg_argv[1], '') <> 'recheck' then
     execute format('select ($1).%I', v_col) into v_old using old;
     if v_old is not distinct from v_new then return new; end if;
   end if;
@@ -1032,8 +1045,12 @@ create trigger recurring_savings_goal_not_completed
 
 drop trigger if exists funds_dca_goal_not_completed on public.funds;
 create trigger funds_dca_goal_not_completed
-  before insert or update of dca_goal_id on public.funds
-  for each row execute function public.enforce_goal_not_completed('dca_goal_id');
+  before insert or update of dca_goal_id, is_dca, dca_monthly_amount_vnd on public.funds
+  for each row
+  -- Exactly what seeding requires of a fund. A plan that is off, or has no
+  -- amount, puts nothing anywhere — it neither blocks a finish nor needs guarding.
+  when (new.is_dca and new.dca_monthly_amount_vnd is not null)
+  execute function public.enforce_goal_not_completed('dca_goal_id', 'recheck');
 
 -- ── reopening ────────────────────────────────────────────────────────────────
 --
