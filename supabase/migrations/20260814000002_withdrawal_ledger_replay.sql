@@ -72,8 +72,20 @@
 -- no ordering of any history could have produced this row — answered by searching
 -- for a legal one. See the `reach` CTE: it is a subset search rather than a
 -- permutation one, because the balance after a set of events does not depend on
--- the order they arrived in. A key with a legal reading is 'review' however
--- damning the created_at order looks, and the finding is reported either way.
+-- the order they arrived in.
+--
+-- And the question is asked of the ROW, not of the holding, because those are not
+-- the same claim. Two 50-unit sales of a 1000 đồng / 100 unit holding each taking
+-- 499: either is legal written first (the đồng of rounding covers 499 against 500)
+-- and whichever comes second owes the whole 501 left, so the holding has no legal
+-- reading at all — yet neither sale is individually impossible, and grading them by
+-- the holding's verdict would call whichever sorts second a proven violation when
+-- it may be the innocent one. So `row_rescued` asks whether THIS row would have
+-- been accepted in any state the holding could legally have been in without it.
+-- Legal somewhere means 'review', and the finding is reported either way. The
+-- holding-level proof is not thrown away — where it says more than the row-level
+-- one, it goes into the detail sentence, which is where a claim about a set of rows
+-- can be made without pointing at one of them.
 --
 -- One ordering fact IS honoured, because the ledger genuinely records it: a claim
 -- parented to a purchase cannot have been written before that purchase existed —
@@ -495,17 +507,58 @@ explainable as (
     from reach r
     join opening o on o.user_id = r.user_id and o.balance_key = r.balance_key
    where r.mask = (1::bigint << o.n) - 1
+),
+
+-- ── and is THIS row the one that is wrong? ──────────────────────────────────
+-- "No ordering of this holding is legal" is a statement about the HOLDING. The
+-- finding names a ROW, and those are not the same claim. A pristine 1000 đồng /
+-- 100 unit holding with two 50-unit sales each taking 499: either is legal written
+-- first (the đồng of rounding covers 499 against 500) and whichever comes second
+-- owes the whole 501 that is left, so no complete ordering exists — yet neither
+-- sale is individually impossible, and calling one of them proven sends an
+-- operator to correct a row that may be the innocent one.
+--
+-- So the row is asked about itself: is there ANY state this holding could legally
+-- have been in, without this row, where this row would have been accepted? The
+-- reachable states are already computed above, so this is a scan over them. Legal
+-- somewhere means not proven, whatever the holding as a whole says.
+--
+-- This is strictly stronger than the holding-level test and replaces it: a holding
+-- with a legal ordering puts every one of its rows in a legal position, so nothing
+-- provable at row level can survive there. What the holding-level result still
+-- earns is a SENTENCE — the detail says the holding has no legal reading even when
+-- no single row can be blamed for it, which is the true and useful thing to tell
+-- an operator looking at a set of rows that cannot all be right.
+row_rescued as (
+  select distinct f.user_id, f.balance_key, f.row_id
+    from fails f
+    join movable_dep m
+      on m.user_id = f.user_id and m.balance_key = f.balance_key and m.row_id = f.row_id
+    join reach r
+      on r.user_id = f.user_id and r.balance_key = f.balance_key
+     and (r.mask >> m.idx) & 1 = 0
+     and (m.dep_idx is null or (r.mask >> m.dep_idx) & 1 = 1)
+   where not (f.took_units > 0
+              and f.took_units > r.rem_units + case when r.rem_units > 0 then 0.0001 else 0 end)
+     and not (f.quantity_valued and f.took_units > 0 and r.rem_units > 0
+              and abs(f.took_principal
+                      - case when f.took_units < r.rem_units - 0.0001
+                               then round(f.took_units * r.rem_basis / r.rem_units)
+                             else r.rem_basis end) > 1)
+     and not (not f.quantity_valued and f.took_principal > 0
+              and f.took_principal > r.rem_basis)
 )
 
 select distinct on (f.user_id, f.balance_key)
        f.failure::text  as check_name,
        -- Provable only where the replay's premise holds: nothing on this key was
-       -- touched after it was written, so these rows ARE what was measured; the
-       -- key was small enough to search; and no ordering of it is legal.
+       -- touched after it was written, so these rows ARE what was measured; the key
+       -- was small enough to search; and THIS ROW had no legal position in it.
        case when f.key_touched
               or f.movable > 14
-              or exists (select 1 from explainable x
-                          where x.user_id = f.user_id and x.balance_key = f.balance_key)
+              or exists (select 1 from row_rescued x
+                          where x.user_id = f.user_id and x.balance_key = f.balance_key
+                            and x.row_id = f.row_id)
               then 'review' else 'violation' end::text as severity,
        f.user_id,
        f.row_id         as transaction_id,
@@ -534,12 +587,25 @@ select distinct on (f.user_id, f.balance_key)
        || case when f.fails_on_key > 1
                  then format(' — and %s later row(s) on this holding fail the replay too, measured against a balance this one already made fiction',
                              f.fails_on_key - 1)
+               else '' end
+       -- The holding-level result, where it says more than the row-level one. Two
+       -- 50-unit sales of 1000 đồng / 100 units each taking 499 have no legal
+       -- reading between them, and neither one is individually impossible — the
+       -- proof is real but it belongs to the pair, so it goes in the sentence
+       -- rather than into a severity that would point at one of them.
+       || case when not f.key_touched and f.movable <= 14
+                and not exists (select 1 from explainable x
+                                 where x.user_id = f.user_id and x.balance_key = f.balance_key)
+                and exists (select 1 from row_rescued x
+                             where x.user_id = f.user_id and x.balance_key = f.balance_key
+                               and x.row_id = f.row_id)
+                 then '. No ordering of this holding''s claims is legal, so at least one of them is wrong — but this row is not provably the one, since it would have been accepted had it been written earlier'
                else '' end as detail
   from fails f
  order by f.user_id, f.balance_key, f.ord_at, f.ord_kind, f.ord_id;
 
 comment on view public.withdrawal_ledger_replay is
-  'Replays each balance key''s rows in created_at order against check_withdrawal_balance''s own transition rules and names the first row that could not have been written at its turn. severity=violation where every row on the key is pristine (updated_at = created_at), so the replay IS the history; severity=review where something was touched afterwards. Shape checks belong to withdrawal_ledger_audit (#613).';
+  'Replays each balance key''s rows against check_withdrawal_balance''s own transition rules and names the first row that could not have been written at its turn. created_at gives the order it REPORTS against; severity is decided by an exhaustive search over orderings, since created_at is transaction-start and records no write order. severity=violation means this row had no legal position in any history of its holding, and nothing on the key was edited after it was written; severity=review means it is worth looking at but not proven — read the detail, which carries the holding-level verdict where that says more. Shape checks belong to withdrawal_ledger_audit; the two are complements (#613).';
 
 -- An operator tool, and there is no screen that reads it. security_invoker means
 -- RLS would confine a caller to their own rows anyway, but granting it adds a

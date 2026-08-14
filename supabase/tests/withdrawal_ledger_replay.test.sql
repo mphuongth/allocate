@@ -60,6 +60,7 @@ declare
   v_fund_dep   uuid; v_dep_buy  uuid; v_dep_sell    uuid;
   v_shape      uuid; v_shape_w  uuid;
   v_other      uuid; v_other_g  uuid; v_foreign uuid; v_foreign_w uuid;
+  v_pair       uuid; v_pair_a   uuid; v_pair_b  uuid;
   i            int;
   v_found      text;
   v_count      int;
@@ -283,6 +284,36 @@ begin
           '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
   returning transaction_id into v_inst_b;
 
+  -- ── no legal ordering, and yet no guilty row ───────────────────────────────
+  -- 1000 đồng / 100 units, two 50-unit sales each taking 499. Either is legal
+  -- written FIRST — the đồng of rounding covers 499 against 500 — and whichever
+  -- comes second owes the whole 501 that is left. So the holding has no legal
+  -- reading, and neither sale is individually impossible.
+  --
+  -- "No ordering of this holding is legal" is a statement about the HOLDING; the
+  -- finding names a ROW. Grading the row by the holding's verdict points an
+  -- operator at whichever sale happens to sort second and calls it proven, when it
+  -- may be the innocent one. The pair beside it — 497/503, where each sale is
+  -- impossible in every position it could occupy — is the same shape and stays a
+  -- violation, which is what makes this a test of the row-level proof rather than
+  -- of the search.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'investment', '2026-01-01', 1000, 100, 10, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+  returning transaction_id into v_pair;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-02-01', 499, v_pair, 499, 50,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
+  returning transaction_id into v_pair_a;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-03-01', 499, v_pair, 499, 50,
+          '2026-03-01T00:00:00Z', '2026-03-01T00:00:00Z')
+  returning transaction_id into v_pair_b;
+
   -- ── a claim on someone ELSE'S holding ──────────────────────────────────────
   -- check_withdrawal_balance looks for the parent under the claimant's own
   -- user_id, finds nothing, and returns without measuring anything: ownership is a
@@ -490,12 +521,22 @@ begin
     raise exception 'a finding on a holding edited after its sales must not claim proof, got %', coalesce(v_found, '(silence)');
   end if;
 
-  -- the bank overdraw: the replay names the row, where the screening audit names
-  -- only the holding
+  -- the bank overdraw: 100,000,000 with two 80,000,000 withdrawals. The HOLDING is
+  -- provably overdrawn and the screening audit says so, at the level where that
+  -- claim belongs. Neither ROW is the culprit — 80,000,000 fits a 100,000,000
+  -- holding, so either could have been written first and the second is whichever
+  -- it happened to be. So the replay names the row, points at the balance it met,
+  -- and grades it 'review'. The two views say different true things about the same
+  -- holding, which is the whole reason for running both.
   select r.check_name || '/' || r.severity into v_found
     from public.withdrawal_ledger_replay r where r.transaction_id = v_bank_w2;
-  if v_found is distinct from 'withdrawal_exceeded_the_balance/violation' then
-    raise exception 'the second bank withdrawal should be named as the row that broke the holding, got %', coalesce(v_found, '(silence)');
+  if v_found is distinct from 'withdrawal_exceeded_the_balance/review' then
+    raise exception 'neither of two 80m withdrawals of a 100m holding is provably the wrong one, got %', coalesce(v_found, '(silence)');
+  end if;
+  if not exists (select 1 from public.withdrawal_ledger_audit a
+                  where a.parent_transaction_id = v_bank_over
+                    and a.check_name = 'holding_overdrawn' and a.severity = 'violation') then
+    raise exception 'the screening audit owns the holding-level proof here — without it this overdraw would go unproven by both views';
   end if;
   -- and placed in the holding's history, not merely in the list of failures: this
   -- is the SECOND of two withdrawals, and an operator opening the ledger needs
@@ -561,6 +602,20 @@ begin
       coalesce(v_found, '(silence)');
   end if;
 
+  -- the pair with no legal ordering and no guilty row: reported, not proven, and
+  -- the holding-level proof said in words where it cannot be said in a severity
+  select r.severity into v_found
+    from public.withdrawal_ledger_replay r where r.parent_transaction_id = v_pair;
+  if v_found is distinct from 'review' then
+    raise exception 'a row that would have been accepted written earlier must not be called the proven culprit, got %',
+      coalesce(v_found, '(silence)');
+  end if;
+  select r.detail into v_found
+    from public.withdrawal_ledger_replay r where r.parent_transaction_id = v_pair;
+  if v_found not like '%No ordering of this holding%' or v_found not like '%not provably the one%' then
+    raise exception 'the holding-level proof is real and has to reach the operator in the sentence, got %', v_found;
+  end if;
+
   -- the claim on another user's holding: silent, and silent for BOTH users — the
   -- holding's owner must not see an overdraw of a holding nobody touched either
   if exists (select 1 from public.withdrawal_ledger_replay r
@@ -605,10 +660,10 @@ begin
   -- tie-break, and it is the only fixture here that may do either.
   select count(*) into v_count from public.withdrawal_ledger_replay r
    where r.user_id = v_user and r.parent_transaction_id is distinct from v_tie;
-  if v_count <> 8 then
+  if v_count <> 9 then
     select string_agg(format('%s/%s: %s', r.check_name, r.severity, r.detail), E'\n')
       into v_found from public.withdrawal_ledger_replay r where r.user_id = v_user;
-    raise exception 'expected exactly the 8 planted sequences, got %:%s%s', v_count, E'\n', v_found;
+    raise exception 'expected exactly the 9 planted sequences, got %:%s%s', v_count, E'\n', v_found;
   end if;
 
   raise notice 'withdrawal_ledger_replay: ok';
