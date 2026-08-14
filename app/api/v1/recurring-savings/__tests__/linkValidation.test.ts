@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { validateLinkedDeposit } from '../linkValidation'
+import { linkRefusalMessage, validateLinkedDeposit } from '../linkValidation'
 
 // The readable half of "a link must point at a live deposit" (#650) — the table
 // refuses it either way, but this is what the user is told. It measures the
@@ -68,5 +68,27 @@ describe('validateLinkedDeposit — a fund sale is not a withdrawal from the dep
       'goal-1',
     )
     expect(result).toMatch(/closed/i)
+  })
+})
+
+// The validator says nothing when it cannot judge — a failed balance read is not
+// evidence of a closed deposit — and it can be outrun by a close committing
+// between the check and the write. Both land as a trigger refusal on the write,
+// which the routes used to report as 500 (POST) and 404 (PUT): a server fault,
+// and a missing row, for a request that was neither.
+describe('linkRefusalMessage', () => {
+  it('recognises a deposit the table refused as closed', () => {
+    expect(linkRefusalMessage({ message: 'closed deposit: that deposit has been closed, so a link to it could never be funded' }))
+      .toMatch(/closed/i)
+  })
+
+  it('recognises a book that has handed over', () => {
+    expect(linkRefusalMessage({ message: 'successor book: that book has handed over to a successor, so link the successor instead' }))
+      .toMatch(/successor/i)
+  })
+
+  it('leaves an unrelated failure to the caller, so a genuine fault still reads as one', () => {
+    expect(linkRefusalMessage({ message: 'could not connect to server' })).toBeNull()
+    expect(linkRefusalMessage(null)).toBeNull()
   })
 })

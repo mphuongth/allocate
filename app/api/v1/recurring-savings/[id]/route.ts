@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validateText, validateUUID, validateYearMonth } from '@/lib/validation'
-import { validateLinkedDeposit } from '../linkValidation'
+import { linkRefusalMessage, validateLinkedDeposit } from '../linkValidation'
 import { ownershipError } from '@/lib/assertOwned'
 import { readJsonBody } from '@/lib/apiBody'
 
@@ -107,6 +107,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     .select('saving_id, name, goal_id, amount_vnd, effective_from, effective_to, linked_deposit_tx_id, savings_goals(goal_name)')
     .single()
 
+  // The table refuses a link the validator could not judge (a failed balance
+  // read says nothing) or one that closed under it. Reported as 404 it read as a
+  // missing saving — the error-vs-not-found conflation of #532/#533, on a row
+  // that is right there.
+  const refusal = linkRefusalMessage(error)
+  if (refusal) return NextResponse.json({ error: refusal }, { status: 400 })
   if (error || !saving) return NextResponse.json({ error: 'Recurring saving not found' }, { status: 404 })
   return NextResponse.json(saving)
 }

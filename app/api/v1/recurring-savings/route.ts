@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validatePlanMonthFilter, validateText, validateUUID, validateYearMonth, type PlanMonthFilter } from '@/lib/validation'
-import { validateLinkedDeposit } from './linkValidation'
+import { linkRefusalMessage, validateLinkedDeposit } from './linkValidation'
 import { ownershipError } from '@/lib/assertOwned'
 import { readJsonBody } from '@/lib/apiBody'
 
@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from('recurring_savings')
-    .select('saving_id, name, goal_id, amount_vnd, effective_from, effective_to, linked_deposit_tx_id, unlinked_at, unlinked_from_book, savings_goals(goal_name)')
+    .select('saving_id, name, goal_id, amount_vnd, effective_from, effective_to, linked_deposit_tx_id, unlinked_at, unlinked_from_book, unlinked_reason, savings_goals(goal_name)')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
 
@@ -130,6 +130,11 @@ export async function POST(request: NextRequest) {
     .select('saving_id, name, goal_id, amount_vnd, effective_from, effective_to, linked_deposit_tx_id, savings_goals(goal_name)')
     .single()
 
+  // A link the validator waved through — because a balance read failed, or
+  // because the deposit closed between the check and the write — is refused by
+  // the table. Say what it said, not "something went wrong on our side".
+  const refusal = linkRefusalMessage(error)
+  if (refusal) return NextResponse.json({ error: refusal }, { status: 400 })
   if (error) return NextResponse.json({ error: 'Failed to create recurring saving' }, { status: 500 })
   return NextResponse.json(saving, { status: 201 })
 }

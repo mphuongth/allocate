@@ -62,3 +62,57 @@ describe('LinkLostBadge', () => {
     expect(screen.getByTestId('plan-link-lost-detail-rs1').textContent).toMatch(/Sửa kế hoạch định kỳ/)
   })
 })
+
+// A deposit that was fully withdrawn is not a deposit that was deleted (#650).
+// The row is still there — on the ledger, in the history — so telling the user
+// it "was deleted" sends them looking for something that was never removed.
+describe('LinkLostBadge — the deposit was closed, not deleted', () => {
+  const closed: GoalItem = { ...lost, linkLostReason: 'closed' }
+
+  it('says the deposit was closed', () => {
+    render(<LinkLostBadge item={closed} isVI={false} />)
+    const badge = screen.getByTestId('plan-link-lost-rs1')
+    expect(badge.textContent).toMatch(/closed/i)
+    expect(badge.textContent).not.toMatch(/deleted/i)
+  })
+
+  it('still names the consequence and the way out', async () => {
+    render(<LinkLostBadge item={closed} isVI={false} />)
+    await userEvent.click(screen.getByTestId('plan-link-lost-rs1'))
+
+    const detail = screen.getByTestId('plan-link-lost-detail-rs1')
+    expect(detail.textContent).not.toMatch(/deleted/i)
+    expect(detail.textContent).toMatch(/standalone deposit/i)   // it was a book
+    expect(detail.textContent).toMatch(/Edit recurring plan/i)
+  })
+
+  // The repair of a legacy closed book cannot know whether the target was a book:
+  // withdraw_accumulating_book cleared the group before anyone asked. Unknown
+  // must read as the half that is true, not as "it was only a term deposit".
+  it('claims nothing about routing when the kind is unknown', async () => {
+    render(<LinkLostBadge item={{ ...closed, linkLostFromBook: undefined }} isVI={false} />)
+    await userEvent.click(screen.getByTestId('plan-link-lost-rs1'))
+
+    const detail = screen.getByTestId('plan-link-lost-detail-rs1')
+    expect(detail.textContent).not.toMatch(/standalone deposit/i)
+    expect(detail.textContent).toMatch(/closed/i)
+    expect(detail.textContent).toMatch(/Edit recurring plan/i)
+  })
+
+  it('says it in Vietnamese too, without the word for deleted', async () => {
+    render(<LinkLostBadge item={closed} isVI />)
+    const badge = screen.getByTestId('plan-link-lost-rs1')
+    expect(badge.textContent).not.toMatch(/xoá/)
+    await userEvent.click(badge)
+    const detail = screen.getByTestId('plan-link-lost-detail-rs1')
+    expect(detail.textContent).not.toMatch(/xoá/)
+    expect(detail.textContent).toMatch(/Sửa kế hoạch định kỳ/)
+  })
+
+  // Everything stamped before the reason existed was a deletion, and the delete
+  // trigger still says so — the old sentence must not drift.
+  it('still says deleted when that is what happened', () => {
+    render(<LinkLostBadge item={lost} isVI={false} />)
+    expect(screen.getByTestId('plan-link-lost-rs1').textContent).toMatch(/deleted/i)
+  })
+})

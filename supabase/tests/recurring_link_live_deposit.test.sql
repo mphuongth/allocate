@@ -130,6 +130,7 @@ declare
   v_link uuid;
   v_mark timestamptz;
   v_from_book boolean;
+  v_reason text;
 begin
   insert into auth.users (id, email) values (v_user, 'recurring-link-close@test.invalid');
   insert into public.savings_goals (user_id, goal_name) values (v_user, 'Đóng sổ') returning goal_id into v_goal;
@@ -162,12 +163,17 @@ begin
     investment_date, amount_vnd, principal_withdrawn
   ) values (v_user, v_goal, 'bank', 'withdrawal', v_single, current_date, 3050000, 3000000);
 
-  select linked_deposit_tx_id, unlinked_at, unlinked_from_book
-    into v_link, v_mark, v_from_book
+  select linked_deposit_tx_id, unlinked_at, unlinked_from_book, unlinked_reason
+    into v_link, v_mark, v_from_book, v_reason
     from public.recurring_savings where saving_id = v_saving;
   if v_link is not null then raise exception 'closing the deposit must clear the link'; end if;
   if v_mark is null then raise exception 'closing the deposit must mark the saving unlinked'; end if;
   if v_from_book is not false then raise exception 'a term deposit is not a book'; end if;
+  -- The deposit is still on the ledger. Reusing the deletion mark without saying
+  -- which is which had the plan announce a deletion that never happened.
+  if v_reason is distinct from 'closed' then
+    raise exception 'a withdrawn deposit must not be reported as deleted: read %', v_reason;
+  end if;
 
   -- ── A book: the link names the anchor, the withdrawals name the tranches ───
   --
@@ -219,6 +225,8 @@ declare
   v_live_saving uuid := gen_random_uuid();
   v_link uuid;
   v_mark timestamptz;
+  v_reason text;
+  v_from_book boolean;
 begin
   insert into auth.users (id, email) values (v_user, 'recurring-link-repair@test.invalid');
   insert into public.savings_goals (user_id, goal_name) values (v_user, 'Cũ') returning goal_id into v_goal;
@@ -255,10 +263,21 @@ begin
 
   perform public.repair_closed_recurring_links();
 
-  select linked_deposit_tx_id, unlinked_at into v_link, v_mark
+  select linked_deposit_tx_id, unlinked_at, unlinked_reason, unlinked_from_book
+    into v_link, v_mark, v_reason, v_from_book
     from public.recurring_savings where saving_id = v_dead_saving;
   if v_link is not null then raise exception 'the repair must clear a link to a closed deposit'; end if;
   if v_mark is null then raise exception 'the repair must mark the saving unlinked'; end if;
+  if v_reason is distinct from 'closed' then
+    raise exception 'the repair must not report a withdrawn deposit as deleted: read %', v_reason;
+  end if;
+  -- Not false. This one IS a plain term deposit, but the rows this repair exists
+  -- for are closed books whose group was cleared long ago, and the two are the
+  -- same row by now. Recording false would tell a book's owner that nothing about
+  -- their monthly money changed.
+  if v_from_book is not null then
+    raise exception 'the repair must not claim to know the kind: read %', v_from_book;
+  end if;
 
   select linked_deposit_tx_id, unlinked_at into v_link, v_mark
     from public.recurring_savings where saving_id = v_live_saving;

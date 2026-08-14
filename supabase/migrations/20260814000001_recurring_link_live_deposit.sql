@@ -151,6 +151,74 @@ comment on function public.enforce_recurring_link_not_handed_over() is
 -- the trigger''s helper and nothing else''s (mirrors 20260812000001).
 revoke all on function public.enforce_recurring_link_not_handed_over() from public, anon, authenticated;
 
+-- ─── Why the link went, not just that it did ────────────────────────────────
+--
+-- unlinked_at meant one thing until now: the deposit was DELETED (#655), and the
+-- plan says so in as many words — "Sổ đã bị xoá" / "Deposit deleted". The
+-- unlinker below reuses the mark for a deposit that was fully withdrawn, which
+-- is a different thing: the deposit is still there, on the ledger, in the
+-- history. Reusing the mark without saying which is which would have the plan
+-- tell users their deposit was deleted when nobody deleted anything.
+alter table public.recurring_savings
+  add column if not exists unlinked_reason text;
+
+alter table public.recurring_savings
+  drop constraint if exists recurring_savings_unlinked_reason_check;
+alter table public.recurring_savings
+  add constraint recurring_savings_unlinked_reason_check
+  check (unlinked_reason is null or unlinked_reason in ('deleted', 'closed'));
+
+comment on column public.recurring_savings.unlinked_reason is
+  'Why the link went: ''deleted'' (the deposit was removed, #655) or ''closed'' (it was fully withdrawn, #650). Advisory: it only decides which sentence the plan shows.';
+
+-- Every stamp that exists today was written by the delete trigger, because it
+-- was the only thing that wrote one.
+update public.recurring_savings
+   set unlinked_reason = 'deleted'
+ where unlinked_at is not null
+   and unlinked_reason is null;
+
+-- Verbatim from 20260812000002 apart from the reason it now records.
+create or replace function public.mark_saving_link_lost()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  -- Deleting the account cascades to both tables, and the saving being marked is
+  -- itself on its way out. Writing to it then re-checks its owner FK against a
+  -- `auth.users` row the cascade has already removed, which aborts the account
+  -- deletion over an advisory flag. Nobody is left to read the warning, so skip
+  -- it: the owner still existing is what makes the mark worth writing.
+  update public.recurring_savings
+     set unlinked_at = now(),
+         unlinked_reason = 'deleted',
+         -- An anchor is a book: deposit_group_id pointing at its own row. A
+         -- plain term deposit has no group at all, and the link validator
+         -- accepts nothing in between.
+         unlinked_from_book = (old.deposit_group_id is not distinct from old.transaction_id),
+         updated_at = now()
+   where linked_deposit_tx_id = old.transaction_id
+     and user_id = old.user_id
+     and exists (select 1 from auth.users u where u.id = old.user_id);
+  return old;
+end;
+$$;
+
+-- Re-linking clears the whole mark, reason included.
+create or replace function public.clear_saving_unlinked_mark()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.unlinked_at := null;
+  new.unlinked_from_book := null;
+  new.unlinked_reason := null;
+  return new;
+end;
+$$;
+
 -- ─── The other way in: the deposit closes under a link that was valid ────────
 --
 -- Guarding the link write only covers half the invariant. A saving linked to a
@@ -196,6 +264,7 @@ begin
   update public.recurring_savings s
      set linked_deposit_tx_id = null,
          unlinked_at = now(),
+         unlinked_reason = 'closed',
          unlinked_from_book = (
            select x.deposit_group_id is not distinct from x.transaction_id
              from public.investment_transactions x
@@ -267,8 +336,17 @@ begin
   update public.recurring_savings s
      set linked_deposit_tx_id = null,
          unlinked_at = now(),
+         unlinked_reason = 'closed',
+         -- Unknown, not false. A book settled through withdraw_accumulating_book
+         -- has had deposit_group_id cleared on every tranche, so a former anchor
+         -- and a plain term deposit are the same row by the time this runs — the
+         -- provenance is gone, and these are precisely the rows this repair is
+         -- for. Recorded as null, the plan says the true half (the deposit is
+         -- closed, pick another) and leaves out the half it cannot know. Claiming
+         -- false would be the same lie in the other direction: it tells a book''s
+         -- owner nothing changed about where the monthly money goes, when it did.
          unlinked_from_book = (
-           select x.deposit_group_id is not distinct from x.transaction_id
+           select case when x.deposit_group_id = x.transaction_id then true end
              from public.investment_transactions x
             where x.transaction_id = s.linked_deposit_tx_id
          ),

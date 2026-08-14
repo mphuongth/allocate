@@ -1,5 +1,26 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+// One sentence per refusal, said the same way whether this file worked it out or
+// the table did. The table is the authority — these checks can be skipped (a read
+// that failed says nothing, see below) or outrun by a close committing in
+// between — so the same conditions arrive as trigger errors, and a caller who
+// hits the race deserves the same answer as one who does not.
+const CLOSED_DEPOSIT = 'That deposit has been closed — link a live deposit instead.'
+const HANDED_OVER = 'That book has handed over to a successor — link the successor instead.'
+
+// Maps a write refused by enforce_recurring_link_not_handed_over onto the
+// message and status the validator would have given. Without it these land in
+// the generic catch-alls: "Failed to create recurring saving" (500 — reads as a
+// server fault for a request the server understood perfectly) and "Recurring
+// saving not found" (404 — reads as a missing row, the error-vs-not-found
+// conflation #532/#533 exists to stop).
+export function linkRefusalMessage(error: { message?: string } | null): string | null {
+  const message = error?.message ?? ''
+  if (message.includes('closed deposit:')) return CLOSED_DEPOSIT
+  if (message.includes('successor book:')) return HANDED_OVER
+  return null
+}
+
 // Validate a recurring saving's `linked_deposit_tx_id`. The FK only enforces that
 // the transaction exists (globally), and RLS on recurring_savings only checks the
 // recurring row's own user_id — so without this an authenticated caller could
@@ -43,7 +64,7 @@ export async function validateLinkedDeposit(
   // so a link pointing at it could never be funded — and the monthly plan would
   // answer the Saved pill with "it already has a successor" and nothing else.
   if (data.successor_deposit_tx_id) {
-    return 'That book has handed over to a successor — link the successor instead.'
+    return HANDED_OVER
   }
   if ((data.goal_id ?? null) !== (recurringGoalId ?? null)) {
     return 'Linked deposit must belong to the same goal as the recurring saving.'
@@ -100,7 +121,7 @@ export async function validateLinkedDeposit(
     .filter((w) => !(w.asset_type === 'fund' && w.fund_id != null))
     .reduce((sum, w) => sum + (w.principal_withdrawn ?? 0), 0)
   if (held - withdrawn <= 0) {
-    return 'That deposit has been closed — link a live deposit instead.'
+    return CLOSED_DEPOSIT
   }
   return null
 }
