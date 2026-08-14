@@ -16,6 +16,14 @@
 --   • it stays SILENT on ledgers the invariant itself vouched for. Those are
 --     planted with the triggers ON, so the invariant accepted every write, and the
 --     replay has no licence to complain about any of them.
+--   • and it only says 'violation' when it has the proof. created_at is the order
+--     it REPORTS against; what it proves against is the ordering search, which
+--     assumes no order at all. So the fixtures come in matched pairs that differ
+--     only in whether a legal reading exists — same shape, different verdict — and
+--     several of them are here to state what the search COSTS rather than what it
+--     catches. Getting that boundary wrong in the forgiving direction makes a
+--     tool nobody needs; getting it wrong the other way sends an operator to
+--     repair a ledger nobody wrote wrong.
 --
 -- Every fixture sets created_at and updated_at by hand, and has to: now() is fixed
 -- for the whole transaction, so rows inserted here would otherwise all share one
@@ -48,6 +56,8 @@ declare
   v_legacy_buy uuid; v_legacy   uuid; v_legacy_sell uuid;
   v_tie        uuid; v_tie_a    uuid; v_tie_b       uuid;
   v_inst       uuid; v_inst_a   uuid; v_inst_b      uuid;
+  v_big        uuid;
+  i            int;
   v_found      text;
   v_count      int;
   v_audit      int;
@@ -246,11 +256,11 @@ begin
           '2026-03-01T00:00:00Z', '2026-03-01T00:00:00Z');
 
   -- ── the impossible pair, written at ONE instant ────────────────────────────
-  -- The 497/503 ledger again, this time sharing a created_at. Both orders fail,
-  -- so a finding always appears — which is what makes this the deterministic half
-  -- of the tie rule: the pair above proves no false violation is produced, and
-  -- this proves the downgrade is what does it, rather than the replay happening to
-  -- pick the forgiving order that run.
+  -- The 497/503 ledger again, this time sharing a created_at — the shape a single
+  -- RPC writes, where transaction_id is the only tie-break and it recovers no
+  -- order at all. Beside the legal pair above it pins what the ordering search
+  -- actually keys on: not how the rows are timestamped, but whether any reading of
+  -- them is legal. This one has none in either order and stays proven.
   insert into public.investment_transactions
     (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, created_at, updated_at)
   values (v_user, v_goal, 'gold', 'investment', '2026-01-01', 1000, 100, 10, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
@@ -267,6 +277,25 @@ begin
   values (v_user, v_goal, 'gold', 'withdrawal', '2026-02-01', 503, v_inst, 503, 50,
           '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
   returning transaction_id into v_inst_b;
+
+  -- ── past the search's reach ────────────────────────────────────────────────
+  -- The ordering search is capped at 14 movable events per key, and the cap is a
+  -- resource bound rather than a tolerance — beyond it the answer is unknown, not
+  -- forgiven. Fifteen claims of the same shape as a provable pair therefore report
+  -- 'review': the replay still names the row and the balance, it just cannot say
+  -- no ordering explains it. Ordinary holdings sit far below this.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'investment', '2026-01-01', 1000, 100, 10, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+  returning transaction_id into v_big;
+  for i in 1..15 loop
+    insert into public.investment_transactions
+      (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+       parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+    values (v_user, v_goal, 'gold', 'withdrawal', '2026-02-01', 33, v_big, 33, 5,
+            timestamptz '2026-02-01T00:00:00Z' + (i * interval '1 day'),
+            timestamptz '2026-02-01T00:00:00Z' + (i * interval '1 day'));
+  end loop;
 
   -- ── a bank holding drawn past zero by its second withdrawal ────────────────
   -- The screening audit reports this holding too; what the replay adds is WHICH
@@ -348,11 +377,18 @@ begin
     raise exception 'the detail should report the balance at that turn and the basis owed, got %', v_found;
   end if;
 
-  -- the fund sell that outran its purchases
+  -- the fund sell that outran its purchases: found, and deliberately NOT proven.
+  -- Ordering both purchases ahead of the sell is a legal reading of these rows —
+  -- the sell would then take all 100 units and the whole basis — and created_at
+  -- cannot rule it out, because created_at is transaction-start and a purchase
+  -- written in a long transaction can land after a later-starting sell. So the
+  -- search finds a legal order and the finding says 'review'. This is the class
+  -- the ordering search costs us, and the test states the cost rather than hiding
+  -- it: the screening audit is silent here, and the replay still speaks.
   select r.check_name || '/' || r.severity into v_found
     from public.withdrawal_ledger_replay r where r.transaction_id = v_early;
-  if v_found is distinct from 'sale_exceeded_the_units_left/violation' then
-    raise exception 'a sell of 100 units against a 50-unit bucket should be a proven violation, got %', coalesce(v_found, '(silence)');
+  if v_found is distinct from 'sale_exceeded_the_units_left/review' then
+    raise exception 'a sell of 100 units against a 50-unit bucket should be reported, unproven, got %', coalesce(v_found, '(silence)');
   end if;
   select count(*) into v_audit from public.withdrawal_ledger_audit a where a.fund_id = v_fund_late;
   if v_audit <> 0 then
@@ -385,8 +421,13 @@ begin
   -- words the live invariant refuses it with ("the remaining balance of 40 units")
   select r.check_name || '/' || r.severity into v_found
     from public.withdrawal_ledger_replay r where r.transaction_id = v_legacy_sell;
-  if v_found is distinct from 'sale_exceeded_the_units_left/violation' then
-    raise exception 'a 45-unit sell behind a 10-unit legacy claim on a 50-unit purchase should be a proven violation, got %',
+  -- Reported, and 'review' for the same reason as the bucket above: the 5-unit
+  -- purchase that squares the totals could be read as arriving before the sell.
+  -- What this fixture is here to prove is that the bucket's OTHER kind of claim is
+  -- counted at all — without it the sell replays against 50 units and there is no
+  -- finding to grade.
+  if v_found is distinct from 'sale_exceeded_the_units_left/review' then
+    raise exception 'a 45-unit sell behind a 10-unit legacy claim on a 50-unit purchase should be reported, got %',
       coalesce(v_found, '(silence)');
   end if;
   select r.detail into v_found from public.withdrawal_ledger_replay r where r.transaction_id = v_legacy_sell;
@@ -420,12 +461,23 @@ begin
     raise exception 'a legal ledger whose write order the database never recorded was called a proven violation';
   end if;
 
-  -- the impossible pair at one instant: a finding on every run, and never proof
+  -- the impossible pair at one instant: still PROVEN. Sharing a created_at costs a
+  -- finding nothing by itself — what would cost it is a legal reading, and this
+  -- pair has none in either order. The pair above and this one are the two halves
+  -- of that distinction, and they differ only in their numbers.
   select r.check_name || '/' || r.severity into v_found
     from public.withdrawal_ledger_replay r
    where r.transaction_id in (v_inst_a, v_inst_b);
-  if v_found is distinct from 'sale_took_the_wrong_basis/review' then
-    raise exception 'a finding whose ordering the ledger does not record must be reported without claiming proof, got %',
+  if v_found is distinct from 'sale_took_the_wrong_basis/violation' then
+    raise exception 'a pair with no legal reading stays proven however its rows are timestamped, got %',
+      coalesce(v_found, '(silence)');
+  end if;
+
+  -- past the search's reach: reported, and honest that it is not proof
+  select r.severity into v_found
+    from public.withdrawal_ledger_replay r where r.parent_transaction_id = v_big;
+  if v_found is distinct from 'review' then
+    raise exception 'a holding with more claims than the search can order must not claim proof, got %',
       coalesce(v_found, '(silence)');
   end if;
 
@@ -434,10 +486,10 @@ begin
   -- tie-break, and it is the only fixture here that may do either.
   select count(*) into v_count from public.withdrawal_ledger_replay r
    where r.user_id = v_user and r.parent_transaction_id is distinct from v_tie;
-  if v_count <> 6 then
+  if v_count <> 7 then
     select string_agg(format('%s/%s: %s', r.check_name, r.severity, r.detail), E'\n')
       into v_found from public.withdrawal_ledger_replay r where r.user_id = v_user;
-    raise exception 'expected exactly the 6 planted sequences, got %:%s%s', v_count, E'\n', v_found;
+    raise exception 'expected exactly the 7 planted sequences, got %:%s%s', v_count, E'\n', v_found;
   end if;
 
   raise notice 'withdrawal_ledger_replay: ok';

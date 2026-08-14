@@ -56,13 +56,30 @@
 -- by construction, rather than being flagged as corruption or having their shapes
 -- hand-listed here — a list that would go stale the first time an RPC changed.
 --
--- The second thing a 'violation' has to answer for is that the order it replayed
--- is the only one the ledger allows. now() is transaction-stable, so every row a
--- single RPC writes shares one created_at exactly, and transaction_id is a random
--- uuid — sorting by it invents an order rather than recovering one. An instant
--- holding more than one event, at least one of them a claim, therefore drops
--- everything from that point on to 'review' as well. See the `tied` CTE for the
--- legal pair that fails when its two rows are replayed the other way round.
+-- The second thing a 'violation' has to answer for is the ORDER, and created_at
+-- cannot answer it. It defaults to now(), which is the transaction's START, while
+-- the invariant serializes claims on the source's row lock — so the write order is
+-- the lock order, and a long-running transaction writes after a later-starting
+-- one. Reproduced with two sessions: A begins at 11:06:57 and writes (32 units,
+-- 319 đồng); B begins at 11:06:59, writes (34, 339) and commits first. Both are
+-- accepted, both rows are pristine, and created_at puts them in the wrong order —
+-- replayed that way the 34-unit row owes 341 and is two đồng out. Rows a single
+-- RPC writes are worse still: they share one created_at exactly and transaction_id
+-- is a random uuid, which invents an order rather than recovering one.
+--
+-- So the ordering is not assumed AT ALL. created_at decides what the finding is
+-- reported against; what it is PROVED against is the question #613 actually asks —
+-- no ordering of any history could have produced this row — answered by searching
+-- for a legal one. See the `reach` CTE: it is a subset search rather than a
+-- permutation one, because the balance after a set of events does not depend on
+-- the order they arrived in. A key with a legal reading is 'review' however
+-- damning the created_at order looks, and the finding is reported either way.
+--
+-- The price is real and worth stating plainly: a fund bucket whose purchases could
+-- be reordered ahead of its sells is rarely provable, because "all the purchases
+-- first" is usually a legal reading. Those report 'review'. What stays provable is
+-- the class #613 opens with — a holding no sequence explains, like the 497/503
+-- pair — and any holding whose claims exceed it outright.
 --
 -- Two residual gaps, stated rather than papered over. updated_at is maintained by
 -- the writers, not by a trigger, so a hand-written SQL UPDATE that leaves it alone
@@ -108,7 +125,8 @@
 
 create or replace view public.withdrawal_ledger_replay
 with (security_invoker = true) as
-with wd as (
+-- RECURSIVE for the `reach` CTE alone, which walks the subsets of a key's events.
+with recursive wd as (
   select w.transaction_id, w.user_id, w.goal_id, w.fund_id, w.parent_transaction_id,
          w.principal_withdrawn, w.units_withdrawn, w.created_at, w.updated_at,
          -- The same branch precedence as check_withdrawal_balance and
@@ -244,44 +262,29 @@ events as (
 -- such a transaction could have passed the invariant in the first place: a
 -- purchase and the sell of it written together must have gone in that order.
 --
--- Ties are the limit of that reading, and they are load-bearing. Two withdrawals
--- written by separate statements of ONE transaction share a created_at exactly,
--- and transaction_id is a random uuid — it recovers no order, it only invents a
--- stable one. A pristine, legal ledger can fail under the invented order: against
--- 1000 đồng / 100 units, (34 units, 339 đồng) then (32 units, 319 đồng) is legal
--- both ways round as written, but replayed in the other order the 34-unit row owes
--- 341 and is two đồng out. So an instant holding more than one event, at least one
--- of them a debit, makes every finding from that point on a 'review' — the replay
--- still says what it found and against what, it just does not claim the ordering
--- was the one that happened.
-tied as (
-  select e.*,
-         (count(*) over w_at > 1 and count(*) filter (where e.is_debit) over w_at > 0)
-           as ambiguous_instant
-    from events e
-  window w_at as (partition by e.user_id, e.balance_key, e.ord_at)
-),
+-- That order is what the replay REPORTS against. It is not what it proves from —
+-- see the ordering search below, which assumes no order at all.
 state as (
-  select t.*,
-         coalesce(sum(t.d_basis) over w_prev, 0) as rem_basis,
-         coalesce(sum(t.d_units) over w_prev, 0) as rem_units,
-         bool_or(t.touched)      over w_key      as key_touched,
-         count(*) filter (where t.is_debit) over w_key as claims_on_key,
+  select e.*,
+         coalesce(sum(e.d_basis) over w_prev, 0) as rem_basis,
+         coalesce(sum(e.d_units) over w_prev, 0) as rem_units,
+         bool_or(e.touched)      over w_key      as key_touched,
+         count(*) filter (where e.is_debit) over w_key as claims_on_key,
          -- Where this claim sits in the holding's history, which is the number an
          -- operator needs to find it in the ledger. Counted over the claims alone,
          -- so an interleaved fund purchase does not shift it.
-         count(*) filter (where t.is_debit) over w_upto as claim_ordinal,
-         -- Only ties up to and including this row can have moved the balance it was
-         -- measured against; a tie later in the holding says nothing about it.
-         bool_or(t.ambiguous_instant) over w_upto as order_ambiguous
-    from tied t
+         count(*) filter (where e.is_debit) over w_upto as claim_ordinal,
+         -- The events that have to be permuted to decide the key: everything but
+         -- the source, which opens the balance rather than happening in it.
+         count(*) filter (where e.ord_at > '-infinity') over w_key as movable
+    from events e
   window
-    w_key  as (partition by t.user_id, t.balance_key),
-    w_prev as (partition by t.user_id, t.balance_key
-               order by t.ord_at, t.ord_kind, t.ord_id
+    w_key  as (partition by e.user_id, e.balance_key),
+    w_prev as (partition by e.user_id, e.balance_key
+               order by e.ord_at, e.ord_kind, e.ord_id
                rows between unbounded preceding and 1 preceding),
-    w_upto as (partition by t.user_id, t.balance_key
-               order by t.ord_at, t.ord_kind, t.ord_id
+    w_upto as (partition by e.user_id, e.balance_key
+               order by e.ord_at, e.ord_kind, e.ord_id
                rows between unbounded preceding and current row)
 ),
 
@@ -324,15 +327,106 @@ fails as (
   select j.*, count(*) over (partition by j.user_id, j.balance_key) as fails_on_key
     from judged j
    where j.failure is not null
+),
+
+-- ── is there ANY order this key could have been written in? ─────────────────
+-- What the replay reports comes from created_at. What it PROVES may not, because
+-- created_at is `now()`, which is the transaction's START — and the invariant
+-- serializes claims on a lock, so the write order is the lock order. A long
+-- transaction can write after a later-starting one:
+--
+--   A begins 11:06:57 .............................. writes (32 units, 319 đồng)
+--   B begins 11:06:59, writes (34, 339), commits
+--
+-- Both accepted — B against the full 1000 đồng / 100 units, A against the 661/66
+-- B left it. Both rows pristine, both timestamps distinct, and in the WRONG order:
+-- replayed by created_at the 34-unit row owes 341 and is two đồng out. Reproduced
+-- with two sessions against the local stack. No comparison of created_at values
+-- rescues that, whatever gap is allowed for, so the ordering is not assumed at all.
+--
+-- Instead the question #613 actually asks — "no ordering of any history could have
+-- produced this row" — is answered directly, and it is cheaper than it looks. The
+-- remaining balance after a SET of events does not depend on the order they came
+-- in: it is the opening balance plus their deltas, and addition commutes. So this
+-- is a search over subsets, not permutations. A subset is reachable when some
+-- event in it is legal against the balance the rest of it leaves.
+--
+-- A key where SOME ordering is legal cannot be called proven, however damning the
+-- created_at order looks; it drops to 'review' with the finding intact. Only a key
+-- where the full set is unreachable by any route has no legal reading at all.
+--
+-- The cap is a resource bound, not a tolerance: a key with more than 14 movable
+-- events is not searched and reports 'review'. Ordinary holdings are far below it,
+-- and only keys that already produced a finding are searched at all — a clean
+-- ledger does no work here.
+movable as (
+  select s.user_id, s.balance_key, s.is_debit, s.judge_here, s.quantity_valued,
+         s.d_basis, s.d_units, s.took_principal, s.took_units,
+         (row_number() over (partition by s.user_id, s.balance_key
+                             order by s.ord_at, s.ord_kind, s.ord_id) - 1)::int as idx
+    from state s
+   where s.ord_at > '-infinity'
+     and exists (select 1 from fails f
+                  where f.user_id = s.user_id and f.balance_key = s.balance_key)
+),
+opening as (
+  select s.user_id, s.balance_key,
+         -- The source opens a parent-backed holding; a fund bucket opens at zero
+         -- and is filled by the purchase events themselves.
+         coalesce(sum(s.d_basis) filter (where s.ord_at = '-infinity'), 0) as open_basis,
+         coalesce(sum(s.d_units) filter (where s.ord_at = '-infinity'), 0) as open_units,
+         max(s.movable)::int as n
+    from state s
+   where exists (select 1 from fails f
+                  where f.user_id = s.user_id and f.balance_key = s.balance_key)
+   group by s.user_id, s.balance_key
+),
+reach as (
+  select o.user_id, o.balance_key, 0::bigint as mask,
+         o.open_basis as rem_basis, o.open_units as rem_units
+    from opening o
+   where o.n <= 14
+  union
+  select r.user_id, r.balance_key, r.mask | (1::bigint << m.idx),
+         r.rem_basis + m.d_basis, r.rem_units + m.d_units
+    from reach r
+    join movable m
+      on m.user_id = r.user_id and m.balance_key = r.balance_key
+     and (r.mask >> m.idx) & 1 = 0
+   where not m.is_debit
+      -- A purchase claims nothing, and a claim the invariant does not measure here
+      -- (a bucket's parent-backed claim) is only counted, never judged — so both
+      -- may be placed anywhere.
+      or not m.judge_here
+      -- Otherwise it has to survive the same three questions, against the balance
+      -- the rest of this subset leaves.
+      or (not (m.took_units > 0
+               and m.took_units > r.rem_units + case when r.rem_units > 0 then 0.0001 else 0 end)
+          and not (m.quantity_valued and m.took_units > 0 and r.rem_units > 0
+                   and abs(m.took_principal
+                           - case when m.took_units < r.rem_units - 0.0001
+                                    then round(m.took_units * r.rem_basis / r.rem_units)
+                                  else r.rem_basis end) > 1)
+          and not (not m.quantity_valued and m.took_principal > 0
+                   and m.took_principal > r.rem_basis))
+),
+explainable as (
+  select distinct r.user_id, r.balance_key
+    from reach r
+    join opening o on o.user_id = r.user_id and o.balance_key = r.balance_key
+   where r.mask = (1::bigint << o.n) - 1
 )
 
 select distinct on (f.user_id, f.balance_key)
        f.failure::text  as check_name,
        -- Provable only where the replay's premise holds: nothing on this key was
-       -- touched after it was written, and no instant up to this row holds two
-       -- events whose order the ledger does not record. Then these rows ARE the
-       -- history, and no ordering of them produces what was found.
-       case when f.key_touched or f.order_ambiguous then 'review' else 'violation' end::text as severity,
+       -- touched after it was written, so these rows ARE what was measured; the
+       -- key was small enough to search; and no ordering of it is legal.
+       case when f.key_touched
+              or f.movable > 14
+              or exists (select 1 from explainable x
+                          where x.user_id = f.user_id and x.balance_key = f.balance_key)
+              then 'review' else 'violation' end::text as severity,
        f.user_id,
        f.row_id         as transaction_id,
        f.holding        as parent_transaction_id,
