@@ -237,7 +237,16 @@ events as (
          -- it stays freely placeable in the ordering search — a row that could
          -- never have been written cannot be used to prove anything about its
          -- neighbours.
-         coalesce(w.principal_withdrawn, 0) > 0, w.transaction_id,
+         -- A NEGATIVE amount is condemned by the screen too (`negative_amounts`),
+         -- and it is the same mistake to restate it here: principal 150 of a 100
+         -- holding with units -1 came out as a plain overdraw, which says nothing
+         -- about the sign that makes the row impossible. It is also the one shape
+         -- that runs the ledger BACKWARDS — a negative delta ADDS to the holding
+         -- and banks a credit later rows can spend — so judging the rows around it
+         -- would measure them against a balance the invariant would never have
+         -- allowed to exist.
+         coalesce(w.principal_withdrawn, 0) > 0
+           and coalesce(w.units_withdrawn, 0) >= 0, w.transaction_id,
          -coalesce(w.principal_withdrawn, 0), -coalesce(w.units_withdrawn, 0),
          coalesce(w.principal_withdrawn, 0), coalesce(w.units_withdrawn, 0),
          (w.updated_at > w.created_at), null::uuid
@@ -334,7 +343,16 @@ events as (
   select w.user_id,
          'f:' || w.fund_id::text || ':' || coalesce(w.goal_id::text, ''),
          null, w.fund_id, w.goal_id, true,
-         w.created_at, 1, w.transaction_id, true, true, w.transaction_id,
+         w.created_at, 1, w.transaction_id, true,
+         -- Same negative-amount carve-out as the parent axis, for the same reason:
+         -- the screen names it and this view would only restate it worse — a sell
+         -- of 50 units recording MINUS 500 đồng came out as "it should have taken
+         -- 500 đồng, it took -500", which reads as a misallocation rather than as
+         -- the impossible sign it is. No positive-principal rule here, though:
+         -- unlike the parent axis a fund sell may legitimately take nothing, since
+         -- a slice worth less than half a đồng rounds to zero.
+         coalesce(w.principal_withdrawn, 0) >= 0
+           and coalesce(w.units_withdrawn, 0) >= 0, w.transaction_id,
          -coalesce(w.principal_withdrawn, 0), -coalesce(w.units_withdrawn, 0),
          coalesce(w.principal_withdrawn, 0), coalesce(w.units_withdrawn, 0),
          (w.updated_at > w.created_at), null::uuid

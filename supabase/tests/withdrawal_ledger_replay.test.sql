@@ -59,6 +59,7 @@ declare
   v_big        uuid;
   v_fund_dep   uuid; v_dep_buy  uuid; v_dep_sell    uuid;
   v_shape      uuid; v_shape_w  uuid;
+  v_neg        uuid; v_neg_w    uuid; v_negf uuid; v_negf_buy uuid; v_negf_sell uuid;
   v_other      uuid; v_other_g  uuid; v_foreign uuid; v_foreign_w uuid;
   v_pair       uuid; v_pair_a   uuid; v_pair_b  uuid;
   v_xfund      uuid; v_x_mine   uuid; v_x_theirs uuid; v_x_claim uuid; v_x_sell uuid;
@@ -401,6 +402,42 @@ begin
           '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
   returning transaction_id into v_shape_w;
 
+  -- ── negative amounts, on both axes ─────────────────────────────────────────
+  -- The screen calls these `negative_amounts` and the invariant refuses them
+  -- before it measures anything, because a negative delta runs the ledger
+  -- BACKWARDS: it ADDS to the holding and banks a credit the next row can spend.
+  -- Judged as transitions they came out described as ordinary balance faults —
+  -- "a withdrawal of 150 đồng when the holding had 100 đồng left", saying nothing
+  -- about the sign that makes the row impossible, and on the fund side "it should
+  -- have taken 500 đồng, it took -500", which reads as a misallocation. Both are
+  -- the shape the screen owns, and the rows around them cannot be judged either:
+  -- the balance a credit like this leaves is one the invariant would never have
+  -- allowed to exist.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, created_at, updated_at)
+  values (v_user, v_goal, 'bank', 'investment', '2026-01-01', 100, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+  returning transaction_id into v_neg;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 150, v_neg, 150, -1,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
+  returning transaction_id into v_neg_w;
+
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Neg Fund', 'RNEG', 'equity', 20000) returning id into v_negf;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'investment', '2026-01-01', 1000, 100, 10, v_negf,
+          '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+  returning transaction_id into v_negf_buy;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, fund_id,
+     principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'withdrawal', '2026-02-01', 1, v_negf, -500, 50,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
+  returning transaction_id into v_negf_sell;
+
   -- ── the one order the ledger DOES record ───────────────────────────────────
   -- A claim parented to a purchase cannot have been written before that purchase
   -- existed — the foreign key would have refused it. That is a fact about the
@@ -679,6 +716,22 @@ begin
       from public.withdrawal_ledger_replay r
      where r.transaction_id = v_foreign_w or r.parent_transaction_id = v_foreign or r.user_id = v_other;
     raise exception 'a claim naming another user''s holding is not a balance question — the invariant returns quietly and so must this: %', v_found;
+  end if;
+
+  -- negative amounts on both axes: silent here, named there
+  if exists (select 1 from public.withdrawal_ledger_replay r
+              where r.transaction_id in (v_neg_w, v_negf_sell)
+                 or r.parent_transaction_id = v_neg or r.fund_id = v_negf) then
+    select string_agg(r.check_name || ': ' || r.detail, E'\n') into v_found
+      from public.withdrawal_ledger_replay r
+     where r.transaction_id in (v_neg_w, v_negf_sell)
+        or r.parent_transaction_id = v_neg or r.fund_id = v_negf;
+    raise exception 'a negative amount is the screen''s finding, and describing it as a balance fault says nothing about the sign: %', v_found;
+  end if;
+  select count(distinct a.transaction_id) into v_audit from public.withdrawal_ledger_audit a
+   where a.transaction_id in (v_neg_w, v_negf_sell) and a.check_name = 'negative_amounts';
+  if v_audit <> 2 then
+    raise exception 'the screen was supposed to own both negative rows, it named %', v_audit;
   end if;
 
   -- the shape the screening view owns: named there, and silent here
