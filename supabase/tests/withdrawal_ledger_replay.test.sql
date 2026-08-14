@@ -59,6 +59,7 @@ declare
   v_big        uuid;
   v_fund_dep   uuid; v_dep_buy  uuid; v_dep_sell    uuid;
   v_shape      uuid; v_shape_w  uuid;
+  v_other      uuid; v_other_g  uuid; v_foreign uuid; v_foreign_w uuid;
   i            int;
   v_found      text;
   v_count      int;
@@ -281,6 +282,32 @@ begin
   values (v_user, v_goal, 'gold', 'withdrawal', '2026-02-01', 503, v_inst, 503, 50,
           '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
   returning transaction_id into v_inst_b;
+
+  -- ── a claim on someone ELSE'S holding ──────────────────────────────────────
+  -- check_withdrawal_balance looks for the parent under the claimant's own
+  -- user_id, finds nothing, and returns without measuring anything: ownership is a
+  -- different trigger's refusal (#474 / #525), and staying quiet keeps that message
+  -- the one the user sees. The replay has to match that silence, and the reason is
+  -- specific — judging it means partitioning the holding under its owner and the
+  -- claim under the claimant, so the claim replays against an opening balance of
+  -- zero and reads as a pristine overdraw of a holding nobody touched. The
+  -- screening view is silent here too, which the header records rather than
+  -- letting the silence pass for a clean bill.
+  insert into auth.users (id, email) values (gen_random_uuid(), 'wd-replay-other@test.invalid')
+  returning id into v_other;
+  insert into public.savings_goals (user_id, goal_name) values (v_other, 'Theirs')
+  returning goal_id into v_other_g;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, created_at, updated_at)
+  values (v_other, v_other_g, 'bank', 'investment', '2026-01-01', 100000000,
+          '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+  returning transaction_id into v_foreign;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 30000000, v_foreign, 30000000,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
+  returning transaction_id into v_foreign_w;
 
   -- ── a shape the screening view already owns ────────────────────────────────
   -- A gold sale with units and no principal. The invariant refuses it before the
@@ -532,6 +559,17 @@ begin
   if v_found is distinct from 'sale_took_the_wrong_basis/violation' then
     raise exception 'a pair with no legal reading stays proven however its rows are timestamped, got %',
       coalesce(v_found, '(silence)');
+  end if;
+
+  -- the claim on another user's holding: silent, and silent for BOTH users — the
+  -- holding's owner must not see an overdraw of a holding nobody touched either
+  if exists (select 1 from public.withdrawal_ledger_replay r
+              where r.transaction_id = v_foreign_w or r.parent_transaction_id = v_foreign
+                 or r.user_id = v_other) then
+    select r.check_name || '/' || r.severity || ': ' || r.detail into v_found
+      from public.withdrawal_ledger_replay r
+     where r.transaction_id = v_foreign_w or r.parent_transaction_id = v_foreign or r.user_id = v_other;
+    raise exception 'a claim naming another user''s holding is not a balance question — the invariant returns quietly and so must this: %', v_found;
   end if;
 
   -- the shape the screening view owns: named there, and silent here

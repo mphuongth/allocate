@@ -88,6 +88,19 @@
 -- the class #613 opens with — a holding no sequence explains, like the 497/503
 -- pair — and any holding whose claims exceed it outright.
 --
+-- One shape is left unreported ON PURPOSE, and it is worth saying so rather than
+-- letting silence read as a clean bill: a claim naming a holding that belongs to
+-- SOMEONE ELSE. check_withdrawal_balance looks for the parent under the claimant's
+-- own user_id, finds nothing, and returns without measuring anything — ownership is
+-- a different trigger's refusal (#474 / #525), and staying quiet here keeps that
+-- message the one the user sees. This view matches that silence, because judging it
+-- meant partitioning the holding under its owner and the claim under the claimant,
+-- which replays the claim against an opening balance of zero and reports a pristine
+-- overdraw of a holding nobody touched. withdrawal_ledger_audit is silent on it
+-- too, so no view in this family reports such a row. A candidate for the screen,
+-- where ownership would be an honest shape check; it is not a balance question and
+-- inventing a balance answer to it is what this note exists to prevent.
+--
 -- Two residual gaps, stated rather than papered over. updated_at is maintained by
 -- the writers, not by a trigger, so a hand-written SQL UPDATE that leaves it alone
 -- is invisible to this test and its key would still read as pristine. And the test
@@ -192,7 +205,8 @@ events as (
     from public.investment_transactions p
    where p.transaction_type = 'investment'
      and exists (select 1 from wd w
-                  where w.parent_transaction_id = p.transaction_id and not w.fund_keyed)
+                  where w.parent_transaction_id = p.transaction_id and not w.fund_keyed
+                    and w.user_id = p.user_id)
 
   union all
   select w.user_id, 'p:' || w.parent_transaction_id::text, w.parent_transaction_id, null, w.goal_id,
@@ -222,6 +236,14 @@ events as (
      -- already left; withdrawal_ledger_audit calls that by name, and replaying it
      -- would only restate the same row less clearly.
      and pa.transaction_type = 'investment'
+     -- And it has to be the writer's OWN holding, which is the same predicate
+     -- check_withdrawal_balance uses before it reads a balance at all — it finds
+     -- nothing and returns quietly, leaving ownership to the trigger whose refusal
+     -- it is (#474 / #525). Without this the two sides land in different partitions
+     -- (the holding under its owner, the claim under the claimant) and the claim
+     -- replays against an opening balance of zero, which reads as a pristine
+     -- overdraw of a holding that is in fact untouched.
+     and pa.user_id = w.user_id
 
   union all
   -- The bucket's OTHER kind of claim (#606). A withdrawal parented to a fund
@@ -261,6 +283,10 @@ events as (
      and p.fund_id is not null
      and coalesce(p.units, 0) > 0
      and coalesce(p.amount_vnd, 0) > 0
+     -- Same-owner, as on the parent axis. A fund belongs to one user, so the
+     -- invariant's own query reaches this implicitly through the bucket; stating it
+     -- keeps the two branches reading alike rather than relying on that.
+     and p.user_id = w.user_id
 
   union all
   -- A fund bucket's purchases DO interleave: the invariant sums whatever is in the
