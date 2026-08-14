@@ -56,6 +56,14 @@
 -- by construction, rather than being flagged as corruption or having their shapes
 -- hand-listed here — a list that would go stale the first time an RPC changed.
 --
+-- The second thing a 'violation' has to answer for is that the order it replayed
+-- is the only one the ledger allows. now() is transaction-stable, so every row a
+-- single RPC writes shares one created_at exactly, and transaction_id is a random
+-- uuid — sorting by it invents an order rather than recovering one. An instant
+-- holding more than one event, at least one of them a claim, therefore drops
+-- everything from that point on to 'review' as well. See the `tied` CTE for the
+-- legal pair that fails when its two rows are replayed the other way round.
+--
 -- Two residual gaps, stated rather than papered over. updated_at is maintained by
 -- the writers, not by a trigger, so a hand-written SQL UPDATE that leaves it alone
 -- is invisible to this test and its key would still read as pristine. And the test
@@ -138,7 +146,8 @@ events as (
          '-infinity'::timestamptz              as ord_at,
          0                                     as ord_kind,
          p.transaction_id                      as ord_id,
-         false                                 as is_sale,
+         false                                 as is_debit,
+         false                                 as judge_here,
          null::uuid                            as row_id,
          coalesce(p.amount_vnd, 0)::numeric    as d_basis,
          coalesce(p.units, 0)::numeric         as d_units,
@@ -153,7 +162,7 @@ events as (
   union all
   select w.user_id, 'p:' || w.parent_transaction_id::text, w.parent_transaction_id, null, w.goal_id,
          (pa.asset_type = 'gold'),
-         w.created_at, 1, w.transaction_id, true, w.transaction_id,
+         w.created_at, 1, w.transaction_id, true, true, w.transaction_id,
          -coalesce(w.principal_withdrawn, 0), -coalesce(w.units_withdrawn, 0),
          coalesce(w.principal_withdrawn, 0), coalesce(w.units_withdrawn, 0),
          (w.updated_at > w.created_at)
@@ -166,6 +175,39 @@ events as (
      and pa.transaction_type = 'investment'
 
   union all
+  -- The bucket's OTHER kind of claim (#606). A withdrawal parented to a fund
+  -- PURCHASE is not fund-keyed, so it is measured on the parent axis above — but
+  -- 20260803000005 also charges it against that purchase's (goal, fund) bucket
+  -- when the next sale is measured, because lib/withdrawalProgress values it
+  -- there. Leaving it out of the bucket made the replay miss exactly the overdraw
+  -- that migration exists to refuse: a legacy 10-unit claim on a 50-unit purchase
+  -- followed by a 45-unit sell replays as 45 of 50 and reports clean.
+  --
+  -- It is a DEBIT here and not a judged one: the invariant never measures such a
+  -- row against the bucket, only counts it. Its verdict is the parent axis's.
+  --
+  -- Every predicate below is that function's, including the derived units for a
+  -- claim that records none, and `p.units > 0` — a purchase with no units is no
+  -- bucket, so its claim stays on the parent axis alone.
+  select w.user_id,
+         'f:' || p.fund_id::text || ':' || coalesce(p.goal_id::text, ''),
+         null, p.fund_id, p.goal_id, true,
+         w.created_at, 1, w.transaction_id, true, false, w.transaction_id,
+         -coalesce(w.principal_withdrawn, 0),
+         -case when coalesce(w.units_withdrawn, 0) > 0 then w.units_withdrawn
+               else least(p.units, p.units * coalesce(w.principal_withdrawn, 0) / p.amount_vnd) end,
+         null, null,
+         (w.updated_at > w.created_at)
+    from wd w
+    join public.investment_transactions p on p.transaction_id = w.parent_transaction_id
+   where not w.fund_keyed
+     and p.transaction_type = 'investment'
+     and p.asset_type = 'fund'
+     and p.fund_id is not null
+     and coalesce(p.units, 0) > 0
+     and coalesce(p.amount_vnd, 0) > 0
+
+  union all
   -- A fund bucket's purchases DO interleave: the invariant sums whatever is in the
   -- bucket at the moment of the sell, so a purchase made later is not part of that
   -- sum. The exclusions mirror the invariant's own — a pending DCA seed (units
@@ -173,7 +215,7 @@ events as (
   select t.user_id,
          'f:' || t.fund_id::text || ':' || coalesce(t.goal_id::text, ''),
          null, t.fund_id, t.goal_id, true,
-         t.created_at, 0, t.transaction_id, false, t.transaction_id,
+         t.created_at, 0, t.transaction_id, false, false, t.transaction_id,
          coalesce(t.amount_vnd, 0), coalesce(t.units, 0), null, null,
          (t.updated_at > t.created_at)
     from public.investment_transactions t
@@ -187,7 +229,7 @@ events as (
   select w.user_id,
          'f:' || w.fund_id::text || ':' || coalesce(w.goal_id::text, ''),
          null, w.fund_id, w.goal_id, true,
-         w.created_at, 1, w.transaction_id, true, w.transaction_id,
+         w.created_at, 1, w.transaction_id, true, true, w.transaction_id,
          -coalesce(w.principal_withdrawn, 0), -coalesce(w.units_withdrawn, 0),
          coalesce(w.principal_withdrawn, 0), coalesce(w.units_withdrawn, 0),
          (w.updated_at > w.created_at)
@@ -201,24 +243,45 @@ events as (
 -- sorted before debits at the same instant, which is the only reading under which
 -- such a transaction could have passed the invariant in the first place: a
 -- purchase and the sell of it written together must have gone in that order.
-state as (
+--
+-- Ties are the limit of that reading, and they are load-bearing. Two withdrawals
+-- written by separate statements of ONE transaction share a created_at exactly,
+-- and transaction_id is a random uuid — it recovers no order, it only invents a
+-- stable one. A pristine, legal ledger can fail under the invented order: against
+-- 1000 đồng / 100 units, (34 units, 339 đồng) then (32 units, 319 đồng) is legal
+-- both ways round as written, but replayed in the other order the 34-unit row owes
+-- 341 and is two đồng out. So an instant holding more than one event, at least one
+-- of them a debit, makes every finding from that point on a 'review' — the replay
+-- still says what it found and against what, it just does not claim the ordering
+-- was the one that happened.
+tied as (
   select e.*,
-         coalesce(sum(e.d_basis) over w_prev, 0) as rem_basis,
-         coalesce(sum(e.d_units) over w_prev, 0) as rem_units,
-         bool_or(e.touched)      over w_key      as key_touched,
-         count(*) filter (where e.is_sale) over w_key as sales_on_key,
-         -- Where this sale sits in the holding's history, which is the number an
-         -- operator needs to find it in the ledger. Counted over the sales alone,
-         -- so an interleaved fund purchase does not shift it.
-         count(*) filter (where e.is_sale) over w_upto as sale_ordinal
+         (count(*) over w_at > 1 and count(*) filter (where e.is_debit) over w_at > 0)
+           as ambiguous_instant
     from events e
+  window w_at as (partition by e.user_id, e.balance_key, e.ord_at)
+),
+state as (
+  select t.*,
+         coalesce(sum(t.d_basis) over w_prev, 0) as rem_basis,
+         coalesce(sum(t.d_units) over w_prev, 0) as rem_units,
+         bool_or(t.touched)      over w_key      as key_touched,
+         count(*) filter (where t.is_debit) over w_key as claims_on_key,
+         -- Where this claim sits in the holding's history, which is the number an
+         -- operator needs to find it in the ledger. Counted over the claims alone,
+         -- so an interleaved fund purchase does not shift it.
+         count(*) filter (where t.is_debit) over w_upto as claim_ordinal,
+         -- Only ties up to and including this row can have moved the balance it was
+         -- measured against; a tie later in the holding says nothing about it.
+         bool_or(t.ambiguous_instant) over w_upto as order_ambiguous
+    from tied t
   window
-    w_key  as (partition by e.user_id, e.balance_key),
-    w_prev as (partition by e.user_id, e.balance_key
-               order by e.ord_at, e.ord_kind, e.ord_id
+    w_key  as (partition by t.user_id, t.balance_key),
+    w_prev as (partition by t.user_id, t.balance_key
+               order by t.ord_at, t.ord_kind, t.ord_id
                rows between unbounded preceding and 1 preceding),
-    w_upto as (partition by e.user_id, e.balance_key
-               order by e.ord_at, e.ord_kind, e.ord_id
+    w_upto as (partition by t.user_id, t.balance_key
+               order by t.ord_at, t.ord_kind, t.ord_id
                rows between unbounded preceding and current row)
 ),
 
@@ -254,7 +317,7 @@ judged as (
              then 'withdrawal_exceeded_the_balance'
          end as failure
     from state s
-   where s.is_sale
+   where s.judge_here
 ),
 
 fails as (
@@ -266,8 +329,10 @@ fails as (
 select distinct on (f.user_id, f.balance_key)
        f.failure::text  as check_name,
        -- Provable only where the replay's premise holds: nothing on this key was
-       -- touched after it was written, so these rows ARE the history.
-       case when f.key_touched then 'review' else 'violation' end::text as severity,
+       -- touched after it was written, and no instant up to this row holds two
+       -- events whose order the ledger does not record. Then these rows ARE the
+       -- history, and no ordering of them produces what was found.
+       case when f.key_touched or f.order_ambiguous then 'review' else 'violation' end::text as severity,
        f.user_id,
        f.row_id         as transaction_id,
        f.holding        as parent_transaction_id,
@@ -276,13 +341,13 @@ select distinct on (f.user_id, f.balance_key)
        case f.failure
          when 'sale_exceeded_the_units_left' then
            format('a sale of %s units when the holding had %s units left (%s đồng of basis), %s of %s sale(s) into its history',
-                  f.took_units, f.rem_units, f.rem_basis, f.sale_ordinal, f.sales_on_key)
+                  f.took_units, f.rem_units, f.rem_basis, f.claim_ordinal, f.claims_on_key)
          when 'sale_took_the_wrong_basis' then
            format('a sale of %s units out of the %s units then left, against a %s đồng basis: it should have taken %s đồng, it took %s',
                   f.took_units, f.rem_units, f.rem_basis, f.owed, f.took_principal)
          else
            format('a withdrawal of %s đồng when the holding had %s đồng left, %s of %s withdrawal(s) into its history',
-                  f.took_principal, f.rem_basis, f.sale_ordinal, f.sales_on_key)
+                  f.took_principal, f.rem_basis, f.claim_ordinal, f.claims_on_key)
        end
        || case when f.fails_on_key > 1
                  then format(' — and %s later row(s) on this holding fail the replay too, measured against a balance this one already made fiction',

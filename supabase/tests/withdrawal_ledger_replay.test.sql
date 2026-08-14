@@ -45,6 +45,8 @@ declare
   v_early      uuid;
   v_edited     uuid; v_edited_a uuid;
   v_bank_over  uuid; v_bank_w2  uuid;
+  v_legacy_buy uuid; v_legacy   uuid; v_legacy_sell uuid;
+  v_tie        uuid; v_tie_a    uuid; v_tie_b       uuid;
   v_found      text;
   v_count      int;
   v_audit      int;
@@ -143,6 +145,35 @@ begin
     raise exception 'the replay complained about a ledger the invariant itself accepted:%s%s', E'\n', v_found;
   end if;
 
+  -- ── two claims the ledger records no order between ────────────────────────
+  -- Still with the triggers ON, because this pair IS legal — 34 units taking 339
+  -- of 1000/100 (owing 340), then 32 of the 66 left taking 319 (owing 320), and
+  -- the invariant accepted both in that order. What it does not record is that
+  -- order: now() is transaction-stable, so two withdrawals written by separate
+  -- statements of ONE transaction share a created_at exactly, and transaction_id
+  -- is a random uuid — it invents an order, it does not recover one. Replayed the
+  -- other way round the 34-unit row owes 341 and is two đồng out, so the replay
+  -- would call a legal ledger proven corrupt if it trusted its own tie-break.
+  --
+  -- It sits outside the clean half deliberately: the replay is NOT silent here,
+  -- and it should not be. It reports what it found and says 'review'.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'investment', '2026-01-01', 1000, 100, 10, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+  returning transaction_id into v_tie;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-02-01', 339, v_tie, 339, 34,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
+  returning transaction_id into v_tie_a;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-02-01', 319, v_tie, 319, 32,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
+  returning transaction_id into v_tie_b;
+
   -- ═══ the sequences only a replay can decide ════════════════════════════════
   -- Planted with the triggers off: every one of these is a shape the invariant
   -- refuses to write, which is the whole reason they can only be found afterwards.
@@ -232,6 +263,38 @@ begin
           '2026-03-01T00:00:00Z', '2026-03-01T00:00:00Z')
   returning transaction_id into v_bank_w2;
 
+  -- ── a fund bucket's OTHER kind of claim ────────────────────────────────────
+  -- A withdrawal parented to a fund PURCHASE is not fund-keyed, so it is measured
+  -- on the parent axis — but 20260803000005 also charges it against that
+  -- purchase's bucket when the next sale is measured (#606). A 10-unit legacy
+  -- claim on a 50-unit purchase leaves 40, and the 45-unit sell that follows is
+  -- refused by the live invariant in those words. Counting only the fund-keyed
+  -- sells replays it as 45 of 50 and reports clean.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'investment', '2026-01-01', 50000000, 50, 1000000, v_fund,
+          '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+  returning transaction_id into v_legacy_buy;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 10000000, v_legacy_buy, 10000000, 10,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
+  returning transaction_id into v_legacy;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, fund_id,
+     principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'withdrawal', '2026-03-01', 45000000, v_fund, 45000000, 45,
+          '2026-03-01T00:00:00Z', '2026-03-01T00:00:00Z')
+  returning transaction_id into v_legacy_sell;
+  -- and a purchase afterwards that squares the bucket's totals, so the screening
+  -- audit — which sums both kinds of claim against both purchases — sees 55 units
+  -- bought and 55 sold and is silent. Only the order says the sell came first.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'investment', '2026-04-01', 5000000, 5, 1000000, v_fund,
+          '2026-04-01T00:00:00Z', '2026-04-01T00:00:00Z');
+
   alter table public.investment_transactions enable trigger user;
   set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted deferred;
 
@@ -294,12 +357,43 @@ begin
     raise exception 'the detail should place the row at its turn in the holding''s history, got %', v_found;
   end if;
 
-  -- and nothing beyond the four holdings planted above
+  -- the bucket's legacy claim: the sell that followed it is named, in the same
+  -- words the live invariant refuses it with ("the remaining balance of 40 units")
+  select r.check_name || '/' || r.severity into v_found
+    from public.withdrawal_ledger_replay r where r.transaction_id = v_legacy_sell;
+  if v_found is distinct from 'sale_exceeded_the_units_left/violation' then
+    raise exception 'a 45-unit sell behind a 10-unit legacy claim on a 50-unit purchase should be a proven violation, got %',
+      coalesce(v_found, '(silence)');
+  end if;
+  select r.detail into v_found from public.withdrawal_ledger_replay r where r.transaction_id = v_legacy_sell;
+  if v_found not like '%40 units left%' then
+    raise exception 'the bucket had 40 units left once the legacy claim is counted, got %', v_found;
+  end if;
+  -- and the screening audit does not report the overdraw: its bucket sums count
+  -- the fund-keyed sells alone, so 45 of 50 units looks like it fits
+  select count(*) into v_audit from public.withdrawal_ledger_audit a
+   where a.fund_id = v_fund and a.severity = 'violation';
+  if v_audit <> 0 then
+    raise exception 'the screening audit was supposed to miss the legacy-claim overdraw';
+  end if;
+
+  -- the tied pair: reported, but never as proof — the ledger records no order
+  -- between two rows written in one transaction, and one of the two orders is
+  -- legal. A tie-break on a random uuid is not evidence.
+  select r.severity into v_found
+    from public.withdrawal_ledger_replay r
+   where r.transaction_id in (v_tie_a, v_tie_b);
+  if v_found is distinct from 'review' then
+    raise exception 'a finding whose ordering the ledger does not record must not claim proof, got %',
+      coalesce(v_found, '(silence)');
+  end if;
+
+  -- and nothing beyond the six holdings planted above
   select count(*) into v_count from public.withdrawal_ledger_replay r where r.user_id = v_user;
-  if v_count <> 4 then
+  if v_count <> 6 then
     select string_agg(format('%s/%s: %s', r.check_name, r.severity, r.detail), E'\n')
       into v_found from public.withdrawal_ledger_replay r where r.user_id = v_user;
-    raise exception 'expected exactly the 4 planted sequences, got %:%s%s', v_count, E'\n', v_found;
+    raise exception 'expected exactly the 6 planted sequences, got %:%s%s', v_count, E'\n', v_found;
   end if;
 
   raise notice 'withdrawal_ledger_replay: ok';
