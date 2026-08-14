@@ -4,6 +4,7 @@ import { ValidationError, validateAmount, validateBankCode, validateDate, valida
 import { readJsonBody } from '@/lib/apiBody'
 import { isFutureInvestmentDate } from '@/lib/dates'
 import { subtypeResetFields } from '@/lib/assetTypeFields'
+import { contentionError } from '@/lib/contention'
 
 const ASSET_TYPES = ['fund', 'bank', 'stock', 'gold'] as const
 
@@ -285,6 +286,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       { status: 400 },
     )
   }
+
+  // Contention is not a missing row. Raising principal_withdrawn on a tranche
+  // makes the unlinker wait for the book's anchor, which a concurrent close
+  // holds (#650) — reported as 404 it would read as "that transaction is gone",
+  // for a row sitting right there on screen.
+  const busy = contentionError(error, 'This holding was being changed at the same time. Nothing was saved — try again.', 'holding_busy')
+  if (busy) return busy
 
   if (error || !transaction) return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
 

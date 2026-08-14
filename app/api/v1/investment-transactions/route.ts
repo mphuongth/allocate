@@ -5,6 +5,7 @@ import { ValidationError, validateAmount, validateBankCode, validateDate, valida
 import { isFutureInvestmentDate } from '@/lib/dates'
 import { classifyAccumulatingTopUp } from '@/lib/accumulatingTopUp'
 import { readJsonBody } from '@/lib/apiBody'
+import { contentionError } from '@/lib/contention'
 
 const ASSET_TYPES = ['fund', 'bank', 'stock', 'gold'] as const
 
@@ -419,6 +420,11 @@ export async function POST(request: NextRequest) {
       // problem, not the server's.
       return NextResponse.json({ error: 'This withdrawal does not match the holding it is drawn on.' }, { status: 400 })
     }
+    // A withdrawal from a book tranche waits for the book's anchor in the
+    // recurring-link unlinker, and a concurrent full close takes them the other
+    // way round (#650). Nothing was written; the caller can just retry.
+    const busy = contentionError(error, 'This holding was being changed at the same time. Nothing was saved — try again.', 'holding_busy')
+    if (busy) return busy
     console.error('investment-transactions POST insert failed', error.message)
     return NextResponse.json({ error: 'Failed to create transaction' }, { status: 500 })
   }
