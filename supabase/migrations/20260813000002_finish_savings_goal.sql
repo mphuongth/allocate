@@ -155,6 +155,19 @@ as $$
     from public.funds f
    where f.dca_goal_id = p_goal_id
   union all
+  -- A contribution dated in the FUTURE. POST /api/v1/investment-transactions
+  -- allows one when it carries a plan_id — that is how next month's planned
+  -- deposit is recorded before it happens — and it is a live holding from the
+  -- moment it is written. Liquidating it would date the withdrawal before the
+  -- purchase it draws on, and would settle a contribution the user has not made
+  -- yet. Wait for it, or move it out of the goal.
+  select 'future_holding'::text, coalesce(t.notes, t.investment_date::text)
+    from public.investment_transactions t
+   where t.goal_id = p_goal_id
+     and t.transaction_type = 'investment'
+     and t.renewed_from_transaction_id is null
+     and t.investment_date > current_date
+  union all
   -- Cash parked for a merge is money in the goal that is not a holding — it has
   -- no source row left to liquidate, so a finish would archive the goal on top of
   -- it. Consumed settlements are history and skipped (mirrors DELETE on the goal).
@@ -661,6 +674,22 @@ begin
   end if;
   if p_ledger_fingerprint is distinct from public.savings_goal_ledger_fingerprint(p_goal_id) then
     raise exception 'finish goal: this goal changed while it was being valued — reload it and try again'
+      using errcode = 'check_violation';
+  end if;
+
+  -- A holding dated after the finish itself, measured against THIS date rather
+  -- than against today: the blocker list uses current_date, and a caller may pass
+  -- an earlier p_date. Liquidating one would write a withdrawal before the
+  -- purchase it draws on and settle a contribution that has not happened.
+  if exists (
+    select 1 from public.investment_transactions t
+     where t.user_id = v_goal.user_id
+       and t.goal_id = p_goal_id
+       and t.transaction_type = 'investment'
+       and t.renewed_from_transaction_id is null
+       and t.investment_date > p_date
+  ) then
+    raise exception 'future holding: this goal holds a contribution dated after the finish, so it cannot be liquidated yet'
       using errcode = 'check_violation';
   end if;
 

@@ -282,7 +282,10 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
             </p>
             {goal.targetAmount && (
               <p style={{ fontSize: 12, color: 'var(--c-muted)', marginBottom: 12, fontVariantNumeric: 'tabular-nums' }}>
-                {fmtCompact(progValue)} / {fmtCompact(goal.targetAmount)} {isVI ? 'mục tiêu' : 'target'}
+                {/* The numerator follows the headline. Left live, a finished goal
+                    read "Value at completion 30M" over "0 / 100M target" beside a
+                    full bar — three numbers on one card disagreeing (#650). */}
+                {fmtCompact(completion ? completion.value : progValue)} / {fmtCompact(goal.targetAmount)} {isVI ? 'mục tiêu' : 'target'}
               </p>
             )}
             {goal.targetAmount && (

@@ -227,6 +227,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
     // A book shared between two goals. Not a stale page and not a fault — a
     // decision to undo, and the message says which book and what to do.
+    // A contribution dated after the finish — nothing to retry, and not a fault.
+    if (message.startsWith('future holding: ')) {
+      return NextResponse.json(
+        { error: message.slice('future holding: '.length), code: 'future_holding' },
+        { status: 409 },
+      )
+    }
     if (message.startsWith('split book: ')) {
       return NextResponse.json(
         { error: message.slice('split book: '.length), code: 'book_split' },

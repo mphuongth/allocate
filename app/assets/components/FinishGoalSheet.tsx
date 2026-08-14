@@ -57,6 +57,11 @@ function blockerCopy(code: string, isVI: boolean): string {
       ? 'Có tiền đang chờ gộp trong mục tiêu này. Bỏ chờ gộp hoặc hoàn tất việc gộp trước.'
       : 'Cash is parked in this goal for a merge. Release it or complete the merge first.'
   }
+  if (code === 'future_holding') {
+    return isVI
+      ? 'Mục tiêu có khoản đóng góp ghi ngày trong tương lai. Chờ tới ngày đó, hoặc chuyển khoản đó ra khỏi mục tiêu.'
+      : 'This goal holds a contribution dated in the future. Wait for that date, or move it out of the goal.'
+  }
   if (code === 'successor_handover') {
     return isVI
       ? 'Sổ này đã hứa chuyển sang sổ kế nhiệm. Huỷ bàn giao trước khi tất toán.'

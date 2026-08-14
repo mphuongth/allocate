@@ -159,6 +159,33 @@ begin
   delete from public.recurring_savings where user_id = v_user;
   delete from public.savings_goals where goal_id = v_other_goal;
 
+  -- ── A contribution dated in the FUTURE blocks, and is refused ────────────
+  --
+  -- POST /api/v1/investment-transactions allows a future date when the row
+  -- carries a plan_id — that is how next month's planned deposit is recorded —
+  -- and it is a live holding from the moment it is written. Liquidating it would
+  -- date the withdrawal before the purchase it draws on.
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate, notes
+  ) values (
+    gen_random_uuid(), v_user, v_goal, 'bank', 'investment',
+    current_date + 7, current_date + 372, 1000000, 5, 'Kế hoạch tháng sau'
+  );
+  if not exists (select 1 from public.savings_goal_finish_blockers(v_goal)
+                  where code = 'future_holding' and label = 'Kế hoạch tháng sau') then
+    raise exception 'a future-dated contribution must be named as a blocker';
+  end if;
+  begin
+    perform public.finish_savings_goal(v_goal, jsonb_build_array(
+      jsonb_build_object('key', 'tx:' || v_deposit, 'received', 10400000)
+    ), current_date, 26000000, public.savings_goal_ledger_fingerprint(v_goal));
+    raise exception 'a goal holding a future contribution must not be finishable';
+  exception when sqlstate '23514' then null;
+  end;
+  delete from public.investment_transactions
+   where user_id = v_user and notes = 'Kế hoạch tháng sau';
+
   -- ── A holding that realizes nothing is refused, not half-written ─────────
   --
   -- investment_transactions requires amount_vnd > 0, so a zero would be rejected
