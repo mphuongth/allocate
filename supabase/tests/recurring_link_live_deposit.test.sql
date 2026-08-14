@@ -530,4 +530,56 @@ begin
   raise notice 'recurring_link_live_deposit renewal snapshot: all assertions passed';
 end $$;
 
+-- ─── A handover moves the link; it does not lose it ─────────────────────────
+--
+-- merge_book_into_successor settles the source book with ORDINARY withdrawals —
+-- not held_for_merge, so the unlinker sees them — and then repoints every saving
+-- that fed the old book at the new one (#638). Clearing the links when the last
+-- tranche empties leaves that repointing update matching nothing, so keeping a
+-- planned handover silently unlinked every saving instead of moving it. The
+-- money is not leaving here; it is going into the successor, which is exactly
+-- what consumed_by_inv_id says.
+do $$
+declare
+  v_user uuid := gen_random_uuid();
+  v_goal uuid;
+  v_source uuid := gen_random_uuid();
+  v_successor uuid := gen_random_uuid();
+  v_saving uuid := gen_random_uuid();
+  v_link uuid;
+begin
+  insert into auth.users (id, email) values (v_user, 'recurring-link-handover@test.invalid');
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Chuyển sổ') returning goal_id into v_goal;
+
+  -- A matured book, and the successor waiting for it.
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate, deposit_group_id
+  ) values (v_source, v_user, v_goal, 'bank', 'investment',
+            current_date - 400, current_date - 1, 8000000, 4, v_source);
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate, deposit_group_id
+  ) values (v_successor, v_user, v_goal, 'bank', 'investment',
+            current_date, current_date + 365, 2000000, 4.5, v_successor);
+
+  insert into public.recurring_savings (saving_id, user_id, goal_id, name, amount_vnd, linked_deposit_tx_id)
+    values (v_saving, v_user, v_goal, 'Gửi góp', 1000000, v_source);
+
+  perform set_config('app.successor_write', '1', true);
+  update public.investment_transactions set successor_deposit_tx_id = v_successor
+   where transaction_id = v_source;
+  perform set_config('app.successor_write', '', true);
+
+  perform public.merge_book_into_successor(
+    v_source, 8100000, 4.5, current_date, array[v_source], array[8000000::bigint], v_successor);
+
+  select linked_deposit_tx_id into v_link from public.recurring_savings where saving_id = v_saving;
+  if v_link is distinct from v_successor then
+    raise exception 'a handover must move the link to the successor, found %', v_link;
+  end if;
+
+  raise notice 'recurring_link_live_deposit handover: all assertions passed';
+end $$;
+
 rollback;

@@ -348,11 +348,21 @@ revoke all on function public.clear_recurring_link_on_close() from public, anon,
 drop trigger if exists investment_transactions_close_clears_link on public.investment_transactions;
 create trigger investment_transactions_close_clears_link
   after insert or update of
-    transaction_type, principal_withdrawn, parent_transaction_id, asset_type, fund_id
+    transaction_type, principal_withdrawn, parent_transaction_id, asset_type, fund_id,
+    consumed_by_inv_id
   on public.investment_transactions
   for each row
+  -- held_for_merge is 20260727000003''s to clear, and a CONSUMED withdrawal is
+  -- the owning RPC''s: the money is not leaving, it is going into the deposit
+  -- named by consumed_by_inv_id, and the link goes with it.
+  -- merge_book_into_successor settles the source book with ordinary withdrawals
+  -- and only THEN repoints every saving that fed it at the successor (#638) — so
+  -- unlinking when the last tranche empties left that update matching nothing,
+  -- and a kept handover silently unlinked every saving instead of moving it.
+  -- The renewal paths clear or repoint their own links the same way.
   when (new.transaction_type = 'withdrawal'
         and new.parent_transaction_id is not null
+        and new.consumed_by_inv_id is null
         and not coalesce(new.held_for_merge, false))
   execute function public.clear_recurring_link_on_close();
 
