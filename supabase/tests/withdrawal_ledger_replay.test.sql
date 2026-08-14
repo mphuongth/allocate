@@ -63,6 +63,7 @@ declare
   v_pfund      uuid; v_pf_p2    uuid; v_pf_sell uuid;
   v_dirt       uuid; v_dirt_bad uuid; v_dirt_ok uuid;
   v_mask       uuid; v_mask_neg uuid; v_mask_over uuid;
+  v_drv        uuid; v_drv_par  uuid; v_drv_claim uuid; v_drv_sell uuid;
   v_other      uuid; v_other_g  uuid; v_foreign uuid; v_foreign_w uuid;
   v_pair       uuid; v_pair_a   uuid; v_pair_b  uuid;
   v_xfund      uuid; v_x_mine   uuid; v_x_theirs uuid; v_x_claim uuid; v_x_sell uuid;
@@ -494,6 +495,45 @@ begin
           '2026-03-01T00:00:00Z', '2026-03-01T00:00:00Z')
   returning transaction_id into v_dirt_ok;
 
+  -- ── an edit the key cannot see ─────────────────────────────────────────────
+  -- A bucket claim that records no units has them DERIVED from its parent's
+  -- current units and amount_vnd, so editing that purchase silently restates how
+  -- much of the bucket the claim took — and the claim's own updated_at says
+  -- nothing about it. Usually the purchase is a credit on this same key and its
+  -- touched flag carries; not here. A cross-owner purchase is partitioned under
+  -- ITS owner (a renewal snapshot is no part of the bucket at all), while
+  -- 20260803000005 counts claims on both.
+  --
+  -- 1000/100 of my own, a claim of 400 on their 50-unit purchase, and a 40-unit
+  -- sale taking 300 — which is exactly right against the 600/80 the bucket showed
+  -- when the claim derived 20 units. Their purchase is since re-priced to 2000, so
+  -- the claim now derives 10, the bucket reads 600/90, and the sale owes 267. Every
+  -- row on this key is pristine, so without the parent's edit the replay calls a
+  -- legally-written sale a proven violation.
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Derived Fund', 'RDRV', 'equity', 20000) returning id into v_drv;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'investment', '2026-01-01', 1000, 100, 10, v_drv,
+          '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id, created_at, updated_at)
+  values (v_other, v_goal, 'fund', 'investment', '2026-01-02', 2000, 50, 40, v_drv,
+          '2026-01-02T00:00:00Z', '2026-06-01T00:00:00Z')
+  returning transaction_id into v_drv_par;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 400, v_drv_par, 400,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
+  returning transaction_id into v_drv_claim;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, fund_id,
+     principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'withdrawal', '2026-03-01', 300, v_drv, 300, 40,
+          '2026-03-01T00:00:00Z', '2026-03-01T00:00:00Z')
+  returning transaction_id into v_drv_sell;
+
   -- ── a refused row that HIDES one, which is the other direction ─────────────
   -- The deltas of a refused row are signed, so leaving them in does not merely
   -- convict the innocent — it acquits the guilty. 100 đồng, a -100 withdrawal,
@@ -848,6 +888,16 @@ begin
     raise exception 'the screening view owns the refused row — without it this holding goes unreported by both';
   end if;
 
+  -- the derived claim whose parent moved under it: reported, never proven, because
+  -- the numbers this key was measured against are not the ones it was written
+  -- against — and no row ON the key records that
+  select r.severity into v_found
+    from public.withdrawal_ledger_replay r where r.transaction_id = v_drv_sell;
+  if v_found is distinct from 'review' then
+    raise exception 'a derived claim''s parent was edited under this sale, so the balance is not the one it met — that is not proof, got %',
+      coalesce(v_found, '(silence)');
+  end if;
+
   -- and the mirror of it, which is why the deltas had to go rather than just the
   -- verdict: a NEGATIVE refused row credits the balance and hides a real overdraw.
   -- 100 đồng, a -100 withdrawal, then a 150 withdrawal. Left in, the 150 replayed
@@ -887,10 +937,10 @@ begin
   -- tie-break, and it is the only fixture here that may do either.
   select count(*) into v_count from public.withdrawal_ledger_replay r
    where r.user_id = v_user and r.parent_transaction_id is distinct from v_tie;
-  if v_count <> 12 then
+  if v_count <> 13 then
     select string_agg(format('%s/%s: %s', r.check_name, r.severity, r.detail), E'\n')
       into v_found from public.withdrawal_ledger_replay r where r.user_id = v_user;
-    raise exception 'expected exactly the 12 planted sequences, got %:%s%s', v_count, E'\n', v_found;
+    raise exception 'expected exactly the 13 planted sequences, got %:%s%s', v_count, E'\n', v_found;
   end if;
 
   raise notice 'withdrawal_ledger_replay: ok';

@@ -306,7 +306,17 @@ events as (
          -case when coalesce(w.units_withdrawn, 0) > 0 then w.units_withdrawn
                else least(p.units, p.units * coalesce(w.principal_withdrawn, 0) / p.amount_vnd) end,
          null, null,
-         (w.updated_at > w.created_at),
+         -- The PARENT's edits count as this event's too, because this event's units
+         -- are derived from the parent's current units and amount_vnd (see the
+         -- expression above) — so editing the purchase silently restates how much
+         -- of the bucket this claim took. Usually the purchase is a credit on this
+         -- same key and its own touched flag would carry, but not always: a
+         -- cross-owner purchase is partitioned under ITS owner, and a renewal
+         -- snapshot is no part of the bucket at all, while 20260803000005 counts
+         -- claims on both. Probed — a claim deriving 20 units, a legal 40-unit sale
+         -- against that, then the parent re-priced so the claim derives 10: every
+         -- row pristine, and the sale reported as a proven violation.
+         (w.updated_at > w.created_at or p.updated_at > p.created_at),
          -- The one order the ledger DOES record. A claim parented to a purchase
          -- cannot have been written before that purchase existed: the foreign key
          -- would have refused it, and the invariant finds the claim by joining to
