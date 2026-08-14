@@ -58,6 +58,7 @@ declare
   v_inst       uuid; v_inst_a   uuid; v_inst_b      uuid;
   v_big        uuid;
   v_fund_dep   uuid; v_dep_buy  uuid; v_dep_sell    uuid;
+  v_shape      uuid; v_shape_w  uuid;
   i            int;
   v_found      text;
   v_count      int;
@@ -280,6 +281,27 @@ begin
   values (v_user, v_goal, 'gold', 'withdrawal', '2026-02-01', 503, v_inst, 503, 50,
           '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
   returning transaction_id into v_inst_b;
+
+  -- ── a shape the screening view already owns ────────────────────────────────
+  -- A gold sale with units and no principal. The invariant refuses it before the
+  -- allocation rule is ever reached ("must record a positive principal_withdrawn")
+  -- and withdrawal_ledger_audit names it withdrawal_missing_principal. The replay
+  -- must stay out of it: judged as an allocation, the row reads "it should have
+  -- taken 10,000,000 đồng, it took 0", which describes a misallocation where the
+  -- defect is that no principal was recorded at all — the same row, a second time,
+  -- under a worse name. The two views are advertised as complements, and this is
+  -- the test of that word.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'investment', '2026-01-01', 40000000, 4, 10000000,
+          '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+  returning transaction_id into v_shape;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-02-01', 1, v_shape, null, 1,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
+  returning transaction_id into v_shape_w;
 
   -- ── the one order the ledger DOES record ───────────────────────────────────
   -- A claim parented to a purchase cannot have been written before that purchase
@@ -510,6 +532,17 @@ begin
   if v_found is distinct from 'sale_took_the_wrong_basis/violation' then
     raise exception 'a pair with no legal reading stays proven however its rows are timestamped, got %',
       coalesce(v_found, '(silence)');
+  end if;
+
+  -- the shape the screening view owns: named there, and silent here
+  if exists (select 1 from public.withdrawal_ledger_replay r where r.transaction_id = v_shape_w) then
+    select r.check_name || '/' || r.detail into v_found
+      from public.withdrawal_ledger_replay r where r.transaction_id = v_shape_w;
+    raise exception 'a row the screening view already condemns by shape must not be restated as a balance finding: %', v_found;
+  end if;
+  if not exists (select 1 from public.withdrawal_ledger_audit a
+                  where a.transaction_id = v_shape_w and a.check_name = 'withdrawal_missing_principal') then
+    raise exception 'the screening view was supposed to own this shape — if it no longer does, the replay must stop deferring to it';
   end if;
 
   -- the claim-to-purchase dependency: the sale is proven, because the only reading

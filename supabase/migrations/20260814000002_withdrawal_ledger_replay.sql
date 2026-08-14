@@ -107,6 +107,15 @@
 -- adding a fact. The two views are complements: run the screen for shapes and
 -- aggregates, run this for sequences.
 --
+-- That division has to be enforced and not merely intended, because one shape
+-- reaches the transition rules and comes out mis-described. A parent-backed claim
+-- recording no principal is `withdrawal_missing_principal` over there; judged as an
+-- allocation here it reads "it should have taken 10,000,000 đồng, it took 0" — a
+-- misallocation, where the defect is that no principal was recorded at all. Such a
+-- row is therefore not judged (see the parent-backed branch below). It still
+-- consumes the balance, and it stays freely placeable in the ordering search: a row
+-- that could never have been written proves nothing about its neighbours.
+--
 -- Only the FIRST failing row per balance key is reported. Once a row could not
 -- have been written, the state every later row is measured against is fiction, so
 -- the rows after it are not evidence of anything — the detail says how many there
@@ -188,7 +197,21 @@ events as (
   union all
   select w.user_id, 'p:' || w.parent_transaction_id::text, w.parent_transaction_id, null, w.goal_id,
          (pa.asset_type = 'gold'),
-         w.created_at, 1, w.transaction_id, true, true, w.transaction_id,
+         w.created_at, 1, w.transaction_id, true,
+         -- Judged here UNLESS its shape is already condemned. The invariant demands
+         -- a positive principal from any parent-backed claim and refuses one
+         -- without ever reaching the allocation rule, and withdrawal_ledger_audit
+         -- names that row `withdrawal_missing_principal`. Judging it anyway makes
+         -- the replay report the same row a second time under a WORSE name: a
+         -- gold sale recording no principal comes out as "it should have taken
+         -- 10,000,000 đồng, it took 0", which describes a misallocation where the
+         -- defect is that no principal was recorded at all. The two views are
+         -- advertised as complements, and a complement does not restate its
+         -- partner's finding in vaguer words. It still consumes the balance, and
+         -- it stays freely placeable in the ordering search — a row that could
+         -- never have been written cannot be used to prove anything about its
+         -- neighbours.
+         coalesce(w.principal_withdrawn, 0) > 0, w.transaction_id,
          -coalesce(w.principal_withdrawn, 0), -coalesce(w.units_withdrawn, 0),
          coalesce(w.principal_withdrawn, 0), coalesce(w.units_withdrawn, 0),
          (w.updated_at > w.created_at), null::uuid
