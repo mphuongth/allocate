@@ -207,6 +207,9 @@ events as (
          p.transaction_id                      as ord_id,
          false                                 as is_debit,
          false                                 as judge_here,
+         -- A credit claims nothing, so there is no shape for the invariant to
+         -- refuse. Only a DEBIT can be shape-invalid, and only those quarantine.
+         true                                  as shape_ok,
          null::uuid                            as row_id,
          coalesce(p.amount_vnd, 0)::numeric    as d_basis,
          coalesce(p.units, 0)::numeric         as d_units,
@@ -245,8 +248,19 @@ events as (
          -- and banks a credit later rows can spend — so judging the rows around it
          -- would measure them against a balance the invariant would never have
          -- allowed to exist.
+         -- judge_here and shape_ok are the SAME question on this axis, asked twice
+         -- because they answer different ones downstream: whether to grade this row,
+         -- and whether its numbers may be trusted as the balance for its neighbours.
+         -- The gold clause is the invariant's ("a gold sale must record
+         -- units_withdrawn"); it never produced a finding here, but such a row still
+         -- eats basis, so it has to quarantine.
          coalesce(w.principal_withdrawn, 0) > 0
-           and coalesce(w.units_withdrawn, 0) >= 0, w.transaction_id,
+           and coalesce(w.units_withdrawn, 0) >= 0
+           and (pa.asset_type is distinct from 'gold' or coalesce(w.units_withdrawn, 0) > 0),
+         coalesce(w.principal_withdrawn, 0) > 0
+           and coalesce(w.units_withdrawn, 0) >= 0
+           and (pa.asset_type is distinct from 'gold' or coalesce(w.units_withdrawn, 0) > 0),
+         w.transaction_id,
          -coalesce(w.principal_withdrawn, 0), -coalesce(w.units_withdrawn, 0),
          coalesce(w.principal_withdrawn, 0), coalesce(w.units_withdrawn, 0),
          (w.updated_at > w.created_at), null::uuid
@@ -284,7 +298,10 @@ events as (
   select w.user_id,
          'f:' || p.fund_id::text || ':' || coalesce(p.goal_id::text, ''),
          null, p.fund_id, p.goal_id, true,
-         w.created_at, 1, w.transaction_id, true, false, w.transaction_id,
+         -- Not judged here, and NOT quarantining either: 20260803000005's bucket
+         -- query sums this row's numbers exactly as they stand, whatever shape they
+         -- are in. They are not contamination — on this axis they are the balance.
+         w.created_at, 1, w.transaction_id, true, false, true, w.transaction_id,
          -coalesce(w.principal_withdrawn, 0),
          -case when coalesce(w.units_withdrawn, 0) > 0 then w.units_withdrawn
                else least(p.units, p.units * coalesce(w.principal_withdrawn, 0) / p.amount_vnd) end,
@@ -329,7 +346,7 @@ events as (
   select t.user_id,
          'f:' || t.fund_id::text || ':' || coalesce(t.goal_id::text, ''),
          null, t.fund_id, t.goal_id, true,
-         t.created_at, 0, t.transaction_id, false, false, t.transaction_id,
+         t.created_at, 0, t.transaction_id, false, false, true, t.transaction_id,
          coalesce(t.amount_vnd, 0), coalesce(t.units, 0), null, null,
          (t.updated_at > t.created_at), null::uuid
     from public.investment_transactions t
@@ -351,11 +368,21 @@ events as (
          -- the impossible sign it is. No positive-principal rule here, though:
          -- unlike the parent axis a fund sell may legitimately take nothing, since
          -- a slice worth less than half a đồng rounds to zero.
-         coalesce(w.principal_withdrawn, 0) >= 0
-           and coalesce(w.units_withdrawn, 0) >= 0, w.transaction_id,
+         -- Same pair as the parent axis. The units clause is the invariant's ("a
+         -- fund sale must record units_withdrawn") and, like gold's, it never
+         -- produced a finding — but such a row still eats basis, so it quarantines.
+         coalesce(w.principal_withdrawn, 0) >= 0 and coalesce(w.units_withdrawn, 0) > 0,
+         coalesce(w.principal_withdrawn, 0) >= 0 and coalesce(w.units_withdrawn, 0) > 0,
+         w.transaction_id,
          -coalesce(w.principal_withdrawn, 0), -coalesce(w.units_withdrawn, 0),
          coalesce(w.principal_withdrawn, 0), coalesce(w.units_withdrawn, 0),
-         (w.updated_at > w.created_at), null::uuid
+         (w.updated_at > w.created_at),
+         -- A fund sell ignores its parent for the BALANCE — the bucket is what it
+         -- draws on — but the foreign key still proves that parent existed when the
+         -- sell was written. Where the parent is a purchase in this same bucket that
+         -- is a real ordering fact, and without it the search invents the one
+         -- history that excuses the sell: its own parent purchase placed after it.
+         w.parent_transaction_id
     from wd w
    where w.fund_keyed
 ),
@@ -381,7 +408,16 @@ state as (
          count(*) filter (where e.is_debit) over w_upto as claim_ordinal,
          -- The events that have to be permuted to decide the key: everything but
          -- the source, which opens the balance rather than happening in it.
-         count(*) filter (where e.ord_at > '-infinity') over w_key as movable
+         count(*) filter (where e.ord_at > '-infinity') over w_key as movable,
+         -- A debit the invariant would have refused OUTRIGHT is not judged (the
+         -- screen owns it), but its deltas are still in the running balance and in
+         -- the search's states — so every other row on the key is measured against
+         -- a balance that could never have existed. A 40,000,000 / 4 unit gold
+         -- holding with a no-principal 1-unit claim in it replays the perfectly
+         -- ordinary 1-unit / 10,000,000 sale after it against 40,000,000 / 3, and
+         -- calls the innocent sale wrong. The key is therefore quarantined: its
+         -- findings stay, and they stop claiming to be proof.
+         bool_or(e.is_debit and not e.shape_ok) over w_key as key_contaminated
     from events e
   window
     w_key  as (partition by e.user_id, e.balance_key),
@@ -584,6 +620,14 @@ select distinct on (f.user_id, f.balance_key)
        -- Provable only where the replay's premise holds: nothing on this key was
        -- touched after it was written, so these rows ARE what was measured; the key
        -- was small enough to search; and THIS ROW had no legal position in it.
+       -- Contamination is deliberately NOT a severity clause here, though it looks
+       -- like one. A shape-invalid row is unjudged and therefore freely placeable,
+       -- so every subset WITHOUT it is reachable — and those are exactly the states
+       -- of the ledger as it would stand once that row is gone. A judged row that
+       -- survives none of them fails in the clean ledger too, so it is genuinely
+       -- proven, and downgrading it because something else on the holding is broken
+       -- would throw away a true proof. What contamination earns is the sentence in
+       -- the detail, not a change of verdict.
        case when f.key_touched
               or f.movable > 14
               or exists (select 1 from row_rescued x
@@ -630,6 +674,13 @@ select distinct on (f.user_id, f.balance_key)
                              where x.user_id = f.user_id and x.balance_key = f.balance_key
                                and x.row_id = f.row_id)
                  then '. No ordering of this holding''s claims is legal, so at least one of them is wrong — but this row is not provably the one, since it would have been accepted had it been written earlier'
+               else '' end
+       -- Why a contaminated key's findings are only ever 'review', said where the
+       -- operator meets them: the balance below such a row is not one the invariant
+       -- would have allowed, so nothing measured against it can be trusted, and the
+       -- row to fix is the one the screen already names.
+       || case when f.key_contaminated
+                 then '. This holding also carries a row check_withdrawal_balance would have refused outright — withdrawal_ledger_audit names it — so the balances here are not ones the invariant ever allowed, and this finding may belong to that row rather than to this one'
                else '' end as detail
   from fails f
  order by f.user_id, f.balance_key, f.ord_at, f.ord_kind, f.ord_id;

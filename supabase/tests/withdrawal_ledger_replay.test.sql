@@ -60,6 +60,8 @@ declare
   v_fund_dep   uuid; v_dep_buy  uuid; v_dep_sell    uuid;
   v_shape      uuid; v_shape_w  uuid;
   v_neg        uuid; v_neg_w    uuid; v_negf uuid; v_negf_buy uuid; v_negf_sell uuid;
+  v_pfund      uuid; v_pf_p2    uuid; v_pf_sell uuid;
+  v_dirt       uuid; v_dirt_bad uuid; v_dirt_ok uuid;
   v_other      uuid; v_other_g  uuid; v_foreign uuid; v_foreign_w uuid;
   v_pair       uuid; v_pair_a   uuid; v_pair_b  uuid;
   v_xfund      uuid; v_x_mine   uuid; v_x_theirs uuid; v_x_claim uuid; v_x_sell uuid;
@@ -438,6 +440,59 @@ begin
           '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
   returning transaction_id into v_negf_sell;
 
+  -- ── a fund sell parented into its own bucket ───────────────────────────────
+  -- A fund sell ignores its parent for the BALANCE — the bucket is what it draws
+  -- on — but the foreign key still proves that parent existed when the sell was
+  -- written. Purchases of 1000/100 and 1000/10, and a 50-unit sell taking 500
+  -- parented to the SECOND: every FK-valid order refuses it, and the only reading
+  -- that excuses it puts the sell before its own parent. The dependency added for
+  -- legacy parent-backed claims did not reach this branch, so the search found
+  -- that invented history and downgraded a provable failure to 'review'.
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Parented Fund', 'RPAR', 'equity', 20000) returning id into v_pfund;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'investment', '2026-01-01', 1000, 100, 10, v_pfund,
+          '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'investment', '2026-02-01', 1000, 10, 100, v_pfund,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
+  returning transaction_id into v_pf_p2;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, fund_id,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'withdrawal', '2026-03-01', 500, v_pfund, v_pf_p2, 500, 50,
+          '2026-03-01T00:00:00Z', '2026-03-01T00:00:00Z')
+  returning transaction_id into v_pf_sell;
+
+  -- ── a key contaminated by a shape-invalid row ──────────────────────────────
+  -- Not judging a shape-invalid row is only half of it: its deltas are still in
+  -- the running balance and in the search's states, so every OTHER row on the key
+  -- is measured against a balance that could never have existed. A 40,000,000 /
+  -- 4 unit gold holding with a no-principal 1-unit claim replays the perfectly
+  -- ordinary 1-unit / 10,000,000 sale after it against 40,000,000 / 3 units and
+  -- calls the innocent sale wrong. It stays reported — the numbers are real and
+  -- an operator wants to see them — but it may never be proof, and the sentence
+  -- has to point at the row that actually needs fixing.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'investment', '2026-01-01', 40000000, 4, 10000000,
+          '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+  returning transaction_id into v_dirt;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-02-01', 1, v_dirt, null, 1,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
+  returning transaction_id into v_dirt_bad;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-03-01', 10000000, v_dirt, 10000000, 1,
+          '2026-03-01T00:00:00Z', '2026-03-01T00:00:00Z')
+  returning transaction_id into v_dirt_ok;
+
   -- ── the one order the ledger DOES record ───────────────────────────────────
   -- A claim parented to a purchase cannot have been written before that purchase
   -- existed — the foreign key would have refused it. That is a fact about the
@@ -745,6 +800,33 @@ begin
     raise exception 'the screening view was supposed to own this shape — if it no longer does, the replay must stop deferring to it';
   end if;
 
+  -- a fund sell parented into its own bucket: proven, because the only reading
+  -- that excuses it puts the sell before the parent its foreign key names
+  select r.check_name || '/' || r.severity into v_found
+    from public.withdrawal_ledger_replay r where r.transaction_id = v_pf_sell;
+  if v_found is distinct from 'sale_took_the_wrong_basis/violation' then
+    raise exception 'a fund sell cannot predate the parent its FK names, so this stays proven, got %',
+      coalesce(v_found, '(silence)');
+  end if;
+
+  -- a key contaminated by a shape-invalid row: the innocent sale beside it is
+  -- still reported, never proven, and the sentence names where to look
+  select r.check_name || '/' || r.severity into v_found
+    from public.withdrawal_ledger_replay r where r.transaction_id = v_dirt_ok;
+  if v_found is distinct from 'sale_took_the_wrong_basis/review' then
+    raise exception 'a row measured against a balance the invariant never allowed must not be proof, got %',
+      coalesce(v_found, '(silence)');
+  end if;
+  select r.detail into v_found
+    from public.withdrawal_ledger_replay r where r.transaction_id = v_dirt_ok;
+  if v_found not like '%would have refused outright%' then
+    raise exception 'the contaminated key has to say so where the operator meets it, got %', v_found;
+  end if;
+  if not exists (select 1 from public.withdrawal_ledger_audit a
+                  where a.transaction_id = v_dirt_bad and a.severity = 'violation') then
+    raise exception 'the sentence points at the screening view for the real row — it has to be there';
+  end if;
+
   -- the claim-to-purchase dependency: the sale is proven, because the only reading
   -- that excuses it puts a claim before the purchase it names
   select r.check_name || '/' || r.severity into v_found
@@ -767,10 +849,10 @@ begin
   -- tie-break, and it is the only fixture here that may do either.
   select count(*) into v_count from public.withdrawal_ledger_replay r
    where r.user_id = v_user and r.parent_transaction_id is distinct from v_tie;
-  if v_count <> 10 then
+  if v_count <> 12 then
     select string_agg(format('%s/%s: %s', r.check_name, r.severity, r.detail), E'\n')
       into v_found from public.withdrawal_ledger_replay r where r.user_id = v_user;
-    raise exception 'expected exactly the 10 planted sequences, got %:%s%s', v_count, E'\n', v_found;
+    raise exception 'expected exactly the 12 planted sequences, got %:%s%s', v_count, E'\n', v_found;
   end if;
 
   raise notice 'withdrawal_ledger_replay: ok';
