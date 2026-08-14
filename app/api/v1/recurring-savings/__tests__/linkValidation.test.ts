@@ -92,3 +92,70 @@ describe('linkRefusalMessage', () => {
     expect(linkRefusalMessage(null)).toBeNull()
   })
 })
+
+// Two shapes the validator got wrong on the way to the balance, both of which
+// end in a 400 on a link the table would have taken.
+describe('validateLinkedDeposit — reading the target correctly', () => {
+  type Row = Record<string, unknown>
+
+  // The real call sequence: the target (.single()), then — for a book anchor —
+  // its tranches, then the withdrawals against them.
+  function bookClient(target: Row, tranches: Row[], withdrawals: Row[]): SupabaseClient {
+    let awaited = 0
+    const chain: Record<string, unknown> = {
+      select: () => chain,
+      eq: () => chain,
+      in: () => chain,
+      is: () => chain,
+      single: async () => ({ data: target, error: null }),
+      then: (resolve: (v: unknown) => void) => {
+        awaited += 1
+        return resolve({ data: awaited === 1 ? tranches : withdrawals, error: null })
+      },
+    }
+    return { from: () => chain } as unknown as SupabaseClient
+  }
+
+  // validateUUID preserves the case it was given, while PostgREST answers in
+  // canonical lowercase — so a strict === misread an anchor as a plain deposit,
+  // measured the (empty) anchor tranche alone, and refused a live book.
+  it('recognises a book anchor whose id arrived in uppercase', async () => {
+    const lower = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
+    const result = await validateLinkedDeposit(
+      bookClient(
+        { ...DEPOSIT, deposit_group_id: lower, amount_vnd: 1_000_000 },
+        [{ transaction_id: lower, amount_vnd: 1_000_000 }, { transaction_id: 'tranche-2', amount_vnd: 2_000_000 }],
+        [{ principal_withdrawn: 1_000_000, asset_type: 'bank', fund_id: null }],
+      ),
+      'user-1',
+      lower.toUpperCase(),
+      'goal-1',
+    )
+    expect(result).toBeNull()
+  })
+
+  // A renewal snapshot is the cycle that ended. Its amount_vnd is still sitting
+  // on the row, so reading it as fundable let a saving point at closed history —
+  // and the ids are handed out, under include_history.
+  it('refuses a renewal snapshot', async () => {
+    const result = await validateLinkedDeposit(
+      bookClient({ ...DEPOSIT, renewed_from_transaction_id: 'tx-live' }, [], []),
+      'user-1',
+      'tx-old',
+      'goal-1',
+    )
+    expect(result).toMatch(/closed/i)
+  })
+
+  // ...and the deposit it renewed into is still a perfectly good target, so the
+  // refusal above is about history and not about renewed deposits in general.
+  it('accepts the deposit a snapshot renewed into', async () => {
+    const result = await validateLinkedDeposit(
+      bookClient({ ...DEPOSIT, renewed_from_transaction_id: null }, [], []),
+      'user-1',
+      'tx-live',
+      'goal-1',
+    )
+    expect(result).toBeNull()
+  })
+})

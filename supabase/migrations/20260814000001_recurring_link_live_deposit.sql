@@ -59,6 +59,15 @@ as $$
        where x.deposit_group_id = t.transaction_id
          and x.transaction_type = 'investment'
          and x.renewed_from_transaction_id is null)
+    -- A renewal snapshot is the cycle that ENDED: renewing leaves a copy of it
+    -- carrying renewed_from_transaction_id, and every reader treats those as
+    -- history — the active_investment_transactions view, the book branch just
+    -- above, the goal detail's holding rows. Its amount_vnd is still sitting on
+    -- the row, though, so read plainly it looked like a deposit with its whole
+    -- principal intact, and a saving could be pointed at closed history. The ids
+    -- are handed out: the investment-transactions response returns them under
+    -- include_history.
+    when t.renewed_from_transaction_id is not null then 0
     else t.amount_vnd - coalesce((
       select sum(w.principal_withdrawn) from public.investment_transactions w
        where w.parent_transaction_id = t.transaction_id

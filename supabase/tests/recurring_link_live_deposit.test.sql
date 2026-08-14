@@ -479,4 +479,55 @@ begin
   raise notice 'recurring_link_live_deposit reclassify: all assertions passed';
 end $$;
 
+-- ─── A renewal snapshot is history, not a deposit to fund ───────────────────
+--
+-- Renewing a term deposit leaves a copy of the cycle that ended, carrying
+-- renewed_from_transaction_id. Every reader treats those as history — the
+-- active_investment_transactions view, the book measurement here, the goal
+-- detail's holding rows — but the single-deposit branch read the snapshot's own
+-- amount_vnd as fundable principal, so a link to a closed past cycle was accepted
+-- by both the validator and the trigger. The ids are handed out: the
+-- investment-transactions response returns them under include_history.
+do $$
+declare
+  v_user uuid := gen_random_uuid();
+  v_goal uuid;
+  v_live uuid := gen_random_uuid();
+  v_snapshot uuid := gen_random_uuid();
+  v_left bigint;
+begin
+  insert into auth.users (id, email) values (v_user, 'recurring-link-renewed@test.invalid');
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Đáo hạn') returning goal_id into v_goal;
+
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate
+  ) values (v_live, v_user, v_goal, 'bank', 'investment', current_date - 10, current_date + 355, 4200000, 5);
+
+  -- The cycle it renewed from: same money, already superseded.
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate, renewed_from_transaction_id
+  ) values (v_snapshot, v_user, v_goal, 'bank', 'investment',
+            current_date - 375, current_date - 10, 4000000, 5, v_live);
+
+  v_left := public.deposit_link_fundable_principal(v_snapshot);
+  if coalesce(v_left, 0) <> 0 then
+    raise exception 'a renewal snapshot holds nothing to fund, read %', v_left;
+  end if;
+
+  begin
+    insert into public.recurring_savings (user_id, goal_id, name, amount_vnd, linked_deposit_tx_id)
+      values (v_user, v_goal, 'Gộp khi đáo hạn', 1000000, v_snapshot);
+    raise exception 'a link to a renewal snapshot must be refused';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- ...while the deposit it renewed into takes the link.
+  insert into public.recurring_savings (user_id, goal_id, name, amount_vnd, linked_deposit_tx_id)
+    values (v_user, v_goal, 'Gộp khi đáo hạn', 1000000, v_live);
+
+  raise notice 'recurring_link_live_deposit renewal snapshot: all assertions passed';
+end $$;
+
 rollback;

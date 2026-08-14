@@ -37,10 +37,16 @@ export async function validateLinkedDeposit(
   txId: string,
   recurringGoalId: string | null,
 ): Promise<string | null> {
+  // validateUUID accepts the case it was given and PostgREST answers in canonical
+  // lowercase, so the anchor comparison below has to be made on one of them. A
+  // strict === against an uppercase id read a book anchor as a plain deposit,
+  // measured that one (possibly empty) tranche, and refused a live book with a
+  // 400 the table would never have raised.
+  const id = txId.toLowerCase()
   const { data, error } = await supabase
     .from('investment_transactions')
-    .select('asset_type, interest_rate, expiry_date, goal_id, transaction_type, deposit_group_id, successor_deposit_tx_id, amount_vnd')
-    .eq('transaction_id', txId)
+    .select('asset_type, interest_rate, expiry_date, goal_id, transaction_type, deposit_group_id, successor_deposit_tx_id, amount_vnd, renewed_from_transaction_id')
+    .eq('transaction_id', id)
     .eq('user_id', userId)
     .single()
   if (error || !data) return 'Linked deposit not found.'
@@ -57,7 +63,7 @@ export async function validateLinkedDeposit(
   // valid target — deposit_group_id = its own id — so the link points at the book
   // as a whole and survives a collapse (the collapse re-points links to the
   // surviving anchor). A non-anchor tranche is not a linkable target.
-  if (data.deposit_group_id != null && data.deposit_group_id !== txId) {
+  if (data.deposit_group_id != null && data.deposit_group_id.toLowerCase() !== id) {
     return 'Link an accumulating book via its anchor deposit.'
   }
   // A book that has handed over refuses every contribution from here on (#638),
@@ -86,20 +92,24 @@ export async function validateLinkedDeposit(
   // retry would clear. The table refuses a genuinely closed target either way
   // (that guard is the authoritative one), so the honest move when this cannot
   // be judged is to say nothing and let the write be judged there.
-  const isBookAnchor = data.deposit_group_id === txId
+  // A renewal snapshot is the cycle that ended (#650). Its amount_vnd is still on
+  // the row, so measured plainly it looks like a deposit holding its whole
+  // principal — the table refuses it now, and this is the readable half.
+  if (data.renewed_from_transaction_id) return CLOSED_DEPOSIT
+  const isBookAnchor = data.deposit_group_id?.toLowerCase() === id
   let group: Array<{ transaction_id: string; amount_vnd: number }>
   if (isBookAnchor) {
     const { data: tranches, error: groupError } = await supabase
       .from('investment_transactions')
       .select('transaction_id, amount_vnd')
       .eq('user_id', userId)
-      .eq('deposit_group_id', txId)
+      .eq('deposit_group_id', id)
       .eq('transaction_type', 'investment')
       .is('renewed_from_transaction_id', null)
     if (groupError) return null
     group = tranches ?? []
   } else {
-    group = [{ transaction_id: txId, amount_vnd: data.amount_vnd }]
+    group = [{ transaction_id: id, amount_vnd: data.amount_vnd }]
   }
 
   const ids = group.map((t) => t.transaction_id)
