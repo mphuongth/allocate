@@ -582,4 +582,47 @@ begin
   raise notice 'recurring_link_live_deposit handover: all assertions passed';
 end $$;
 
+-- ─── ...and a live deposit stamped as history ───────────────────────────────
+--
+-- renewed_from_transaction_id turns a row into a snapshot of a cycle that ended,
+-- which the balance helper reads as holding nothing. A direct writer can stamp it
+-- on a deposit that a saving is linked to — the source-balance constraint allows
+-- it while the row backs no withdrawals — and no column the unlinker watched
+-- would have changed, so the saving kept pointing at a target that new links are
+-- now refused for.
+do $$
+declare
+  v_user uuid := gen_random_uuid();
+  v_goal uuid;
+  v_live uuid := gen_random_uuid();
+  v_dep uuid := gen_random_uuid();
+  v_saving uuid := gen_random_uuid();
+  v_link uuid;
+begin
+  insert into auth.users (id, email) values (v_user, 'recurring-link-lineage@test.invalid');
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Đánh dấu lịch sử') returning goal_id into v_goal;
+
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate
+  ) values (v_live, v_user, v_goal, 'bank', 'investment', current_date - 10, current_date + 355, 4200000, 5);
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate
+  ) values (v_dep, v_user, v_goal, 'bank', 'investment', current_date - 30, current_date + 300, 4000000, 5);
+
+  insert into public.recurring_savings (saving_id, user_id, goal_id, name, amount_vnd, linked_deposit_tx_id)
+    values (v_saving, v_user, v_goal, 'Gộp khi đáo hạn', 1000000, v_dep);
+
+  update public.investment_transactions set renewed_from_transaction_id = v_live
+   where transaction_id = v_dep;
+
+  select linked_deposit_tx_id into v_link from public.recurring_savings where saving_id = v_saving;
+  if v_link is not null then
+    raise exception 'a link must not survive its target becoming a renewal snapshot';
+  end if;
+
+  raise notice 'recurring_link_live_deposit lineage: all assertions passed';
+end $$;
+
 rollback;

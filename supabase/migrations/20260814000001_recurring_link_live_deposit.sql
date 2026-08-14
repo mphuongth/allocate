@@ -372,10 +372,14 @@ create trigger investment_transactions_close_clears_link
 -- deposit_group_id too: leaving the group makes a tranche a deposit measured on
 -- its own, which may be nothing.
 -- transaction_type as well, and fired on the way OUT of 'investment' too: a row
--- that stops being a deposit takes its links with it.
+-- that stops being a deposit takes its links with it. renewed_from_transaction_id
+-- for the same reason one step further: stamping it on a live deposit turns the
+-- row into a history snapshot, which the helper above reads as holding nothing —
+-- a link the guard would now refuse, left in place because no watched column had
+-- changed.
 drop trigger if exists investment_transactions_shrink_clears_link on public.investment_transactions;
 create trigger investment_transactions_shrink_clears_link
-  after update of amount_vnd, deposit_group_id, transaction_type
+  after update of amount_vnd, deposit_group_id, transaction_type, renewed_from_transaction_id
   on public.investment_transactions
   for each row
   when (new.transaction_type = 'investment' or old.transaction_type = 'investment')
