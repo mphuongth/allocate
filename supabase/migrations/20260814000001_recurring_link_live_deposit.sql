@@ -88,11 +88,26 @@ begin
   -- past to commit against a book that, moments later, refuses it. The lock has
   -- to be taken on the row itself, whatever it currently says — and the same
   -- reasoning covers a liquidation committing underneath this write.
+  --
+  -- FOR UPDATE, and on this row ONLY. An earlier version also share-locked every
+  -- live tranche, so that a close of the book's last non-anchor tranche — which
+  -- check_withdrawal_balance never makes touch the anchor — could not slip past
+  -- this measurement. That lock is what put the two paths in opposite orders:
+  -- this one takes the anchor and then the tranches, while an ordinary withdrawal
+  -- holds its tranche (from the balance check) and then waits for the anchor in
+  -- clear_recurring_link_on_close. A cycle, and a 40P01 for whichever side loses.
+  --
+  -- It is also no longer needed. The state it guarded against — a link accepted
+  -- onto a book a concurrent withdrawal has just emptied — is now repaired from
+  -- the other side: that withdrawal's unlinker takes this same anchor, so it runs
+  -- after this write and clears the link it finds. Whichever way the two
+  -- interleave, the book and the link agree at the end. One row, one lock, one
+  -- order (asserted by the link-vs-close race in recurring_link_close_race).
   select * into v_target
     from public.investment_transactions
    where transaction_id = new.linked_deposit_tx_id
      and user_id = new.user_id
-   for share;
+   for update;
   if not found then return new; end if;
 
   if v_target.successor_deposit_tx_id is not null then
@@ -109,28 +124,6 @@ begin
   if v_folded then
     raise exception 'successor book: that deposit has been folded into another one, so link that one instead'
       using errcode = 'check_violation';
-  end if;
-
-  if v_target.deposit_group_id = v_target.transaction_id then
-    -- A live accumulating book, which is measured across the GROUP.
-    --
-    -- LOCK every live tranche before measuring them, not just the anchor. The
-    -- withdrawal invariant (check_withdrawal_balance, 20260730000002) locks only
-    -- the row a withdrawal names as its parent, so a close of the book's last
-    -- non-anchor tranche never touches the anchor and never waits here: this
-    -- query would miss that uncommitted withdrawal, accept the link, and leave it
-    -- pointing at a book both transactions have just emptied.
-    --
-    -- Ordered by transaction_id, the same order check_withdrawal_balance takes
-    -- its locks in, so the two cannot deadlock.
-    perform 1
-      from public.investment_transactions t
-     where t.deposit_group_id = v_target.transaction_id
-       and t.transaction_type = 'investment'
-       and t.renewed_from_transaction_id is null
-     order by t.transaction_id
-       for share;
-
   end if;
 
   v_left := public.deposit_link_fundable_principal(v_target.transaction_id);
@@ -249,10 +242,29 @@ declare
   -- the deposit without any withdrawal being written at all.
   v_deposit uuid := case
     when new.transaction_type = 'withdrawal' then new.parent_transaction_id
-    else new.transaction_id
+    when new.transaction_type = 'investment' then new.transaction_id
   end;
   v_group uuid;
 begin
+  -- A row can stop being a deposit at all: give it a parent and a principal and
+  -- call it a withdrawal, and the balance invariants accept it (it is measured
+  -- against its new parent) while any saving linked to it is left pointing at
+  -- something that is not an investment — a link the guard would refuse outright
+  -- if it were being written now. Nothing about the balance is in question here,
+  -- so nothing is measured: the target is simply gone as a deposit.
+  if tg_op = 'UPDATE'
+     and old.transaction_type = 'investment'
+     and new.transaction_type is distinct from 'investment' then
+    update public.recurring_savings s
+       set linked_deposit_tx_id = null,
+           unlinked_at = now(),
+           unlinked_reason = 'closed',
+           unlinked_from_book = (old.deposit_group_id is not distinct from old.transaction_id),
+           updated_at = now()
+     where s.user_id = new.user_id
+       and s.linked_deposit_tx_id = new.transaction_id;
+  end if;
+
   if v_deposit is null then return null; end if;
 
   -- The link names the book''s ANCHOR while a withdrawal (or an edit) names a
@@ -340,11 +352,14 @@ create trigger investment_transactions_close_clears_link
 -- invariant permits equality — and the trigger above would never see it.
 -- deposit_group_id too: leaving the group makes a tranche a deposit measured on
 -- its own, which may be nothing.
+-- transaction_type as well, and fired on the way OUT of 'investment' too: a row
+-- that stops being a deposit takes its links with it.
 drop trigger if exists investment_transactions_shrink_clears_link on public.investment_transactions;
 create trigger investment_transactions_shrink_clears_link
-  after update of amount_vnd, deposit_group_id on public.investment_transactions
+  after update of amount_vnd, deposit_group_id, transaction_type
+  on public.investment_transactions
   for each row
-  when (new.transaction_type = 'investment')
+  when (new.transaction_type = 'investment' or old.transaction_type = 'investment')
   execute function public.clear_recurring_link_on_close();
 
 -- ─── ...and the links that are already wrong ─────────────────────────────────

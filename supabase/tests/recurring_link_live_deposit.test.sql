@@ -431,4 +431,52 @@ begin
   raise notice 'recurring_link_live_deposit activation: all assertions passed';
 end $$;
 
+-- ─── ...and the linked row itself stops being a deposit ──────────────────────
+--
+-- A direct writer can reclassify the very row a saving is linked to: give it a
+-- parent and a principal, then call it a withdrawal. The balance invariants
+-- accept that (it is measured against its new parent), but the saving is left
+-- pointing at a row that is not an investment at all — a link the guard would
+-- refuse outright if it were being written now. The unlinker looked only at the
+-- parent named by the new withdrawal, never at the reclassified row's own id.
+do $$
+declare
+  v_user uuid := gen_random_uuid();
+  v_goal uuid;
+  v_host uuid := gen_random_uuid();
+  v_dep uuid := gen_random_uuid();
+  v_saving uuid := gen_random_uuid();
+  v_link uuid;
+begin
+  insert into auth.users (id, email) values (v_user, 'recurring-link-reclassify@test.invalid');
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Đổi loại') returning goal_id into v_goal;
+
+  -- A big live deposit for the reclassified row to draw on...
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate
+  ) values (v_host, v_user, v_goal, 'bank', 'investment', current_date - 60, current_date + 300, 9000000, 5);
+
+  -- ...and the deposit the saving is linked to.
+  insert into public.investment_transactions (
+    transaction_id, user_id, goal_id, asset_type, transaction_type,
+    investment_date, expiry_date, amount_vnd, interest_rate
+  ) values (v_dep, v_user, v_goal, 'bank', 'investment', current_date - 30, current_date + 300, 4000000, 5);
+  insert into public.recurring_savings (saving_id, user_id, goal_id, name, amount_vnd, linked_deposit_tx_id)
+    values (v_saving, v_user, v_goal, 'Gộp khi đáo hạn', 1000000, v_dep);
+
+  update public.investment_transactions
+     set transaction_type = 'withdrawal',
+         parent_transaction_id = v_host,
+         principal_withdrawn = 4000000
+   where transaction_id = v_dep;
+
+  select linked_deposit_tx_id into v_link from public.recurring_savings where saving_id = v_saving;
+  if v_link is not null then
+    raise exception 'a link must not survive its target ceasing to be a deposit';
+  end if;
+
+  raise notice 'recurring_link_live_deposit reclassify: all assertions passed';
+end $$;
+
 rollback;

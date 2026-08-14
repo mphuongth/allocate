@@ -141,3 +141,134 @@ exception
     perform dblink_exec(v_conn, format('delete from auth.users where id = %L', c_user));
     raise;
 end $$;
+
+-- ─── A link written while the book's last tranche is being closed ────────────
+--
+-- The guard used to lock every live tranche before measuring, so that it would
+-- wait for exactly this withdrawal. That lock is what reversed the order — it
+-- takes the anchor first and the tranches second, while an ordinary withdrawal
+-- holds its tranche and then waits for the anchor in the unlinker — a cycle
+-- narrow enough to be hard to provoke and real enough to abort either side with
+-- 40P01.
+--
+-- The tranche locks are gone: both paths now serialise on the anchor alone. What
+-- must NOT come back with them is the state they were added to prevent — a link
+-- accepted onto a book that a concurrent withdrawal has just emptied. Whichever
+-- way the two interleave, the end state must not be a link on an empty book:
+-- either the guard measures after the close and refuses, or it measures before
+-- and the unlinker clears the link it just accepted.
+delete from auth.users where id = '66566566-5665-4665-8665-665665665666';
+
+do $$
+declare
+  c_user   constant uuid := '66566566-5665-4665-8665-665665665666';
+  c_book   constant uuid := '66566566-5665-4665-8665-000000000011';
+  c_tranche constant uuid := '66566566-5665-4665-8665-000000000012';
+  c_saving constant uuid := '66566566-5665-4665-8665-000000000013';
+  v_goal   uuid;
+  v_conn   text;
+  v_rows   int;
+  v_link   uuid;
+  v_left   bigint;
+begin
+  v_conn := format('host=%s port=%s dbname=%s user=postgres password=postgres',
+                   inet_server_addr(), current_setting('port'), current_database());
+
+  perform dblink_connect('link665b_a', v_conn);
+  perform dblink_connect('link665b_b', v_conn);
+
+  perform dblink_exec('link665b_a', format($f$
+    insert into auth.users (id, email) values (%L, 'link-write-race@test.invalid');
+  $f$, c_user));
+
+  select id into v_goal from dblink('link665b_a', format($f$
+    insert into public.savings_goals (user_id, goal_name) values (%L, 'Sổ tích luỹ') returning goal_id;
+  $f$, c_user)) as t(id uuid);
+
+  -- An anchor that is already empty and one live tranche: closing that tranche
+  -- closes the book, and it never touches the anchor.
+  perform dblink_exec('link665b_a', format($f$
+    insert into public.investment_transactions
+      (transaction_id, user_id, goal_id, asset_type, transaction_type,
+       investment_date, expiry_date, amount_vnd, interest_rate, deposit_group_id)
+    values (%L, %L, %L, 'bank', 'investment',
+            current_date - 90, current_date + 275, 1000000, 4, %L);
+  $f$, c_book, c_user, v_goal, c_book));
+
+  perform dblink_exec('link665b_a', format($f$
+    insert into public.investment_transactions
+      (transaction_id, user_id, goal_id, asset_type, transaction_type,
+       investment_date, expiry_date, amount_vnd, interest_rate, deposit_group_id)
+    values (%L, %L, %L, 'bank', 'investment',
+            current_date - 30, current_date + 275, 2000000, 4, %L);
+  $f$, c_tranche, c_user, v_goal, c_book));
+
+  perform dblink_exec('link665b_a', format($f$
+    insert into public.investment_transactions
+      (user_id, goal_id, asset_type, transaction_type, parent_transaction_id,
+       investment_date, amount_vnd, principal_withdrawn)
+    values (%L, %L, 'bank', 'withdrawal', %L, current_date, 1010000, 1000000);
+  $f$, c_user, v_goal, c_book));
+
+  perform dblink_exec('link665b_a', format($f$
+    insert into public.recurring_savings (saving_id, user_id, goal_id, name, amount_vnd)
+    values (%L, %L, %L, 'Gửi góp', 1000000);
+  $f$, c_saving, c_user, v_goal));
+
+  -- ── the race ──────────────────────────────────────────────────────────────
+  -- A empties the last live tranche and holds its transaction open.
+  perform dblink_exec('link665b_a', 'begin');
+  perform dblink_exec('link665b_a', format($f$
+    insert into public.investment_transactions
+      (user_id, goal_id, asset_type, transaction_type, parent_transaction_id,
+       investment_date, amount_vnd, principal_withdrawn)
+    values (%L, %L, 'bank', 'withdrawal', %L, current_date, 2020000, 2000000);
+  $f$, c_user, v_goal, c_tranche));
+
+  -- B points the saving at the book. Async: it must not run past A.
+  perform dblink_send_query('link665b_b', format($f$
+    update public.recurring_savings set linked_deposit_tx_id = %L where saving_id = %L;
+  $f$, c_book, c_saving));
+
+  perform pg_sleep(1);
+  perform dblink_exec('link665b_a', 'commit');
+
+  -- B may legitimately be refused here ('closed deposit'), which is one of the
+  -- two acceptable outcomes — so a failure is swallowed and judged by the state.
+  begin
+    select count(*) into v_rows from dblink_get_result('link665b_b') as t(ignored text);
+  exception when others then null;
+  end;
+
+  perform dblink_disconnect('link665b_a');
+  perform dblink_disconnect('link665b_b');
+
+  select coalesce(sum(
+           t.amount_vnd - coalesce((
+             select sum(w.principal_withdrawn) from public.investment_transactions w
+              where w.parent_transaction_id = t.transaction_id
+                and w.transaction_type = 'withdrawal'), 0)
+         ), 0)
+    into v_left
+    from public.investment_transactions t
+   where t.deposit_group_id = c_book and t.transaction_type = 'investment';
+  if v_left <> 0 then
+    raise exception 'the book should have been emptied by the close, % left', v_left;
+  end if;
+
+  select linked_deposit_tx_id into v_link
+    from public.recurring_savings where saving_id = c_saving;
+  if v_link is not null then
+    raise exception 'a link must not survive on a book emptied at the same moment';
+  end if;
+
+  perform dblink_exec(v_conn, format('delete from auth.users where id = %L', c_user));
+  raise notice 'recurring_link_close_race link-vs-close: all assertions passed';
+exception
+  when others then
+    perform dblink_disconnect(name)
+       from unnest(coalesce(dblink_get_connections(), '{}')) as name
+      where name like 'link665b\_%';
+    perform dblink_exec(v_conn, format('delete from auth.users where id = %L', c_user));
+    raise;
+end $$;
