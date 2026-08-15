@@ -203,12 +203,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // stopped offering such an anchor, so this is the raw-API path — but it is
     // still the user's rule and it has a remedy, which a 500 would hide. The
     // prefix is what marks the message as ours; everything else stays a fault.
-    if (renewErr?.message?.startsWith('pledged deposit: ')) {
+    // The message is the database's, minus the prefix that marks it as ours:
+    // the rule has two sentences (collateral cannot RECEIVE merged cash, and
+    // cannot be liquidated INTO a merge) and only the trigger knows which one
+    // applies. Same shape as the held-settlement refusals on POST.
+    const PLEDGED_PREFIX = 'pledged deposit: '
+    if (renewErr?.message?.startsWith(PLEDGED_PREFIX)) {
       return NextResponse.json(
-        {
-          error: 'This deposit is pledged as collateral, so money cannot be merged into it. Release the pledge first.',
-          code: 'pledged_destination',
-        },
+        { error: renewErr.message.slice(PLEDGED_PREFIX.length), code: 'pledged_destination' },
         { status: 409 },
       )
     }

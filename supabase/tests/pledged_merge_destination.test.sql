@@ -9,10 +9,13 @@
 --
 -- The UI now refuses both directions. The database says the same thing, because
 -- the raw API reaches these rows directly: RLS lets `authenticated` write its own
--- investment_transactions, and no merge RPC mentions is_pledged at all
--- (held_settlement_source_state guards the SOURCE, which is the other half).
+-- investment_transactions, and no merge RPC mentions is_pledged at all. The
+-- source half only LOOKED covered — held_settlement_source_state measures a
+-- source parked through create_held_settlement, while the live-source merge path
+-- had no check at all — so §2b pins that too.
 --
--- Two columns carry the claim, so the guard reads both:
+-- Two columns carry the claim, and the withdrawal carrying the first also names
+-- the source it closes, so the guard reads all three:
 --
 --   • consumed_by_inv_id — every merge into D stamps it, on the withdrawal it
 --     writes for a live source and on the held settlement it consumes. It is the
@@ -103,6 +106,31 @@ begin
     raise exception 'a live source must not be folded into a pledged deposit' using errcode = 'ZZ999';
   exception when check_violation then null;
   end;
+
+  -- ── 2b) a PLEDGED SOURCE cannot be liquidated into a merge ──────────────────
+  -- The other half of rule 5, and the half that looked done: the sheet refuses a
+  -- pledged source and held_settlement_source_state refuses one parked for a
+  -- merge — but the LIVE-source path had no server-side check at all. A raw call
+  -- closed pledged collateral in full and moved its cash into a free deposit.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, interest_rate, expiry_date, is_pledged)
+  values (v_user, v_goal, 'bank', 'investment', current_date - 100, 2000000, 5.0, current_date + 30, true)
+  returning transaction_id into v_src;
+  begin
+    perform public.renew_term_deposit_with_merge(
+      v_free, 50000000, 6.5, current_date + 180, current_date, 100000,
+      null, null, null, null, array[v_src], array[2000000::bigint], null, '{}'::uuid[]
+    );
+    raise exception 'pledged collateral must not be liquidated into a merge' using errcode = 'ZZ999';
+  exception when check_violation then null;
+  end;
+  -- The source is untouched: nothing was closed on the way to the refusal.
+  if exists (
+    select 1 from public.investment_transactions w
+     where w.parent_transaction_id = v_src and w.transaction_type = 'withdrawal'
+  ) then
+    raise exception 'the refused merge must not have closed the pledged source';
+  end if;
 
   -- ── 3) the unpledged destination still merges ────────────────────────────────
   -- The rule is about collateral, not about merging: the control proves the guard

@@ -79,6 +79,22 @@ describe('POST /renew — merging into pledged collateral', () => {
     expect(body.error).not.toMatch(/^pledged deposit: /)
   })
 
+  // The rule has two sentences and only the trigger knows which applies, so the
+  // route forwards the one it was given rather than authoring its own.
+  it('forwards the source-side sentence too, not a fixed one', async () => {
+    h.rpcError = {
+      code: '23514',
+      message: 'pledged deposit: this deposit is pledged as collateral, so it cannot be liquidated into a merge — release the pledge first',
+    }
+
+    const res = await call()
+
+    expect(res.status).toBe(409)
+    await expect(res.json()).resolves.toMatchObject({
+      error: 'this deposit is pledged as collateral, so it cannot be liquidated into a merge — release the pledge first',
+    })
+  })
+
   // Anything without the prefix is not a rule we wrote — it stays a fault, and
   // echoing it would leak database internals as if it were advice.
   it('still reports an unrelated failure as a 500', async () => {
