@@ -52,14 +52,14 @@ describe('holdAnchorsFor', () => {
     expect(holdAnchorsFor(inv, [inv, row({ id: 'usd', expiryDate: '2026-08-14', currency: 'USD' })], 'g1', false, 7)).toEqual([])
   })
 
-  it('accepts a PLEDGED anchor — the pledged rule only guards the source side', () => {
-    // Documenting today's behavior, not endorsing it. classifyMergeSources
-    // blocks a pledged *source* (it can't be liquidated); it says nothing about
-    // a pledged destination, and holdAnchorsFor calls it with the roles
-    // reversed. Whether topping up collateral should be allowed is a domain
-    // question, deliberately not settled inside this refactor.
+  it('rejects a PLEDGED anchor — cash must not be folded into frozen collateral', () => {
+    // #635 settled the asymmetry this test used to document: classifyMergeSource
+    // read source.isPledged only, so holdAnchorsFor — which calls it with the
+    // roles reversed — offered a pledged sibling as the deposit to park cash
+    // for. The cash would land inside a balance frozen as collateral and could
+    // not be withdrawn until the pledge is released. Release it first.
     const pledgedAnchor = row({ id: 'pledged', expiryDate: '2026-08-14', isPledged: true })
-    expect(holdAnchorsFor(inv, [inv, pledgedAnchor], 'g1', false, 7).map((a) => a.id)).toEqual(['pledged'])
+    expect(holdAnchorsFor(inv, [inv, pledgedAnchor], 'g1', false, 7)).toEqual([])
   })
 
   it('respects the window — a far-off anchor is out until the window widens', () => {

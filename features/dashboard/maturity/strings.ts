@@ -58,6 +58,9 @@ export function maturityResolveStrings(isVi: boolean, matured: boolean) {
     reasonOutOfWindow: (n: number) => `Đáo hạn cách ${n} ngày — phá kỳ mất lãi`,
     reasonCurrency: 'Khác loại tiền',
     reasonPledged: 'Đang thế chấp — bị phong toả',
+    // The anchor, not the source: the deposit the money would go INTO is frozen,
+    // so nothing can be folded in until the pledge is released (#635).
+    reasonPledgedAnchor: 'Sổ này đang thế chấp — không nhận thêm tiền',
     reasonGoal: 'Khác mục tiêu',
     reasonBlocked: 'Chưa đủ điều kiện',
     holdNudge: (anchor: string, date: string) => `«${anchor}» đáo hạn ${date} cùng mục tiêu — để dành gộp thay vì rút?`,
@@ -119,6 +122,7 @@ export function maturityResolveStrings(isVi: boolean, matured: boolean) {
     reasonOutOfWindow: (n: number) => `Matures ${n}d apart — early settlement`,
     reasonCurrency: 'Different currency',
     reasonPledged: 'Pledged as collateral',
+    reasonPledgedAnchor: 'This deposit is pledged — it cannot take more money',
     reasonGoal: 'Different goal',
     reasonBlocked: 'Not eligible yet',
     holdNudge: (anchor: string, date: string) => `“${anchor}” matures ${date} in the same goal — hold for merge instead of withdrawing?`,

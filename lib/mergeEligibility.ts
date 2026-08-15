@@ -9,7 +9,12 @@
 //                           not an accumulating book, not fully withdrawn).
 //   3. Maturities close    — |source.maturity − anchor.maturity| ≤ window days.
 //   4. Same currency      — no mixing VND with a foreign currency.
-//   5. Not pledged        — not frozen as collateral.
+//   5. Not pledged        — neither side frozen as collateral. A pledged SOURCE
+//                           cannot be liquidated into the merge; a pledged
+//                           ANCHOR cannot receive the cash, because it would
+//                           land inside a balance the user cannot withdraw
+//                           until the pledge is released (#635). Release the
+//                           pledge first, in either direction.
 //
 // Rule 1 (same goal) is normally the *caller's* job: the merge sheet only ever
 // passes a goal's own holdings, so it's enforced by scoping. We still check it
@@ -22,6 +27,7 @@ export type MergeBlockReason =
   | 'different-goal'
   | 'different-currency'
   | 'pledged'
+  | 'pledged-anchor'
   | 'out-of-window'
 
 // The minimal shape the rules read. InvRow (goal-detail) is structurally
@@ -86,7 +92,13 @@ export function classifyMergeSource(
 
   let reason: MergeBlockReason | null = null
   let overridable = false
-  if (!liquidatable) {
+  // The anchor first: a pledged destination blocks every source identically, so
+  // reporting anything about the source would name the wrong deposit. This is
+  // the only rule about the anchor's own state — the rest measure the source
+  // against it (#635).
+  if (anchor.isPledged) {
+    reason = 'pledged-anchor'
+  } else if (!liquidatable) {
     reason = 'not-liquidatable'
   } else if (anchor.goalId != null && source.goalId != null && source.goalId !== anchor.goalId) {
     reason = 'different-goal'

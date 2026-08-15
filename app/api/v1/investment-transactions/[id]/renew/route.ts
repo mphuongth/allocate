@@ -199,6 +199,21 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         })
         .single()
   if (renewErr || !renewed) {
+    // A deposit frozen as collateral cannot receive merged cash (#635). The sheet
+    // stopped offering such an anchor, so this is the raw-API path — but it is
+    // still the user's rule and it has a remedy, which a 500 would hide. The
+    // prefix is what marks the message as ours; everything else stays a fault.
+    // The message is the database's, minus the prefix that marks it as ours:
+    // the rule has two sentences (collateral cannot RECEIVE merged cash, and
+    // cannot be liquidated INTO a merge) and only the trigger knows which one
+    // applies. Same shape as the held-settlement refusals on POST.
+    const PLEDGED_PREFIX = 'pledged deposit: '
+    if (renewErr?.message?.startsWith(PLEDGED_PREFIX)) {
+      return NextResponse.json(
+        { error: renewErr.message.slice(PLEDGED_PREFIX.length), code: 'pledged_destination' },
+        { status: 409 },
+      )
+    }
     console.error('renew: atomic renewal failed', renewErr?.message)
     return NextResponse.json({ error: 'Failed to renew deposit' }, { status: 500 })
   }
