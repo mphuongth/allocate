@@ -199,6 +199,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         })
         .single()
   if (renewErr || !renewed) {
+    // A deposit frozen as collateral cannot receive merged cash (#635). The sheet
+    // stopped offering such an anchor, so this is the raw-API path — but it is
+    // still the user's rule and it has a remedy, which a 500 would hide. The
+    // prefix is what marks the message as ours; everything else stays a fault.
+    if (renewErr?.message?.startsWith('pledged deposit: ')) {
+      return NextResponse.json(
+        {
+          error: 'This deposit is pledged as collateral, so money cannot be merged into it. Release the pledge first.',
+          code: 'pledged_destination',
+        },
+        { status: 409 },
+      )
+    }
     console.error('renew: atomic renewal failed', renewErr?.message)
     return NextResponse.json({ error: 'Failed to renew deposit' }, { status: 500 })
   }

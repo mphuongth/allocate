@@ -344,6 +344,7 @@ export function MaturityResolveBody({
       case 'out-of-window': return t.reasonOutOfWindow(gapDays ?? 0)
       case 'different-currency': return t.reasonCurrency
       case 'pledged': return t.reasonPledged
+      case 'pledged-anchor': return t.reasonPledgedAnchor
       case 'different-goal': return t.reasonGoal
       default: return t.reasonBlocked
     }

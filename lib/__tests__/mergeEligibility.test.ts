@@ -59,6 +59,32 @@ describe('classifyMergeSource', () => {
     expect(c.overridable).toBe(false)
   })
 
+  // #635: the rule used to read source.isPledged only, so cash could be folded
+  // INTO collateral — the money lands inside a frozen balance and cannot be
+  // taken out again until the pledge is released, with nothing in the flow
+  // saying so. Blocked symmetrically: release the pledge first.
+  it('blocks a PLEDGED anchor — the destination is frozen collateral too', () => {
+    const c = classifyMergeSource({ ...anchor, isPledged: true }, sib({ id: 's', expiryDate: plusDays(ANCHOR_MAT, 1) }), 7)
+    expect(c.eligible).toBe(false)
+    expect(c.reason).toBe('pledged-anchor')
+    expect(c.overridable).toBe(false)
+  })
+
+  // Distinct from 'pledged' because the sentence the user reads is different:
+  // one is about the deposit they picked to keep, the other about the one they
+  // are folding in.
+  it('reports the anchor before the source when both are pledged', () => {
+    const c = classifyMergeSource({ ...anchor, isPledged: true }, sib({ id: 's', isPledged: true, expiryDate: ANCHOR_MAT }), 7)
+    expect(c.reason).toBe('pledged-anchor')
+  })
+
+  // A pledged anchor blocks every source, whatever else is wrong with them —
+  // there is no merge to have.
+  it('blocks even a perfect source when the anchor is pledged', () => {
+    const out = classifyMergeSources({ ...anchor, isPledged: true }, [sib({ id: 'a', expiryDate: ANCHOR_MAT })], 7)
+    expect(out.map((c) => c.reason)).toEqual(['pledged-anchor'])
+  })
+
   it('blocks a non-liquidatable source (a fund / book / fully-withdrawn deposit)', () => {
     expect(classifyMergeSource(anchor, sib({ id: 'f', type: 'fund' }), 7).reason).toBe('not-liquidatable')
     expect(classifyMergeSource(anchor, sib({ id: 'bk', depositGroupId: 'book-1' }), 7).reason).toBe('not-liquidatable')
