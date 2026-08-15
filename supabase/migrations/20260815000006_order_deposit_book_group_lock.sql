@@ -56,6 +56,9 @@ as $$
 declare
   v_group uuid;
   v_row public.investment_transactions;
+  v_seen bigint;
+  v_now bigint;
+  v_round int;
 begin
   -- Read, do not lock: locking this row first would be one acquisition outside
   -- the order everything else agrees on, which is the cycle this is closing.
@@ -74,11 +77,40 @@ begin
   -- The whole group, in transaction_id order, before anything is written — the
   -- same order merge_book_into_successor and the pairing checks take it in, so
   -- two writers queue instead of crossing.
-  perform 1
-    from public.investment_transactions
-   where deposit_group_id = v_group
-   order by transaction_id
-     for update;
+  --
+  -- SWEPT UNTIL THE MEMBERSHIP STOPS MOVING, which one sweep does not give at
+  -- READ COMMITTED. The statement's snapshot is fixed before it starts waiting,
+  -- so a tranche a top-up inserts WHILE the sweep is queued behind that top-up's
+  -- own anchor lock is invisible to it — and the book-level UPDATE below takes a
+  -- fresh snapshot, sees the newcomer, and locks it in plan order. That is the
+  -- cycle back, one row at a time.
+  --
+  -- The loop closes it because the sweep includes the ANCHOR, and every writer
+  -- that adds a tranche takes the anchor first
+  -- (assert_accumulating_book_topup_allowed): once a sweep completes, no further
+  -- top-up can land, so the second pass is over a set that can no longer grow.
+  -- The count is read on its own fresh snapshot, after the locks are held, which
+  -- is exactly the read the sweep could not do for itself.
+  --
+  -- Bounded rather than open: a loop that cannot converge is a hung request, and
+  -- "reload and retry" is already this function's answer to a book that will not
+  -- hold still.
+  v_seen := -1;
+  for v_round in 1 .. 5 loop
+    select count(*) into v_now
+      from public.investment_transactions
+     where deposit_group_id = v_group;
+    exit when v_now = v_seen;
+    perform 1
+      from public.investment_transactions
+     where deposit_group_id = v_group
+     order by transaction_id
+       for update;
+    v_seen := v_now;
+  end loop;
+  if v_now is distinct from v_seen then
+    raise exception 'update_deposit_book: book changed since load, reload and retry';
+  end if;
 
   -- Re-read under the lock. The group was read without one, so a book that was
   -- dissolved (or a tranche that left it) in between would have sent the sweep
