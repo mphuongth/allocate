@@ -21,24 +21,29 @@ const h = vi.hoisted(() => ({
   user: { id: 'user-1' } as { id: string } | null,
   inserts: [] as Record<string, unknown>[],
   fund: { data: { id: 'fund-1' } as unknown, error: null as unknown },
-  parent: { data: { transaction_id: 'parent-1', deposit_group_id: null, asset_type: 'bank' } as unknown, error: null as unknown },
+  rows: {} as Record<string, unknown>,
   insertResult: { data: null as unknown, error: null as unknown },
 }))
 
 vi.mock('@/lib/supabase-server', () => {
   const chain = (table: string) => {
     let op = 'select'
+    let rowId: string | null = null
     const c: Record<string, unknown> = {
       select: () => c,
       insert: (payload: Record<string, unknown>) => { op = 'insert'; h.inserts.push(payload); return c },
       update: () => { op = 'update'; return c },
-      eq: () => c,
+      // The id being looked up decides which row comes back: a withdrawal's
+      // parent and a top-up's anchor are both reads of this table, and the two
+      // are different rows.
+      eq: (col: string, val: string) => { if (col === 'transaction_id') rowId = val; return c },
       is: () => c,
       not: () => c,
       single: async () => {
         if (op === 'insert') return h.insertResult
         if (table === 'funds') return h.fund
-        return table === 'investment_transactions' ? h.parent : { data: null, error: null }
+        if (table !== 'investment_transactions') return { data: null, error: null }
+        return { data: (rowId && h.rows[rowId]) || null, error: null }
       },
       maybeSingle: async () => (table === 'funds' ? h.fund : { data: null, error: null }),
       then: (resolve: (v: unknown) => void) => resolve({ data: null, error: null }),
@@ -58,6 +63,7 @@ const { POST } = await import('../route')
 
 const FUND_ID = 'ffffffff-ffff-4fff-8fff-ffffffffffff'
 const PARENT_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+const BOOK_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 
 const call = (body: Record<string, unknown>) =>
   POST(new NextRequest('https://app.test/api/v1/investment-transactions', {
@@ -80,7 +86,14 @@ describe('POST /api/v1/investment-transactions — accumulating is a bank shape'
     h.user = { id: 'user-1' }
     h.inserts = []
     h.fund = { data: { id: FUND_ID }, error: null }
-    h.parent = { data: { transaction_id: PARENT_ID, deposit_group_id: null, asset_type: 'bank' }, error: null }
+    // A plain deposit to withdraw from, and a live book to top up.
+    h.rows = {
+      [PARENT_ID]: { transaction_id: PARENT_ID, deposit_group_id: null, asset_type: 'bank' },
+      [BOOK_ID]: {
+        transaction_id: BOOK_ID, asset_type: 'bank', deposit_group_id: BOOK_ID,
+        goal_id: null, expiry_date: '2027-07-01', bank_code: null, top_up_lock_days: null,
+      },
+    }
     h.insertResult = { data: { transaction_id: 'new-tx' }, error: null }
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
@@ -136,6 +149,42 @@ describe('POST /api/v1/investment-transactions — accumulating is a bank shape'
       parent_transaction_id: PARENT_ID,
       principal_withdrawn: 1_000_000,
       accumulating: true,
+    })
+
+    expect(res.status).toBe(400)
+    expect(h.inserts).toEqual([])
+  })
+
+  // The other way into a book is joining one. It sets deposit_group_id too, so a
+  // withdrawal naming a book as its top-up target lands in the same shape by a
+  // different door — and the table refusing it would answer a nameable request
+  // with a 500.
+  it('refuses a withdrawal that tops up a book', async () => {
+    const res = await call({
+      asset_type: 'bank',
+      transaction_type: 'withdrawal',
+      investment_date: '2026-07-01',
+      amount_vnd: 1_000_000,
+      parent_transaction_id: PARENT_ID,
+      principal_withdrawn: 1_000_000,
+      tops_up_deposit_id: BOOK_ID,
+    })
+
+    expect(res.status).toBe(400)
+    expect(h.inserts).toEqual([])
+  })
+
+  // A tranche is a bank deposit. The top-up branch reads the type off the anchor,
+  // so this used to be accepted and silently rewritten to bank — with the fund_id
+  // dropped, since the row is no longer a fund.
+  it('refuses a fund purchase filed into a book', async () => {
+    const res = await call({
+      asset_type: 'fund',
+      transaction_type: 'investment',
+      investment_date: '2026-07-01',
+      amount_vnd: 1_000_000,
+      fund_id: FUND_ID,
+      tops_up_deposit_id: BOOK_ID,
     })
 
     expect(res.status).toBe(400)

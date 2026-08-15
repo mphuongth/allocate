@@ -333,6 +333,26 @@ export async function POST(request: NextRequest) {
   // makes the anchor row self-group. The book's goal + maturity are book-level,
   // so a top-up inherits them (copied down) and the tranche just carries its own
   // amount/rate/date.
+  //
+  // Both ways in — starting a book (`accumulating`) and joining one
+  // (`tops_up_deposit_id`) — set deposit_group_id, so what a book is made of is
+  // checked once, in front of them, rather than in whichever branch happens to
+  // be reading. A grouped row that is not a bank investment is refused by the
+  // table now (20260815000002); reaching that constraint would answer a request
+  // the route can name with a catch-all 500.
+  //
+  // A withdrawal has no business in a book from either direction: self-grouped
+  // it reads as a live book to every path that keys on deposit_group_id alone,
+  // holding a balance nothing put there.
+  if (isWithdrawal && (cleanTopsUpId || accumulating)) {
+    return NextResponse.json({ error: 'A withdrawal cannot be part of an accumulating book.' }, { status: 400 })
+  }
+  // And joining one is the same rule as starting one. The branch below takes the
+  // type from the ANCHOR, so a caller filing a fund purchase into a book had it
+  // silently rewritten to bank — with its fund_id dropped on the way in.
+  if (cleanTopsUpId && cleanAssetType !== 'bank') {
+    return NextResponse.json({ error: 'Only a bank deposit can be part of an accumulating book.' }, { status: 400 })
+  }
   let explicitTxId: string | undefined
   let depositGroupId: string | null = null
   let effectiveGoalId = cleanGoalId
@@ -367,13 +387,12 @@ export async function POST(request: NextRequest) {
     // then read as a book: lib/mergeEligibility calls it "not a single deposit",
     // update_deposit_book cascades goal/maturity/notes/bank across the group
     // without asking what the rows are, and create_held_settlement has to refuse
-    // a grouped source explicitly because of it. A withdrawal is refused for the
-    // same reason from the other side: self-grouped, it reads as a live book
-    // holding a balance nothing put there.
+    // a grouped source explicitly because of it. (The withdrawal half of the
+    // rule is checked above, where both branches meet it.)
     //
     // Same rule on the table (20260815000002), because an API guard only binds
     // callers who come through the API.
-    if (isWithdrawal || cleanAssetType !== 'bank') {
+    if (cleanAssetType !== 'bank') {
       return NextResponse.json({ error: 'Only a bank deposit can be an accumulating book.' }, { status: 400 })
     }
     // New accumulating book: the anchor self-groups so deposit_group_id IS NOT
