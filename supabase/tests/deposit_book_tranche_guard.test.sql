@@ -29,6 +29,7 @@ declare
   v_tranche uuid;
   v_other   uuid;
   v_plain   uuid;
+  v_book    uuid;  -- a live book for the #618 inserts
   v_left    int;
 begin
   insert into auth.users (id, email) values (gen_random_uuid(), 'book-guard@test.invalid') returning id into v_user;
@@ -150,6 +151,61 @@ begin
   update public.investment_transactions
   set asset_type = 'gold', units = 1, unit_price = 3500000, interest_rate = null
   where transaction_id = v_plain;
+
+  -- ── A book is made of bank deposits, from the first row (#618) ───────────
+  --
+  -- The rules above are about a row that is ALREADY in a book: it cannot change
+  -- type, cannot move, cannot leave alone. None of them fires on the INSERT that
+  -- puts a non-deposit into a book in the first place — and POST accepted
+  -- `{ asset_type: 'fund', accumulating: true }` for exactly as long, so a fund
+  -- row could carry a deposit_group_id. Every path that keys on the group ALONE
+  -- reads such a row as a book: lib/mergeEligibility, update_deposit_book's
+  -- cascade, and create_held_settlement, which refuses a grouped source
+  -- explicitly because of it.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, interest_rate, expiry_date)
+  values (v_user, v_goal, 'bank', 'investment', '2026-01-01', 30000000, 5.5, '2027-01-01')
+  returning transaction_id into v_book;
+  update public.investment_transactions set deposit_group_id = v_book where transaction_id = v_book;
+
+  begin
+    insert into public.investment_transactions
+      (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+       fund_id, units, unit_price, deposit_group_id)
+    values (v_user, v_goal, 'fund', 'investment', '2026-03-01', 10000000,
+            v_fund, 500, 20000, v_book);
+    raise exception 'a fund holding must not be born in a book';
+  exception when sqlstate '23514' then null;
+  end;
+
+  begin
+    insert into public.investment_transactions
+      (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+       units, unit_price, deposit_group_id)
+    values (v_user, v_goal, 'gold', 'investment', '2026-03-01', 10000000, 2, 5000000, v_book);
+    raise exception 'a gold holding must not be born in a book';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- The anchor of a book is a deposit, so a withdrawal has no business carrying
+  -- the group: self-grouped it would read as a live book holding a balance
+  -- nothing put there.
+  begin
+    insert into public.investment_transactions
+      (user_id, goal_id, asset_type, transaction_type, parent_transaction_id,
+       investment_date, amount_vnd, principal_withdrawn, deposit_group_id)
+    values (v_user, v_goal, 'bank', 'withdrawal', v_book,
+            '2026-03-01', 1000000, 1000000, v_book);
+    raise exception 'a withdrawal must not carry a book';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- And the shape every writer actually produces still goes in.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, interest_rate, deposit_group_id)
+  values (v_user, v_goal, 'bank', 'investment', '2026-03-01', 20000000, 5.5, v_book)
+  returning transaction_id into v_tranche;
+  delete from public.investment_transactions where transaction_id = v_tranche;
 
   raise notice 'deposit book tranche guard: OK';
 end $$;
