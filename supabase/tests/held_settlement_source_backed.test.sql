@@ -55,6 +55,10 @@ declare
   v_csrc3   uuid;  -- source for the repoint / consumed-delete cases
   v_small   uuid;  -- the smaller deposit a settlement must not be moved onto
   v_csrc4   uuid;  -- source for the detach case
+  v_csrc5   uuid;  -- source for the stamped-by-the-merge case
+  v_dest    uuid;  -- the deposit a real merge folds the parked cash into
+  v_held3   uuid;  -- the settlement that merge consumes
+  v_stamp   uuid;  -- what consumed_by_inv_id ended up holding
   v_row     public.investment_transactions;
   v_saving  uuid;
   v_link    uuid;
@@ -500,8 +504,9 @@ begin
   values (v_user, v_goal, 'bank', 'investment', '2026-06-26', 1000000) returning transaction_id into v_csrc;
   v_row := public.create_held_settlement(v_csrc, 1000000, '2026-07-01');
   v_held2 := v_row.transaction_id;
-  -- A first stamp is what a merge does, and is left alone (see the migration for
-  -- why "only the merge may stamp it" has no honest implementation here).
+  -- A first stamp is what a merge does. This file has no session behind it —
+  -- auth.uid() is null, the reach migrations and the service role keep — so the
+  -- marker is writable here as setup. Under a session it is not, which is §13.
   update public.investment_transactions set consumed_by_inv_id = v_src2 where transaction_id = v_held2;
   begin
     update public.investment_transactions set consumed_by_inv_id = null where transaction_id = v_held2;
@@ -799,6 +804,71 @@ begin
     raise exception 'deleting the account must remove its rows, % left', v_count;
   end if;
   set constraints all deferred;
+
+  -- ── 13) the first stamp belongs to the merge (#617) ─────────────────────────
+  -- consumed_by_inv_id is what takes a settlement out of the pool. #616 closed
+  -- the inflation direction (clearing or repointing a marker that is already
+  -- set); the FIRST stamp stayed writable, and it is the loss direction — the
+  -- parked cash leaves net worth and arrives in no deposit at all.
+  --
+  -- renew_term_deposit_with_merge now marks its own write, so both halves have to
+  -- be pinned here: a hand-written stamp is refused, and the merge's own is not.
+  -- The second half is the one that matters most. A call-stack test tried in #616
+  -- broke every real merge and this suite could not tell, because it never called
+  -- the RPC; the same is true of any future create-or-replace that drops the
+  -- set_config. So the merge runs here, for real.
+  insert into public.investment_transactions (
+    user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+    interest_rate, expiry_date
+  ) values (
+    v_user, v_goal, 'bank', 'investment', current_date - 200, 5000000, 6.0, current_date - 1
+  ) returning transaction_id into v_dest;
+
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
+  values (v_user, v_goal, 'bank', 'investment', current_date - 200, 1000000) returning transaction_id into v_csrc5;
+  v_row := public.create_held_settlement(v_csrc5, 1000000, current_date - 1);
+  v_held3 := v_row.transaction_id;
+
+  -- A session, which is what an authenticated caller writing the table directly
+  -- has. Nothing else about the row changes — only who is asking.
+  perform set_config('request.jwt.claims', json_build_object('sub', v_user::text)::text, true);
+  begin
+    update public.investment_transactions
+       set consumed_by_inv_id = v_dest
+     where transaction_id = v_held3;
+    raise exception 'a settlement must not be stamped outside the merge' using errcode = 'ZZ999';
+  exception when check_violation then null;
+  end;
+
+  -- Inserting one already stamped is the same claim, made in one statement.
+  begin
+    insert into public.investment_transactions (
+      user_id, goal_id, asset_type, transaction_type, parent_transaction_id,
+      investment_date, amount_vnd, principal_withdrawn, affects_progress,
+      held_for_merge, merge_target_goal_id, consumed_by_inv_id
+    ) values (
+      v_user, v_goal, 'bank', 'withdrawal', v_src2,
+      current_date - 1, 1000000, 2000000, true, true, v_goal, v_dest
+    );
+    raise exception 'a settlement must not be born stamped' using errcode = 'ZZ999';
+  exception when check_violation then null;
+  end;
+
+  -- And the merge, under that same session, still folds the cash in and stamps.
+  v_row := public.renew_term_deposit_with_merge(
+    v_dest, 5000000, 6.5, current_date + 180, current_date, 100000,
+    null, null, null, null, '{}'::uuid[], '{}'::bigint[], null, array[v_held3]
+  );
+  perform set_config('request.jwt.claims', '', true);
+
+  select consumed_by_inv_id into v_stamp
+    from public.investment_transactions where transaction_id = v_held3;
+  if v_stamp is distinct from v_dest then
+    raise exception 'the merge must stamp the settlement it consumed, got %', v_stamp;
+  end if;
+  if v_row.amount_vnd <> 6000000 then
+    raise exception 'the parked cash must land in the destination, got %', v_row.amount_vnd;
+  end if;
 
   raise notice 'held_settlement_source_backed.test.sql: OK';
 end $$;
