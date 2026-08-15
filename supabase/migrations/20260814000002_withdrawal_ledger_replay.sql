@@ -1,0 +1,724 @@
+-- Replay the withdrawal ledger in write order, and name the first row that could
+-- not have been written at its turn (#613).
+--
+-- 20260730000003 screens the ledger as it STANDS, and its header states the limit
+-- that no extra predicate can remove:
+--
+--   The invariant is STATEFUL. It measures each write against the balance
+--   remaining at that moment, so whether a row was legal depends on the order the
+--   rows were written in. Different histories — some legal, some not — reach the
+--   very same final state, and the state does not record which one happened.
+--
+-- The sharpest case, and the one this file exists for: 1000 đồng over 100 units,
+-- two sales of 50 units taking 497 and 503. Neither can be written first (50 of
+-- 100 units must take 500) and neither can follow the other, yet the totals are
+-- exactly proportional and each per-sale deviation is inside what a LEGAL two-sale
+-- ledger shows on other holdings. No predicate over the final state separates it,
+-- so the screen is silent — correctly, and a test pins that silence.
+--
+-- The order the screen lacks is recorded: created_at. So this replays it. Each
+-- balance key's rows are put back in write order and the invariant's own
+-- transition rules are re-run over them, carrying remaining principal and
+-- remaining units forward. Sharp answers, no tolerance-guessing — the epsilons
+-- below are the invariant's own two constants and nothing else.
+--
+-- ─── Why this could not ship before #608 ─────────────────────────────────────
+--
+-- A replay reconstructs history from rows as they are NOW. If a source's
+-- amount_vnd or units was edited after a sale drew on it, every later step is
+-- measured against a balance that never existed and the audit produces confident,
+-- wrong answers — worse than the screen's honest silence. #608 (20260804000001)
+-- refuses the edits that would make a ledger insolvent, which is what makes a
+-- replay worth running at all.
+--
+-- It does not make every replay sound, and this file does not pretend it does.
+-- #608 bounds the TOTAL a source owes, not each prefix of it: a gold holding of
+-- 1000 đồng / 100 units with one 50-unit sale taking 500 can still be re-priced
+-- down to 600, and the replay then measures a perfectly legal sale against a basis
+-- it never saw. Same for a fund purchase relocated into or out of a bucket, and
+-- for a withdrawal whose own amounts were later corrected — the row's numbers are
+-- no longer what was measured at its turn.
+--
+-- So the premise is TESTED rather than assumed, per key: a row is `touched` when
+-- its updated_at is later than its created_at, which every write path in the app
+-- maintains (an insert leaves them equal — both default to now() — and the PUT
+-- route, the assign route and every RPC set updated_at explicitly). A key whose
+-- rows are all pristine can be replayed exactly, and a finding there is a
+-- 'violation': no ordering of these rows produces it. A key with any touched row
+-- reports 'review' instead, the same vocabulary the screen uses and for the same
+-- reason — the number is worth looking at, the proof is not available.
+--
+-- That is also how the RPC rewrites the issue asks about are handled, and it needs
+-- no catalogue of them. renew_term_deposit_with_merge re-parents partial
+-- withdrawals onto the history snapshot it just wrote; collapse and the book
+-- top-up rewrite amounts mid-transaction. Every one of those bumps updated_at on
+-- the rows it touches, so the keys they produce carry their findings as 'review'
+-- by construction, rather than being flagged as corruption or having their shapes
+-- hand-listed here — a list that would go stale the first time an RPC changed.
+--
+-- The second thing a 'violation' has to answer for is the ORDER, and created_at
+-- cannot answer it. It defaults to now(), which is the transaction's START, while
+-- the invariant serializes claims on the source's row lock — so the write order is
+-- the lock order, and a long-running transaction writes after a later-starting
+-- one. Reproduced with two sessions: A begins at 11:06:57 and writes (32 units,
+-- 319 đồng); B begins at 11:06:59, writes (34, 339) and commits first. Both are
+-- accepted, both rows are pristine, and created_at puts them in the wrong order —
+-- replayed that way the 34-unit row owes 341 and is two đồng out. Rows a single
+-- RPC writes are worse still: they share one created_at exactly and transaction_id
+-- is a random uuid, which invents an order rather than recovering one.
+--
+-- So the ordering is not assumed AT ALL. created_at decides what the finding is
+-- reported against; what it is PROVED against is the question #613 actually asks —
+-- no ordering of any history could have produced this row — answered by searching
+-- for a legal one. See the `reach` CTE: it is a subset search rather than a
+-- permutation one, because the balance after a set of events does not depend on
+-- the order they arrived in.
+--
+-- And the question is asked of the ROW, not of the holding, because those are not
+-- the same claim. Two 50-unit sales of a 1000 đồng / 100 unit holding each taking
+-- 499: either is legal written first (the đồng of rounding covers 499 against 500)
+-- and whichever comes second owes the whole 501 left, so the holding has no legal
+-- reading at all — yet neither sale is individually impossible, and grading them by
+-- the holding's verdict would call whichever sorts second a proven violation when
+-- it may be the innocent one. So `row_rescued` asks whether THIS row would have
+-- been accepted in any state the holding could legally have been in without it.
+-- Legal somewhere means 'review', and the finding is reported either way. The
+-- holding-level proof is not thrown away — where it says more than the row-level
+-- one, it goes into the detail sentence, which is where a claim about a set of rows
+-- can be made without pointing at one of them.
+--
+-- One ordering fact IS honoured, because the ledger genuinely records it: a claim
+-- parented to a purchase cannot have been written before that purchase existed —
+-- the foreign key would have refused it. That is a fact about the schema, not a
+-- guess about clocks, and without it the search invents histories in which a
+-- bucket's claim precedes its own source. It is the difference between 'review'
+-- and 'violation' on a real shape; see the fixture in the test suite.
+--
+-- The price is real and worth stating plainly: a fund bucket whose purchases could
+-- be reordered ahead of its sells is rarely provable, because "all the purchases
+-- first" is usually a legal reading. Those report 'review'. What stays provable is
+-- the class #613 opens with — a holding no sequence explains, like the 497/503
+-- pair — and any holding whose claims exceed it outright.
+--
+-- One shape is left unreported ON PURPOSE, and it is worth saying so rather than
+-- letting silence read as a clean bill: a claim naming a holding that belongs to
+-- SOMEONE ELSE. check_withdrawal_balance looks for the parent under the claimant's
+-- own user_id, finds nothing, and returns without measuring anything — ownership is
+-- a different trigger's refusal (#474 / #525), and staying quiet here keeps that
+-- message the one the user sees. This view matches that silence, because judging it
+-- meant partitioning the holding under its owner and the claim under the claimant,
+-- which replays the claim against an opening balance of zero and reports a pristine
+-- overdraw of a holding nobody touched. withdrawal_ledger_audit is silent on it
+-- too, so no view in this family reports such a row. A candidate for the screen,
+-- where ownership would be an honest shape check; it is not a balance question and
+-- inventing a balance answer to it is what this note exists to prevent.
+--
+-- Two residual gaps, stated rather than papered over. updated_at is maintained by
+-- the writers, not by a trigger, so a hand-written SQL UPDATE that leaves it alone
+-- is invisible to this test and its key would still read as pristine. And the test
+-- can only see rows that are STILL on the key: a purchase relocated OUT of a fund
+-- bucket carries its touched flag away with it, so a bucket left short by a
+-- relocation reads as pristine and its sells are reported as violations. That is
+-- the same verdict withdrawal_ledger_audit's fund_bucket_has_no_purchases already
+-- gives that state (#610), so the two agree — but the proof here is the weaker one.
+--
+-- ─── What the replay does NOT judge ──────────────────────────────────────────
+--
+-- Only the balance transitions — how much was left, and what a sale was allowed to
+-- take from it. The SHAPE checks (negative amounts, a fund sell with no units, a
+-- parent that is not an investment, a row drawing on no holding at all) are
+-- decidable from state alone and belong to withdrawal_ledger_audit, which already
+-- reports them as violations. Reporting them twice would double the noise without
+-- adding a fact. The two views are complements: run the screen for shapes and
+-- aggregates, run this for sequences.
+--
+-- That division has to be enforced and not merely intended, because one shape
+-- reaches the transition rules and comes out mis-described. A parent-backed claim
+-- recording no principal is `withdrawal_missing_principal` over there; judged as an
+-- allocation here it reads "it should have taken 10,000,000 đồng, it took 0" — a
+-- misallocation, where the defect is that no principal was recorded at all. Such a
+-- row is therefore not judged (see the parent-backed branch below). It still
+-- consumes the balance, and it stays freely placeable in the ordering search: a row
+-- that could never have been written proves nothing about its neighbours.
+--
+-- Only the FIRST failing row per balance key is reported. Once a row could not
+-- have been written, the state every later row is measured against is fiction, so
+-- the rows after it are not evidence of anything — the detail says how many there
+-- are and stops.
+--
+-- Read-only. It names rows and holdings, changes nothing, and is safe to run on
+-- production in the SQL editor:
+--
+--   select check_name, severity, count(*)
+--     from public.withdrawal_ledger_replay
+--    group by 1, 2 order by 2, 1;
+--
+-- Its columns match public.withdrawal_ledger_audit's, so the two can be read side
+-- by side or unioned.
+--
+-- Why a view and not a script in a folder, and why a test that plants ledgers the
+-- invariant refuses to write: the same reason 20260730000003 gives. An audit that
+-- returns nothing is indistinguishable from an audit that looks for nothing, and
+-- the only way to keep it honest is to make it a database object a test can query.
+-- supabase/tests/withdrawal_ledger_replay.test.sql asserts of every catch that
+-- withdrawal_ledger_audit is SILENT on the same fixture, so the day this decays
+-- into a restatement of that view, the suite says so.
+
+create or replace view public.withdrawal_ledger_replay
+with (security_invoker = true) as
+-- RECURSIVE for the `reach` CTE alone, which walks the subsets of a key's events.
+with recursive wd as (
+  select w.transaction_id, w.user_id, w.goal_id, w.fund_id, w.parent_transaction_id,
+         w.principal_withdrawn, w.units_withdrawn, w.created_at, w.updated_at,
+         -- The same branch precedence as check_withdrawal_balance and
+         -- lib/withdrawalProgress: asset_type='fund' + fund_id wins, and such a row
+         -- draws on its (goal, fund) bucket whatever parent it also names.
+         coalesce(w.asset_type = 'fund' and w.fund_id is not null, false) as fund_keyed
+    from public.investment_transactions w
+   where w.transaction_type = 'withdrawal'
+),
+
+-- ── the ledger as a sequence of events, per balance key ──────────────────────
+-- Two kinds of key, exactly the two the invariant resolves to:
+--   'p:<id>'          one source row — bank, gold, stock
+--   'f:<fund>:<goal>' a fund bucket, which a sell draws on with no parent at all
+--
+-- A credit adds to the balance, a debit takes from it, and the running sum of
+-- everything BEFORE a debit is the state that debit was measured against.
+events as (
+  -- The opening balance of a parent-backed holding. Sorted at -infinity rather
+  -- than at its own created_at, because a source is not an event in its holding's
+  -- history — check_withdrawal_balance reads its amount_vnd and units wholesale,
+  -- with no interleaving, and every claim parented to it is measured against that.
+  -- Ordering it by created_at would also invert the one case that matters: renewal
+  -- re-parents a deposit's partial withdrawals onto a history snapshot written
+  -- AFTER them (#585), so the source would sort last and every legal claim on it
+  -- would replay against an empty holding.
+  select p.user_id,
+         'p:' || p.transaction_id::text        as balance_key,
+         p.transaction_id                      as holding,
+         null::uuid                            as fund_id,
+         p.goal_id                             as goal_id,
+         -- Gold is the one non-fund holding valued by QUANTITY, so its sales follow
+         -- the proportional allocation rather than the outright principal cap.
+         (p.asset_type = 'gold')               as quantity_valued,
+         '-infinity'::timestamptz              as ord_at,
+         0                                     as ord_kind,
+         p.transaction_id                      as ord_id,
+         false                                 as is_debit,
+         false                                 as judge_here,
+         -- A credit claims nothing, so there is no shape for the invariant to
+         -- refuse. Only a DEBIT can be shape-invalid, and only those quarantine.
+         true                                  as shape_ok,
+         null::uuid                            as row_id,
+         coalesce(p.amount_vnd, 0)::numeric    as d_basis,
+         coalesce(p.units, 0)::numeric         as d_units,
+         null::numeric                         as took_principal,
+         null::numeric                         as took_units,
+         (p.updated_at > p.created_at)         as touched,
+         null::uuid                            as depends_on
+    from public.investment_transactions p
+   where p.transaction_type = 'investment'
+     and exists (select 1 from wd w
+                  where w.parent_transaction_id = p.transaction_id and not w.fund_keyed
+                    and w.user_id = p.user_id)
+
+  union all
+  select w.user_id, 'p:' || w.parent_transaction_id::text, w.parent_transaction_id, null, w.goal_id,
+         (pa.asset_type = 'gold'),
+         w.created_at, 1, w.transaction_id, true,
+         -- Judged here UNLESS its shape is already condemned. The invariant demands
+         -- a positive principal from any parent-backed claim and refuses one
+         -- without ever reaching the allocation rule, and withdrawal_ledger_audit
+         -- names that row `withdrawal_missing_principal`. Judging it anyway makes
+         -- the replay report the same row a second time under a WORSE name: a
+         -- gold sale recording no principal comes out as "it should have taken
+         -- 10,000,000 đồng, it took 0", which describes a misallocation where the
+         -- defect is that no principal was recorded at all. The two views are
+         -- advertised as complements, and a complement does not restate its
+         -- partner's finding in vaguer words. It still consumes the balance, and
+         -- it stays freely placeable in the ordering search — a row that could
+         -- never have been written cannot be used to prove anything about its
+         -- neighbours.
+         -- A NEGATIVE amount is condemned by the screen too (`negative_amounts`),
+         -- and it is the same mistake to restate it here: principal 150 of a 100
+         -- holding with units -1 came out as a plain overdraw, which says nothing
+         -- about the sign that makes the row impossible. It is also the one shape
+         -- that runs the ledger BACKWARDS — a negative delta ADDS to the holding
+         -- and banks a credit later rows can spend — so judging the rows around it
+         -- would measure them against a balance the invariant would never have
+         -- allowed to exist.
+         -- judge_here and shape_ok are the SAME question on this axis, asked twice
+         -- because they answer different ones downstream: whether to grade this row,
+         -- and whether its numbers may be trusted as the balance for its neighbours.
+         -- The gold clause is the invariant's ("a gold sale must record
+         -- units_withdrawn"); it never produced a finding here, but such a row still
+         -- eats basis, so it has to quarantine.
+         coalesce(w.principal_withdrawn, 0) > 0
+           and coalesce(w.units_withdrawn, 0) >= 0
+           and (pa.asset_type is distinct from 'gold' or coalesce(w.units_withdrawn, 0) > 0),
+         coalesce(w.principal_withdrawn, 0) > 0
+           and coalesce(w.units_withdrawn, 0) >= 0
+           and (pa.asset_type is distinct from 'gold' or coalesce(w.units_withdrawn, 0) > 0),
+         w.transaction_id,
+         -coalesce(w.principal_withdrawn, 0), -coalesce(w.units_withdrawn, 0),
+         coalesce(w.principal_withdrawn, 0), coalesce(w.units_withdrawn, 0),
+         (w.updated_at > w.created_at), null::uuid
+    from wd w
+    join public.investment_transactions pa on pa.transaction_id = w.parent_transaction_id
+   where not w.fund_keyed
+     -- A parent that is not an investment invents a balance out of money that
+     -- already left; withdrawal_ledger_audit calls that by name, and replaying it
+     -- would only restate the same row less clearly.
+     and pa.transaction_type = 'investment'
+     -- And it has to be the writer's OWN holding, which is the same predicate
+     -- check_withdrawal_balance uses before it reads a balance at all — it finds
+     -- nothing and returns quietly, leaving ownership to the trigger whose refusal
+     -- it is (#474 / #525). Without this the two sides land in different partitions
+     -- (the holding under its owner, the claim under the claimant) and the claim
+     -- replays against an opening balance of zero, which reads as a pristine
+     -- overdraw of a holding that is in fact untouched.
+     and pa.user_id = w.user_id
+
+  union all
+  -- The bucket's OTHER kind of claim (#606). A withdrawal parented to a fund
+  -- PURCHASE is not fund-keyed, so it is measured on the parent axis above — but
+  -- 20260803000005 also charges it against that purchase's (goal, fund) bucket
+  -- when the next sale is measured, because lib/withdrawalProgress values it
+  -- there. Leaving it out of the bucket made the replay miss exactly the overdraw
+  -- that migration exists to refuse: a legacy 10-unit claim on a 50-unit purchase
+  -- followed by a 45-unit sell replays as 45 of 50 and reports clean.
+  --
+  -- It is a DEBIT here and not a judged one: the invariant never measures such a
+  -- row against the bucket, only counts it. Its verdict is the parent axis's.
+  --
+  -- Every predicate below is that function's, including the derived units for a
+  -- claim that records none, and `p.units > 0` — a purchase with no units is no
+  -- bucket, so its claim stays on the parent axis alone.
+  select w.user_id,
+         'f:' || p.fund_id::text || ':' || coalesce(p.goal_id::text, ''),
+         null, p.fund_id, p.goal_id, true,
+         -- Not judged here, and NOT quarantining either: 20260803000005's bucket
+         -- query sums this row's numbers exactly as they stand, whatever shape they
+         -- are in. They are not contamination — on this axis they are the balance.
+         w.created_at, 1, w.transaction_id, true, false, true, w.transaction_id,
+         -coalesce(w.principal_withdrawn, 0),
+         -case when coalesce(w.units_withdrawn, 0) > 0 then w.units_withdrawn
+               else least(p.units, p.units * coalesce(w.principal_withdrawn, 0) / p.amount_vnd) end,
+         null, null,
+         -- The PARENT's edits count as this event's too, because this event's units
+         -- are derived from the parent's current units and amount_vnd (see the
+         -- expression above) — so editing the purchase silently restates how much
+         -- of the bucket this claim took. Usually the purchase is a credit on this
+         -- same key and its own touched flag would carry, but not always: a
+         -- cross-owner purchase is partitioned under ITS owner, and a renewal
+         -- snapshot is no part of the bucket at all, while 20260803000005 counts
+         -- claims on both. Probed — a claim deriving 20 units, a legal 40-unit sale
+         -- against that, then the parent re-priced so the claim derives 10: every
+         -- row pristine, and the sale reported as a proven violation.
+         (w.updated_at > w.created_at or p.updated_at > p.created_at),
+         -- The one order the ledger DOES record. A claim parented to a purchase
+         -- cannot have been written before that purchase existed: the foreign key
+         -- would have refused it, and the invariant finds the claim by joining to
+         -- it. Unlike created_at, that is a fact about the schema rather than a
+         -- guess about clocks, so the search must honour it.
+         p.transaction_id
+    from wd w
+    join public.investment_transactions p on p.transaction_id = w.parent_transaction_id
+   where not w.fund_keyed
+     and p.transaction_type = 'investment'
+     and p.asset_type = 'fund'
+     and p.fund_id is not null
+     and coalesce(p.units, 0) > 0
+     and coalesce(p.amount_vnd, 0) > 0
+     -- NO same-owner test on the purchase, deliberately, and NOT for symmetry with
+     -- the parent axis above. 20260803000005's query constrains the claim's owner
+     -- (`w.user_id = wd.user_id`) and never the purchase's — it reaches the purchase
+     -- through `p.fund_id = wd.fund_id`. The ownership trigger (#474 / 20260722000004)
+     -- stops new rows from carrying another user's fund, but legacy rows are the
+     -- whole reason this view exists, and on one of those the two halves diverge:
+     -- the BASIS sum does require `t.user_id = wd.user_id`, so a cross-owner
+     -- purchase is left out of what the bucket holds while a claim parented to it is
+     -- still charged against the bucket. Probed — a 100-unit bucket carrying a
+     -- 10-unit claim on such a purchase refuses a 95-unit sale at "the remaining
+     -- balance of 90 units". Adding the owner test here dropped that claim and the
+     -- sale replayed clean.
+     --
+     -- Whether that asymmetry is right is a question for the invariant, not for its
+     -- audit. This view's contract is to report what the database actually enforces,
+     -- and a predicate it does not have belongs nowhere in it.
+
+  union all
+  -- A fund bucket's purchases DO interleave: the invariant sums whatever is in the
+  -- bucket at the moment of the sell, so a purchase made later is not part of that
+  -- sum. The exclusions mirror the invariant's own — a pending DCA seed (units
+  -- null) holds nothing sellable, and a renewal snapshot is a history copy.
+  select t.user_id,
+         'f:' || t.fund_id::text || ':' || coalesce(t.goal_id::text, ''),
+         null, t.fund_id, t.goal_id, true,
+         t.created_at, 0, t.transaction_id, false, false, true, t.transaction_id,
+         coalesce(t.amount_vnd, 0), coalesce(t.units, 0), null, null,
+         (t.updated_at > t.created_at), null::uuid
+    from public.investment_transactions t
+   where t.transaction_type = 'investment'
+     and t.asset_type = 'fund'
+     and t.fund_id is not null
+     and t.units is not null
+     and t.renewed_from_transaction_id is null
+
+  union all
+  select w.user_id,
+         'f:' || w.fund_id::text || ':' || coalesce(w.goal_id::text, ''),
+         null, w.fund_id, w.goal_id, true,
+         w.created_at, 1, w.transaction_id, true,
+         -- Same negative-amount carve-out as the parent axis, for the same reason:
+         -- the screen names it and this view would only restate it worse — a sell
+         -- of 50 units recording MINUS 500 đồng came out as "it should have taken
+         -- 500 đồng, it took -500", which reads as a misallocation rather than as
+         -- the impossible sign it is. No positive-principal rule here, though:
+         -- unlike the parent axis a fund sell may legitimately take nothing, since
+         -- a slice worth less than half a đồng rounds to zero.
+         -- Same pair as the parent axis. The units clause is the invariant's ("a
+         -- fund sale must record units_withdrawn") and, like gold's, it never
+         -- produced a finding — but such a row still eats basis, so it quarantines.
+         coalesce(w.principal_withdrawn, 0) >= 0 and coalesce(w.units_withdrawn, 0) > 0,
+         coalesce(w.principal_withdrawn, 0) >= 0 and coalesce(w.units_withdrawn, 0) > 0,
+         w.transaction_id,
+         -coalesce(w.principal_withdrawn, 0), -coalesce(w.units_withdrawn, 0),
+         coalesce(w.principal_withdrawn, 0), coalesce(w.units_withdrawn, 0),
+         (w.updated_at > w.created_at),
+         -- A fund sell ignores its parent for the BALANCE — the bucket is what it
+         -- draws on — but the foreign key still proves that parent existed when the
+         -- sell was written. Where the parent is a purchase in this same bucket that
+         -- is a real ordering fact, and without it the search invents the one
+         -- history that excuses the sell: its own parent purchase placed after it.
+         w.parent_transaction_id
+    from wd w
+   where w.fund_keyed
+),
+
+-- ── the state each row was written against ──────────────────────────────────
+-- now() is fixed for a whole transaction, so every row a single RPC writes shares
+-- one created_at and there is no order between them to read. Credits are therefore
+-- sorted before debits at the same instant, which is the only reading under which
+-- such a transaction could have passed the invariant in the first place: a
+-- purchase and the sell of it written together must have gone in that order.
+--
+-- That order is what the replay REPORTS against. It is not what it proves from —
+-- see the ordering search below, which assumes no order at all.
+-- A debit the invariant would have refused OUTRIGHT contributes NOTHING here: not
+-- a verdict, and not a delta either. The row could not have been written, so no
+-- legal history of this holding contains it, and the balances its neighbours have
+-- to answer for are the ones the holding would show without it.
+--
+-- Leaving the delta in was wrong in both directions. It invented balances that
+-- convicted innocent rows — a 40,000,000 / 4 unit gold holding with a no-principal
+-- 1-unit claim replayed the perfectly ordinary 1-unit / 10,000,000 sale after it
+-- against 40,000,000 / 3. And because these deltas are SIGNED, it also hid real
+-- ones: a 100 đồng holding with a -100 withdrawal and then a 150 withdrawal
+-- replayed the 150 against 200 and said nothing, while the screen's aggregate came
+-- to 50 and said nothing either. That overdraw was reported by no view at all,
+-- which is the exact silence this family exists to break.
+--
+-- The key is still marked, because the row is still there and an operator reading
+-- a finding on this holding needs to know a broken row sits beside it — see the
+-- sentence appended in the detail below.
+state as (
+  select e.*,
+         coalesce(sum(case when e.is_debit and not e.shape_ok then 0 else e.d_basis end)
+                  over w_prev, 0) as rem_basis,
+         coalesce(sum(case when e.is_debit and not e.shape_ok then 0 else e.d_units end)
+                  over w_prev, 0) as rem_units,
+         bool_or(e.touched)      over w_key      as key_touched,
+         count(*) filter (where e.is_debit) over w_key as claims_on_key,
+         -- Where this claim sits in the holding's history, which is the number an
+         -- operator needs to find it in the ledger. Counted over the claims alone,
+         -- so an interleaved fund purchase does not shift it — and over ALL of
+         -- them, including the refused ones, because the operator is counting rows
+         -- in a ledger, not events in this view's model of it.
+         count(*) filter (where e.is_debit) over w_upto as claim_ordinal,
+         -- The events that have to be permuted to decide the key: everything but
+         -- the source, which opens the balance rather than happening in it, and
+         -- everything the invariant would have refused, which is not part of any
+         -- history there is to order.
+         count(*) filter (where e.ord_at > '-infinity'
+                            and not (e.is_debit and not e.shape_ok)) over w_key as movable,
+         bool_or(e.is_debit and not e.shape_ok) over w_key as key_contaminated
+    from events e
+  window
+    w_key  as (partition by e.user_id, e.balance_key),
+    w_prev as (partition by e.user_id, e.balance_key
+               order by e.ord_at, e.ord_kind, e.ord_id
+               rows between unbounded preceding and 1 preceding),
+    w_upto as (partition by e.user_id, e.balance_key
+               order by e.ord_at, e.ord_kind, e.ord_id
+               rows between unbounded preceding and current row)
+),
+
+-- ── the invariant's own transition rules, re-run ────────────────────────────
+-- Same three questions check_withdrawal_balance asks, same two constants, asked of
+-- the balance as it stood rather than of the balance as it ended.
+judged as (
+  select s.*,
+         case when s.rem_units > 0 and s.took_units < s.rem_units - 0.0001
+                then round(s.took_units * s.rem_basis / s.rem_units)
+              else s.rem_basis end as owed,
+         case
+           -- Quantity, for whichever kinds carry units. The epsilon rounds a real
+           -- balance and does not create one, so an emptied holding is measured
+           -- exactly — `case when v_left_units > 0` is the invariant's own wording.
+           when s.took_units > 0
+            and s.took_units > s.rem_units + case when s.rem_units > 0 then 0.0001 else 0 end
+             then 'sale_exceeded_the_units_left'
+           -- A quantity-valued holding binds its principal TO the units: a sale of
+           -- all that is left takes the remaining basis, a partial sale its
+           -- units-proportional share, and the two sides may differ by at most the
+           -- đồng that rounding a slice produces.
+           when s.quantity_valued and s.took_units > 0 and s.rem_units > 0
+            and abs(s.took_principal
+                    - case when s.took_units < s.rem_units - 0.0001
+                             then round(s.took_units * s.rem_basis / s.rem_units)
+                           else s.rem_basis end) > 1
+             then 'sale_took_the_wrong_basis'
+           -- Bank and stock: the principal is the user's own figure, capped
+           -- outright by what the holding still held.
+           when not s.quantity_valued and s.took_principal > 0
+            and s.took_principal > s.rem_basis
+             then 'withdrawal_exceeded_the_balance'
+         end as failure
+    from state s
+   where s.judge_here
+),
+
+fails as (
+  select j.*, count(*) over (partition by j.user_id, j.balance_key) as fails_on_key
+    from judged j
+   where j.failure is not null
+),
+
+-- ── is there ANY order this key could have been written in? ─────────────────
+-- What the replay reports comes from created_at. What it PROVES may not, because
+-- created_at is `now()`, which is the transaction's START — and the invariant
+-- serializes claims on a lock, so the write order is the lock order. A long
+-- transaction can write after a later-starting one:
+--
+--   A begins 11:06:57 .............................. writes (32 units, 319 đồng)
+--   B begins 11:06:59, writes (34, 339), commits
+--
+-- Both accepted — B against the full 1000 đồng / 100 units, A against the 661/66
+-- B left it. Both rows pristine, both timestamps distinct, and in the WRONG order:
+-- replayed by created_at the 34-unit row owes 341 and is two đồng out. Reproduced
+-- with two sessions against the local stack. No comparison of created_at values
+-- rescues that, whatever gap is allowed for, so the ordering is not assumed at all.
+--
+-- Instead the question #613 actually asks — "no ordering of any history could have
+-- produced this row" — is answered directly, and it is cheaper than it looks. The
+-- remaining balance after a SET of events does not depend on the order they came
+-- in: it is the opening balance plus their deltas, and addition commutes. So this
+-- is a search over subsets, not permutations. A subset is reachable when some
+-- event in it is legal against the balance the rest of it leaves.
+--
+-- A key where SOME ordering is legal cannot be called proven, however damning the
+-- created_at order looks; it drops to 'review' with the finding intact. Only a key
+-- where the full set is unreachable by any route has no legal reading at all.
+--
+-- The cap is a resource bound, not a tolerance: a key with more than 14 movable
+-- events is not searched and reports 'review'. Ordinary holdings are far below it,
+-- and only keys that already produced a finding are searched at all — a clean
+-- ledger does no work here.
+movable as (
+  select s.user_id, s.balance_key, s.row_id, s.is_debit, s.judge_here, s.quantity_valued,
+         s.d_basis, s.d_units, s.took_principal, s.took_units, s.depends_on,
+         (row_number() over (partition by s.user_id, s.balance_key
+                             order by s.ord_at, s.ord_kind, s.ord_id) - 1)::int as idx
+    from state s
+   where s.ord_at > '-infinity'
+     -- Out of the search for the same reason it is out of the running balance:
+     -- a row the invariant would have refused is not part of any history there is
+     -- to order, so it neither takes a position nor carries a delta into one.
+     and not (s.is_debit and not s.shape_ok)
+     and exists (select 1 from fails f
+                  where f.user_id = s.user_id and f.balance_key = s.balance_key)
+),
+-- The claim-to-purchase dependency, resolved to the bit that purchase occupies.
+-- Null when the purchase is not an event on this key at all — a renewal snapshot,
+-- say, which the invariant still counts the claim against but which is no part of
+-- the bucket — and the claim is then unconstrained, which is the cautious way to
+-- be wrong.
+movable_dep as (
+  select m.*, buy.idx as dep_idx
+    from movable m
+    left join movable buy
+      on buy.user_id = m.user_id
+     and buy.balance_key = m.balance_key
+     and buy.row_id = m.depends_on
+),
+opening as (
+  select s.user_id, s.balance_key,
+         -- The source opens a parent-backed holding; a fund bucket opens at zero
+         -- and is filled by the purchase events themselves.
+         coalesce(sum(s.d_basis) filter (where s.ord_at = '-infinity'), 0) as open_basis,
+         coalesce(sum(s.d_units) filter (where s.ord_at = '-infinity'), 0) as open_units,
+         max(s.movable)::int as n
+    from state s
+   where exists (select 1 from fails f
+                  where f.user_id = s.user_id and f.balance_key = s.balance_key)
+   group by s.user_id, s.balance_key
+),
+reach as (
+  select o.user_id, o.balance_key, 0::bigint as mask,
+         o.open_basis as rem_basis, o.open_units as rem_units
+    from opening o
+   where o.n <= 14
+  union
+  select r.user_id, r.balance_key, r.mask | (1::bigint << m.idx),
+         r.rem_basis + m.d_basis, r.rem_units + m.d_units
+    from reach r
+    join movable_dep m
+      on m.user_id = r.user_id and m.balance_key = r.balance_key
+     and (r.mask >> m.idx) & 1 = 0
+     -- The purchase a claim names has to have happened already. This is the ONE
+     -- ordering fact the ledger actually records: the foreign key would have
+     -- refused the claim otherwise.
+     and (m.dep_idx is null or (r.mask >> m.dep_idx) & 1 = 1)
+   where not m.is_debit
+      -- A purchase claims nothing, and a claim the invariant does not measure here
+      -- (a bucket's parent-backed claim) is only counted, never judged — so both
+      -- may be placed anywhere.
+      or not m.judge_here
+      -- Otherwise it has to survive the same three questions, against the balance
+      -- the rest of this subset leaves.
+      or (not (m.took_units > 0
+               and m.took_units > r.rem_units + case when r.rem_units > 0 then 0.0001 else 0 end)
+          and not (m.quantity_valued and m.took_units > 0 and r.rem_units > 0
+                   and abs(m.took_principal
+                           - case when m.took_units < r.rem_units - 0.0001
+                                    then round(m.took_units * r.rem_basis / r.rem_units)
+                                  else r.rem_basis end) > 1)
+          and not (not m.quantity_valued and m.took_principal > 0
+                   and m.took_principal > r.rem_basis))
+),
+explainable as (
+  select distinct r.user_id, r.balance_key
+    from reach r
+    join opening o on o.user_id = r.user_id and o.balance_key = r.balance_key
+   where r.mask = (1::bigint << o.n) - 1
+),
+
+-- ── and is THIS row the one that is wrong? ──────────────────────────────────
+-- "No ordering of this holding is legal" is a statement about the HOLDING. The
+-- finding names a ROW, and those are not the same claim. A pristine 1000 đồng /
+-- 100 unit holding with two 50-unit sales each taking 499: either is legal written
+-- first (the đồng of rounding covers 499 against 500) and whichever comes second
+-- owes the whole 501 that is left, so no complete ordering exists — yet neither
+-- sale is individually impossible, and calling one of them proven sends an
+-- operator to correct a row that may be the innocent one.
+--
+-- So the row is asked about itself: is there ANY state this holding could legally
+-- have been in, without this row, where this row would have been accepted? The
+-- reachable states are already computed above, so this is a scan over them. Legal
+-- somewhere means not proven, whatever the holding as a whole says.
+--
+-- This is strictly stronger than the holding-level test and replaces it: a holding
+-- with a legal ordering puts every one of its rows in a legal position, so nothing
+-- provable at row level can survive there. What the holding-level result still
+-- earns is a SENTENCE — the detail says the holding has no legal reading even when
+-- no single row can be blamed for it, which is the true and useful thing to tell
+-- an operator looking at a set of rows that cannot all be right.
+row_rescued as (
+  select distinct f.user_id, f.balance_key, f.row_id
+    from fails f
+    join movable_dep m
+      on m.user_id = f.user_id and m.balance_key = f.balance_key and m.row_id = f.row_id
+    join reach r
+      on r.user_id = f.user_id and r.balance_key = f.balance_key
+     and (r.mask >> m.idx) & 1 = 0
+     and (m.dep_idx is null or (r.mask >> m.dep_idx) & 1 = 1)
+   where not (f.took_units > 0
+              and f.took_units > r.rem_units + case when r.rem_units > 0 then 0.0001 else 0 end)
+     and not (f.quantity_valued and f.took_units > 0 and r.rem_units > 0
+              and abs(f.took_principal
+                      - case when f.took_units < r.rem_units - 0.0001
+                               then round(f.took_units * r.rem_basis / r.rem_units)
+                             else r.rem_basis end) > 1)
+     and not (not f.quantity_valued and f.took_principal > 0
+              and f.took_principal > r.rem_basis)
+)
+
+select distinct on (f.user_id, f.balance_key)
+       f.failure::text  as check_name,
+       -- Provable only where the replay's premise holds: nothing on this key was
+       -- touched after it was written, so these rows ARE what was measured; the key
+       -- was small enough to search; and THIS ROW had no legal position in it.
+       -- Contamination is deliberately NOT a clause here, though it looks like one.
+       -- A row the invariant would have refused is out of the balances and out of
+       -- the search entirely, so what remains on the key IS the legal ledger and a
+       -- finding against it is as sound as any other. Downgrading it because
+       -- something else on the holding is broken would throw away a true proof —
+       -- and it was a real one: the 150 đồng overdraw hiding behind a -100 đồng row
+       -- is only reported because this stays 'violation'. What contamination earns
+       -- is the sentence in the detail, not a change of verdict.
+       case when f.key_touched
+              or f.movable > 14
+              or exists (select 1 from row_rescued x
+                          where x.user_id = f.user_id and x.balance_key = f.balance_key
+                            and x.row_id = f.row_id)
+              then 'review' else 'violation' end::text as severity,
+       f.user_id,
+       f.row_id         as transaction_id,
+       f.holding        as parent_transaction_id,
+       f.fund_id,
+       f.goal_id,
+       case f.failure
+         when 'sale_exceeded_the_units_left' then
+           -- "claim(s)", not "sale(s)": on a fund bucket this count includes the
+           -- withdrawals parented to its purchases (#606), which are claims on the
+           -- bucket without being sales of it. Counting them is the point — a
+           -- legacy claim is often the reason the sale that follows does not fit,
+           -- and an operator who cannot see it in the tally goes looking for a
+           -- second sale that is not there.
+           format('a sale of %s units when the holding had %s units left (%s đồng of basis), %s of %s claim(s) into its history',
+                  f.took_units, f.rem_units, f.rem_basis, f.claim_ordinal, f.claims_on_key)
+         when 'sale_took_the_wrong_basis' then
+           format('a sale of %s units out of the %s units then left, against a %s đồng basis: it should have taken %s đồng, it took %s',
+                  f.took_units, f.rem_units, f.rem_basis, f.owed, f.took_principal)
+         else
+           -- This branch is the parent axis alone, where every claim IS a
+           -- withdrawal of the holding and the word can be the exact one.
+           format('a withdrawal of %s đồng when the holding had %s đồng left, %s of %s withdrawal(s) into its history',
+                  f.took_principal, f.rem_basis, f.claim_ordinal, f.claims_on_key)
+       end
+       || case when f.fails_on_key > 1
+                 then format(' — and %s later row(s) on this holding fail the replay too, measured against a balance this one already made fiction',
+                             f.fails_on_key - 1)
+               else '' end
+       -- The holding-level result, where it says more than the row-level one. Two
+       -- 50-unit sales of 1000 đồng / 100 units each taking 499 have no legal
+       -- reading between them, and neither one is individually impossible — the
+       -- proof is real but it belongs to the pair, so it goes in the sentence
+       -- rather than into a severity that would point at one of them.
+       || case when not f.key_touched and f.movable <= 14
+                and not exists (select 1 from explainable x
+                                 where x.user_id = f.user_id and x.balance_key = f.balance_key)
+                and exists (select 1 from row_rescued x
+                             where x.user_id = f.user_id and x.balance_key = f.balance_key
+                               and x.row_id = f.row_id)
+                 then '. No ordering of this holding''s claims is legal, so at least one of them is wrong — but this row is not provably the one, since it would have been accepted had it been written earlier'
+               else '' end
+       -- Said where the operator meets it, because the balances above will not
+       -- reconcile against the rows they can see otherwise: one of those rows is
+       -- deliberately not in them.
+       || case when f.key_contaminated
+                 then '. This holding also carries a row check_withdrawal_balance would have refused outright — withdrawal_ledger_audit names it — and it is left out of the balances above, since no legal history of this holding contains it'
+               else '' end as detail
+  from fails f
+ order by f.user_id, f.balance_key, f.ord_at, f.ord_kind, f.ord_id;
+
+comment on view public.withdrawal_ledger_replay is
+  'Replays each balance key''s rows against check_withdrawal_balance''s own transition rules and names the first row that could not have been written at its turn. created_at gives the order it REPORTS against; severity is decided by an exhaustive search over orderings, since created_at is transaction-start and records no write order. severity=violation means this row had no legal position in any history of its holding, and nothing on the key was edited after it was written; severity=review means it is worth looking at but not proven — read the detail, which carries the holding-level verdict where that says more. Shape checks belong to withdrawal_ledger_audit; the two are complements (#613).';
+
+-- An operator tool, and there is no screen that reads it. security_invoker means
+-- RLS would confine a caller to their own rows anyway, but granting it adds a
+-- PostgREST surface for no gain — the same reasoning that revoked
+-- withdrawal_ledger_audit in 20260730000003.
+revoke all on public.withdrawal_ledger_replay from anon, authenticated;

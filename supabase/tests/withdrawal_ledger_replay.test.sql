@@ -1,0 +1,1086 @@
+-- The replay audit has to decide what the screening audit cannot (#613).
+--
+-- public.withdrawal_ledger_audit (#609 / #611) reads the ledger as it STANDS. The
+-- invariant it audits is stateful, so whole families of illegal ledgers reach a
+-- final state that a legal one could also have reached, and that view is silent on
+-- every one of them — deliberately, and its own header says so.
+--
+-- public.withdrawal_ledger_replay orders each balance key's rows by created_at and
+-- re-runs the invariant's transition rules over them. This file's job is to prove
+-- the two halves of that claim:
+--
+--   • it CATCHES the sequences the screening audit provably cannot. Each such
+--     fixture asserts BOTH — the replay names it, and withdrawal_ledger_audit does
+--     not — so the test fails if the replay ever silently becomes a restatement of
+--     the view it exists to go beyond.
+--   • it stays SILENT on ledgers the invariant itself vouched for. Those are
+--     planted with the triggers ON, so the invariant accepted every write, and the
+--     replay has no licence to complain about any of them.
+--   • and it only says 'violation' when it has the proof. created_at is the order
+--     it REPORTS against; what it proves against is the ordering search, which
+--     assumes no order at all. So the fixtures come in matched pairs that differ
+--     only in whether a legal reading exists — same shape, different verdict — and
+--     several of them are here to state what the search COSTS rather than what it
+--     catches. Getting that boundary wrong in the forgiving direction makes a
+--     tool nobody needs; getting it wrong the other way sends an operator to
+--     repair a ledger nobody wrote wrong.
+--
+-- Every fixture sets created_at and updated_at by hand, and has to: now() is fixed
+-- for the whole transaction, so rows inserted here would otherwise all share one
+-- timestamp and there would be no order to replay. Setting created_at without
+-- updated_at would also make every row look EDITED (updated_at defaults to now(),
+-- which is later than a backdated created_at) and drop every finding to 'review'.
+--
+-- Runs against the local stack in a rolled-back transaction. Run via
+-- `npm run test:db`.
+
+begin;
+
+do $$
+declare
+  v_user       uuid;
+  v_goal       uuid;
+  v_fund       uuid;
+  v_fund_ok    uuid;
+  v_fund_late  uuid;
+  -- the clean half
+  v_ok_bank    uuid;
+  v_ok_gold    uuid;
+  v_ok_buy     uuid;
+  v_tiny_gold  uuid;
+  -- planted sequences
+  v_cancel     uuid; v_cancel_a uuid; v_cancel_b uuid;
+  v_early      uuid;
+  v_edited     uuid; v_edited_a uuid;
+  v_bank_over  uuid; v_bank_w2  uuid;
+  v_legacy_buy uuid; v_legacy   uuid; v_legacy_sell uuid;
+  v_tie        uuid; v_tie_a    uuid; v_tie_b       uuid;
+  v_inst       uuid; v_inst_a   uuid; v_inst_b      uuid;
+  v_big        uuid;
+  v_fund_dep   uuid; v_dep_buy  uuid; v_dep_sell    uuid;
+  v_shape      uuid; v_shape_w  uuid;
+  v_neg        uuid; v_neg_w    uuid; v_negf uuid; v_negf_buy uuid; v_negf_sell uuid;
+  v_pfund      uuid; v_pf_p2    uuid; v_pf_sell uuid;
+  v_dirt       uuid; v_dirt_bad uuid; v_dirt_ok uuid;
+  v_mask       uuid; v_mask_neg uuid; v_mask_over uuid;
+  v_drv        uuid; v_drv_par  uuid; v_drv_claim uuid; v_drv_sell uuid;
+  v_other      uuid; v_other_g  uuid; v_foreign uuid; v_foreign_w uuid;
+  v_pair       uuid; v_pair_a   uuid; v_pair_b  uuid;
+  v_xfund      uuid; v_x_mine   uuid; v_x_theirs uuid; v_x_claim uuid; v_x_sell uuid;
+  i            int;
+  v_found      text;
+  v_count      int;
+  v_audit      int;
+begin
+  insert into auth.users (id, email) values (gen_random_uuid(), 'wd-replay@test.invalid') returning id into v_user;
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'House') returning goal_id into v_goal;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Replay Fund', 'RPLF', 'equity', 20000) returning id into v_fund;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Clean Fund', 'RCLN', 'equity', 20000) returning id into v_fund_ok;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Late Fund', 'RLAT', 'equity', 20000) returning id into v_fund_late;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Dep Fund', 'RDEP', 'equity', 20000) returning id into v_fund_dep;
+
+  -- ═══ the clean half, written with the invariant WATCHING ═══════════════════
+  -- Each write below passed check_withdrawal_balance against the balance the
+  -- earlier writes left, which is the very sequence the replay reconstructs. A
+  -- finding on any of them is a false positive by construction.
+
+  -- bank: principal-only, drawn down to nothing in two withdrawals
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, created_at, updated_at)
+  values (v_user, v_goal, 'bank', 'investment', '2026-01-01', 100000000, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+  returning transaction_id into v_ok_bank;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 40000000, v_ok_bank, 40000000,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z');
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'bank', 'withdrawal', '2026-03-01', 60000000, v_ok_bank, 60000000,
+          '2026-03-01T00:00:00Z', '2026-03-01T00:00:00Z');
+
+  -- gold: quantity-valued, a partial slice and then the closer
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'investment', '2026-01-01', 40000000, 4, 10000000,
+          '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+  returning transaction_id into v_ok_gold;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-02-01', 11000000, v_ok_gold, 10000000, 1,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z');
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-03-01', 31000000, v_ok_gold, 30000000, 3,
+          '2026-03-01T00:00:00Z', '2026-03-01T00:00:00Z');
+
+  -- a gold holding so small every slice's proportional share rounds to nothing —
+  -- three đồng legally leave a one đồng holding, every write accepted (the
+  -- invariant separately demands a positive principal). The replay must reach the
+  -- same verdict the invariant did, one sale at a time.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'investment', '2026-01-01', 1, 5, 1, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+  returning transaction_id into v_tiny_gold;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-02-01', 1, v_tiny_gold, 1, 1, '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z'),
+         (v_user, v_goal, 'gold', 'withdrawal', '2026-03-01', 1, v_tiny_gold, 1, 1, '2026-03-01T00:00:00Z', '2026-03-01T00:00:00Z'),
+         (v_user, v_goal, 'gold', 'withdrawal', '2026-04-01', 1, v_tiny_gold, 1, 1, '2026-04-01T00:00:00Z', '2026-04-01T00:00:00Z');
+
+  -- a fund bucket with a purchase arriving BETWEEN two sells: the second sell's
+  -- share is computed from the basis as it stood then, which is exactly the drift
+  -- the screening audit can only call 'review'. The replay knows the order, so it
+  -- must be silent.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'investment', '2026-01-01', 100000000, 100, 1000000, v_fund_ok,
+          '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+  returning transaction_id into v_ok_buy;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, fund_id,
+     principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'withdrawal', '2026-02-01', 55000000, v_fund_ok, 50000000, 50,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z');
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'investment', '2026-03-01', 60000000, 50, 1200000, v_fund_ok,
+          '2026-03-01T00:00:00Z', '2026-03-01T00:00:00Z');
+  -- 50 of the 100 units now in the bucket, against a 110,000,000 basis → 55,000,000
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, fund_id,
+     principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'withdrawal', '2026-04-01', 60000000, v_fund_ok, 55000000, 50,
+          '2026-04-01T00:00:00Z', '2026-04-01T00:00:00Z');
+
+  select count(*) into v_count from public.withdrawal_ledger_replay r where r.user_id = v_user;
+  if v_count <> 0 then
+    select string_agg(format('%s/%s: %s', r.check_name, r.severity, r.detail), E'\n')
+      into v_found from public.withdrawal_ledger_replay r where r.user_id = v_user;
+    raise exception 'the replay complained about a ledger the invariant itself accepted:%s%s', E'\n', v_found;
+  end if;
+
+  -- ── two claims the ledger records no order between ────────────────────────
+  -- Still with the triggers ON, because this pair IS legal — 34 units taking 339
+  -- of 1000/100 (owing 340), then 32 of the 66 left taking 319 (owing 320), and
+  -- the invariant accepted both in that order. What it does not record is that
+  -- order: now() is transaction-stable, so two withdrawals written by separate
+  -- statements of ONE transaction share a created_at exactly, and transaction_id
+  -- is a random uuid — it invents an order, it does not recover one. Replayed the
+  -- other way round the 34-unit row owes 341 and is two đồng out, so the replay
+  -- would call a legal ledger proven corrupt if it trusted its own tie-break.
+  --
+  -- It sits outside the clean half deliberately: the replay is NOT silent here,
+  -- and it should not be. It reports what it found and says 'review'.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'investment', '2026-01-01', 1000, 100, 10, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+  returning transaction_id into v_tie;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-02-01', 339, v_tie, 339, 34,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
+  returning transaction_id into v_tie_a;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-02-01', 319, v_tie, 319, 32,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
+  returning transaction_id into v_tie_b;
+
+  -- ═══ the sequences only a replay can decide ════════════════════════════════
+  -- Planted with the triggers off: every one of these is a shape the invariant
+  -- refuses to write, which is the whole reason they can only be found afterwards.
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted immediate;
+  alter table public.investment_transactions disable trigger user;
+
+  -- ── the headline case from #613 ────────────────────────────────────────────
+  -- 1000 đồng over 100 units, two sales of 50 units taking 497 and 503. The totals
+  -- are exactly proportional and each per-sale deviation is inside what a legal
+  -- two-sale ledger shows elsewhere, so no predicate over the final state can
+  -- separate it — the screening audit is silent, and a test there pins that
+  -- silence. Neither sale can be written first (50 of 100 units must take 500) and
+  -- neither can follow the other, so no ordering makes it legal.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'investment', '2026-01-01', 1000, 100, 10, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+  returning transaction_id into v_cancel;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-02-01', 497, v_cancel, 497, 50,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
+  returning transaction_id into v_cancel_a;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-03-01', 503, v_cancel, 503, 50,
+          '2026-03-01T00:00:00Z', '2026-03-01T00:00:00Z')
+  returning transaction_id into v_cancel_b;
+
+  -- ── a fund sell that outran the purchases it now looks backed by ───────────
+  -- 50 units bought, 100 sold, 50 more bought afterwards. The bucket's totals
+  -- balance perfectly, so the screening audit sees nothing; at the moment the sell
+  -- was written only half its units existed.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'investment', '2026-01-01', 50000000, 50, 1000000, v_fund_late,
+          '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, fund_id,
+     principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'withdrawal', '2026-02-01', 110000000, v_fund_late, 100000000, 100,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
+  returning transaction_id into v_early;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'investment', '2026-03-01', 50000000, 50, 1000000, v_fund_late,
+          '2026-03-01T00:00:00Z', '2026-03-01T00:00:00Z');
+
+  -- ── the same impossible pair, on a holding that was EDITED afterwards ──────
+  -- A replay reconstructs history from rows as they are NOW, so a row touched
+  -- after it was written is measured against a balance that may never have
+  -- existed. That is the premise, and where it does not hold the finding drops to
+  -- 'review' rather than claiming proof it cannot have.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'investment', '2026-01-01', 1000, 100, 10, '2026-01-01T00:00:00Z', '2026-06-01T00:00:00Z')
+  returning transaction_id into v_edited;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-02-01', 497, v_edited, 497, 50,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
+  returning transaction_id into v_edited_a;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-03-01', 503, v_edited, 503, 50,
+          '2026-03-01T00:00:00Z', '2026-03-01T00:00:00Z');
+
+  -- ── the impossible pair, written at ONE instant ────────────────────────────
+  -- The 497/503 ledger again, this time sharing a created_at — the shape a single
+  -- RPC writes, where transaction_id is the only tie-break and it recovers no
+  -- order at all. Beside the legal pair above it pins what the ordering search
+  -- actually keys on: not how the rows are timestamped, but whether any reading of
+  -- them is legal. This one has none in either order and stays proven.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'investment', '2026-01-01', 1000, 100, 10, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+  returning transaction_id into v_inst;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-02-01', 497, v_inst, 497, 50,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
+  returning transaction_id into v_inst_a;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-02-01', 503, v_inst, 503, 50,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
+  returning transaction_id into v_inst_b;
+
+  -- ── no legal ordering, and yet no guilty row ───────────────────────────────
+  -- 1000 đồng / 100 units, two 50-unit sales each taking 499. Either is legal
+  -- written FIRST — the đồng of rounding covers 499 against 500 — and whichever
+  -- comes second owes the whole 501 that is left. So the holding has no legal
+  -- reading, and neither sale is individually impossible.
+  --
+  -- "No ordering of this holding is legal" is a statement about the HOLDING; the
+  -- finding names a ROW. Grading the row by the holding's verdict points an
+  -- operator at whichever sale happens to sort second and calls it proven, when it
+  -- may be the innocent one. The pair beside it — 497/503, where each sale is
+  -- impossible in every position it could occupy — is the same shape and stays a
+  -- violation, which is what makes this a test of the row-level proof rather than
+  -- of the search.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'investment', '2026-01-01', 1000, 100, 10, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+  returning transaction_id into v_pair;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-02-01', 499, v_pair, 499, 50,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
+  returning transaction_id into v_pair_a;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-03-01', 499, v_pair, 499, 50,
+          '2026-03-01T00:00:00Z', '2026-03-01T00:00:00Z')
+  returning transaction_id into v_pair_b;
+
+  -- ── a claim on someone ELSE'S holding ──────────────────────────────────────
+  -- check_withdrawal_balance looks for the parent under the claimant's own
+  -- user_id, finds nothing, and returns without measuring anything: ownership is a
+  -- different trigger's refusal (#474 / #525), and staying quiet keeps that message
+  -- the one the user sees. The replay has to match that silence, and the reason is
+  -- specific — judging it means partitioning the holding under its owner and the
+  -- claim under the claimant, so the claim replays against an opening balance of
+  -- zero and reads as a pristine overdraw of a holding nobody touched. The
+  -- screening view is silent here too, which the header records rather than
+  -- letting the silence pass for a clean bill.
+  insert into auth.users (id, email) values (gen_random_uuid(), 'wd-replay-other@test.invalid')
+  returning id into v_other;
+  insert into public.savings_goals (user_id, goal_name) values (v_other, 'Theirs')
+  returning goal_id into v_other_g;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, created_at, updated_at)
+  values (v_other, v_other_g, 'bank', 'investment', '2026-01-01', 100000000,
+          '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+  returning transaction_id into v_foreign;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 30000000, v_foreign, 30000000,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
+  returning transaction_id into v_foreign_w;
+
+  -- ── a cross-owner purchase inside a bucket ─────────────────────────────────
+  -- The mirror of the parent-axis case above, and it goes the OTHER way, which is
+  -- why both are here. 20260803000005's bucket query constrains the CLAIM's owner
+  -- (`w.user_id = wd.user_id`) and never the purchase's — it reaches the purchase
+  -- through `p.fund_id = wd.fund_id`. Its basis sum does require the owner to
+  -- match. So on a legacy row carrying another user's fund, the two halves
+  -- diverge: the cross-owner purchase is left out of what the bucket HOLDS, while
+  -- a claim parented to it is still charged against the bucket.
+  --
+  -- 100 units of my own, a 10-unit claim on their purchase, and a 95-unit sale:
+  -- the invariant refuses it at "the remaining balance of 90 units". An owner test
+  -- on the purchase here — which the parent axis genuinely needs — drops that claim
+  -- and the sale replays clean. This view reports what the database enforces;
+  -- whether that asymmetry is right is a question for the invariant.
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Cross Fund', 'RXFD', 'equity', 20000) returning id into v_xfund;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'investment', '2026-01-01', 100000000, 100, 1000000, v_xfund,
+          '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+  returning transaction_id into v_x_mine;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id, created_at, updated_at)
+  values (v_other, v_goal, 'fund', 'investment', '2026-01-05', 50000000, 50, 1000000, v_xfund,
+          '2026-01-05T00:00:00Z', '2026-01-05T00:00:00Z')
+  returning transaction_id into v_x_theirs;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 10000000, v_x_theirs, 10000000, 10,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
+  returning transaction_id into v_x_claim;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, fund_id,
+     principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'withdrawal', '2026-03-01', 95000000, v_xfund, 95000000, 95,
+          '2026-03-01T00:00:00Z', '2026-03-01T00:00:00Z')
+  returning transaction_id into v_x_sell;
+
+  -- ── a shape the screening view already owns ────────────────────────────────
+  -- A gold sale with units and no principal. The invariant refuses it before the
+  -- allocation rule is ever reached ("must record a positive principal_withdrawn")
+  -- and withdrawal_ledger_audit names it withdrawal_missing_principal. The replay
+  -- must stay out of it: judged as an allocation, the row reads "it should have
+  -- taken 10,000,000 đồng, it took 0", which describes a misallocation where the
+  -- defect is that no principal was recorded at all — the same row, a second time,
+  -- under a worse name. The two views are advertised as complements, and this is
+  -- the test of that word.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'investment', '2026-01-01', 40000000, 4, 10000000,
+          '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+  returning transaction_id into v_shape;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-02-01', 1, v_shape, null, 1,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
+  returning transaction_id into v_shape_w;
+
+  -- ── negative amounts, on both axes ─────────────────────────────────────────
+  -- The screen calls these `negative_amounts` and the invariant refuses them
+  -- before it measures anything, because a negative delta runs the ledger
+  -- BACKWARDS: it ADDS to the holding and banks a credit the next row can spend.
+  -- Judged as transitions they came out described as ordinary balance faults —
+  -- "a withdrawal of 150 đồng when the holding had 100 đồng left", saying nothing
+  -- about the sign that makes the row impossible, and on the fund side "it should
+  -- have taken 500 đồng, it took -500", which reads as a misallocation. Both are
+  -- the shape the screen owns, and the rows around them cannot be judged either:
+  -- the balance a credit like this leaves is one the invariant would never have
+  -- allowed to exist.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, created_at, updated_at)
+  values (v_user, v_goal, 'bank', 'investment', '2026-01-01', 100, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+  returning transaction_id into v_neg;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 150, v_neg, 150, -1,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
+  returning transaction_id into v_neg_w;
+
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Neg Fund', 'RNEG', 'equity', 20000) returning id into v_negf;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'investment', '2026-01-01', 1000, 100, 10, v_negf,
+          '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+  returning transaction_id into v_negf_buy;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, fund_id,
+     principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'withdrawal', '2026-02-01', 1, v_negf, -500, 50,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
+  returning transaction_id into v_negf_sell;
+
+  -- ── a fund sell parented into its own bucket ───────────────────────────────
+  -- A fund sell ignores its parent for the BALANCE — the bucket is what it draws
+  -- on — but the foreign key still proves that parent existed when the sell was
+  -- written. Purchases of 1000/100 and 1000/10, and a 50-unit sell taking 500
+  -- parented to the SECOND: every FK-valid order refuses it, and the only reading
+  -- that excuses it puts the sell before its own parent. The dependency added for
+  -- legacy parent-backed claims did not reach this branch, so the search found
+  -- that invented history and downgraded a provable failure to 'review'.
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Parented Fund', 'RPAR', 'equity', 20000) returning id into v_pfund;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'investment', '2026-01-01', 1000, 100, 10, v_pfund,
+          '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'investment', '2026-02-01', 1000, 10, 100, v_pfund,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
+  returning transaction_id into v_pf_p2;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, fund_id,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'withdrawal', '2026-03-01', 500, v_pfund, v_pf_p2, 500, 50,
+          '2026-03-01T00:00:00Z', '2026-03-01T00:00:00Z')
+  returning transaction_id into v_pf_sell;
+
+  -- ── a key contaminated by a shape-invalid row ──────────────────────────────
+  -- Not judging a shape-invalid row is only half of it: its deltas are still in
+  -- the running balance and in the search's states, so every OTHER row on the key
+  -- is measured against a balance that could never have existed. A 40,000,000 /
+  -- 4 unit gold holding with a no-principal 1-unit claim replays the perfectly
+  -- ordinary 1-unit / 10,000,000 sale after it against 40,000,000 / 3 units and
+  -- calls the innocent sale wrong. It stays reported — the numbers are real and
+  -- an operator wants to see them — but it may never be proof, and the sentence
+  -- has to point at the row that actually needs fixing.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'investment', '2026-01-01', 40000000, 4, 10000000,
+          '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+  returning transaction_id into v_dirt;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-02-01', 1, v_dirt, null, 1,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
+  returning transaction_id into v_dirt_bad;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'withdrawal', '2026-03-01', 10000000, v_dirt, 10000000, 1,
+          '2026-03-01T00:00:00Z', '2026-03-01T00:00:00Z')
+  returning transaction_id into v_dirt_ok;
+
+  -- ── an edit the key cannot see ─────────────────────────────────────────────
+  -- A bucket claim that records no units has them DERIVED from its parent's
+  -- current units and amount_vnd, so editing that purchase silently restates how
+  -- much of the bucket the claim took — and the claim's own updated_at says
+  -- nothing about it. Usually the purchase is a credit on this same key and its
+  -- touched flag carries; not here. A cross-owner purchase is partitioned under
+  -- ITS owner (a renewal snapshot is no part of the bucket at all), while
+  -- 20260803000005 counts claims on both.
+  --
+  -- 1000/100 of my own, a claim of 400 on their 50-unit purchase, and a 40-unit
+  -- sale taking 300 — which is exactly right against the 600/80 the bucket showed
+  -- when the claim derived 20 units. Their purchase is since re-priced to 2000, so
+  -- the claim now derives 10, the bucket reads 600/90, and the sale owes 267. Every
+  -- row on this key is pristine, so without the parent's edit the replay calls a
+  -- legally-written sale a proven violation.
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_user, 'Derived Fund', 'RDRV', 'equity', 20000) returning id into v_drv;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'investment', '2026-01-01', 1000, 100, 10, v_drv,
+          '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id, created_at, updated_at)
+  values (v_other, v_goal, 'fund', 'investment', '2026-01-02', 2000, 50, 40, v_drv,
+          '2026-01-02T00:00:00Z', '2026-06-01T00:00:00Z')
+  returning transaction_id into v_drv_par;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 400, v_drv_par, 400,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
+  returning transaction_id into v_drv_claim;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, fund_id,
+     principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'withdrawal', '2026-03-01', 300, v_drv, 300, 40,
+          '2026-03-01T00:00:00Z', '2026-03-01T00:00:00Z')
+  returning transaction_id into v_drv_sell;
+
+  -- ── a refused row that HIDES one, which is the other direction ─────────────
+  -- The deltas of a refused row are signed, so leaving them in does not merely
+  -- convict the innocent — it acquits the guilty. 100 đồng, a -100 withdrawal,
+  -- then a 150 withdrawal: the 150 replayed against 200 and produced nothing,
+  -- while the screen's aggregate came to 50 and produced nothing either. An
+  -- overdraw reported by no view at all is the exact silence this family exists
+  -- to break, so this fixture is the one that decides the design: the refused row
+  -- leaves the balance entirely, rather than merely losing its verdict.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, created_at, updated_at)
+  values (v_user, v_goal, 'bank', 'investment', '2026-01-01', 100, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+  returning transaction_id into v_mask;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 1, v_mask, -100,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
+  returning transaction_id into v_mask_neg;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'bank', 'withdrawal', '2026-03-01', 150, v_mask, 150,
+          '2026-03-01T00:00:00Z', '2026-03-01T00:00:00Z')
+  returning transaction_id into v_mask_over;
+
+  -- ── the one order the ledger DOES record ───────────────────────────────────
+  -- A claim parented to a purchase cannot have been written before that purchase
+  -- existed — the foreign key would have refused it. That is a fact about the
+  -- schema rather than a guess about clocks, and it is the only ordering fact this
+  -- view is entitled to use.
+  --
+  -- This ledger turns on it. Purchases of 1000/100 and 1000/10, a 500/5 claim on
+  -- the SECOND, and a sale of 50 units taking 263. Every reading that puts the
+  -- claimed purchase before its claim refuses the sale — the balances it could
+  -- have met are 1000/100 (owes 500), 2000/110 (owes 909), 1500/105 (owes 714),
+  -- 500/5 and 1000/10 (both short of 50 units). Exactly one subset makes 263
+  -- correct: 1000/100 with the claim already taken and its own purchase still to
+  -- come, which is the one history that could not have happened. Without the
+  -- dependency the search finds that reading and downgrades a provably impossible
+  -- ledger to 'review'.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'investment', '2026-01-01', 1000, 100, 10, v_fund_dep,
+          '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'investment', '2026-02-01', 1000, 10, 100, v_fund_dep,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
+  returning transaction_id into v_dep_buy;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'bank', 'withdrawal', '2026-03-01', 500, v_dep_buy, 500, 5,
+          '2026-03-01T00:00:00Z', '2026-03-01T00:00:00Z');
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, fund_id,
+     principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'withdrawal', '2026-04-01', 263, v_fund_dep, 263, 50,
+          '2026-04-01T00:00:00Z', '2026-04-01T00:00:00Z')
+  returning transaction_id into v_dep_sell;
+
+  -- ── past the search's reach ────────────────────────────────────────────────
+  -- The ordering search is capped at 14 movable events per key, and the cap is a
+  -- resource bound rather than a tolerance — beyond it the answer is unknown, not
+  -- forgiven. Fifteen claims of the same shape as a provable pair therefore report
+  -- 'review': the replay still names the row and the balance, it just cannot say
+  -- no ordering explains it. Ordinary holdings sit far below this.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, created_at, updated_at)
+  values (v_user, v_goal, 'gold', 'investment', '2026-01-01', 1000, 100, 10, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+  returning transaction_id into v_big;
+  for i in 1..15 loop
+    insert into public.investment_transactions
+      (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+       parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+    values (v_user, v_goal, 'gold', 'withdrawal', '2026-02-01', 33, v_big, 33, 5,
+            timestamptz '2026-02-01T00:00:00Z' + (i * interval '1 day'),
+            timestamptz '2026-02-01T00:00:00Z' + (i * interval '1 day'));
+  end loop;
+
+  -- ── a bank holding drawn past zero by its second withdrawal ────────────────
+  -- The screening audit reports this holding too; what the replay adds is WHICH
+  -- row broke it and the balance it was measured against.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, created_at, updated_at)
+  values (v_user, v_goal, 'bank', 'investment', '2026-01-01', 100000000, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+  returning transaction_id into v_bank_over;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 80000000, v_bank_over, 80000000,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z');
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'bank', 'withdrawal', '2026-03-01', 80000000, v_bank_over, 80000000,
+          '2026-03-01T00:00:00Z', '2026-03-01T00:00:00Z')
+  returning transaction_id into v_bank_w2;
+
+  -- ── a fund bucket's OTHER kind of claim ────────────────────────────────────
+  -- A withdrawal parented to a fund PURCHASE is not fund-keyed, so it is measured
+  -- on the parent axis — but 20260803000005 also charges it against that
+  -- purchase's bucket when the next sale is measured (#606). A 10-unit legacy
+  -- claim on a 50-unit purchase leaves 40, and the 45-unit sell that follows is
+  -- refused by the live invariant in those words. Counting only the fund-keyed
+  -- sells replays it as 45 of 50 and reports clean.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'investment', '2026-01-01', 50000000, 50, 1000000, v_fund,
+          '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+  returning transaction_id into v_legacy_buy;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+     parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 10000000, v_legacy_buy, 10000000, 10,
+          '2026-02-01T00:00:00Z', '2026-02-01T00:00:00Z')
+  returning transaction_id into v_legacy;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, fund_id,
+     principal_withdrawn, units_withdrawn, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'withdrawal', '2026-03-01', 45000000, v_fund, 45000000, 45,
+          '2026-03-01T00:00:00Z', '2026-03-01T00:00:00Z')
+  returning transaction_id into v_legacy_sell;
+  -- and a purchase afterwards that squares the bucket's totals, so the screening
+  -- audit — which sums both kinds of claim against both purchases — sees 55 units
+  -- bought and 55 sold and is silent. Only the order says the sell came first.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'investment', '2026-04-01', 5000000, 5, 1000000, v_fund,
+          '2026-04-01T00:00:00Z', '2026-04-01T00:00:00Z');
+
+  alter table public.investment_transactions enable trigger user;
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted deferred;
+
+  -- ═══ what the replay must say ══════════════════════════════════════════════
+
+  -- the headline case: named, as a violation, on the FIRST of the two sales, and
+  -- invisible to the screening audit
+  select r.check_name || '/' || r.severity into v_found
+    from public.withdrawal_ledger_replay r
+   where r.transaction_id = v_cancel_a;
+  if v_found is distinct from 'sale_took_the_wrong_basis/violation' then
+    raise exception 'the 497/503 pair should be a proven violation on its first sale, got %', coalesce(v_found, '(silence)');
+  end if;
+  if exists (select 1 from public.withdrawal_ledger_replay r where r.transaction_id = v_cancel_b) then
+    raise exception 'only the FIRST row that could not have been written should be reported, not every later one';
+  end if;
+  select count(*) into v_audit from public.withdrawal_ledger_audit a
+   where a.parent_transaction_id = v_cancel or a.transaction_id in (v_cancel_a, v_cancel_b);
+  if v_audit <> 0 then
+    raise exception 'the screening audit was supposed to be silent here — this fixture no longer proves the replay adds anything';
+  end if;
+
+  -- the detail has to carry the state the row was measured against, which is what
+  -- makes a finding repairable rather than merely alarming
+  select r.detail into v_found from public.withdrawal_ledger_replay r where r.transaction_id = v_cancel_a;
+  if v_found not like '%1000%' or v_found not like '%100 units%' or v_found not like '%500%' then
+    raise exception 'the detail should report the balance at that turn and the basis owed, got %', v_found;
+  end if;
+
+  -- the fund sell that outran its purchases: found, and deliberately NOT proven.
+  -- Ordering both purchases ahead of the sell is a legal reading of these rows —
+  -- the sell would then take all 100 units and the whole basis — and created_at
+  -- cannot rule it out, because created_at is transaction-start and a purchase
+  -- written in a long transaction can land after a later-starting sell. So the
+  -- search finds a legal order and the finding says 'review'. This is the class
+  -- the ordering search costs us, and the test states the cost rather than hiding
+  -- it: the screening audit is silent here, and the replay still speaks.
+  select r.check_name || '/' || r.severity into v_found
+    from public.withdrawal_ledger_replay r where r.transaction_id = v_early;
+  if v_found is distinct from 'sale_exceeded_the_units_left/review' then
+    raise exception 'a sell of 100 units against a 50-unit bucket should be reported, unproven, got %', coalesce(v_found, '(silence)');
+  end if;
+  select count(*) into v_audit from public.withdrawal_ledger_audit a where a.fund_id = v_fund_late;
+  if v_audit <> 0 then
+    raise exception 'the screening audit was supposed to be silent on the late-purchase bucket';
+  end if;
+
+  -- the edited holding: same impossible pair, but the premise no longer holds
+  select r.severity into v_found
+    from public.withdrawal_ledger_replay r where r.transaction_id = v_edited_a;
+  if v_found is distinct from 'review' then
+    raise exception 'a finding on a holding edited after its sales must not claim proof, got %', coalesce(v_found, '(silence)');
+  end if;
+
+  -- the bank overdraw: 100,000,000 with two 80,000,000 withdrawals. The HOLDING is
+  -- provably overdrawn and the screening audit says so, at the level where that
+  -- claim belongs. Neither ROW is the culprit — 80,000,000 fits a 100,000,000
+  -- holding, so either could have been written first and the second is whichever
+  -- it happened to be. So the replay names the row, points at the balance it met,
+  -- and grades it 'review'. The two views say different true things about the same
+  -- holding, which is the whole reason for running both.
+  select r.check_name || '/' || r.severity into v_found
+    from public.withdrawal_ledger_replay r where r.transaction_id = v_bank_w2;
+  if v_found is distinct from 'withdrawal_exceeded_the_balance/review' then
+    raise exception 'neither of two 80m withdrawals of a 100m holding is provably the wrong one, got %', coalesce(v_found, '(silence)');
+  end if;
+  if not exists (select 1 from public.withdrawal_ledger_audit a
+                  where a.parent_transaction_id = v_bank_over
+                    and a.check_name = 'holding_overdrawn' and a.severity = 'violation') then
+    raise exception 'the screening audit owns the holding-level proof here — without it this overdraw would go unproven by both views';
+  end if;
+  -- and placed in the holding's history, not merely in the list of failures: this
+  -- is the SECOND of two withdrawals, and an operator opening the ledger needs
+  -- that number to be the one they can count to.
+  select r.detail into v_found from public.withdrawal_ledger_replay r where r.transaction_id = v_bank_w2;
+  if v_found not like '%20000000 đồng left, 2 of 2 withdrawal(s)%' then
+    raise exception 'the detail should place the row at its turn in the holding''s history, got %', v_found;
+  end if;
+
+  -- the bucket's legacy claim: the sell that followed it is named, in the same
+  -- words the live invariant refuses it with ("the remaining balance of 40 units")
+  select r.check_name || '/' || r.severity into v_found
+    from public.withdrawal_ledger_replay r where r.transaction_id = v_legacy_sell;
+  -- Reported, and 'review' for the same reason as the bucket above: the 5-unit
+  -- purchase that squares the totals could be read as arriving before the sell.
+  -- What this fixture is here to prove is that the bucket's OTHER kind of claim is
+  -- counted at all — without it the sell replays against 50 units and there is no
+  -- finding to grade.
+  if v_found is distinct from 'sale_exceeded_the_units_left/review' then
+    raise exception 'a 45-unit sell behind a 10-unit legacy claim on a 50-unit purchase should be reported, got %',
+      coalesce(v_found, '(silence)');
+  end if;
+  select r.detail into v_found from public.withdrawal_ledger_replay r where r.transaction_id = v_legacy_sell;
+  if v_found not like '%40 units left%' then
+    raise exception 'the bucket had 40 units left once the legacy claim is counted, got %', v_found;
+  end if;
+  -- and the tally counts the legacy claim, saying CLAIMS rather than sales. It is
+  -- the second of two claims on this bucket though it is the only sale of it, and
+  -- that other claim is the reason it does not fit — an operator who cannot see it
+  -- in the count goes looking for a second sale that is not there.
+  if v_found not like '%2 of 2 claim(s)%' then
+    raise exception 'the tally should place the sale among the bucket''s claims, got %', v_found;
+  end if;
+  -- and the screening audit does not report the overdraw: its bucket sums count
+  -- the fund-keyed sells alone, so 45 of 50 units looks like it fits
+  select count(*) into v_audit from public.withdrawal_ledger_audit a
+   where a.fund_id = v_fund and a.severity = 'violation';
+  if v_audit <> 0 then
+    raise exception 'the screening audit was supposed to miss the legacy-claim overdraw';
+  end if;
+
+  -- the legal tied pair: never proof. Which of its two orders the tie-break picks
+  -- is itself random — transaction_id is a uuid — so whether this key produces a
+  -- finding at all varies from run to run, and asserting the finding would be
+  -- asserting the coin flip. What must hold on every run is the bound: this ledger
+  -- is legal, and no run may call it proven corrupt.
+  select r.severity into v_found
+    from public.withdrawal_ledger_replay r
+   where r.transaction_id in (v_tie_a, v_tie_b);
+  if v_found = 'violation' then
+    raise exception 'a legal ledger whose write order the database never recorded was called a proven violation';
+  end if;
+
+  -- the impossible pair at one instant: still PROVEN. Sharing a created_at costs a
+  -- finding nothing by itself — what would cost it is a legal reading, and this
+  -- pair has none in either order. The pair above and this one are the two halves
+  -- of that distinction, and they differ only in their numbers.
+  select r.check_name || '/' || r.severity into v_found
+    from public.withdrawal_ledger_replay r
+   where r.transaction_id in (v_inst_a, v_inst_b);
+  if v_found is distinct from 'sale_took_the_wrong_basis/violation' then
+    raise exception 'a pair with no legal reading stays proven however its rows are timestamped, got %',
+      coalesce(v_found, '(silence)');
+  end if;
+
+  -- the pair with no legal ordering and no guilty row: reported, not proven, and
+  -- the holding-level proof said in words where it cannot be said in a severity
+  select r.severity into v_found
+    from public.withdrawal_ledger_replay r where r.parent_transaction_id = v_pair;
+  if v_found is distinct from 'review' then
+    raise exception 'a row that would have been accepted written earlier must not be called the proven culprit, got %',
+      coalesce(v_found, '(silence)');
+  end if;
+  select r.detail into v_found
+    from public.withdrawal_ledger_replay r where r.parent_transaction_id = v_pair;
+  if v_found not like '%No ordering of this holding%' or v_found not like '%not provably the one%' then
+    raise exception 'the holding-level proof is real and has to reach the operator in the sentence, got %', v_found;
+  end if;
+
+  -- the cross-owner purchase in a bucket: the claim on it still counts, and the
+  -- balance the replay reports is the one the invariant names in its own refusal
+  select r.check_name into v_found
+    from public.withdrawal_ledger_replay r where r.transaction_id = v_x_sell;
+  if v_found is distinct from 'sale_exceeded_the_units_left' then
+    raise exception 'a claim parented to a cross-owner purchase is still charged to the bucket by the invariant, so the replay must count it too, got %',
+      coalesce(v_found, '(silence)');
+  end if;
+  select r.detail into v_found
+    from public.withdrawal_ledger_replay r where r.transaction_id = v_x_sell;
+  if v_found not like '%90 units left%' then
+    raise exception 'the invariant refuses this at "the remaining balance of 90 units" — the replay has to agree, got %', v_found;
+  end if;
+
+  -- the claim on another user's holding: silent, and silent for BOTH users — the
+  -- holding's owner must not see an overdraw of a holding nobody touched either
+  if exists (select 1 from public.withdrawal_ledger_replay r
+              where r.transaction_id = v_foreign_w or r.parent_transaction_id = v_foreign
+                 or r.user_id = v_other) then
+    select r.check_name || '/' || r.severity || ': ' || r.detail into v_found
+      from public.withdrawal_ledger_replay r
+     where r.transaction_id = v_foreign_w or r.parent_transaction_id = v_foreign or r.user_id = v_other;
+    raise exception 'a claim naming another user''s holding is not a balance question — the invariant returns quietly and so must this: %', v_found;
+  end if;
+
+  -- negative amounts on both axes: silent here, named there
+  if exists (select 1 from public.withdrawal_ledger_replay r
+              where r.transaction_id in (v_neg_w, v_negf_sell)
+                 or r.parent_transaction_id = v_neg or r.fund_id = v_negf) then
+    select string_agg(r.check_name || ': ' || r.detail, E'\n') into v_found
+      from public.withdrawal_ledger_replay r
+     where r.transaction_id in (v_neg_w, v_negf_sell)
+        or r.parent_transaction_id = v_neg or r.fund_id = v_negf;
+    raise exception 'a negative amount is the screen''s finding, and describing it as a balance fault says nothing about the sign: %', v_found;
+  end if;
+  select count(distinct a.transaction_id) into v_audit from public.withdrawal_ledger_audit a
+   where a.transaction_id in (v_neg_w, v_negf_sell) and a.check_name = 'negative_amounts';
+  if v_audit <> 2 then
+    raise exception 'the screen was supposed to own both negative rows, it named %', v_audit;
+  end if;
+
+  -- the shape the screening view owns: named there, and silent here
+  if exists (select 1 from public.withdrawal_ledger_replay r where r.transaction_id = v_shape_w) then
+    select r.check_name || '/' || r.detail into v_found
+      from public.withdrawal_ledger_replay r where r.transaction_id = v_shape_w;
+    raise exception 'a row the screening view already condemns by shape must not be restated as a balance finding: %', v_found;
+  end if;
+  if not exists (select 1 from public.withdrawal_ledger_audit a
+                  where a.transaction_id = v_shape_w and a.check_name = 'withdrawal_missing_principal') then
+    raise exception 'the screening view was supposed to own this shape — if it no longer does, the replay must stop deferring to it';
+  end if;
+
+  -- a fund sell parented into its own bucket: proven, because the only reading
+  -- that excuses it puts the sell before the parent its foreign key names
+  select r.check_name || '/' || r.severity into v_found
+    from public.withdrawal_ledger_replay r where r.transaction_id = v_pf_sell;
+  if v_found is distinct from 'sale_took_the_wrong_basis/violation' then
+    raise exception 'a fund sell cannot predate the parent its FK names, so this stays proven, got %',
+      coalesce(v_found, '(silence)');
+  end if;
+
+  -- a key carrying a shape-invalid row: the innocent sale beside it is SILENT.
+  -- The refused row is out of the balances, so the sale is measured against the
+  -- 40,000,000 / 4 units the holding legally shows and owes exactly what it took.
+  if exists (select 1 from public.withdrawal_ledger_replay r where r.transaction_id = v_dirt_ok) then
+    select r.check_name || ': ' || r.detail into v_found
+      from public.withdrawal_ledger_replay r where r.transaction_id = v_dirt_ok;
+    raise exception 'a refused row is in no legal history, so the sale beside it owes the clean balance and is not a finding: %', v_found;
+  end if;
+  if not exists (select 1 from public.withdrawal_ledger_audit a
+                  where a.transaction_id = v_dirt_bad and a.severity = 'violation') then
+    raise exception 'the screening view owns the refused row — without it this holding goes unreported by both';
+  end if;
+
+  -- the derived claim whose parent moved under it: reported, never proven, because
+  -- the numbers this key was measured against are not the ones it was written
+  -- against — and no row ON the key records that
+  select r.severity into v_found
+    from public.withdrawal_ledger_replay r where r.transaction_id = v_drv_sell;
+  if v_found is distinct from 'review' then
+    raise exception 'a derived claim''s parent was edited under this sale, so the balance is not the one it met — that is not proof, got %',
+      coalesce(v_found, '(silence)');
+  end if;
+
+  -- and the mirror of it, which is why the deltas had to go rather than just the
+  -- verdict: a NEGATIVE refused row credits the balance and hides a real overdraw.
+  -- 100 đồng, a -100 withdrawal, then a 150 withdrawal. Left in, the 150 replayed
+  -- against 200 and said nothing, while the screen's aggregate came to 50 and said
+  -- nothing either — an overdraw reported by no view at all.
+  select r.check_name || '/' || r.severity into v_found
+    from public.withdrawal_ledger_replay r where r.transaction_id = v_mask_over;
+  if v_found is distinct from 'withdrawal_exceeded_the_balance/violation' then
+    raise exception 'a real overdraw must not be masked by a row the invariant would have refused, got %',
+      coalesce(v_found, '(silence)');
+  end if;
+  select r.detail into v_found
+    from public.withdrawal_ledger_replay r where r.transaction_id = v_mask_over;
+  if v_found not like '%100 đồng left%' or v_found not like '%left out of the balances%' then
+    raise exception 'the balance is the one the holding legally shows, and the omission has to be stated, got %', v_found;
+  end if;
+
+  -- the claim-to-purchase dependency: the sale is proven, because the only reading
+  -- that excuses it puts a claim before the purchase it names
+  select r.check_name || '/' || r.severity into v_found
+    from public.withdrawal_ledger_replay r where r.transaction_id = v_dep_sell;
+  if v_found is distinct from 'sale_took_the_wrong_basis/violation' then
+    raise exception 'a ledger whose only legal reading predates a claim''s own purchase should stay proven, got %',
+      coalesce(v_found, '(silence)');
+  end if;
+
+  -- past the search's reach: reported, and honest that it is not proof
+  select r.severity into v_found
+    from public.withdrawal_ledger_replay r where r.parent_transaction_id = v_big;
+  if v_found is distinct from 'review' then
+    raise exception 'a holding with more claims than the search can order must not claim proof, got %',
+      coalesce(v_found, '(silence)');
+  end if;
+
+  -- and nothing beyond the holdings planted above. The legal tied pair is excluded
+  -- for the reason above — it contributes a row or no row depending on the
+  -- tie-break, and it is the only fixture here that may do either.
+  select count(*) into v_count from public.withdrawal_ledger_replay r
+   where r.user_id = v_user and r.parent_transaction_id is distinct from v_tie;
+  if v_count <> 13 then
+    select string_agg(format('%s/%s: %s', r.check_name, r.severity, r.detail), E'\n')
+      into v_found from public.withdrawal_ledger_replay r where r.user_id = v_user;
+    raise exception 'expected exactly the 13 planted sequences, got %:%s%s', v_count, E'\n', v_found;
+  end if;
+
+  raise notice 'withdrawal_ledger_replay: ok';
+end $$;
+
+-- ═══ the false-positive half, at scale ══════════════════════════════════════
+-- The fixtures above prove the replay CATCHES. This proves it does not cry wolf,
+-- which is the property that decides whether anyone ever reads its output.
+--
+-- Legal ledgers are not asserted to be legal here — they are BUILT with the
+-- invariant watching, one write at a time, in the order the replay will read them.
+-- Every insert below therefore has check_withdrawal_balance's own signature on it,
+-- and a single finding is a false positive by construction. The generator pushes
+-- each sale to the edge of what the rule allows (the đồng of rounding slack, the
+-- full-sale shortcut, slices small enough that their share rounds to nothing),
+-- because the middle of the range was never where the disagreements were.
+--
+-- Seeded, so a failure here is reproducible rather than a coin flip in CI.
+do $$
+declare
+  v_user    uuid;
+  v_goal    uuid;
+  v_fund    uuid;
+  v_src     uuid;
+  v_basis   bigint;
+  v_units   numeric;
+  v_left    bigint;
+  v_left_u  numeric;
+  v_take_u  numeric;
+  v_take_p  bigint;
+  v_when    timestamptz;
+  v_sales   int;
+  v_found   text;
+  i         int;
+  j         int;
+begin
+  perform setseed(0.613);
+  insert into auth.users (id, email) values (gen_random_uuid(), 'wd-replay-fuzz@test.invalid') returning id into v_user;
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Fuzz') returning goal_id into v_goal;
+
+  -- ── gold: one source, sales drawn down in sequence ────────────────────────
+  for i in 1..120 loop
+    -- Four magnitudes of basis and units, so the tiny holdings where every share
+    -- rounds to zero get the same exercise as the ordinary ones.
+    v_basis := (1 + floor(random() * 1000))::bigint * (10 ^ (floor(random() * 4)))::bigint;
+    v_units := round((0.5 + random() * 100)::numeric, 4);
+    v_when  := timestamptz '2026-01-01T00:00:00Z' + (i * interval '1 day');
+    insert into public.investment_transactions
+      (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, created_at, updated_at)
+    values (v_user, v_goal, 'gold', 'investment', '2026-01-01', v_basis, v_units, 1, v_when, v_when)
+    returning transaction_id into v_src;
+
+    v_left := v_basis; v_left_u := v_units;
+    v_sales := 1 + floor(random() * 5);
+    for j in 1..v_sales loop
+      exit when v_left_u <= 0;
+      -- Sometimes close the holding outright, which is the branch that takes the
+      -- whole remaining basis rather than a share of it.
+      if random() < 0.3 or j = v_sales then
+        v_take_u := v_left_u;
+        v_take_p := v_left;
+      else
+        v_take_u := round((v_left_u * (0.05 + random() * 0.8))::numeric, 4);
+        exit when v_take_u <= 0;
+        v_take_p := round(v_take_u * v_left / v_left_u);
+        -- Spend the đồng of slack the rule allows, in whichever direction.
+        v_take_p := v_take_p + (floor(random() * 3) - 1)::bigint;
+      end if;
+      -- A parent-backed withdrawal must also record a positive principal, which is
+      -- what lets three đồng legally leave a one đồng holding.
+      if v_take_p < 1 then v_take_p := 1; end if;
+      v_when := v_when + interval '1 hour';
+      insert into public.investment_transactions
+        (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
+         parent_transaction_id, principal_withdrawn, units_withdrawn, created_at, updated_at)
+      values (v_user, v_goal, 'gold', 'withdrawal', '2026-06-01', v_take_p, v_src, v_take_p, v_take_u, v_when, v_when);
+      v_left := v_left - v_take_p; v_left_u := v_left_u - v_take_u;
+    end loop;
+  end loop;
+
+  -- ── fund buckets: purchases INTERLEAVED with sells ────────────────────────
+  -- The case the parent axis cannot produce, and the one the screening audit can
+  -- only call 'review': a purchase landing between two sells moves the ratio the
+  -- second sell is measured against.
+  for i in 1..80 loop
+    insert into public.funds (user_id, name, code, fund_type, nav)
+    values (v_user, 'Fuzz ' || i, 'FZ' || lpad(i::text, 3, '0'), 'equity', 20000)
+    returning id into v_fund;
+    v_when := timestamptz '2026-01-01T00:00:00Z' + (i * interval '1 day');
+    v_left := 0; v_left_u := 0;
+    for j in 1..(2 + floor(random() * 5)) loop
+      if j = 1 or random() < 0.4 then
+        v_basis := (1 + floor(random() * 1000))::bigint * (10 ^ (floor(random() * 4)))::bigint;
+        v_units := round((0.5 + random() * 100)::numeric, 4);
+        v_when := v_when + interval '1 hour';
+        insert into public.investment_transactions
+          (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id, created_at, updated_at)
+        values (v_user, v_goal, 'fund', 'investment', '2026-01-01', v_basis, v_units, 1, v_fund, v_when, v_when);
+        v_left := v_left + v_basis; v_left_u := v_left_u + v_units;
+      else
+        exit when v_left_u <= 0;
+        if random() < 0.3 then
+          v_take_u := v_left_u; v_take_p := v_left;
+        else
+          v_take_u := round((v_left_u * (0.05 + random() * 0.8))::numeric, 4);
+          exit when v_take_u <= 0;
+          v_take_p := round(v_take_u * v_left / v_left_u) + (floor(random() * 3) - 1)::bigint;
+          -- A fund sell may legitimately take nothing: unlike the parent axis it
+          -- has no positive-principal rule, only the proportional one.
+          if v_take_p < 0 then v_take_p := 0; end if;
+        end if;
+        v_when := v_when + interval '1 hour';
+        insert into public.investment_transactions
+          (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, fund_id,
+           principal_withdrawn, units_withdrawn, created_at, updated_at)
+        -- amount_vnd is the row's own cash figure and must be positive; the
+        -- principal the replay measures is principal_withdrawn beside it.
+        values (v_user, v_goal, 'fund', 'withdrawal', '2026-06-01', greatest(v_take_p, 1), v_fund, v_take_p, v_take_u, v_when, v_when);
+        v_left := v_left - v_take_p; v_left_u := v_left_u - v_take_u;
+      end if;
+    end loop;
+  end loop;
+
+  select string_agg(format('%s/%s: %s', r.check_name, r.severity, r.detail), E'\n')
+    into v_found from public.withdrawal_ledger_replay r where r.user_id = v_user;
+  if v_found is not null then
+    raise exception 'the replay flagged ledgers the invariant itself wrote:%s%s', E'\n', v_found;
+  end if;
+
+  raise notice 'withdrawal_ledger_replay fuzz: ok';
+end $$;
+
+-- An operator tool, like the screen it extends: no screen reads it, and granting
+-- it would add a PostgREST surface for nothing.
+do $$
+begin
+  if has_table_privilege('authenticated', 'public.withdrawal_ledger_replay', 'select')
+     or has_table_privilege('anon', 'public.withdrawal_ledger_replay', 'select') then
+    raise exception 'withdrawal_ledger_replay should not be reachable from the API roles';
+  end if;
+end $$;
+
+rollback;
