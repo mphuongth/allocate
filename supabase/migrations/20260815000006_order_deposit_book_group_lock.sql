@@ -177,6 +177,9 @@ as $$
 declare
   v_anchor public.investment_transactions;
   v_tranche public.investment_transactions;
+  v_seen bigint;
+  v_now bigint;
+  v_round int;
   v_snapshot_id uuid;
   v_interest bigint;
   v_idx int;
@@ -189,11 +192,9 @@ begin
   -- one such writer, and merge_book_into_successor has been another since #649,
   -- so the anchor-first order is the odd one out and it is this one that moves.
   --
-  -- Read without a lock, sweep the whole group in id order, then re-read under
-  -- that lock — the same three steps update_deposit_book takes, for the same
-  -- reason. No loop-until-stable here: a tranche that arrives late is already
-  -- fatal to a collapse and says so (the caller's tranche list would not account
-  -- for it), which is a stronger answer than locking it.
+  -- Read without a lock, sweep the whole group in id order until its membership
+  -- stops moving, then re-read under that lock — the same steps
+  -- update_deposit_book takes, for the same reasons.
   select * into v_anchor
     from public.investment_transactions
    where transaction_id = p_group_id
@@ -203,17 +204,32 @@ begin
       using errcode = 'no_data_found';
   end if;
 
-  perform 1
-    from public.investment_transactions
-   where deposit_group_id = p_group_id
-   order by transaction_id
-     for update;
+  -- Swept until the membership stops moving, for the reason spelled out on
+  -- update_deposit_book above: at READ COMMITTED the sweep's snapshot predates
+  -- its wait, so a tranche a top-up inserts while it is queued behind the anchor
+  -- is invisible to it — and the loop below would then take that row's lock in
+  -- investment_date order, outside the sweep. Refusing the collapse afterwards
+  -- (the caller's list cannot account for it) is the right ANSWER but it comes
+  -- after the lock, which is too late to matter for ordering.
+  v_seen := -1;
+  for v_round in 1 .. 5 loop
+    select count(*) into v_now
+      from public.investment_transactions
+     where deposit_group_id = p_group_id;
+    exit when v_now = v_seen;
+    perform 1
+      from public.investment_transactions
+     where deposit_group_id = p_group_id
+     order by transaction_id
+       for update;
+    v_seen := v_now;
+  end loop;
 
   select * into v_anchor
     from public.investment_transactions
    where transaction_id = p_group_id
      and deposit_group_id = p_group_id;
-  if not found then
+  if not found or v_now is distinct from v_seen then
     raise exception 'collapse_accumulating_book: book changed since load, reload and retry';
   end if;
   if v_anchor.asset_type is distinct from 'bank' then
@@ -332,5 +348,139 @@ begin
   end if;
 
   return v_renewed;
+end;
+$$;
+
+-- ── the full-book withdrawal, same order ─────────────────────────────────────
+--
+-- Anchor first, then every tranche on a full close: the third writer taking a
+-- whole book in an order of its own. Body is 20260813000002's unchanged except
+-- the acquisition.
+
+create or replace function public.withdraw_accumulating_book(
+  p_book_id uuid,
+  p_withdraw_principal bigint,
+  p_total_received bigint,
+  p_investment_date date,
+  p_affects_progress boolean
+)
+returns integer
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  v_anchor public.investment_transactions;
+  v_total_principal bigint;
+  v_inserted integer;
+  v_seen bigint;
+  v_now bigint;
+  v_round int;
+begin
+  -- The book in transaction_id order, not the anchor first (#653): a full close
+  -- rewrites every tranche, so taking the anchor alone and meeting the rest
+  -- later is the same crossing update_deposit_book and the collapse just left.
+  -- Read unlocked, sweep until the membership stops moving, re-read under the
+  -- lock — one shape for every writer that touches a whole book.
+  select * into v_anchor
+    from public.investment_transactions
+   where transaction_id = p_book_id
+     and deposit_group_id = p_book_id;
+  if found then
+    v_seen := -1;
+    for v_round in 1 .. 5 loop
+      select count(*) into v_now
+        from public.investment_transactions
+       where deposit_group_id = p_book_id;
+      exit when v_now = v_seen;
+      perform 1
+        from public.investment_transactions
+       where deposit_group_id = p_book_id
+       order by transaction_id
+         for update;
+      v_seen := v_now;
+    end loop;
+    if v_now is distinct from v_seen then
+      raise exception 'withdraw_accumulating_book: book changed since load, reload and retry';
+    end if;
+    select * into v_anchor
+      from public.investment_transactions
+     where transaction_id = p_book_id
+       and deposit_group_id = p_book_id;
+  end if;
+  if not found then
+    raise exception 'withdraw_accumulating_book: accumulating book not found'
+      using errcode = 'no_data_found';
+  end if;
+  if v_anchor.asset_type is distinct from 'bank' then
+    raise exception 'withdraw_accumulating_book: not a bank book'
+      using errcode = 'check_violation';
+  end if;
+  if p_total_received is null or p_total_received < 0 then
+    raise exception 'withdraw_accumulating_book: total received must be non-negative'
+      using errcode = 'check_violation';
+  end if;
+  if p_investment_date > current_date + 1 then
+    raise exception 'withdraw_accumulating_book: withdrawal date cannot be in the future'
+      using errcode = 'check_violation';
+  end if;
+
+  select coalesce(sum(eff), 0) into v_total_principal
+    from public.book_live_tranches(p_book_id);
+  if v_total_principal <= 0 then
+    raise exception 'withdraw_accumulating_book: nothing to withdraw'
+      using errcode = 'check_violation';
+  end if;
+  if p_withdraw_principal is null or p_withdraw_principal <= 0 then
+    raise exception 'withdraw_accumulating_book: withdraw amount must be positive'
+      using errcode = 'check_violation';
+  end if;
+  if p_withdraw_principal > v_total_principal then
+    raise exception 'withdraw_accumulating_book: cannot withdraw more than the book balance'
+      using errcode = 'check_violation';
+  end if;
+
+  -- Refuse a split the ledger cannot record, rather than writing part of it and
+  -- being refused by amount_vnd > 0 half way through (see book_payout_allocation).
+  if exists (
+    select 1 from public.book_payout_allocation(
+      p_book_id, p_withdraw_principal, p_total_received, v_total_principal)
+     where principal_out > 0 and cash_out <= 0
+  ) then
+    raise exception 'withdraw_accumulating_book: a payout of % is too small to record on every tranche of this book',
+      p_total_received using errcode = 'check_violation';
+  end if;
+
+  with alloc as (
+    select * from public.book_payout_allocation(
+      p_book_id, p_withdraw_principal, p_total_received, v_total_principal)
+  )
+  insert into public.investment_transactions (
+    user_id, goal_id, asset_type, transaction_type, parent_transaction_id,
+    investment_date, amount_vnd, principal_withdrawn, affects_progress
+  )
+  select user_id, goal_id, 'bank', 'withdrawal', transaction_id,
+         p_investment_date, cash_out, principal_out, p_affects_progress
+    from alloc
+   where principal_out > 0;
+
+  get diagnostics v_inserted = row_count;
+
+  -- Full close: the book is settled. Unlink any recurring that fed it, then clear
+  -- the group so nothing can resurrect it (a recurring auto-top-up included).
+  if p_withdraw_principal >= v_total_principal then
+    update public.recurring_savings
+       set linked_deposit_tx_id = null, updated_at = now()
+     where user_id = v_anchor.user_id
+       and linked_deposit_tx_id in (
+         select transaction_id from public.investment_transactions
+          where deposit_group_id = p_book_id
+       );
+    update public.investment_transactions
+       set deposit_group_id = null, updated_at = now()
+     where deposit_group_id = p_book_id;
+  end if;
+
+  return v_inserted;
 end;
 $$;
