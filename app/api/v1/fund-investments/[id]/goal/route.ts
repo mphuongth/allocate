@@ -71,8 +71,10 @@ export async function PATCH(
     if (!goal) return NextResponse.json({ error: "You don't have permission to access this goal." }, { status: 403 })
   }
 
-  // Books are created as bank deposits, but POST /investment-transactions will
-  // group any asset type when asked, so a fund row CAN carry a deposit_group_id.
+  // Books are created as bank deposits. POST /investment-transactions used to
+  // group any asset type when asked, so a fund row CAN carry a deposit_group_id
+  // — it no longer creates one (#618: the route refuses it and the table carries
+  // the rule), which leaves only rows written before that.
   // goal is book-level, so such a row has to move with its whole group — through
   // the same single-transaction RPC the canonical PUT uses. Doing the row update
   // and the cascade as two statements risks a partial failure that splits the

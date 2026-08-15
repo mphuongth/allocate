@@ -360,6 +360,22 @@ export async function POST(request: NextRequest) {
     effectiveBankCode = anchor.bank_code ?? null // tranche inherits the book's bank
     cleanTopUpLockDays = anchor.top_up_lock_days ?? null
   } else if (accumulating) {
+    // A book is bank deposits, and its anchor is one of them. The top-up branch
+    // above has always said so; this branch never did, so
+    // `{ asset_type: 'fund', accumulating: true }` wrote a fund row carrying a
+    // deposit_group_id (#618) — a shape the paths that key on the group ALONE
+    // then read as a book: lib/mergeEligibility calls it "not a single deposit",
+    // update_deposit_book cascades goal/maturity/notes/bank across the group
+    // without asking what the rows are, and create_held_settlement has to refuse
+    // a grouped source explicitly because of it. A withdrawal is refused for the
+    // same reason from the other side: self-grouped, it reads as a live book
+    // holding a balance nothing put there.
+    //
+    // Same rule on the table (20260815000002), because an API guard only binds
+    // callers who come through the API.
+    if (isWithdrawal || cleanAssetType !== 'bank') {
+      return NextResponse.json({ error: 'Only a bank deposit can be an accumulating book.' }, { status: 400 })
+    }
     // New accumulating book: the anchor self-groups so deposit_group_id IS NOT
     // NULL ⇔ accumulating, and the anchor is the row whose group = its own id.
     explicitTxId = randomUUID()
