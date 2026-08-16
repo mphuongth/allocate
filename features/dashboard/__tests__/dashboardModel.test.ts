@@ -280,6 +280,13 @@ describe('nonFundToInvRow', () => {
     expect(nonFundToInvRow(nonFund({ type: 'gold', bankCode: 'VCB' }), false).bankCode).toBeNull()
   })
 
+  // #659: MaturityResolveSheet gates its merge panel on this field, so a mapper
+  // that silently drops it decides "no handover" for every row it produces.
+  it('carries the successor promise through', () => {
+    expect(nonFundToInvRow(nonFund({ successorDepositTxId: 'book-2' }), false).successorDepositTxId).toBe('book-2')
+    expect(nonFundToInvRow(nonFund(), false).successorDepositTxId).toBeNull()
+  })
+
   it('computes gain against the principal, and reports null when there is none', () => {
     expect(nonFundToInvRow(nonFund({ amount: 1_000_000, currentValue: 1_100_000 }), false).gainPct).toBeCloseTo(10)
     expect(nonFundToInvRow(nonFund({ amount: 0 }), false).gainPct).toBeNull()

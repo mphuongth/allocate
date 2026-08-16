@@ -214,6 +214,7 @@ export function nonFundToInvRow(it: NonFundUnallocatedItem, isVi: boolean): InvR
     bankCode: it.type === 'bank' ? (it.bankCode ?? null) : null,
     currency: it.currency ?? null,
     isPledged: it.isPledged ?? false,
+    successorDepositTxId: it.successorDepositTxId ?? null,
   }
 }
 

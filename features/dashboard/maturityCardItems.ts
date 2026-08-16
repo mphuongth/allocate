@@ -29,6 +29,7 @@ export interface MaturityNonFund {
   notes: string | null
   units: number | null
   depositGroupId?: string | null
+  successorDepositTxId?: string | null
 }
 
 // A tranche tagged with the goal bucket it came from (null = unallocated). The
@@ -87,6 +88,12 @@ export function actionableBooks<T extends MaturityNonFund>(
       investmentDate: earliest,
       fund: null,
       depositGroupId: groupId,
+      // From the ANCHOR, which is where the database keeps a promise — only a
+      // book anchor may name a successor. MaturityResolveSheet gates its whole
+      // merge panel on this, and every renewal option it offers instead is one a
+      // promised book is refused (#638, #659). Reading it off `members[0]` would
+      // invent a handover whenever the anchor sorts late.
+      successorDepositTxId: anchorTag.it.successorDepositTxId ?? null,
     }
     if (isActionableAccumulatingBook({ type: inv.type, expiryDate: inv.expiryDate, depositGroupId: inv.depositGroupId })) {
       out.push({ inv, anchor: anchorTag.it, goalId: anchorTag.goalId })

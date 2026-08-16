@@ -35,6 +35,31 @@ describe('actionableBooks — group accumulating tranches into one card row', ()
     expect(goalId).toBe('g1')
   })
 
+  // #659: the promise lives on the anchor, and MaturityResolveSheet gates its
+  // whole merge panel on `inv.successorDepositTxId`. Dropping it here left the
+  // dashboard card's sheet offering the ordinary renewal fork for a book the
+  // database refuses to renew — the user picks an action, confirms, and is
+  // refused for a rule the screen never mentioned.
+  it('carries the anchor\'s successor promise onto the row', () => {
+    const [{ inv }] = actionableBooks([
+      tag(tranche({ transactionId: 'grp', successorDepositTxId: 'book-2' })),
+      tag(tranche({ transactionId: 't2' })),
+    ], false)
+    expect(inv.successorDepositTxId).toBe('book-2')
+  })
+
+  // A tranche is not the promise. Only the anchor may carry one (the DB's
+  // `investment_transactions_successor_shape` says so), so reading it off the
+  // first member would invent a handover on a book that has none whenever the
+  // anchor sorts late.
+  it('reads the promise from the anchor, not from whichever tranche comes first', () => {
+    const [{ inv }] = actionableBooks([
+      tag(tranche({ transactionId: 't2', successorDepositTxId: 'not-the-anchor' })),
+      tag(tranche({ transactionId: 'grp' })),
+    ], false)
+    expect(inv.successorDepositTxId).toBeNull()
+  })
+
   it('groups a book to ONE row even if its tranches are split across goal buckets, using the anchor\'s goal', () => {
     // Mid-way through #349's non-atomic goal cascade a book can momentarily span
     // goals. Global grouping must still yield one row with the FULL principal and
