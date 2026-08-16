@@ -1186,4 +1186,80 @@ begin
   raise notice 'withdrawal_ledger_audit: a cross-owner parent is named, and no balance is invented for it';
 end $$;
 
+-- ═══ a claim on another user's FUND purchase is charged to no balance (#668) ══
+--
+-- The fund axis stopped counting it when the bucket started requiring the purchase
+-- to be its owner's. That must not tip it onto the PARENT axis, which is where it
+-- would otherwise fall: no legal write reaches the parent axis of a fund purchase
+-- at all (20260803000002 refuses one by name — "a fund sale must be keyed by its
+-- fund, not parented to purchase X"), so charging it there mirrors no invariant and
+-- invents an overdraw against a user who did not write the row and cannot reach the
+-- state. The bank/gold/stock case is the opposite and stays as it was — see #667.
+do $$
+declare
+  v_a uuid; v_b uuid; v_g uuid; v_fund uuid; v_buy uuid; v_claim uuid; v_n int; v_detail text;
+begin
+  insert into auth.users (id, email) values (gen_random_uuid(), 'wd-audit-668a@test.invalid') returning id into v_a;
+  insert into auth.users (id, email) values (gen_random_uuid(), 'wd-audit-668b@test.invalid') returning id into v_b;
+  insert into public.savings_goals (user_id, goal_name) values (v_b, 'Theirs') returning goal_id into v_g;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_b, 'Their Fund', 'THRF', 'equity', 1000) returning id into v_fund;
+
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted immediate;
+  alter table public.investment_transactions disable trigger user;
+
+  -- B's own 50-unit fund purchase, and A's oversized claim on it. Sized past the
+  -- purchase on purpose: if any balance still counts this row, it says so loudly.
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_b, v_g, v_fund, 'fund', 'investment', '2026-01-01', 50000000, 50, 1000000)
+  returning transaction_id into v_buy;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, units_withdrawn, principal_withdrawn)
+  values (v_a, null, null, 'withdrawal', '2026-02-01', 90000000, v_buy, 90, 90000000)
+  returning transaction_id into v_claim;
+
+  alter table public.investment_transactions enable trigger user;
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted deferred;
+
+  -- B is told nothing: their holding is untouched by anything they could write.
+  select count(*) into v_n from public.withdrawal_ledger_audit where user_id = v_b;
+  if v_n <> 0 then
+    select string_agg(check_name || ': ' || detail, E'\n') into v_detail
+      from public.withdrawal_ledger_audit where user_id = v_b;
+    raise exception 'the fund purchase''s owner must not be charged for a claim they did not write: %', v_detail;
+  end if;
+
+  -- No bucket either — neither under A nor under B.
+  select count(*) into v_n from public.withdrawal_ledger_audit
+   where check_name in ('fund_bucket_overdrawn', 'fund_bucket_has_no_purchases', 'basis_taken_exceeds_cost')
+     and (user_id = v_a or user_id = v_b);
+  if v_n <> 0 then
+    raise exception 'a claim on another user''s fund purchase draws on no bucket, got % bucket finding(s)', v_n;
+  end if;
+
+  -- A is told the truth about the row, once by name…
+  if not exists (select 1 from public.withdrawal_ledger_audit
+                  where transaction_id = v_claim and check_name = 'parent_belongs_to_another_user') then
+    raise exception 'the ownership finding must still name this row';
+  end if;
+
+  -- …and the review line must not claim the purchase "carries no fund of its own":
+  -- it has both a fund and units, and an operator sent after that would be looking
+  -- for a defect that is not there.
+  select detail into v_detail from public.withdrawal_ledger_audit
+   where transaction_id = v_claim and check_name = 'parent_is_a_fund_purchase';
+  if v_detail is null then
+    raise exception 'the row still draws on a fund purchase and must still be reported for review';
+  end if;
+  if v_detail like '%carries no fund of its own%' then
+    raise exception 'the fallback describes a shape this row is not: %', v_detail;
+  end if;
+  if v_detail not like '%belongs to another user%' then
+    raise exception 'the review line must say why nothing values this row, got %', v_detail;
+  end if;
+
+  raise notice 'withdrawal_ledger_audit: a claim on another user''s fund purchase is charged to no balance';
+end $$;
+
 rollback;

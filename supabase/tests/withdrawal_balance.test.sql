@@ -1626,4 +1626,94 @@ begin
 end;
 $$;
 
+-- ── a bucket owes only what ITS OWNER's purchases back (#668) ────────────────
+--
+-- The legacy parent-backed claims (#606) were summed by the CLAIM's owner and the
+-- purchase's fund — never the purchase's owner — while the basis beside them
+-- required the purchase to be the writer's own. On a legacy row carrying another
+-- user's fund the two halves disagreed: the cross-owner purchase was left out of
+-- what the bucket HOLDS while a claim parented to it was still charged against it.
+--
+-- Probed on lib/withdrawalProgress, which is what the invariant exists to protect:
+-- the dashboard query is user-scoped, so that purchase is not among the rows
+-- buildWithdrawalMaps is given at all, `fundParent` is undefined, and the claim
+-- lands in parentWdMap under a holding this user does not have — where nothing
+-- reads it. fundWdMap comes back EMPTY. The reader does not charge the bucket, so
+-- the invariant charging it was not mirroring the reader; it was refusing sales the
+-- reader says are fine, with a balance the user cannot find on any screen.
+do $$
+declare
+  v_a uuid; v_b uuid; v_goal uuid; v_fund uuid; v_buy uuid; v_foreign uuid;
+  v_bsale uuid; v_row public.investment_transactions;
+begin
+  insert into auth.users (id, email) values (gen_random_uuid(), 'wb-668-a@test.invalid') returning id into v_a;
+  insert into auth.users (id, email) values (gen_random_uuid(), 'wb-668-b@test.invalid') returning id into v_b;
+  insert into public.savings_goals (user_id, goal_name) values (v_a, 'Mine') returning goal_id into v_goal;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_a, 'Cross Owner Fund', 'XOWN', 'equity', 1000000) returning id into v_fund;
+
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted immediate;
+  alter table public.investment_transactions disable trigger user;
+
+  -- A's own 100-unit purchase — the whole of what A holds.
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_a, v_goal, v_fund, 'fund', 'investment', '2026-01-01', 100000000, 100, 1000000)
+  returning transaction_id into v_buy;
+
+  -- A legacy purchase owned by B carrying A's fund and goal. enforce_fk_ownership
+  -- refuses this now (#474 / #525); only rows written before it can be here.
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_b, v_goal, v_fund, 'fund', 'investment', '2026-01-01', 50000000, 50, 1000000)
+  returning transaction_id into v_foreign;
+
+  -- A's claim drawn on B's purchase.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, units_withdrawn, principal_withdrawn)
+  values (v_a, v_goal, null, 'withdrawal', '2026-02-01', 10000000, v_foreign, 10, 10000000);
+
+  alter table public.investment_transactions enable trigger user;
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted deferred;
+
+  -- 95 of A's own 100 units. The dashboard shows A 100 units and no claim against
+  -- them; this used to be refused at "the remaining balance of 90 units".
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units_withdrawn, principal_withdrawn)
+  values (v_a, v_goal, v_fund, 'fund', 'withdrawal', '2026-03-01', 95000000, 95, 95000000);
+
+  -- And the bound is still real on A's own side: 6 more units of the 5 left.
+  begin
+    insert into public.investment_transactions
+      (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units_withdrawn, principal_withdrawn)
+    values (v_a, v_goal, v_fund, 'fund', 'withdrawal', '2026-04-01', 6000000, 6, 6000000);
+    raise exception 'the bucket must still refuse more units than A''s own purchases hold';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- The other half of the same asymmetry, from B's side: A's claim is not B's
+  -- business either. B selling their own 50 units must not be reduced by it.
+  --
+  -- Asked of the invariant DIRECTLY rather than by inserting: B's whole position
+  -- here is a cross-owner shape (their purchase carries A's fund), so the ownership
+  -- trigger refuses any new row of B's naming that fund — correctly, and before this
+  -- check would ever run. The question is what the BALANCE rule says, so the balance
+  -- rule is what is called, on a row planted and then read back rather than built as
+  -- a positional literal (which would silently rot the next time a column is added).
+  alter table public.investment_transactions disable trigger user;
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units_withdrawn, principal_withdrawn)
+  values (v_b, v_goal, v_fund, 'fund', 'withdrawal', '2026-03-01', 50000000, 50, 50000000)
+  returning transaction_id into v_bsale;
+  alter table public.investment_transactions enable trigger user;
+
+  select * into v_row from public.investment_transactions where transaction_id = v_bsale;
+  -- Measured WITHOUT itself, as the invariant always is, so this is the same
+  -- question the trigger would have asked at write time: 50 units of B's own 50.
+  perform public.check_withdrawal_balance(v_row);
+
+  raise notice 'a fund bucket counts only its own owner''s purchases and claims: ok';
+end;
+$$;
+
 rollback;
