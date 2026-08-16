@@ -63,7 +63,7 @@ declare
   v_pfund      uuid; v_pf_p2    uuid; v_pf_sell uuid;
   v_dirt       uuid; v_dirt_bad uuid; v_dirt_ok uuid;
   v_mask       uuid; v_mask_neg uuid; v_mask_over uuid;
-  v_drv        uuid; v_drv_par  uuid; v_drv_claim uuid; v_drv_sell uuid;
+  v_drv        uuid; v_drv_par  uuid; v_drv_claim uuid; v_drv_sell uuid; v_drv_anchor uuid;
   v_other      uuid; v_other_g  uuid; v_foreign uuid; v_foreign_w uuid;
   v_pair       uuid; v_pair_a   uuid; v_pair_b  uuid;
   v_xfund      uuid; v_x_mine   uuid; v_x_theirs uuid; v_x_claim uuid; v_x_sell uuid;
@@ -348,19 +348,22 @@ begin
   returning transaction_id into v_foreign_w;
 
   -- ── a cross-owner purchase inside a bucket ─────────────────────────────────
-  -- The mirror of the parent-axis case above, and it goes the OTHER way, which is
-  -- why both are here. 20260803000005's bucket query constrains the CLAIM's owner
-  -- (`w.user_id = wd.user_id`) and never the purchase's — it reaches the purchase
-  -- through `p.fund_id = wd.fund_id`. Its basis sum does require the owner to
-  -- match. So on a legacy row carrying another user's fund, the two halves
-  -- diverge: the cross-owner purchase is left out of what the bucket HOLDS, while
-  -- a claim parented to it is still charged against the bucket.
+  -- 100 units of my own, a 10-unit claim on THEIR purchase carrying my fund, and a
+  -- 95-unit sale of my own units.
   --
-  -- 100 units of my own, a 10-unit claim on their purchase, and a 95-unit sale:
-  -- the invariant refuses it at "the remaining balance of 90 units". An owner test
-  -- on the purchase here — which the parent axis genuinely needs — drops that claim
-  -- and the sale replays clean. This view reports what the database enforces;
-  -- whether that asymmetry is right is a question for the invariant.
+  -- Until #668 the bucket's two halves disagreed here: the basis sum required the
+  -- purchase to be mine (`t.user_id = wd.user_id`) while the claims sum reached the
+  -- purchase through `p.fund_id` alone — so their purchase was left out of what the
+  -- bucket HOLDS while a claim parented to it was still charged against it, and this
+  -- sale was refused at "the remaining balance of 90 units". This view reported that
+  -- refusal, because its contract is to report what the database enforces.
+  --
+  -- The invariant now carries `p.user_id = wd.user_id` (settled by probing
+  -- lib/withdrawalProgress, which never counted the claim either — its query is
+  -- user-scoped, so their purchase is not among the rows it indexes). Same contract,
+  -- opposite verdict: the sale is legal and this view says nothing about it. The
+  -- assertions below are written as a PAIR with the invariant's, so moving the
+  -- predicate on one side alone fails loudly — which is what it did when it moved.
   insert into public.funds (user_id, name, code, fund_type, nav)
   values (v_user, 'Cross Fund', 'RXFD', 'equity', 20000) returning id into v_xfund;
   insert into public.investment_transactions
@@ -501,26 +504,33 @@ begin
   -- current units and amount_vnd, so editing that purchase silently restates how
   -- much of the bucket the claim took — and the claim's own updated_at says
   -- nothing about it. Usually the purchase is a credit on this same key and its
-  -- touched flag carries; not here. A cross-owner purchase is partitioned under
-  -- ITS owner (a renewal snapshot is no part of the bucket at all), while
-  -- 20260803000005 counts claims on both.
+  -- touched flag carries; not here. A RENEWAL SNAPSHOT is no part of the bucket —
+  -- the basis sum excludes it (`t.renewed_from_transaction_id is null`) — while
+  -- 20260803000005's claims sum has no such exclusion and counts claims drawn on it.
   --
-  -- 1000/100 of my own, a claim of 400 on their 50-unit purchase, and a 40-unit
-  -- sale taking 300 — which is exactly right against the 600/80 the bucket showed
-  -- when the claim derived 20 units. Their purchase is since re-priced to 2000, so
-  -- the claim now derives 10, the bucket reads 600/90, and the sale owes 267. Every
-  -- row on this key is pristine, so without the parent's edit the replay calls a
+  -- This fixture stood on a CROSS-OWNER purchase until #668, which was the same
+  -- asymmetry reached the other way. The invariant now requires the purchase to be
+  -- the writer's own, so that shape no longer produces the property; a snapshot
+  -- does, and it is the case the original comment already named beside it.
+  --
+  -- 1000/100 of my own, a claim of 400 on a 50-unit snapshot, and a 40-unit sale
+  -- taking 300 — which is exactly right against the 600/80 the bucket showed when
+  -- the claim derived 20 units. The snapshot is since re-priced to 2000, so the
+  -- claim now derives 10, the bucket reads 600/90, and the sale owes 267. Every row
+  -- on this key is pristine, so without the parent's edit the replay calls a
   -- legally-written sale a proven violation.
   insert into public.funds (user_id, name, code, fund_type, nav)
   values (v_user, 'Derived Fund', 'RDRV', 'equity', 20000) returning id into v_drv;
   insert into public.investment_transactions
     (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id, created_at, updated_at)
   values (v_user, v_goal, 'fund', 'investment', '2026-01-01', 1000, 100, 10, v_drv,
-          '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+          '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+  returning transaction_id into v_drv_anchor;
   insert into public.investment_transactions
-    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id, created_at, updated_at)
-  values (v_other, v_goal, 'fund', 'investment', '2026-01-02', 2000, 50, 40, v_drv,
-          '2026-01-02T00:00:00Z', '2026-06-01T00:00:00Z')
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price, fund_id,
+     renewed_from_transaction_id, created_at, updated_at)
+  values (v_user, v_goal, 'fund', 'investment', '2026-01-02', 2000, 50, 40, v_drv,
+          v_drv_anchor, '2026-01-02T00:00:00Z', '2026-06-01T00:00:00Z')
   returning transaction_id into v_drv_par;
   insert into public.investment_transactions
     (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd,
@@ -815,18 +825,31 @@ begin
     raise exception 'the holding-level proof is real and has to reach the operator in the sentence, got %', v_found;
   end if;
 
-  -- the cross-owner purchase in a bucket: the claim on it still counts, and the
-  -- balance the replay reports is the one the invariant names in its own refusal
-  select r.check_name into v_found
+  -- The cross-owner purchase in a bucket, now that the invariant no longer charges
+  -- a claim on one (#668): the 95-unit sale of a 100-unit bucket is legal, so the
+  -- replay must say nothing about it.
+  --
+  -- This assertion is a PAIR with the invariant's, and deliberately so. Until #668
+  -- it stood the other way round — 'sale_exceeded_the_units_left', "90 units left" —
+  -- because the invariant charged the claim and this view's contract is to report
+  -- what the database enforces, not what it ought to. The pairing is the mechanism
+  -- that makes the contract hold: change the predicate on one side alone and this
+  -- fails loudly, which is exactly what it did when the invariant moved.
+  select r.check_name || '/' || r.detail into v_found
     from public.withdrawal_ledger_replay r where r.transaction_id = v_x_sell;
-  if v_found is distinct from 'sale_exceeded_the_units_left' then
-    raise exception 'a claim parented to a cross-owner purchase is still charged to the bucket by the invariant, so the replay must count it too, got %',
-      coalesce(v_found, '(silence)');
+  if v_found is not null then
+    raise exception 'the invariant accepts this sale now that the bucket counts only its owner''s purchases — the replay has to agree, got %', v_found;
   end if;
-  select r.detail into v_found
-    from public.withdrawal_ledger_replay r where r.transaction_id = v_x_sell;
-  if v_found not like '%90 units left%' then
-    raise exception 'the invariant refuses this at "the remaining balance of 90 units" — the replay has to agree, got %', v_found;
+  -- And the claim itself is not judged here either: it draws on a holding in another
+  -- user's ledger, which is an ownership question, and withdrawal_ledger_audit owns
+  -- it (`parent_belongs_to_another_user`, #667).
+  if exists (select 1 from public.withdrawal_ledger_replay r where r.transaction_id = v_x_claim) then
+    raise exception 'a claim on a cross-owner purchase is the screening view''s finding, not a balance fault';
+  end if;
+  if not exists (select 1 from public.withdrawal_ledger_audit a
+                  where a.transaction_id = v_x_claim
+                    and a.check_name = 'parent_belongs_to_another_user') then
+    raise exception 'the screening view was supposed to name the cross-owner claim — if it no longer does, nothing reports this row';
   end if;
 
   -- the claim on another user's holding: silent, and silent for BOTH users — the
@@ -943,12 +966,14 @@ begin
   -- and nothing beyond the holdings planted above. The legal tied pair is excluded
   -- for the reason above — it contributes a row or no row depending on the
   -- tie-break, and it is the only fixture here that may do either.
+  -- 12 since #668: the cross-owner sale above was the thirteenth, and it is legal
+  -- now that a bucket counts only its own owner's purchases.
   select count(*) into v_count from public.withdrawal_ledger_replay r
    where r.user_id = v_user and r.parent_transaction_id is distinct from v_tie;
-  if v_count <> 13 then
+  if v_count <> 12 then
     select string_agg(format('%s/%s: %s', r.check_name, r.severity, r.detail), E'\n')
       into v_found from public.withdrawal_ledger_replay r where r.user_id = v_user;
-    raise exception 'expected exactly the 13 planted sequences, got %:%s%s', v_count, E'\n', v_found;
+    raise exception 'expected exactly the 12 planted sequences, got %:%s%s', v_count, E'\n', v_found;
   end if;
 
   raise notice 'withdrawal_ledger_replay: ok';
