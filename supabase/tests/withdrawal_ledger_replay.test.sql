@@ -328,8 +328,9 @@ begin
   -- specific — judging it means partitioning the holding under its owner and the
   -- claim under the claimant, so the claim replays against an opening balance of
   -- zero and reads as a pristine overdraw of a holding nobody touched. The
-  -- screening view is silent here too, which the header records rather than
-  -- letting the silence pass for a clean bill.
+  -- screening view owns it instead, as the shape check it is — the header's note
+  -- that no view reported it was the state before #667, and the assertion below
+  -- keeps the two halves of that division honest.
   insert into auth.users (id, email) values (gen_random_uuid(), 'wd-replay-other@test.invalid')
   returning id into v_other;
   insert into public.savings_goals (user_id, goal_name) values (v_other, 'Theirs')
@@ -837,6 +838,13 @@ begin
       from public.withdrawal_ledger_replay r
      where r.transaction_id = v_foreign_w or r.parent_transaction_id = v_foreign or r.user_id = v_other;
     raise exception 'a claim naming another user''s holding is not a balance question — the invariant returns quietly and so must this: %', v_found;
+  end if;
+  -- ...and the screening view names it, because silence in BOTH views reads as a
+  -- clean bill (#667). If it ever stops, this view's silence needs revisiting.
+  if not exists (select 1 from public.withdrawal_ledger_audit a
+                  where a.transaction_id = v_foreign_w
+                    and a.check_name = 'parent_belongs_to_another_user') then
+    raise exception 'the screening view was supposed to own the ownership shape — if it no longer does, this view''s silence leaves the row reported by nothing';
   end if;
 
   -- negative amounts on both axes: silent here, named there
