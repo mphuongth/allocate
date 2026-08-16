@@ -120,27 +120,63 @@ test.describe('Recent activity — mobile', () => {
   })
 })
 
-// ─── Where the "+ row" assertion went ────────────────────────────────────────
+// ─── Data-backed: the card renders what the API returns ──────────────────────
 //
-// It used to live here: seed an investment dated today, then find a "+7.7M" row in
-// the card. The card shows the five most recent rows, and ~200 specs run before this
-// file in the full lane — each seeding its own same-day data — so once that pile
-// passed five, the row was real and off the bottom of the card. Two consecutive full
-// runs failed here (238 passed / 1 failed) while the file passed alone (#660).
+// This test used to assert the SIGN of a specific row: seed an investment dated
+// today, then find "+7.7M" in the card. The card shows the five most recent rows,
+// and ~200 specs run ahead of this file in the full lane, each seeding its own
+// same-day data — so once that pile passed five, the row was real and off the bottom
+// of the card. Two consecutive full runs failed here, 238 passed / 1 failed, while
+// the file passed alone (#660). Matching by amount instead of `.first()` had already
+// been tried once; it fixed WHICH row was asserted, not WHETHER it was on screen.
 //
-// Matching by amount instead of `.first()` had already been tried, and it fixed WHICH
-// row was asserted, not WHETHER it was on screen. The next fix in that direction —
-// seed an older date, assert through the ledger — would have kept a browser and a
-// full dashboard in the loop to check the sign of one row.
-//
-// So it moved down a layer, per the repo's own rule: the behaviour is the sign of an
-// investment row, and it is asserted in
+// The sign moved down a layer, to
 // app/assets/components/__tests__/RecentActivityCard.test.tsx, where the card is
-// given exactly the rows it renders. What stays E2E here is what genuinely spans
-// layers — the card mounting against the real API, and the ledger's CRUD round-trip.
+// given exactly the rows it renders and nothing can push the assertion off screen.
 //
-// Seeding a today-dated row for every full run also pushed everyone ELSE's rows down
-// the same card, so removing it takes one grain off a shared pile.
+// What CANNOT move down is this: that the card, mounted in a browser against the
+// real API, renders rows at all. A failed fetch is swallowed into the empty state
+// (`r.ok ? r.json() : { transactions: [] }`, plus a `.catch`), so a broken endpoint
+// URL, a broken auth path or a changed response shape produces a silently empty
+// card — and every other test in this file passes on the section header and the
+// "View all" button, which render either way. The component test cannot see it
+// either: it supplies the response itself.
+//
+// So the assertion that stays is the one that does not depend on position: seed a
+// row, and require the card to be showing rows. Whichever five it picks, there is
+// data behind them and the fetch worked.
+test.describe('Recent activity — rendered rows', () => {
+  const NOTE = 'E2E recent activity bank'
+  let txId: string
+
+  test.beforeAll(async () => {
+    const tx = await api.createTransaction({
+      asset_type: 'bank',
+      amount_vnd: 7_654_321,
+      investment_date: new Date().toISOString().slice(0, 10),
+      interest_rate: 5.2,
+      notes: NOTE,
+    })
+    txId = tx.transaction_id
+  })
+
+  test.afterAll(async () => {
+    if (txId) await api.deleteTransactionCascade(txId)
+  })
+
+  test('the card lists transactions fetched from the API', async ({ page }) => {
+    await page.goto('/dashboard')
+    await page.waitForLoadState('networkidle')
+
+    const card = page.getByTestId('recent-activity')
+    await expect(card).toBeVisible({ timeout: 10_000 })
+
+    // At least one row, never the empty state: the ledger has data (this file just
+    // seeded some) so an empty card means the fetch did not arrive. Not "my row",
+    // which is what made this flaky — only that the card is showing the API's.
+    await expect(card.getByTestId('recent-activity-row').first()).toBeVisible({ timeout: 5_000 })
+  })
+})
 
 // ─── Ledger CRUD: delete from "View all" ─────────────────────────────────────
 // Replaces the legacy Settings-tab delete test now that the tab is removed.
