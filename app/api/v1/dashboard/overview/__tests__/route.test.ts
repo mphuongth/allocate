@@ -15,6 +15,7 @@ import { SNAPSHOT_WRITE_TIMEOUT_MS } from '@/lib/snapshots'
 const h = vi.hoisted(() => ({
   user: { id: 'user-1' } as { id: string } | null,
   tables: {} as Record<string, { data: unknown; error: unknown }>,
+  selects: {} as Record<string, string>,
   upsertCalls: [] as unknown[],
   // How the snapshot upsert behaves, and whether it had actually settled by the
   // time GET() resolved — the fire-and-forget bug (#592) is precisely a response
@@ -43,7 +44,12 @@ vi.mock('@/lib/supabase-server', () => {
   function chainFor(name: string) {
     const result = () => h.tables[name] ?? { data: [], error: null }
     const chain: Record<string, unknown> = {
-      select: () => chain,
+      // The column list is recorded, not just accepted. This mock returns
+      // whatever row the test hands it regardless of what was selected, so a
+      // column MISSING from the real query is invisible to any assertion about
+      // the payload — the shape of #659, where the successor promise was mapped
+      // correctly but never fetched.
+      select: (cols?: string) => { if (cols) h.selects[name] = cols; return chain },
       eq: () => chain,
       in: () => chain,
       single: async () => result(),
@@ -101,6 +107,7 @@ beforeEach(() => {
   h.upsertCalls = []
   h.upsertOutcome = 'ok'
   h.upsertSettled = false
+  h.selects = {}
   baseHappy()
 })
 
@@ -148,6 +155,47 @@ describe('GET /api/v1/dashboard/overview — partial reads never corrupt snapsho
       expect(h.upsertCalls).toHaveLength(0)
     })
   }
+})
+
+// #659 — the dashboard's needs-attention card is where a matured deposit asks to
+// be dealt with, and the sheet it opens gates its whole merge panel on the book's
+// successor promise. The overview never fetched the column, so the card's sheet
+// decided "no handover" for every book and offered the renewal fork instead —
+// every option of which the database refuses while the promise stands.
+describe('GET /api/v1/dashboard/overview — a book carries its successor promise (#659)', () => {
+  it('asks for the successor column', async () => {
+    // Asserted on the QUERY, because the payload assertion below cannot see this:
+    // the mock returns the row it is handed whatever was selected, while the real
+    // client returns a row with the field simply absent.
+    await GET()
+    expect(h.selects.active_investment_transactions).toContain('successor_deposit_tx_id')
+  })
+
+  it('carries the promise into the goal bucket the book sits in', async () => {
+    h.tables.savings_goals = { data: [{ goal_id: 'g1', goal_name: 'Goal', target_amount: 10_000_000, target_date: null }], error: null }
+    h.tables.active_investment_transactions = {
+      data: [
+        {
+          transaction_id: 'book-1', goal_id: 'g1', asset_type: 'bank', transaction_type: 'investment',
+          amount_vnd: 20_000_000, investment_date: '2025-01-01', expiry_date: '2026-01-01',
+          deposit_group_id: 'book-1', successor_deposit_tx_id: 'book-2', affects_progress: true,
+        },
+        {
+          transaction_id: 'tr-2', goal_id: 'g1', asset_type: 'bank', transaction_type: 'investment',
+          amount_vnd: 15_000_000, investment_date: '2025-06-01', expiry_date: '2026-01-01',
+          deposit_group_id: 'book-1', affects_progress: true,
+        },
+      ],
+      error: null,
+    }
+    const res = await GET()
+    expect(res.status).toBe(200)
+    const d = await res.json() as { goals: { nonFunds: { transactionId: string; successorDepositTxId?: string | null }[] }[] }
+    const byId = new Map(d.goals[0].nonFunds.map((n) => [n.transactionId, n]))
+    expect(byId.get('book-1')?.successorDepositTxId).toBe('book-2')
+    // A tranche is not the promise — only the anchor may carry one.
+    expect(byId.get('tr-2')?.successorDepositTxId ?? null).toBeNull()
+  })
 })
 
 // #606 — a withdrawal parented to a FUND PURCHASE (not itself fund-keyed: no

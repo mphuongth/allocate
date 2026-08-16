@@ -86,6 +86,10 @@ export interface NonFundUnallocatedItem {
   bankCode?: string | null
   currency?: string | null
   isPledged?: boolean | null
+  // The book this one was promised to at maturity (#638), carried so the sheet
+  // opened from the dashboard's needs-attention card makes the same decision as
+  // the one opened from goal detail (#659). Set on a book anchor only.
+  successorDepositTxId?: string | null
 }
 
 export interface DashboardData {

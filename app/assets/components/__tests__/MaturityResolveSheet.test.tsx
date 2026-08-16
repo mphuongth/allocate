@@ -7,6 +7,8 @@ import { fmt } from '@/lib/formatters'
 import { formatIntVN } from '@/lib/numberFormat'
 import { SUCCESS_FLASH_MS } from '../../successFlash'
 import type { InvRow } from '../goalDetailShared'
+import type { DashboardData, NonFundUnallocatedItem } from '@/features/dashboard/contracts'
+import { maturingDeposits, tagNonFunds } from '@/features/dashboard/dashboardModel'
 import { todayIso, addDaysIso } from '@/lib/dates'
 
 // A YYYY-MM-DD string `n` days from today (deterministic regardless of run date).
@@ -879,6 +881,55 @@ describe('MaturityResolveBody', () => {
     expect(screen.queryByTestId('maturity-term-input')).not.toBeInTheDocument()
     // ...and the way out is offered without having to trip over a refusal first.
     expect(screen.getByTestId('cancel-handover-btn')).toBeInTheDocument()
+  })
+
+  // ...and the same book opened from the DASHBOARD's needs-attention card gets
+  // the same sheet (#659). Every fixture above hands the sheet an InvRow built by
+  // hand; the card builds its own from the overview payload, and that path used to
+  // drop the promise — so the card, which is where a matured deposit ASKS to be
+  // dealt with, offered the renewal fork for a book the database refuses to renew.
+  // The row here is built by the real pipeline for that reason: asserting on a
+  // hand-made row would pass while the bug was live.
+  it('offers the merge when the book is opened from the dashboard card', async () => {
+    global.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).includes('/merge-successor') && init?.method !== 'POST') {
+        return { ok: true, json: async () => ({
+          tranches: [{ transaction_id: 'tr-1', effective_principal: 35_000_000 }],
+          successor_id: 'book-2', projected_value: 37_000_000,
+        }) } as Response
+      }
+      return { ok: true, json: async () => ({ banks: [] }) } as Response
+    }) as unknown as typeof fetch
+
+    // Two tranches of one matured book, as the overview returns them, with the
+    // promise on the anchor where the database keeps it.
+    const tranche = (over: Partial<NonFundUnallocatedItem>): NonFundUnallocatedItem => ({
+      transactionId: 'tr-2', type: 'bank', amount: 15_000_000, currentValue: 15_400_000,
+      interestRate: 5.8, expiryDate: daysFromNow(-12), investmentDate: '2025-06-01',
+      notes: null, units: null, depositGroupId: 'book-1', ...over,
+    })
+    const data = {
+      goals: [{ goalId: 'g1', nonFunds: [
+        tranche({ transactionId: 'book-1', amount: 20_000_000, currentValue: 21_000_000, notes: 'Sổ tích luỹ', successorDepositTxId: 'book-2' }),
+        tranche({}),
+      ] }],
+      unallocated: { nonFunds: [] },
+    } as unknown as DashboardData
+
+    const rows = maturingDeposits(tagNonFunds(data), false)
+    expect(rows).toHaveLength(1)   // one book, not two tranches
+
+    render(
+      <MaturityResolveBody inv={rows[0].inv} isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
+    )
+
+    expect(screen.getByTestId('merge-successor-panel')).toBeInTheDocument()
+    // The dead ends the card used to offer: each one is refused by the database
+    // while the promise stands.
+    expect(screen.queryByRole('button', { name: /Confirm renewal/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Don.t renew/i })).not.toBeInTheDocument()
+    expect(screen.queryByTestId('maturity-term-input')).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.getByTestId('cancel-handover-btn')).toBeInTheDocument())
   })
 
   it('cancels the handover from the promised book’s own sheet', async () => {

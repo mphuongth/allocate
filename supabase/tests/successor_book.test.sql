@@ -621,4 +621,45 @@ begin
 end;
 $$;
 
+-- The readers go through active_investment_transactions, and that view is
+-- `select *` — expanded ONCE, at creation. A column added to the table afterwards
+-- is silently absent from it, and PostgREST answers a select naming an absent
+-- column with a 400, so the first reader to ask for it takes the whole dashboard
+-- down. That is what happened here: 20260811000001 added the column and left the
+-- view alone, and asking the overview for the promise blanked every screen fed by
+-- it (#659). 20260620000004's header warned about exactly this and the next column
+-- fell into it anyway, so the guard is a test rather than another comment.
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.columns
+     where table_schema = 'public'
+       and table_name = 'active_investment_transactions'
+       and column_name = 'successor_deposit_tx_id'
+  ) then
+    raise exception 'active_investment_transactions must expose successor_deposit_tx_id — re-issue the view (create or replace) after adding a column to investment_transactions';
+  end if;
+
+  -- Stated as the general rule too, so the NEXT column added is caught here
+  -- instead of by a blank dashboard.
+  if exists (
+    select c.column_name from information_schema.columns c
+     where c.table_schema = 'public' and c.table_name = 'investment_transactions'
+       and not exists (
+         select 1 from information_schema.columns v
+          where v.table_schema = 'public' and v.table_name = 'active_investment_transactions'
+            and v.column_name = c.column_name)
+  ) then
+    raise exception 'active_investment_transactions is missing column(s) the table has: % — re-issue the view',
+      (select string_agg(c.column_name, ', ') from information_schema.columns c
+        where c.table_schema = 'public' and c.table_name = 'investment_transactions'
+          and not exists (
+            select 1 from information_schema.columns v
+             where v.table_schema = 'public' and v.table_name = 'active_investment_transactions'
+               and v.column_name = c.column_name));
+  end if;
+
+  raise notice 'successor book: the active view carries every column the table has';
+end $$;
+
 rollback;
