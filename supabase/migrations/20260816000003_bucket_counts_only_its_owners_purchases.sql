@@ -1112,7 +1112,32 @@ with wd as (
                   and p.transaction_type = 'investment'
                   and p.asset_type = 'fund' and p.fund_id is not null
                   and p.user_id = w.user_id
-                  and coalesce(p.units, 0) > 0, false) as fund_parented
+                  and coalesce(p.units, 0) > 0, false) as fund_parented,
+         -- The rows the owner test above newly drops out of `fund_parented`: a
+         -- claim on someone else's fund purchase. They belong to NEITHER aggregate,
+         -- and saying so needs its own flag.
+         --
+         -- Not the bucket, because the invariant stopped charging them there
+         -- (#668). And not the parent axis either, which is where they would
+         -- otherwise fall — unlike the bank/gold/stock case, where a cross-owner
+         -- claim IS charged to the holding (the invariant's sibling sum is keyed by
+         -- parent_transaction_id alone, which is why `parents` deliberately has no
+         -- ownership test and #667 kept it that way). No legal write reaches the
+         -- parent axis of a FUND purchase at all: 20260803000002 refuses one
+         -- outright — "a fund sale must be keyed by its fund, not parented to
+         -- purchase X" — so charging the claim there mirrors no invariant and
+         -- invents an overdraw of a holding whose owner cannot even write against
+         -- it. Probed: 90 units claimed on a 50-unit purchase reported
+         -- `holding_overdrawn` under the PURCHASE's owner, for a row they did not
+         -- write and a state they cannot reach.
+         --
+         -- `parent_belongs_to_another_user` (#667) still names the row, which is the
+         -- finding that describes it.
+         coalesce(not coalesce(w.asset_type = 'fund' and w.fund_id is not null, false)
+                  and p.transaction_type = 'investment'
+                  and p.asset_type = 'fund' and p.fund_id is not null
+                  and p.user_id is distinct from w.user_id
+                  and coalesce(p.units, 0) > 0, false) as fund_parent_not_ours
     from public.investment_transactions w
     left join public.investment_transactions p on p.transaction_id = w.parent_transaction_id
    where w.transaction_type = 'withdrawal'
@@ -1126,8 +1151,14 @@ parents as (
     from public.investment_transactions p
     join wd w on w.parent_transaction_id = p.transaction_id
              and not w.fund_keyed and not w.fund_parented
-             -- Deliberately NOT constrained to the holding's own owner, however
-             -- much the ownership check below invites it — see the header (#667).
+             -- Still deliberately NOT constrained to the holding's own owner in
+             -- general: for a bank/gold/stock parent the invariant's sibling sum is
+             -- keyed by parent_transaction_id alone, so a cross-owner claim really
+             -- does reduce the balance its OWNER is measured against, and dropping
+             -- it here would report a holding sound while the database refuses that
+             -- owner's next write (#667). What is excluded is the one shape where no
+             -- legal write reaches this axis at all — see `fund_parent_not_ours`.
+             and not w.fund_parent_not_ours
    where p.transaction_type = 'investment'
    group by p.transaction_id, p.user_id, p.goal_id, p.asset_type, p.amount_vnd, p.units
 ),
@@ -1402,6 +1433,15 @@ select 'parent_is_a_fund_purchase', 'review',
             when w.parent_asset = 'fund' and w.parent_fund is not null
                  and w.parent_units is null
               then format('draws %s đồng on pending fund purchase %s, which records no units — nothing values either row',
+                          w.principal_withdrawn, w.parent_transaction_id)
+            -- SOMEONE ELSE's fund purchase. It has a fund and units, so none of the
+            -- branches above fit, and the fallback below would tell an operator it
+            -- "carries no fund of its own" — plainly false, and it sends them
+            -- looking for the wrong defect. What is true is that no balance counts
+            -- this row: not the bucket (#668) and not the purchase, whose owner
+            -- cannot write against it on this axis anyway.
+            when w.fund_parent_not_ours
+              then format('draws %s đồng on fund purchase %s, which belongs to another user — no balance of either user counts it; see parent_belongs_to_another_user',
                           w.principal_withdrawn, w.parent_transaction_id)
             else format('draws %s đồng on fund-typed %s %s, which carries no fund of its own — no bucket values it',
                         w.principal_withdrawn, w.parent_type, w.parent_transaction_id)
