@@ -10,7 +10,11 @@ vi.mock('../TransactionLedgerSheet', () => ({ default: () => null }))
 
 const mockTx = {
   transaction_id: 'tx-1',
-  transaction_type: 'buy',
+  // Not 'buy': the column's CHECK constraint and the POST route's enum both allow
+  // only 'investment' and 'withdrawal', so a 'buy' row is one the API can never
+  // return. Corrected here as well as below so the next fixture is copied from a
+  // shape that exists.
+  transaction_type: 'investment',
   asset_type: 'fund',
   fund_name: 'VNINDEX ETF',
   investment_date: '2024-01-15',
@@ -105,7 +109,13 @@ describe('RecentActivityCard — held-for-merge rows read neutrally', () => {
   // browser nor a dashboard, and here the card is given exactly the rows it renders,
   // so nothing else can push the assertion off screen.
   it('an investment reads as a green "+" with the compact amount', async () => {
-    mockTxs([{ ...base, transaction_id: 'i1', transaction_type: 'buy', amount_vnd: 7_654_321 }])
+    // 'investment', the value the API actually returns — the enum it validates and
+    // the CHECK constraint on the column both allow only that and 'withdrawal'.
+    // txKind reads "anything not 'withdrawal'", so a made-up type passes for the
+    // wrong reason: the test would stay green on a card that handled the fiction
+    // and regressed the real value. This assertion replaces E2E coverage of a real
+    // row, so it has to stand on the real shape.
+    mockTxs([{ ...base, transaction_id: 'i1', transaction_type: 'investment', amount_vnd: 7_654_321 }])
     render(<RecentActivityCard locale="en" />)
     const row = await screen.findByTestId('recent-activity-row')
     expect(row.textContent).toContain('+7.7M')
