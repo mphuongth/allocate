@@ -205,6 +205,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           { status: 409 },
         )
       }
+      // The book changed between the unlocked read and the ordered lock the RPC
+      // takes over the group (#653) — dissolved, or this tranche gone. It aborts
+      // rather than write to a book that no longer exists, which is a reload,
+      // not a fault: the collapse and merge-successor routes answer the same
+      // message the same way.
+      if (bookErr?.message?.includes('book changed since load')) {
+        return NextResponse.json({ error: 'This deposit changed — please reload and try again.' }, { status: 409 })
+      }
       console.error('update_deposit_book: atomic book edit failed', bookErr?.message)
       return NextResponse.json({ error: 'Failed to update deposit book' }, { status: 500 })
     }
