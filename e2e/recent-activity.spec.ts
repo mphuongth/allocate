@@ -120,47 +120,27 @@ test.describe('Recent activity — mobile', () => {
   })
 })
 
-// ─── Data-backed: an investment renders as a positive (+) row ────────────────
-// Per the TDD lesson: assert the rendered outcome, not just storage. A seeded
-// investment must surface in the card as a "+amount" row.
-
-test.describe('Recent activity — rendered row', () => {
-  const NOTE = 'E2E recent activity bank'
-  let txId: string
-
-  test.beforeAll(async () => {
-    const tx = await api.createTransaction({
-      asset_type: 'bank',
-      amount_vnd: 7_654_321,
-      investment_date: new Date().toISOString().slice(0, 10),
-      interest_rate: 5.2,
-      notes: NOTE,
-    })
-    txId = tx.transaction_id
-  })
-
-  test.afterAll(async () => {
-    if (txId) await api.deleteTransactionCascade(txId)
-  })
-
-  test('seeded investment shows as a positive row in the card', async ({ page }) => {
-    await page.goto('/dashboard')
-    await page.waitForLoadState('networkidle')
-
-    const card = page.getByTestId('recent-activity')
-    await expect(card).toBeVisible({ timeout: 10_000 })
-
-    // An investment surfaces as a "+" signed amount (green), never a "−".
-    // fmtCompact renders 7,654,321 as "7.7M ₫".
-    //
-    // Matched by amount rather than by taking `.first()`: this transaction is dated today,
-    // and so are several seeded by other specs, so "the top row is mine" only held when
-    // this file ran alone. The behaviour under test is the sign, not the ordering.
-    const row = card.getByTestId('recent-activity-row').filter({ hasText: /7\.7M/ })
-    await expect(row).toBeVisible({ timeout: 5_000 })
-    await expect(row).toContainText('+')
-  })
-})
+// ─── Where the "+ row" assertion went ────────────────────────────────────────
+//
+// It used to live here: seed an investment dated today, then find a "+7.7M" row in
+// the card. The card shows the five most recent rows, and ~200 specs run before this
+// file in the full lane — each seeding its own same-day data — so once that pile
+// passed five, the row was real and off the bottom of the card. Two consecutive full
+// runs failed here (238 passed / 1 failed) while the file passed alone (#660).
+//
+// Matching by amount instead of `.first()` had already been tried, and it fixed WHICH
+// row was asserted, not WHETHER it was on screen. The next fix in that direction —
+// seed an older date, assert through the ledger — would have kept a browser and a
+// full dashboard in the loop to check the sign of one row.
+//
+// So it moved down a layer, per the repo's own rule: the behaviour is the sign of an
+// investment row, and it is asserted in
+// app/assets/components/__tests__/RecentActivityCard.test.tsx, where the card is
+// given exactly the rows it renders. What stays E2E here is what genuinely spans
+// layers — the card mounting against the real API, and the ledger's CRUD round-trip.
+//
+// Seeding a today-dated row for every full run also pushed everyone ELSE's rows down
+// the same card, so removing it takes one grain off a shared pile.
 
 // ─── Ledger CRUD: delete from "View all" ─────────────────────────────────────
 // Replaces the legacy Settings-tab delete test now that the tab is removed.
