@@ -1156,12 +1156,23 @@ begin
     raise exception 'the fund-keyed finding must say the bucket is what it draws on, got %', v_detail;
   end if;
 
-  -- And B — who wrote nothing — is told nothing. Charging A's claim to B's holding
-  -- reports a pristine overdraw of a holding nobody touched, which is the reason
-  -- check_withdrawal_balance and withdrawal_ledger_replay both leave it alone.
-  select count(*) into v_n from public.withdrawal_ledger_audit where user_id = v_b;
+  -- And B's holding IS reported overdrawn, which looks like charging a user for a
+  -- row they cannot see and is instead the invariant's own arithmetic. Ownership is
+  -- required only of the parent being measured; the sum of what that holding already
+  -- owes is keyed by parent_transaction_id alone, so A's claim really does reduce
+  -- the balance B is measured against. Probed: B withdrawing 60,000,000 of a
+  -- 100,000,000 holding carrying A's 60,000,000 claim is refused at "the remaining
+  -- balance of 40000000". Filtering the claim out here would report a holding sound
+  -- while the database refuses its owner's next write.
+  if not exists (select 1 from public.withdrawal_ledger_audit
+                  where user_id = v_b and check_name = 'holding_overdrawn'
+                    and parent_transaction_id = v_held) then
+    raise exception 'a foreign claim still counts against the holding, as the invariant counts it';
+  end if;
+  select count(*) into v_n from public.withdrawal_ledger_audit
+   where user_id = v_b and check_name <> 'holding_overdrawn';
   if v_n <> 0 then
-    raise exception 'the owner of an untouched holding must not be reported, got % row(s)', v_n;
+    raise exception 'nothing else is provable about the owner, got % row(s)', v_n;
   end if;
 
   -- A's own bucket is sound (10 of 100 units at the flat rate), so the ownership

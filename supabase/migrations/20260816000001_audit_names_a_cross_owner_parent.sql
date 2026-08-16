@@ -37,27 +37,37 @@
 -- turns it into `draws_on_no_holding`, which is a different finding and not obviously
 -- a better state. What the operator needs first is to know the row is there.
 --
--- ─── And the balance axis stops charging it ──────────────────────────────────
+-- ─── The balance axis keeps charging it, and that is not an oversight ────────
 --
--- `parents` joined a claim to the holding it names without asking who owned either,
--- so a cross-owner claim was summed into the OWNER's balance — B's untouched
--- 100,000,000 holding reported `holding_overdrawn` for A's 150,000,000 claim, under
--- B's user_id, naming a row B cannot see and did not write. That is the same
--- artifact the replay's header describes, reached from the other end. The join now
--- carries `w.user_id = p.user_id`, which is character for character the predicate
--- check_withdrawal_balance uses before it reads a balance at all
--- (20260730000002) and the one withdrawal_ledger_replay uses to build its opening
--- balances. The three now agree: the balance checks leave the row alone, and the
--- shape check names it.
+-- The obvious companion change — teaching `parents` to skip a claim whose owner is
+-- not the holding's — is WRONG, and the reason is worth stating where the next
+-- reader will look. check_withdrawal_balance requires ownership only of the parent
+-- it is measuring against; the sum of what that holding already owes is keyed by
+-- `w.parent_transaction_id = wd.parent_transaction_id` and nothing else. So a
+-- foreign claim really does reduce the balance the OWNER is measured against.
+-- Probed against a local stack, the claim planted with the ownership trigger off:
 --
--- The FUND axis is deliberately untouched. `fund_parented` reaches the purchase by
--- id and keys the claim into the bucket by the PURCHASE's fund and goal, which is
--- what check_withdrawal_balance's fund branch does too (it reaches the purchase
--- through `p.fund_id = wd.fund_id`, never through its owner). Adding an ownership
--- predicate there would make the audit disagree with the invariant it screens for —
--- the miss PR #666 caught in the replay and reverted. Whether that asymmetry is
--- right at all is #668's question, not this one's, and if it changes the fund
--- branches of both views change with it.
+--   B holds 100,000,000. A's legacy claim on it: 60,000,000.
+--   B then withdraws 60,000,000 of their own holding.
+--     → withdrawal invariant: 60000000 exceeds the remaining balance of 40000000
+--
+-- An audit that filtered the claim out would report that holding sound while the
+-- database refuses its owner's next write — the same failure mode PR #666 caught in
+-- the replay's bucket branch and reverted. This view reports what the database
+-- enforces, so the aggregate is left exactly as it was: B's holding is named by
+-- `holding_overdrawn` when the claims on it sum past it, whoever wrote them, and
+-- `parent_belongs_to_another_user` names the claim that explains it.
+--
+-- The two findings are meant to be read together. The overdraw alone would send an
+-- operator looking for a row in B's own ledger that isn't there; the ownership
+-- finding is the row.
+--
+-- The FUND axis is untouched for the matching reason. `fund_parented` reaches the
+-- purchase by id and keys the claim into the bucket by the PURCHASE's fund and
+-- goal, which is what check_withdrawal_balance's fund branch does too (it reaches
+-- the purchase through `p.fund_id = wd.fund_id`, never through its owner). Whether
+-- that asymmetry is right at all is #668's question, not this one's, and if it
+-- changes the fund branches of both views change with it.
 --
 -- Everything else below is verbatim from 20260803000001 (a view has to be re-stated
 -- whole).
@@ -116,14 +126,8 @@ parents as (
     from public.investment_transactions p
     join wd w on w.parent_transaction_id = p.transaction_id
              and not w.fund_keyed and not w.fund_parented
-             -- The claimant's OWN holding, which is the predicate
-             -- check_withdrawal_balance applies before it reads a balance at all,
-             -- and the one withdrawal_ledger_replay builds its opening balances
-             -- with. Without it a cross-owner claim was summed into the balance of
-             -- the user who OWNS the holding — an overdraw reported against a row
-             -- that user cannot see and did not write. `parent_belongs_to_another_user`
-             -- names such a claim instead (#667).
-             and w.user_id = p.user_id
+             -- Deliberately NOT constrained to the holding's own owner, however
+             -- much the ownership check below invites it — see the header (#667).
    where p.transaction_type = 'investment'
    group by p.transaction_id, p.user_id, p.goal_id, p.asset_type, p.amount_vnd, p.units
 ),
