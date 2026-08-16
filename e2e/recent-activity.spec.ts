@@ -120,11 +120,32 @@ test.describe('Recent activity — mobile', () => {
   })
 })
 
-// ─── Data-backed: an investment renders as a positive (+) row ────────────────
-// Per the TDD lesson: assert the rendered outcome, not just storage. A seeded
-// investment must surface in the card as a "+amount" row.
-
-test.describe('Recent activity — rendered row', () => {
+// ─── Data-backed: the card renders what the API returns ──────────────────────
+//
+// This test used to assert the SIGN of a specific row: seed an investment dated
+// today, then find "+7.7M" in the card. The card shows the five most recent rows,
+// and ~200 specs run ahead of this file in the full lane, each seeding its own
+// same-day data — so once that pile passed five, the row was real and off the bottom
+// of the card. Two consecutive full runs failed here, 238 passed / 1 failed, while
+// the file passed alone (#660). Matching by amount instead of `.first()` had already
+// been tried once; it fixed WHICH row was asserted, not WHETHER it was on screen.
+//
+// The sign moved down a layer, to
+// app/assets/components/__tests__/RecentActivityCard.test.tsx, where the card is
+// given exactly the rows it renders and nothing can push the assertion off screen.
+//
+// What CANNOT move down is this: that the card, mounted in a browser against the
+// real API, renders rows at all. A failed fetch is swallowed into the empty state
+// (`r.ok ? r.json() : { transactions: [] }`, plus a `.catch`), so a broken endpoint
+// URL, a broken auth path or a changed response shape produces a silently empty
+// card — and every other test in this file passes on the section header and the
+// "View all" button, which render either way. The component test cannot see it
+// either: it supplies the response itself.
+//
+// So the assertion that stays is the one that does not depend on position: seed a
+// row, and require the card to be showing rows. Whichever five it picks, there is
+// data behind them and the fetch worked.
+test.describe('Recent activity — rendered rows', () => {
   const NOTE = 'E2E recent activity bank'
   let txId: string
 
@@ -143,22 +164,17 @@ test.describe('Recent activity — rendered row', () => {
     if (txId) await api.deleteTransactionCascade(txId)
   })
 
-  test('seeded investment shows as a positive row in the card', async ({ page }) => {
+  test('the card lists transactions fetched from the API', async ({ page }) => {
     await page.goto('/dashboard')
     await page.waitForLoadState('networkidle')
 
     const card = page.getByTestId('recent-activity')
     await expect(card).toBeVisible({ timeout: 10_000 })
 
-    // An investment surfaces as a "+" signed amount (green), never a "−".
-    // fmtCompact renders 7,654,321 as "7.7M ₫".
-    //
-    // Matched by amount rather than by taking `.first()`: this transaction is dated today,
-    // and so are several seeded by other specs, so "the top row is mine" only held when
-    // this file ran alone. The behaviour under test is the sign, not the ordering.
-    const row = card.getByTestId('recent-activity-row').filter({ hasText: /7\.7M/ })
-    await expect(row).toBeVisible({ timeout: 5_000 })
-    await expect(row).toContainText('+')
+    // At least one row, never the empty state: the ledger has data (this file just
+    // seeded some) so an empty card means the fetch did not arrive. Not "my row",
+    // which is what made this flaky — only that the card is showing the API's.
+    await expect(card.getByTestId('recent-activity-row').first()).toBeVisible({ timeout: 5_000 })
   })
 })
 

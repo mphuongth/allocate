@@ -10,7 +10,11 @@ vi.mock('../TransactionLedgerSheet', () => ({ default: () => null }))
 
 const mockTx = {
   transaction_id: 'tx-1',
-  transaction_type: 'buy',
+  // Not 'buy': the column's CHECK constraint and the POST route's enum both allow
+  // only 'investment' and 'withdrawal', so a 'buy' row is one the API can never
+  // return. Corrected here as well as below so the next fixture is copied from a
+  // shape that exists.
+  transaction_type: 'investment',
   asset_type: 'fund',
   fund_name: 'VNINDEX ETF',
   investment_date: '2024-01-15',
@@ -93,5 +97,33 @@ describe('RecentActivityCard — held-for-merge rows read neutrally', () => {
     const row = await screen.findByTestId('recent-activity-row')
     expect(screen.getByText('withdrawal')).toBeInTheDocument()
     expect(row.textContent).toContain('−')
+  })
+
+  // The positive half, which lived in e2e/recent-activity.spec.ts until #660. There
+  // it seeded a transaction dated today and looked for it in the card — and the card
+  // shows the five most recent rows, so once the ~200 specs running before it had
+  // seeded enough same-day rows, the row was real but off the bottom. The test then
+  // failed on how much data ran ahead of it, which is not a fact about the product.
+  //
+  // The behaviour under test is the SIGN of an investment row. It needs neither a
+  // browser nor a dashboard, and here the card is given exactly the rows it renders,
+  // so nothing else can push the assertion off screen.
+  it('an investment reads as a green "+" with the compact amount', async () => {
+    // 'investment', the value the API actually returns — the enum it validates and
+    // the CHECK constraint on the column both allow only that and 'withdrawal'.
+    // txKind reads "anything not 'withdrawal'", so a made-up type passes for the
+    // wrong reason: the test would stay green on a card that handled the fiction
+    // and regressed the real value. This assertion replaces E2E coverage of a real
+    // row, so it has to stand on the real shape.
+    mockTxs([{ ...base, transaction_id: 'i1', transaction_type: 'investment', amount_vnd: 7_654_321 }])
+    render(<RecentActivityCard locale="en" />)
+    const row = await screen.findByTestId('recent-activity-row')
+    expect(row.textContent).toContain('+7.7M')
+    expect(row.textContent).not.toContain('−')
+    // The colour, not just the glyph: the amount carries the positive token. A row
+    // that lost its tone but kept its sign still reads wrong at a glance.
+    const amount = Array.from(row.querySelectorAll('span')).find((s) => s.textContent?.includes('+7.7M'))
+    expect(amount).toBeDefined()
+    expect(amount!.getAttribute('style')).toContain('--c-pos')
   })
 })
