@@ -1082,4 +1082,97 @@ begin
   raise notice 'withdrawal_ledger_audit: contract holds — sequence-sensitive findings stay advisory';
 end $$;
 
+-- ═══ a claim on SOMEONE ELSE's holding is named, and charged to nobody (#667) ══
+--
+-- enforce_fk_ownership refuses new ones (#474 / #525), so this is legacy data —
+-- exactly what an audit of history is for. It used to be reported by no view in the
+-- family: check_withdrawal_balance looks the parent up under the claimant's own
+-- user_id, finds nothing and returns quietly, and withdrawal_ledger_replay matches
+-- that silence on purpose. Silence there read as a clean bill.
+do $$
+declare
+  v_a uuid; v_b uuid; v_goal_a uuid; v_goal_b uuid;
+  v_held uuid; v_claim uuid; v_fund uuid; v_buy uuid; v_fund_sell uuid;
+  v_n int; v_detail text;
+begin
+  insert into auth.users (id, email) values (gen_random_uuid(), 'wd-audit-owner-a@test.invalid') returning id into v_a;
+  insert into auth.users (id, email) values (gen_random_uuid(), 'wd-audit-owner-b@test.invalid') returning id into v_b;
+  insert into public.savings_goals (user_id, goal_name) values (v_a, 'Claimant') returning goal_id into v_goal_a;
+  insert into public.savings_goals (user_id, goal_name) values (v_b, 'Owner') returning goal_id into v_goal_b;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_a, 'Owner Fund', 'OWNF', 'equity', 10000) returning id into v_fund;
+
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted immediate;
+
+  alter table public.investment_transactions disable trigger user;
+
+  -- B's holding, and A's claim on it — for MORE than it holds, so that the balance
+  -- checks have every excuse to speak up.
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
+  values (v_b, v_goal_b, 'bank', 'investment', '2026-01-01', 100000000)
+  returning transaction_id into v_held;
+
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, principal_withdrawn)
+  values (v_a, v_goal_a, 'bank', 'withdrawal', '2026-02-01', 150000000, v_held, 150000000)
+  returning transaction_id into v_claim;
+
+  -- A fund-keyed sell of A's own bucket that ALSO names B's holding as its parent.
+  -- It draws on its (goal, fund) bucket whatever it names, so no balance is wrong —
+  -- but the reference is still a shape no write path produces.
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_a, v_goal_a, v_fund, 'fund', 'investment', '2026-01-01', 1000000, 100, 10000)
+  returning transaction_id into v_buy;
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, units_withdrawn, principal_withdrawn)
+  values (v_a, v_goal_a, v_fund, 'fund', 'withdrawal', '2026-02-01', 100000, v_held, 10, 100000)
+  returning transaction_id into v_fund_sell;
+
+  alter table public.investment_transactions enable trigger user;
+
+  set constraints investment_transactions_source_backs_claims, investment_transactions_source_deleted deferred;
+
+  select detail into v_detail from public.withdrawal_ledger_audit
+   where transaction_id = v_claim and check_name = 'parent_belongs_to_another_user'
+     and severity = 'violation' and user_id = v_a;
+  if v_detail is null then
+    raise exception 'the audit must name a claim drawing on another user''s holding';
+  end if;
+  if v_detail not like '%' || v_held::text || '%' then
+    raise exception 'the finding must name the holding drawn on, got %', v_detail;
+  end if;
+
+  -- The fund-keyed sell is named too, and its detail says the balance is unaffected:
+  -- an operator told only "cross-owner parent" would go looking for money that never
+  -- moved on that axis.
+  select detail into v_detail from public.withdrawal_ledger_audit
+   where transaction_id = v_fund_sell and check_name = 'parent_belongs_to_another_user';
+  if v_detail is null then
+    raise exception 'a fund-keyed sell naming another user''s holding must be reported too';
+  end if;
+  if v_detail not like '%own (goal, fund) bucket%' then
+    raise exception 'the fund-keyed finding must say the bucket is what it draws on, got %', v_detail;
+  end if;
+
+  -- And B — who wrote nothing — is told nothing. Charging A's claim to B's holding
+  -- reports a pristine overdraw of a holding nobody touched, which is the reason
+  -- check_withdrawal_balance and withdrawal_ledger_replay both leave it alone.
+  select count(*) into v_n from public.withdrawal_ledger_audit where user_id = v_b;
+  if v_n <> 0 then
+    raise exception 'the owner of an untouched holding must not be reported, got % row(s)', v_n;
+  end if;
+
+  -- A's own bucket is sound (10 of 100 units at the flat rate), so the ownership
+  -- finding is the only thing said about A either.
+  select count(*) into v_n from public.withdrawal_ledger_audit
+   where user_id = v_a and check_name <> 'parent_belongs_to_another_user';
+  if v_n <> 0 then
+    raise exception 'a cross-owner claim must not be judged on the balance axis, got % other finding(s)', v_n;
+  end if;
+
+  raise notice 'withdrawal_ledger_audit: a cross-owner parent is named, and no balance is invented for it';
+end $$;
+
 rollback;
