@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
-import { BATCH_MAX_BODY_BYTES, DEFAULT_MAX_BODY_BYTES } from '@/lib/apiBody'
+import { BULK_MAX_BODY_BYTES, DEFAULT_MAX_BODY_BYTES } from '@/lib/apiBody'
 
-// Every write route is bounded by default now (#682), and this is the one route
-// whose body is legitimately bulky: the Excel-paste importer sends up to 500
-// rows in a single request. A cap that fits an ordinary write would turn a
-// working import into a 413, so batch carries an explicit, larger one — and the
-// number has to stay provably big enough for the 500 rows the route itself
-// allows.
+// Every write route is bounded by default now (#682), and this is one of the two
+// whose body is a list sized by the user's data rather than by a fixed set of
+// fields: the Excel-paste importer sends up to 500 rows in a single request. A
+// cap sized for a form submission would turn a working import into a 413, so
+// batch carries an explicit, larger one — and the number has to stay provably
+// big enough for the 500 rows the route itself allows.
 
 const h = vi.hoisted(() => ({
   user: { id: 'user-1' } as { id: string } | null,
@@ -81,17 +81,17 @@ describe('POST /api/v1/investment-transactions/batch — body limit', () => {
   it('leaves room to spare for a 500-row payload', () => {
     const bytes = new TextEncoder().encode(fullImport).byteLength
 
-    expect(bytes).toBeLessThan(BATCH_MAX_BODY_BYTES / 4)
+    expect(bytes).toBeLessThan(BULK_MAX_BODY_BYTES / 4)
   })
 
   it('raises the default rather than living under it', () => {
-    expect(BATCH_MAX_BODY_BYTES).toBeGreaterThan(DEFAULT_MAX_BODY_BYTES)
+    expect(BULK_MAX_BODY_BYTES).toBeGreaterThan(DEFAULT_MAX_BODY_BYTES)
   })
 
   // Bulky is not unbounded: past its own cap the import is refused with a 413
   // like everything else, before the array is parsed or a row is validated.
   it('still refuses a body past its own cap with 413', async () => {
-    const res = await post(`{"pad":"${'x'.repeat(BATCH_MAX_BODY_BYTES)}"}`)
+    const res = await post(`{"pad":"${'x'.repeat(BULK_MAX_BODY_BYTES)}"}`)
 
     expect(res.status).toBe(413)
     expect(await res.json()).toEqual({ error: 'Request body too large' })

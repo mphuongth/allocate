@@ -38,27 +38,35 @@ export type JsonBodyResult<T> =
  * time. Bounding by default inverts that: a route now has to opt *out* to be
  * unbounded, and none does.
  *
- * 256 KiB is generous on purpose. The bodies these routes actually take are a
- * handful of scalars — a few hundred bytes — so the limit is two orders of
+ * 256 KiB is generous on purpose. Almost every body here is a form submission —
+ * a handful of scalars, a few hundred bytes — so the limit sits two orders of
  * magnitude above anything legitimate and exists only to put a ceiling on the
  * pathological case. Sizing it tightly would buy no real protection and would
- * turn some future field into a mystery 413.
+ * turn some future field into a mystery 413. The bodies that are NOT a fixed set
+ * of fields say so explicitly — see `BULK_MAX_BODY_BYTES`.
  */
 export const DEFAULT_MAX_BODY_BYTES = 256 * 1024
 
 /**
- * The one route whose body is legitimately bulky: the Excel-paste importer
- * posts up to 500 transaction rows at once, and the route enforces that 500
- * itself.
+ * For the two routes whose body is a LIST whose length comes from the user's
+ * data, not from a fixed set of fields. The default is sized for a form
+ * submission; these are sized for their own worst case.
  *
- * A row as the importer serialises it — a fund UUID, a date and three numbers —
- * costs about 146 bytes, so a full 500-row import is roughly 72 KiB. That fits
- * under the default already; the point of an explicit constant is that the fit
- * stays true. Tightening the default later, or adding a field to a row, should
- * not quietly turn a supported import into a 413. 1 MiB leaves better than ten
- * times the measured payload, and `route.test.ts` fails if that margin erodes.
+ *   • Batch import posts up to 500 transaction rows — a count the route itself
+ *     enforces. A row costs about 146 bytes as the importer serialises it (a
+ *     fund UUID, a date, three numbers), so a full import is roughly 72 KiB.
+ *   • Finish-goal posts one `{ key, received }` per live holding, and nothing
+ *     bounds that count — the route enumerates holdings, it does not cap them.
+ *     An entry costs about 73 bytes, so this admits well over 10,000 of them.
+ *     Funds and deposit books collapse to one key each server-side, so the part
+ *     that really scales is standalone gold buys and ungrouped deposits.
+ *
+ * Batch already fits under the default; the point of naming the limit is that
+ * the fit stays true. Tightening the default later, or adding a field to a row,
+ * must not quietly turn a supported request into a 413. Both routes' tests fail
+ * when the margin erodes, rather than when a real user does.
  */
-export const BATCH_MAX_BODY_BYTES = 1024 * 1024
+export const BULK_MAX_BODY_BYTES = 1024 * 1024
 
 const badRequest = (error: string) => NextResponse.json({ error }, { status: 400 })
 const tooLarge = () => NextResponse.json({ error: 'Request body too large' }, { status: 413 })
@@ -123,8 +131,8 @@ export async function readJsonBody<T = JsonBody>(
      * Upper bound, in UTF-8 bytes, on the body this route will accept, over
      * `DEFAULT_MAX_BODY_BYTES`. Set it in either direction, and say why:
      * the PDF report endpoint drops to 256 bytes because it takes only a locale
-     * yet triggers an expensive server-side render (#594), while the batch
-     * importer raises the limit because 500 rows are a legitimate payload.
+     * yet triggers an expensive server-side render (#594), while the routes
+     * that post a data-sized list raise it to `BULK_MAX_BODY_BYTES`.
      */
     maxBytes = DEFAULT_MAX_BODY_BYTES,
   }: { optional?: boolean; maxBytes?: number } = {},

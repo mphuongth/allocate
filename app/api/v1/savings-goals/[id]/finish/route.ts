@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validateUUID } from '@/lib/validation'
-import { readJsonBody } from '@/lib/apiBody'
+import { BULK_MAX_BODY_BYTES, readJsonBody } from '@/lib/apiBody'
 import { todayIso } from '@/lib/dates'
 import { buildDashboardOverview } from '@/lib/dashboardOverview'
 import { valuationByKey } from '@/lib/finishGoal'
@@ -135,7 +135,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
 
-  const parsed = await readJsonBody(request)
+  // One plan entry per live holding, and this route enumerates holdings rather
+  // than capping them — so the body grows with the goal's history. Under the
+  // default limit a long-lived goal would become permanently un-finishable, and
+  // the 413 would land before the plan validation that could have explained
+  // itself. See BULK_MAX_BODY_BYTES for how far this actually stretches.
+  const parsed = await readJsonBody(request, { maxBytes: BULK_MAX_BODY_BYTES })
   if (!parsed.ok) return parsed.response
   const body = parsed.body
 
