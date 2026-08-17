@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { NextRequest } from 'next/server'
+import { BULK_MAX_BODY_BYTES, DEFAULT_MAX_BODY_BYTES } from '@/lib/apiBody'
 
 // POST /api/v1/savings-goals/:id/finish — the route around the atomic RPC (#650).
 //
@@ -293,5 +294,50 @@ describe('POST', () => {
     const res = await post({ plan: PLAN })
     expect(res.status).toBe(409)
     expect((await res.json()).code).toBe('successor_planned')
+  })
+})
+
+// The plan carries one entry per LIVE HOLDING, and nothing bounds how many a
+// goal has: the route enumerates them, it does not cap them. So unlike every
+// other write route, this body grows with the user's data rather than with a
+// fixed list of fields, and the default 256 KiB limit (#682) would turn a
+// long-lived goal into a permanently un-finishable one — a 413 raised before the
+// plan validation that would have explained itself.
+//
+// Funds and deposit books each collapse to a single key server-side
+// (savings_goal_live_holdings groups by fund_id and by deposit_group_id), so the
+// count that actually scales is standalone holdings: individual gold buys and
+// ungrouped deposits.
+describe('POST — plan size', () => {
+  /** A plan entry the size the client really sends: `kind:uuid` plus an amount. */
+  const entry = (i: number) => ({
+    key: `tx:550e8400-e29b-41d4-a716-${String(i).padStart(12, '0')}`,
+    received: 123_456_789,
+  })
+
+  const planOf = (count: number) => ({ plan: Array.from({ length: count }, (_, i) => entry(i)) })
+
+  it('accepts a plan far past the default body limit', async () => {
+    const plan = planOf(6_000)
+    expect(JSON.stringify(plan).length).toBeGreaterThan(DEFAULT_MAX_BODY_BYTES)
+
+    const res = await post(plan)
+
+    expect(res.status).toBe(200)
+  })
+
+  it('sizes its limit for well past the holdings a goal can plausibly reach', () => {
+    const bytesPerEntry = JSON.stringify(entry(1)).length + 1
+
+    expect(BULK_MAX_BODY_BYTES / bytesPerEntry).toBeGreaterThan(10_000)
+  })
+
+  // Roomy is not unbounded: past its own cap the plan is refused like any other
+  // oversized body, before a single entry is validated or the RPC is reached.
+  it('still refuses a body past its own cap with 413', async () => {
+    const res = await post({ pad: 'x'.repeat(BULK_MAX_BODY_BYTES) })
+
+    expect(res.status).toBe(413)
+    expect(h.rpc).toHaveLength(0)
   })
 })

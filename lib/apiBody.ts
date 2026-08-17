@@ -29,6 +29,45 @@ export type JsonBodyResult<T> =
   | { ok: true; body: T }
   | { ok: false; response: NextResponse }
 
+/**
+ * How many UTF-8 bytes a write route accepts unless it says otherwise.
+ *
+ * The cap used to be opt-in, so every route that did not ask for one buffered
+ * the whole request before validation ran (#682) — an authenticated client could
+ * make the server hold as much memory as it cared to send, one request at a
+ * time. Bounding by default inverts that: a route now has to opt *out* to be
+ * unbounded, and none does.
+ *
+ * 256 KiB is generous on purpose. Almost every body here is a form submission —
+ * a handful of scalars, a few hundred bytes — so the limit sits two orders of
+ * magnitude above anything legitimate and exists only to put a ceiling on the
+ * pathological case. Sizing it tightly would buy no real protection and would
+ * turn some future field into a mystery 413. The bodies that are NOT a fixed set
+ * of fields say so explicitly — see `BULK_MAX_BODY_BYTES`.
+ */
+export const DEFAULT_MAX_BODY_BYTES = 256 * 1024
+
+/**
+ * For the two routes whose body is a LIST whose length comes from the user's
+ * data, not from a fixed set of fields. The default is sized for a form
+ * submission; these are sized for their own worst case.
+ *
+ *   • Batch import posts up to 500 transaction rows — a count the route itself
+ *     enforces. A row costs about 146 bytes as the importer serialises it (a
+ *     fund UUID, a date, three numbers), so a full import is roughly 72 KiB.
+ *   • Finish-goal posts one `{ key, received }` per live holding, and nothing
+ *     bounds that count — the route enumerates holdings, it does not cap them.
+ *     An entry costs about 73 bytes, so this admits well over 10,000 of them.
+ *     Funds and deposit books collapse to one key each server-side, so the part
+ *     that really scales is standalone gold buys and ungrouped deposits.
+ *
+ * Batch already fits under the default; the point of naming the limit is that
+ * the fit stays true. Tightening the default later, or adding a field to a row,
+ * must not quietly turn a supported request into a 413. Both routes' tests fail
+ * when the margin erodes, rather than when a real user does.
+ */
+export const BULK_MAX_BODY_BYTES = 1024 * 1024
+
 const badRequest = (error: string) => NextResponse.json({ error }, { status: 400 })
 const tooLarge = () => NextResponse.json({ error: 'Request body too large' }, { status: 413 })
 
@@ -89,28 +128,26 @@ export async function readJsonBody<T = JsonBody>(
   {
     optional = false,
     /**
-     * Upper bound, in UTF-8 bytes, on the body this route will accept. Routes
-     * whose body is a couple of scalars should set one: the PDF report endpoint
-     * takes only a locale but triggers an expensive server-side render, so a
-     * huge payload is refused with a 413 instead of being parsed first (#594).
-     * Unset means unbounded, which is the pre-existing behaviour everywhere else.
+     * Upper bound, in UTF-8 bytes, on the body this route will accept, over
+     * `DEFAULT_MAX_BODY_BYTES`. Set it in either direction, and say why:
+     * the PDF report endpoint drops to 256 bytes because it takes only a locale
+     * yet triggers an expensive server-side render (#594), while the routes
+     * that post a data-sized list raise it to `BULK_MAX_BODY_BYTES`.
      */
-    maxBytes,
+    maxBytes = DEFAULT_MAX_BODY_BYTES,
   }: { optional?: boolean; maxBytes?: number } = {},
 ): Promise<JsonBodyResult<T>> {
   // Content-Length lets an oversized body be refused before a single chunk is
   // read. It is a client-supplied claim, so it is a shortcut, not the limit —
   // the streaming read below enforces the cap on what actually arrives.
-  if (maxBytes != null) {
-    const declared = Number(request.headers.get('content-length'))
-    if (Number.isFinite(declared) && declared > maxBytes) return { ok: false, response: tooLarge() }
-  }
+  const declared = Number(request.headers.get('content-length'))
+  if (Number.isFinite(declared) && declared > maxBytes) return { ok: false, response: tooLarge() }
 
   // Read as text rather than calling `.json()`, so "empty" is distinguishable
   // from "unparseable" instead of both arriving as the same SyntaxError.
   let raw: string
   try {
-    const read = maxBytes == null ? await readAll(request) : await readBounded(request, maxBytes)
+    const read = await readBounded(request, maxBytes)
     if (!read.ok) return { ok: false, response: tooLarge() }
     raw = read.text
   } catch {

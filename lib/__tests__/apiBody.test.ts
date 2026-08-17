@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { readJsonBody } from '../apiBody'
+import { DEFAULT_MAX_BODY_BYTES, readJsonBody } from '../apiBody'
 
 // Write handlers used to call `await request.json()` bare, so an invalid or
 // empty body threw an uncaught SyntaxError and Next reported it as a 500 — a
@@ -8,6 +8,30 @@ import { readJsonBody } from '../apiBody'
 // a stand-in for it.
 const post = (body: BodyInit | null) =>
   new Request('http://localhost/api/v1/savings-goals', { method: 'POST', body })
+
+/**
+ * A chunked body — no Content-Length — that counts how much of it was pulled.
+ * A client that omits Content-Length is the case a "measure it afterwards" cap
+ * cannot cover, so both the default limit and an explicit one are tested here.
+ */
+function chunked(chunkCount: number, chunkBytes = 1024) {
+  const pulled = { chunks: 0 }
+  const chunk = new TextEncoder().encode('x'.repeat(chunkBytes))
+  const stream = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (pulled.chunks >= chunkCount) return controller.close()
+      pulled.chunks++
+      controller.enqueue(chunk)
+    },
+  })
+  const request = new Request('http://localhost/api/v1/report', {
+    method: 'POST',
+    body: stream,
+    // Required by undici to send a stream body.
+    duplex: 'half',
+  } as RequestInit & { duplex: 'half' })
+  return { request, pulled }
+}
 
 async function reject(body: BodyInit | null) {
   const result = await readJsonBody(post(body))
@@ -104,10 +128,78 @@ describe('readJsonBody', () => {
     }
   })
 
-  // A route whose body is a handful of scalars has no reason to accept a
-  // megabyte of JSON. The PDF report endpoint sets a very small cap because the
-  // work it triggers is expensive and its body carries nothing but a locale
-  // (#594) — an oversized payload is refused before it is parsed.
+  // Every write route is bounded whether or not it asked to be. The cap used to
+  // be opt-in, so 33 authenticated write routes buffered the entire request
+  // before validation ran — a single client could make the server hold as much
+  // memory as it cared to send (#682). None of those bodies is more than a
+  // handful of fields, so the default is generous by two orders of magnitude and
+  // still refuses the pathological case.
+  describe('the default limit', () => {
+    /** A JSON object whose serialised form is exactly `bytes` UTF-8 bytes. */
+    // `{"pad":"` + padding + `"}` — ten bytes of envelope, all of it ASCII.
+    const bodyOfBytes = (bytes: number) => `{"pad":"${'x'.repeat(bytes - 10)}"}`
+
+    it('accepts a body exactly at the limit', async () => {
+      const result = await readJsonBody(post(bodyOfBytes(DEFAULT_MAX_BODY_BYTES)))
+
+      expect(result.ok).toBe(true)
+    })
+
+    it('rejects a body one byte over the limit with 413', async () => {
+      const result = await readJsonBody(post(bodyOfBytes(DEFAULT_MAX_BODY_BYTES + 1)))
+
+      expect(result.ok).toBe(false)
+      if (!result.ok) {
+        expect(result.response.status).toBe(413)
+        expect(await result.response.json()).toEqual({ error: 'Request body too large' })
+      }
+    })
+
+    // The Content-Length shortcut cannot help here, so this is the case that
+    // proves the default is enforced by the streaming reader and not by a header
+    // the client controls.
+    it('rejects an oversized chunked body with 413', async () => {
+      const { request } = chunked(512)
+      expect(request.headers.get('content-length')).toBeNull()
+
+      const result = await readJsonBody(request)
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.response.status).toBe(413)
+    })
+
+    // "Before being fully buffered" is the whole point: a 16 MiB chunked upload
+    // must cost the server the cap plus one chunk, not 16 MiB.
+    it('stops reading an oversized chunked body instead of buffering it', async () => {
+      const oneMiB = 1024 * 1024
+      const { request, pulled } = chunked(16, oneMiB)
+
+      await readJsonBody(request)
+
+      // 256 KiB cap, 1 MiB chunks: the first chunk already blows the cap, so the
+      // remaining 15 MiB are never pulled.
+      expect(pulled.chunks).toBe(1)
+    })
+
+    it('leaves an explicit larger cap in charge', async () => {
+      const result = await readJsonBody(post(bodyOfBytes(DEFAULT_MAX_BODY_BYTES + 1)), {
+        maxBytes: DEFAULT_MAX_BODY_BYTES * 4,
+      })
+
+      expect(result.ok).toBe(true)
+    })
+
+    it('leaves an explicit stricter cap in charge', async () => {
+      const result = await readJsonBody(post(bodyOfBytes(1024)), { maxBytes: 256 })
+
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.response.status).toBe(413)
+    })
+  })
+
+  // A route whose body is a handful of scalars has no reason to accept even the
+  // default. The PDF report endpoint sets a very small cap because the work it
+  // triggers is expensive and its body carries nothing but a locale (#594) — an
+  // oversized payload is refused before it is parsed.
   describe('maxBytes', () => {
     const read = (body: BodyInit | null, maxBytes: number) =>
       readJsonBody(post(body), { maxBytes })
@@ -154,26 +246,6 @@ describe('readJsonBody', () => {
     // body is read incrementally and the read is abandoned the moment the
     // running total passes the cap.
     describe('streaming', () => {
-      /** A chunked body — no Content-Length — that counts how much was pulled. */
-      function chunked(chunkCount: number, chunkBytes = 1024) {
-        const pulled = { chunks: 0 }
-        const chunk = new TextEncoder().encode('x'.repeat(chunkBytes))
-        const stream = new ReadableStream<Uint8Array>({
-          pull(controller) {
-            if (pulled.chunks >= chunkCount) return controller.close()
-            pulled.chunks++
-            controller.enqueue(chunk)
-          },
-        })
-        const request = new Request('http://localhost/api/v1/report', {
-          method: 'POST',
-          body: stream,
-          // Required by undici to send a stream body.
-          duplex: 'half',
-        } as RequestInit & { duplex: 'half' })
-        return { request, pulled }
-      }
-
       it('rejects an oversized chunked body with 413', async () => {
         const { request } = chunked(64)
         expect(request.headers.get('content-length')).toBeNull()

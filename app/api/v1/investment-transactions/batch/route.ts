@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validateDate, validateUUID } from '@/lib/validation'
-import { readJsonBody } from '@/lib/apiBody'
+import { BULK_MAX_BODY_BYTES, readJsonBody } from '@/lib/apiBody'
 
 interface BatchTransaction {
   fund_id: string
@@ -16,7 +16,9 @@ export async function POST(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const parsed = await readJsonBody(request)
+  // 500 rows is a legitimate body here, so this route opts out of the default
+  // limit — see BULK_MAX_BODY_BYTES for the arithmetic.
+  const parsed = await readJsonBody(request, { maxBytes: BULK_MAX_BODY_BYTES })
   if (!parsed.ok) return parsed.response
   const body = parsed.body
   const { transactions } = body as { transactions: BatchTransaction[] }
