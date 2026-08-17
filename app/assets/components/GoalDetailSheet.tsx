@@ -16,7 +16,7 @@ import { SellWithdrawSheet } from './SellWithdrawSheet'
 import { MaturityResolveSheet } from './MaturityResolveSheet'
 import { GD_COLORS, TypeIcon, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
 import { buildCompositionSegments, buildInvRows, buildRenewalSummary } from './goalDetailRows'
-import { computeGoalCalculator, describeHistoryRow } from './goalDetailModel'
+import { computeGoalCalculator, describeHistoryRow, mergedFromLabel } from './goalDetailModel'
 import { fmtTxDate } from './transactionUtils'
 import { TxRowsSkeleton } from './Skeletons'
 import LoadError from './LoadError'
@@ -713,6 +713,14 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
                       <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 2 }}>
                         {fmtTxDate(tx.investment_date, isVI ? 'vi' : 'en')}
                       </div>
+                      {/* Which book paid for this cycle (#656). Its own line rather
+                          than a pill: the name line is nowrap + ellipsis, so a third
+                          chip there would clip the book's own name first. */}
+                      {mergedFromLabel(tx, bookNames, isVI) && (
+                        <div data-testid="history-merged-from" style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 2 }}>
+                          {mergedFromLabel(tx, bookNames, isVI)}
+                        </div>
+                      )}
                     </div>
                     <span style={{ fontSize: 13, fontWeight: 600, color: ink, fontVariantNumeric: 'tabular-nums' }}>
                       {sign}{fmtCompact(tx.amount_vnd)}

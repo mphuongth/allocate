@@ -785,3 +785,75 @@ describe('GoalDetailSheet — recurring contributions are not holdings (#640)', 
     expect(screen.getAllByRole('button', { name: /^Options$/ })).toHaveLength(1)
   })
 })
+
+// #656: the credited tranche's "Merged from <A>" line used to die with the
+// successor's first renewal — the tranche is deleted and the anchor's
+// deposit_group_id is cleared, so the book stops rendering as a book and the
+// top-up strip that hosted the label is gone. The marker now rides onto the
+// renewal snapshot, and the History tab is where it gets said.
+describe('GoalDetailSheet — merge provenance on a renewed row (#656)', () => {
+  const snapshot = {
+    transaction_id: 'snap-1',
+    transaction_type: 'investment',
+    asset_type: 'bank',
+    investment_date: '2026-08-01',
+    amount_vnd: 8_300_000,
+    notes: 'VCB 6-month book',
+    renewed_from_transaction_id: 'book-1',
+    merged_from_book_id: 'book-a',
+    interest_rate: 5,
+    expiry_date: null,
+    units: null,
+    unit_price: null,
+    principal_withdrawn: null,
+    units_withdrawn: null,
+  }
+  // The source book, named but dissolved — it is what useGoalDetailData backfills
+  // so the label has something to say.
+  const sourceBook = {
+    ...snapshot,
+    transaction_id: 'book-a',
+    notes: 'PVcomBank A',
+    renewed_from_transaction_id: null,
+    merged_from_book_id: null,
+  }
+
+  beforeEach(() => {
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('ids=')) {
+        return Promise.resolve({ ok: true, json: async () => ({ transactions: [sourceBook] }) })
+      }
+      if (url.includes('investment-transactions')) {
+        return Promise.resolve({ ok: true, json: async () => ({ transactions: [snapshot] }) })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+  })
+
+  it('names the book that paid for a renewal snapshot', async () => {
+    render(<GoalDetailSheet {...baseProps} goal={{ ...mockGoal, funds: [] }} />)
+
+    await userEvent.click(await screen.findByRole('button', { name: /history/i }))
+    const row = await screen.findByTestId('history-renewed-row')
+    expect(row).toHaveTextContent('Merged from PVcomBank A')
+    // The row still reads as the renewal it is; the provenance is added to it,
+    // not substituted for it.
+    expect(row).toHaveTextContent('Renewed')
+  })
+
+  it('says nothing on a renewal no book paid for', async () => {
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('investment-transactions')) {
+        return Promise.resolve({ ok: true, json: async () => ({
+          transactions: [{ ...snapshot, merged_from_book_id: null }],
+        }) })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+    render(<GoalDetailSheet {...baseProps} goal={{ ...mockGoal, funds: [] }} />)
+
+    await userEvent.click(await screen.findByRole('button', { name: /history/i }))
+    const row = await screen.findByTestId('history-renewed-row')
+    expect(row).not.toHaveTextContent(/Merged from/)
+  })
+})

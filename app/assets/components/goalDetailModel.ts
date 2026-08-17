@@ -36,6 +36,33 @@ export function describeHistoryRow(
   return { kind, ink, fill, Icon, sign, name }
 }
 
+/**
+ * "Gộp từ <sổ A>" for a row another book paid for (#638 Phase 4, #656), or null.
+ *
+ * The same sentence the live book's top-up strip shows, said on a History row.
+ * That strip is where this started, and it does not survive the successor's own
+ * renewal: the credited tranche is deleted and the anchor's deposit_group_id is
+ * cleared, so the book stops rendering as a book at all. The marker rides onto
+ * the renewal snapshot instead (20260817000002), and this is where it is read.
+ *
+ * `names` is the page's book-name map. A merged source is DISSOLVED, so nothing
+ * points at it through deposit_group_id any more and it can easily be off the
+ * page; useGoalDetailData backfills those by id, but a miss must still read as
+ * provenance — "Merged from undefined" would look like a bug in the ledger
+ * rather than a name this page happens not to have.
+ */
+export function mergedFromLabel(
+  tx: { merged_from_book_id?: string | null },
+  names: Record<string, string>,
+  isVi: boolean,
+): string | null {
+  const id = tx.merged_from_book_id
+  if (!id) return null
+  const name = names[id]
+  if (!name) return isVi ? 'Gộp từ một sổ khác' : 'Merged from another book'
+  return isVi ? `Gộp từ ${name}` : `Merged from ${name}`
+}
+
 export function calcDeadlineMonths(targetDate: string | null): number {
   if (!targetDate) return 12
   return monthsUntilYm(targetDate)

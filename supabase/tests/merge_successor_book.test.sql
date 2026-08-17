@@ -732,6 +732,27 @@ begin
     raise exception 'the collapse must still delete the credited tranche';
   end if;
 
+  -- ...and the provenance survives it (#656). The credited tranche is deleted and
+  -- the book stops being a book (deposit_group_id cleared), so the top-up strip
+  -- that hosted "Gộp từ A" is gone with it. What remains is the per-tranche
+  -- snapshot the collapse writes, which is where a closed cycle is already
+  -- described — so the marker is carried onto it rather than lost.
+  --
+  -- Asserted on the SNAPSHOT of the credited tranche specifically, not on "some
+  -- row of this book": every tranche gets a snapshot, and only one of them was
+  -- paid for by another book.
+  if not exists (
+    select 1 from public.investment_transactions s
+     where s.renewed_from_transaction_id = v_b
+       and s.merged_from_book_id is not null
+  ) then
+    raise exception 'the renewal snapshot must still say which book paid for this tranche';
+  end if;
+  if (select count(*) from public.investment_transactions s
+       where s.renewed_from_transaction_id = v_b and s.merged_from_book_id is not null) <> 1 then
+    raise exception 'only the credited tranche was paid for by another book';
+  end if;
+
   -- ...and the deposit it became goes on living. Freezing it because it once
   -- absorbed a merged payout was tried and makes it unrenewable for good: the
   -- renewal rewrites amount_vnd on this very row. Past the collapse the cash is
