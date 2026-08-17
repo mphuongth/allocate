@@ -856,4 +856,26 @@ describe('GoalDetailSheet — merge provenance on a renewed row (#656)', () => {
     const row = await screen.findByTestId('history-renewed-row')
     expect(row).not.toHaveTextContent(/Merged from/)
   })
+
+  // The common case, and the one the off-page fixture above hides: a recent merge
+  // leaves the source among the goal's own rows. useGoalDetailData deliberately
+  // keeps those OUT of bookNames — `nameOnly` skips ids already `present` — so a
+  // lookup that reads bookNames alone falls back to the anonymous wording for
+  // exactly the merges most likely to be on screen. buildInvRows already merges
+  // on-page notes over the map for the same reason.
+  it('names an on-page source from the rows already loaded', async () => {
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('investment-transactions')) {
+        return Promise.resolve({ ok: true, json: async () => ({
+          transactions: [snapshot, sourceBook],
+        }) })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+    render(<GoalDetailSheet {...baseProps} goal={{ ...mockGoal, funds: [] }} />)
+
+    await userEvent.click(await screen.findByRole('button', { name: /history/i }))
+    const row = await screen.findByTestId('history-renewed-row')
+    expect(row).toHaveTextContent('Merged from PVcomBank A')
+  })
 })

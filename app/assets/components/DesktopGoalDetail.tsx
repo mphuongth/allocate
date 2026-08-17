@@ -553,9 +553,9 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
                       </div>
                       {/* Which book paid for this cycle (#656) — see the mobile
                           sheet for why it takes a line rather than a third pill. */}
-                      {mergedFromLabel(tx, bookNames, isVi) && (
+                      {mergedFromLabel(tx, bookNames, isVi, transactions) && (
                         <div data-testid="history-merged-from" style={{ fontSize: 10, color: 'var(--c-muted)', marginTop: 1 }}>
-                          {mergedFromLabel(tx, bookNames, isVi)}
+                          {mergedFromLabel(tx, bookNames, isVi, transactions)}
                         </div>
                       )}
                     </div>
