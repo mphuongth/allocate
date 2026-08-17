@@ -900,4 +900,81 @@ begin
   raise notice 'finish_savings_goal disabled DCA: all assertions passed';
 end $$;
 
+-- ═══ live holdings measure the bucket the way the invariant does (#668) ══════
+--
+-- savings_goal_live_holdings carries its own copy of 20260803000005's
+-- parent-backed-claim derivation, and says why in its own comment: "copied from
+-- 20260803000005 so the two cannot disagree". #668 put `p.user_id = wd.user_id`
+-- into that function — a bucket counts only its own owner's purchases — and the
+-- copy has to move with it, or the two disagree in the direction that archives a
+-- goal it did not finish liquidating.
+--
+-- Probed before the fix: a goal holding 100 units, plus a legacy claim of 10 on a
+-- cross-owner purchase carrying this goal, reported 90 live units. The finish
+-- liquidated 90, and left the goal archived at 100% with ten units still in it —
+-- a live holding inside a completed goal, which no screen shows.
+do $$
+declare
+  v_a uuid; v_b uuid; v_g uuid; v_fund uuid; v_buy uuid; v_foreign uuid;
+  v_units numeric; v_principal bigint; v_res jsonb; v_left numeric;
+begin
+  insert into auth.users (id, email) values (gen_random_uuid(), 'fin-668a@test.invalid') returning id into v_a;
+  insert into auth.users (id, email) values (gen_random_uuid(), 'fin-668b@test.invalid') returning id into v_b;
+  insert into public.savings_goals (user_id, goal_name, target_amount)
+  values (v_a, 'Cross-owner claim', 100000000) returning goal_id into v_g;
+  insert into public.funds (user_id, name, code, fund_type, nav)
+  values (v_a, 'Finish Fund', 'FINF', 'equity', 1000000) returning id into v_fund;
+
+  -- Every deferred check in this transaction has to settle before the table can be
+  -- altered — including any left pending by the blocks above, which is why this is
+  -- ALL rather than the two this block writes against.
+  set constraints all immediate;
+  alter table public.investment_transactions disable trigger user;
+
+  -- Everything this goal actually holds: A's own 100 units.
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_a, v_g, v_fund, 'fund', 'investment', '2026-01-01', 100000000, 100, 1000000)
+  returning transaction_id into v_buy;
+  -- A legacy purchase owned by B carrying this goal and fund, and A's claim on it.
+  -- enforce_fk_ownership refuses both now (#474 / #525).
+  insert into public.investment_transactions
+    (user_id, goal_id, fund_id, asset_type, transaction_type, investment_date, amount_vnd, units, unit_price)
+  values (v_b, v_g, v_fund, 'fund', 'investment', '2026-01-01', 50000000, 50, 1000000)
+  returning transaction_id into v_foreign;
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, parent_transaction_id, units_withdrawn, principal_withdrawn)
+  values (v_a, v_g, null, 'withdrawal', '2026-02-01', 10000000, v_foreign, 10, 10000000);
+
+  alter table public.investment_transactions enable trigger user;
+  set constraints all deferred;
+
+  -- What the goal holds is what the invariant would let it sell: all 100 units.
+  select principal, units into v_principal, v_units
+    from public.savings_goal_live_holdings(v_g) where key = 'fund:' || v_fund;
+  if v_units <> 100 or v_principal <> 100000000 then
+    raise exception 'live holdings must count the bucket as the invariant does, got % units / %', v_units, v_principal;
+  end if;
+
+  select public.finish_savings_goal(v_g,
+    jsonb_build_array(jsonb_build_object('key', 'fund:' || v_fund, 'received', 100000000)),
+    current_date, 100000000, public.savings_goal_ledger_fingerprint(v_g)) into v_res;
+
+  -- And an archived goal holds nothing. This is the assertion that matters: the
+  -- finish is advertised as all-or-nothing, so a residue in a completed goal is a
+  -- lie the UI has no way to show.
+  select coalesce(sum(t.units), 0)
+         - coalesce((select sum(w.units_withdrawn) from public.investment_transactions w
+                      where w.user_id = v_a and w.transaction_type = 'withdrawal'
+                        and w.asset_type = 'fund' and w.fund_id = v_fund), 0)
+    into v_left
+    from public.investment_transactions t
+   where t.user_id = v_a and t.fund_id = v_fund and t.transaction_type = 'investment';
+  if v_left <> 0 then
+    raise exception 'an archived goal must hold nothing, % units left', v_left;
+  end if;
+
+  raise notice 'finish_savings_goal: live holdings mirror the bucket the invariant measures';
+end $$;
+
 rollback;
