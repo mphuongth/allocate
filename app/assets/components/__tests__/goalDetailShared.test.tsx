@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest'
 import { type GoalDetailTx } from '../goalDetailShared'
 import { buildInvRows, buildRenewalSummary } from '../goalDetailRows'
 import { fmtMaturity } from '../goalDetailMaturity'
-import { calcDeadlineMonths, computeGoalCalculator, describeHistoryRow } from '../goalDetailModel'
+import { calcDeadlineMonths, computeGoalCalculator, describeHistoryRow, mergedFromLabel } from '../goalDetailModel'
 import type { FundBreakdownItem } from '@/features/dashboard/contracts'
 import { ArrowUpRight, ArrowDownRight, PiggyBank, GitMerge, RefreshCw } from 'lucide-react'
 import { todayIso, addDaysIso } from '@/lib/dates'
@@ -539,5 +539,33 @@ describe('describeHistoryRow', () => {
     expect(describeHistoryRow({ transaction_type: 'investment', notes: 'Cash' }, false, false).name).toBe('Cash')
     expect(describeHistoryRow({ transaction_type: 'investment' }, false, false).name).toBe('Investment')
     expect(describeHistoryRow({ transaction_type: 'investment' }, false, true).name).toBe('Khoản đầu tư')
+  })
+})
+
+// #656: a credited tranche's "Gộp từ <A>" used to die with the successor's first
+// renewal — the tranche is deleted and the book stops being a book, so the top-up
+// strip that hosted the label is gone. The marker now rides onto the renewal
+// snapshot, and the History row is where it gets said.
+describe('mergedFromLabel', () => {
+  const names = { 'book-a': 'PVcomBank A' }
+
+  it('names the book a renewal snapshot was paid for by', () => {
+    const tx = { merged_from_book_id: 'book-a' }
+    expect(mergedFromLabel(tx, names, true)).toBe('Gộp từ PVcomBank A')
+    expect(mergedFromLabel(tx, names, false)).toBe('Merged from PVcomBank A')
+  })
+
+  it('says nothing for a row no book paid for', () => {
+    expect(mergedFromLabel({}, names, false)).toBeNull()
+    expect(mergedFromLabel({ merged_from_book_id: null }, names, false)).toBeNull()
+  })
+
+  // The source is dissolved by the merge, so its name comes from the page's
+  // book-name map — and a source on a goal past the page falls out of it.
+  // useGoalDetailData backfills those by id, but a miss must still read as
+  // provenance rather than as "Merged from undefined".
+  it('falls back to an anonymous source rather than an empty name', () => {
+    expect(mergedFromLabel({ merged_from_book_id: 'gone' }, names, false)).toBe('Merged from another book')
+    expect(mergedFromLabel({ merged_from_book_id: 'gone' }, names, true)).toBe('Gộp từ một sổ khác')
   })
 })

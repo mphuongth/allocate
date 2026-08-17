@@ -10,7 +10,7 @@ import type { GoalData } from '@/features/dashboard/contracts'
 import { GD_COLORS, TypeIcon, UnlinkSvg, BankInfoStrip, TopUpControl, RenewalSummaryLine, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
 import { buildCompositionSegments, buildInvRows, buildRenewalSummary } from './goalDetailRows'
 import { needsMaturityAction, needsBookMaturityAction } from './goalDetailMaturity'
-import { computeGoalCalculator, describeHistoryRow } from './goalDetailModel'
+import { computeGoalCalculator, describeHistoryRow, mergedFromLabel } from './goalDetailModel'
 import { MaturityResolveModal } from './MaturityResolveSheet'
 import { fmtTxDate } from './transactionUtils'
 import { TxRowsSkeleton } from './Skeletons'
@@ -551,6 +551,13 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
                       <div style={{ fontSize: 10, color: 'var(--c-muted)', marginTop: 1 }}>
                         {fmtTxDate(tx.investment_date, locale)}
                       </div>
+                      {/* Which book paid for this cycle (#656) — see the mobile
+                          sheet for why it takes a line rather than a third pill. */}
+                      {mergedFromLabel(tx, bookNames, isVi, transactions) && (
+                        <div data-testid="history-merged-from" style={{ fontSize: 10, color: 'var(--c-muted)', marginTop: 1 }}>
+                          {mergedFromLabel(tx, bookNames, isVi, transactions)}
+                        </div>
+                      )}
                     </div>
                     <span style={{ fontSize: 12, fontWeight: 600, color: ink, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
                       {sign}{fmtCompact(tx.amount_vnd)}

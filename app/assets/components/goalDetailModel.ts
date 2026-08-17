@@ -36,6 +36,40 @@ export function describeHistoryRow(
   return { kind, ink, fill, Icon, sign, name }
 }
 
+/**
+ * "Gộp từ <sổ A>" for a row another book paid for (#638 Phase 4, #656), or null.
+ *
+ * The same sentence the live book's top-up strip shows, said on a History row.
+ * That strip is where this started, and it does not survive the successor's own
+ * renewal: the credited tranche is deleted and the anchor's deposit_group_id is
+ * cleared, so the book stops rendering as a book at all. The marker rides onto
+ * the renewal snapshot instead (20260817000002), and this is where it is read.
+ *
+ * The name is looked up in TWO places, the same pair buildInvRows uses and for
+ * the same reason. `names` is useGoalDetailData's backfill, which fetches a
+ * source that fell OFF the page — and deliberately skips any id already among
+ * the loaded rows. So a recent merge, whose source is still on the page, is
+ * precisely the case that map does not cover; its name lives on the row itself.
+ * Reading only the map made the commonest merges read as anonymous.
+ *
+ * A miss in both must still read as provenance: "Merged from undefined" would
+ * look like a defect in the ledger rather than a name this page happens not to
+ * have.
+ */
+export function mergedFromLabel(
+  tx: { merged_from_book_id?: string | null },
+  names: Record<string, string>,
+  isVi: boolean,
+  rows: { transaction_id: string; notes?: string | null }[] = [],
+): string | null {
+  const id = tx.merged_from_book_id
+  if (!id) return null
+  const name = names[id]?.trim()
+    || rows.find((r) => r.transaction_id === id)?.notes?.trim()
+  if (!name) return isVi ? 'Gộp từ một sổ khác' : 'Merged from another book'
+  return isVi ? `Gộp từ ${name}` : `Merged from ${name}`
+}
+
 export function calcDeadlineMonths(targetDate: string | null): number {
   if (!targetDate) return 12
   return monthsUntilYm(targetDate)
