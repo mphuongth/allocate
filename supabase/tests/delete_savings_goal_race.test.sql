@@ -146,3 +146,137 @@ $$;
 
 -- The fixture was committed, so it has to be removed explicitly.
 delete from auth.users where id = '68768768-7687-4687-8687-687687687687';
+
+-- ── a reference that no foreign key covers ───────────────────────────────────
+--
+-- The case above is caught twice over: the parked row also carries goal_id, and
+-- that column has a real foreign key. merge_target_goal_id has none, and its only
+-- other guard — the #525 ownership trigger — reads without a lock, so against a
+-- delete committing beside it that read sees the goal as still present and waves
+-- the row through. (Trigger order puts the ownership check first, so in every
+-- non-racing case it is the one that answers.)
+--
+-- A CONSUMED settlement is where this bites: the held-shape constraint only ties
+-- merge_target_goal_id to goal_id while the settlement is unconsumed, so a
+-- consumed row can be re-pointed at any goal on its own. Nothing but
+-- enforce_goal_not_completed holds a lock when that happens.
+delete from auth.users where id = '68768768-7687-4687-8687-687687687688';
+
+do $$
+declare
+  c_user   constant uuid := '68768768-7687-4687-8687-687687687688';
+  c_src    constant uuid := '68768768-7687-4687-8687-000000000011';
+  c_anchor constant uuid := '68768768-7687-4687-8687-000000000012';
+  c_held   constant uuid := '68768768-7687-4687-8687-000000000013';
+  v_doomed uuid;
+  v_keeper uuid;
+  v_conn   text;
+  v_busy   int;
+  v_target uuid;
+  v_err    text := null;
+begin
+  v_conn := format('host=%s port=%s dbname=%s user=postgres password=postgres',
+                   inet_server_addr(), current_setting('port'), current_database());
+
+  perform dblink_connect('goal687b_deleter', v_conn);
+  perform dblink_connect('goal687b_pointer', v_conn);
+
+  perform dblink_exec('goal687b_deleter', format($f$
+    insert into auth.users (id, email) values (%L, 'delete-goal-race-b@test.invalid');
+  $f$, c_user));
+
+  -- The goal about to be deleted, and a second goal that holds the settlement —
+  -- so nothing the pointer writes touches goal_id at all.
+  select id into v_doomed from dblink('goal687b_deleter', format($f$
+    insert into public.savings_goals (user_id, goal_name) values (%L, 'Doomed') returning goal_id;
+  $f$, c_user)) as t(id uuid);
+  select id into v_keeper from dblink('goal687b_deleter', format($f$
+    insert into public.savings_goals (user_id, goal_name) values (%L, 'Keeper') returning goal_id;
+  $f$, c_user)) as t(id uuid);
+
+  perform dblink_exec('goal687b_deleter', format($f$
+    insert into public.investment_transactions
+      (transaction_id, user_id, goal_id, asset_type, transaction_type,
+       investment_date, amount_vnd, interest_rate, expiry_date)
+    values (%L, %L, %L, 'bank', 'investment', '2026-01-01', 20000000, 5.5, '2027-01-01');
+  $f$, c_src, c_user, v_keeper));
+  perform dblink_exec('goal687b_deleter', format($f$
+    insert into public.investment_transactions
+      (transaction_id, user_id, goal_id, asset_type, transaction_type,
+       investment_date, amount_vnd)
+    values (%L, %L, %L, 'bank', 'investment', '2026-01-02', 5000000);
+  $f$, c_anchor, c_user, v_keeper));
+  perform dblink_exec('goal687b_deleter', format($f$
+    insert into public.investment_transactions
+      (transaction_id, user_id, goal_id, asset_type, transaction_type, investment_date,
+       amount_vnd, parent_transaction_id, principal_withdrawn, held_for_merge,
+       merge_target_goal_id)
+    values (%L, %L, %L, 'bank', 'withdrawal', '2026-03-01', 20000000, %L, 20000000, true, %L);
+  $f$, c_held, c_user, v_keeper, c_src, v_keeper));
+  -- Merged already, which is what frees its target from the shape constraint.
+  perform dblink_exec('goal687b_deleter', format($f$
+    update public.investment_transactions set consumed_by_inv_id = %L
+     where transaction_id = %L;
+  $f$, c_anchor, c_held));
+
+  -- ── the race ──────────────────────────────────────────────────────────────
+  perform dblink_exec('goal687b_deleter', 'begin');
+  perform * from dblink('goal687b_deleter', format($f$
+    select public.delete_savings_goal(%L);
+  $f$, v_doomed)) as t(result jsonb);
+
+  -- Re-point the consumed settlement at the goal being deleted. The ownership
+  -- trigger reads it as still there — it does not take the lock — so what has to
+  -- refuse this is the FOR SHARE read that waits.
+  perform dblink_send_query('goal687b_pointer', format($f$
+    update public.investment_transactions set merge_target_goal_id = %L
+     where transaction_id = %L returning transaction_id;
+  $f$, v_doomed, c_held));
+
+  perform pg_sleep(1);
+
+  v_busy := dblink_is_busy('goal687b_pointer');
+  if v_busy <> 1 then
+    raise exception 'pointing at a goal under deletion must wait for the lock';
+  end if;
+
+  perform dblink_exec('goal687b_deleter', 'commit');
+
+  begin
+    perform * from dblink_get_result('goal687b_pointer') as t(id uuid);
+  exception when others then
+    v_err := sqlerrm;
+  end;
+  perform * from dblink_get_result('goal687b_pointer') as t(id uuid);
+
+  perform dblink_disconnect('goal687b_deleter');
+  perform dblink_disconnect('goal687b_pointer');
+
+  if v_err is null then
+    raise exception 'a reference to a deleted goal must be refused, the update succeeded';
+  end if;
+
+  -- Nothing may be left pointing at a goal that is gone.
+  select merge_target_goal_id into v_target from public.investment_transactions
+   where transaction_id = c_held;
+  if v_target is distinct from v_keeper then
+    raise exception 'the settlement must still point at its own goal, got %', v_target;
+  end if;
+  if exists (select 1 from public.savings_goals where goal_id = v_doomed) then
+    raise exception 'the goal should have been deleted';
+  end if;
+
+  raise notice 'delete_savings_goal race (no foreign key): pass';
+
+exception when others then
+  begin perform dblink_disconnect('goal687b_deleter'); exception when others then null; end;
+  begin perform dblink_disconnect('goal687b_pointer'); exception when others then null; end;
+  perform dblink_connect('goal687b_cleanup', v_conn);
+  perform dblink_exec('goal687b_cleanup', 'set lock_timeout = ''10s''');
+  perform dblink_exec('goal687b_cleanup', format('delete from auth.users where id = %L', c_user));
+  perform dblink_disconnect('goal687b_cleanup');
+  raise;
+end;
+$$;
+
+delete from auth.users where id = '68768768-7687-4687-8687-687687687688';

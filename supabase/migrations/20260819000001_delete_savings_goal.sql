@@ -122,7 +122,6 @@ declare
   v_new uuid;
   v_old uuid;
   v_completed timestamptz;
-  v_found boolean;
 begin
   execute format('select ($1).%I', v_col) into v_new using new;
   if v_new is null then return new; end if;
@@ -139,11 +138,14 @@ begin
   -- goal for the whole liquidation, and delete_savings_goal holds it for the
   -- whole deletion; a plain EXISTS does not participate in either lock. The row
   -- read once the lock is granted is the post-finish, post-delete version.
-  select true, g.completed_at into v_found, v_completed
+  select g.completed_at into v_completed
     from public.savings_goals g
    where g.goal_id = v_new
      for share;
-  if not v_found then
+  -- FOUND, not a flag selected into a variable. `select true into v_found` leaves
+  -- v_found NULL when there is no row, and `if not null` takes the ELSE branch —
+  -- so the guard below would never fire in the one case it exists for.
+  if not found then
     raise exception 'deleted goal: this goal no longer exists'
       using errcode = 'foreign_key_violation';
   end if;
