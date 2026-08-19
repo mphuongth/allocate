@@ -90,8 +90,44 @@ jobs:
       - name: Build the app
         run: npm run build
 
+      # Two consecutive `main` runs stalled on this download and burned the job's
+      # whole 30-minute budget. Because `Apply DB migrations (production)` needs
+      # e2e-smoke, that skipped the migration push and left production serving
+      # code against a schema without it (#696) — the failure ci.yml calls "the
+      # one failure in this pipeline that does not heal on its own", reached by a
+      # different road. Three changes: the cache means an ordinary run downloads
+      # nothing, the step timeout turns a stall into a 6-minute failure instead of
+      # a 30-minute one, and the retry means a single bad fetch does not need a
+      # human to re-run the pipeline.
+      - name: Resolve the Playwright version from the lockfile
+        id: playwright
+        run: |
+          echo "version=$(node -p "require('./node_modules/@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the browser cache
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          # Keyed by the resolved version, not a constant: a stale cache would
+          # hand last month's browsers to this month's Playwright, which fails
+          # when a test runs rather than when the browsers are installed.
+          key: ${{ runner.os }}-playwright-${{ steps.playwright.outputs.version }}
+
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        timeout-minutes: 6
+        run: |
+          # The cache holds the browsers, not the apt libraries they link
+          # against, so the system deps are installed either way — restoring the
+          # cache and skipping them gives a browser that cannot start.
+          install_browsers() {
+            if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
+              npx playwright install-deps chromium
+            else
+              npx playwright install --with-deps chromium
+            fi
+          }
+          install_browsers || { echo "browser install failed — retrying once"; install_browsers; }
 
       - name: Run the ${{ inputs.lane || 'full' }} lane
         run: |

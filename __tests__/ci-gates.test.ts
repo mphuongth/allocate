@@ -183,3 +183,61 @@ describe('reproducible installs (#685)', () => {
     return floor
   }
 })
+
+// Guard for #696: `Install Playwright browsers` stalled on two consecutive `main`
+// runs, each time eating the E2E job's whole 30-minute budget — and because
+// `Apply DB migrations (production)` needs e2e-smoke, a hung download SKIPPED the
+// migration push. On #687 that left Vercel serving code that called a function
+// the production database did not have yet. ci.yml already names this class of
+// failure as "the one failure in this pipeline that does not heal on its own";
+// a browser download reaching the same outcome by another road is worth pinning.
+describe('Playwright browser install (#696)', () => {
+  const e2e = readFileSync(path.join(root, '.github/workflows/e2e.yml'), 'utf8')
+
+  /** The `- name: …` step block that contains `needle`, up to the next step. */
+  function stepContaining(workflow: string, needle: string): string {
+    const at = workflow.indexOf(needle)
+    expect(at, `no step runs "${needle}"`).toBeGreaterThan(-1)
+    const start = workflow.lastIndexOf('\n      - ', at)
+    const end = workflow.indexOf('\n      - ', at)
+    return workflow.slice(start, end === -1 ? undefined : end)
+  }
+
+  it('caches the browsers instead of downloading them every run', () => {
+    expect(e2e).toMatch(/actions\/cache/)
+    // The store Playwright actually reads. A cache of anything else is a cache
+    // that still downloads.
+    expect(e2e).toMatch(/~\/\.cache\/ms-playwright/)
+  })
+
+  it('keys the cache by the Playwright version, not by a fixed string', () => {
+    // A constant key serves last month's browsers to this month's Playwright,
+    // which fails at runtime rather than at install time — the worst place for it.
+    expect(e2e).toMatch(/key:.*playwright.*\$\{\{\s*steps\./i)
+  })
+
+  it('still installs the system packages when the cache hits', () => {
+    // ~/.cache/ms-playwright holds the browsers, not the apt libraries they link
+    // against. Restoring it and skipping `install-deps` gives a browser that
+    // cannot start.
+    expect(e2e).toMatch(/playwright install-deps/)
+  })
+
+  it('bounds the install step itself, well under the job budget', () => {
+    const step = stepContaining(e2e, 'playwright install')
+    const stepTimeout = step.match(/timeout-minutes:\s*(\d+)/)
+    expect(stepTimeout, 'the install step needs its own timeout-minutes').not.toBeNull()
+
+    const jobTimeout = e2e.match(/^ {4}timeout-minutes:\s*(\d+)/m)
+    expect(jobTimeout).not.toBeNull()
+    // The point is to fail the step and leave the job room, not to hang until the
+    // job dies and takes the migration push with it.
+    expect(Number(stepTimeout![1])).toBeLessThan(Number(jobTimeout![1]) / 2)
+  })
+
+  it('retries a failed install once before giving up', () => {
+    const step = stepContaining(e2e, 'playwright install')
+    // One bad fetch should not need a human to re-run the pipeline.
+    expect(step).toMatch(/for attempt|retry|\|\|.*playwright install/i)
+  })
+})
