@@ -240,4 +240,19 @@ describe('Playwright browser install (#696)', () => {
     // One bad fetch should not need a human to re-run the pipeline.
     expect(step).toMatch(/for attempt|retry|\|\|.*playwright install/i)
   })
+
+  it('bounds each attempt, not just the step as a whole', () => {
+    // `timeout-minutes` kills the step's process — GitHub's own words. A stall on
+    // the first attempt therefore takes the shell down with it and the retry
+    // never starts, which is the failure mode this whole step exists to survive.
+    // Each attempt has to carry its own bound so the first one hands control back.
+    const step = stepContaining(e2e, 'playwright install')
+    const attempts = [...step.matchAll(/timeout (\d+)m\b/g)].map((m) => Number(m[1]))
+    expect(attempts.length, 'each install attempt needs its own timeout').toBeGreaterThan(0)
+
+    // And the step's own bound has to leave room for both attempts, or the
+    // backstop fires during the retry and the retry was decoration.
+    const stepBound = Number(step.match(/timeout-minutes:\s*(\d+)/)![1])
+    expect(stepBound).toBeGreaterThan(2 * Math.max(...attempts))
+  })
 })

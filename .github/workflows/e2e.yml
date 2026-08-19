@@ -115,19 +115,28 @@ jobs:
           key: ${{ runner.os }}-playwright-${{ steps.playwright.outputs.version }}
 
       - name: Install Playwright browsers
-        timeout-minutes: 6
+        # A backstop, not the mechanism. `timeout-minutes` kills the step's
+        # PROCESS, so a stall on the first attempt would take the shell down and
+        # the retry below would never start — the bound has to be around each
+        # attempt. Set above two full attempts so this never fires during a retry.
+        timeout-minutes: 10
         run: |
           # The cache holds the browsers, not the apt libraries they link
           # against, so the system deps are installed either way — restoring the
           # cache and skipping them gives a browser that cannot start.
           install_browsers() {
             if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
-              npx playwright install-deps chromium
+              timeout 4m npx playwright install-deps chromium
             else
-              npx playwright install --with-deps chromium
+              timeout 4m npx playwright install --with-deps chromium
             fi
           }
-          install_browsers || { echo "browser install failed — retrying once"; install_browsers; }
+          # `timeout` exits 124 when it kills the attempt, which is a failure like
+          # any other here: hand control to the retry rather than to the runner.
+          install_browsers || {
+            echo "browser install failed or stalled — retrying once"
+            install_browsers
+          }
 
       - name: Run the ${{ inputs.lane || 'full' }} lane
         run: |
