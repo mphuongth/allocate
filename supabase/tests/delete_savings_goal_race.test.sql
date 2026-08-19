@@ -123,13 +123,23 @@ begin
   raise notice 'delete_savings_goal race: pass';
 
 exception when others then
-  -- Clean up through a connection of this block's own: a delete issued here would
-  -- roll back with the block that failed.
-  perform dblink_connect('goal687_cleanup', v_conn);
-  perform dblink_exec('goal687_cleanup', format('delete from auth.users where id = %L', c_user));
-  perform dblink_disconnect('goal687_cleanup');
+  -- Drop the worker sessions FIRST. An assertion that fails between the
+  -- deleter's `begin` and its `commit` leaves that session holding the goal, the
+  -- user row and the transactions it has already deleted — and the cleanup below
+  -- would queue behind those locks forever, hanging the DB suite instead of
+  -- reporting the failure that got us here. Disconnecting rolls their open
+  -- transactions back and releases everything (measured: the same delete goes
+  -- from a lock timeout to succeeding).
   begin perform dblink_disconnect('goal687_deleter'); exception when others then null; end;
   begin perform dblink_disconnect('goal687_parker'); exception when others then null; end;
+  -- Then clean up through a connection of this block's own: a delete issued here
+  -- would roll back with the block that failed.
+  perform dblink_connect('goal687_cleanup', v_conn);
+  -- Belt and braces. If anything still holds a lock on the fixture, say so
+  -- instead of hanging — a stuck DB job reads as infrastructure, not as this bug.
+  perform dblink_exec('goal687_cleanup', 'set lock_timeout = ''10s''');
+  perform dblink_exec('goal687_cleanup', format('delete from auth.users where id = %L', c_user));
+  perform dblink_disconnect('goal687_cleanup');
   raise;
 end;
 $$;
