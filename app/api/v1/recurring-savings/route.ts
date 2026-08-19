@@ -4,6 +4,7 @@ import { ValidationError, validateAmount, validatePlanMonthFilter, validateText,
 import { linkRefusalMessage, validateLinkedDeposit } from './linkValidation'
 import { archivedGoalError, ownershipError } from '@/lib/assertOwned'
 import { readJsonBody } from '@/lib/apiBody'
+import { INVERTED_RANGE_MESSAGE } from '@/lib/effectiveRange'
 
 function toDateCol(ym: string | undefined | null): string | null {
   if (!ym) return null
@@ -100,7 +101,7 @@ export async function POST(request: NextRequest) {
   const fromDate = toDateCol(cleanFromYm)
   const toDate = toDateCol(cleanToYm)
   if (fromDate && toDate && fromDate > toDate) {
-    return NextResponse.json({ error: '"Active from" must be before "Active until".' }, { status: 400 })
+    return NextResponse.json({ error: INVERTED_RANGE_MESSAGE }, { status: 400 })
   }
 
   // linked_deposit_tx_id was already ownership-checked by validateLinkedDeposit;

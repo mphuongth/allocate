@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validateText, validateUUID, validateYearMonth } from '@/lib/validation'
 import { readJsonBody } from '@/lib/apiBody'
+import {
+  INVERTED_RANGE_MESSAGE,
+  isRangeCheckViolation,
+  mergedRangeIsInverted,
+  needsStoredRange,
+  type RangePatch,
+  type StoredRange,
+} from '@/lib/effectiveRange'
 
 function toDateCol(ym: string | undefined | null): string | null {
   if (!ym) return null
@@ -47,10 +55,25 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     throw e
   }
 
-  const fromDate = (updates.effective_from ?? null) as string | null
-  const toDate = (updates.effective_to ?? null) as string | null
-  if (fromDate && toDate && fromDate > toDate) {
-    return NextResponse.json({ error: '"Active from" must be before "Active until".' }, { status: 400 })
+  // Judge the range the table will see, not just the half the body carried: a
+  // partial update has to be compared with the endpoint already stored, or it
+  // sails past this check and is refused below as a 404 (#686).
+  const patch: RangePatch = {}
+  if ('effective_from' in body) patch.from = updates.effective_from as string | null
+  if ('effective_to' in body) patch.to = updates.effective_to as string | null
+
+  let stored: StoredRange = null
+  if (needsStoredRange(patch)) {
+    const { data } = await supabase
+      .from('fixed_expenses')
+      .select('effective_from, effective_to')
+      .eq('expense_id', expenseId)
+      .eq('user_id', user.id)
+      .single()
+    stored = data
+  }
+  if (mergedRangeIsInverted(patch, stored)) {
+    return NextResponse.json({ error: INVERTED_RANGE_MESSAGE }, { status: 400 })
   }
 
   const { data: expense, error } = await supabase
@@ -61,6 +84,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     .select()
     .single()
 
+  // A concurrent update can move the other endpoint between the read above and
+  // this write, and then the table refuses the range. That is still a validation
+  // failure — reported as 404 it reads as a missing row (#532/#533, #686).
+  if (isRangeCheckViolation(error)) {
+    return NextResponse.json({ error: INVERTED_RANGE_MESSAGE }, { status: 400 })
+  }
   if (error || !expense) return NextResponse.json({ error: 'Expense not found' }, { status: 404 })
   return NextResponse.json(expense)
 }
