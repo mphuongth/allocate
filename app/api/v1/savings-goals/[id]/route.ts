@@ -172,64 +172,40 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // Count linked transactions before delete (ON DELETE SET NULL handles the nulling)
-  const { count } = await supabase
-    .from('investment_transactions')
-    .select('*', { count: 'exact', head: true })
-    .eq('goal_id', goalId)
-    .eq('user_id', user.id)
+  // One statement, one transaction (#687). Counting the linked transactions,
+  // refusing parked cash, clearing the dead merge targets and removing the goal
+  // used to be four separate requests with nothing holding them together: the
+  // cleanup could commit while the delete failed, and consumed merge history
+  // would lose the target it recorded while the goal was still there. The
+  // function does all of it under the goal's lock; the route authenticates,
+  // validates, and maps the answer.
+  const { data, error } = await supabase.rpc('delete_savings_goal', { p_goal_id: goalId })
 
-  // Cash parked in this goal for a merge (#588). The database refuses the delete
-  // either way — merge_target_goal_id has no foreign key, so it would be left
-  // pointing at a goal that no longer exists — but it refuses through the #525
-  // ownership trigger, whose message is about a goal reference, not about a
-  // settlement. Asking first is what turns that into an answer the user can act
-  // on: 404 "Goal not found" describes the wrong thing entirely, since the goal is
-  // very much there.
-  const { data: parked } = await supabase
-    .from('investment_transactions')
-    .select('transaction_id')
-    .eq('user_id', user.id)
-    .eq('held_for_merge', true)
-    .is('consumed_by_inv_id', null)
-    .or(`merge_target_goal_id.eq.${goalId},goal_id.eq.${goalId}`)
-    .limit(1)
-    .maybeSingle()
-
-  if (parked) {
-    return NextResponse.json(
-      {
-        error: 'This goal has cash parked in it for a merge. Release that settlement before deleting the goal.',
-        code: 'held_settlement_parked',
-      },
-      { status: 409 },
-    )
+  if (error) {
+    const message = error.message ?? ''
+    // Cash earmarked to this goal for a merge. The remedy is in the message
+    // because the database's own refusal talks about a goal reference, not about
+    // a settlement — "Bỏ chờ gộp" releases it, then the goal deletes (#588).
+    if (message.startsWith('delete goal: this goal has cash parked')) {
+      return NextResponse.json(
+        {
+          error: 'This goal has cash parked in it for a merge. Release that settlement before deleting the goal.',
+          code: 'held_settlement_parked',
+        },
+        { status: 409 },
+      )
+    }
+    if (message.startsWith('delete goal: goal not found')) {
+      return NextResponse.json({ error: 'Goal not found' }, { status: 404 })
+    }
+    // Anything else is a fault, not a missing goal. Answering 404 for it is the
+    // error-vs-not-found conflation of #532/#533 — it sends the user looking for
+    // a goal that is sitting right there.
+    console.error('delete_savings_goal failed', message)
+    return NextResponse.json({ error: 'Failed to delete the goal' }, { status: 500 })
   }
 
-  // Settlements whose merge is already DONE are history, and the goal should not
-  // be stuck behind them — but merge_target_goal_id has no foreign key, so the
-  // deletion leaves it pointing at nothing and the #525 ownership trigger then
-  // refuses the very update the deletion depends on. Adding the missing FK does
-  // not help: goal_id and merge_target_goal_id are separate referential actions on
-  // the same row, and whichever runs first leaves the other dangling. Clearing it
-  // here is deterministic. Safe because the pool skips consumed rows entirely —
-  // for them the target is dead metadata.
-  await supabase
-    .from('investment_transactions')
-    .update({ merge_target_goal_id: null })
-    .eq('user_id', user.id)
-    .eq('held_for_merge', true)
-    .not('consumed_by_inv_id', 'is', null)
-    .eq('merge_target_goal_id', goalId)
-
-  const { error } = await supabase
-    .from('savings_goals')
-    .delete()
-    .eq('goal_id', goalId)
-    .eq('user_id', user.id)
-
-  if (error) return NextResponse.json({ error: 'Goal not found' }, { status: 404 })
-  const n = count ?? 0
+  const n = (data as { moved?: number } | null)?.moved ?? 0
   const txWord = n === 1 ? 'transaction' : 'transactions'
   return NextResponse.json({ message: `Goal deleted. ${n} ${txWord} moved to Unassigned Investments.` })
 }
