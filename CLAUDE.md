@@ -58,6 +58,22 @@ the wrong month (#591). An eslint `no-restricted-syntax` rule blocks both idioms
 `new Date().toISOString()` on its own is fine and correct for *timestamps*
 (`updated_at`, `created_at`) — those are instants, not business dates.
 
+## Toolchain — Node 22 and npm 11, installs come from the lockfile
+
+`.nvmrc` and `engines` in `package.json` pin the supported toolchain: **Node 22.x**
+and **npm >= 11**. Use `nvm use` (or any manager that reads `.nvmrc`) and install with
+**`npm ci`**, never `npm install`, unless you are deliberately changing a dependency.
+
+The npm major matters. Node 22 still bundles npm 10, and npm 10 refuses this lockfile
+with `Missing: @swc/helpers@0.5.23 from lock file` — `next-intl` pulls `@swc/core`,
+whose *optional* peer on `@swc/helpers >=0.5.17` npm 11 treats as skippable and npm 10
+insists on materialising as a nested entry. Every CI job therefore runs
+`npm i -g npm@11.12.1` before `npm ci`, and regenerating the lock under npm 10 is not a
+fix — it silently strips the `libc` metadata npm 11 records (#685).
+
+When you do change dependencies, commit the resulting `package-lock.json` and confirm
+`npm ci` still runs clean on a fresh checkout.
+
 ## What to run before opening a PR
 
 CI reports five independent gates on every PR (#596): **Unit Tests** (typecheck +

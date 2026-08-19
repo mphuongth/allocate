@@ -46,11 +46,16 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version-file: .nvmrc
           cache: npm
 
+      # Node 22 bundles npm 10, which rejects this lockfile — see the note in
+      # ci.yml's Unit Tests job (#685).
+      - name: Pin npm to the version that generated the lockfile
+        run: npm i -g npm@11.12.1
+
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - uses: supabase/setup-cli@v2
         with:
