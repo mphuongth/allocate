@@ -4,6 +4,14 @@ import { ValidationError, validateAmount, validateText, validateUUID, validateYe
 import { linkRefusalMessage, validateLinkedDeposit } from '../linkValidation'
 import { archivedGoalError, ownershipError } from '@/lib/assertOwned'
 import { readJsonBody } from '@/lib/apiBody'
+import {
+  INVERTED_RANGE_MESSAGE,
+  isRangeCheckViolation,
+  mergedRangeIsInverted,
+  needsStoredRange,
+  type RangePatch,
+  type StoredRange,
+} from '@/lib/effectiveRange'
 
 function toDateCol(ym: string | undefined | null): string | null {
   if (!ym) return null
@@ -52,10 +60,25 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     throw e
   }
 
-  const fromDate = (updates.effective_from ?? null) as string | null
-  const toDate = (updates.effective_to ?? null) as string | null
-  if (fromDate && toDate && fromDate > toDate) {
-    return NextResponse.json({ error: '"Active from" must be before "Active until".' }, { status: 400 })
+  // Judge the range the table will see, not just the half the body carried: a
+  // partial update has to be compared with the endpoint already stored, or it
+  // sails past this check and is refused below as a 404 (#686).
+  const patch: RangePatch = {}
+  if ('effective_from' in body) patch.from = updates.effective_from as string | null
+  if ('effective_to' in body) patch.to = updates.effective_to as string | null
+
+  let storedRange: StoredRange = null
+  if (needsStoredRange(patch)) {
+    const { data } = await supabase
+      .from('recurring_savings')
+      .select('effective_from, effective_to')
+      .eq('saving_id', savingId)
+      .eq('user_id', user.id)
+      .single()
+    storedRange = data
+  }
+  if (mergedRangeIsInverted(patch, storedRange)) {
+    return NextResponse.json({ error: INVERTED_RANGE_MESSAGE }, { status: 400 })
   }
 
   // Same check the POST does. Without it, moving an existing saving onto a
@@ -115,6 +138,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   // that is right there.
   const refusal = linkRefusalMessage(error)
   if (refusal) return NextResponse.json({ error: refusal }, { status: 400 })
+  // A concurrent update can move the other endpoint between the read above and
+  // this write, and then the table refuses the range. Still a validation
+  // failure, so it must not fall through to the 404 below (#686).
+  if (isRangeCheckViolation(error)) {
+    return NextResponse.json({ error: INVERTED_RANGE_MESSAGE }, { status: 400 })
+  }
   if (error || !saving) return NextResponse.json({ error: 'Recurring saving not found' }, { status: 404 })
   return NextResponse.json(saving)
 }

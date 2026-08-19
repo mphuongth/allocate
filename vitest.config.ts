@@ -75,7 +75,7 @@ export default defineConfig({
 
         // The money math. These modules are the ones that have actually shipped
         // bugs, and they are fully covered today — hold them there.
-        'lib/{accumulating,bankWithdrawal,dates,depositValuation,finance,fundWithdrawal,goldWithdrawal,heldForMerge,maturity,mergeCluster,mergeEligibility,planning,recurringLink,snapshots,validation,withdrawalProgress}.ts':
+        'lib/{accumulating,bankWithdrawal,dates,depositValuation,effectiveRange,finance,fundWithdrawal,goldWithdrawal,heldForMerge,maturity,mergeCluster,mergeEligibility,planning,recurringLink,snapshots,validation,withdrawalProgress}.ts':
           { lines: 100, functions: 100, branches: 80 },
 
         // The server routes the audit flagged as thin. Floors sit just under

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateAmount, validatePlanMonthFilter, validateText, validateYearMonth, type PlanMonthFilter } from '@/lib/validation'
 import { readJsonBody } from '@/lib/apiBody'
+import { INVERTED_RANGE_MESSAGE } from '@/lib/effectiveRange'
 
 function toDateCol(ym: string | undefined | null): string | null {
   if (!ym) return null
@@ -75,7 +76,7 @@ export async function POST(request: NextRequest) {
   const fromDate = toDateCol(cleanFromYm)
   const toDate = toDateCol(cleanToYm)
   if (fromDate && toDate && fromDate > toDate) {
-    return NextResponse.json({ error: '"Active from" must be before "Active until".' }, { status: 400 })
+    return NextResponse.json({ error: INVERTED_RANGE_MESSAGE }, { status: 400 })
   }
 
   const { data: expense, error } = await supabase
