@@ -19,11 +19,18 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version-file: .nvmrc
           cache: npm
 
+      # Node 22 still bundles npm 10, which rejects this lockfile: it wants
+      # `@swc/core`'s optional peer on @swc/helpers as a nested entry, while the
+      # npm 11 that generated the lock treats it as skippable. Upgrade npm before
+      # installing so the runner reads the committed lock the same way we do (#685).
+      - name: Pin npm to the version that generated the lockfile
+        run: npm i -g npm@11.12.1
+
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Typecheck
         run: npm run typecheck
@@ -50,11 +57,16 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version-file: .nvmrc
           cache: npm
 
+      # Node 22 bundles npm 10, which rejects this lockfile — see the note in
+      # the Unit Tests job (#685).
+      - name: Pin npm to the version that generated the lockfile
+        run: npm i -g npm@11.12.1
+
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Lint
         run: npm run lint
@@ -68,11 +80,16 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version-file: .nvmrc
           cache: npm
 
+      # Node 22 bundles npm 10, which rejects this lockfile — see the note in
+      # the Unit Tests job (#685).
+      - name: Pin npm to the version that generated the lockfile
+        run: npm i -g npm@11.12.1
+
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       # Placeholder Supabase credentials: `next build` only needs the public env
       # vars to exist so the client bundle compiles and the static routes
@@ -103,7 +120,7 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version-file: .nvmrc
 
       - uses: supabase/setup-cli@v2
         with:
