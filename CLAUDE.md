@@ -60,9 +60,12 @@ the wrong month (#591). An eslint `no-restricted-syntax` rule blocks both idioms
 
 ## Toolchain — Node 22 and npm 11, installs come from the lockfile
 
-`.nvmrc` and `engines` in `package.json` pin the supported toolchain: **Node 22.x**
-and **npm >= 11**. Use `nvm use` (or any manager that reads `.nvmrc`) and install with
-**`npm ci`**, never `npm install`, unless you are deliberately changing a dependency.
+`.nvmrc` and `engines` in `package.json` pin the supported toolchain: **Node 22.18.0**
+(`engines` admits `^22.13.0` — the floor `jsdom@29` sets) and **npm >= 11**. Use
+`nvm use` (or any manager that reads `.nvmrc`) and install with **`npm ci`**, never
+`npm install`, unless you are deliberately changing a dependency. `.nvmrc` names an
+exact patch on purpose: a bare `22` lets `nvm use` pick any locally-installed 22.x,
+including the 22.0–22.12 the dependency graph doesn't support.
 
 The npm major matters. Node 22 still bundles npm 10, and npm 10 refuses this lockfile
 with `Missing: @swc/helpers@0.5.23 from lock file` — `next-intl` pulls `@swc/core`,

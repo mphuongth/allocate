@@ -126,9 +126,60 @@ describe('reproducible installs (#685)', () => {
   it('declares the supported Node and npm versions in package.json', () => {
     expect(pkg.engines?.node).toBeDefined()
     expect(pkg.engines?.npm).toBeDefined()
-    // .nvmrc and engines.node must name the same major, or the two sources of
-    // truth can drift apart silently.
-    expect(pkg.engines.node).toContain(nvmrc.replace(/^v/, '').split('.')[0])
     expect(pkg.engines.npm).toContain('11')
   })
+
+  it('claims only the Node 22 minors the dependency graph actually supports', () => {
+    // A bare major ("22.x", ".nvmrc" of "22") over-promises: `jsdom@29` — a direct
+    // devDependency — needs ^22.13.0, so Node 22.0–22.12 warns on install and fails
+    // outright under engine-strict while the root package claims to support it.
+    // Derive the floor from the lock so a future dependency bump moves this test,
+    // not a hand-maintained number.
+    const floor = highestNode22Floor()
+    expect(atLeast(parse(nvmrc), floor)).toBe(true)
+    expect(atLeast(nodeRangeFloor(pkg.engines.node), floor)).toBe(true)
+  })
+
+  type Version = [number, number, number]
+
+  /** "22.18.0" / "v22.18.0" → [22, 18, 0]; a missing minor or patch reads as 0. */
+  function parse(version: string): Version {
+    const [major = 0, minor = 0, patch = 0] = version
+      .trim()
+      .replace(/^v/, '')
+      .split('.')
+      .map(Number)
+    return [major, minor, patch]
+  }
+
+  function atLeast(a: Version, b: Version): boolean {
+    return a[0] !== b[0] ? a[0] > b[0] : a[1] !== b[1] ? a[1] > b[1] : a[2] >= b[2]
+  }
+
+  /**
+   * The lowest Node 22 this range admits, from its `^22.x` / `>=22.x` term —
+   * null when the range pins no 22-specific bound (`>=16.0.0` admits every 22).
+   */
+  function node22Floor(range: string): Version | null {
+    const term = range.match(/(?:\^|>=)\s*22(?:\.(\d+))?(?:\.(\d+))?/)
+    return term ? [22, Number(term[1] ?? 0), Number(term[2] ?? 0)] : null
+  }
+
+  /** Same, for a version we declare ourselves — where a missing bound is a bug. */
+  function nodeRangeFloor(range: string): Version {
+    const floor = node22Floor(range)
+    expect(floor, `"${range}" names no Node 22 lower bound`).not.toBeNull()
+    return floor!
+  }
+
+  /** The strictest Node 22 floor any package in the lock asks for. */
+  function highestNode22Floor(): Version {
+    const lock = JSON.parse(readFileSync(path.join(root, 'package-lock.json'), 'utf8'))
+    let floor: Version = [22, 0, 0]
+    for (const [name, entry] of Object.entries<{ engines?: { node?: string } }>(lock.packages)) {
+      const asked = name === '' ? null : node22Floor(entry.engines?.node ?? '')
+      if (asked && atLeast(asked, floor)) floor = asked
+    }
+    return floor
+  }
 })
