@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import TransactionHistorySheet from '../TransactionHistorySheet'
 
@@ -126,5 +126,45 @@ describe('TransactionHistorySheet', () => {
     render(<TransactionHistorySheet {...baseProps} onAddTransaction={onAddTransaction} />)
     await userEvent.click(screen.getByRole('button', { name: /add transaction/i }))
     expect(onAddTransaction).toHaveBeenCalledOnce()
+  })
+})
+
+// Guard for #688. A full-screen sheet with no dialog semantics: nothing told a
+// screen reader it was a modal, Escape did nothing, and focus stayed on the row
+// behind it so Tab walked the page underneath.
+describe('TransactionHistorySheet — dialog contract (#688)', () => {
+  it('is a modal dialog named by the fund heading it already shows', () => {
+    render(<TransactionHistorySheet {...baseProps} />)
+
+    // aria-labelledby, not a duplicated aria-label: one name, and it is the one
+    // on screen.
+    const dialog = screen.getByRole('dialog', { name: 'VNINDEX ETF' })
+    expect(dialog).toHaveAttribute('aria-modal', 'true')
+  })
+
+  it('closes on Escape', () => {
+    const onClose = vi.fn()
+    render(<TransactionHistorySheet {...baseProps} onClose={onClose} />)
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('moves focus into the sheet on open', () => {
+    render(<TransactionHistorySheet {...baseProps} />)
+
+    expect(screen.getByRole('dialog')).toContainElement(document.activeElement as HTMLElement)
+  })
+
+  it('keeps Tab inside the sheet', async () => {
+    render(<TransactionHistorySheet {...baseProps} />)
+    const dialog = screen.getByRole('dialog')
+    const focusables = dialog.querySelectorAll<HTMLElement>('button, a[href], input')
+    focusables[focusables.length - 1].focus()
+
+    await userEvent.tab()
+
+    expect(dialog).toContainElement(document.activeElement as HTMLElement)
   })
 })

@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { X, TrendingUp, Building2, Coins, ArrowUpRight, ArrowDownRight } from 'lucide-react'
 import { iconHit } from './iconHit'
 import { useLocale, useTranslations } from 'next-intl'
+import DialogShell from '@/components/ui/DialogShell'
 import { CairnLoader } from '@/components/ui/CairnLoader'
 import { todayIso } from '@/lib/dates'
 import { computeFundPricing, computeSellPreview, buildBuyPayload, buildEditPayload, buildSellPayload, type TxForm } from './addTransactionModel'
@@ -141,6 +142,10 @@ const ASSET_TYPES = [
 ] as const
 
 type AssetType = typeof ASSET_TYPES[number]['v']
+
+// The visible heading is the dialog's accessible name. One id for both
+// wrappers: only ever one of them is on screen.
+const TITLE_ID = 'add-transaction-title'
 
 export default function AddTransactionSheet({ open, onClose, onSaved, desktop, existing, prefill }: Props) {
   const t = useTranslations('addTx')
@@ -648,51 +653,44 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
 
   if (desktop) {
     return (
-      <div
-        onClick={onClose}
-        style={{
-          position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.4)', zIndex: 200,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+      <DialogShell
+        onClose={onClose}
+        labelledBy={TITLE_ID}
+        overlayStyle={{
+          zIndex: 200, padding: 24,
           animation: 'fade-in 150ms ease', backdropFilter: 'blur(2px)',
         }}
+        panelStyle={{
+          width: '100%', maxWidth: 520, maxHeight: 'calc(100vh - 48px)',
+          background: 'var(--c-card)', borderRadius: 16,
+          boxShadow: '0 24px 48px rgba(15,23,42,0.18), 0 8px 16px rgba(15,23,42,0.08)',
+          display: 'flex', flexDirection: 'column',
+          animation: 'modal-in 200ms cubic-bezier(0.2,0.8,0.2,1)', overflow: 'hidden',
+        }}
       >
-        <div
-          onClick={(e) => e.stopPropagation()}
-          style={{
-            width: '100%', maxWidth: 520, maxHeight: 'calc(100vh - 48px)',
-            background: 'var(--c-card)', borderRadius: 16,
-            boxShadow: '0 24px 48px rgba(15,23,42,0.18), 0 8px 16px rgba(15,23,42,0.08)',
-            display: 'flex', flexDirection: 'column',
-            animation: 'modal-in 200ms cubic-bezier(0.2,0.8,0.2,1)', overflow: 'hidden',
-          }}
-        >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px 14px', borderBottom: '1px solid var(--c-line)', flexShrink: 0 }}>
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em' }}>{existing ? t('editTitle') : t('title')}</h3>
+            <h3 id={TITLE_ID} style={{ margin: 0, fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em' }}>{existing ? t('editTitle') : t('title')}</h3>
             <button onClick={onClose} style={{ ...iconHit, border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', color: 'var(--c-muted)' }} aria-label="Close"><X size={18} /></button>
           </div>
           <div style={{ flex: 1, padding: '18px 20px', overflowY: 'auto', overflowX: 'hidden', overscrollBehavior: 'contain' }}>
             {formBody}
           </div>
-        </div>
-      </div>
+      </DialogShell>
     )
   }
 
   return (
-    <div
-      onClick={onClose}
-      style={{
-        position: 'fixed', inset: 0,
+    <DialogShell
+      onClose={onClose}
+      labelledBy={TITLE_ID}
+      overlayStyle={{
         background: 'rgba(15, 23, 42, 0.45)',
         zIndex: 100,
-        display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+        alignItems: 'flex-end',
         animation: open ? 'fade-in 180ms ease' : 'fade-out 180ms ease forwards',
         pointerEvents: open ? 'auto' : 'none',
       }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
+      panelStyle={{
           width: '100%', maxWidth: 480, maxHeight: '90dvh',
           background: 'var(--c-card)',
           borderTopLeftRadius: 20, borderTopRightRadius: 20,
@@ -706,7 +704,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
 
         {/* Header — pinned, sits outside the scrollable body so the title stays put */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px 20px', flexShrink: 0 }}>
-          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600, color: 'var(--c-ink)' }}>
+          <h3 id={TITLE_ID} style={{ margin: 0, fontSize: 17, fontWeight: 600, color: 'var(--c-ink)' }}>
             {existing ? t('editTitle') : t('title')}
           </h3>
           <button
@@ -722,7 +720,6 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
         <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', overscrollBehavior: 'contain', touchAction: 'pan-y', padding: '0 16px 32px' }}>
           {formBody}
         </div>
-      </div>
-    </div>
+    </DialogShell>
   )
 }

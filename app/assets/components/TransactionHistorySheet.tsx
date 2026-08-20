@@ -1,17 +1,21 @@
 'use client'
 
+import { useRef } from 'react'
 import { ChevronLeft, ArrowUpRight, ArrowDownRight, Plus } from 'lucide-react'
 import { useLocale } from 'next-intl'
 import { fmtCompact, fmtNav, fmtPct, fmtUnits } from '@/lib/formatters'
 import { TxRowsSkeleton } from './Skeletons'
 import LoadError from './LoadError'
 import { useDialogMount } from '@/components/ui/useDialogMount'
+import { useDialogA11y } from '@/components/ui/useDialogA11y'
 
 export interface PurchaseHistoryRow {
   purchase_date: string
   units: number | null
   nav_at_purchase: number | null
 }
+
+const TITLE_ID = 'transaction-history-title'
 
 interface Props {
   open: boolean
@@ -39,6 +43,12 @@ export default function TransactionHistorySheet({
   const isVI = useLocale() === 'vi'
   const mounted = useDialogMount(open)
 
+  // Applied directly rather than through DialogShell: this sheet IS the fixed
+  // element — full-screen, its own scroll container, no scrim and so no
+  // click-away. What it owes a keyboard user is the same either way (#688).
+  const panelRef = useRef<HTMLDivElement>(null)
+  useDialogA11y(panelRef, open && mounted, onClose)
+
   if (!mounted) return null
 
   const isPositive = profitLoss >= 0
@@ -46,6 +56,12 @@ export default function TransactionHistorySheet({
 
   return (
     <div
+      ref={panelRef}
+      role="dialog"
+      aria-modal="true"
+      // The fund heading below is the name; pointing at it keeps one name rather
+      // than a second copy that can drift.
+      aria-labelledby={TITLE_ID}
       style={{
         position: 'fixed', inset: 0, zIndex: 200,
         background: 'var(--c-canvas,#faf9f7)',
@@ -82,7 +98,7 @@ export default function TransactionHistorySheet({
             }}>
               {isVI ? 'Khoản nắm giữ' : 'Holding'}
             </div>
-            <h1 style={{
+            <h1 id={TITLE_ID} style={{
               margin: 0, fontSize: 22, fontWeight: 600,
               letterSpacing: '-0.015em', color: 'var(--c-ink)',
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
