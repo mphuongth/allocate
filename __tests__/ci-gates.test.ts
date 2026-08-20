@@ -183,3 +183,111 @@ describe('reproducible installs (#685)', () => {
     return floor
   }
 })
+
+// Guard for #696: `Install Playwright browsers` stalled on two consecutive `main`
+// runs, each time eating the E2E job's whole 30-minute budget — and because
+// `Apply DB migrations (production)` needs e2e-smoke, a hung download SKIPPED the
+// migration push. On #687 that left Vercel serving code that called a function
+// the production database did not have yet. ci.yml already names this class of
+// failure as "the one failure in this pipeline that does not heal on its own";
+// a browser download reaching the same outcome by another road is worth pinning.
+describe('Playwright browser install (#696)', () => {
+  const e2e = readFileSync(path.join(root, '.github/workflows/e2e.yml'), 'utf8')
+
+  /** The `- name: …` step block that contains `needle`, up to the next step. */
+  function stepContaining(workflow: string, needle: string): string {
+    const at = workflow.indexOf(needle)
+    expect(at, `no step runs "${needle}"`).toBeGreaterThan(-1)
+    const start = workflow.lastIndexOf('\n      - ', at)
+    const end = workflow.indexOf('\n      - ', at)
+    return workflow.slice(start, end === -1 ? undefined : end)
+  }
+
+  it('caches the browsers instead of downloading them every run', () => {
+    expect(e2e).toMatch(/actions\/cache/)
+    // The store Playwright actually reads. A cache of anything else is a cache
+    // that still downloads.
+    expect(e2e).toMatch(/~\/\.cache\/ms-playwright/)
+  })
+
+  it('keys the cache by the Playwright version, not by a fixed string', () => {
+    // A constant key serves last month's browsers to this month's Playwright,
+    // which fails at runtime rather than at install time — the worst place for it.
+    expect(e2e).toMatch(/key:.*playwright.*\$\{\{\s*steps\./i)
+  })
+
+  it('still installs the system packages when the cache hits', () => {
+    // ~/.cache/ms-playwright holds the browsers, not the apt libraries they link
+    // against. Restoring it and skipping `install-deps` gives a browser that
+    // cannot start.
+    expect(e2e).toMatch(/playwright install-deps/)
+  })
+
+  it('bounds the install step itself, well under the job budget', () => {
+    const step = stepContaining(e2e, 'playwright install')
+    const stepTimeout = step.match(/timeout-minutes:\s*(\d+)/)
+    expect(stepTimeout, 'the install step needs its own timeout-minutes').not.toBeNull()
+
+    const jobTimeout = e2e.match(/^ {4}timeout-minutes:\s*(\d+)/m)
+    expect(jobTimeout).not.toBeNull()
+    // The point is to fail the step and leave the job room, not to hang until the
+    // job dies and takes the migration push with it.
+    expect(Number(stepTimeout![1])).toBeLessThan(Number(jobTimeout![1]) / 2)
+  })
+
+  it('retries a failed install once before giving up', () => {
+    // Structure, not prose. Matching /retry/ passed on the comments and the log
+    // line alone, so deleting the handler and leaving the paragraph that explains
+    // it kept this green — a guard that cannot fail is not a guard.
+    const script = runScript(stepContaining(e2e, 'playwright install'))
+    const calls = [...script.matchAll(/^\s*install_browsers\b(?!\s*\(\))/gm)]
+    expect(calls.length, 'the installer must be invoked twice: attempt and retry').toBeGreaterThanOrEqual(2)
+  })
+
+  it('bounds each attempt, not just the step as a whole', () => {
+    // `timeout-minutes` kills the step's process — GitHub's own words. A stall on
+    // the first attempt therefore takes the shell down with it and the retry
+    // never starts, which is the failure mode this whole step exists to survive.
+    // Each attempt has to carry its own bound so the first one hands control back.
+    const step = stepContaining(e2e, 'playwright install')
+    expect(attemptBounds(step).length, 'each install attempt needs its own timeout').toBeGreaterThan(0)
+  })
+
+  it('escalates to KILL, because TERM can be ignored', () => {
+    // `timeout` sends TERM and then WAITS. Measured on ubuntu:24.04: against a
+    // child that traps TERM, `timeout 3` never returns, while `timeout -k 2s 3`
+    // returns 137 after 5s. Without the escalation a hung install outlives its
+    // own bound, the step-level backstop kills the shell instead, and the retry
+    // is skipped again — the same hole one layer down.
+    const step = stepContaining(e2e, 'playwright install')
+    for (const attempt of attemptBounds(step)) {
+      expect(attempt.killAfterSeconds, 'every attempt needs --kill-after').toBeGreaterThan(0)
+    }
+  })
+
+  it('leaves the step backstop room for two whole attempts', () => {
+    // Or the backstop fires during the retry and the retry was decoration. The
+    // worst case per attempt is its bound PLUS the grace before the KILL.
+    const step = stepContaining(e2e, 'playwright install')
+    const worst = Math.max(...attemptBounds(step).map((a) => a.minutes + a.killAfterSeconds / 60))
+    const stepBound = Number(step.match(/timeout-minutes:\s*(\d+)/)![1])
+    expect(stepBound).toBeGreaterThan(2 * worst)
+  })
+
+  /** A step's shell script with comment lines dropped — only what actually runs. */
+  function runScript(step: string): string {
+    return step
+      .slice(step.indexOf('run: |'))
+      .split('\n')
+      .filter((line) => !/^\s*#/.test(line))
+      .join('\n')
+  }
+
+  /** Every `timeout -k <n>s <m>m` in a step: what each attempt is allowed. */
+  function attemptBounds(step: string): { minutes: number; killAfterSeconds: number }[] {
+    return [...step.matchAll(/timeout(?:\s+-k\s+(\d+)s)?\s+(\d+)m\b/g)].map((m) => ({
+      killAfterSeconds: Number(m[1] ?? 0),
+      minutes: Number(m[2]),
+    }))
+  }
+})
