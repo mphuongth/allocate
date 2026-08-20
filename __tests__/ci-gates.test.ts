@@ -236,9 +236,12 @@ describe('Playwright browser install (#696)', () => {
   })
 
   it('retries a failed install once before giving up', () => {
-    const step = stepContaining(e2e, 'playwright install')
-    // One bad fetch should not need a human to re-run the pipeline.
-    expect(step).toMatch(/for attempt|retry|\|\|.*playwright install/i)
+    // Structure, not prose. Matching /retry/ passed on the comments and the log
+    // line alone, so deleting the handler and leaving the paragraph that explains
+    // it kept this green — a guard that cannot fail is not a guard.
+    const script = runScript(stepContaining(e2e, 'playwright install'))
+    const calls = [...script.matchAll(/^\s*install_browsers\b(?!\s*\(\))/gm)]
+    expect(calls.length, 'the installer must be invoked twice: attempt and retry').toBeGreaterThanOrEqual(2)
   })
 
   it('bounds each attempt, not just the step as a whole', () => {
@@ -270,6 +273,15 @@ describe('Playwright browser install (#696)', () => {
     const stepBound = Number(step.match(/timeout-minutes:\s*(\d+)/)![1])
     expect(stepBound).toBeGreaterThan(2 * worst)
   })
+
+  /** A step's shell script with comment lines dropped — only what actually runs. */
+  function runScript(step: string): string {
+    return step
+      .slice(step.indexOf('run: |'))
+      .split('\n')
+      .filter((line) => !/^\s*#/.test(line))
+      .join('\n')
+  }
 
   /** Every `timeout -k <n>s <m>m` in a step: what each attempt is allowed. */
   function attemptBounds(step: string): { minutes: number; killAfterSeconds: number }[] {
